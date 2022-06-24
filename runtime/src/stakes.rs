@@ -57,7 +57,22 @@ impl StakesCache {
         self.0.read().unwrap()
     }
 
-    pub fn check_and_store(&self, pubkey: &Pubkey, account: &AccountSharedData) {
+    pub fn num_stake_accounts(&self) -> usize {
+        let stakes = self.0.read().unwrap();
+        stakes.stake_delegations.len()
+    }
+
+    pub fn num_vote_accounts(&self) -> usize {
+        let stakes = self.0.read().unwrap();
+        stakes.vote_accounts.num_vote_accounts()
+    }
+
+    pub fn num_staked_nodes(&self) -> usize {
+        let stakes = self.0.read().unwrap();
+        stakes.vote_accounts.num_staked_nodes()
+    }
+
+    pub fn check_and_store(&self, pubkey: &Pubkey, account: &impl ReadableAccount) {
         // TODO: If the account is already cached as a vote or stake account
         // but the owner changes, then this needs to evict the account from
         // the cache. see:
@@ -78,7 +93,7 @@ impl StakesCache {
         debug_assert_ne!(account.lamports(), 0u64);
         if solana_vote_program::check_id(owner) {
             if VoteState::is_correct_size_and_initialized(account.data()) {
-                match VoteAccount::try_from(account.clone()) {
+                match VoteAccount::try_from(account.to_account_shared_data()) {
                     Ok(vote_account) => {
                         {
                             // Called to eagerly deserialize vote state
@@ -97,7 +112,7 @@ impl StakesCache {
                 stakes.remove_vote_account(pubkey)
             };
         } else if solana_stake_program::check_id(owner) {
-            match StakeAccount::try_from(account.clone()) {
+            match StakeAccount::try_from(account.to_account_shared_data()) {
                 Ok(stake_account) => {
                     let mut stakes = self.0.write().unwrap();
                     stakes.upsert_stake_delegation(*pubkey, stake_account);

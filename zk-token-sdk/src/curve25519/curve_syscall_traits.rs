@@ -9,6 +9,12 @@
 //! zk-token-sdk or curve25519. It should be moved to a more general location in the future.
 //!
 
+// Functions are organized by the curve traits, which can be instantiated by multiple curve
+// representations. The functions take in a `curve_id` (e.g. `CURVE25519_EDWARDS`) and should run
+// the associated functions in the appropriate trait instantiation. The `curve_op` function
+// additionally takes in an `op_id` (e.g. `ADD`) that controls which associated functions to run in
+// `GroupOperations`.
+
 pub trait PointValidation {
     type Point;
 
@@ -50,7 +56,7 @@ pub trait MultiScalarMultiplication {
     /// complications in computing the cost for the syscall. The computational costs should only
     /// depend on the length of the vectors (and the curve), so it would be ideal to support
     /// variable length inputs and compute the syscall cost as is done in eip-197:
-    /// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md#gas-costs. If not, then we can
+    /// <https://github.com/ethereum/EIPs/blob/master/EIPS/eip-197.md#gas-costs>. If not, then we can
     /// consider bounding the length of the input and assigning worst-case cost.
     fn multiscalar_multiply(
         scalars: &[Self::Scalar],
@@ -77,13 +83,3 @@ pub const CURVE25519_RISTRETTO: u64 = 1;
 pub const ADD: u64 = 0;
 pub const SUB: u64 = 1;
 pub const MUL: u64 = 2;
-
-// Functions are organized by the curve traits, which can be instantiated by multiple curve
-// representations. The functions take in a `curve_id` (e.g. `CURVE25519_EDWARDS`) and should run
-// the associated functions in the appropriate trait instantiation. The `curve_op` function
-// additionally takes in an `op_id` (e.g. `ADD`) that controls which associated functions to run in
-// `GroupOperations`.
-#[cfg(target_os = "solana")]
-pub use solana_program::syscalls::{
-    sol_curve_multiscalar_mul, sol_curve_op, sol_curve_pairing_map, sol_curve_validate_point,
-};

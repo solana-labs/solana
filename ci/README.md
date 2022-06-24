@@ -2,6 +2,38 @@
 Our CI infrastructure is built around [BuildKite](https://buildkite.com) with some
 additional GitHub integration provided by https://github.com/mvines/ci-gate
 
+# Running Locally
+
+To run the CI suite locally, you can run the `run-local.sh` script.
+
+Before you do, there are a few dependencies that need to be installed:
+
+```bash
+cargo install grcov cargo-audit
+```
+
+## macOS
+
+On macOS, you will need to install coreutils:
+
+```bash
+brew install coreutils
+```
+
+Make sure to update your PATH environment variable:
+
+```bash
+export PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
+```
+
+If you notice the error `UnableToSetOpenFileDescriptorLimit` you may need to
+increase the number of available file descriptors:
+
+```bash
+sudo launchctl limit maxfiles 100000
+ulimit -n 1000000
+```
+
 # Agent Queues
 
 We define two [Agent Queues](https://buildkite.com/docs/agent/v3/queues):

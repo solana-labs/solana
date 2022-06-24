@@ -25,7 +25,8 @@ use {
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
     },
-    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+    crossbeam_channel::{unbounded, Receiver},
+    solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
@@ -53,12 +54,8 @@ use {
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
         thread,
-        time::Duration,
     },
 };
-
-/// Timeout interval when joining threads during TVU close
-const TVU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
 
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
@@ -132,7 +129,7 @@ impl Tvu {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
-        use_quic: bool,
+        connection_cache: &Arc<ConnectionCache>,
     ) -> Self {
         let TvuSockets {
             repair: repair_socket,
@@ -153,8 +150,9 @@ impl Tvu {
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
-            &fetch_sender,
-            Some(bank_forks.clone()),
+            fetch_sender,
+            tvu_config.shred_version,
+            bank_forks.clone(),
             exit,
         );
 
@@ -188,7 +186,6 @@ impl Tvu {
             cluster_slots_update_receiver,
             *bank_forks.read().unwrap().working_bank().epoch_schedule(),
             turbine_disabled,
-            tvu_config.shred_version,
             cluster_slots.clone(),
             duplicate_slots_reset_sender,
             verified_vote_receiver,
@@ -229,8 +226,9 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service = if use_quic {
+        let warm_quic_cache_service = if connection_cache.get_use_quic() {
             Some(WarmQuicCacheService::new(
+                connection_cache.clone(),
                 cluster_info.clone(),
                 poh_recorder.clone(),
                 exit.clone(),
@@ -304,22 +302,6 @@ impl Tvu {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        // spawn a new thread to wait for tvu close
-        let (sender, receiver) = bounded(0);
-        let _ = thread::spawn(move || {
-            let _ = self.do_join();
-            sender.send(()).unwrap();
-        });
-
-        // exit can deadlock. put an upper-bound on how long we wait for it
-        let timeout = Duration::from_secs(TVU_THREADS_JOIN_TIMEOUT_SECONDS);
-        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
-            error!("timeout for closing tvu");
-        }
-        Ok(())
-    }
-
-    fn do_join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
@@ -451,7 +433,7 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
-            false, // use_quic
+            &Arc::new(ConnectionCache::default()),
         );
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();

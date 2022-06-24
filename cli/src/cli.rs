@@ -103,6 +103,7 @@ pub enum CliCommand {
     ShowStakes {
         use_lamports_unit: bool,
         vote_account_pubkeys: Option<Vec<Pubkey>>,
+        withdraw_authority: Option<Pubkey>,
     },
     ShowValidators {
         use_lamports_unit: bool,
@@ -156,6 +157,10 @@ pub enum CliCommand {
         memo: Option<String>,
         destination_account_pubkey: Pubkey,
         lamports: u64,
+    },
+    UpgradeNonceAccount {
+        nonce_account: Pubkey,
+        memo: Option<String>,
     },
     // Program Deployment
     Deploy {
@@ -633,6 +638,7 @@ pub fn parse_command(
         ("withdraw-from-nonce-account", Some(matches)) => {
             parse_withdraw_from_nonce_account(matches, default_signer, wallet_manager)
         }
+        ("upgrade-nonce-account", Some(matches)) => parse_upgrade_nonce_account(matches),
         // Program Deployment
         ("deploy", Some(matches)) => {
             let (address_signer, _address) = signer_of(matches, "address_signer", wallet_manager)?;
@@ -899,11 +905,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowStakes {
             use_lamports_unit,
             vote_account_pubkeys,
+            withdraw_authority,
         } => process_show_stakes(
             &rpc_client,
             config,
             *use_lamports_unit,
             vote_account_pubkeys.as_deref(),
+            withdraw_authority.as_ref(),
         ),
         CliCommand::WaitForMaxStake { max_stake_percent } => {
             process_wait_for_max_stake(&rpc_client, config, *max_stake_percent)
@@ -1019,6 +1027,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             destination_account_pubkey,
             *lamports,
         ),
+        // Upgrade nonce account out of blockhash domain.
+        CliCommand::UpgradeNonceAccount {
+            nonce_account,
+            memo,
+        } => process_upgrade_nonce_account(&rpc_client, config, *nonce_account, memo.as_ref()),
 
         // Program Deployment
 

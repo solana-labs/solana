@@ -10,7 +10,7 @@ use {
 };
 
 #[derive(Clone)]
-pub struct PacketHasher {
+pub(crate) struct PacketHasher {
     seed1: u128,
     seed2: u128,
 }
@@ -39,7 +39,7 @@ impl PacketHasher {
         hasher.finish()
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         *self = Self::default();
     }
 }

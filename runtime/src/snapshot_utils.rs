@@ -342,7 +342,7 @@ pub fn archive_snapshot_package(
 
         let do_archive_files = |encoder: &mut dyn Write| -> Result<()> {
             let mut archive = tar::Builder::new(encoder);
-            for dir in ["accounts", "snapshots"] {
+            for dir in ["snapshots", "accounts"] {
                 archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
             }
             archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
@@ -821,6 +821,9 @@ pub fn bank_from_snapshot_archives(
         incremental_snapshot_archive_info,
     )?;
 
+    let accounts_db_skip_shrink =
+        accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote();
+
     let parallel_divisions = std::cmp::min(
         PARALLEL_UNTAR_READERS_DEFAULT,
         std::cmp::max(1, num_cpus::get() / 4),
@@ -879,6 +882,7 @@ pub fn bank_from_snapshot_archives(
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        accounts_db_skip_shrink,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -886,7 +890,7 @@ pub fn bank_from_snapshot_archives(
     let mut measure_verify = Measure::start("verify");
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
-        accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
+        accounts_db_skip_shrink,
         Some(full_snapshot_archive_info.slot()),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
@@ -1551,7 +1555,6 @@ fn verify_unpacked_snapshots_dir_and_version(
     if bank_snapshots.len() > 1 {
         return Err(get_io_error("invalid snapshot format"));
     }
-    bank_snapshots.sort_unstable();
     let root_paths = bank_snapshots
         .pop()
         .ok_or_else(|| get_io_error("No snapshots found in snapshots directory"))?;
@@ -1576,6 +1579,7 @@ fn rebuild_bank_from_snapshots(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    accounts_db_skip_shrink: bool,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1624,6 +1628,7 @@ fn rebuild_bank_from_snapshots(
                     verify_index,
                     accounts_db_config,
                     accounts_update_notifier,
+                    accounts_db_skip_shrink,
                 ),
             }?,
         )
@@ -1658,7 +1663,7 @@ fn rebuild_bank_from_snapshots(
         Ok(slot_deltas)
     })?;
 
-    bank.src.append(&slot_deltas);
+    bank.status_cache.write().unwrap().append(&slot_deltas);
 
     bank.prepare_rewrites_for_hash();
 
@@ -1944,11 +1949,12 @@ pub fn package_and_archive_full_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<FullSnapshotArchiveInfo> {
+    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
-        bank.src.slot_deltas(&bank.src.roots()),
+        slot_deltas,
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
@@ -1993,11 +1999,12 @@ pub fn package_and_archive_incremental_snapshot(
     maximum_full_snapshot_archives_to_retain: usize,
     maximum_incremental_snapshot_archives_to_retain: usize,
 ) -> Result<IncrementalSnapshotArchiveInfo> {
+    let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
-        bank.src.slot_deltas(&bank.src.roots()),
+        slot_deltas,
         &full_snapshot_archives_dir,
         &incremental_snapshot_archives_dir,
         snapshot_storages,
@@ -2086,6 +2093,7 @@ mod tests {
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
             genesis_config::create_genesis_config,
+            native_token::sol_to_lamports,
             signature::{Keypair, Signer},
             system_transaction,
             transaction::SanitizedTransaction,
@@ -3033,41 +3041,59 @@ mod tests {
         let key4 = Keypair::new();
         let key5 = Keypair::new();
 
-        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
-        bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
-        bank0.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
+        bank0
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
+        bank0
+            .transfer(sol_to_lamports(2.), &mint_keypair, &key2.pubkey())
+            .unwrap();
+        bank0
+            .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
+            .unwrap();
         while !bank0.is_complete() {
             bank0.register_tick(&Hash::new_unique());
         }
 
         let slot = 1;
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &collector, slot));
-        bank1.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
-        bank1.transfer(4, &mint_keypair, &key4.pubkey()).unwrap();
-        bank1.transfer(5, &mint_keypair, &key5.pubkey()).unwrap();
+        bank1
+            .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
+            .unwrap();
+        bank1
+            .transfer(sol_to_lamports(4.), &mint_keypair, &key4.pubkey())
+            .unwrap();
+        bank1
+            .transfer(sol_to_lamports(5.), &mint_keypair, &key5.pubkey())
+            .unwrap();
         while !bank1.is_complete() {
             bank1.register_tick(&Hash::new_unique());
         }
 
         let slot = slot + 1;
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
-        bank2.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank2
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
         while !bank2.is_complete() {
             bank2.register_tick(&Hash::new_unique());
         }
 
         let slot = slot + 1;
         let bank3 = Arc::new(Bank::new_from_parent(&bank2, &collector, slot));
-        bank3.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank3
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
         while !bank3.is_complete() {
             bank3.register_tick(&Hash::new_unique());
         }
 
         let slot = slot + 1;
         let bank4 = Arc::new(Bank::new_from_parent(&bank3, &collector, slot));
-        bank4.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank4
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
         while !bank4.is_complete() {
             bank4.register_tick(&Hash::new_unique());
         }
@@ -3132,20 +3158,32 @@ mod tests {
         let key4 = Keypair::new();
         let key5 = Keypair::new();
 
-        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
-        bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
-        bank0.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
+        bank0
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
+        bank0
+            .transfer(sol_to_lamports(2.), &mint_keypair, &key2.pubkey())
+            .unwrap();
+        bank0
+            .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
+            .unwrap();
         while !bank0.is_complete() {
             bank0.register_tick(&Hash::new_unique());
         }
 
         let slot = 1;
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &collector, slot));
-        bank1.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
-        bank1.transfer(4, &mint_keypair, &key4.pubkey()).unwrap();
-        bank1.transfer(5, &mint_keypair, &key5.pubkey()).unwrap();
+        bank1
+            .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
+            .unwrap();
+        bank1
+            .transfer(sol_to_lamports(4.), &mint_keypair, &key4.pubkey())
+            .unwrap();
+        bank1
+            .transfer(sol_to_lamports(5.), &mint_keypair, &key5.pubkey())
+            .unwrap();
         while !bank1.is_complete() {
             bank1.register_tick(&Hash::new_unique());
         }
@@ -3171,21 +3209,27 @@ mod tests {
 
         let slot = slot + 1;
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
-        bank2.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank2
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
         while !bank2.is_complete() {
             bank2.register_tick(&Hash::new_unique());
         }
 
         let slot = slot + 1;
         let bank3 = Arc::new(Bank::new_from_parent(&bank2, &collector, slot));
-        bank3.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank3
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
         while !bank3.is_complete() {
             bank3.register_tick(&Hash::new_unique());
         }
 
         let slot = slot + 1;
         let bank4 = Arc::new(Bank::new_from_parent(&bank3, &collector, slot));
-        bank4.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank4
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
         while !bank4.is_complete() {
             bank4.register_tick(&Hash::new_unique());
         }
@@ -3235,20 +3279,32 @@ mod tests {
         let key2 = Keypair::new();
         let key3 = Keypair::new();
 
-        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        bank0.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
-        bank0.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
-        bank0.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
+        bank0
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
+        bank0
+            .transfer(sol_to_lamports(2.), &mint_keypair, &key2.pubkey())
+            .unwrap();
+        bank0
+            .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
+            .unwrap();
         while !bank0.is_complete() {
             bank0.register_tick(&Hash::new_unique());
         }
 
         let slot = 1;
         let bank1 = Arc::new(Bank::new_from_parent(&bank0, &collector, slot));
-        bank1.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
-        bank1.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
-        bank1.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
+        bank1
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
+        bank1
+            .transfer(sol_to_lamports(2.), &mint_keypair, &key2.pubkey())
+            .unwrap();
+        bank1
+            .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
+            .unwrap();
         while !bank1.is_complete() {
             bank1.register_tick(&Hash::new_unique());
         }
@@ -3274,21 +3330,27 @@ mod tests {
 
         let slot = slot + 1;
         let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
-        bank2.transfer(1, &mint_keypair, &key1.pubkey()).unwrap();
+        bank2
+            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
+            .unwrap();
         while !bank2.is_complete() {
             bank2.register_tick(&Hash::new_unique());
         }
 
         let slot = slot + 1;
         let bank3 = Arc::new(Bank::new_from_parent(&bank2, &collector, slot));
-        bank3.transfer(2, &mint_keypair, &key2.pubkey()).unwrap();
+        bank3
+            .transfer(sol_to_lamports(2.), &mint_keypair, &key2.pubkey())
+            .unwrap();
         while !bank3.is_complete() {
             bank3.register_tick(&Hash::new_unique());
         }
 
         let slot = slot + 1;
         let bank4 = Arc::new(Bank::new_from_parent(&bank3, &collector, slot));
-        bank4.transfer(3, &mint_keypair, &key3.pubkey()).unwrap();
+        bank4
+            .transfer(sol_to_lamports(3.), &mint_keypair, &key3.pubkey())
+            .unwrap();
         while !bank4.is_complete() {
             bank4.register_tick(&Hash::new_unique());
         }
@@ -3365,9 +3427,9 @@ mod tests {
         let incremental_snapshot_archives_dir = tempfile::TempDir::new().unwrap();
         let snapshot_archive_format = ArchiveFormat::Tar;
 
-        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000);
+        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
 
-        let lamports_to_transfer = 123_456;
+        let lamports_to_transfer = sol_to_lamports(123_456.);
         let bank0 = Arc::new(Bank::new_with_paths_for_tests(
             &genesis_config,
             vec![accounts_dir.path().to_path_buf()],

@@ -1,0 +1,20 @@
+[package]
+name = "solana-bpf-rust-curve25519"
+version = "1.11.2"
+description = "Solana BPF test program written in Rust"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-bpf-rust-zktoken_crypto"
+edition = "2021"
+
+[dependencies]
+solana-program = { path = "../../../../sdk/program", version = "=1.11.2" }
+solana-zk-token-sdk = { path = "../../../../zk-token-sdk", version = "=1.11.2" }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

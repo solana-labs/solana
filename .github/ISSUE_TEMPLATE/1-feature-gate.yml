@@ -48,6 +48,20 @@ body:
     validations:
       required: true
   - type: input
+    id: beta-version
+    attributes:
+      label: Minimum Beta Version
+      placeholder: Edit this response when feature has landed in a beta release
+    validations:
+      required: false
+  - type: input
+    id: stable-version
+    attributes:
+      label: Minimum Stable Version
+      placeholder: Edit this response when feature has landed in a stable release
+    validations:
+      required: false
+  - type: input
     id: testnet
     attributes:
       label: Testnet Activation Epoch

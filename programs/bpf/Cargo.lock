@@ -750,9 +750,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
-version = "0.5.4"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aaa7bd5fb665c6864b5f963dd9097905c54125909c7aa94c9e18507cdbe6c53"
+checksum = "4c02a4d71819009c192cf4872265391563fd6a84c81ff2c0f2a7026ca4c1d85c"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils",
@@ -1076,7 +1076,7 @@ version = "3.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b166c9e378360dd5a6666a9604bb4f54ae0cac39023ffbac425e917a2a04fef"
 dependencies = [
- "num-bigint",
+ "num-bigint 0.4.3",
  "num-traits",
  "proc-macro2 1.0.38",
  "quote 1.0.18",
@@ -1502,6 +1502,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "headers"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cff78e5788be1e0ab65b04d306b2ed5092c815ec97ec70f4ebd5aee158aa55d"
+dependencies = [
+ "base64 0.13.0",
+ "bitflags",
+ "bytes",
+ "headers-core",
+ "http",
+ "httpdate",
+ "mime",
+ "sha-1 0.10.0",
+]
+
+[[package]]
+name = "headers-core"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
+dependencies = [
+ "http",
+]
+
+[[package]]
 name = "heck"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1629,6 +1654,24 @@ dependencies = [
  "tower-service",
  "tracing",
  "want",
+]
+
+[[package]]
+name = "hyper-proxy"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca815a891b24fdfb243fa3239c86154392b0953ee584aa1a2a1f66d20cbe75cc"
+dependencies = [
+ "bytes",
+ "futures 0.3.21",
+ "headers",
+ "http",
+ "hyper",
+ "hyper-tls",
+ "native-tls",
+ "tokio",
+ "tokio-native-tls",
+ "tower-service",
 ]
 
 [[package]]
@@ -2091,9 +2134,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8015d95cb7b2ddd3c0d32ca38283ceb1eea09b4713ee380bceb942d85a244228"
+checksum = "c84e6fe5655adc6ce00787cf7dcaf8dc4f998a0565d23eafc207a8b08ca3349a"
 dependencies = [
  "hashbrown",
 ]
@@ -2309,13 +2352,48 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-bigint"
-version = "0.4.2"
+name = "num"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74e768dff5fb39a41b3bcd30bb25cf989706c90d028d1ad71971987aa309d535"
+checksum = "b8536030f9fea7127f841b45bb6243b27255787fb4eb83958aa1ef9d2fdc0c36"
+dependencies = [
+ "num-bigint 0.2.6",
+ "num-complex",
+ "num-integer",
+ "num-iter",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "090c7f9998ee0ff65aa5b723e4009f7b217707f1fb5ea551329cc4d6231fb304"
 dependencies = [
  "autocfg",
  "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-complex"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6b19411a9719e753aff12e5187b74d60d3dc449ec3f4dc21e3989c3f554bc95"
+dependencies = [
+ "autocfg",
  "num-traits",
 ]
 
@@ -2337,6 +2415,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f6ea62e9d81a77cd3ee9a2a5b9b609447857f3d358704331e4ef39eb247fcba"
 dependencies = [
  "autocfg",
+ "num-traits",
+]
+
+[[package]]
+name = "num-iter"
+version = "0.1.43"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d03e6c028c5dc5cac6e2dec0efda81fc887605bb3d884578bb6d6bf7514e252"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-rational"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c000134b5dbf44adc5cb772486d335293351644b801551abe8f75c84cfa4aef"
+dependencies = [
+ "autocfg",
+ "num-bigint 0.2.6",
+ "num-integer",
  "num-traits",
 ]
 
@@ -2447,9 +2548,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "openssl-src"
-version = "111.18.0+1.1.1n"
+version = "111.20.0+1.1.1o"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7897a926e1e8d00219127dc020130eca4292e5ca666dd592480d72c3eca2ff6c"
+checksum = "92892c4f87d56e376e469ace79f1128fdaded07646ddf73aa0be4706ff712dec"
 dependencies = [
  "cc",
 ]
@@ -2635,6 +2736,15 @@ name = "percent-encoding"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4fd5641d01c8f18a23da7b6fe29298ff4b55afcccdf78973b24cf3175fee32e"
+
+[[package]]
+name = "percentage"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fd23b938276f14057220b707937bcb42fa76dda7560e57a2da30cb52d557937"
+dependencies = [
+ "num",
+]
 
 [[package]]
 name = "pest"
@@ -3488,9 +3598,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.9"
+version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cb243bdfdb5936c8dc3c45762a19d12ab4550cdc753bc247637d4ec35a040fd"
+checksum = "a41d061efea015927ac527063765e73601444cdc344ba855bc7bd44578b25e1c"
 
 [[package]]
 name = "serde"
@@ -3749,7 +3859,7 @@ dependencies = [
 
 [[package]]
 name = "solana-account-decoder"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "Inflector",
  "base64 0.13.0",
@@ -3761,7 +3871,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-config-program",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-vote-program",
  "spl-token",
  "spl-token-2022",
@@ -3771,7 +3881,7 @@ dependencies = [
 
 [[package]]
 name = "solana-address-lookup-table-program"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "bytemuck",
@@ -3780,23 +3890,23 @@ dependencies = [
  "num-traits",
  "rustc_version",
  "serde",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
- "solana-program 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
+ "solana-program 1.11.2",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-banks-client"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "borsh",
  "futures 0.3.21",
  "solana-banks-interface",
- "solana-program 1.11.0",
- "solana-sdk 1.11.0",
+ "solana-program 1.11.2",
+ "solana-sdk 1.11.2",
  "tarpc",
  "thiserror",
  "tokio",
@@ -3805,23 +3915,24 @@ dependencies = [
 
 [[package]]
 name = "solana-banks-interface"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "serde",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "tarpc",
 ]
 
 [[package]]
 name = "solana-banks-server"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "crossbeam-channel",
  "futures 0.3.21",
  "solana-banks-interface",
+ "solana-client",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-send-transaction-service",
  "tarpc",
  "tokio",
@@ -3831,7 +3942,7 @@ dependencies = [
 
 [[package]]
 name = "solana-bloom"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bv",
  "fnv",
@@ -3841,14 +3952,14 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
- "solana-sdk 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-loader-program"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
@@ -3857,15 +3968,15 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
- "solana-zk-token-sdk 1.11.0",
+ "solana-sdk 1.11.2",
+ "solana-zk-token-sdk 1.11.2",
  "solana_rbpf",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-bpf-programs"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
@@ -3880,11 +3991,11 @@ dependencies = [
  "solana-bpf-rust-realloc",
  "solana-bpf-rust-realloc-invoke",
  "solana-cli-output",
- "solana-logger 1.11.0",
+ "solana-logger 1.11.2",
  "solana-measure",
  "solana-program-runtime",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-transaction-status",
  "solana_rbpf",
  "walkdir",
@@ -3892,384 +4003,392 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-rust-128bit"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-bpf-rust-128bit-dep",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-128bit-dep"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-alloc"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-call-depth"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-caller-access"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
+]
+
+[[package]]
+name = "solana-bpf-rust-curve25519"
+version = "1.11.2"
+dependencies = [
+ "solana-program 1.11.2",
+ "solana-zk-token-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-custom-heap"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-dep-crate"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "byteorder 1.4.3",
  "solana-address-lookup-table-program",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-deprecated-loader"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-dup-accounts"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-error-handling"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "num-derive",
  "num-traits",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-bpf-rust-external-spend"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-finalize"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-get-minimum-delegation"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-inner_instruction_alignment_check"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-instruction-introspection"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-bpf-rust-invoked",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke-and-error"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke-and-ok"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoke-and-return"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-invoked"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-iter"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-log-data"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-many-args"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-bpf-rust-many-args-dep",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-many-args-dep"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-mem"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
  "solana-program-runtime",
  "solana-program-test",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-membuiltins"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-bpf-rust-mem",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-noop"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-panic"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-param-passing"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-bpf-rust-param-passing-dep",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-param-passing-dep"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-rand"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "getrandom 0.1.14",
  "rand 0.7.3",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-realloc"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-realloc-invoke"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-bpf-rust-realloc",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-ro-account_modify"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-ro-modify"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sanity"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
  "solana-program-runtime",
  "solana-program-test",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-secp256k1-recover"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sha"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "blake3",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sibling-instructions"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sibling_inner-instructions"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-simulation"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-logger 1.11.0",
- "solana-program 1.11.0",
+ "solana-logger 1.11.2",
+ "solana-program 1.11.2",
  "solana-program-test",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-validator",
 ]
 
 [[package]]
 name = "solana-bpf-rust-spoof1"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-spoof1-system"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-sysvar"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
  "solana-program-runtime",
  "solana-program-test",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-upgradeable"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-upgraded"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-bpf-rust-zk_token_elgamal"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
- "solana-program 1.11.0",
- "solana-zk-token-sdk 1.11.0",
+ "solana-program 1.11.2",
+ "solana-zk-token-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-bucket-map"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "log",
  "memmap2",
  "modular-bitfield",
  "rand 0.7.3",
  "solana-measure",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "tempfile",
 ]
 
 [[package]]
 name = "solana-clap-utils"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "chrono",
  "clap 2.33.3",
  "rpassword",
  "solana-perf",
  "solana-remote-wallet",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "thiserror",
  "tiny-bip39",
  "uriparse",
@@ -4278,7 +4397,7 @@ dependencies = [
 
 [[package]]
 name = "solana-cli-config"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "dirs-next",
  "lazy_static",
@@ -4286,13 +4405,13 @@ dependencies = [
  "serde_derive",
  "serde_yaml",
  "solana-clap-utils",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "url 2.2.2",
 ]
 
 [[package]]
 name = "solana-cli-output"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "Inflector",
  "base64 0.13.0",
@@ -4309,7 +4428,7 @@ dependencies = [
  "solana-clap-utils",
  "solana-cli-config",
  "solana-client",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-transaction-status",
  "solana-vote-program",
  "spl-memo",
@@ -4317,7 +4436,7 @@ dependencies = [
 
 [[package]]
 name = "solana-client"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "async-mutex",
  "async-trait",
@@ -4353,7 +4472,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-streamer",
  "solana-transaction-status",
  "solana-version",
@@ -4369,27 +4488,27 @@ dependencies = [
 
 [[package]]
 name = "solana-compute-budget-program"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-config-program"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "chrono",
  "serde",
  "serde_derive",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-core"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "ahash",
  "base64 0.13.0",
@@ -4416,8 +4535,8 @@ dependencies = [
  "solana-bloom",
  "solana-client",
  "solana-entry",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
  "solana-geyser-plugin-manager",
  "solana-gossip",
  "solana-ledger",
@@ -4430,7 +4549,7 @@ dependencies = [
  "solana-rayon-threadlimit",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-send-transaction-service",
  "solana-streamer",
  "solana-transaction-status",
@@ -4446,19 +4565,19 @@ dependencies = [
 
 [[package]]
 name = "solana-download-utils"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "console",
  "indicatif",
  "log",
  "reqwest",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-entry"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "crossbeam-channel",
@@ -4474,12 +4593,12 @@ dependencies = [
  "solana-metrics",
  "solana-perf",
  "solana-rayon-threadlimit",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-faucet"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "byteorder 1.4.3",
@@ -4490,9 +4609,9 @@ dependencies = [
  "serde_derive",
  "solana-clap-utils",
  "solana-cli-config",
- "solana-logger 1.11.0",
+ "solana-logger 1.11.2",
  "solana-metrics",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-version",
  "spl-memo",
  "thiserror",
@@ -4523,7 +4642,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bs58",
  "bv",
@@ -4537,7 +4656,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "sha2 0.10.2",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi-macro 1.11.2",
  "thiserror",
 ]
 
@@ -4555,7 +4674,7 @@ dependencies = [
 
 [[package]]
 name = "solana-frozen-abi-macro"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "proc-macro2 1.0.38",
  "quote 1.0.18",
@@ -4565,26 +4684,26 @@ dependencies = [
 
 [[package]]
 name = "solana-genesis-utils"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-download-utils",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-geyser-plugin-interface"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "log",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-transaction-status",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-geyser-plugin-manager"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bs58",
  "crossbeam-channel",
@@ -4597,14 +4716,14 @@ dependencies = [
  "solana-metrics",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-transaction-status",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-gossip"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "bv",
@@ -4628,17 +4747,17 @@ dependencies = [
  "solana-clap-utils",
  "solana-client",
  "solana-entry",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
  "solana-ledger",
- "solana-logger 1.11.0",
+ "solana-logger 1.11.2",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-streamer",
  "solana-version",
  "solana-vote-program",
@@ -4647,7 +4766,7 @@ dependencies = [
 
 [[package]]
 name = "solana-ledger"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "bitflags",
@@ -4655,6 +4774,7 @@ dependencies = [
  "chrono",
  "chrono-humanize",
  "crossbeam-channel",
+ "dashmap",
  "fs_extra",
  "futures 0.3.21",
  "itertools",
@@ -4676,15 +4796,15 @@ dependencies = [
  "sha2 0.10.2",
  "solana-bpf-loader-program",
  "solana-entry",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
  "solana-measure",
  "solana-metrics",
  "solana-perf",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-storage-proto",
@@ -4711,7 +4831,7 @@ dependencies = [
 
 [[package]]
 name = "solana-logger"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "env_logger",
  "lazy_static",
@@ -4720,36 +4840,36 @@ dependencies = [
 
 [[package]]
 name = "solana-measure"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "log",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-merkle-tree"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "fast-math",
  "matches",
- "solana-program 1.11.0",
+ "solana-program 1.11.2",
 ]
 
 [[package]]
 name = "solana-metrics"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "crossbeam-channel",
  "gethostname",
  "lazy_static",
  "log",
  "reqwest",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-net-utils"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "clap 3.1.6",
@@ -4760,8 +4880,8 @@ dependencies = [
  "serde",
  "serde_derive",
  "socket2",
- "solana-logger 1.11.0",
- "solana-sdk 1.11.0",
+ "solana-logger 1.11.2",
+ "solana-sdk 1.11.2",
  "solana-version",
  "tokio",
  "url 2.2.2",
@@ -4769,7 +4889,7 @@ dependencies = [
 
 [[package]]
 name = "solana-perf"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "ahash",
  "bincode",
@@ -4788,13 +4908,13 @@ dependencies = [
  "serde",
  "solana-metrics",
  "solana-rayon-threadlimit",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-vote-program",
 ]
 
 [[package]]
 name = "solana-poh"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "core_affinity",
  "crossbeam-channel",
@@ -4804,7 +4924,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-sys-tuner",
  "thiserror",
 ]
@@ -4853,7 +4973,7 @@ dependencies = [
 
 [[package]]
 name = "solana-program"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "base64 0.13.0",
  "bincode",
@@ -4885,16 +5005,16 @@ dependencies = [
  "serde_derive",
  "sha2 0.10.2",
  "sha3 0.10.1",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
- "solana-sdk-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
+ "solana-sdk-macro 1.11.2",
  "thiserror",
  "wasm-bindgen",
 ]
 
 [[package]]
 name = "solana-program-runtime"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "base64 0.13.0",
  "bincode",
@@ -4907,16 +5027,16 @@ dependencies = [
  "num-traits",
  "rustc_version",
  "serde",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
  "solana-measure",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-program-test"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "assert_matches",
  "async-trait",
@@ -4928,10 +5048,10 @@ dependencies = [
  "solana-banks-client",
  "solana-banks-server",
  "solana-bpf-loader-program",
- "solana-logger 1.11.0",
+ "solana-logger 1.11.2",
  "solana-program-runtime",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-vote-program",
  "thiserror",
  "tokio",
@@ -4939,7 +5059,7 @@ dependencies = [
 
 [[package]]
 name = "solana-rayon-threadlimit"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "lazy_static",
  "num_cpus",
@@ -4947,7 +5067,7 @@ dependencies = [
 
 [[package]]
 name = "solana-remote-wallet"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "console",
  "dialoguer",
@@ -4957,14 +5077,14 @@ dependencies = [
  "parking_lot 0.12.0",
  "qstring",
  "semver",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "thiserror",
  "uriparse",
 ]
 
 [[package]]
 name = "solana-rpc"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "base64 0.13.0",
  "bincode",
@@ -4997,7 +5117,7 @@ dependencies = [
  "solana-poh",
  "solana-rayon-threadlimit",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -5014,7 +5134,7 @@ dependencies = [
 
 [[package]]
 name = "solana-runtime"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "arrayref",
  "bincode",
@@ -5049,17 +5169,17 @@ dependencies = [
  "solana-bucket-map",
  "solana-compute-budget-program",
  "solana-config-program",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
  "solana-measure",
  "solana-metrics",
  "solana-program-runtime",
  "solana-rayon-threadlimit",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-stake-program",
  "solana-vote-program",
  "solana-zk-token-proof-program",
- "solana-zk-token-sdk 1.11.0",
+ "solana-zk-token-sdk 1.11.2",
  "strum",
  "strum_macros",
  "symlink",
@@ -5122,7 +5242,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "assert_matches",
  "base64 0.13.0",
@@ -5159,11 +5279,11 @@ dependencies = [
  "serde_json",
  "sha2 0.10.2",
  "sha3 0.10.1",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
- "solana-logger 1.11.0",
- "solana-program 1.11.0",
- "solana-sdk-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
+ "solana-logger 1.11.2",
+ "solana-program 1.11.2",
+ "solana-sdk-macro 1.11.2",
  "thiserror",
  "uriparse",
  "wasm-bindgen",
@@ -5184,7 +5304,7 @@ dependencies = [
 
 [[package]]
 name = "solana-sdk-macro"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bs58",
  "proc-macro2 1.0.38",
@@ -5195,7 +5315,7 @@ dependencies = [
 
 [[package]]
 name = "solana-send-transaction-service"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -5203,12 +5323,12 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-stake-program"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "log",
@@ -5218,26 +5338,30 @@ dependencies = [
  "serde",
  "serde_derive",
  "solana-config-program",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
  "solana-metrics",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-vote-program",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-storage-bigtable"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "backoff",
  "bincode",
+ "bytes",
  "bzip2",
  "enum-iterator",
  "flate2",
  "futures 0.3.21",
  "goauth",
+ "http",
+ "hyper",
+ "hyper-proxy",
  "log",
  "openssl",
  "prost 0.10.4",
@@ -5246,7 +5370,7 @@ dependencies = [
  "serde_derive",
  "smpl_jwt",
  "solana-metrics",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-storage-proto",
  "solana-transaction-status",
  "thiserror",
@@ -5257,21 +5381,21 @@ dependencies = [
 
 [[package]]
 name = "solana-storage-proto"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "bs58",
  "prost 0.10.4",
  "serde",
  "solana-account-decoder",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-transaction-status",
  "tonic-build 0.7.2",
 ]
 
 [[package]]
 name = "solana-streamer"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "crossbeam-channel",
  "futures-util",
@@ -5281,6 +5405,7 @@ dependencies = [
  "log",
  "nix",
  "pem",
+ "percentage",
  "pkcs8",
  "quinn",
  "rand 0.7.3",
@@ -5288,20 +5413,20 @@ dependencies = [
  "rustls 0.20.6",
  "solana-metrics",
  "solana-perf",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "thiserror",
  "tokio",
 ]
 
 [[package]]
 name = "solana-sys-tuner"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "clap 2.33.3",
  "libc",
  "log",
  "nix",
- "solana-logger 1.11.0",
+ "solana-logger 1.11.2",
  "solana-version",
  "sysctl",
  "unix_socket2",
@@ -5310,7 +5435,7 @@ dependencies = [
 
 [[package]]
 name = "solana-test-validator"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "base64 0.13.0",
  "log",
@@ -5321,20 +5446,20 @@ dependencies = [
  "solana-core",
  "solana-gossip",
  "solana-ledger",
- "solana-logger 1.11.0",
+ "solana-logger 1.11.2",
  "solana-net-utils",
  "solana-program-runtime",
  "solana-program-test",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-streamer",
  "tokio",
 ]
 
 [[package]]
 name = "solana-transaction-status"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "Inflector",
  "base64 0.13.0",
@@ -5350,7 +5475,7 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-vote-program",
  "spl-associated-token-account",
  "spl-memo",
@@ -5361,7 +5486,7 @@ dependencies = [
 
 [[package]]
 name = "solana-validator"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "chrono",
  "clap 2.33.3",
@@ -5392,14 +5517,14 @@ dependencies = [
  "solana-genesis-utils",
  "solana-gossip",
  "solana-ledger",
- "solana-logger 1.11.0",
+ "solana-logger 1.11.2",
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",
  "solana-poh",
  "solana-rpc",
  "solana-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "solana-send-transaction-service",
  "solana-storage-bigtable",
  "solana-streamer",
@@ -5412,21 +5537,21 @@ dependencies = [
 
 [[package]]
 name = "solana-version"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "log",
  "rustc_version",
  "semver",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
- "solana-sdk 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
+ "solana-sdk 1.11.2",
 ]
 
 [[package]]
 name = "solana-vote-program"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bincode",
  "log",
@@ -5435,25 +5560,25 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_derive",
- "solana-frozen-abi 1.11.0",
- "solana-frozen-abi-macro 1.11.0",
+ "solana-frozen-abi 1.11.2",
+ "solana-frozen-abi-macro 1.11.2",
  "solana-metrics",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
+ "solana-sdk 1.11.2",
  "thiserror",
 ]
 
 [[package]]
 name = "solana-zk-token-proof-program"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "bytemuck",
  "getrandom 0.1.14",
  "num-derive",
  "num-traits",
  "solana-program-runtime",
- "solana-sdk 1.11.0",
- "solana-zk-token-sdk 1.11.0",
+ "solana-sdk 1.11.2",
+ "solana-zk-token-sdk 1.11.2",
 ]
 
 [[package]]
@@ -5488,7 +5613,7 @@ dependencies = [
 
 [[package]]
 name = "solana-zk-token-sdk"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "aes-gcm-siv",
  "arrayref",
@@ -5507,8 +5632,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha3 0.9.1",
- "solana-program 1.11.0",
- "solana-sdk 1.11.0",
+ "solana-program 1.11.2",
+ "solana-sdk 1.11.2",
  "subtle",
  "thiserror",
  "zeroize",
@@ -6027,9 +6152,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50145484efff8818b5ccd256697f36863f587da82cf8b409c53adf1e840798e3"
+checksum = "df54d54117d6fdc4e4fea40fe1e4e566b3505700e148a6827e59b34b0d2600d9"
 dependencies = [
  "futures-core",
  "pin-project-lite",

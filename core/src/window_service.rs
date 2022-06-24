@@ -14,7 +14,7 @@ use {
     rayon::{prelude::*, ThreadPool},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
-        blockstore::{self, Blockstore, BlockstoreInsertionMetrics, MAX_DATA_SHREDS_PER_SLOT},
+        blockstore::{self, Blockstore, BlockstoreInsertionMetrics},
         leader_schedule_cache::LeaderScheduleCache,
         shred::{Nonce, Shred, ShredType},
     },
@@ -177,7 +177,6 @@ pub(crate) fn should_retransmit_and_persist(
     leader_schedule_cache: &LeaderScheduleCache,
     my_pubkey: &Pubkey,
     root: u64,
-    shred_version: u16,
 ) -> bool {
     let slot_leader_pubkey = leader_schedule_cache.slot_leader_at(shred.slot(), bank.as_deref());
     if let Some(leader_id) = slot_leader_pubkey {
@@ -186,15 +185,6 @@ pub(crate) fn should_retransmit_and_persist(
             false
         } else if !verify_shred_slot(shred, root) {
             inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
-            false
-        } else if shred.version() != shred_version {
-            inc_new_counter_debug!("streamer-recv_window-incorrect_shred_version", 1);
-            false
-        } else if shred.index() >= MAX_DATA_SHREDS_PER_SLOT as u32 {
-            inc_new_counter_warn!("streamer-recv_window-shred_index_overrun", 1);
-            false
-        } else if shred.sanitize().is_err() {
-            inc_new_counter_warn!("streamer-recv_window-invalid-shred", 1);
             false
         } else {
             true
@@ -720,7 +710,7 @@ mod test {
             blockstore::{make_many_slot_entries, Blockstore},
             genesis_utils::create_genesis_config_with_leader,
             get_tmp_ledger_path,
-            shred::Shredder,
+            shred::{ProcessShredsStats, Shredder},
         },
         solana_sdk::{
             epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
@@ -739,9 +729,12 @@ mod test {
     ) -> Vec<Shred> {
         let shredder = Shredder::new(slot, parent, 0, 0).unwrap();
         let (data_shreds, _) = shredder.entries_to_shreds(
-            keypair, entries, true, // is_last_in_slot
+            keypair,
+            entries,
+            true, // is_last_in_slot
             0,    // next_shred_index
             0,    // next_code_index
+            &mut ProcessShredsStats::default(),
         );
         data_shreds
     }
@@ -783,17 +776,6 @@ mod test {
             &cache,
             &me_id,
             0,
-            0
-        ));
-
-        // with the wrong shred_version, shred gets thrown out
-        assert!(!should_retransmit_and_persist(
-            &shreds[0],
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            0,
-            1
         ));
 
         // substitute leader_pubkey for me_id so it looks I was the leader
@@ -804,7 +786,6 @@ mod test {
             &cache,
             &leader_pubkey,
             0,
-            0
         ));
         assert!(!should_retransmit_and_persist(
             &shreds[0],
@@ -812,7 +793,6 @@ mod test {
             &cache,
             &leader_pubkey,
             0,
-            0
         ));
 
         // change the shred's slot so leader lookup fails
@@ -825,19 +805,6 @@ mod test {
             &cache,
             &me_id,
             0,
-            0
-        ));
-
-        // with an invalid index, shred gets thrown out
-        let mut bad_index_shred = shreds[0].clone();
-        bad_index_shred.set_index((MAX_DATA_SHREDS_PER_SLOT + 1) as u32);
-        assert!(!should_retransmit_and_persist(
-            &bad_index_shred,
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            0,
-            0
         ));
 
         // with a shred where shred.slot() == root, shred gets thrown out
@@ -849,7 +816,6 @@ mod test {
             &cache,
             &me_id,
             root,
-            0
         ));
 
         // with a shred where shred.parent() < root, shred gets thrown out
@@ -862,7 +828,6 @@ mod test {
             &cache,
             &me_id,
             root,
-            0
         ));
 
         // coding shreds don't contain parent slot information, test that slot >= root
@@ -884,7 +849,6 @@ mod test {
             &cache,
             &me_id,
             0,
-            0
         ));
         // shred.slot() == root, shred continues
         assert!(should_retransmit_and_persist(
@@ -893,7 +857,6 @@ mod test {
             &cache,
             &me_id,
             5,
-            0
         ));
         // shred.slot() < root, shred gets thrown out
         assert!(!should_retransmit_and_persist(
@@ -902,7 +865,6 @@ mod test {
             &cache,
             &me_id,
             6,
-            0
         ));
     }
 

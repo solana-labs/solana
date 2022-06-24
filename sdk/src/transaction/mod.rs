@@ -1095,7 +1095,7 @@ pub fn uses_durable_nonce(tx: &Transaction) -> Option<&CompiledInstruction> {
             )
             // Nonce account is writable
             && matches!(
-                instruction.accounts.get(0),
+                instruction.accounts.first(),
                 Some(index) if message.is_writable(*index as usize)
             )
         })
@@ -1106,7 +1106,7 @@ pub fn get_nonce_pubkey_from_instruction<'a>(
     ix: &CompiledInstruction,
     tx: &'a Transaction,
 ) -> Option<&'a Pubkey> {
-    ix.accounts.get(0).and_then(|idx| {
+    ix.accounts.first().and_then(|idx| {
         let idx = *idx as usize;
         tx.message().account_keys.get(idx)
     })

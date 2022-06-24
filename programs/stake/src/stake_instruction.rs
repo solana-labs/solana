@@ -28,17 +28,23 @@ use {
 fn get_optional_pubkey<'a>(
     transaction_context: &'a TransactionContext,
     instruction_context: &'a InstructionContext,
-    index_in_instruction: usize,
+    instruction_account_index: usize,
     should_be_signer: bool,
 ) -> Result<Option<&'a Pubkey>, InstructionError> {
     Ok(
-        if instruction_context.get_number_of_accounts() > index_in_instruction {
-            if should_be_signer && !instruction_context.is_signer(index_in_instruction)? {
+        if instruction_account_index < instruction_context.get_number_of_instruction_accounts() {
+            if should_be_signer
+                && !instruction_context.is_instruction_account_signer(instruction_account_index)?
+            {
                 return Err(InstructionError::MissingRequiredSignature);
             }
-            Some(transaction_context.get_key_of_account_at_index(
-                instruction_context.get_index_in_transaction(index_in_instruction)?,
-            )?)
+            Some(
+                transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_of_instruction_account_in_transaction(
+                        instruction_account_index,
+                    )?,
+                )?,
+            )
         } else {
             None
         },
@@ -46,7 +52,7 @@ fn get_optional_pubkey<'a>(
 }
 
 pub fn process_instruction(
-    first_instruction_account: usize,
+    _first_instruction_account: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -86,12 +92,8 @@ pub fn process_instruction(
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 instruction_context.check_number_of_instruction_accounts(3)?;
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 3,
-                    false,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
 
                 authorize(
                     &mut me,
@@ -123,18 +125,14 @@ pub fn process_instruction(
             if require_custodian_for_locked_stake_authorize {
                 let clock =
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 3,
-                    false,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 3, false)?;
 
                 authorize_with_seed(
                     transaction_context,
                     instruction_context,
                     &mut me,
-                    first_instruction_account + 1,
+                    1,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -148,7 +146,7 @@ pub fn process_instruction(
                     transaction_context,
                     instruction_context,
                     &mut me,
-                    first_instruction_account + 1,
+                    1,
                     &args.authority_seed,
                     &args.authority_owner,
                     &args.new_authorized_pubkey,
@@ -181,8 +179,8 @@ pub fn process_instruction(
             delegate(
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &clock,
                 &stake_history,
                 &config,
@@ -198,9 +196,9 @@ pub fn process_instruction(
                 invoke_context,
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
+                0,
                 lamports,
-                first_instruction_account + 1,
+                1,
                 &signers,
             )
         }
@@ -219,8 +217,8 @@ pub fn process_instruction(
                 invoke_context,
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
-                first_instruction_account + 1,
+                0,
+                1,
                 &clock,
                 &stake_history,
                 &signers,
@@ -241,14 +239,14 @@ pub fn process_instruction(
             withdraw(
                 transaction_context,
                 instruction_context,
-                first_instruction_account,
+                0,
                 lamports,
-                first_instruction_account + 1,
+                1,
                 &clock,
                 &stake_history,
-                first_instruction_account + 4,
+                4,
                 if instruction_context.get_number_of_instruction_accounts() >= 6 {
-                    Some(first_instruction_account + 5)
+                    Some(5)
                 } else {
                     None
                 },
@@ -274,12 +272,12 @@ pub fn process_instruction(
             {
                 instruction_context.check_number_of_instruction_accounts(4)?;
                 let staker_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 2)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(2)?,
                 )?;
                 let withdrawer_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
                 )?;
-                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                if !instruction_context.is_instruction_account_signer(3)? {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
 
@@ -311,17 +309,13 @@ pub fn process_instruction(
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 1)?;
                 instruction_context.check_number_of_instruction_accounts(4)?;
                 let authorized_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
                 )?;
-                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                if !instruction_context.is_instruction_account_signer(3)? {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 4,
-                    false,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
 
                 authorize(
                     &mut me,
@@ -347,23 +341,19 @@ pub fn process_instruction(
                     get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
                 instruction_context.check_number_of_instruction_accounts(4)?;
                 let authorized_pubkey = transaction_context.get_key_of_account_at_index(
-                    instruction_context.get_index_in_transaction(first_instruction_account + 3)?,
+                    instruction_context.get_index_of_instruction_account_in_transaction(3)?,
                 )?;
-                if !instruction_context.is_signer(first_instruction_account + 3)? {
+                if !instruction_context.is_instruction_account_signer(3)? {
                     return Err(InstructionError::MissingRequiredSignature);
                 }
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 4,
-                    false,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 4, false)?;
 
                 authorize_with_seed(
                     transaction_context,
                     instruction_context,
                     &mut me,
-                    first_instruction_account + 1,
+                    1,
                     &args.authority_seed,
                     &args.authority_owner,
                     authorized_pubkey,
@@ -382,12 +372,8 @@ pub fn process_instruction(
                 .feature_set
                 .is_active(&feature_set::vote_stake_checked_instructions::id())
             {
-                let custodian_pubkey = get_optional_pubkey(
-                    transaction_context,
-                    instruction_context,
-                    first_instruction_account + 2,
-                    true,
-                )?;
+                let custodian_pubkey =
+                    get_optional_pubkey(transaction_context, instruction_context, 2, true)?;
 
                 let lockup = LockupArgs {
                     unix_timestamp: lockup_checked.unix_timestamp,
@@ -430,8 +416,8 @@ pub fn process_instruction(
                     transaction_context,
                     instruction_context,
                     &mut me,
-                    first_instruction_account + 1,
-                    first_instruction_account + 2,
+                    1,
+                    2,
                     clock.epoch,
                 )
             } else {

@@ -62,6 +62,7 @@ fn main() {
             "alloc",
             "call_depth",
             "caller_access",
+            "curve25519",
             "custom_heap",
             "dep_crate",
             "deprecated_loader",

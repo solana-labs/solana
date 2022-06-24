@@ -12,6 +12,8 @@ pub struct BlockstoreOptions {
 
 impl Default for BlockstoreOptions {
     /// The default options are the values used by [`Blockstore::open`].
+    ///
+    /// [`Blockstore::open`]: crate::blockstore::Blockstore::open
     fn default() -> Self {
         Self {
             access_type: AccessType::Primary,
@@ -133,6 +135,15 @@ impl Default for ShredStorageType {
     }
 }
 
+impl ShredStorageType {
+    /// Returns ShredStorageType::RocksFifo where the specified
+    /// `shred_storage_size` is equally allocated to shred_data_cf_size
+    /// and shred_code_cf_size.
+    pub fn rocks_fifo(shred_storage_size: u64) -> ShredStorageType {
+        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::new(shred_storage_size))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BlockstoreRocksFifoOptions {
     // The maximum storage size for storing data shreds in column family
@@ -162,11 +173,15 @@ pub const DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = 250 * 1024 * 1024 *
 
 impl Default for BlockstoreRocksFifoOptions {
     fn default() -> Self {
+        BlockstoreRocksFifoOptions::new(DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES)
+    }
+}
+
+impl BlockstoreRocksFifoOptions {
+    fn new(shred_storage_size: u64) -> Self {
         Self {
-            // Maximum size of cf::ShredData.
-            shred_data_cf_size: DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES / 2,
-            // Maximum size of cf::ShredCode.
-            shred_code_cf_size: DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES / 2,
+            shred_data_cf_size: shred_storage_size / 2,
+            shred_code_cf_size: shred_storage_size / 2,
         }
     }
 }

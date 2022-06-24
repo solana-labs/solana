@@ -4,7 +4,7 @@ use {
     crate::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
-    solana_client::thin_client::{create_client, ThinClient},
+    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
@@ -194,29 +194,25 @@ pub fn discover(
     ))
 }
 
-/// Creates a ThinClient per valid node
-pub fn get_clients(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) -> Vec<ThinClient> {
-    nodes
-        .iter()
-        .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
-        .map(|(rpc, tpu)| create_client(rpc, tpu))
-        .collect()
-}
-
 /// Creates a ThinClient by selecting a valid node at random
-pub fn get_client(nodes: &[ContactInfo], socket_addr_space: &SocketAddrSpace) -> ThinClient {
+pub fn get_client(
+    nodes: &[ContactInfo],
+    socket_addr_space: &SocketAddrSpace,
+    connection_cache: Arc<ConnectionCache>,
+) -> ThinClient {
     let nodes: Vec<_> = nodes
         .iter()
         .filter_map(|node| ContactInfo::valid_client_facing_addr(node, socket_addr_space))
         .collect();
     let select = thread_rng().gen_range(0, nodes.len());
     let (rpc, tpu) = nodes[select];
-    create_client(rpc, tpu)
+    ThinClient::new(rpc, tpu, connection_cache)
 }
 
 pub fn get_multi_client(
     nodes: &[ContactInfo],
     socket_addr_space: &SocketAddrSpace,
+    connection_cache: Arc<ConnectionCache>,
 ) -> (ThinClient, usize) {
     let addrs: Vec<_> = nodes
         .iter()
@@ -226,7 +222,10 @@ pub fn get_multi_client(
     let tpu_addrs: Vec<_> = addrs.iter().map(|addr| addr.1).collect();
 
     let num_nodes = tpu_addrs.len();
-    (ThinClient::new_from_addrs(rpc_addrs, tpu_addrs), num_nodes)
+    (
+        ThinClient::new_from_addrs(rpc_addrs, tpu_addrs, connection_cache),
+        num_nodes,
+    )
 }
 
 fn spy(

@@ -67,7 +67,9 @@ fi
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
- _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- --deny=warnings --deny=clippy::integer_arithmetic
+ _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- \
+   --deny=warnings \
+   --deny=clippy::integer_arithmetic \
 
 _ scripts/cargo-for-all-lock-files.sh -- nightly fmt --all -- --check
 

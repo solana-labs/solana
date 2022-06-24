@@ -19,6 +19,7 @@ use {
     },
     solana_client::{
         client_error::ClientErrorKind,
+        connection_cache::ConnectionCache,
         rpc_client::RpcClient,
         rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
         rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
@@ -1620,12 +1621,12 @@ fn process_close(
                         }) = account.state()
                         {
                             if authority_pubkey != Some(authority_signer.pubkey()) {
-                                return Err(format!(
+                                Err(format!(
                                     "Program authority {:?} does not match {:?}",
                                     authority_pubkey,
                                     Some(authority_signer.pubkey())
                                 )
-                                .into());
+                                .into())
                             } else {
                                 close(
                                     rpc_client,
@@ -1644,22 +1645,16 @@ fn process_close(
                                 ))
                             }
                         } else {
-                            return Err(
-                                format!("Program {} has been closed", account_pubkey).into()
-                            );
+                            Err(format!("Program {} has been closed", account_pubkey).into())
                         }
                     } else {
-                        return Err(format!("Program {} has been closed", account_pubkey).into());
+                        Err(format!("Program {} has been closed", account_pubkey).into())
                     }
                 }
-                _ => {
-                    return Err(
-                        format!("{} is not a Program or Buffer account", account_pubkey).into(),
-                    );
-                }
+                _ => Err(format!("{} is not a Program or Buffer account", account_pubkey).into()),
             }
         } else {
-            return Err(format!("Unable to find the account {}", account_pubkey).into());
+            Err(format!("Unable to find the account {}", account_pubkey).into())
         }
     } else {
         let buffers = get_buffers(
@@ -2223,10 +2218,12 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let tpu_client = TpuClient::new(
+            let connection_cache = Arc::new(ConnectionCache::default());
+            let tpu_client = TpuClient::new_with_connection_cache(
                 rpc_client.clone(),
                 &config.websocket_url,
                 TpuClientConfig::default(),
+                connection_cache,
             )?;
             let transaction_errors = tpu_client
                 .send_and_confirm_messages_with_spinner(

@@ -4,7 +4,7 @@ use {
     crate::bigtable::RowKey,
     log::*,
     serde::{Deserialize, Serialize},
-    solana_metrics::inc_new_counter_debug,
+    solana_metrics::{datapoint_info, inc_new_counter_debug},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -368,6 +368,7 @@ impl From<LegacyTransactionByAddrInfo> for TransactionByAddrInfo {
 }
 
 pub const DEFAULT_INSTANCE_NAME: &str = "solana-ledger";
+pub const DEFAULT_APP_PROFILE_ID: &str = "default";
 
 #[derive(Debug)]
 pub enum CredentialType {
@@ -381,6 +382,7 @@ pub struct LedgerStorageConfig {
     pub timeout: Option<std::time::Duration>,
     pub credential_type: CredentialType,
     pub instance_name: String,
+    pub app_profile_id: String,
 }
 
 impl Default for LedgerStorageConfig {
@@ -390,6 +392,7 @@ impl Default for LedgerStorageConfig {
             timeout: None,
             credential_type: CredentialType::Filepath(None),
             instance_name: DEFAULT_INSTANCE_NAME.to_string(),
+            app_profile_id: DEFAULT_APP_PROFILE_ID.to_string(),
         }
     }
 }
@@ -419,10 +422,12 @@ impl LedgerStorage {
             read_only,
             timeout,
             instance_name,
+            app_profile_id,
             credential_type,
         } = config;
         let connection = bigtable::BigTableConnection::new(
             instance_name.as_str(),
+            app_profile_id.as_str(),
             read_only,
             timeout,
             credential_type,
@@ -850,11 +855,12 @@ impl LedgerStorage {
             .connection
             .put_protobuf_cells_with_retry::<generated::ConfirmedBlock>("blocks", &blocks_cells)
             .await?;
-        info!(
-            "uploaded block for slot {}: {} transactions, {} bytes",
-            slot, num_transactions, bytes_written
+        datapoint_info!(
+            "storage-bigtable-upload-block",
+            ("slot", slot, i64),
+            ("transactions", num_transactions, i64),
+            ("bytes", bytes_written, i64),
         );
-
         Ok(())
     }
 

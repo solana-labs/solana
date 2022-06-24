@@ -5,6 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
+    solana_client::connection_cache::{ConnectionCache, UseQUIC, DEFAULT_TPU_CONNECTION_POOL_SIZE},
     solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -212,6 +213,12 @@ fn main() {
                 .takes_value(true)
                 .help("Number of threads to use in the banking stage"),
         )
+        .arg(
+            Arg::new("tpu_use_quic")
+                .long("tpu-use-quic")
+                .takes_value(false)
+                .help("Forward messages to TPU using QUIC"),
+        )
         .get_matches();
 
     let num_banking_threads = matches
@@ -334,6 +341,8 @@ fn main() {
             SocketAddrSpace::Unspecified,
         );
         let cluster_info = Arc::new(cluster_info);
+        let tpu_use_quic = UseQUIC::new(matches.is_present("tpu_use_quic"))
+            .expect("Failed to initialize QUIC flags");
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,
@@ -344,8 +353,12 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
+            Arc::new(ConnectionCache::new(
+                tpu_use_quic,
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            )),
         );
-        poh_recorder.lock().unwrap().set_bank(&bank);
+        poh_recorder.lock().unwrap().set_bank(&bank, false);
 
         // This is so that the signal_receiver does not go out of scope after the closure.
         // If it is dropped before poh_service, then poh_service will error when
@@ -426,7 +439,7 @@ fn main() {
                     std::u64::MAX,
                 );
 
-                poh_recorder.lock().unwrap().set_bank(&bank);
+                poh_recorder.lock().unwrap().set_bank(&bank, false);
                 assert!(poh_recorder.lock().unwrap().bank().is_some());
                 if bank.slot() > 32 {
                     leader_schedule_cache.set_root(&bank);

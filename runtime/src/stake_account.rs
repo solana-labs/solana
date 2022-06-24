@@ -103,6 +103,12 @@ impl<T> From<StakeAccount<T>> for (AccountSharedData, StakeState) {
     }
 }
 
+impl<T> StakeAccount<T> {
+    pub fn account(&self) -> &AccountSharedData {
+        &self.account
+    }
+}
+
 impl<S, T> PartialEq<StakeAccount<S>> for StakeAccount<T> {
     fn eq(&self, other: &StakeAccount<S>) -> bool {
         let StakeAccount {

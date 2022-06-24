@@ -6,7 +6,6 @@ pub mod accounts_data_meter;
 pub mod compute_budget;
 pub mod invoke_context;
 pub mod log_collector;
-pub mod neon_evm_program;
 pub mod pre_account;
 pub mod prioritization_fee;
 pub mod stable_log;

@@ -19,8 +19,8 @@ use {
         keypair::SKIP_SEED_PHRASE_VALIDATION_ARG,
     },
     solana_client::{
-        rpc_client::RpcClient, rpc_config::RpcLeaderScheduleConfig,
-        rpc_request::MAX_MULTIPLE_ACCOUNTS,
+        connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE, rpc_client::RpcClient,
+        rpc_config::RpcLeaderScheduleConfig, rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
@@ -31,8 +31,8 @@ use {
     },
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_ledger::blockstore_options::{
-        BlockstoreCompressionType, BlockstoreRecoveryMode, BlockstoreRocksFifoOptions,
-        LedgerColumnOptions, ShredStorageType, DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
+        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -66,7 +66,7 @@ use {
         commitment_config::CommitmentConfig,
         hash::Hash,
         pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::{read_keypair, Keypair, Signer},
     },
     solana_send_transaction_service::send_transaction_service::{
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
@@ -259,7 +259,7 @@ fn wait_for_restart_window(
                         leader_schedule.pop_front();
                     }
                     while upcoming_idle_windows
-                        .get(0)
+                        .first()
                         .map(|(slot, _)| *slot < epoch_info.absolute_slot)
                         .unwrap_or(false)
                     {
@@ -276,7 +276,7 @@ fn wait_for_restart_window(
                             if idle_slots >= min_idle_slots {
                                 Ok(())
                             } else {
-                                Err(match upcoming_idle_windows.get(0) {
+                                Err(match upcoming_idle_windows.first() {
                                     Some((starting_slot, length_in_slots)) => {
                                         format!(
                                             "Next idle window in {} slots, for {} slots",
@@ -468,6 +468,7 @@ pub fn main() {
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
     let default_rocksdb_fifo_shred_storage_size =
         &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
+    let default_tpu_connection_pool_size = &DEFAULT_TPU_CONNECTION_POOL_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -1210,6 +1211,19 @@ pub fn main() {
                 .help("Use QUIC to send transactions."),
         )
         .arg(
+            Arg::with_name("enable_quic_servers")
+                .hidden(true)
+                .long("enable-quic-servers")
+        )
+        .arg(
+            Arg::with_name("tpu_connection_pool_size")
+                .long("tpu-connection-pool-size")
+                .takes_value(true)
+                .default_value(default_tpu_connection_pool_size)
+                .validator(is_parsable::<usize>)
+                .help("Controls the TPU connection pool size per remote addresss"),
+        )
+        .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
                 .long("rocksdb-max-compaction-jitter-slots")
                 .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
@@ -1268,6 +1282,14 @@ pub fn main() {
                 .value_name("INSTANCE_NAME")
                 .default_value(solana_storage_bigtable::DEFAULT_INSTANCE_NAME)
                 .help("Name of the Bigtable instance to upload to")
+        )
+        .arg(
+            Arg::with_name("rpc_bigtable_app_profile_id")
+                .long("rpc-bigtable-app-profile-id")
+                .takes_value(true)
+                .value_name("APP_PROFILE_ID")
+                .default_value(solana_storage_bigtable::DEFAULT_APP_PROFILE_ID)
+                .help("Bigtable application profile id to use in requests")
         )
         .arg(
             Arg::with_name("rpc_pubsub_worker_threads")
@@ -1800,9 +1822,11 @@ pub fn main() {
                     Arg::with_name("authorized_voter_keypair")
                         .index(1)
                         .value_name("KEYPAIR")
+                        .required(false)
                         .takes_value(true)
                         .validator(is_keypair)
-                        .help("Keypair of the authorized voter to add"),
+                        .help("Path to keypair of the authorized voter to add \
+                               [default: read JSON keypair from stdin]"),
                 )
                 .after_help("Note: the new authorized voter only applies to the \
                              currently running validator instance")
@@ -1845,9 +1869,11 @@ pub fn main() {
                 Arg::with_name("identity")
                     .index(1)
                     .value_name("KEYPAIR")
+                    .required(false)
                     .takes_value(true)
                     .validator(is_keypair)
-                    .help("Validator identity keypair")
+                    .help("Path to validator identity keypair \
+                           [default: read JSON keypair from stdin]")
             )
             .arg(
                 clap::Arg::with_name("require_tower")
@@ -1916,36 +1942,64 @@ pub fn main() {
         ("authorized-voter", Some(authorized_voter_subcommand_matches)) => {
             match authorized_voter_subcommand_matches.subcommand() {
                 ("add", Some(subcommand_matches)) => {
-                    let authorized_voter_keypair =
-                        value_t_or_exit!(subcommand_matches, "authorized_voter_keypair", String);
+                    if let Some(authorized_voter_keypair) =
+                        value_t!(subcommand_matches, "authorized_voter_keypair", String).ok()
+                    {
+                        let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
+                            .unwrap_or_else(|err| {
+                                println!(
+                                    "Unable to access path: {}: {:?}",
+                                    authorized_voter_keypair, err
+                                );
+                                exit(1);
+                            });
+                        println!(
+                            "Adding authorized voter path: {}",
+                            authorized_voter_keypair.display()
+                        );
 
-                    let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
-                        .unwrap_or_else(|err| {
-                            println!(
-                                "Unable to access path: {}: {:?}",
-                                authorized_voter_keypair, err
-                            );
-                            exit(1);
-                        });
-                    println!(
-                        "Adding authorized voter: {}",
-                        authorized_voter_keypair.display()
-                    );
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async move {
+                                admin_client
+                                    .await?
+                                    .add_authorized_voter(
+                                        authorized_voter_keypair.display().to_string(),
+                                    )
+                                    .await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("addAuthorizedVoter request failed: {}", err);
+                                exit(1);
+                            });
+                    } else {
+                        let mut stdin = std::io::stdin();
+                        let authorized_voter_keypair =
+                            read_keypair(&mut stdin).unwrap_or_else(|err| {
+                                println!("Unable to read JSON keypair from stdin: {:?}", err);
+                                exit(1);
+                            });
+                        println!(
+                            "Adding authorized voter: {}",
+                            authorized_voter_keypair.pubkey()
+                        );
 
-                    let admin_client = admin_rpc_service::connect(&ledger_path);
-                    admin_rpc_service::runtime()
-                        .block_on(async move {
-                            admin_client
-                                .await?
-                                .add_authorized_voter(
-                                    authorized_voter_keypair.display().to_string(),
-                                )
-                                .await
-                        })
-                        .unwrap_or_else(|err| {
-                            println!("addAuthorizedVoter request failed: {}", err);
-                            exit(1);
-                        });
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async move {
+                                admin_client
+                                    .await?
+                                    .add_authorized_voter_from_bytes(Vec::from(
+                                        authorized_voter_keypair.to_bytes(),
+                                    ))
+                                    .await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("addAuthorizedVoterFromBytes request failed: {}", err);
+                                exit(1);
+                            });
+                    }
+
                     return;
                 }
                 ("remove-all", _) => {
@@ -2027,26 +2081,54 @@ pub fn main() {
         }
         ("set-identity", Some(subcommand_matches)) => {
             let require_tower = subcommand_matches.is_present("require_tower");
-            let identity_keypair = value_t_or_exit!(subcommand_matches, "identity", String);
 
-            let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
-                println!("Unable to access path: {}: {:?}", identity_keypair, err);
-                exit(1);
-            });
-            println!("Validator identity: {}", identity_keypair.display());
-
-            let admin_client = admin_rpc_service::connect(&ledger_path);
-            admin_rpc_service::runtime()
-                .block_on(async move {
-                    admin_client
-                        .await?
-                        .set_identity(identity_keypair.display().to_string(), require_tower)
-                        .await
-                })
-                .unwrap_or_else(|err| {
-                    println!("setIdentity request failed: {}", err);
+            if let Some(identity_keypair) = value_t!(subcommand_matches, "identity", String).ok() {
+                let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
+                    println!("Unable to access path: {}: {:?}", identity_keypair, err);
                     exit(1);
                 });
+                println!(
+                    "New validator identity path: {}",
+                    identity_keypair.display()
+                );
+
+                let admin_client = admin_rpc_service::connect(&ledger_path);
+                admin_rpc_service::runtime()
+                    .block_on(async move {
+                        admin_client
+                            .await?
+                            .set_identity(identity_keypair.display().to_string(), require_tower)
+                            .await
+                    })
+                    .unwrap_or_else(|err| {
+                        println!("setIdentity request failed: {}", err);
+                        exit(1);
+                    });
+            } else {
+                let mut stdin = std::io::stdin();
+                let identity_keypair = read_keypair(&mut stdin).unwrap_or_else(|err| {
+                    println!("Unable to read JSON keypair from stdin: {:?}", err);
+                    exit(1);
+                });
+                println!("New validator identity: {}", identity_keypair.pubkey());
+
+                let admin_client = admin_rpc_service::connect(&ledger_path);
+                admin_rpc_service::runtime()
+                    .block_on(async move {
+                        admin_client
+                            .await?
+                            .set_identity_from_bytes(
+                                Vec::from(identity_keypair.to_bytes()),
+                                require_tower,
+                            )
+                            .await
+                    })
+                    .unwrap_or_else(|err| {
+                        println!("setIdentityFromBytes request failed: {}", err);
+                        exit(1);
+                    });
+            };
+
             return;
         }
         ("set-log-filter", Some(subcommand_matches)) => {
@@ -2214,6 +2296,8 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
+    let enable_quic_servers = matches.is_present("enable_quic_servers");
+    let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
     if !(0.0..=1.0).contains(&shrink_ratio) {
@@ -2385,6 +2469,11 @@ pub fn main() {
         Some(RpcBigtableConfig {
             enable_bigtable_ledger_upload: matches.is_present("enable_bigtable_ledger_upload"),
             bigtable_instance_name: value_t_or_exit!(matches, "rpc_bigtable_instance_name", String),
+            bigtable_app_profile_id: value_t_or_exit!(
+                matches,
+                "rpc_bigtable_app_profile_id",
+                String
+            ),
             timeout: value_t!(matches, "rpc_bigtable_timeout", u64)
                 .ok()
                 .map(Duration::from_secs),
@@ -2527,7 +2616,6 @@ pub fn main() {
                 "rpc_send_transaction_service_max_retries",
                 usize
             ),
-            use_quic: tpu_use_quic,
             batch_send_rate_ms: rpc_send_batch_send_rate_ms,
             batch_size: rpc_send_batch_size,
         },
@@ -2551,6 +2639,7 @@ pub fn main() {
             bpf_jit: !matches.is_present("no_bpf_jit"),
             ..RuntimeConfig::default()
         },
+        enable_quic_servers,
         ..ValidatorConfig::default()
     };
 
@@ -2771,10 +2860,7 @@ pub fn main() {
                 "fifo" => {
                     let shred_storage_size =
                         value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
-                    ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions {
-                        shred_data_cf_size: shred_storage_size / 2,
-                        shred_code_cf_size: shred_storage_size / 2,
-                    })
+                    ShredStorageType::rocks_fifo(shred_storage_size)
                 }
                 _ => panic!(
                     "Unrecognized rocksdb-shred-compaction: {}",
@@ -2980,6 +3066,7 @@ pub fn main() {
         start_progress,
         socket_addr_space,
         tpu_use_quic,
+        tpu_connection_pool_size,
     );
     *admin_service_post_init.write().unwrap() =
         Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {

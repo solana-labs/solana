@@ -1,7 +1,7 @@
 use {
     super::*,
     solana_entry::entry::Entry,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
 };
 
@@ -28,7 +28,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     fn run(
         &mut self,
         keypair: &Keypair,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -60,6 +60,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
             self.next_code_index,
+            &mut ProcessShredsStats::default(),
         );
 
         // If the last blockhash is default, a new block is being created
@@ -78,6 +79,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
             self.next_code_index,
+            &mut ProcessShredsStats::default(),
         );
 
         if let Some(index) = coding_shreds
@@ -120,10 +122,10 @@ impl BroadcastRun for BroadcastFakeShredsRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<TransmitReceiver>>,
+        receiver: &Mutex<TransmitReceiver>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        _bank_forks: &Arc<RwLock<BankForks>>,
+        _bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
         for (data_shreds, batch_info) in receiver.lock().unwrap().iter() {
             let fake = batch_info.is_some();
@@ -139,11 +141,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
         }
         Ok(())
     }
-    fn record(
-        &mut self,
-        receiver: &Arc<Mutex<RecordReceiver>>,
-        blockstore: &Arc<Blockstore>,
-    ) -> Result<()> {
+    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
         for (data_shreds, _) in receiver.lock().unwrap().iter() {
             blockstore.insert_shreds(data_shreds.to_vec(), None, true)?;
         }

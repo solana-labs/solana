@@ -9,7 +9,14 @@ if [[ $OSTYPE == darwin* ]]; then
   # Mac OS X's version of `readlink` does not support the -f option,
   # But `greadlink` does, which you can get with `brew install coreutils`
   readlink_cmd="greadlink"
+
+  if ! command -v ${readlink_cmd} &> /dev/null
+  then
+    echo "${readlink_cmd} could not be found. You may need to install coreutils: \`brew install coreutils\`"
+    exit 1
+  fi
 fi
+
 cargo="$("${readlink_cmd}" -f "${here}/../cargo")"
 
 set -e

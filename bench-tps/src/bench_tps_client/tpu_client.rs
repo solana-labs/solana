@@ -2,8 +2,8 @@ use {
     crate::bench_tps_client::{BenchTpsClient, Result},
     solana_client::tpu_client::TpuClient,
     solana_sdk::{
-        commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash, message::Message,
-        pubkey::Pubkey, signature::Signature, transaction::Transaction,
+        account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
+        message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
     },
 };
 
@@ -94,6 +94,12 @@ impl BenchTpsClient for TpuClient {
     ) -> Result<Signature> {
         self.rpc_client()
             .request_airdrop_with_blockhash(pubkey, lamports, recent_blockhash)
+            .map_err(|err| err.into())
+    }
+
+    fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
+        self.rpc_client()
+            .get_account(pubkey)
             .map_err(|err| err.into())
     }
 }

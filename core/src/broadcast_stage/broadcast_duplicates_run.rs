@@ -4,7 +4,7 @@ use {
     itertools::Itertools,
     solana_entry::entry::Entry,
     solana_gossip::cluster_info::DATA_PLANE_FANOUT,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{
         hash::Hash,
         signature::{Keypair, Signature, Signer},
@@ -64,7 +64,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
     fn run(
         &mut self,
         keypair: &Keypair,
-        _blockstore: &Arc<Blockstore>,
+        _blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -163,31 +163,47 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
             self.next_code_index,
+            &mut ProcessShredsStats::default(),
         );
 
         self.next_shred_index += data_shreds.len() as u32;
         if let Some(index) = coding_shreds.iter().map(Shred::index).max() {
             self.next_code_index = index + 1;
         }
-        let last_shreds = last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
-            let (original_last_data_shred, _) =
-                shredder.entries_to_shreds(keypair, &[original_last_entry], true, self.next_shred_index, self.next_code_index);
-
-            let (partition_last_data_shred, _) =
-                // Don't mark the last shred as last so that validators won't know that
-                // they've gotten all the shreds, and will continue trying to repair
-                shredder.entries_to_shreds(keypair, &duplicate_extra_last_entries, true, self.next_shred_index, self.next_code_index);
-
-                let sigs: Vec<_> = partition_last_data_shred.iter().map(|s| (s.signature(), s.index())).collect();
+        let last_shreds =
+            last_entries.map(|(original_last_entry, duplicate_extra_last_entries)| {
+                let (original_last_data_shred, _) = shredder.entries_to_shreds(
+                    keypair,
+                    &[original_last_entry],
+                    true,
+                    self.next_shred_index,
+                    self.next_code_index,
+                    &mut ProcessShredsStats::default(),
+                );
+                // Don't mark the last shred as last so that validators won't
+                // know that they've gotten all the shreds, and will continue
+                // trying to repair.
+                let (partition_last_data_shred, _) = shredder.entries_to_shreds(
+                    keypair,
+                    &duplicate_extra_last_entries,
+                    true,
+                    self.next_shred_index,
+                    self.next_code_index,
+                    &mut ProcessShredsStats::default(),
+                );
+                let sigs: Vec<_> = partition_last_data_shred
+                    .iter()
+                    .map(|s| (s.signature(), s.index()))
+                    .collect();
                 info!(
                     "duplicate signatures for slot {}, sigs: {:?}",
                     bank.slot(),
                     sigs,
                 );
 
-            self.next_shred_index += 1;
-            (original_last_data_shred, partition_last_data_shred)
-        });
+                self.next_shred_index += 1;
+                (original_last_data_shred, partition_last_data_shred)
+            });
 
         let data_shreds = Arc::new(data_shreds);
         blockstore_sender.send((data_shreds.clone(), None))?;
@@ -238,10 +254,10 @@ impl BroadcastRun for BroadcastDuplicatesRun {
 
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<TransmitReceiver>>,
+        receiver: &Mutex<TransmitReceiver>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
         let (shreds, _) = receiver.lock().unwrap().recv()?;
         if shreds.is_empty() {
@@ -342,11 +358,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         Ok(())
     }
 
-    fn record(
-        &mut self,
-        receiver: &Arc<Mutex<RecordReceiver>>,
-        blockstore: &Arc<Blockstore>,
-    ) -> Result<()> {
+    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
         let (all_shreds, _) = receiver.lock().unwrap().recv()?;
         blockstore
             .insert_shreds(all_shreds.to_vec(), None, true)
