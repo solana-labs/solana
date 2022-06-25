@@ -4012,7 +4012,7 @@ dependencies = [
 
 [[package]]
 name = "sealevel-ffi"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "solana-bpf-loader-program",
  "solana-program-runtime",
