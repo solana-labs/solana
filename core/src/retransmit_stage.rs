@@ -53,6 +53,7 @@ use {
 
 const MAX_DUPLICATE_COUNT: usize = 2;
 const DEFAULT_LRU_SIZE: usize = 10_000;
+const RAYON_PAR_ITER_MIN_LEN: usize = 4;
 
 const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
 const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
@@ -73,6 +74,7 @@ struct RetransmitStats {
     num_addrs_failed: AtomicUsize,
     num_shreds: usize,
     num_shreds_skipped: usize,
+    num_small_batches: usize,
     total_batches: usize,
     total_time: u64,
     epoch_fetch: u64,
@@ -106,6 +108,7 @@ impl RetransmitStats {
             ("epoch_fetch", stats.epoch_fetch, i64),
             ("epoch_cache_update", stats.epoch_cache_update, i64),
             ("total_batches", stats.total_batches, i64),
+            ("num_small_batches", stats.num_small_batches, i64),
             ("num_nodes", stats.num_nodes.into_inner(), i64),
             ("num_addrs_failed", stats.num_addrs_failed.into_inner(), i64),
             ("num_shreds", stats.num_shreds, i64),
@@ -237,12 +240,19 @@ fn retransmit(
         .flatten()
         .collect();
     let socket_addr_space = cluster_info.socket_addr_space();
-    let slot_stats = thread_pool.install(|| {
+    let record = |mut stats: HashMap<Slot, RetransmitSlotStats>,
+                  (slot, root_distance, num_nodes)| {
+        let now = timestamp();
+        let entry = stats.entry(slot).or_default();
+        entry.record(now, root_distance, num_nodes);
+        stats
+    };
+    let slot_stats = if shreds.len() <= RAYON_PAR_ITER_MIN_LEN {
+        stats.num_small_batches += 1;
         shreds
-            .into_par_iter()
-            .with_min_len(4)
-            .map(|(shred, slot_leader, cluster_nodes)| {
-                let index = thread_pool.current_thread_index().unwrap();
+            .into_iter()
+            .enumerate()
+            .map(|(index, (shred, slot_leader, cluster_nodes))| {
                 let (root_distance, num_nodes) = retransmit_shred(
                     &shred,
                     slot_leader,
@@ -254,17 +264,29 @@ fn retransmit(
                 );
                 (shred.slot(), root_distance, num_nodes)
             })
-            .fold(
-                HashMap::<Slot, RetransmitSlotStats>::new,
-                |mut acc, (slot, root_distance, num_nodes)| {
-                    let now = timestamp();
-                    let slot_stats = acc.entry(slot).or_default();
-                    slot_stats.record(now, root_distance, num_nodes);
-                    acc
-                },
-            )
-            .reduce(HashMap::new, RetransmitSlotStats::merge)
-    });
+            .fold(HashMap::new(), record)
+    } else {
+        thread_pool.install(|| {
+            shreds
+                .into_par_iter()
+                .with_min_len(RAYON_PAR_ITER_MIN_LEN)
+                .map(|(shred, slot_leader, cluster_nodes)| {
+                    let index = thread_pool.current_thread_index().unwrap();
+                    let (root_distance, num_nodes) = retransmit_shred(
+                        &shred,
+                        slot_leader,
+                        &root_bank,
+                        &cluster_nodes,
+                        socket_addr_space,
+                        &sockets[index % sockets.len()],
+                        stats,
+                    );
+                    (shred.slot(), root_distance, num_nodes)
+                })
+                .fold(HashMap::new, record)
+                .reduce(HashMap::new, RetransmitSlotStats::merge)
+        })
+    };
     stats.upsert_slot_stats(slot_stats, root_bank.slot(), rpc_subscriptions);
     timer_start.stop();
     stats.total_time += timer_start.as_us();
@@ -515,6 +537,7 @@ impl RetransmitStats {
             num_shreds: 0usize,
             num_shreds_skipped: 0usize,
             total_batches: 0usize,
+            num_small_batches: 0usize,
             total_time: 0u64,
             epoch_fetch: 0u64,
             epoch_cache_update: 0u64,
