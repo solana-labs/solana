@@ -97,11 +97,11 @@ impl AccessToken {
             let token_r = self.token.read().unwrap();
 
             if token_r.1.elapsed().as_secs() < token_r.0.expires_in() as u64 / 2 {
-                info!("Token not ready to be refreshed");
+                debug!("Token not ready to be refreshed");
                 return;
             }
-            warn!("Token ready to be refreshed");
-            warn!("Current Token: {:#?}", self.token);
+            debug!("Token ready to be refreshed");
+            debug!("Current Token: {:#?}", self.token);
 
             #[allow(deprecated)]
             if self
@@ -111,7 +111,7 @@ impl AccessToken {
                 // Refresh already pending
                 let wait_time: u64 = 2;
                 let wait_time_millis = std::time::Duration::from_millis(wait_time * 1000);
-                warn!("Refresh already pending... waiting {} seconds before trying again...", wait_time);
+                debug!("Refresh already pending... waiting {} seconds before trying again...", wait_time);
 
                 tokio::time::sleep(wait_time_millis).await;
                 self.refresh_active.store(false, Ordering::Relaxed);
@@ -119,7 +119,7 @@ impl AccessToken {
             }
         }
 
-        warn!("Refreshing token");
+        info!("Refreshing token");
 
         let new_token = Self::get_token(&self.credentials, &self.scope).await;
         {
@@ -130,7 +130,7 @@ impl AccessToken {
             }
             self.refresh_active.store(false, Ordering::Relaxed);
         }
-        warn!("New Token: {:#?}", self.token);
+        debug!("New Token: {:#?}", self.token);
     }
 
     /// Return an access token suitable for use in an HTTP authorization header
