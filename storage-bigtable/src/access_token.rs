@@ -93,10 +93,10 @@ impl AccessToken {
     pub async fn refresh(&self) {
         //Check if it's time to try a token refresh
         {
-            let token_r = self.token.read().unwrap();            
+            let token_r = self.token.read().unwrap();
 
             if token_r.1.elapsed().as_secs() < token_r.0.expires_in() as u64 / 2 {
-                info!("Token not ready to be refreshed");                
+                info!("Token not ready to be refreshed");
                 return;
             }
             warn!("Token ready to be refreshed");
@@ -111,7 +111,7 @@ impl AccessToken {
                 let wait_time: u64 = 2;
                 let wait_time_millis = std::time::Duration::from_millis(wait_time * 1000);
                 warn!("Refresh already pending... waiting {} seconds before trying again...", wait_time);
-                
+
                 thread::sleep(wait_time_millis);
                 self.refresh_active.store(false, Ordering::Relaxed);
                 return;
@@ -119,7 +119,7 @@ impl AccessToken {
         }
 
         warn!("Refreshing token");
-                
+
         let new_token = Self::get_token(&self.credentials, &self.scope).await;
         {
             let mut token_w = self.token.write().unwrap();
