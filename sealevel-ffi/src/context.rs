@@ -1,5 +1,4 @@
-use std::ffi::c_void;
-use solana_rbpf::vm::SyscallRegistry;
+use {solana_rbpf::vm::SyscallRegistry, std::ffi::c_void};
 
 /// The map of syscalls provided by the virtual machine.
 #[repr(transparent)]

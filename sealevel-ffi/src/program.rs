@@ -1,8 +1,11 @@
-use solana_rbpf::vm::SyscallRegistry;
 use {
     crate::{config::sealevel_config, context::sealevel_syscall_registry, error::hoist_error},
     solana_bpf_loader_program::{BpfError, ThisInstructionMeter},
-    solana_rbpf::{elf::Executable, verifier::RequisiteVerifier, vm::VerifiedExecutable},
+    solana_rbpf::{
+        elf::Executable,
+        verifier::RequisiteVerifier,
+        vm::{Config, SyscallRegistry, VerifiedExecutable},
+    },
     std::{os::raw::c_char, ptr::null_mut},
 };
 
@@ -27,7 +30,8 @@ pub struct sealevel_instruction_account {
 ///
 /// Sets `sealevel_errno` and returns a null pointer if loading failed.
 ///
-/// Consumes the given syscall registry.
+/// Syscalls and config may be null pointers, in which case defaults are used.
+/// These defaults is not stable across any libsealevel versions.
 ///
 /// # Safety
 /// Avoid the following undefined behavior:
@@ -41,11 +45,18 @@ pub unsafe extern "C" fn sealevel_load_program(
     data_len: usize,
 ) -> *mut sealevel_executable {
     let data_slice = std::slice::from_raw_parts(data as *const u8, data_len);
-    let load_result = Executable::<BpfError, ThisInstructionMeter>::from_elf(
-        data_slice,
-        (*config).config,
-        (*(syscalls.0 as *mut SyscallRegistry)).clone(),
-    );
+    let config = if config.is_null() {
+        Config::default()
+    } else {
+        (*config).config
+    };
+    let syscalls = if syscalls.0.is_null() {
+        SyscallRegistry::default()
+    } else {
+        (*(syscalls.0 as *mut SyscallRegistry)).clone()
+    };
+    let load_result =
+        Executable::<BpfError, ThisInstructionMeter>::from_elf(data_slice, config, syscalls);
     let executable = match hoist_error(load_result) {
         None => return null_mut(),
         Some(v) => v,

@@ -105,26 +105,17 @@ int main(int argc, const char *argv[]) {
   params.n1 = LE64((int64_t) atoll(argv[1]));
   params.n2 = LE64((int64_t) atoll(argv[2]));
 
-  int status = EXIT_SUCCESS;
-
-  sealevel_config *config = sealevel_config_new();
-  assert(config != NULL);
-
-  sealevel_syscall_registry *syscalls = sealevel_syscall_registry_new();
-  assert(syscalls != NULL);
-
   sealevel_executable *program = NULL;
   sealevel_vm *vm = NULL;
 
   program = sealevel_load_program(
-      config,
-      syscalls,
+      /* config */ NULL,
+      /* syscalls */ NULL,
       (const char *) &program_elf,
       sizeof(program_elf));
   if (program == NULL) {
     fprintf(stderr, "Failed to load program code: %s\n", sealevel_strerror());
-    status = EXIT_FAILURE;
-    goto beach;
+    return EXIT_FAILURE;
   }
 
   const sealevel_region regions[1] = {
@@ -146,16 +137,12 @@ int main(int argc, const char *argv[]) {
   int64_t result = (int64_t) sealevel_vm_execute(vm);
   if (sealevel_errno() != SEALEVEL_OK) {
     fprintf(stderr, "Execution failed: %s\n", sealevel_strerror());
-    status = EXIT_FAILURE;
-    goto beach;
+    return EXIT_FAILURE;
   }
 
   printf("Success: %lld\n", result);
 
-beach:
   sealevel_vm_destroy(vm);
-  sealevel_syscall_registry_free(syscalls);
-  sealevel_config_free(config);
 
-  return status;
+  return EXIT_SUCCESS;
 }
