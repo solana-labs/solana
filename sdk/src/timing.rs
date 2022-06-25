@@ -66,11 +66,12 @@ pub fn slot_duration_from_slots_per_year(slots_per_year: f64) -> Duration {
 }
 
 #[derive(Debug, Default)]
-pub struct AtomicInterval {
-    last_update: AtomicU64,
+pub struct Interval<T> {
+    last_update: T,
 }
 
-impl AtomicInterval {
+/// Thread safe
+impl Interval<AtomicU64> {
     /// true if 'interval_time_ms' has elapsed since last time we returned true as long as it has been 'interval_time_ms' since this struct was created
     pub fn should_update(&self, interval_time_ms: u64) -> bool {
         self.should_update_ext(interval_time_ms, true)
@@ -103,17 +104,78 @@ impl AtomicInterval {
     }
 }
 
+/// Not thread safe
+impl Interval<u64> {
+    /// true if 'interval_time_ms' has elapsed since last time we returned true as long as it has
+    /// been 'interval_time_ms' since this struct was created
+    pub fn should_update(&mut self, interval_time_ms: u64) -> bool {
+        self.should_update_ext(interval_time_ms, true)
+    }
+
+    /// a primary use case is periodic metric reporting,
+    /// true if 'interval_time_ms' has elapsed since last time we returned true
+    /// except, if skip_first=false, false until 'interval_time_ms' has elapsed since this struct was created
+    pub fn should_update_ext(&mut self, interval_time_ms: u64, skip_first: bool) -> bool {
+        let now = timestamp();
+        let last = self.last_update;
+
+        let passed = now.saturating_sub(last) > interval_time_ms && !(skip_first && last == 0);
+        if passed || last == 0 {
+            self.last_update = now;
+        }
+        return passed;
+    }
+
+    /// return ms elapsed since the last time the time was set
+    pub fn elapsed_ms(&self) -> u64 {
+        let now = timestamp();
+        let last = self.last_update;
+        now.saturating_sub(last) // wrapping somehow?
+    }
+
+    /// return ms until the interval_time will have elapsed
+    pub fn remaining_until_next_interval(&self, interval_time: u64) -> u64 {
+        interval_time.saturating_sub(self.elapsed_ms())
+    }
+}
+
+/// Thread safe. Can be used to time single/mutli thread execution. If you are timing single thread
+/// exectuion, consider using NonAtomicInterval, the no thread safe but with better performance.
+pub type AtomicInterval = Interval<AtomicU64>;
+
+/// Not thread safe. Should only be used to time single thread execution.
+pub type NonAtomicInterval = Interval<u64>;
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn test_interval_update() {
+    fn test_atomic_interval_update() {
         solana_logger::setup();
         let i = AtomicInterval::default();
         assert!(!i.should_update(1000));
 
         let i = AtomicInterval::default();
+        assert!(i.should_update_ext(1000, false));
+
+        std::thread::sleep(Duration::from_millis(10));
+        assert!(i.elapsed_ms() > 9 && i.elapsed_ms() < 1000);
+        assert!(
+            i.remaining_until_next_interval(1000) > 9
+                && i.remaining_until_next_interval(1000) < 991
+        );
+        assert!(i.should_update(9));
+        assert!(!i.should_update(100));
+    }
+
+    #[test]
+    fn test_non_atomic_interval_update() {
+        solana_logger::setup();
+        let mut i = NonAtomicInterval::default();
+        assert!(!i.should_update(1000));
+
+        let mut i = NonAtomicInterval::default();
         assert!(i.should_update_ext(1000, false));
 
         std::thread::sleep(Duration::from_millis(10));

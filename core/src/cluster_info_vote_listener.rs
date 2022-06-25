@@ -40,7 +40,7 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         slot_hashes,
-        timing::AtomicInterval,
+        timing::NonAtomicInterval,
         transaction::Transaction,
     },
     std::{
@@ -187,7 +187,7 @@ impl BankSendVotesStats {
 struct VoteProcessingTiming {
     gossip_txn_processing_time_us: u64,
     gossip_slot_confirming_time_us: u64,
-    last_report: AtomicInterval,
+    last_report: NonAtomicInterval,
 }
 
 const VOTE_PROCESSING_REPORT_INTERVAL_MS: u64 = 1_000;
