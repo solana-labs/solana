@@ -572,8 +572,8 @@ fn get_rpc_node(
 
         let peer_snapshot_hashes = get_peer_snapshot_hashes(
             cluster_info,
-            validator_config,
             &rpc_peers,
+            &validator_config.known_validators,
             bootstrap_config.incremental_snapshot_fetch,
         );
 
@@ -653,16 +653,16 @@ fn get_highest_local_snapshot_hash(
 /// 3. have the highest full snapshot slot of (2)
 fn get_peer_snapshot_hashes(
     cluster_info: &ClusterInfo,
-    validator_config: &ValidatorConfig,
     rpc_peers: &[ContactInfo],
+    known_validators: &Option<HashSet<Pubkey>>,
     incremental_snapshot_fetch: bool,
 ) -> Vec<PeerSnapshotHash> {
     let mut peer_snapshot_hashes =
         get_eligible_peer_snapshot_hashes(cluster_info, rpc_peers, incremental_snapshot_fetch);
-    if validator_config.known_validators.is_some() {
+    if known_validators.is_some() {
         let known_snapshot_hashes = get_snapshot_hashes_from_known_validators(
             cluster_info,
-            validator_config,
+            known_validators,
             incremental_snapshot_fetch,
         );
         retain_peer_snapshot_hashes_that_match_known_snapshot_hashes(
@@ -692,7 +692,7 @@ type KnownSnapshotHashes = HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>;
 /// This applies to both full and incremental snapshot hashes.
 fn get_snapshot_hashes_from_known_validators(
     cluster_info: &ClusterInfo,
-    validator_config: &ValidatorConfig,
+    known_validators: &Option<HashSet<Pubkey>>,
     incremental_snapshot_fetch: bool,
 ) -> KnownSnapshotHashes {
     // Get the full snapshot hashes for a node from CRDS
@@ -711,8 +711,7 @@ fn get_snapshot_hashes_from_known_validators(
             .map(|hashes| (hashes.base, hashes.hashes))
     };
 
-    validator_config
-        .known_validators
+    known_validators
         .as_ref()
         .map(|known_validators| {
             build_known_snapshot_hashes(
