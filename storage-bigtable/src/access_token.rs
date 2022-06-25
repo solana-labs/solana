@@ -121,7 +121,7 @@ impl AccessToken {
         }
 
         warn!("Refreshing token");
-                
+
         let new_token = Self::get_token(&self.credentials, &self.scope).await;
         {
             let mut token_w = self.token.write().unwrap();
