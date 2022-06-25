@@ -91,12 +91,16 @@ impl AccessToken {
 
     /// Call this function regularly to ensure the access token does not expire
     pub async fn refresh(&self) {
-        // Check if it's time to try a token refresh
+        //Check if it's time to try a token refresh
         {
-            let token_r = self.token.read().unwrap();
+            let token_r = self.token.read().unwrap();            
+
             if token_r.1.elapsed().as_secs() < token_r.0.expires_in() as u64 / 2 {
+                info!("Token not ready to be refreshed");                
                 return;
             }
+            warn!("Token ready to be refreshed");
+            warn!("Current Token: {:#?}", self.token);
 
             #[allow(deprecated)]
             if self
@@ -104,11 +108,18 @@ impl AccessToken {
                 .compare_and_swap(false, true, Ordering::Relaxed)
             {
                 // Refresh already pending
+                let wait_time: u64 = 2;
+                let wait_time_millis = std::time::Duration::from_millis(wait_time * 1000);
+                warn!("Refresh already pending... waiting {} seconds before trying again...", wait_time);
+                
+                thread::sleep(wait_time_millis);
+                self.refresh_active.store(false, Ordering::Relaxed);
                 return;
             }
         }
 
-        info!("Refreshing token");
+        warn!("Refreshing token");
+                
         let new_token = Self::get_token(&self.credentials, &self.scope).await;
         {
             let mut token_w = self.token.write().unwrap();
@@ -118,6 +129,7 @@ impl AccessToken {
             }
             self.refresh_active.store(false, Ordering::Relaxed);
         }
+        warn!("New Token: {:#?}", self.token);
     }
 
     /// Return an access token suitable for use in an HTTP authorization header
