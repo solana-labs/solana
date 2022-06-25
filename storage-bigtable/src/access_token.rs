@@ -15,7 +15,6 @@ use {
             {Arc, RwLock},
         },
         time::Instant,
-        time::Duration,
         thread,
     },
 };
