@@ -11,16 +11,10 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-        sync::{Arc, Once, RwLock, RwLockReadGuard},
+        sync::{Arc, Once, RwLock},
     },
     thiserror::Error,
 };
-
-// The value here does not matter. It will be overwritten
-// at the first call to VoteAccount::vote_state().
-const INVALID_VOTE_STATE: Result<VoteState, Error> = Err(Error::InstructionError(
-    InstructionError::InvalidAccountData,
-));
 
 #[derive(Clone, Debug, PartialEq, AbiExample, Deserialize)]
 #[serde(try_from = "AccountSharedData")]
@@ -37,8 +31,7 @@ pub enum Error {
 #[derive(Debug, AbiExample)]
 struct VoteAccountInner {
     account: AccountSharedData,
-    vote_state: RwLock<Result<VoteState, Error>>,
-    vote_state_once: Once,
+    vote_state: Arc<VoteState>,
 }
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
@@ -60,16 +53,6 @@ pub struct VoteAccounts {
     staked_nodes_once: Once,
 }
 
-impl VoteAccounts {
-    pub fn num_vote_accounts(&self) -> usize {
-        self.vote_accounts.len()
-    }
-
-    pub fn num_staked_nodes(&self) -> usize {
-        self.staked_nodes.read().unwrap().len()
-    }
-}
-
 impl VoteAccount {
     pub(crate) fn lamports(&self) -> u64 {
         self.0.account.lamports()
@@ -79,28 +62,18 @@ impl VoteAccount {
         self.0.account.owner()
     }
 
-    pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, Error>> {
-        let inner = &self.0;
-        inner.vote_state_once.call_once(|| {
-            let vote_state = VoteState::deserialize(inner.account.data());
-            *inner.vote_state.write().unwrap() = vote_state.map_err(Error::from);
-        });
-        inner.vote_state.read().unwrap()
-    }
-
-    pub(crate) fn is_deserialized(&self) -> bool {
-        self.0.vote_state_once.is_completed()
-    }
-
-    /// VoteState.node_pubkey of this vote-account.
-    fn node_pubkey(&self) -> Option<Pubkey> {
-        Some(self.vote_state().as_ref().ok()?.node_pubkey)
+    pub fn vote_state(&self) -> Arc<VoteState> {
+        self.0.vote_state.clone()
     }
 }
 
 impl VoteAccounts {
-    pub(crate) fn len(&self) -> usize {
+    pub fn num_vote_accounts(&self) -> usize {
         self.vote_accounts.len()
+    }
+
+    pub fn num_staked_nodes(&self) -> usize {
+        self.staked_nodes.read().unwrap().len()
     }
 
     pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
@@ -109,10 +82,7 @@ impl VoteAccounts {
                 .vote_accounts
                 .values()
                 .filter(|(stake, _)| *stake != 0)
-                .filter_map(|(stake, vote_account)| {
-                    let node_pubkey = vote_account.node_pubkey()?;
-                    Some((node_pubkey, stake))
-                })
+                .map(|(stake, vote_account)| (vote_account.vote_state().node_pubkey, stake))
                 .into_grouping_map()
                 .aggregate(|acc, _node_pubkey, stake| Some(acc.unwrap_or_default() + stake));
             *self.staked_nodes.write().unwrap() = Arc::new(staked_nodes)
@@ -190,32 +160,30 @@ impl VoteAccounts {
 
     fn add_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
-            if let Some(node_pubkey) = vote_account.node_pubkey() {
-                let mut staked_nodes = self.staked_nodes.write().unwrap();
-                let staked_nodes = Arc::make_mut(&mut staked_nodes);
-                staked_nodes
-                    .entry(node_pubkey)
-                    .and_modify(|s| *s += stake)
-                    .or_insert(stake);
-            }
+            let node_pubkey = vote_account.vote_state().node_pubkey;
+            let mut staked_nodes = self.staked_nodes.write().unwrap();
+            let staked_nodes = Arc::make_mut(&mut staked_nodes);
+            staked_nodes
+                .entry(node_pubkey)
+                .and_modify(|s| *s += stake)
+                .or_insert(stake);
         }
     }
 
     fn sub_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
-            if let Some(node_pubkey) = vote_account.node_pubkey() {
-                let mut staked_nodes = self.staked_nodes.write().unwrap();
-                let staked_nodes = Arc::make_mut(&mut staked_nodes);
-                match staked_nodes.entry(node_pubkey) {
-                    Entry::Vacant(_) => panic!("this should not happen!"),
-                    Entry::Occupied(mut entry) => match entry.get().cmp(&stake) {
-                        Ordering::Less => panic!("subtraction value exceeds node's stake"),
-                        Ordering::Equal => {
-                            entry.remove_entry();
-                        }
-                        Ordering::Greater => *entry.get_mut() -= stake,
-                    },
-                }
+            let node_pubkey = vote_account.vote_state().node_pubkey;
+            let mut staked_nodes = self.staked_nodes.write().unwrap();
+            let staked_nodes = Arc::make_mut(&mut staked_nodes);
+            match staked_nodes.entry(node_pubkey) {
+                Entry::Vacant(_) => panic!("this should not happen!"),
+                Entry::Occupied(mut entry) => match entry.get().cmp(&stake) {
+                    Ordering::Less => panic!("subtraction value exceeds node's stake"),
+                    Ordering::Equal => {
+                        entry.remove_entry();
+                    }
+                    Ordering::Greater => *entry.get_mut() -= stake,
+                },
             }
         }
     }
@@ -250,10 +218,10 @@ impl TryFrom<AccountSharedData> for VoteAccountInner {
         if !solana_vote_program::check_id(account.owner()) {
             return Err(Error::InvalidOwner(*account.owner()));
         }
+        let vote_state = Arc::new(VoteState::deserialize(account.data()).map_err(Error::from)?);
         Ok(Self {
             account,
-            vote_state: RwLock::new(INVALID_VOTE_STATE),
-            vote_state_once: Once::new(),
+            vote_state,
         })
     }
 }
@@ -263,7 +231,6 @@ impl PartialEq<VoteAccountInner> for VoteAccountInner {
         let Self {
             account,
             vote_state: _,
-            vote_state_once: _,
         } = self;
         account == &other.account
     }
@@ -418,12 +385,10 @@ mod tests {
             .into_iter()
             .filter(|(_, (stake, _))| *stake != 0)
         {
-            if let Some(node_pubkey) = vote_account.node_pubkey() {
-                staked_nodes
-                    .entry(node_pubkey)
-                    .and_modify(|s| *s += *stake)
-                    .or_insert(*stake);
-            }
+            staked_nodes
+                .entry(vote_account.vote_state().node_pubkey)
+                .and_modify(|s| *s += *stake)
+                .or_insert(*stake);
         }
         staked_nodes
     }
@@ -435,9 +400,7 @@ mod tests {
         let lamports = account.lamports();
         let vote_account = VoteAccount::try_from(account).unwrap();
         assert_eq!(lamports, vote_account.lamports());
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
-        // 2nd call to .vote_state() should return the cached value.
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(&vote_state, vote_account.vote_state().as_ref());
     }
 
     #[test]
@@ -445,7 +408,7 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::try_from(account.clone()).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(&vote_state, vote_account.vote_state().as_ref());
         // Assert than VoteAccount has the same wire format as Account.
         assert_eq!(
             bincode::serialize(&account).unwrap(),
@@ -459,13 +422,10 @@ mod tests {
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let data = bincode::serialize(&account).unwrap();
         let vote_account = VoteAccount::try_from(account).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(&vote_state, vote_account.vote_state().as_ref());
         let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         assert_eq!(vote_account, other_vote_account);
-        assert_eq!(
-            vote_state,
-            *other_vote_account.vote_state().as_ref().unwrap()
-        );
+        assert_eq!(&vote_state, other_vote_account.vote_state().as_ref());
     }
 
     #[test]
@@ -473,15 +433,12 @@ mod tests {
         let mut rng = rand::thread_rng();
         let (account, vote_state) = new_rand_vote_account(&mut rng, None);
         let vote_account = VoteAccount::try_from(account).unwrap();
-        assert_eq!(vote_state, *vote_account.vote_state().as_ref().unwrap());
+        assert_eq!(&vote_state, vote_account.vote_state().as_ref());
         let data = bincode::serialize(&vote_account).unwrap();
         let other_vote_account: VoteAccount = bincode::deserialize(&data).unwrap();
         // Assert that serialize->deserialized returns the same VoteAccount.
         assert_eq!(vote_account, other_vote_account);
-        assert_eq!(
-            vote_state,
-            *other_vote_account.vote_state().as_ref().unwrap()
-        );
+        assert_eq!(&vote_state, other_vote_account.vote_state().as_ref());
     }
 
     #[test]
@@ -583,7 +540,7 @@ mod tests {
         let staked_nodes = vote_accounts.staked_nodes();
         let (pubkey, (more_stake, vote_account)) =
             accounts.find(|(_, (stake, _))| *stake != 0).unwrap();
-        let node_pubkey = vote_account.node_pubkey().unwrap();
+        let node_pubkey = vote_account.vote_state().node_pubkey;
         vote_accounts.insert(pubkey, (more_stake, vote_account));
         assert_ne!(staked_nodes, vote_accounts.staked_nodes());
         assert_eq!(

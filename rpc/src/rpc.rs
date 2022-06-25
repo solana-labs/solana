@@ -88,7 +88,7 @@ use {
         RewardType, TransactionBinaryEncoding, TransactionConfirmationStatus, TransactionStatus,
         UiConfirmedBlock, UiTransactionEncoding,
     },
-    solana_vote_program::vote_state::{VoteState, MAX_LOCKOUT_HISTORY},
+    solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     spl_token_2022::{
         extension::StateWithExtensions,
         solana_program::program_pack::Pack,
@@ -921,7 +921,6 @@ impl JsonRpcRequestProcessor {
         let epoch_vote_accounts = bank
             .epoch_vote_accounts(bank.get_epoch_and_slot_index(bank.slot()).0)
             .ok_or_else(Error::invalid_request)?;
-        let default_vote_state = VoteState::default();
         let delinquent_validator_slot_distance = config
             .delinquent_slot_distance
             .unwrap_or(DELINQUENT_VALIDATOR_SLOT_DISTANCE);
@@ -938,7 +937,6 @@ impl JsonRpcRequestProcessor {
                 }
 
                 let vote_state = account.vote_state();
-                let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
                 let last_vote = if let Some(vote) = vote_state.votes.iter().last() {
                     vote.slot
                 } else {
@@ -4594,7 +4592,7 @@ pub mod tests {
         },
         solana_vote_program::{
             vote_instruction,
-            vote_state::{Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+            vote_state::{Vote, VoteInit, VoteState, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
         spl_token_2022::{
             extension::{

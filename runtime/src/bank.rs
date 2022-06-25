@@ -156,7 +156,7 @@ use {
         collections::{HashMap, HashSet},
         convert::{TryFrom, TryInto},
         fmt, mem,
-        ops::{Deref, Div, RangeInclusive},
+        ops::{Div, RangeInclusive},
         path::PathBuf,
         rc::Rc,
         sync::{
@@ -2769,7 +2769,8 @@ impl Bank {
     ) -> LoadVoteAndStakeAccountsResult {
         let stakes = self.stakes_cache.stakes();
         let cached_vote_accounts = stakes.vote_accounts();
-        let vote_with_stake_delegations_map = DashMap::with_capacity(cached_vote_accounts.len());
+        let vote_with_stake_delegations_map =
+            DashMap::with_capacity(cached_vote_accounts.num_vote_accounts());
         let invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
         let invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason> = DashMap::new();
         let invalid_cached_stake_accounts = AtomicUsize::default();
@@ -2986,15 +2987,8 @@ impl Bank {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::WrongOwner);
                 return None;
             }
-            let vote_state = match vote_account.vote_state().deref() {
-                Ok(vote_state) => vote_state.clone(),
-                Err(_) => {
-                    invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::BadState);
-                    return None;
-                }
-            };
             let vote_with_stake_delegations = VoteWithStakeDelegations {
-                vote_state: Arc::new(vote_state),
+                vote_state: vote_account.vote_state(),
                 vote_account: AccountSharedData::from(vote_account),
                 delegations: Vec::default(),
             };
@@ -3285,7 +3279,6 @@ impl Bank {
         let vote_accounts = self.vote_accounts();
         let recent_timestamps = vote_accounts.iter().filter_map(|(pubkey, (_, account))| {
             let vote_state = account.vote_state();
-            let vote_state = vote_state.as_ref().ok()?;
             let slot_delta = self.slot().checked_sub(vote_state.last_timestamp.slot)?;
             (slot_delta <= slots_per_epoch).then(|| {
                 (
@@ -5051,8 +5044,7 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    let node_pubkey = account.vote_state().as_ref().ok()?.node_pubkey;
-                    Some((node_pubkey, *staked))
+                    Some((account.vote_state().node_pubkey, *staked))
                 }
             })
             .collect::<Vec<(Pubkey, u64)>>();
@@ -11749,12 +11741,8 @@ pub(crate) mod tests {
                 accounts
                     .iter()
                     .filter_map(|(pubkey, (stake, account))| {
-                        if let Ok(vote_state) = account.vote_state().as_ref() {
-                            if vote_state.node_pubkey == leader_pubkey {
-                                Some((*pubkey, *stake))
-                            } else {
-                                None
-                            }
+                        if account.vote_state().node_pubkey == leader_pubkey {
+                            Some((*pubkey, *stake))
                         } else {
                             None
                         }

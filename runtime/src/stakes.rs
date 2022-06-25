@@ -95,10 +95,6 @@ impl StakesCache {
             if VoteState::is_correct_size_and_initialized(account.data()) {
                 match VoteAccount::try_from(account.to_account_shared_data()) {
                     Ok(vote_account) => {
-                        {
-                            // Called to eagerly deserialize vote state
-                            let _res = vote_account.vote_state();
-                        }
                         let mut stakes = self.0.write().unwrap();
                         stakes.upsert_vote_account(pubkey, vote_account);
                     }
@@ -341,7 +337,6 @@ impl Stakes<StakeAccount> {
 
     fn upsert_vote_account(&mut self, vote_pubkey: &Pubkey, vote_account: VoteAccount) {
         debug_assert_ne!(vote_account.lamports(), 0u64);
-        debug_assert!(vote_account.is_deserialized());
         // unconditionally remove existing at first; there is no dependent calculated state for
         // votes, not like stakes (stake codepath maintains calculated stake value grouped by
         // delegated vote pubkey)
@@ -378,7 +373,7 @@ impl Stakes<StakeAccount> {
 
     pub(crate) fn highest_staked_node(&self) -> Option<Pubkey> {
         let vote_account = self.vote_accounts.find_max_by_delegated_stake()?;
-        Some(vote_account.vote_state().as_ref().ok()?.node_pubkey)
+        Some(vote_account.vote_state().node_pubkey)
     }
 }
 

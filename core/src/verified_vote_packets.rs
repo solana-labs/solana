@@ -87,35 +87,33 @@ impl<'a> Iterator for ValidatorGossipVotesIterator<'a> {
                     self.my_leader_bank
                         .vote_accounts()
                         .get(&vote_account_key)
-                        .and_then(|(_stake, vote_account)| {
-                            vote_account.vote_state().as_ref().ok().map(|vote_state| {
-                                let start_vote_slot =
-                                    vote_state.last_voted_slot().map(|x| x + 1).unwrap_or(0);
-                                // Filter out the votes that are outdated
-                                validator_gossip_votes
-                                    .range((start_vote_slot, Hash::default())..)
-                                    .filter_map(|((slot, hash), (packet, tx_signature))| {
-                                        if self.previously_sent_to_bank_votes.contains(tx_signature)
-                                        {
-                                            return None;
-                                        }
-                                        // Don't send the same vote to the same bank multiple times
-                                        self.previously_sent_to_bank_votes.insert(*tx_signature);
-                                        // Filter out votes on the wrong fork (or too old to be)
-                                        // on this fork
-                                        if self
-                                            .slot_hashes
-                                            .get(slot)
-                                            .map(|found_hash| found_hash == hash)
-                                            .unwrap_or(false)
-                                        {
-                                            Some(packet.clone())
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .collect::<Vec<PacketBatch>>()
-                            })
+                        .map(|(_stake, vote_account)| {
+                            let vote_state = vote_account.vote_state();
+                            let start_vote_slot =
+                                vote_state.last_voted_slot().map(|x| x + 1).unwrap_or(0);
+                            // Filter out the votes that are outdated
+                            validator_gossip_votes
+                                .range((start_vote_slot, Hash::default())..)
+                                .filter_map(|((slot, hash), (packet, tx_signature))| {
+                                    if self.previously_sent_to_bank_votes.contains(tx_signature) {
+                                        return None;
+                                    }
+                                    // Don't send the same vote to the same bank multiple times
+                                    self.previously_sent_to_bank_votes.insert(*tx_signature);
+                                    // Filter out votes on the wrong fork (or too old to be)
+                                    // on this fork
+                                    if self
+                                        .slot_hashes
+                                        .get(slot)
+                                        .map(|found_hash| found_hash == hash)
+                                        .unwrap_or(false)
+                                    {
+                                        Some(packet.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<PacketBatch>>()
                         })
                 });
             if let Some(validator_votes) = validator_votes {

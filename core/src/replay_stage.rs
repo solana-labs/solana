@@ -1919,17 +1919,6 @@ impl ReplayStage {
             Some(vote_account) => vote_account,
         };
         let vote_state = vote_account.vote_state();
-        let vote_state = match vote_state.as_ref() {
-            Err(_) => {
-                warn!(
-                    "Vote account {} is unreadable.  Unable to vote",
-                    vote_account_pubkey,
-                );
-                return None;
-            }
-            Ok(vote_state) => vote_state,
-        };
-
         if vote_state.node_pubkey != node_keypair.pubkey() {
             info!(
                 "Vote account node_pubkey mismatch: {} (expected: {}).  Unable to vote",
@@ -2415,62 +2404,57 @@ impl ReplayStage {
                         Tower::is_direct_vote_state_update_enabled(bank),
                         bank.get_vote_account(my_vote_pubkey),
                     ) {
-                        if let Some(mut bank_vote_state) =
-                            vote_account.vote_state().as_ref().ok().cloned()
-                        {
-                            if bank_vote_state.last_voted_slot()
-                                > tower.vote_state.last_voted_slot()
-                            {
-                                info!(
-                                    "Frozen bank vote state slot {:?}
+                        let mut bank_vote_state = vote_account.vote_state().as_ref().clone();
+                        if bank_vote_state.last_voted_slot() > tower.vote_state.last_voted_slot() {
+                            info!(
+                                "Frozen bank vote state slot {:?}
                                     is newer than our local vote state slot {:?},
                                     adopting the bank vote state as our own.
                                     Bank votes: {:?}, root: {:?},
                                     Local votes: {:?}, root: {:?}",
-                                    bank_vote_state.last_voted_slot(),
-                                    tower.vote_state.last_voted_slot(),
-                                    bank_vote_state.votes,
-                                    bank_vote_state.root_slot,
-                                    tower.vote_state.votes,
-                                    tower.vote_state.root_slot
-                                );
+                                bank_vote_state.last_voted_slot(),
+                                tower.vote_state.last_voted_slot(),
+                                bank_vote_state.votes,
+                                bank_vote_state.root_slot,
+                                tower.vote_state.votes,
+                                tower.vote_state.root_slot
+                            );
 
-                                if let Some(local_root) = tower.vote_state.root_slot {
-                                    if bank_vote_state
-                                        .root_slot
-                                        .map(|bank_root| local_root > bank_root)
-                                        .unwrap_or(true)
-                                    {
-                                        // If the local root is larger than this on chain vote state
-                                        // root (possible due to supermajority roots being set on
-                                        // startup), then we need to adjust the tower
-                                        bank_vote_state.root_slot = Some(local_root);
-                                        bank_vote_state
-                                            .votes
-                                            .retain(|lockout| lockout.slot > local_root);
-                                        info!(
-                                            "Local root is larger than on chain root,
+                            if let Some(local_root) = tower.vote_state.root_slot {
+                                if bank_vote_state
+                                    .root_slot
+                                    .map(|bank_root| local_root > bank_root)
+                                    .unwrap_or(true)
+                                {
+                                    // If the local root is larger than this on chain vote state
+                                    // root (possible due to supermajority roots being set on
+                                    // startup), then we need to adjust the tower
+                                    bank_vote_state.root_slot = Some(local_root);
+                                    bank_vote_state
+                                        .votes
+                                        .retain(|lockout| lockout.slot > local_root);
+                                    info!(
+                                        "Local root is larger than on chain root,
                                             overwrote bank root {:?} and updated votes {:?}",
-                                            bank_vote_state.root_slot, bank_vote_state.votes
-                                        );
+                                        bank_vote_state.root_slot, bank_vote_state.votes
+                                    );
 
-                                        if let Some(first_vote) = bank_vote_state.votes.front() {
-                                            assert!(ancestors
-                                                .get(&first_vote.slot)
-                                                .expect(
-                                                    "Ancestors map must contain an
+                                    if let Some(first_vote) = bank_vote_state.votes.front() {
+                                        assert!(ancestors
+                                            .get(&first_vote.slot)
+                                            .expect(
+                                                "Ancestors map must contain an
                                                         entry for all slots on this fork
                                                         greater than `local_root` and less
                                                         than `bank_slot`"
-                                                )
-                                                .contains(&local_root));
-                                        }
+                                            )
+                                            .contains(&local_root));
                                     }
                                 }
-
-                                tower.vote_state.root_slot = bank_vote_state.root_slot;
-                                tower.vote_state.votes = bank_vote_state.votes;
                             }
+
+                            tower.vote_state.root_slot = bank_vote_state.root_slot;
+                            tower.vote_state.votes = bank_vote_state.votes;
                         }
                     }
                     let computed_bank_state = Tower::collect_vote_lockouts(
@@ -6110,10 +6094,7 @@ pub(crate) mod tests {
         let vote_account = expired_bank_child
             .get_vote_account(&my_vote_pubkey)
             .unwrap();
-        assert_eq!(
-            vote_account.vote_state().as_ref().unwrap().tower(),
-            vec![0, 1]
-        );
+        assert_eq!(vote_account.vote_state().tower(), vec![0, 1]);
         expired_bank_child.fill_bank_with_ticks_for_tests();
         expired_bank_child.freeze();
 

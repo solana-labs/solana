@@ -108,7 +108,6 @@ impl VoteSimulator {
                     let state = vote_account.vote_state();
                     assert!(state
                         .as_ref()
-                        .unwrap()
                         .votes
                         .iter()
                         .any(|lockout| lockout.slot == parent));
