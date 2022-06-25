@@ -1388,20 +1388,22 @@ mod tests {
         let node_to_full_snapshot_hashes = |node| oracle.get(node).unwrap().clone().0;
         let node_to_incremental_snapshot_hashes = |node| oracle.get(node).unwrap().clone().1;
 
-        let known_snapshot_hashes = build_known_snapshot_hashes(
+        let known_snapshot_hashes_with_incremental = build_known_snapshot_hashes(
             oracle.keys(),
             node_to_full_snapshot_hashes,
             node_to_incremental_snapshot_hashes,
             true,
         );
 
-        let mut known_full_snapshot_hashes: Vec<_> =
-            known_snapshot_hashes.keys().copied().collect();
+        let mut known_full_snapshot_hashes: Vec<_> = known_snapshot_hashes_with_incremental
+            .keys()
+            .copied()
+            .collect();
         known_full_snapshot_hashes.sort_unstable();
 
         let known_base_snapshot_hash = known_full_snapshot_hashes.last().unwrap();
 
-        let mut known_incremental_snapshot_hashes: Vec<_> = known_snapshot_hashes
+        let mut known_incremental_snapshot_hashes: Vec<_> = known_snapshot_hashes_with_incremental
             .get(known_base_snapshot_hash)
             .unwrap()
             .iter()
@@ -1427,6 +1429,38 @@ mod tests {
                 incremental_snapshot_hashes2
             );
         }
+
+        let known_snapshot_hashes_without_incremental = build_known_snapshot_hashes(
+            oracle.keys(),
+            node_to_full_snapshot_hashes,
+            node_to_incremental_snapshot_hashes,
+            false,
+        );
+
+        let mut known_full_snapshot_hashes: Vec<_> = known_snapshot_hashes_without_incremental
+            .keys()
+            .copied()
+            .collect();
+        known_full_snapshot_hashes.sort_unstable();
+
+        let known_base_snapshot_hash = known_full_snapshot_hashes.last().unwrap();
+
+        let known_incremental_snapshot_hashes: Vec<_> = known_snapshot_hashes_without_incremental
+            .get(known_base_snapshot_hash)
+            .unwrap()
+            .iter()
+            .copied()
+            .collect();
+
+        assert!(
+            known_full_snapshot_hashes == full_snapshot_hashes1
+                || known_full_snapshot_hashes == full_snapshot_hashes2
+        );
+
+        assert_eq!(
+            known_incremental_snapshot_hashes,
+            Vec::<(Slot, Hash)>::new()
+        );
     }
 
     #[test]
