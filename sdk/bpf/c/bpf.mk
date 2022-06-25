@@ -57,6 +57,11 @@ BPF_C_FLAGS := \
   -fPIC \
   -march=bpfel+solana
 
+BPF_S_FLAGS := \
+  -target bpf \
+  -fPIC \
+  -march=bpfel+solana
+
 BPF_CXX_FLAGS := \
   $(CXX_FLAGS) \
   -target bpf \
@@ -171,6 +176,13 @@ $1: $2
 	$(_@)$(CC) $(BPF_C_FLAGS) -o $1 -c $2
 endef
 
+define S_RULE
+$1: $2
+	@echo "[as] $1 ($2)"
+	$(_@)mkdir -p $(dir $1)
+	$(_@)$(CC) $(BPF_S_FLAGS) -o $1 -c $2
+endef
+
 define CC_RULE
 $1: $2
 	@echo "[cxx] $1 ($2)"
@@ -266,15 +278,18 @@ $(foreach PROGRAM, $(PROGRAM_NAMES), \
   $(eval $(PROGRAM): %: $(addprefix $(OUT_DIR)/, %.so)) \
   $(eval $(PROGRAM)_SRCS := \
     $(addprefix $(SRC_DIR)/$(PROGRAM)/, \
-    $(filter-out $(TEST_PREFIX)%,$(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/*.c $(SRC_DIR)/$(PROGRAM)/*.cc))))) \
+    $(filter-out $(TEST_PREFIX)%,$(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/*.c $(SRC_DIR)/$(PROGRAM)/*.s $(SRC_DIR)/$(PROGRAM)/*.cc))))) \
   $(eval $(PROGRAM)_OBJS := $(subst $(SRC_DIR), $(OUT_DIR), \
     $(patsubst %.c,%.o, \
-    $(patsubst %.cc,%.o,$($(PROGRAM)_SRCS))))) \
+    $(patsubst %.s,%.o, \
+    $(patsubst %.cc,%.o,$($(PROGRAM)_SRCS)))))) \
 	$(eval $($(PROGRAM)_SRCS): $(INSTALL_SH)) \
   $(eval $(call SO_RULE,$(OUT_DIR)/$(PROGRAM).so,$($(PROGRAM)_OBJS))) \
   $(foreach _,$(filter %.c,$($(PROGRAM)_SRCS)), \
     $(eval $(call D_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.c=%.d)),$_)) \
     $(eval $(call C_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.c=%.o)),$_))) \
+  $(foreach _,$(filter %.s,$($(PROGRAM)_SRCS)), \
+    $(eval $(call S_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.s=%.o)),$_))) \
   $(foreach _,$(filter %.cc,$($(PROGRAM)_SRCS)), \
     $(eval $(call DXX_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.cc=%.d)),$_)) \
     $(eval $(call CC_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.cc=%.o)),$_))) \
