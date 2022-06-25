@@ -66,6 +66,31 @@
 
 #define SEALEVEL_ERR_VERIFIER_ERROR 19
 
+typedef enum {
+  SEALEVEL_OPT_NONE,
+  SEALEVEL_OPT_NO_VERIFY,
+  SEALEVEL_OPT_MAX_CALL_DEPTH,
+  SEALEVEL_STACK_FRAME_SIZE,
+  SEALEVEL_ENABLE_STACK_FRAME_GAPS,
+  SEALEVEL_INSTRUCTION_METER_CHECKPOINT_DISTANCE,
+  SEALEVEL_ENABLE_INSTRUCTION_METER,
+  SEALEVEL_ENABLE_INSTRUCTION_TRACING,
+  SEALEVEL_ENABLE_SYMBOL_AND_SECTION_LABELS,
+  SEALEVEL_DISABLE_UNRESOLVED_SYMBOLS_AT_RUNTIME,
+  SEALEVEL_REJECT_BROKEN_ELFS,
+  SEALEVEL_NOOP_INSTRUCTION_RATIO,
+  SEALEVEL_SANITIZE_USER_PROVIDED_VALUES,
+  SEALEVEL_ENCRYPT_ENVIRONMENT_REGISTERS,
+  SEALEVEL_DISABLE_DEPRECATED_LOAD_INSTRUCTIONS,
+  SEALEVEL_SYSCALL_BPF_FUNCTION_HASH_COLLISION,
+  SEALEVEL_REJECT_CALLX_R10,
+  SEALEVEL_DYNAMIC_STACK_FRAMES,
+  SEALEVEL_ENABLE_SDIV,
+  SEALEVEL_OPTIMIZE_RODATA,
+  SEALEVEL_STATIC_SYSCALLS,
+  SEALEVEL_ENABLE_ELF_VADDR,
+} sealevel_config_opt;
+
 /**
  * Sealevel virtual machine config.
  */
@@ -113,6 +138,15 @@ extern "C" {
  * Failure to do so results in a memory leak.
  */
 sealevel_config *sealevel_config_new(void);
+
+/**
+ * Sets a config option given the config key and exactly one value arg.
+ *
+ * # Safety
+ * Avoid the following undefined behavior:
+ * - Passing the wrong argument type as the config value (each key documents the expected value).
+ */
+void sealevel_config_setopt(sealevel_config *config, sealevel_config_opt key, size_t value);
 
 /**
  * Releases resources associated with a Sealevel machine config.
@@ -186,7 +220,8 @@ void sealevel_strerror_free(const char *str);
  *
  * Sets `sealevel_errno` and returns a null pointer if loading failed.
  *
- * Consumes the given syscall registry.
+ * Syscalls and config may be null pointers, in which case defaults are used.
+ * These defaults is not stable across any libsealevel versions.
  *
  * # Safety
  * Avoid the following undefined behavior:
