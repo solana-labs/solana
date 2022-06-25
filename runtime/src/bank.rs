@@ -7067,10 +7067,11 @@ impl Bank {
         Arc::from(stakes.vote_accounts())
     }
 
-    /// Vote account for the given vote account pubkey along with the stake.
-    pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<(/*stake:*/ u64, VoteAccount)> {
+    /// Vote account for the given vote account pubkey.
+    pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<VoteAccount> {
         let stakes = self.stakes_cache.stakes();
-        stakes.vote_accounts().get(vote_account).cloned()
+        let (_stake, ref vote_account) = stakes.vote_accounts().get(vote_account)?;
+        Some(vote_account.clone())
     }
 
     /// Get the EpochStakes for a given epoch
