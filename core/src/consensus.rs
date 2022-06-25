@@ -438,7 +438,7 @@ impl Tower {
     }
 
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
-        let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
+        let vote_account = bank.get_vote_account(vote_account_pubkey)?;
         let vote_state = vote_account.vote_state();
         vote_state.as_ref().ok()?.last_voted_slot()
     }
@@ -1239,7 +1239,7 @@ impl Tower {
         root: Slot,
         bank: &Bank,
     ) {
-        if let Some((_stake, vote_account)) = bank.get_vote_account(vote_account_pubkey) {
+        if let Some(vote_account) = bank.get_vote_account(vote_account_pubkey) {
             self.vote_state = vote_account
                 .vote_state()
                 .as_ref()
@@ -2034,7 +2034,7 @@ pub mod test {
             .unwrap()
             .get_vote_account(&vote_pubkey)
             .unwrap();
-        let state = observed.1.vote_state();
+        let state = observed.vote_state();
         info!("observed tower: {:#?}", state.as_ref().unwrap().votes);
 
         let num_slots_to_try = 200;

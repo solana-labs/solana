@@ -1916,7 +1916,7 @@ impl ReplayStage {
                 );
                 return None;
             }
-            Some((_stake, vote_account)) => vote_account,
+            Some(vote_account) => vote_account,
         };
         let vote_state = vote_account.vote_state();
         let vote_state = match vote_state.as_ref() {
@@ -2411,7 +2411,7 @@ impl ReplayStage {
                 if !is_computed {
                     // Check if our tower is behind, if so (and the feature migration flag is in use)
                     // overwrite with the newer bank.
-                    if let (true, Some((_, vote_account))) = (
+                    if let (true, Some(vote_account)) = (
                         Tower::is_direct_vote_state_update_enabled(bank),
                         bank.get_vote_account(my_vote_pubkey),
                     ) {
@@ -6107,7 +6107,7 @@ pub(crate) mod tests {
             expired_bank.slot() + 1,
         ));
         expired_bank_child.process_transaction(vote_tx).unwrap();
-        let (_stake, vote_account) = expired_bank_child
+        let vote_account = expired_bank_child
             .get_vote_account(&my_vote_pubkey)
             .unwrap();
         assert_eq!(
