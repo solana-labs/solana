@@ -113,7 +113,7 @@ impl AccessToken {
                 let wait_time_millis = std::time::Duration::from_millis(wait_time * 1000);
                 debug!("Refresh already pending... waiting {} seconds before trying again...", wait_time);
 
-                tokio::time::sleep(wait_time_millis).await;
+                thread::sleep(wait_time_millis);
                 self.refresh_active.store(false, Ordering::Relaxed);
                 return;
             }
