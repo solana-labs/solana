@@ -5,14 +5,16 @@ use {
         cell::RefCell,
         ffi::CString,
         os::raw::{c_char, c_int},
-        ptr::null,
     },
 };
 
 pub(crate) type Error = EbpfError<BpfError>;
 
+const ERROR_STRING_LEN: usize = 1024;
+
 thread_local! {
     pub(crate) static ERROR: RefCell<Option<Error>> = RefCell::new(None);
+    pub(crate) static ERROR_STRING: RefCell<[c_char; ERROR_STRING_LEN]> = RefCell::new([0i8; ERROR_STRING_LEN]);
 }
 
 pub const SEALEVEL_ERR_UNKNOWN: c_int = -1;
@@ -81,38 +83,30 @@ pub extern "C" fn sealevel_errno() -> c_int {
     })
 }
 
-/// Returns a UTF-8 string of this thread's last seen error,
-/// or NULL if `sealevel_errno() == SEALEVEL_OK`.
+/// Returns a UTF-8 string of this thread's last seen error.
 ///
 /// # Safety
-/// Call `sealevel_strerror_free` on the return value after you are done using it.
-/// Failure to do so results in a memory leak.
+/// Avoid the following undefined behavior:
+/// - Writing to the error string
+/// - Reading the error string after the thread that called `sealevel_strerror` exited.
 #[no_mangle]
-pub extern "C" fn sealevel_strerror() -> *const c_char {
+pub unsafe extern "C" fn sealevel_strerror() -> *const c_char {
     let c_string = ERROR.with(|err_cell| {
         err_cell
             .borrow()
             .as_ref()
             .map(|err| CString::new(format!("{:?}", err)).expect(""))
     });
-    match c_string {
-        None => null(),
-        Some(str) => str.into_raw() as *const c_char,
-    }
-}
-
-/// Frees an unused error string gained from `sealevel_strerror`.
-/// Calling this with a NULL pointer is a no-op.
-///
-/// # Safety
-/// Avoid the following undefined behavior:
-/// - Calling this function given a string that's _not_ the return value of `sealevel_strerror`.
-/// - Calling this function more than once on the same string (double free).
-/// - Using a string after calling this function (use-after-free).
-#[no_mangle]
-pub unsafe extern "C" fn sealevel_strerror_free(str: *const c_char) {
-    if str.is_null() {
-        return;
-    }
-    drop(CString::from_raw(str as *mut c_char))
+    ERROR_STRING.with(|str_cell| {
+        let mut str_cell = str_cell.borrow_mut();
+        match c_string {
+            None => {
+                str_cell[0] = '\0' as c_char; // empty string
+            }
+            Some(v) => {
+                libc::strncpy(str_cell.as_mut_ptr(), v.as_ptr(), ERROR_STRING_LEN-1);
+            },
+        };
+        str_cell.as_ptr()
+    })
 }
