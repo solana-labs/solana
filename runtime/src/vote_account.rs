@@ -124,6 +124,13 @@ impl VoteAccounts {
         self.vote_accounts.get(pubkey)
     }
 
+    pub fn get_delegated_stake(&self, pubkey: &Pubkey) -> u64 {
+        self.vote_accounts
+            .get(pubkey)
+            .map(|(stake, ..)| *stake)
+            .unwrap_or_default()
+    }
+
     pub(crate) fn iter(&self) -> impl Iterator<Item = (&Pubkey, &(u64, VoteAccount))> {
         self.vote_accounts.iter()
     }

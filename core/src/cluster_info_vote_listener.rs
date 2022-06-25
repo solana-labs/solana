@@ -611,10 +611,7 @@ impl ClusterInfoVoteListener {
             // 2) We do not know the hash of the earlier slot
             if slot == last_vote_slot {
                 let vote_accounts = epoch_stakes.stakes().vote_accounts();
-                let stake = vote_accounts
-                    .get(vote_pubkey)
-                    .map(|(stake, _)| *stake)
-                    .unwrap_or_default();
+                let stake = vote_accounts.get_delegated_stake(vote_pubkey);
                 let total_stake = epoch_stakes.total_stake();
 
                 // Fast track processing of the last slot in a vote transactions
@@ -795,9 +792,7 @@ impl ClusterInfoVoteListener {
 
     fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {
         if let Some(stakes) = epoch_stakes {
-            if let Some(vote_account) = stakes.stakes().vote_accounts().get(pubkey) {
-                *sum += vote_account.0;
-            }
+            *sum += stakes.stakes().vote_accounts().get_delegated_stake(pubkey)
         }
     }
 }
