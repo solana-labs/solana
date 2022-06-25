@@ -2533,8 +2533,8 @@ impl Bank {
                     .stakes_cache
                     .stakes()
                     .vote_accounts()
-                    .iter()
-                    .map(|(pubkey, (stake, _))| (*pubkey, *stake))
+                    .delegated_stakes_iter()
+                    .map(|(pubkey, stake)| (*pubkey, stake))
                     .collect();
                 info!(
                     "new epoch stakes, epoch: {}, stakes: {:#?}, total_stake: {}",
@@ -2854,7 +2854,7 @@ impl Bank {
                         let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
                             Some(vote_account) => {
                                 match cached_vote_account {
-                                    Some((_stake, cached_vote_account))
+                                    Some(cached_vote_account)
                                         if cached_vote_account == &vote_account => {}
                                     _ => {
                                         invalid_cached_vote_accounts.fetch_add(1, Relaxed);
@@ -2958,7 +2958,7 @@ impl Bank {
         let solana_vote_program: Pubkey = solana_vote_program::id();
         let vote_accounts_cache_miss_count = AtomicUsize::default();
         let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
-            if let Some((_stake, vote_account)) = cached_vote_accounts.get(vote_pubkey) {
+            if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
                 return Some(vote_account.clone());
             }
             // If accounts-db contains a valid vote account, then it should
@@ -7070,7 +7070,7 @@ impl Bank {
     /// Vote account for the given vote account pubkey.
     pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<VoteAccount> {
         let stakes = self.stakes_cache.stakes();
-        let (_stake, ref vote_account) = stakes.vote_accounts().get(vote_account)?;
+        let vote_account = stakes.vote_accounts().get(vote_account)?;
         Some(vote_account.clone())
     }
 

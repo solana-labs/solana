@@ -292,7 +292,7 @@ impl Stakes<StakeAccount> {
         self.vote_accounts = self
             .vote_accounts
             .iter()
-            .map(|(&vote_pubkey, (_ /*stake*/, vote_account))| {
+            .map(|(&vote_pubkey, vote_account)| {
                 let delegated_stake = delegated_stakes
                     .get(&vote_pubkey)
                     .copied()
@@ -320,7 +320,7 @@ impl Stakes<StakeAccount> {
     /// Sum the lamports of the vote accounts and the delegated stake
     pub fn vote_balance_and_staked(&self) -> u64 {
         let get_stake = |stake_account: &StakeAccount| stake_account.delegation().stake;
-        let get_lamports = |(_, (_, vote_account)): (_, &(_, VoteAccount))| vote_account.lamports();
+        let get_lamports = |(_, vote_account): (_, &VoteAccount)| vote_account.lamports();
 
         self.stake_delegations.values().map(get_stake).sum::<u64>()
             + self.vote_accounts.iter().map(get_lamports).sum::<u64>()
@@ -377,8 +377,7 @@ impl Stakes<StakeAccount> {
     }
 
     pub(crate) fn highest_staked_node(&self) -> Option<Pubkey> {
-        let key = |(_pubkey, (stake, _vote_account)): &(_, &(u64, _))| *stake;
-        let (_pubkey, (_stake, vote_account)) = self.vote_accounts.iter().max_by_key(key)?;
+        let vote_account = self.vote_accounts.find_max_by_delegated_stake()?;
         Some(vote_account.vote_state().as_ref().ok()?.node_pubkey)
     }
 }
@@ -571,7 +570,7 @@ pub mod tests {
                 let vote_accounts = stakes.vote_accounts();
                 assert!(vote_accounts.get(&vote_pubkey).is_some());
                 assert_eq!(
-                    vote_accounts.get(&vote_pubkey).unwrap().0,
+                    vote_accounts.get_delegated_stake(&vote_pubkey),
                     stake.stake(i, None)
                 );
             }
@@ -583,7 +582,7 @@ pub mod tests {
                 let vote_accounts = stakes.vote_accounts();
                 assert!(vote_accounts.get(&vote_pubkey).is_some());
                 assert_eq!(
-                    vote_accounts.get(&vote_pubkey).unwrap().0,
+                    vote_accounts.get_delegated_stake(&vote_pubkey),
                     stake.stake(i, None)
                 ); // stays old stake, because only 10 is activated
             }
@@ -597,7 +596,7 @@ pub mod tests {
                 let vote_accounts = stakes.vote_accounts();
                 assert!(vote_accounts.get(&vote_pubkey).is_some());
                 assert_eq!(
-                    vote_accounts.get(&vote_pubkey).unwrap().0,
+                    vote_accounts.get_delegated_stake(&vote_pubkey),
                     stake.stake(i, None)
                 ); // now stake of 42 is activated
             }
@@ -608,7 +607,7 @@ pub mod tests {
                 let stakes = stakes_cache.stakes();
                 let vote_accounts = stakes.vote_accounts();
                 assert!(vote_accounts.get(&vote_pubkey).is_some());
-                assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
+                assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 0);
             }
         }
     }
@@ -654,7 +653,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 10);
         }
 
         vote_account.set_lamports(0);
@@ -664,6 +663,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_none());
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 0);
         }
 
         vote_account.set_lamports(1);
@@ -673,7 +673,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 10);
         }
 
         // Vote account too big
@@ -687,6 +687,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_none());
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 0);
         }
 
         // Vote account uninitialized
@@ -699,6 +700,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_none());
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 0);
         }
 
         vote_account.set_data(cache_data);
@@ -708,7 +710,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 10);
         }
     }
 
@@ -738,11 +740,11 @@ pub mod tests {
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
             assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
+                vote_accounts.get_delegated_stake(&vote_pubkey),
                 stake.stake(stakes.epoch, Some(&stakes.stake_history))
             );
             assert!(vote_accounts.get(&vote_pubkey2).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey2).unwrap().0, 0);
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey2), 0);
         }
 
         // delegates to vote_pubkey2
@@ -752,10 +754,10 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 0);
             assert!(vote_accounts.get(&vote_pubkey2).is_some());
             assert_eq!(
-                vote_accounts.get(&vote_pubkey2).unwrap().0,
+                vote_accounts.get_delegated_stake(&vote_pubkey2),
                 stake.stake(stakes.epoch, Some(&stakes.stake_history))
             );
         }
@@ -782,7 +784,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 20);
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 20);
         }
     }
 
@@ -801,7 +803,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
+                vote_accounts.get_delegated_stake(&vote_pubkey),
                 stake.stake(stakes.epoch, Some(&stakes.stake_history))
             );
         }
@@ -811,7 +813,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert_eq!(
-                vote_accounts.get(&vote_pubkey).unwrap().0,
+                vote_accounts.get_delegated_stake(&vote_pubkey),
                 stake.stake(stakes.epoch, Some(&stakes.stake_history))
             );
         }
@@ -834,7 +836,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 10);
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 10);
         }
 
         // not a stake account, and whacks above entry
@@ -846,7 +848,7 @@ pub mod tests {
             let stakes = stakes_cache.stakes();
             let vote_accounts = stakes.vote_accounts();
             assert!(vote_accounts.get(&vote_pubkey).is_some());
-            assert_eq!(vote_accounts.get(&vote_pubkey).unwrap().0, 0);
+            assert_eq!(vote_accounts.get_delegated_stake(&vote_pubkey), 0);
         }
     }
 
@@ -861,10 +863,17 @@ pub mod tests {
         let stakes_cache = StakesCache::default();
         impl Stakes<StakeAccount> {
             pub fn vote_balance_and_warmed_staked(&self) -> u64 {
-                self.vote_accounts
+                let vote_balance: u64 = self
+                    .vote_accounts
                     .iter()
-                    .map(|(_pubkey, (staked, account))| staked + account.lamports())
-                    .sum()
+                    .map(|(_pubkey, account)| account.lamports())
+                    .sum();
+                let warmed_stake: u64 = self
+                    .vote_accounts
+                    .delegated_stakes_iter()
+                    .map(|(_pubkey, stake)| stake)
+                    .sum();
+                vote_balance + warmed_stake
             }
         }
 

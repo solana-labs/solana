@@ -120,8 +120,10 @@ impl VoteAccounts {
         self.staked_nodes.read().unwrap().clone()
     }
 
-    pub fn get(&self, pubkey: &Pubkey) -> Option<&(/*stake:*/ u64, VoteAccount)> {
-        self.vote_accounts.get(pubkey)
+    pub fn get(&self, pubkey: &Pubkey) -> Option<&VoteAccount> {
+        self.vote_accounts
+            .get(pubkey)
+            .map(|(_stake, vote_account)| vote_account)
     }
 
     pub fn get_delegated_stake(&self, pubkey: &Pubkey) -> u64 {
@@ -131,8 +133,22 @@ impl VoteAccounts {
             .unwrap_or_default()
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Pubkey, &(u64, VoteAccount))> {
-        self.vote_accounts.iter()
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Pubkey, &VoteAccount)> {
+        self.vote_accounts
+            .iter()
+            .map(|(vote_pubkey, (_stake, vote_account))| (vote_pubkey, vote_account))
+    }
+
+    pub(crate) fn delegated_stakes_iter(&self) -> impl Iterator<Item = (&Pubkey, u64)> {
+        self.vote_accounts
+            .iter()
+            .map(|(vote_pubkey, (stake, ..))| (vote_pubkey, *stake))
+    }
+
+    pub(crate) fn find_max_by_delegated_stake(&self) -> Option<&VoteAccount> {
+        let key = |(_pubkey, (stake, _vote_account)): &(_, &(u64, _))| *stake;
+        let (_pubkey, (_stake, vote_account)) = self.vote_accounts.iter().max_by_key(key)?;
+        Some(vote_account)
     }
 
     pub(crate) fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
@@ -611,7 +627,7 @@ mod tests {
         ));
         assert_ne!(vote_accounts_hashmap, vote_accounts.vote_accounts);
         let other = (more_stake, vote_account);
-        for (pk, value) in vote_accounts.iter() {
+        for (pk, value) in vote_accounts.vote_accounts.iter() {
             if *pk != pubkey {
                 assert_eq!(value, &vote_accounts_hashmap[pk]);
             } else {
