@@ -4026,7 +4026,7 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
     };
 }
 
-pub fn verify_shred_slots(slot: Slot, parent: Slot, root: Slot) -> bool {
+pub(crate) fn verify_shred_slots(slot: Slot, parent: Slot, root: Slot) -> bool {
     if slot == 0 && parent == 0 && root == 0 {
         return true; // valid write to slot zero.
     }

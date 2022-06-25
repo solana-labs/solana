@@ -37,6 +37,7 @@ pub struct ShredFetchStats {
     pub slot_out_of_range: usize,
     pub(crate) bad_shred_type: usize,
     pub shred_version_mismatch: usize,
+    pub(crate) bad_parent_offset: usize,
     since: Option<Instant>,
 }
 
@@ -121,6 +122,7 @@ impl ShredFetchStats {
             ("duplicate_shred", self.duplicate_shred, i64),
             ("bad_shred_type", self.bad_shred_type, i64),
             ("shred_version_mismatch", self.shred_version_mismatch, i64),
+            ("bad_parent_offset", self.bad_parent_offset, i64),
         );
         *self = Self {
             since: Some(Instant::now()),
