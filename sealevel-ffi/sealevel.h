@@ -86,14 +86,20 @@ typedef struct sealevel_executable sealevel_executable;
  */
 typedef struct sealevel_invoke_context sealevel_invoke_context;
 
-typedef struct sealevel_region sealevel_region;
-
 typedef struct sealevel_vm sealevel_vm;
 
 /**
  * The map of syscalls provided by the virtual machine.
  */
-typedef SyscallRegistry *sealevel_syscall_registry;
+typedef void *sealevel_syscall_registry;
+
+typedef struct {
+  void *data_addr;
+  size_t data_size;
+  uint64_t vm_addr;
+  uint64_t vm_gap_size;
+  bool is_writable;
+} sealevel_region;
 
 #ifdef __cplusplus
 extern "C" {
@@ -120,11 +126,31 @@ sealevel_config *sealevel_config_new(void);
 void sealevel_config_free(sealevel_config *config);
 
 /**
+ * Creates a new, empty syscall registry.
+ *
+ * # Safety
+ * Call `sealevel_syscall_registry_free` on the return value after you are done using it.
+ * Failure to do so results in a memory leak.
+ */
+sealevel_syscall_registry sealevel_syscall_registry_new(void);
+
+/**
+ * Frees a syscall registry.
+ *
+ * # Safety
+ * Avoid the following undefined behavior:
+ * - Calling this function twice on the same object.
+ * - Using the syscall registry after calling this function.
+ */
+void sealevel_syscall_registry_free(sealevel_syscall_registry registry);
+
+/**
  * Drops an invoke context and all programs created with it. Noop given a null pointer.
  *
  * # Safety
  * Avoid the following undefined behavior:
  * - Calling this function twice on the same object.
+ * - Using the invoke context after calling this function.
  */
 void sealevel_invoke_context_free(sealevel_invoke_context *this_);
 
@@ -196,6 +222,8 @@ sealevel_vm *sealevel_vm_create(sealevel_executable *program,
                                 size_t heap_len,
                                 const sealevel_region *regions_ptr,
                                 int regions_count);
+
+void sealevel_vm_destroy(sealevel_vm *vm);
 
 uint64_t sealevel_vm_execute(sealevel_vm *vm);
 

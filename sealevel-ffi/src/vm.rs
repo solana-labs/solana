@@ -11,6 +11,7 @@ pub struct sealevel_vm {
     pub(crate) program: *mut sealevel_executable,
 }
 
+#[repr(C)]
 pub struct sealevel_region {
     pub data_addr: *mut c_void,
     pub data_size: usize,
@@ -30,7 +31,6 @@ unsafe fn create_region(r: &sealevel_region) -> MemoryRegion {
 /// Sets `sealevel_errno` and returns a null pointer if loading failed.
 ///
 /// The given heap should be 16-byte aligned.
-// TODO: Support `additional_regions` parameter.
 #[no_mangle]
 pub unsafe extern "C" fn sealevel_vm_create(
     program: *mut sealevel_executable,
@@ -53,6 +53,14 @@ pub unsafe extern "C" fn sealevel_vm_create(
             Box::into_raw(Box::new(wrapper))
         }
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sealevel_vm_destroy(vm: *mut sealevel_vm) {
+    if vm.is_null() {
+        return;
+    }
+    drop(Box::from_raw(vm))
 }
 
 #[no_mangle]

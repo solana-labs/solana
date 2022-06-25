@@ -9,6 +9,10 @@ documentation = "https://docs.rs/rbpf-ffi"
 license = "Apache-2.0"
 edition = "2021"
 
+[lib]
+name = "sealevel"
+crate-type = ["rlib", "cdylib"]
+
 [dependencies]
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.2" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.11.2" }

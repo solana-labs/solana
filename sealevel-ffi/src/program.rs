@@ -1,3 +1,4 @@
+use solana_rbpf::vm::SyscallRegistry;
 use {
     crate::{config::sealevel_config, context::sealevel_syscall_registry, error::hoist_error},
     solana_bpf_loader_program::{BpfError, ThisInstructionMeter},
@@ -43,7 +44,7 @@ pub unsafe extern "C" fn sealevel_load_program(
     let load_result = Executable::<BpfError, ThisInstructionMeter>::from_elf(
         data_slice,
         (*config).config,
-        *syscalls,
+        (*(syscalls.0 as *mut SyscallRegistry)).clone(),
     );
     let executable = match hoist_error(load_result) {
         None => return null_mut(),
