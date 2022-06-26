@@ -9,6 +9,7 @@ use {
         },
         QuietDisplay, VerboseDisplay,
     },
+    bincode::serialize,
     chrono::{Local, TimeZone},
     clap::ArgMatches,
     console::{style, Emoji},
@@ -1609,6 +1610,8 @@ impl fmt::Display for CliInflation {
 pub struct CliSignOnlyData {
     pub blockhash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub transaction: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub signers: Vec<String>,
@@ -1625,6 +1628,9 @@ impl fmt::Display for CliSignOnlyData {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f)?;
         writeln_name_value(f, "Blockhash:", &self.blockhash)?;
+        if let Some(transaction) = self.transaction.as_ref() {
+            writeln_name_value(f, "Transaction:", transaction)?;
+        }
         if let Some(message) = self.message.as_ref() {
             writeln_name_value(f, "Transaction Message:", message)?;
         }
@@ -2147,16 +2153,22 @@ pub fn return_signers_data(tx: &Transaction, config: &ReturnSignersConfig) -> Cl
                 bad_sig.push(key.to_string());
             }
         });
-    let message = if config.dump_transaction_message {
+    let dumped_message = if config.dump_transaction_message {
         let message_data = tx.message_data();
         Some(base64::encode(&message_data))
+    } else {
+        None
+    };
+    let dumped_transaction = if config.dump_transaction_message {
+        Some(base64::encode(serialize(tx).unwrap()))
     } else {
         None
     };
 
     CliSignOnlyData {
         blockhash: tx.message.recent_blockhash.to_string(),
-        message,
+        transaction: dumped_transaction,
+        message: dumped_message,
         signers,
         absent,
         bad_sig,
@@ -2782,6 +2794,7 @@ mod tests {
             CliSignOnlyData {
                 blockhash: blockhash.to_string(),
                 message: None,
+                transaction: None,
                 signers: vec![format!("{}={}", present.pubkey(), tx.signatures[1])],
                 absent: vec![absent.pubkey().to_string()],
                 bad_sig: vec![bad.pubkey().to_string()],
@@ -2794,6 +2807,17 @@ mod tests {
             BgYGBgYGBgYGBgYGBgYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAan1RcZLFaO\
             4IqEX3PSl4jPA1wxRbIas0TYBi6pQAAABwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcH\
             BwcCBQMEBgIEBAAAAAUCAQMMAgAAACoAAAAAAAAA"
+            .to_string();
+        let expected_tx = "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
+            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAC74RMZET6o+SO8FoacTbuwTl/WzV8llT3k7s9OEJQsM\
+            g9pcb/VxtSxiXacZ5Ly2eO0WBXTDWhGu+w9U+lzehgLAQEBAQEBAQEBAQEBAQEBAQEBAQEBA\
+            QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMBAgcDAwMDAwMDA\
+            wMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA4E5dw6ofRdfVqNUZsNMfszLjYqRtO43ol32D1uPy\
+            bOUBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQFBQUFBQUFBQUFBQUFBQUFBQUFB\
+            QUFBQUFBQUFBQUFBQYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAAAAAAAAAAAAA\
+            AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGp9UXGSxWjuCKhF9z0peIzwNcMUWyGrNE2AYuqUAAA\
+            AcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAgUDBAYCBAQAAAAFAgEDDAIAAAAqA\
+            AAAAAAAAA=="
             .to_string();
         let config = ReturnSignersConfig {
             dump_transaction_message: true,
@@ -2812,6 +2836,7 @@ mod tests {
             CliSignOnlyData {
                 blockhash: blockhash.to_string(),
                 message: Some(expected_msg),
+                transaction: Some(expected_tx),
                 signers: vec![format!("{}={}", present.pubkey(), tx.signatures[1])],
                 absent: vec![absent.pubkey().to_string()],
                 bad_sig: vec![bad.pubkey().to_string()],

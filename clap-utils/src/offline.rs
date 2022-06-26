@@ -21,10 +21,17 @@ pub const SIGNER_ARG: ArgConstant<'static> = ArgConstant {
     help: "Provide a public-key/signature pair for the transaction",
 };
 
+pub const DUMP_TRANSACTION: ArgConstant<'static> = ArgConstant {
+    name: "dump_transaction_message", // for compatibility
+    long: "dump-transaction",
+    help:
+        "Display the base64 encoded binary transaction (and the enclosed message) in sign-only mode",
+};
+
 pub const DUMP_TRANSACTION_MESSAGE: ArgConstant<'static> = ArgConstant {
     name: "dump_transaction_message",
     long: "dump-transaction-message",
-    help: "Display the base64 encoded binary transaction message in sign-only mode",
+    help: "Display the base64 encoded binary transaction message (and the enclosing transaction) in sign-only mode",
 };
 
 pub fn blockhash_arg<'a, 'b>() -> Arg<'a, 'b> {
@@ -55,6 +62,14 @@ fn signer_arg<'a, 'b>() -> Arg<'a, 'b> {
         .help(SIGNER_ARG.help)
 }
 
+pub fn dump_transaction<'a, 'b>() -> Arg<'a, 'b> {
+    Arg::with_name(DUMP_TRANSACTION.name)
+        .long(DUMP_TRANSACTION.long)
+        .takes_value(false)
+        .requires(SIGN_ONLY_ARG.name)
+        .help(DUMP_TRANSACTION.help)
+}
+
 pub fn dump_transaction_message<'a, 'b>() -> Arg<'a, 'b> {
     Arg::with_name(DUMP_TRANSACTION_MESSAGE.name)
         .long(DUMP_TRANSACTION_MESSAGE.long)
@@ -73,6 +88,10 @@ pub trait ArgsConfig {
     fn signer_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
         arg
     }
+    fn dump_transaction_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
+        arg
+    }
+
     fn dump_transaction_message_arg<'a, 'b>(&self, arg: Arg<'a, 'b>) -> Arg<'a, 'b> {
         arg
     }
@@ -88,6 +107,7 @@ impl OfflineArgs for App<'_, '_> {
         self.arg(config.blockhash_arg(blockhash_arg()))
             .arg(config.sign_only_arg(sign_only_arg()))
             .arg(config.signer_arg(signer_arg()))
+            .arg(config.dump_transaction_arg(dump_transaction()))
             .arg(config.dump_transaction_message_arg(dump_transaction_message()))
     }
     fn offline_args(self) -> Self {
