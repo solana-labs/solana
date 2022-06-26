@@ -9765,6 +9765,47 @@ pub(crate) mod tests {
         );
     }
 
+    fn new_from_parent_next_epoch(parent: &Arc<Bank>, epochs: Epoch) -> Bank {
+        let mut slot = parent.slot();
+        let mut epoch = parent.epoch();
+        for _ in 0..epochs {
+            slot += parent.epoch_schedule().get_slots_in_epoch(epoch);
+            epoch = parent.epoch_schedule().get_epoch(slot);
+        }
+
+        Bank::new_from_parent(parent, &Pubkey::default(), slot)
+    }
+
+    #[test]
+    fn test_collect_rent_from_accounts() {
+        solana_logger::setup();
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(100000);
+
+        let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
+
+        let genesis_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let first_bank = Arc::new(new_from_parent(&genesis_bank));
+        let first_slot = 1;
+        assert_eq!(first_slot, first_bank.slot());
+        let epoch_delta = 4;
+        let later_bank = Arc::new(new_from_parent_next_epoch(&first_bank, epoch_delta)); // a bank a few epochs in the future
+        let later_slot = later_bank.slot();
+        assert!(later_bank.epoch() == genesis_bank.epoch() + epoch_delta);
+
+        let data_size = 0; // make sure we're rent exempt
+        let lamports = later_bank.get_minimum_balance_for_rent_exemption(data_size); // cannot be 0 or we zero out rent_epoch in rent collection and we need to be rent exempt
+        let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
+        account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+
+        let just_rewrites = true;
+        let result = later_bank.collect_rent_from_accounts(
+            vec![(zero_lamport_pubkey, account, later_slot)],
+            just_rewrites,
+        );
+        assert!(result.rewrites_skipped.is_empty());
+    }
+
     #[test]
     fn test_rent_eager_collect_rent_zero_lamport_deterministic() {
         solana_logger::setup();
