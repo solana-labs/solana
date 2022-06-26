@@ -93,7 +93,7 @@ impl VoteAccount {
     }
 
     /// VoteState.node_pubkey of this vote-account.
-    fn node_pubkey(&self) -> Option<Pubkey> {
+    pub fn node_pubkey(&self) -> Option<Pubkey> {
         Some(self.vote_state().as_ref().ok()?.node_pubkey)
     }
 }

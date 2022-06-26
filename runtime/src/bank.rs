@@ -2986,6 +2986,10 @@ impl Bank {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::WrongOwner);
                 return None;
             }
+
+            // NOTE: `.vote_state()` grabs a reader lock, but there will never be any writers
+            // (since the only writer was within a `Once`), so we can ignore this clippy warning.
+            #[allow(clippy::significant_drop_in_scrutinee)]
             let vote_state = match vote_account.vote_state().deref() {
                 Ok(vote_state) => vote_state.clone(),
                 Err(_) => {
@@ -5051,7 +5055,7 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    let node_pubkey = account.vote_state().as_ref().ok()?.node_pubkey;
+                    let node_pubkey = account.node_pubkey()?;
                     Some((node_pubkey, *staked))
                 }
             })
