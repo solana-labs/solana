@@ -304,10 +304,10 @@ impl LocalCluster {
             entry_point_info: leader_contact_info,
             validators,
             genesis_config,
-            connection_cache: Arc::new(ConnectionCache::new(
-                config.tpu_use_quic,
-                config.tpu_connection_pool_size,
-            )),
+            connection_cache: match config.tpu_use_quic {
+                true => Arc::new(ConnectionCache::new(config.tpu_connection_pool_size)),
+                false => Arc::new(ConnectionCache::with_udp(config.tpu_connection_pool_size)),
+            },
         };
 
         let node_pubkey_to_vote_key: HashMap<Pubkey, Arc<Keypair>> = keys_in_genesis

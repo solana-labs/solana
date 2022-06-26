@@ -252,18 +252,22 @@ impl ConnectionPool {
 }
 
 impl ConnectionCache {
-    pub fn new(use_quic: bool, connection_pool_size: usize) -> Self {
+    pub fn new(connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
-        let defaults = Self::default();
         Self {
-            tpu_udp_socket: if use_quic {
-                None
-            } else {
-                defaults.tpu_udp_socket
-            },
+            tpu_udp_socket: None,
             connection_pool_size,
-            ..defaults
+            ..Self::default()
+        }
+    }
+
+    pub fn with_udp(connection_pool_size: usize) -> Self {
+        // The minimum pool size is 1.
+        let connection_pool_size = 1.max(connection_pool_size);
+        Self {
+            connection_pool_size,
+            ..Self::default()
         }
     }
 

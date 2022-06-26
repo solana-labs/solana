@@ -342,6 +342,10 @@ fn main() {
         );
         let cluster_info = Arc::new(cluster_info);
         let tpu_use_quic = matches.is_present("tpu_use_quic");
+        let connection_cache = match tpu_use_quic {
+            true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+            false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        };
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,
@@ -352,10 +356,7 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
-            Arc::new(ConnectionCache::new(
-                tpu_use_quic,
-                DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            )),
+            Arc::new(connection_cache),
         );
         poh_recorder.lock().unwrap().set_bank(&bank, false);
 
