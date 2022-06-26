@@ -2986,10 +2986,6 @@ impl Bank {
                 invalid_vote_keys.insert(vote_pubkey, InvalidCacheEntryReason::WrongOwner);
                 return None;
             }
-
-            // NOTE: `.vote_state()` grabs a reader lock, but there will never be any writers
-            // (since the only writer was within a `Once`), so we can ignore this clippy warning.
-            #[allow(clippy::significant_drop_in_scrutinee)]
             let vote_state = match vote_account.vote_state().deref() {
                 Ok(vote_state) => vote_state.clone(),
                 Err(_) => {

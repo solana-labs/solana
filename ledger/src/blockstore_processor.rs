@@ -1462,9 +1462,6 @@ fn supermajority_root_from_vote_accounts(
                 return None;
             }
 
-            // NOTE: `.vote_state()` grabs a reader lock, but there will never be any writers
-            // (since the only writer was within a `Once`), so we can ignore this clippy warning.
-            #[allow(clippy::significant_drop_in_scrutinee)]
             match account.vote_state().as_ref() {
                 Err(_) => {
                     warn!(

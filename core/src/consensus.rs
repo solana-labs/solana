@@ -271,10 +271,6 @@ impl Tower {
                 continue;
             }
             trace!("{} {} with stake {}", vote_account_pubkey, key, voted_stake);
-
-            // NOTE: `.vote_state()` grabs a reader lock, but there will never be any writers
-            // (since the only writer was within a `Once`), so we can ignore this clippy warning.
-            #[allow(clippy::significant_drop_in_scrutinee)]
             let mut vote_state = match account.vote_state().as_ref() {
                 Err(_) => {
                     datapoint_warn!(

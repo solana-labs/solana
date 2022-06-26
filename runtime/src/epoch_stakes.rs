@@ -71,9 +71,6 @@ impl EpochStakes {
             .iter()
             .filter_map(|(key, (stake, account))| {
                 let vote_state = account.vote_state();
-                // NOTE: `.vote_state()` grabs a reader lock, but there will never be any writers
-                // (since the only writer was within a `Once`), so we can ignore this clippy warning.
-                #[allow(clippy::significant_drop_in_scrutinee)]
                 let vote_state = match vote_state.as_ref() {
                     Err(_) => {
                         datapoint_warn!(
