@@ -91,6 +91,43 @@ typedef enum {
   SEALEVEL_OPT_ENABLE_ELF_VADDR,
 } sealevel_config_opt;
 
+typedef enum {
+  SEALEVEL_SYSCALL_INVALID,
+  SEALEVEL_SYSCALL_ABORT,
+  SEALEVEL_SYSCALL_SOL_PANIC,
+  SEALEVEL_SYSCALL_SOL_LOG,
+  SEALEVEL_SYSCALL_SOL_LOG_64,
+  SEALEVEL_SYSCALL_SOL_LOG_COMPUTE_UNITS,
+  SEALEVEL_SYSCALL_SOL_LOG_PUBKEY,
+  SEALEVEL_SYSCALL_SOL_CREATE_PROGRAM_ADDRESS,
+  SEALEVEL_SYSCALL_SOL_TRY_FIND_PROGRAM_ADDRESS,
+  SEALEVEL_SYSCALL_SOL_SHA256,
+  SEALEVEL_SYSCALL_SOL_KECCAK256,
+  SEALEVEL_SYSCALL_SOL_SECP256K1_RECOVER,
+  SEALEVEL_SYSCALL_SOL_BLAKE3,
+  SEALEVEL_SYSCALL_SOL_ZK_TOKEN_ELGAMAL_OP,
+  SEALEVEL_SYSCALL_SOL_ZK_TOKEN_ELGAMAL_OP_WITH_LO_HI,
+  SEALEVEL_SYSCALL_SOL_ZK_TOKEN_ELGAMAL_OP_WITH_SCALAR,
+  SEALEVEL_SYSCALL_SOL_CURVE_VALIDATE_POINT,
+  SEALEVEL_SYSCALL_SOL_CURVE_GROUP_OP,
+  SEALEVEL_SYSCALL_SOL_GET_CLOCK_SYSVAR,
+  SEALEVEL_SYSCALL_SOL_GET_EPOCH_SCHEDULE_SYSVAR,
+  SEALEVEL_SYSCALL_SOL_GET_FEES_SYSVAR,
+  SEALEVEL_SYSCALL_SOL_GET_RENT_SYSVAR,
+  SEALEVEL_SYSCALL_SOL_MEMCPY,
+  SEALEVEL_SYSCALL_SOL_MEMMOVE,
+  SEALEVEL_SYSCALL_SOL_MEMCMP,
+  SEALEVEL_SYSCALL_SOL_MEMSET,
+  SEALEVEL_SYSCALL_SOL_INVOKE_SIGNED_C,
+  SEALEVEL_SYSCALL_SOL_INVOKE_SIGNED_RUST,
+  SEALEVEL_SYSCALL_SOL_ALLOC_FREE,
+  SEALEVEL_SYSCALL_SOL_SET_RETURN_DATA,
+  SEALEVEL_SYSCALL_SOL_GET_RETURN_DATA,
+  SEALEVEL_SYSCALL_SOL_LOG_DATA,
+  SEALEVEL_SYSCALL_SOL_GET_PROCESSED_SIBLING_INSTRUCTION,
+  SEALEVEL_SYSCALL_SOL_GET_STACK_HEIGHT,
+} sealevel_syscall_id;
+
 /**
  * Sealevel virtual machine config.
  */
@@ -179,6 +216,20 @@ sealevel_syscall_registry sealevel_syscall_registry_new(void);
 void sealevel_syscall_registry_free(sealevel_syscall_registry registry);
 
 /**
+ * Registers a Solana builtin syscall.
+ *
+ * Returns TRUE when registration was successful.
+ *
+ * # Safety
+ * Avoid the following undefined behavior:
+ * - Passing a NULL pointer.
+ * - Passing a registry that was already freed with `sealevel_syscall_registry_free`.
+ * - Passing a registry that was created from another thread.
+ */
+bool sealevel_syscall_register_builtin(sealevel_syscall_registry registry,
+                                       sealevel_syscall_id syscall_id);
+
+/**
  * Drops an invoke context and all programs created with it. Noop given a null pointer.
  *
  * # Safety
@@ -194,26 +245,14 @@ void sealevel_invoke_context_free(sealevel_invoke_context *this_);
 int sealevel_errno(void);
 
 /**
- * Returns a UTF-8 string of this thread's last seen error,
- * or NULL if `sealevel_errno() == SEALEVEL_OK`.
- *
- * # Safety
- * Call `sealevel_strerror_free` on the return value after you are done using it.
- * Failure to do so results in a memory leak.
- */
-const char *sealevel_strerror(void);
-
-/**
- * Frees an unused error string gained from `sealevel_strerror`.
- * Calling this with a NULL pointer is a no-op.
+ * Returns a UTF-8 string of this thread's last seen error.
  *
  * # Safety
  * Avoid the following undefined behavior:
- * - Calling this function given a string that's _not_ the return value of `sealevel_strerror`.
- * - Calling this function more than once on the same string (double free).
- * - Using a string after calling this function (use-after-free).
+ * - Writing to the error string
+ * - Reading the error string after the thread that called `sealevel_strerror` exited.
  */
-void sealevel_strerror_free(const char *str);
+const char *sealevel_strerror(void);
 
 /**
  * Loads a Sealevel program from an ELF buffer and verifies its SBF bytecode.

@@ -66,11 +66,15 @@ pub unsafe extern "C" fn sealevel_config_setopt(
         SEALEVEL_OPT_NO_VERIFY => (*config).no_verify = value != 0,
         SEALEVEL_OPT_MAX_CALL_DEPTH => (*config).config.max_call_depth = value,
         SEALEVEL_OPT_STACK_FRAME_SIZE => (*config).config.stack_frame_size = value,
-        SEALEVEL_OPT_ENABLE_STACK_FRAME_GAPS => (*config).config.enable_stack_frame_gaps = value != 0,
+        SEALEVEL_OPT_ENABLE_STACK_FRAME_GAPS => {
+            (*config).config.enable_stack_frame_gaps = value != 0
+        }
         SEALEVEL_OPT_INSTRUCTION_METER_CHECKPOINT_DISTANCE => {
             (*config).config.instruction_meter_checkpoint_distance = value
         }
-        SEALEVEL_OPT_ENABLE_INSTRUCTION_METER => (*config).config.enable_instruction_meter = value != 0,
+        SEALEVEL_OPT_ENABLE_INSTRUCTION_METER => {
+            (*config).config.enable_instruction_meter = value != 0
+        }
         SEALEVEL_OPT_ENABLE_INSTRUCTION_TRACING => {
             (*config).config.enable_instruction_tracing = value != 0
         }
@@ -81,7 +85,9 @@ pub unsafe extern "C" fn sealevel_config_setopt(
             (*config).config.disable_unresolved_symbols_at_runtime = value != 0
         }
         SEALEVEL_OPT_REJECT_BROKEN_ELFS => (*config).config.reject_broken_elfs = value != 0,
-        SEALEVEL_OPT_NOOP_INSTRUCTION_RATIO => (*config).config.noop_instruction_rate = value as u32,
+        SEALEVEL_OPT_NOOP_INSTRUCTION_RATIO => {
+            (*config).config.noop_instruction_rate = value as u32
+        }
         SEALEVEL_OPT_SANITIZE_USER_PROVIDED_VALUES => {
             (*config).config.sanitize_user_provided_values = value != 0
         }

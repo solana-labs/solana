@@ -10,6 +10,7 @@ use {
 
 pub(crate) type Error = EbpfError<BpfError>;
 
+/// cbindgen:ignore
 const ERROR_STRING_LEN: usize = 1024;
 
 thread_local! {
@@ -104,8 +105,8 @@ pub unsafe extern "C" fn sealevel_strerror() -> *const c_char {
                 str_cell[0] = '\0' as c_char; // empty string
             }
             Some(v) => {
-                libc::strncpy(str_cell.as_mut_ptr(), v.as_ptr(), ERROR_STRING_LEN-1);
-            },
+                libc::strncpy(str_cell.as_mut_ptr(), v.as_ptr(), ERROR_STRING_LEN - 1);
+            }
         };
         str_cell.as_ptr()
     })
