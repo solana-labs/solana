@@ -20,14 +20,17 @@ use {
         cluster_info::Node, contact_info::ContactInfo, gossip_service::discover_cluster,
     },
     solana_ledger::create_new_tmp_ledger,
-    solana_runtime::genesis_utils::{
-        create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
-        ValidatorVoteKeypairs,
+    solana_runtime::{
+        genesis_utils::{
+            create_genesis_config_with_vote_accounts_and_cluster_type, GenesisConfigInfo,
+            ValidatorVoteKeypairs,
+        },
+        snapshot_config::SnapshotConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData},
         client::SyncClient,
-        clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+        clock::{Slot, DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
@@ -52,9 +55,12 @@ use {
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
+        path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
 };
+
+const DUMMY_SNAPSHOT_CONFIG_PATH_MARKER: &str = "dummy";
 
 pub struct ClusterConfig {
     /// The validator config that should be applied to every node in the cluster
@@ -136,6 +142,23 @@ impl LocalCluster {
             ..ClusterConfig::default()
         };
         Self::new(&mut config, socket_addr_space)
+    }
+
+    fn sync_ledger_path_across_nested_config_fields(
+        config: &mut ValidatorConfig,
+        ledger_path: &Path,
+    ) {
+        config.account_paths = vec![ledger_path.join("accounts")];
+        config.tower_storage = Arc::new(FileTowerStorage::new(ledger_path.to_path_buf()));
+        if let Some(snapshot_config) = &mut config.snapshot_config {
+            let dummy: PathBuf = DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into();
+            if snapshot_config.full_snapshot_archives_dir == dummy {
+                snapshot_config.full_snapshot_archives_dir = ledger_path.to_path_buf();
+            }
+            if snapshot_config.bank_snapshots_dir == dummy {
+                snapshot_config.bank_snapshots_dir = ledger_path.join("snapshot");
+            }
+        }
     }
 
     pub fn new(config: &mut ClusterConfig, socket_addr_space: SocketAddrSpace) -> Self {
@@ -241,8 +264,7 @@ impl LocalCluster {
         let leader_contact_info = leader_node.info.clone();
         let mut leader_config = safe_clone_config(&config.validator_configs[0]);
         leader_config.rpc_addrs = Some((leader_node.info.rpc, leader_node.info.rpc_pubsub));
-        leader_config.account_paths = vec![leader_ledger_path.join("accounts")];
-        leader_config.tower_storage = Arc::new(FileTowerStorage::new(leader_ledger_path.clone()));
+        Self::sync_ledger_path_across_nested_config_fields(&mut leader_config, &leader_ledger_path);
         let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
         let leader_vote_keypair =
             Arc::new(Keypair::from_bytes(&leader_vote_keypair.to_bytes()).unwrap());
@@ -445,8 +467,7 @@ impl LocalCluster {
 
         let mut config = safe_clone_config(validator_config);
         config.rpc_addrs = Some((validator_node.info.rpc, validator_node.info.rpc_pubsub));
-        config.account_paths = vec![ledger_path.join("accounts")];
-        config.tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
+        Self::sync_ledger_path_across_nested_config_fields(&mut config, &ledger_path);
         let voting_keypair = voting_keypair.unwrap();
         let validator_server = Validator::new(
             validator_node,
@@ -479,7 +500,7 @@ impl LocalCluster {
         validator_pubkey
     }
 
-    pub fn ledger_path(&self, validator_pubkey: &Pubkey) -> std::path::PathBuf {
+    pub fn ledger_path(&self, validator_pubkey: &Pubkey) -> PathBuf {
         self.validators
             .get(validator_pubkey)
             .unwrap()
@@ -718,6 +739,19 @@ impl LocalCluster {
             )),
         }
     }
+
+    pub fn create_dummy_load_only_snapshot_config() -> SnapshotConfig {
+        // DUMMY_SNAPSHOT_CONFIG_PATH_MARKER will be replaced with real value as part of cluster
+        // node lifecycle.
+        // There must be some place holder for now...
+        SnapshotConfig {
+            full_snapshot_archive_interval_slots: Slot::MAX,
+            incremental_snapshot_archive_interval_slots: Slot::MAX,
+            full_snapshot_archives_dir: DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into(),
+            bank_snapshots_dir: DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into(),
+            ..SnapshotConfig::default()
+        }
+    }
 }
 
 impl Cluster for LocalCluster {
@@ -790,10 +824,10 @@ impl Cluster for LocalCluster {
     ) -> ClusterValidatorInfo {
         // Restart the node
         let validator_info = &cluster_validator_info.info;
-        cluster_validator_info.config.account_paths =
-            vec![validator_info.ledger_path.join("accounts")];
-        cluster_validator_info.config.tower_storage =
-            Arc::new(FileTowerStorage::new(validator_info.ledger_path.clone()));
+        LocalCluster::sync_ledger_path_across_nested_config_fields(
+            &mut cluster_validator_info.config,
+            &validator_info.ledger_path,
+        );
         let restarted_node = Validator::new(
             node,
             validator_info.keypair.clone(),

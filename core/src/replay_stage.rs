@@ -23,6 +23,7 @@ use {
         rewards_recorder_service::RewardsRecorderSender,
         tower_storage::{SavedTower, SavedTowerVersions, TowerStorage},
         unfrozen_gossip_verified_vote_hashes::UnfrozenGossipVerifiedVoteHashes,
+        validator::ProcessBlockStore,
         voting_service::VoteOp,
         window_service::DuplicateSlotReceiver,
     },
@@ -352,7 +353,7 @@ pub struct ReplayStage {
 
 impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new<T: Into<Tower> + Sized>(
+    pub fn new(
         config: ReplayStageConfig,
         blockstore: Arc<Blockstore>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -360,7 +361,7 @@ impl ReplayStage {
         ledger_signal_receiver: Receiver<bool>,
         duplicate_slots_receiver: DuplicateSlotReceiver,
         poh_recorder: Arc<Mutex<PohRecorder>>,
-        tower: T,
+        maybe_process_blockstore: Option<ProcessBlockStore>,
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
         retransmit_slots_sender: RetransmitSlotsSender,
@@ -375,8 +376,14 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
     ) -> Self {
-        let mut tower = tower.into();
-        info!("Tower state: {:?}", tower);
+        let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
+            let tower = process_blockstore.process_to_create_tower();
+            info!("Tower state: {:?}", tower);
+            tower
+        } else {
+            warn!("creating default tower....");
+            Tower::default()
+        };
 
         let ReplayStageConfig {
             vote_account,

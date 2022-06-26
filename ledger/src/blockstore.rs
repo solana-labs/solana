@@ -525,11 +525,26 @@ impl Blockstore {
         Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
-    pub fn rooted_slot_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = u64> + '_> {
+    fn prepare_rooted_slot_iterator(
+        &self,
+        slot: Slot,
+        direction: IteratorDirection,
+    ) -> Result<impl Iterator<Item = Slot> + '_> {
         let slot_iterator = self
             .db
-            .iter::<cf::Root>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+            .iter::<cf::Root>(IteratorMode::From(slot, direction))?;
         Ok(slot_iterator.map(move |(rooted_slot, _)| rooted_slot))
+    }
+
+    pub fn rooted_slot_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = Slot> + '_> {
+        self.prepare_rooted_slot_iterator(slot, IteratorDirection::Forward)
+    }
+
+    pub fn reversed_rooted_slot_iterator(
+        &self,
+        slot: Slot,
+    ) -> Result<impl Iterator<Item = Slot> + '_> {
+        self.prepare_rooted_slot_iterator(slot, IteratorDirection::Reverse)
     }
 
     /// Determines if starting_slot and ending_slot are connected
@@ -1743,6 +1758,13 @@ impl Blockstore {
     /// Dangerous. Use with care.
     pub fn put_meta_bytes(&self, slot: Slot, bytes: &[u8]) -> Result<()> {
         self.meta_cf.put_bytes(slot, bytes)
+    }
+
+    /// Manually update the meta for a slot.
+    /// Can interfere with automatic meta update and potentially break chaining.
+    /// Dangerous. Use with care.
+    pub fn put_meta(&self, slot: Slot, meta: &SlotMeta) -> Result<()> {
+        self.put_meta_bytes(slot, &bincode::serialize(meta)?)
     }
 
     // Given a start and end entry index, find all the missing
@@ -3040,6 +3062,22 @@ impl Blockstore {
             *last_root = 0;
         }
         *last_root = cmp::max(max_new_rooted_slot, *last_root);
+        Ok(())
+    }
+
+    pub fn mark_slots_as_if_rooted_normally_at_startup(
+        &self,
+        slots: Vec<(Slot, Option<Hash>)>,
+        with_hash: bool,
+    ) -> Result<()> {
+        self.set_roots(slots.iter().map(|(slot, _hash)| slot))?;
+        if with_hash {
+            self.set_duplicate_confirmed_slots_and_hashes(
+                slots
+                    .into_iter()
+                    .map(|(slot, maybe_hash)| (slot, maybe_hash.unwrap())),
+            )?;
+        }
         Ok(())
     }
 

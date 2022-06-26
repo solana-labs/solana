@@ -214,6 +214,11 @@ impl SlotMeta {
         Some(self.consumed) == self.last_index.map(|ix| ix + 1)
     }
 
+    /// Dangerous. Currently only needed for a local-cluster test
+    pub fn unset_parent(&mut self) {
+        self.parent_slot = None;
+    }
+
     pub fn clear_unconfirmed_slot(&mut self) {
         let mut new_self = SlotMeta::new_orphan(self.slot);
         std::mem::swap(&mut new_self.next_slots, &mut self.next_slots);
