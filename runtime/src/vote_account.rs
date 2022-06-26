@@ -1,5 +1,6 @@
 use {
     itertools::Itertools,
+    parking_lot::{RwLock, RwLockReadGuard},
     serde::ser::{Serialize, Serializer},
     solana_sdk::{
         account::{accounts_equal, AccountSharedData, ReadableAccount},
@@ -11,7 +12,7 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-        sync::{Arc, Once, RwLock, RwLockReadGuard},
+        sync::{Arc, Once},
     },
     thiserror::Error,
 };
@@ -66,7 +67,7 @@ impl VoteAccounts {
     }
 
     pub fn num_staked_nodes(&self) -> usize {
-        self.staked_nodes.read().unwrap().len()
+        self.staked_nodes.read().len()
     }
 }
 
@@ -83,9 +84,9 @@ impl VoteAccount {
         let inner = &self.0;
         inner.vote_state_once.call_once(|| {
             let vote_state = VoteState::deserialize(inner.account.data());
-            *inner.vote_state.write().unwrap() = vote_state.map_err(Error::from);
+            *inner.vote_state.write() = vote_state.map_err(Error::from);
         });
-        inner.vote_state.read().unwrap()
+        inner.vote_state.read()
     }
 
     pub(crate) fn is_deserialized(&self) -> bool {
@@ -115,9 +116,9 @@ impl VoteAccounts {
                 })
                 .into_grouping_map()
                 .aggregate(|acc, _node_pubkey, stake| Some(acc.unwrap_or_default() + stake));
-            *self.staked_nodes.write().unwrap() = Arc::new(staked_nodes)
+            *self.staked_nodes.write() = Arc::new(staked_nodes)
         });
-        self.staked_nodes.read().unwrap().clone()
+        self.staked_nodes.read().clone()
     }
 
     pub fn get(&self, pubkey: &Pubkey) -> Option<&VoteAccount> {
@@ -191,7 +192,7 @@ impl VoteAccounts {
     fn add_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
             if let Some(node_pubkey) = vote_account.node_pubkey() {
-                let mut staked_nodes = self.staked_nodes.write().unwrap();
+                let mut staked_nodes = self.staked_nodes.write();
                 let staked_nodes = Arc::make_mut(&mut staked_nodes);
                 staked_nodes
                     .entry(node_pubkey)
@@ -204,7 +205,7 @@ impl VoteAccounts {
     fn sub_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
         if stake != 0 && self.staked_nodes_once.is_completed() {
             if let Some(node_pubkey) = vote_account.node_pubkey() {
-                let mut staked_nodes = self.staked_nodes.write().unwrap();
+                let mut staked_nodes = self.staked_nodes.write();
                 let staked_nodes = Arc::make_mut(&mut staked_nodes);
                 match staked_nodes.entry(node_pubkey) {
                     Entry::Vacant(_) => panic!("this should not happen!"),
@@ -288,7 +289,7 @@ impl Default for VoteAccounts {
 impl Clone for VoteAccounts {
     fn clone(&self) -> Self {
         if self.staked_nodes_once.is_completed() {
-            let staked_nodes = self.staked_nodes.read().unwrap().clone();
+            let staked_nodes = self.staked_nodes.read().clone();
             let other = Self {
                 vote_accounts: self.vote_accounts.clone(),
                 staked_nodes: RwLock::new(staked_nodes),
@@ -567,7 +568,7 @@ mod tests {
                 assert_eq!(staked_nodes(&accounts), *vote_accounts.staked_nodes());
             }
         }
-        assert!(vote_accounts.staked_nodes.read().unwrap().is_empty());
+        assert!(vote_accounts.staked_nodes.read().is_empty());
     }
 
     // Asserts that returned staked-nodes are copy-on-write references.
