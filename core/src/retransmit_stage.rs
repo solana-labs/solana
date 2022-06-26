@@ -453,7 +453,6 @@ impl RetransmitStage {
             exit.clone(),
         );
 
-        let leader_schedule_cache_clone = leader_schedule_cache.clone();
         let repair_info = RepairInfo {
             bank_forks,
             epoch_schedule,
@@ -471,18 +470,12 @@ impl RetransmitStage {
             exit,
             repair_info,
             leader_schedule_cache,
-            move |id, shred, working_bank, last_root| {
+            move |shred, last_root| {
                 let turbine_disabled = turbine_disabled
                     .as_ref()
                     .map(|x| x.load(Ordering::Relaxed))
                     .unwrap_or(false);
-                let rv = should_retransmit_and_persist(
-                    shred,
-                    working_bank,
-                    &leader_schedule_cache_clone,
-                    id,
-                    last_root,
-                );
+                let rv = should_retransmit_and_persist(shred, last_root);
                 rv && !turbine_disabled
             },
             verified_vote_receiver,
