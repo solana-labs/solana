@@ -28,7 +28,7 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{HOST_ALIGN, MM_INPUT_START},
+        ebpf::MM_INPUT_START,
         elf::Executable,
         error::{EbpfError, UserDefinedError},
         memory_region::MemoryRegion,
@@ -306,8 +306,7 @@ pub fn create_vm<'a, 'b>(
                 .saturating_mul(compute_budget.heap_cost),
         );
     }
-    let mut heap =
-        AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
+    let mut heap = AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
     let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
     let mut vm = EbpfVm::new(program, heap.as_slice_mut(), vec![parameter_region])?;
     syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_account_lengths)?;

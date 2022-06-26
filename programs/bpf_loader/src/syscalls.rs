@@ -1,3 +1,4 @@
+use solana_rbpf::ebpf::HOST_ALIGN;
 #[allow(deprecated)]
 use {
     crate::{allocator_bump::BpfAllocator, BpfError},
@@ -360,7 +361,7 @@ pub fn register_syscalls(
 pub fn bind_syscall_context_objects<'a, 'b>(
     vm: &mut EbpfVm<'a, RequisiteVerifier, BpfError, crate::ThisInstructionMeter>,
     invoke_context: &'a mut InvokeContext<'b>,
-    heap: AlignedMemory,
+    heap: AlignedMemory<{ HOST_ALIGN }>,
     orig_account_lengths: Vec<usize>,
 ) -> Result<(), EbpfError<BpfError>> {
     let check_aligned = bpf_loader_deprecated::id()
@@ -4258,7 +4259,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::new_with_size(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
@@ -4300,7 +4301,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::new_with_size(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
@@ -4341,7 +4342,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::new_with_size(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
