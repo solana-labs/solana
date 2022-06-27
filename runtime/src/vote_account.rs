@@ -11,7 +11,7 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-        sync::{Arc, Once, RwLock, RwLockReadGuard},
+        sync::{Arc, Once, RwLock},
     },
     thiserror::Error,
 };
@@ -37,7 +37,7 @@ pub enum Error {
 #[derive(Debug, AbiExample)]
 struct VoteAccountInner {
     account: AccountSharedData,
-    vote_state: RwLock<Result<VoteState, Error>>,
+    vote_state: Result<VoteState, Error>,
     vote_state_once: Once,
 }
 
@@ -79,13 +79,16 @@ impl VoteAccount {
         self.0.account.owner()
     }
 
-    pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, Error>> {
-        let inner = &self.0;
-        inner.vote_state_once.call_once(|| {
-            let vote_state = VoteState::deserialize(inner.account.data());
-            *inner.vote_state.write().unwrap() = vote_state.map_err(Error::from);
+    pub fn vote_state(&self) -> &Result<VoteState, Error> {
+        self.0.vote_state_once.call_once(|| {
+            let vote_state = VoteState::deserialize(self.0.account.data()).map_err(Error::from);
+            unsafe {
+                let cache = &self.0.vote_state as *const Result<VoteState, Error>;
+                let cache = cache as *mut Result<VoteState, Error>;
+                *cache = vote_state;
+            }
         });
-        inner.vote_state.read().unwrap()
+        &self.0.vote_state
     }
 
     pub(crate) fn is_deserialized(&self) -> bool {
@@ -252,7 +255,7 @@ impl TryFrom<AccountSharedData> for VoteAccountInner {
         }
         Ok(Self {
             account,
-            vote_state: RwLock::new(INVALID_VOTE_STATE),
+            vote_state: INVALID_VOTE_STATE,
             vote_state_once: Once::new(),
         })
     }
