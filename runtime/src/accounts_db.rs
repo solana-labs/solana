@@ -2998,7 +2998,7 @@ impl AccountsDb {
         &'a self,
         iter: I,
         alive_accounts: &mut Vec<(&'a Pubkey, &'a FoundStoredAccount<'a>)>,
-        unrefed_pubkeys: &mut Vec<&'a Pubkey>,
+        mut unrefed_pubkeys: Option<&mut Vec<&'a Pubkey>>,
     ) -> usize
     where
         I: Iterator<Item = &'a (Pubkey, FoundStoredAccount<'a>)>,
@@ -3021,7 +3021,9 @@ impl AccountsDb {
                     // It would have had a ref to the storage from the initial store, but it will
                     // not exist in the re-written slot. Unref it to keep the index consistent with
                     // rewriting the storage entries.
-                    unrefed_pubkeys.push(pubkey);
+                    if let Some(unrefed_pubkeys) = &mut unrefed_pubkeys {
+                        unrefed_pubkeys.push(pubkey);
+                    }
                     locked_entry.unref();
                     dead += 1;
                 } else {
@@ -3115,7 +3117,7 @@ impl AccountsDb {
                 let alive_total = self.load_accounts_index_for_shrink(
                     stored_accounts.iter().skip(skip).take(chunk_size),
                     &mut alive_accounts,
-                    &mut unrefed_pubkeys,
+                    Some(&mut unrefed_pubkeys),
                 );
 
                 // collect
@@ -3666,11 +3668,10 @@ impl AccountsDb {
                     let skip = chunk * chunk_size;
 
                     let mut alive_accounts = Vec::with_capacity(chunk_size);
-                    let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
                     let alive_total = self.load_accounts_index_for_shrink(
                         stored_accounts.iter().skip(skip).take(chunk_size),
                         &mut alive_accounts,
-                        &mut unrefed_pubkeys,
+                        None,
                     );
 
                     // collect
