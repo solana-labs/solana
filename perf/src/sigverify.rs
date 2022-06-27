@@ -589,8 +589,8 @@ impl Deduper {
     }
 
     pub fn update_max_packets(&mut self, packets: u64, time: u64) {
-        if packets == 0 || time == 0 {
-            // Need meaningful timing data to update max dedup packet threshold.
+        if packets < MIN_MAX_DEDUP_BATCH as u64 || time == 0 {
+            // Need meaningful timing data and enough packets to amortize fixed cost in order to update max dedup packet threshold.
             return;
         }
         // Compute dedup max capability based on most recent iteration.
