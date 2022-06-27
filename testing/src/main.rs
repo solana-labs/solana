@@ -132,7 +132,7 @@ pub fn main() {
     let leader_pubkey = leader_keypair.pubkey();
 
     //Entrypoint to join Gossip Cluster
-    let entrypoint_addrs: Vec<SocketAddr> = Vec::new();
+    let mut entrypoint_addrs: Vec<SocketAddr> = Vec::new();
     // let entrypoint = "127.0.0.1:8001";
     // entrypoint_addrs.push(
     //     entrypoint
