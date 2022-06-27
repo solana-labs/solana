@@ -33,7 +33,7 @@ use {
     },
 };
 
-const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
+const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: u64 = 100_000;
 const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
 
 #[allow(clippy::too_many_arguments)]
@@ -211,8 +211,10 @@ async fn setup_connection(
                 ConnectionPeerType::Staked => {
                     let staked_nodes = staked_nodes.read().unwrap();
                     VarInt::from_u64(
-                        ((stake as f64 / staked_nodes.total_stake as f64)
-                            * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS) as u64,
+                        (stake as u128)
+                            .saturating_mul(QUIC_TOTAL_STAKED_CONCURRENT_STREAMS as u128)
+                            .checked_div(staked_nodes.total_stake as u128)
+                            .unwrap_or(0) as u64,
                     )
                 }
             };
