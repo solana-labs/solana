@@ -2532,13 +2532,18 @@ impl AccountsDb {
                         let mut useful = 0;
                         self.accounts_index.scan(
                             pubkeys,
-                            max_clean_root,
                             // return true if we want this item to remain in the cache
-                            |exists, slot_list, index_in_slot_list, pubkey, ref_count| {
+                            |exists, slot_list, pubkey, ref_count| {
                                 let mut useless = true;
                                 if !exists {
                                     missing += 1;
                                 } else {
+                                    let index_in_slot_list = self.accounts_index.latest_slot(
+                                        None,
+                                        slot_list,
+                                        max_clean_root,
+                                    );
+
                                     match index_in_slot_list {
                                         Some(index_in_slot_list) => {
                                             // found info relative to max_clean_root
