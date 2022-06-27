@@ -22,7 +22,7 @@ use {
     solana_metrics::inc_new_counter_error,
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
-    solana_sdk::{clock::Slot, pubkey::Pubkey},
+    solana_sdk::clock::Slot,
     std::{
         cmp::Reverse,
         collections::{HashMap, HashSet},
@@ -43,7 +43,10 @@ pub(crate) type DuplicateSlotReceiver = Receiver<Slot>;
 #[derive(Default)]
 struct WindowServiceMetrics {
     run_insert_count: u64,
-    num_shreds_received: u64,
+    num_packets: usize,
+    num_repairs: usize,
+    num_shreds_received: usize,
+    handle_packets_elapsed_us: u64,
     shred_receiver_elapsed_us: u64,
     prune_shreds_elapsed_us: u64,
     num_shreds_pruned_invalid_repair: usize,
@@ -52,14 +55,23 @@ struct WindowServiceMetrics {
     num_errors_cross_beam_recv_timeout: u64,
     num_errors_other: u64,
     num_errors_try_crossbeam_send: u64,
+    addrs: HashMap</*source:*/ SocketAddr, /*num packets:*/ usize>,
 }
 
 impl WindowServiceMetrics {
     fn report_metrics(&self, metric_name: &'static str) {
+        const MAX_NUM_ADDRS: usize = 5;
         datapoint_info!(
             metric_name,
+            (
+                "handle_packets_elapsed_us",
+                self.handle_packets_elapsed_us,
+                i64
+            ),
             ("run_insert_count", self.run_insert_count as i64, i64),
-            ("num_shreds_received", self.num_shreds_received as i64, i64),
+            ("num_packets", self.num_packets, i64),
+            ("num_repairs", self.num_repairs, i64),
+            ("num_shreds_received", self.num_shreds_received, i64),
             (
                 "shred_receiver_elapsed_us",
                 self.shred_receiver_elapsed_us as i64,
@@ -89,6 +101,19 @@ impl WindowServiceMetrics {
                 i64
             ),
         );
+
+        let mut addrs: Vec<_> = self.addrs.iter().collect();
+        let reverse_count = |(_addr, count): &_| Reverse(*count);
+        if addrs.len() > MAX_NUM_ADDRS {
+            addrs.select_nth_unstable_by_key(MAX_NUM_ADDRS, reverse_count);
+            addrs.truncate(MAX_NUM_ADDRS);
+        }
+        addrs.sort_unstable_by_key(reverse_count);
+        info!(
+            "num addresses: {}, top packets by source: {:?}",
+            self.addrs.len(),
+            addrs
+        );
     }
 
     fn record_error(&mut self, err: &Error) {
@@ -102,52 +127,6 @@ impl WindowServiceMetrics {
             }
             _ => self.num_errors_other += 1,
         }
-    }
-}
-
-#[derive(Default)]
-struct ReceiveWindowStats {
-    num_iters: usize,
-    num_packets: usize,
-    num_repairs: usize,
-    num_shreds: usize, // num_discards: num_packets - num_shreds
-    elapsed: Duration, // excludes waiting time on the receiver channel.
-    addrs: HashMap</*source:*/ SocketAddr, /*num packets:*/ usize>,
-    since: Option<Instant>,
-}
-
-impl ReceiveWindowStats {
-    fn maybe_submit(&mut self) {
-        const MAX_NUM_ADDRS: usize = 5;
-        const SUBMIT_CADENCE: Duration = Duration::from_secs(2);
-        let elapsed = self.since.as_ref().map(Instant::elapsed);
-        if elapsed.unwrap_or(Duration::MAX) < SUBMIT_CADENCE {
-            return;
-        }
-        datapoint_info!(
-            "receive_window_stats",
-            ("num_iters", self.num_iters, i64),
-            ("num_packets", self.num_packets, i64),
-            ("num_shreds", self.num_shreds, i64),
-            ("num_repairs", self.num_repairs, i64),
-            ("elapsed_micros", self.elapsed.as_micros(), i64),
-        );
-        let mut addrs: Vec<_> = std::mem::take(&mut self.addrs).into_iter().collect();
-        let reverse_count = |(_addr, count): &_| Reverse(*count);
-        if addrs.len() > MAX_NUM_ADDRS {
-            addrs.select_nth_unstable_by_key(MAX_NUM_ADDRS, reverse_count);
-            addrs.truncate(MAX_NUM_ADDRS);
-        }
-        addrs.sort_unstable_by_key(reverse_count);
-        info!(
-            "num addresses: {}, top packets by source: {:?}",
-            self.addrs.len(),
-            addrs
-        );
-        *self = Self {
-            since: Some(Instant::now()),
-            ..Self::default()
-        };
     }
 }
 
@@ -229,8 +208,10 @@ fn prune_shreds_invalid_repair(
     assert_eq!(shreds.len(), repair_infos.len());
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_insert<F>(
-    shred_receiver: &Receiver<(Vec<ShredPayload>, Vec<Option<RepairMeta>>)>,
+    thread_pool: &ThreadPool,
+    verified_receiver: &Receiver<Vec<PacketBatch>>,
     blockstore: &Blockstore,
     leader_schedule_cache: &LeaderScheduleCache,
     handle_duplicate: F,
@@ -243,26 +224,46 @@ fn run_insert<F>(
 where
     F: Fn(Shred),
 {
-    ws_metrics.run_insert_count += 1;
+    const RECV_TIMEOUT: Duration = Duration::from_millis(200);
     let mut shred_receiver_elapsed = Measure::start("shred_receiver_elapsed");
-    let timer = Duration::from_millis(200);
-    let (mut shreds, mut repair_infos) = shred_receiver.recv_timeout(timer)?;
-    while let Ok((more_shreds, more_repair_infos)) = shred_receiver.try_recv() {
-        shreds.extend(more_shreds);
-        repair_infos.extend(more_repair_infos);
-    }
+    let mut packets = verified_receiver.recv_timeout(RECV_TIMEOUT)?;
+    packets.extend(verified_receiver.try_iter().flatten());
     shred_receiver_elapsed.stop();
     ws_metrics.shred_receiver_elapsed_us += shred_receiver_elapsed.as_us();
-    ws_metrics.num_shreds_received += shreds.len() as u64;
-    // TODO: Consider using thread-pool here instead of recv_window.
-    let (mut shreds, mut repair_infos): (Vec<_>, Vec<_>) = shreds
-        .into_iter()
-        .zip(repair_infos)
-        .filter_map(|(shred, repair_info)| {
-            let shred = Shred::new_from_serialized_shred(shred).ok()?;
-            Some((shred, repair_info))
-        })
-        .unzip();
+    ws_metrics.run_insert_count += 1;
+    let handle_packet = |packet: &Packet| {
+        if packet.meta.discard() {
+            return None;
+        }
+        let shred = shred::layout::get_shred(packet)?;
+        let shred = Shred::new_from_serialized_shred(shred.to_vec()).ok()?;
+        if packet.meta.repair() {
+            let repair_info = RepairMeta {
+                _from_addr: packet.meta.socket_addr(),
+                // If can't parse the nonce, dump the packet.
+                nonce: repair_response::nonce(packet)?,
+            };
+            Some((shred, Some(repair_info)))
+        } else {
+            Some((shred, None))
+        }
+    };
+    let now = Instant::now();
+    let (mut shreds, mut repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
+        packets
+            .par_iter()
+            .flat_map_iter(|packets| packets.iter().filter_map(handle_packet))
+            .unzip()
+    });
+    ws_metrics.handle_packets_elapsed_us += now.elapsed().as_micros() as u64;
+    ws_metrics.num_packets += packets.iter().map(PacketBatch::len).sum::<usize>();
+    ws_metrics.num_repairs += repair_infos.iter().filter(|r| r.is_some()).count();
+    ws_metrics.num_shreds_received += shreds.len();
+    for packet in packets.iter().flat_map(PacketBatch::iter) {
+        let addr = packet.meta.socket_addr();
+        *ws_metrics.addrs.entry(addr).or_default() += 1;
+    }
+
     let mut prune_shreds_elapsed = Measure::start("prune_shreds_elapsed");
     let num_shreds = shreds.len();
     prune_shreds_invalid_repair(&mut shreds, &mut repair_infos, outstanding_requests);
@@ -293,90 +294,12 @@ where
     Ok(())
 }
 
-fn recv_window(
-    insert_shred_sender: &Sender<(Vec<ShredPayload>, Vec<Option<RepairMeta>>)>,
-    verified_receiver: &Receiver<Vec<PacketBatch>>,
-    retransmit_sender: &Sender<Vec<ShredPayload>>,
-    turbine_disabled: &AtomicBool,
-    thread_pool: &ThreadPool,
-    stats: &mut ReceiveWindowStats,
-) -> Result<()> {
-    const RECV_TIMEOUT: Duration = Duration::from_millis(200);
-    let mut packet_batches = verified_receiver.recv_timeout(RECV_TIMEOUT)?;
-    packet_batches.extend(verified_receiver.try_iter().flatten());
-    let now = Instant::now();
-    let turbine_disabled = turbine_disabled.load(Ordering::Relaxed);
-    let handle_packet = |packet: &Packet| {
-        if turbine_disabled || packet.meta.discard() {
-            return None;
-        }
-        let shred = shred::layout::get_shred(packet)?;
-        if packet.meta.repair() {
-            let repair_info = RepairMeta {
-                _from_addr: packet.meta.socket_addr(),
-                // If can't parse the nonce, dump the packet.
-                nonce: repair_response::nonce(packet)?,
-            };
-            Some((shred.to_vec(), Some(repair_info)))
-        } else {
-            Some((shred.to_vec(), None))
-        }
-    };
-    let (shreds, repair_infos): (Vec<_>, Vec<_>) = thread_pool.install(|| {
-        packet_batches
-            .par_iter()
-            .flat_map_iter(|packet_batch| packet_batch.iter().filter_map(handle_packet))
-            .unzip()
-    });
-    // Exclude repair packets from retransmit.
-    let _ = retransmit_sender.send(
-        shreds
-            .iter()
-            .zip(&repair_infos)
-            .filter(|(_, repair_info)| repair_info.is_none())
-            .map(|(shred, _)| shred)
-            .cloned()
-            .collect(),
-    );
-    stats.num_repairs += repair_infos.iter().filter(|r| r.is_some()).count();
-    stats.num_shreds += shreds.len();
-    insert_shred_sender.send((shreds, repair_infos))?;
-
-    stats.num_iters += 1;
-    stats.num_packets += packet_batches.iter().map(PacketBatch::len).sum::<usize>();
-    for packet in packet_batches.iter().flat_map(PacketBatch::iter) {
-        let addr = packet.meta.socket_addr();
-        *stats.addrs.entry(addr).or_default() += 1;
-    }
-    stats.elapsed += now.elapsed();
-    Ok(())
-}
-
 struct RepairMeta {
     _from_addr: SocketAddr,
     nonce: Nonce,
 }
 
-// Implement a destructor for the window_service thread to signal it exited
-// even on panics
-struct Finalizer {
-    exit_sender: Arc<AtomicBool>,
-}
-
-impl Finalizer {
-    fn new(exit_sender: Arc<AtomicBool>) -> Self {
-        Finalizer { exit_sender }
-    }
-}
-// Implement a destructor for Finalizer.
-impl Drop for Finalizer {
-    fn drop(&mut self) {
-        self.exit_sender.clone().store(true, Ordering::Relaxed);
-    }
-}
-
 pub(crate) struct WindowService {
-    t_window: JoinHandle<()>,
     t_insert: JoinHandle<()>,
     t_check_duplicate: JoinHandle<()>,
     repair_service: RepairService,
@@ -393,7 +316,6 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         repair_info: RepairInfo,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
-        turbine_disabled: Arc<AtomicBool>,
         verified_vote_receiver: VerifiedVoteReceiver,
         completed_data_sets_sender: CompletedDataSetsSender,
         duplicate_slots_sender: DuplicateSlotSender,
@@ -402,7 +324,6 @@ impl WindowService {
         let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
 
         let cluster_info = repair_info.cluster_info.clone();
-        let id = cluster_info.id();
 
         let repair_service = RepairService::new(
             blockstore.clone(),
@@ -415,7 +336,6 @@ impl WindowService {
             ancestor_hashes_replay_update_receiver,
         );
 
-        let (insert_sender, insert_receiver) = unbounded();
         let (duplicate_sender, duplicate_receiver) = unbounded();
 
         let t_check_duplicate = Self::start_check_duplicate_thread(
@@ -427,27 +347,17 @@ impl WindowService {
         );
 
         let t_insert = Self::start_window_insert_thread(
-            exit.clone(),
+            exit,
             blockstore,
             leader_schedule_cache,
-            insert_receiver,
+            verified_receiver,
             duplicate_sender,
             completed_data_sets_sender,
-            retransmit_sender.clone(),
+            retransmit_sender,
             outstanding_requests,
         );
 
-        let t_window = Self::start_recv_window_thread(
-            id,
-            exit,
-            insert_sender,
-            verified_receiver,
-            turbine_disabled,
-            retransmit_sender,
-        );
-
         WindowService {
-            t_window,
             t_insert,
             t_check_duplicate,
             repair_service,
@@ -466,20 +376,17 @@ impl WindowService {
         };
         Builder::new()
             .name("solana-check-duplicate".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                let mut noop = || {};
-                if let Err(e) = run_check_duplicate(
-                    &cluster_info,
-                    &blockstore,
-                    &duplicate_receiver,
-                    &duplicate_slots_sender,
-                ) {
-                    if Self::should_exit_on_error(e, &mut noop, &handle_error) {
-                        break;
+            .spawn(move || {
+                while !exit.load(Ordering::Relaxed) {
+                    if let Err(e) = run_check_duplicate(
+                        &cluster_info,
+                        &blockstore,
+                        &duplicate_receiver,
+                        &duplicate_slots_sender,
+                    ) {
+                        if Self::should_exit_on_error(e, &handle_error) {
+                            break;
+                        }
                     }
                 }
             })
@@ -490,17 +397,20 @@ impl WindowService {
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
-        insert_receiver: Receiver<(Vec<ShredPayload>, Vec<Option<RepairMeta>>)>,
+        verified_receiver: Receiver<Vec<PacketBatch>>,
         check_duplicate_sender: Sender<Shred>,
         completed_data_sets_sender: CompletedDataSetsSender,
         retransmit_sender: Sender<Vec<ShredPayload>>,
         outstanding_requests: Arc<RwLock<OutstandingShredRepairs>>,
     ) -> JoinHandle<()> {
-        let mut handle_timeout = || {};
         let handle_error = || {
             inc_new_counter_error!("solana-window-insert-error", 1, 1);
         };
-
+        let thread_pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(get_thread_count().min(8))
+            .thread_name(|i| format!("window-insert-{}", i))
+            .build()
+            .unwrap();
         Builder::new()
             .name("solana-window-insert".to_string())
             .spawn(move || {
@@ -510,13 +420,10 @@ impl WindowService {
                 let mut metrics = BlockstoreInsertionMetrics::default();
                 let mut ws_metrics = WindowServiceMetrics::default();
                 let mut last_print = Instant::now();
-                loop {
-                    if exit.load(Ordering::Relaxed) {
-                        break;
-                    }
-
+                while !exit.load(Ordering::Relaxed) {
                     if let Err(e) = run_insert(
-                        &insert_receiver,
+                        &thread_pool,
+                        &verified_receiver,
                         &blockstore,
                         &leader_schedule_cache,
                         &handle_duplicate,
@@ -527,7 +434,7 @@ impl WindowService {
                         &outstanding_requests,
                     ) {
                         ws_metrics.record_error(&e);
-                        if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
+                        if Self::should_exit_on_error(e, &handle_error) {
                             break;
                         }
                     }
@@ -544,71 +451,13 @@ impl WindowService {
             .unwrap()
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn start_recv_window_thread(
-        id: Pubkey,
-        exit: Arc<AtomicBool>,
-        insert_sender: Sender<(Vec<ShredPayload>, Vec<Option<RepairMeta>>)>,
-        verified_receiver: Receiver<Vec<PacketBatch>>,
-        turbine_disabled: Arc<AtomicBool>,
-        retransmit_sender: Sender<Vec<ShredPayload>>,
-    ) -> JoinHandle<()> {
-        let mut stats = ReceiveWindowStats::default();
-        Builder::new()
-            .name("solana-window".to_string())
-            .spawn(move || {
-                let _exit = Finalizer::new(exit.clone());
-                trace!("{}: RECV_WINDOW started", id);
-                let thread_pool = rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .build()
-                    .unwrap();
-                let mut now = Instant::now();
-                let handle_error = || {
-                    inc_new_counter_error!("solana-window-error", 1, 1);
-                };
-
-                while !exit.load(Ordering::Relaxed) {
-                    let mut handle_timeout = || {
-                        if now.elapsed() > Duration::from_secs(30) {
-                            warn!(
-                                "Window does not seem to be receiving data. \
-                            Ensure port configuration is correct..."
-                            );
-                            now = Instant::now();
-                        }
-                    };
-                    if let Err(e) = recv_window(
-                        &insert_sender,
-                        &verified_receiver,
-                        &retransmit_sender,
-                        &turbine_disabled,
-                        &thread_pool,
-                        &mut stats,
-                    ) {
-                        if Self::should_exit_on_error(e, &mut handle_timeout, &handle_error) {
-                            break;
-                        }
-                    } else {
-                        now = Instant::now();
-                    }
-                    stats.maybe_submit();
-                }
-            })
-            .unwrap()
-    }
-
-    fn should_exit_on_error<F, H>(e: Error, handle_timeout: &mut F, handle_error: &H) -> bool
+    fn should_exit_on_error<H>(e: Error, handle_error: &H) -> bool
     where
-        F: FnMut(),
         H: Fn(),
     {
         match e {
             Error::RecvTimeout(RecvTimeoutError::Disconnected) => true,
-            Error::RecvTimeout(RecvTimeoutError::Timeout) => {
-                handle_timeout();
-                false
-            }
+            Error::RecvTimeout(RecvTimeoutError::Timeout) => false,
             Error::Send => true,
             _ => {
                 handle_error();
@@ -619,7 +468,6 @@ impl WindowService {
     }
 
     pub(crate) fn join(self) -> thread::Result<()> {
-        self.t_window.join()?;
         self.t_insert.join()?;
         self.t_check_duplicate.join()?;
         self.repair_service.join()
