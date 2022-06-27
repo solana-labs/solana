@@ -51,7 +51,7 @@ pub struct ComputeBudget {
     pub log_pubkey_units: u64,
     /// Maximum cross-program invocation instruction size
     pub max_cpi_instruction_size: usize,
-    /// Number of account data bytes per conpute unit charged during a cross-program invocation
+    /// Number of account data bytes per compute unit charged during a cross-program invocation
     pub cpi_bytes_per_unit: u64,
     /// Base number of compute units consumed to get a sysvar
     pub sysvar_base_cost: u64,
