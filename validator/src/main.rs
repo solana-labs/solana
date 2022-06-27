@@ -1768,6 +1768,20 @@ pub fn main() {
                 .help("Allow contacting private ip addresses")
                 .hidden(true),
         )
+        .arg(
+            Arg::with_name("gossip_warmup_time")
+                .long("gossip-warmup-time")
+                .help("The amount of time to wait for gossip to warmup during bootstrap")
+                .long_help("The amount of time to wait, in seconds, for gossip to warmup during bootstrap. \
+                            Populating the gossip table takes time, and is used to discover snapshots on \
+                            cluster. To ensure all/enough of the table is available, an additional delay \
+                            may be necessary. Consider setting this option when you observe that incremental \
+                            snapshots are not being downloaded, and instead only very old full snapshots \
+                            are downloaded.")
+                .takes_value(true)
+                .value_name("SECONDS")
+                .default_value("0")
+        )
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -2227,6 +2241,11 @@ pub fn main() {
             u64
         ),
         incremental_snapshot_fetch: !matches.is_present("no_incremental_snapshots"),
+        gossip_warmup_time: Duration::from_secs_f64(value_t_or_exit!(
+            matches,
+            "gossip_warmup_time",
+            f64
+        )),
     };
 
     let private_rpc = matches.is_present("private_rpc");

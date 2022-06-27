@@ -49,6 +49,7 @@ pub struct RpcBootstrapConfig {
     pub max_genesis_archive_unpacked_size: u64,
     pub check_vote_account: Option<String>,
     pub incremental_snapshot_fetch: bool,
+    pub gossip_warmup_time: Duration,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -849,6 +850,16 @@ mod with_incremental_snapshots {
                     should_check_duplicate_instance,
                     socket_addr_space,
                 ));
+
+                debug!(
+                    "gossip warmup time: {:?}",
+                    bootstrap_config.gossip_warmup_time
+                );
+                if bootstrap_config.gossip_warmup_time > Duration::default() {
+                    info!("Waiting for gossip to warmup...");
+                    sleep(bootstrap_config.gossip_warmup_time);
+                    info!("Waiting for gossip to warmup... DONE");
+                }
             }
 
             let rpc_node_details = get_rpc_node(
