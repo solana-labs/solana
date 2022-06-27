@@ -2531,7 +2531,7 @@ impl AccountsDb {
                         let mut missing = 0;
                         let mut useful = 0;
                         self.accounts_index.scan(
-                            pubkeys,
+                            pubkeys.iter(),
                             // return true if we want this item to remain in the cache
                             |exists, slot_list, pubkey, ref_count| {
                                 let mut useless = true;
