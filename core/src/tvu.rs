@@ -160,6 +160,7 @@ impl Tvu {
         let sigverify_stage = SigVerifyStage::new(
             fetch_receiver,
             ShredSigVerifier::new(
+                cluster_info.id(),
                 bank_forks.clone(),
                 leader_schedule_cache.clone(),
                 verified_sender,

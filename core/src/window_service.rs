@@ -22,7 +22,6 @@ use {
     solana_metrics::{inc_new_counter_debug, inc_new_counter_error},
     solana_perf::packet::{Packet, PacketBatch},
     solana_rayon_threadlimit::get_thread_count,
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         cmp::Reverse,
@@ -171,26 +170,11 @@ fn verify_shred_slot(shred: &Shred, root: u64) -> bool {
 
 /// drop shreds that are from myself or not from the correct leader for the
 /// shred's slot
-pub(crate) fn should_retransmit_and_persist(
-    shred: &Shred,
-    bank: Option<Arc<Bank>>,
-    leader_schedule_cache: &LeaderScheduleCache,
-    my_pubkey: &Pubkey,
-    root: u64,
-) -> bool {
-    let slot_leader_pubkey = leader_schedule_cache.slot_leader_at(shred.slot(), bank.as_deref());
-    if let Some(leader_id) = slot_leader_pubkey {
-        if leader_id == *my_pubkey {
-            inc_new_counter_debug!("streamer-recv_window-circular_transmission", 1);
-            false
-        } else if !verify_shred_slot(shred, root) {
-            inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
-            false
-        } else {
-            true
-        }
+pub(crate) fn should_retransmit_and_persist(shred: &Shred, root: u64) -> bool {
+    if verify_shred_slot(shred, root) {
+        true
     } else {
-        inc_new_counter_debug!("streamer-recv_window-unknown_leader", 1);
+        inc_new_counter_debug!("streamer-recv_window-outdated_transmission", 1);
         false
     }
 }
@@ -331,7 +315,6 @@ where
 
 fn recv_window<F>(
     blockstore: &Blockstore,
-    bank_forks: &RwLock<BankForks>,
     insert_shred_sender: &Sender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
     verified_receiver: &Receiver<Vec<PacketBatch>>,
     retransmit_sender: &Sender<Vec<Shred>>,
@@ -340,14 +323,13 @@ fn recv_window<F>(
     stats: &mut ReceiveWindowStats,
 ) -> Result<()>
 where
-    F: Fn(&Shred, Arc<Bank>, /*last root:*/ Slot) -> bool + Sync,
+    F: Fn(&Shred, /*last root:*/ Slot) -> bool + Sync,
 {
     let timer = Duration::from_millis(200);
     let mut packet_batches = verified_receiver.recv_timeout(timer)?;
     packet_batches.extend(verified_receiver.try_iter().flatten());
     let now = Instant::now();
     let last_root = blockstore.last_root();
-    let working_bank = bank_forks.read().unwrap().working_bank();
     let handle_packet = |packet: &Packet| {
         if packet.meta.discard() {
             inc_new_counter_debug!("streamer-recv_window-invalid_or_unnecessary_packet", 1);
@@ -355,7 +337,7 @@ where
         }
         let serialized_shred = packet.data(..)?.to_vec();
         let shred = Shred::new_from_serialized_shred(serialized_shred).ok()?;
-        if !shred_filter(&shred, working_bank.clone(), last_root) {
+        if !shred_filter(&shred, last_root) {
             return None;
         }
         if packet.meta.repair() {
@@ -456,13 +438,12 @@ impl WindowService {
     ) -> WindowService
     where
         F: 'static
-            + Fn(&Pubkey, &Shred, Option<Arc<Bank>>, /*last root:*/ Slot) -> bool
+            + Fn(&Shred, /*last root:*/ Slot) -> bool
             + std::marker::Send
             + std::marker::Sync,
     {
         let outstanding_requests = Arc::<RwLock<OutstandingShredRepairs>>::default();
 
-        let bank_forks = repair_info.bank_forks.clone();
         let cluster_info = repair_info.cluster_info.clone();
         let id = cluster_info.id();
 
@@ -506,7 +487,6 @@ impl WindowService {
             insert_sender,
             verified_receiver,
             shred_filter,
-            bank_forks,
             retransmit_sender,
         );
 
@@ -616,14 +596,10 @@ impl WindowService {
         insert_sender: Sender<(Vec<Shred>, Vec<Option<RepairMeta>>)>,
         verified_receiver: Receiver<Vec<PacketBatch>>,
         shred_filter: F,
-        bank_forks: Arc<RwLock<BankForks>>,
         retransmit_sender: Sender<Vec<Shred>>,
     ) -> JoinHandle<()>
     where
-        F: 'static
-            + Fn(&Pubkey, &Shred, Option<Arc<Bank>>, u64) -> bool
-            + std::marker::Send
-            + std::marker::Sync,
+        F: 'static + Fn(&Shred, u64) -> bool + std::marker::Send + std::marker::Sync,
     {
         let mut stats = ReceiveWindowStats::default();
         Builder::new()
@@ -652,11 +628,10 @@ impl WindowService {
                     };
                     if let Err(e) = recv_window(
                         &blockstore,
-                        &bank_forks,
                         &insert_sender,
                         &verified_receiver,
                         &retransmit_sender,
-                        |shred, bank, last_root| shred_filter(&id, shred, Some(bank), last_root),
+                        |shred, last_root| shred_filter(shred, last_root),
                         &thread_pool,
                         &mut stats,
                     ) {
@@ -708,7 +683,6 @@ mod test {
         solana_gossip::contact_info::ContactInfo,
         solana_ledger::{
             blockstore::{make_many_slot_entries, Blockstore},
-            genesis_utils::create_genesis_config_with_leader,
             get_tmp_ledger_path,
             shred::{ProcessShredsStats, Shredder},
         },
@@ -759,76 +733,29 @@ mod test {
 
     #[test]
     fn test_should_retransmit_and_persist() {
-        let me_id = solana_sdk::pubkey::new_rand();
         let leader_keypair = Arc::new(Keypair::new());
-        let leader_pubkey = leader_keypair.pubkey();
-        let bank = Arc::new(Bank::new_for_tests(
-            &create_genesis_config_with_leader(100, &leader_pubkey, 10).genesis_config,
-        ));
-        let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
 
         let shreds = local_entries_to_shred(&[Entry::default()], 0, 0, &leader_keypair);
 
         // with a Bank for slot 0, shred continues
-        assert!(should_retransmit_and_persist(
-            &shreds[0],
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            0,
-        ));
-
-        // substitute leader_pubkey for me_id so it looks I was the leader
-        // if the shred came back from me, it doesn't continue, whether or not I have a bank
-        assert!(!should_retransmit_and_persist(
-            &shreds[0],
-            Some(bank.clone()),
-            &cache,
-            &leader_pubkey,
-            0,
-        ));
-        assert!(!should_retransmit_and_persist(
-            &shreds[0],
-            None,
-            &cache,
-            &leader_pubkey,
-            0,
-        ));
+        assert!(should_retransmit_and_persist(&shreds[0], 0));
 
         // change the shred's slot so leader lookup fails
         // with a Bank and no idea who leader is, shred gets thrown out
         let mut bad_slot_shred = shreds[0].clone();
         bad_slot_shred.set_slot(MINIMUM_SLOTS_PER_EPOCH as u64 * 3);
-        assert!(!should_retransmit_and_persist(
-            &bad_slot_shred,
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            0,
-        ));
+        assert!(!should_retransmit_and_persist(&bad_slot_shred, 0));
 
         // with a shred where shred.slot() == root, shred gets thrown out
         let root = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds = local_entries_to_shred(&[Entry::default()], root, root - 1, &leader_keypair);
-        assert!(!should_retransmit_and_persist(
-            &shreds[0],
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            root,
-        ));
+        assert!(!should_retransmit_and_persist(&shreds[0], root));
 
         // with a shred where shred.parent() < root, shred gets thrown out
         let root = MINIMUM_SLOTS_PER_EPOCH as u64 * 3;
         let shreds =
             local_entries_to_shred(&[Entry::default()], root + 1, root - 1, &leader_keypair);
-        assert!(!should_retransmit_and_persist(
-            &shreds[0],
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            root,
-        ));
+        assert!(!should_retransmit_and_persist(&shreds[0], root));
 
         // coding shreds don't contain parent slot information, test that slot >= root
         let mut coding_shred = Shred::new_from_parity_shard(
@@ -843,29 +770,11 @@ mod test {
         );
         coding_shred.sign(&leader_keypair);
         // shred.slot() > root, shred continues
-        assert!(should_retransmit_and_persist(
-            &coding_shred,
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            0,
-        ));
+        assert!(should_retransmit_and_persist(&coding_shred, 0));
         // shred.slot() == root, shred continues
-        assert!(should_retransmit_and_persist(
-            &coding_shred,
-            Some(bank.clone()),
-            &cache,
-            &me_id,
-            5,
-        ));
+        assert!(should_retransmit_and_persist(&coding_shred, 5));
         // shred.slot() < root, shred gets thrown out
-        assert!(!should_retransmit_and_persist(
-            &coding_shred,
-            Some(bank),
-            &cache,
-            &me_id,
-            6,
-        ));
+        assert!(!should_retransmit_and_persist(&coding_shred, 6));
     }
 
     #[test]
