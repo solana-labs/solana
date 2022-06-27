@@ -914,11 +914,18 @@ impl Drop for TestValidator {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use {super::*, std::sync::atomic::Ordering};
 
     #[test]
     fn get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start();
+        test_validator
+            .bank_forks()
+            .read()
+            .unwrap()
+            .root_bank()
+            .get_startup_verification_complete()
+            .store(true, Ordering::Release);
         let rpc_client = test_validator.get_rpc_client();
         rpc_client.get_health().expect("health");
     }
@@ -926,6 +933,13 @@ mod test {
     #[tokio::test]
     async fn nonblocking_get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start_async().await;
+        test_validator
+            .bank_forks()
+            .read()
+            .unwrap()
+            .root_bank()
+            .get_startup_verification_complete()
+            .store(true, Ordering::Release);
         let rpc_client = test_validator.get_async_rpc_client();
         rpc_client.get_health().await.expect("health");
     }
