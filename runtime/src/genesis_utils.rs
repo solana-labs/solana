@@ -7,7 +7,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         pubkey::Pubkey,
         rent::Rent,
-        signature::{Keypair, Signer},
+        signature::{Keypair, KeypairInsecureClone, Signer},
         stake::state::StakeState,
         system_program,
     },
@@ -109,8 +109,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
     assert_eq!(voting_keypairs.len(), stakes.len());
 
     let mint_keypair = Keypair::new();
-    let voting_keypair =
-        Keypair::from_bytes(&voting_keypairs[0].borrow().vote_keypair.to_bytes()).unwrap();
+    let voting_keypair = voting_keypairs[0].borrow().vote_keypair.clone();
 
     let validator_pubkey = voting_keypairs[0].borrow().node_keypair.pubkey();
     let genesis_config = create_genesis_config_with_leader_ex(

@@ -3227,7 +3227,7 @@ pub(crate) mod tests {
             hash::{hash, Hash},
             instruction::InstructionError,
             poh_config::PohConfig,
-            signature::{Keypair, Signer},
+            signature::{Keypair, KeypairInsecureClone, Signer},
             system_transaction,
             transaction::TransactionError,
         },
@@ -3307,7 +3307,7 @@ pub(crate) mod tests {
         let my_pubkey = my_keypairs.node_keypair.pubkey();
         let cluster_info = ClusterInfo::new(
             Node::new_localhost_with_pubkey(&my_pubkey).info,
-            Arc::new(Keypair::from_bytes(&my_keypairs.node_keypair.to_bytes()).unwrap()),
+            Arc::new(my_keypairs.node_keypair.clone()),
             SocketAddrSpace::Unspecified,
         );
         assert_eq!(my_pubkey, cluster_info.id());
