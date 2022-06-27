@@ -5954,6 +5954,7 @@ dependencies = [
  "solana-logger 1.11.2",
  "solana-program 1.11.2",
  "solana-sdk-macro 1.11.2",
+ "static_assertions",
  "thiserror",
  "tiny-bip39",
  "uriparse",
