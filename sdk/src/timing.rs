@@ -123,7 +123,7 @@ impl Interval<u64> {
         if passed || last == 0 {
             self.last_update = now;
         }
-        return passed;
+        passed
     }
 
     /// return ms elapsed since the last time the time was set
