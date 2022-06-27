@@ -226,6 +226,17 @@ impl ShredId {
     pub(crate) fn unwrap(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
         (self.0, self.1, self.2)
     }
+
+    pub fn seed(&self, leader: &Pubkey) -> [u8; 32] {
+        let ShredId(slot, index, shred_type) = self;
+        hashv(&[
+            &slot.to_le_bytes(),
+            &u8::from(*shred_type).to_le_bytes(),
+            &index.to_le_bytes(),
+            AsRef::<[u8]>::as_ref(leader),
+        ])
+        .to_bytes()
+    }
 }
 
 /// Tuple which identifies erasure coding set that the shred belongs to.
@@ -429,16 +440,6 @@ impl Shred {
     pub fn sign(&mut self, keypair: &Keypair) {
         let signature = keypair.sign_message(self.signed_message());
         self.set_signature(signature);
-    }
-
-    pub fn seed(&self, leader_pubkey: Pubkey) -> [u8; 32] {
-        hashv(&[
-            &self.slot().to_le_bytes(),
-            &u8::from(self.shred_type()).to_le_bytes(),
-            &self.index().to_le_bytes(),
-            &leader_pubkey.to_bytes(),
-        ])
-        .to_bytes()
     }
 
     #[inline]
@@ -1074,6 +1075,31 @@ mod tests {
                 ShredVariant::MerkleData(proof_size)
             );
         }
+    }
+
+    #[test]
+    fn test_shred_seed() {
+        let mut rng = ChaChaRng::from_seed([147u8; 32]);
+        let leader = Pubkey::new_from_array(rng.gen());
+        let key = ShredId(
+            141939602, // slot
+            28685,     // index
+            ShredType::Data,
+        );
+        assert_eq!(
+            bs58::encode(key.seed(&leader)).into_string(),
+            "Gp4kUM4ZpWGQN5XSCyM9YHYWEBCAZLa94ZQuSgDE4r56"
+        );
+        let leader = Pubkey::new_from_array(rng.gen());
+        let key = ShredId(
+            141945197, // slot
+            23418,     // index
+            ShredType::Code,
+        );
+        assert_eq!(
+            bs58::encode(key.seed(&leader)).into_string(),
+            "G1gmFe1QUM8nhDApk6BqvPgw3TQV2Qc5bpKppa96qbVb"
+        );
     }
 
     fn verify_shred_layout(shred: &Shred, packet: &Packet) {

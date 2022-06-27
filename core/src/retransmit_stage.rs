@@ -255,7 +255,7 @@ fn retransmit(
             .map(|(index, (shred, slot_leader, cluster_nodes))| {
                 let (root_distance, num_nodes) = retransmit_shred(
                     &shred,
-                    slot_leader,
+                    &slot_leader,
                     &root_bank,
                     &cluster_nodes,
                     socket_addr_space,
@@ -274,7 +274,7 @@ fn retransmit(
                     let index = thread_pool.current_thread_index().unwrap();
                     let (root_distance, num_nodes) = retransmit_shred(
                         &shred,
-                        slot_leader,
+                        &slot_leader,
                         &root_bank,
                         &cluster_nodes,
                         socket_addr_space,
@@ -296,7 +296,7 @@ fn retransmit(
 
 fn retransmit_shred(
     shred: &Shred,
-    slot_leader: Pubkey,
+    slot_leader: &Pubkey,
     root_bank: &Bank,
     cluster_nodes: &ClusterNodes<RetransmitStage>,
     socket_addr_space: &SocketAddrSpace,

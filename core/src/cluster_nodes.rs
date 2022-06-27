@@ -122,7 +122,7 @@ impl ClusterNodes<BroadcastStage> {
         socket_addr_space: &SocketAddrSpace,
     ) -> Vec<SocketAddr> {
         const MAX_CONTACT_INFO_AGE: Duration = Duration::from_secs(2 * 60);
-        let shred_seed = shred.seed(self.pubkey);
+        let shred_seed = shred.id().seed(&self.pubkey);
         let mut rng = ChaChaRng::from_seed(shred_seed);
         let index = match self.weighted_shuffle.first(&mut rng) {
             None => return Vec::default(),
@@ -176,7 +176,7 @@ impl ClusterNodes<BroadcastStage> {
 impl ClusterNodes<RetransmitStage> {
     pub(crate) fn get_retransmit_addrs(
         &self,
-        slot_leader: Pubkey,
+        slot_leader: &Pubkey,
         shred: &Shred,
         root_bank: &Bank,
         fanout: usize,
@@ -212,7 +212,7 @@ impl ClusterNodes<RetransmitStage> {
 
     pub fn get_retransmit_peers(
         &self,
-        slot_leader: Pubkey,
+        slot_leader: &Pubkey,
         shred: &Shred,
         root_bank: &Bank,
         fanout: usize,
@@ -221,12 +221,12 @@ impl ClusterNodes<RetransmitStage> {
         Vec<&Node>, // neighbors
         Vec<&Node>, // children
     ) {
-        let shred_seed = shred.seed(slot_leader);
+        let shred_seed = shred.id().seed(slot_leader);
         let mut weighted_shuffle = self.weighted_shuffle.clone();
         // Exclude slot leader from list of nodes.
-        if slot_leader == self.pubkey {
+        if slot_leader == &self.pubkey {
             error!("retransmit from slot leader: {}", slot_leader);
-        } else if let Some(index) = self.index.get(&slot_leader) {
+        } else if let Some(index) = self.index.get(slot_leader) {
             weighted_shuffle.remove_index(*index);
         };
         let mut rng = ChaChaRng::from_seed(shred_seed);
