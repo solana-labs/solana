@@ -297,6 +297,23 @@ export type BlockheightBasedTransactionConfirmationStrategy = {
   signature: TransactionSignature;
 } & BlockhashWithExpiryBlockHeight;
 
+/** @internal */
+function extractCommitmentFromConfig<TConfig>(
+  commitmentOrConfig?: Commitment | ({commitment?: Commitment} & TConfig),
+) {
+  let commitment: Commitment | undefined;
+  let config: Omit<TConfig, 'commitment'> | undefined;
+  if (typeof commitmentOrConfig === 'string') {
+    commitment = commitmentOrConfig;
+  } else if (commitmentOrConfig) {
+    const {commitment: specifiedCommitment, ...specifiedConfig} =
+      commitmentOrConfig;
+    commitment = specifiedCommitment;
+    config = specifiedConfig;
+  }
+  return {commitment, config};
+}
+
 /**
  * @internal
  */
@@ -398,6 +415,16 @@ export type Finality = 'confirmed' | 'finalized';
  * </pre>
  */
 export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
+
+/**
+ * Configuration object for changing `getAccountInfo` query behavior
+ */
+export type GetAccountInfoConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
 
 /**
  * Configuration object for changing `getLargestAccounts` query behavior
@@ -2616,9 +2643,16 @@ export class Connection {
    */
   async getAccountInfoAndContext(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
-    const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64');
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      'base64',
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = create(
       unsafeRes,
@@ -2670,10 +2704,13 @@ export class Connection {
    */
   async getAccountInfo(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<AccountInfo<Buffer> | null> {
     try {
-      const res = await this.getAccountInfoAndContext(publicKey, commitment);
+      const res = await this.getAccountInfoAndContext(
+        publicKey,
+        commitmentOrConfig,
+      );
       return res.value;
     } catch (e) {
       throw new Error(
