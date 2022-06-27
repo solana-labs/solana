@@ -37,7 +37,7 @@ impl<'a> AccountsToStore<'a> {
     /// available_bytes: how many bytes remain in the primary storage. Excess accounts will be directed to an overflow storage
     pub fn new(
         mut available_bytes: u64,
-        stored_accounts: &'a [(&'a Pubkey, &'a FoundStoredAccount<'a>)],
+        stored_accounts: &'a [&'a (Pubkey, FoundStoredAccount<'a>)],
         slot: Slot,
     ) -> Self {
         let num_accounts = stored_accounts.len();
@@ -171,7 +171,8 @@ pub mod tests {
             store_id,
             account_size,
         };
-        let map = vec![(&pubkey, &found)];
+        let item = (pubkey, found);
+        let map = vec![&item];
         for (selector, available_bytes) in [
             (StorageSelector::Primary, account_size),
             (StorageSelector::Overflow, account_size - 1),
@@ -182,7 +183,7 @@ pub mod tests {
             assert_eq!(
                 accounts,
                 map.iter()
-                    .map(|(a, b)| (*a, &b.account, slot))
+                    .map(|(a, b)| (a, &b.account, slot))
                     .collect::<Vec<_>>(),
                 "mismatch"
             );

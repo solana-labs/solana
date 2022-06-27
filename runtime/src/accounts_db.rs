@@ -2997,7 +2997,7 @@ impl AccountsDb {
     fn load_accounts_index_for_shrink<'a, I>(
         &'a self,
         iter: I,
-        alive_accounts: &mut Vec<(&'a Pubkey, &'a FoundStoredAccount<'a>)>,
+        alive_accounts: &mut Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
         mut unrefed_pubkeys: Option<&mut Vec<&'a Pubkey>>,
     ) -> usize
     where
@@ -3007,7 +3007,9 @@ impl AccountsDb {
 
         let mut alive = 0;
         let mut dead = 0;
-        iter.for_each(|(pubkey, stored_account)| {
+        iter.for_each(|pair| {
+            let pubkey = &pair.0;
+            let stored_account = &pair.1;
             let lookup = self.accounts_index.get_account_read_entry(pubkey);
             if let Some(locked_entry) = lookup {
                 let is_alive = locked_entry.slot_list().iter().any(|(_slot, acct_info)| {
@@ -3027,7 +3029,7 @@ impl AccountsDb {
                     locked_entry.unref();
                     dead += 1;
                 } else {
-                    alive_accounts.push((pubkey, stored_account));
+                    alive_accounts.push(pair);
                     alive_total += stored_account.account_size;
                     alive += 1;
                 }
