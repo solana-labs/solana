@@ -52,6 +52,8 @@ solana-streamer = { path = "../streamer", version = "=1.11.2" }
 solana-test-validator = { path = "../test-validator", version = "=1.11.2" }
 solana-version = { path = "../version", version = "=1.11.2" }
 solana-vote-program = { path = "../programs/vote", version = "=1.11.2" }
+solana-local-cluster = { path = "../local-cluster", version = "=1.11.2" }
+tempfile = "3.3.0"
 symlink = "0.1.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

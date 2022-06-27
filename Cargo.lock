@@ -6787,6 +6787,7 @@ dependencies = [
  "solana-genesis-utils",
  "solana-gossip",
  "solana-ledger",
+ "solana-local-cluster",
  "solana-logger 1.11.2",
  "solana-metrics",
  "solana-net-utils",
@@ -6802,6 +6803,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "symlink",
+ "tempfile",
  "tikv-jemallocator",
 ]
 
