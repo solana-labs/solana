@@ -409,7 +409,7 @@ pub(crate) fn submit_gossip_stats(
             "gossip_listen_loop_iterations_since_last_report",
             stats.gossip_listen_loop_iterations_since_last_report.clear(),
             i64
-        ), 
+        ),
         (
             "process_gossip_packets_iterations_since_last_report",
             stats.process_gossip_packets_iterations_since_last_report.clear(),
