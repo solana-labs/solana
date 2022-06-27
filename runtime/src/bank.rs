@@ -9778,6 +9778,7 @@ pub(crate) mod tests {
     }
 
     #[test]
+    /// tests that an account which has already had rent collected IN this slot does not skip rewrites
     fn test_collect_rent_from_accounts() {
         solana_logger::setup();
 
@@ -9800,11 +9801,20 @@ pub(crate) mod tests {
         account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
 
         let just_rewrites = true;
+        // 'later_slot' here is the slot the account was loaded from.
+        // Since 'later_slot' is the same slot the bank is in, this means that the account was already written IN this slot.
+        // So, we should NOT skip rewrites.
         let result = later_bank.collect_rent_from_accounts(
-            vec![(zero_lamport_pubkey, account, later_slot)],
+            vec![(zero_lamport_pubkey, account.clone(), later_slot)],
             just_rewrites,
         );
         assert!(result.rewrites_skipped.is_empty());
+        // loaded from previous slot, so we skip rent collection on it
+        let result = later_bank.collect_rent_from_accounts(
+            vec![(zero_lamport_pubkey, account, later_slot - 1)],
+            just_rewrites,
+        );
+        assert!(result.rewrites_skipped[0].0 == zero_lamport_pubkey);
     }
 
     #[test]
