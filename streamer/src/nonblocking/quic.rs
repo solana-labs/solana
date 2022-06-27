@@ -32,7 +32,7 @@ use {
 };
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
-const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 1;
+const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
 
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
