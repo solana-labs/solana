@@ -293,7 +293,11 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let executable = *(input.add(offset) as *const u8) != 0;
             offset += size_of::<u8>();
 
-            offset += size_of::<u32>(); // padding to u64
+            // The original data length is stored here because these 4 bytes were
+            // originally only used for padding and served as a good location to
+            // track the original size of the account data in a compatible way.
+            let original_data_len_offset = offset;
+            offset += size_of::<u32>();
 
             let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
             offset += size_of::<Pubkey>();
@@ -308,6 +312,10 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             #[allow(clippy::cast_ptr_alignment)]
             let data_len = *(input.add(offset) as *const u64) as usize;
             offset += size_of::<u64>();
+
+            // Store the original data length for detecting invalid reallocations and
+            // requires that MAX_PERMITTED_DATA_LENGTH fits in a u32
+            *(input.add(original_data_len_offset) as *mut u32) = data_len as u32;
 
             let data = Rc::new(RefCell::new({
                 from_raw_parts_mut(input.add(offset), data_len)
