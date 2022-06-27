@@ -139,8 +139,8 @@ impl Interval<u64> {
     }
 }
 
-/// Thread safe. Can be used to time single/mutli thread execution. If you are timing single thread
-/// exectuion, consider using NonAtomicInterval, the no thread safe but with better performance.
+/// Thread safe. Can be used to time single/multi thread execution. If you are timing single thread
+/// execution, consider using NonAtomicInterval, the non thread safe version, but with better performance.
 pub type AtomicInterval = Interval<AtomicU64>;
 
 /// Not thread safe. Should only be used to time single thread execution.
