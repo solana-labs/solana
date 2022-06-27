@@ -5051,8 +5051,9 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    let node_pubkey = account.vote_state().as_ref().ok()?.node_pubkey;
-                    Some((node_pubkey, *staked))
+                    account
+                        .node_pubkey()
+                        .map(|node_pubkey| (node_pubkey, *staked))
                 }
             })
             .collect::<Vec<(Pubkey, u64)>>();

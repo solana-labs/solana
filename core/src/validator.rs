@@ -1995,11 +1995,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
         if activated_stake == 0 {
             continue;
         }
-        let vote_state_node_pubkey = vote_account
-            .vote_state()
-            .as_ref()
-            .map(|vote_state| vote_state.node_pubkey)
-            .unwrap_or_default();
+        let vote_state_node_pubkey = vote_account.node_pubkey().unwrap_or_default();
 
         if let Some(peer) = peers.get(&vote_state_node_pubkey) {
             if peer.shred_version == my_shred_version {
