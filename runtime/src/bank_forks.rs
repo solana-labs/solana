@@ -281,7 +281,6 @@ impl BankForks {
                     // Save off the status cache because these may get pruned if another
                     // `set_root()` is called before the snapshots package can be generated
                     let status_cache_slot_deltas = snapshot_root_bank
-                        .src
                         .status_cache
                         .read()
                         .unwrap()

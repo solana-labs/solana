@@ -327,17 +327,24 @@ export class Transaction {
       return this._message;
     }
 
-    const {nonceInfo} = this;
-    if (nonceInfo && this.instructions[0] != nonceInfo.nonceInstruction) {
-      this.recentBlockhash = nonceInfo.nonce;
-      this.instructions.unshift(nonceInfo.nonceInstruction);
+    let recentBlockhash;
+    let instructions: TransactionInstruction[];
+    if (this.nonceInfo) {
+      recentBlockhash = this.nonceInfo.nonce;
+      if (this.instructions[0] != this.nonceInfo.nonceInstruction) {
+        instructions = [this.nonceInfo.nonceInstruction, ...this.instructions];
+      } else {
+        instructions = this.instructions;
+      }
+    } else {
+      recentBlockhash = this.recentBlockhash;
+      instructions = this.instructions;
     }
-    const {recentBlockhash} = this;
     if (!recentBlockhash) {
       throw new Error('Transaction recentBlockhash required');
     }
 
-    if (this.instructions.length < 1) {
+    if (instructions.length < 1) {
       console.warn('No instructions provided');
     }
 
@@ -351,8 +358,8 @@ export class Transaction {
       throw new Error('Transaction fee payer required');
     }
 
-    for (let i = 0; i < this.instructions.length; i++) {
-      if (this.instructions[i].programId === undefined) {
+    for (let i = 0; i < instructions.length; i++) {
+      if (instructions[i].programId === undefined) {
         throw new Error(
           `Transaction instruction index ${i} has undefined program id`,
         );
@@ -361,7 +368,7 @@ export class Transaction {
 
     const programIds: string[] = [];
     const accountMetas: AccountMeta[] = [];
-    this.instructions.forEach(instruction => {
+    instructions.forEach(instruction => {
       instruction.keys.forEach(accountMeta => {
         accountMetas.push({...accountMeta});
       });
@@ -471,7 +478,7 @@ export class Transaction {
     });
 
     const accountKeys = signedKeys.concat(unsignedKeys);
-    const instructions: CompiledInstruction[] = this.instructions.map(
+    const compiledInstructions: CompiledInstruction[] = instructions.map(
       instruction => {
         const {data, programId} = instruction;
         return {
@@ -484,7 +491,7 @@ export class Transaction {
       },
     );
 
-    instructions.forEach(instruction => {
+    compiledInstructions.forEach(instruction => {
       invariant(instruction.programIdIndex >= 0);
       instruction.accounts.forEach(keyIndex => invariant(keyIndex >= 0));
     });
@@ -497,7 +504,7 @@ export class Transaction {
       },
       accountKeys,
       recentBlockhash,
-      instructions,
+      instructions: compiledInstructions,
     });
   }
 
