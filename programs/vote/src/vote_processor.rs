@@ -1178,7 +1178,7 @@ mod tests {
             &serialize(&VoteInstruction::Withdraw(lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
-            Err(InstructionError::ActiveVoteAccountClose),
+            Err(VoteError::ActiveVoteAccountClose.into()),
         );
 
         // Both features disabled:
