@@ -177,13 +177,11 @@ pub fn withdraw_nonce_account(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    from.checked_sub_lamports(lamports)
-        .map_err(|_| InstructionError::ArithmeticOverflow)?;
+    from.checked_sub_lamports(lamports)?;
     drop(from);
     let mut to = instruction_context
         .try_borrow_instruction_account(transaction_context, to_account_index)?;
-    to.checked_add_lamports(lamports)
-        .map_err(|_| InstructionError::ArithmeticOverflow)?;
+    to.checked_add_lamports(lamports)?;
 
     Ok(())
 }
