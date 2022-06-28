@@ -12,12 +12,16 @@ use {
     itertools::Itertools,
     log::*,
     quinn::{
-        ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError,
+        ClientConfig, ConnectionError, Endpoint, EndpointConfig, IdleTimeout, NewConnection,
+        VarInt, WriteError,
     },
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{
-        quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
+        quic::{
+            QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS,
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
+        },
         transport::Result as TransportResult,
     },
     std::{
@@ -26,7 +30,7 @@ use {
         thread,
         time::Duration,
     },
-    tokio::sync::RwLock,
+    tokio::{sync::RwLock, time::timeout},
 };
 
 struct SkipServerVerification;
@@ -142,21 +146,29 @@ impl QuicNewConnection {
             .connect(addr, "connect")
             .expect("QuicNewConnection::make_connection endpoint.connect");
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        let connecting_result = connecting.await;
-        if connecting_result.is_err() {
-            stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+        if let Ok(connecting_result) = timeout(
+            Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
+            connecting,
+        )
+        .await
+        {
+            if connecting_result.is_err() {
+                stats.connection_errors.fetch_add(1, Ordering::Relaxed);
+            }
+            make_connection_measure.stop();
+            stats
+                .make_connection_ms
+                .fetch_add(make_connection_measure.as_ms(), Ordering::Relaxed);
+
+            let connection = connecting_result?;
+
+            Ok(Self {
+                endpoint,
+                connection: Arc::new(connection),
+            })
+        } else {
+            Err(ConnectionError::TimedOut.into())
         }
-        make_connection_measure.stop();
-        stats
-            .make_connection_ms
-            .fetch_add(make_connection_measure.as_ms(), Ordering::Relaxed);
-
-        let connection = connecting_result?;
-
-        Ok(Self {
-            endpoint,
-            connection: Arc::new(connection),
-        })
     }
 
     fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
@@ -179,17 +191,35 @@ impl QuicNewConnection {
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
-                if zero_rtt.await {
-                    stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+                if let Ok(zero_rtt) = timeout(
+                    Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
+                    zero_rtt,
+                )
+                .await
+                {
+                    if zero_rtt {
+                        stats.zero_rtt_accepts.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+                    }
+                    connection
                 } else {
-                    stats.zero_rtt_rejects.fetch_add(1, Ordering::Relaxed);
+                    return Err(ConnectionError::TimedOut.into());
                 }
-                connection
             }
             Err(connecting) => {
                 stats.connection_errors.fetch_add(1, Ordering::Relaxed);
-                let connecting = connecting.await;
-                connecting?
+
+                if let Ok(connecting_result) = timeout(
+                    Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
+                    connecting,
+                )
+                .await
+                {
+                    connecting_result?
+                } else {
+                    return Err(ConnectionError::TimedOut.into());
+                }
             }
         };
         self.connection = Arc::new(connection);
