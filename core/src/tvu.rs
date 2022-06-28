@@ -20,8 +20,7 @@ use {
         retransmit_stage::RetransmitStage,
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
-        sigverify_shreds::ShredSigVerifier,
-        sigverify_stage::SigVerifyStage,
+        sigverify_shreds,
         tower_storage::TowerStorage,
         validator::ProcessBlockStore,
         voting_service::VotingService,
@@ -56,13 +55,13 @@ use {
         collections::HashSet,
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
-        thread,
+        thread::{self, JoinHandle},
     },
 };
 
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
-    sigverify_stage: SigVerifyStage,
+    shred_sigverify: JoinHandle<()>,
     retransmit_stage: RetransmitStage,
     window_service: WindowService,
     cluster_slots_service: ClusterSlotsService,
@@ -163,17 +162,14 @@ impl Tvu {
 
         let (verified_sender, verified_receiver) = unbounded();
         let (retransmit_sender, retransmit_receiver) = unbounded();
-        let sigverify_stage = SigVerifyStage::new(
+        let shred_sigverify = sigverify_shreds::spawn_shred_sigverify(
+            cluster_info.id(),
+            bank_forks.clone(),
+            leader_schedule_cache.clone(),
             fetch_receiver,
-            ShredSigVerifier::new(
-                cluster_info.id(),
-                bank_forks.clone(),
-                leader_schedule_cache.clone(),
-                retransmit_sender.clone(),
-                verified_sender,
-                turbine_disabled,
-            ),
-            "shred-verifier",
+            retransmit_sender.clone(),
+            verified_sender,
+            turbine_disabled,
         );
 
         let retransmit_stage = RetransmitStage::new(
@@ -319,7 +315,7 @@ impl Tvu {
 
         Tvu {
             fetch_stage,
-            sigverify_stage,
+            shred_sigverify,
             retransmit_stage,
             window_service,
             cluster_slots_service,
@@ -338,7 +334,7 @@ impl Tvu {
         self.window_service.join()?;
         self.cluster_slots_service.join()?;
         self.fetch_stage.join()?;
-        self.sigverify_stage.join()?;
+        self.shred_sigverify.join()?;
         if self.ledger_cleanup_service.is_some() {
             self.ledger_cleanup_service.unwrap().join()?;
         }
