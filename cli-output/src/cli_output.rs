@@ -2153,14 +2153,14 @@ pub fn return_signers_data(tx: &Transaction, config: &ReturnSignersConfig) -> Cl
                 bad_sig.push(key.to_string());
             }
         });
-    let dumped_message = if config.dump_transaction_message {
-        let message_data = tx.message_data();
-        Some(base64::encode(&message_data))
+    let dumped_transaction = if config.dump_transaction_message {
+        Some(base64::encode(serialize(tx).unwrap()))
     } else {
         None
     };
-    let dumped_transaction = if config.dump_transaction_message {
-        Some(base64::encode(serialize(tx).unwrap()))
+    let dumped_message = if config.dump_transaction_message {
+        let message_data = tx.message_data();
+        Some(base64::encode(&message_data))
     } else {
         None
     };
@@ -2793,21 +2793,14 @@ mod tests {
             res_data,
             CliSignOnlyData {
                 blockhash: blockhash.to_string(),
-                message: None,
                 transaction: None,
+                message: None,
                 signers: vec![format!("{}={}", present.pubkey(), tx.signatures[1])],
                 absent: vec![absent.pubkey().to_string()],
                 bad_sig: vec![bad.pubkey().to_string()],
             }
         );
 
-        let expected_msg = "AwECBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDgTl3Dqh9\
-            F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE\
-            BAQEBAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBgYGBgYGBgYGBgYGBgYGBgYG\
-            BgYGBgYGBgYGBgYGBgYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAan1RcZLFaO\
-            4IqEX3PSl4jPA1wxRbIas0TYBi6pQAAABwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcH\
-            BwcCBQMEBgIEBAAAAAUCAQMMAgAAACoAAAAAAAAA"
-            .to_string();
         let expected_tx = "AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\
             AAAAAAAAAAAAAAAAAAAAAAAAAAAAAC74RMZET6o+SO8FoacTbuwTl/WzV8llT3k7s9OEJQsM\
             g9pcb/VxtSxiXacZ5Ly2eO0WBXTDWhGu+w9U+lzehgLAQEBAQEBAQEBAQEBAQEBAQEBAQEBA\
@@ -2818,6 +2811,13 @@ mod tests {
             AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGp9UXGSxWjuCKhF9z0peIzwNcMUWyGrNE2AYuqUAAA\
             AcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHAgUDBAYCBAQAAAAFAgEDDAIAAAAqA\
             AAAAAAAAA=="
+            .to_string();
+        let expected_msg = "AwECBwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDgTl3Dqh9\
+            F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE\
+            BAQEBAUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBgYGBgYGBgYGBgYGBgYGBgYG\
+            BgYGBgYGBgYGBgYGBgYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAan1RcZLFaO\
+            4IqEX3PSl4jPA1wxRbIas0TYBi6pQAAABwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcH\
+            BwcCBQMEBgIEBAAAAAUCAQMMAgAAACoAAAAAAAAA"
             .to_string();
         let config = ReturnSignersConfig {
             dump_transaction_message: true,
@@ -2835,8 +2835,8 @@ mod tests {
             res_data,
             CliSignOnlyData {
                 blockhash: blockhash.to_string(),
-                message: Some(expected_msg),
                 transaction: Some(expected_tx),
+                message: Some(expected_msg),
                 signers: vec![format!("{}={}", present.pubkey(), tx.signatures[1])],
                 absent: vec![absent.pubkey().to_string()],
                 bad_sig: vec![bad.pubkey().to_string()],
