@@ -917,7 +917,7 @@ impl<'a> InvokeContext<'a> {
                 .try_borrow_program_account(self.transaction_context, 0)
                 .map_err(|_| InstructionError::UnsupportedProgramId)?;
             let owner_id = borrowed_root_account.get_owner();
-            if solana_sdk::native_loader::check_id(owner_id) {
+            if native_loader::check_id(owner_id) {
                 (1, *borrowed_root_account.get_key())
             } else {
                 (0, *owner_id)
@@ -1138,7 +1138,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     let transaction_accounts = vec![
         (
             loader_id,
-            AccountSharedData::new(0, 0, &solana_sdk::native_loader::id()),
+            AccountSharedData::new(0, 0, &native_loader::id()),
         ),
         (
             Pubkey::new_unique(),
@@ -1182,7 +1182,7 @@ pub fn mock_process_instruction(
     program_indices.insert(0, transaction_accounts.len());
     let mut preparation =
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
-    let processor_account = AccountSharedData::new(0, 0, &solana_sdk::native_loader::id());
+    let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     preparation
         .transaction_accounts
         .push((*loader_id, processor_account));
