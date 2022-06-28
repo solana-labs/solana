@@ -2027,6 +2027,8 @@ export type GetProgramAccountsConfig = {
   dataSlice?: DataSlice;
   /** Optional array of filters to apply to accounts */
   filters?: GetProgramAccountsFilter[];
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -2037,6 +2039,8 @@ export type GetParsedProgramAccountsConfig = {
   commitment?: Commitment;
   /** Optional array of filters to apply to accounts */
   filters?: GetProgramAccountsFilter[];
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -2853,31 +2857,14 @@ export class Connection {
     programId: PublicKey,
     configOrCommitment?: GetProgramAccountsConfig | Commitment,
   ): Promise<Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>> {
-    const extra: Pick<GetProgramAccountsConfig, 'dataSlice' | 'filters'> = {};
-
-    let commitment;
-    let encoding;
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-      } else {
-        commitment = configOrCommitment.commitment;
-        encoding = configOrCommitment.encoding;
-
-        if (configOrCommitment.dataSlice) {
-          extra.dataSlice = configOrCommitment.dataSlice;
-        }
-        if (configOrCommitment.filters) {
-          extra.filters = configOrCommitment.filters;
-        }
-      }
-    }
-
+    const {commitment, config} =
+      extractCommitmentFromConfig(configOrCommitment);
+    const {encoding, ...configWithoutEncoding} = config || {};
     const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
       encoding || 'base64',
-      extra,
+      configWithoutEncoding,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(unsafeRes, jsonRpcResult(array(KeyedAccountInfoResult)));
@@ -2906,26 +2893,13 @@ export class Connection {
       account: AccountInfo<Buffer | ParsedAccountData>;
     }>
   > {
-    const extra: Pick<GetParsedProgramAccountsConfig, 'filters'> = {};
-
-    let commitment;
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-      } else {
-        commitment = configOrCommitment.commitment;
-
-        if (configOrCommitment.filters) {
-          extra.filters = configOrCommitment.filters;
-        }
-      }
-    }
-
+    const {commitment, config} =
+      extractCommitmentFromConfig(configOrCommitment);
     const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
       'jsonParsed',
-      extra,
+      config,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(
