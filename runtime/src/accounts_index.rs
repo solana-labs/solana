@@ -1236,7 +1236,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element
     // in `L`, where the slot `S` is an ancestor or root, and if `S` is a root, then `S <= max_root`
-    fn latest_slot(
+    pub(crate) fn latest_slot(
         &self,
         ancestors: Option<&Ancestors>,
         slice: SlotSlice<T>,
@@ -1291,18 +1291,17 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.storage.get_startup_remaining_items_to_flush_estimate()
     }
 
-    /// For each pubkey, find the latest account that appears in `roots` and <= `max_root`
+    /// For each pubkey, find the slot list in the accounts index
     ///   call `callback`
-    pub(crate) fn scan<F>(&self, pubkeys: &[Pubkey], max_root: Option<Slot>, mut callback: F)
+    pub(crate) fn scan<F>(&self, pubkeys: &[Pubkey], mut callback: F)
     where
         // return true if accounts index entry should be put in in_mem cache
         // params:
         //  exists: false if not in index at all
-        //  slot list found at slot at most max_root or empty slot list
         //  index in slot list where best slot was found or None if nothing found by root criteria
         //  pubkey looked up
         //  refcount of entry in index
-        F: FnMut(bool, &SlotList<T>, Option<usize>, &Pubkey, RefCount) -> bool,
+        F: FnMut(bool, &SlotList<T>, &Pubkey, RefCount) -> bool,
     {
         let empty_slot_list = vec![];
         let mut lock = None;
@@ -1318,16 +1317,9 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let cache = match entry {
                     Some(locked_entry) => {
                         let slot_list = &locked_entry.slot_list.read().unwrap();
-                        let found_index = self.latest_slot(None, slot_list, max_root);
-                        callback(
-                            true,
-                            slot_list,
-                            found_index,
-                            pubkey,
-                            locked_entry.ref_count(),
-                        )
+                        callback(true, slot_list, pubkey, locked_entry.ref_count())
                     }
-                    None => callback(false, &empty_slot_list, None, pubkey, RefCount::MAX),
+                    None => callback(false, &empty_slot_list, pubkey, RefCount::MAX),
                 };
                 (cache, ())
             });
