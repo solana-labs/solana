@@ -491,6 +491,16 @@ export type GetSlotConfig = {
 };
 
 /**
+ * Configuration object for changing `getSlotLeader` query behavior
+ */
+export type GetSlotLeaderConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Configuration object for changing `getLargestAccounts` query behavior
  */
 export type GetLargestAccountsConfig = {
@@ -3121,8 +3131,17 @@ export class Connection {
   /**
    * Fetch the current slot leader of the cluster
    */
-  async getSlotLeader(commitment?: Commitment): Promise<string> {
-    const args = this._buildArgs([], commitment);
+  async getSlotLeader(
+    commitmentOrConfig?: Commitment | GetSlotLeaderConfig,
+  ): Promise<string> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getSlotLeader', args);
     const res = create(unsafeRes, jsonRpcResult(string()));
     if ('error' in res) {
