@@ -277,7 +277,7 @@ pub fn run_cluster_partition<C>(
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
     let turbine_disabled = Arc::new(AtomicBool::new(false));
     let mut validator_config = ValidatorConfig {
-        turbine_disabled: Some(turbine_disabled.clone()),
+        turbine_disabled: turbine_disabled.clone(),
         ..ValidatorConfig::default_for_test()
     };
 

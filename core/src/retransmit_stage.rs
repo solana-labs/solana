@@ -11,7 +11,7 @@ use {
         completed_data_sets_service::CompletedDataSetsSender,
         packet_hasher::PacketHasher,
         repair_service::{DuplicateSlotsResetSender, RepairInfo},
-        window_service::{should_retransmit_and_persist, WindowService},
+        window_service::WindowService,
     },
     crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
     itertools::{izip, Itertools},
@@ -421,7 +421,7 @@ impl RetransmitStage {
         exit: Arc<AtomicBool>,
         cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
         epoch_schedule: EpochSchedule,
-        turbine_disabled: Option<Arc<AtomicBool>>,
+        turbine_disabled: Arc<AtomicBool>,
         cluster_slots: Arc<ClusterSlots>,
         duplicate_slots_reset_sender: DuplicateSlotsResetSender,
         verified_vote_receiver: VerifiedVoteReceiver,
@@ -470,14 +470,7 @@ impl RetransmitStage {
             exit,
             repair_info,
             leader_schedule_cache,
-            move |shred, last_root| {
-                let turbine_disabled = turbine_disabled
-                    .as_ref()
-                    .map(|x| x.load(Ordering::Relaxed))
-                    .unwrap_or(false);
-                let rv = should_retransmit_and_persist(shred, last_root);
-                rv && !turbine_disabled
-            },
+            turbine_disabled,
             verified_vote_receiver,
             completed_data_sets_sender,
             duplicate_slots_sender,
