@@ -447,6 +447,16 @@ export type GetBlockHeightConfig = {
 };
 
 /**
+ * Configuration object for changing `getEpochInfo` query behavior
+ */
+export type GetEpochInfoConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Configuration object for changing `getLargestAccounts` query behavior
  */
 export type GetLargestAccountsConfig = {
@@ -3224,8 +3234,17 @@ export class Connection {
   /**
    * Fetch the Epoch Info parameters
    */
-  async getEpochInfo(commitment?: Commitment): Promise<EpochInfo> {
-    const args = this._buildArgs([], commitment);
+  async getEpochInfo(
+    commitmentOrConfig?: Commitment | GetEpochInfoConfig,
+  ): Promise<EpochInfo> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
     const res = create(unsafeRes, GetEpochInfoRpcResult);
     if ('error' in res) {
