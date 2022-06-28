@@ -211,10 +211,13 @@ async fn setup_connection(
                 ConnectionPeerType::Staked => {
                     let staked_nodes = staked_nodes.read().unwrap();
                     VarInt::from_u64(
-                        (stake as u128)
-                            .saturating_mul(QUIC_TOTAL_STAKED_CONCURRENT_STREAMS as u128)
-                            .checked_div(staked_nodes.total_stake as u128)
-                            .unwrap_or(0) as u64,
+                        u64::try_from(
+                            u128::from(stake)
+                                .saturating_mul(u128::from(QUIC_TOTAL_STAKED_CONCURRENT_STREAMS))
+                                .checked_div(u128::from(staked_nodes.total_stake))
+                                .unwrap_or(0),
+                        )
+                        .unwrap_or(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64),
                     )
                 }
             };
