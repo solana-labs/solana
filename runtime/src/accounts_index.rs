@@ -1293,7 +1293,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     /// For each pubkey, find the slot list in the accounts index
     ///   call `callback`
-    pub(crate) fn scan<F>(&self, pubkeys: &[Pubkey], mut callback: F)
+    pub(crate) fn scan<'a, F, I>(&'a self, pubkeys: I, mut callback: F)
     where
         // return true if accounts index entry should be put in in_mem cache
         // params:
@@ -1302,11 +1302,12 @@ impl<T: IndexValue> AccountsIndex<T> {
         //  pubkey looked up
         //  refcount of entry in index
         F: FnMut(bool, &SlotList<T>, &Pubkey, RefCount) -> bool,
+        I: IntoIterator<Item = &'a Pubkey>,
     {
         let empty_slot_list = vec![];
         let mut lock = None;
         let mut last_bin = self.bins(); // too big, won't match
-        pubkeys.iter().for_each(|pubkey| {
+        pubkeys.into_iter().for_each(|pubkey| {
             let bin = self.bin_calculator.bin_from_pubkey(pubkey);
             if bin != last_bin {
                 // cannot re-use lock since next pubkey is in a different bin than previous one
