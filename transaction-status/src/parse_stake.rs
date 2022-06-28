@@ -284,6 +284,19 @@ pub fn parse_stake(
                 }),
             })
         }
+        StakeInstruction::Redelegate => {
+            check_num_stake_accounts(&instruction.accounts, 4)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "redelegate".to_string(),
+                info: json!({
+                    "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "newStakeAccount": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "voteAccount": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "stakeConfigAccount": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "stakeAuthority": account_keys[instruction.accounts[4] as usize].to_string(),
+                }),
+            })
+        }
     }
 }
 
