@@ -32,7 +32,7 @@ quinn-proto = "0.8.3"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.3"
-reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
 rustls = { version = "0.20.6", features = ["dangerous_configuration"] }
 semver = "1.0.10"
 serde = "1.0.137"
@@ -62,6 +62,7 @@ anyhow = "1.0.57"
 assert_matches = "1.5.0"
 jsonrpc-http-server = "18.0.0"
 solana-logger = { path = "../logger", version = "=1.11.2" }
+solana-perf = { path = "../perf", version = "=1.11.2" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

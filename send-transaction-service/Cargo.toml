@@ -18,7 +18,6 @@ solana-metrics = { path = "../metrics", version = "=1.11.2" }
 solana-runtime = { path = "../runtime", version = "=1.11.2" }
 solana-sdk = { path = "../sdk", version = "=1.11.2" }
 
-
 [dev-dependencies]
 solana-logger = { path = "../logger", version = "=1.11.2" }
 

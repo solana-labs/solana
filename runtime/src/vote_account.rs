@@ -2,7 +2,7 @@ use {
     itertools::Itertools,
     serde::ser::{Serialize, Serializer},
     solana_sdk::{
-        account::{accounts_equal, Account, AccountSharedData, ReadableAccount},
+        account::{accounts_equal, AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
     },
@@ -23,7 +23,7 @@ const INVALID_VOTE_STATE: Result<VoteState, Error> = Err(Error::InstructionError
 ));
 
 #[derive(Clone, Debug, PartialEq, AbiExample, Deserialize)]
-#[serde(try_from = "Account")]
+#[serde(try_from = "AccountSharedData")]
 pub struct VoteAccount(Arc<VoteAccountInner>);
 
 #[derive(Debug, Error)]
@@ -36,7 +36,7 @@ pub enum Error {
 
 #[derive(Debug, AbiExample)]
 struct VoteAccountInner {
-    account: Account,
+    account: AccountSharedData,
     vote_state: RwLock<Result<VoteState, Error>>,
     vote_state_once: Once,
 }
@@ -93,7 +93,7 @@ impl VoteAccount {
     }
 
     /// VoteState.node_pubkey of this vote-account.
-    fn node_pubkey(&self) -> Option<Pubkey> {
+    pub fn node_pubkey(&self) -> Option<Pubkey> {
         Some(self.vote_state().as_ref().ok()?.node_pubkey)
     }
 }
@@ -120,12 +120,35 @@ impl VoteAccounts {
         self.staked_nodes.read().unwrap().clone()
     }
 
-    pub fn get(&self, pubkey: &Pubkey) -> Option<&(/*stake:*/ u64, VoteAccount)> {
-        self.vote_accounts.get(pubkey)
+    pub fn get(&self, pubkey: &Pubkey) -> Option<&VoteAccount> {
+        self.vote_accounts
+            .get(pubkey)
+            .map(|(_stake, vote_account)| vote_account)
     }
 
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Pubkey, &(u64, VoteAccount))> {
-        self.vote_accounts.iter()
+    pub fn get_delegated_stake(&self, pubkey: &Pubkey) -> u64 {
+        self.vote_accounts
+            .get(pubkey)
+            .map(|(stake, ..)| *stake)
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Pubkey, &VoteAccount)> {
+        self.vote_accounts
+            .iter()
+            .map(|(vote_pubkey, (_stake, vote_account))| (vote_pubkey, vote_account))
+    }
+
+    pub(crate) fn delegated_stakes_iter(&self) -> impl Iterator<Item = (&Pubkey, u64)> {
+        self.vote_accounts
+            .iter()
+            .map(|(vote_pubkey, (stake, ..))| (vote_pubkey, *stake))
+    }
+
+    pub(crate) fn find_max_by_delegated_stake(&self) -> Option<&VoteAccount> {
+        let key = |(_pubkey, (stake, _vote_account)): &(_, &(u64, _))| *stake;
+        let (_pubkey, (_stake, vote_account)) = self.vote_accounts.iter().max_by_key(key)?;
+        Some(vote_account)
     }
 
     pub(crate) fn insert(&mut self, pubkey: Pubkey, (stake, vote_account): (u64, VoteAccount)) {
@@ -207,30 +230,23 @@ impl Serialize for VoteAccount {
     }
 }
 
+impl From<VoteAccount> for AccountSharedData {
+    fn from(account: VoteAccount) -> Self {
+        account.0.account.clone()
+    }
+}
+
 impl TryFrom<AccountSharedData> for VoteAccount {
     type Error = Error;
     fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
-        Self::try_from(Account::from(account))
-    }
-}
-
-impl From<VoteAccount> for AccountSharedData {
-    fn from(account: VoteAccount) -> Self {
-        Self::from(account.0.account.clone())
-    }
-}
-
-impl TryFrom<Account> for VoteAccount {
-    type Error = Error;
-    fn try_from(account: Account) -> Result<Self, Self::Error> {
         let vote_account = VoteAccountInner::try_from(account)?;
         Ok(Self(Arc::new(vote_account)))
     }
 }
 
-impl TryFrom<Account> for VoteAccountInner {
+impl TryFrom<AccountSharedData> for VoteAccountInner {
     type Error = Error;
-    fn try_from(account: Account) -> Result<Self, Self::Error> {
+    fn try_from(account: AccountSharedData) -> Result<Self, Self::Error> {
         if !solana_vote_program::check_id(account.owner()) {
             return Err(Error::InvalidOwner(*account.owner()));
         }
@@ -355,7 +371,7 @@ mod tests {
     fn new_rand_vote_account<R: Rng>(
         rng: &mut R,
         node_pubkey: Option<Pubkey>,
-    ) -> (Account, VoteState) {
+    ) -> (AccountSharedData, VoteState) {
         let vote_init = VoteInit {
             node_pubkey: node_pubkey.unwrap_or_else(Pubkey::new_unique),
             authorized_voter: Pubkey::new_unique(),
@@ -370,7 +386,7 @@ mod tests {
             unix_timestamp: rng.gen(),
         };
         let vote_state = VoteState::new(&vote_init, &clock);
-        let account = Account::new_data(
+        let account = AccountSharedData::new_data(
             rng.gen(), // lamports
             &VoteStateVersions::new_current(vote_state.clone()),
             &solana_vote_program::id(), // owner
@@ -611,7 +627,7 @@ mod tests {
         ));
         assert_ne!(vote_accounts_hashmap, vote_accounts.vote_accounts);
         let other = (more_stake, vote_account);
-        for (pk, value) in vote_accounts.iter() {
+        for (pk, value) in vote_accounts.vote_accounts.iter() {
             if *pk != pubkey {
                 assert_eq!(value, &vote_accounts_hashmap[pk]);
             } else {

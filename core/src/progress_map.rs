@@ -702,13 +702,17 @@ impl ProgressMap {
 
 #[cfg(test)]
 mod test {
-    use {super::*, solana_runtime::vote_account::VoteAccount, solana_sdk::account::Account};
+    use {
+        super::*,
+        solana_runtime::vote_account::VoteAccount,
+        solana_sdk::account::{Account, AccountSharedData},
+    };
 
     fn new_test_vote_account() -> VoteAccount {
-        let account = Account {
+        let account = AccountSharedData::from(Account {
             owner: solana_vote_program::id(),
             ..Account::default()
-        };
+        });
         VoteAccount::try_from(account).unwrap()
     }
 

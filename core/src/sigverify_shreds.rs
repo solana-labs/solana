@@ -10,16 +10,17 @@ use {
         leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
     solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
-    solana_runtime::bank_forks::BankForks,
-    solana_sdk::clock::Slot,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         sync::{Arc, RwLock},
     },
 };
 
 #[derive(Clone)]
 pub struct ShredSigVerifier {
+    pubkey: Pubkey, // TODO: Hot swap will change pubkey.
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     recycler_cache: RecyclerCache,
@@ -28,26 +29,19 @@ pub struct ShredSigVerifier {
 
 impl ShredSigVerifier {
     pub fn new(
+        pubkey: Pubkey,
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         packet_sender: Sender<Vec<PacketBatch>>,
     ) -> Self {
         sigverify::init();
         Self {
+            pubkey,
             bank_forks,
             leader_schedule_cache,
             recycler_cache: RecyclerCache::warmed(),
             packet_sender,
         }
-    }
-    fn read_slots(batches: &[PacketBatch]) -> HashSet<Slot> {
-        batches
-            .iter()
-            .flat_map(PacketBatch::iter)
-            .filter(|packet| !packet.meta.discard())
-            .filter_map(shred::layout::get_shred)
-            .filter_map(shred::layout::get_slot)
-            .collect()
     }
 }
 
@@ -67,23 +61,59 @@ impl SigVerifier for ShredSigVerifier {
         mut batches: Vec<PacketBatch>,
         _valid_packets: usize,
     ) -> Vec<PacketBatch> {
-        let r_bank = self.bank_forks.read().unwrap().working_bank();
-        let slots: HashSet<u64> = Self::read_slots(&batches);
-        let mut leader_slots: HashMap<u64, [u8; 32]> = slots
-            .into_iter()
-            .filter_map(|slot| {
-                let key = self
-                    .leader_schedule_cache
-                    .slot_leader_at(slot, Some(&r_bank))?;
-                Some((slot, key.to_bytes()))
-            })
-            .collect();
-        leader_slots.insert(std::u64::MAX, [0u8; 32]);
-
+        let working_bank = self.bank_forks.read().unwrap().working_bank();
+        let leader_slots: HashMap<Slot, [u8; 32]> = get_slot_leaders(
+            &self.pubkey,
+            &mut batches,
+            &self.leader_schedule_cache,
+            &working_bank,
+        )
+        .into_iter()
+        .filter_map(|(slot, pubkey)| Some((slot, pubkey?.to_bytes())))
+        .chain(std::iter::once((Slot::MAX, [0u8; 32])))
+        .collect();
         let r = verify_shreds_gpu(&batches, &leader_slots, &self.recycler_cache);
         solana_perf::sigverify::mark_disabled(&mut batches, &r);
         batches
     }
+}
+
+// Returns pubkey of leaders for shred slots refrenced in the packets.
+// Marks packets as discard if:
+//   - fails to deserialize the shred slot.
+//   - slot leader is unknown.
+//   - slot leader is the node itself (circular transmission).
+fn get_slot_leaders(
+    self_pubkey: &Pubkey,
+    batches: &mut [PacketBatch],
+    leader_schedule_cache: &LeaderScheduleCache,
+    bank: &Bank,
+) -> HashMap<Slot, Option<Pubkey>> {
+    let mut leaders = HashMap::<Slot, Option<Pubkey>>::new();
+    for batch in batches {
+        for packet in batch.iter_mut() {
+            if packet.meta.discard() {
+                continue;
+            }
+            let shred = shred::layout::get_shred(packet);
+            let slot = match shred.and_then(shred::layout::get_slot) {
+                None => {
+                    packet.meta.set_discard(true);
+                    continue;
+                }
+                Some(slot) => slot,
+            };
+            let leader = leaders.entry(slot).or_insert_with(|| {
+                let leader = leader_schedule_cache.slot_leader_at(slot, Some(bank))?;
+                // Discard the shred if the slot leader is the node itself.
+                (&leader != self_pubkey).then(|| leader)
+            });
+            if leader.is_none() {
+                packet.meta.set_discard(true);
+            }
+        }
+    }
+    leaders
 }
 
 #[cfg(test)]
@@ -101,50 +131,6 @@ pub mod tests {
     };
 
     #[test]
-    fn test_sigverify_shreds_read_slots() {
-        solana_logger::setup();
-        let mut shred = Shred::new_from_data(
-            0xdead_c0de,
-            0xc0de,
-            0xdead,
-            &[1, 2, 3, 4],
-            ShredFlags::LAST_SHRED_IN_SLOT,
-            0,
-            0,
-            0xc0de,
-        );
-        let mut batches: Vec<_> = (0..2)
-            .map(|_| {
-                let mut batch = PacketBatch::with_capacity(1);
-                batch.resize(1, Packet::default());
-                batch
-            })
-            .collect();
-
-        let keypair = Keypair::new();
-        shred.sign(&keypair);
-        batches[0][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[0][0].meta.size = shred.payload().len();
-
-        let mut shred = Shred::new_from_data(
-            0xc0de_dead,
-            0xc0de,
-            0xdead,
-            &[1, 2, 3, 4],
-            ShredFlags::LAST_SHRED_IN_SLOT,
-            0,
-            0,
-            0xc0de,
-        );
-        shred.sign(&keypair);
-        batches[1][0].buffer_mut()[..shred.payload().len()].copy_from_slice(shred.payload());
-        batches[1][0].meta.size = shred.payload().len();
-
-        let expected: HashSet<u64> = [0xc0de_dead, 0xdead_c0de].iter().cloned().collect();
-        assert_eq!(ShredSigVerifier::read_slots(&batches), expected);
-    }
-
-    #[test]
     fn test_sigverify_shreds_verify_batches() {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
@@ -154,7 +140,7 @@ pub mod tests {
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bf = Arc::new(RwLock::new(BankForks::new(bank)));
         let (sender, receiver) = unbounded();
-        let mut verifier = ShredSigVerifier::new(bf, cache, sender);
+        let mut verifier = ShredSigVerifier::new(Pubkey::new_unique(), bf, cache, sender);
 
         let batch_size = 2;
         let mut batch = PacketBatch::with_capacity(batch_size);

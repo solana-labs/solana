@@ -5,7 +5,7 @@ use {
         instruction::{checked_add, InstructionError},
         nonce::{
             self,
-            state::{DurableNonce, Versions},
+            state::{AuthorizeNonceError, DurableNonce, Versions},
             State,
         },
         pubkey::Pubkey,
@@ -177,13 +177,11 @@ pub fn withdraw_nonce_account(
         return Err(InstructionError::MissingRequiredSignature);
     }
 
-    from.checked_sub_lamports(lamports)
-        .map_err(|_| InstructionError::ArithmeticOverflow)?;
+    from.checked_sub_lamports(lamports)?;
     drop(from);
     let mut to = instruction_context
         .try_borrow_instruction_account(transaction_context, to_account_index)?;
-    to.checked_add_lamports(lamports)
-        .map_err(|_| InstructionError::ArithmeticOverflow)?;
+    to.checked_add_lamports(lamports)?;
 
     Ok(())
 }
@@ -268,30 +266,12 @@ pub fn authorize_nonce_account(
         );
         return Err(InstructionError::InvalidArgument);
     }
-
-    let state: Versions = account.get_state()?;
-    let separate_domains = state.separate_domains();
-    match state.state() {
-        State::Initialized(data) => {
-            if !signers.contains(&data.authority) {
-                ic_msg!(
-                    invoke_context,
-                    "Authorize nonce account: Account {} must sign",
-                    data.authority
-                );
-                return Err(InstructionError::MissingRequiredSignature);
-            }
-            let new_data = nonce::state::Data::new(
-                *nonce_authority,
-                data.durable_nonce,
-                data.get_lamports_per_signature(),
-            );
-            account.set_state(&Versions::new(
-                State::Initialized(new_data),
-                separate_domains,
-            ))
-        }
-        State::Uninitialized => {
+    match account
+        .get_state::<Versions>()?
+        .authorize(signers, *nonce_authority)
+    {
+        Ok(versions) => account.set_state(&versions),
+        Err(AuthorizeNonceError::Uninitialized) => {
             ic_msg!(
                 invoke_context,
                 "Authorize nonce account: Account {} state is invalid",
@@ -301,6 +281,14 @@ pub fn authorize_nonce_account(
                 NonceError::BadAccountState,
                 merge_nonce_error_into_system_error,
             ))
+        }
+        Err(AuthorizeNonceError::MissingRequiredSignature(account_authority)) => {
+            ic_msg!(
+                invoke_context,
+                "Authorize nonce account: Account {} must sign",
+                account_authority
+            );
+            Err(InstructionError::MissingRequiredSignature)
         }
     }
 }

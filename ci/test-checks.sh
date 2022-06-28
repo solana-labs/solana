@@ -71,6 +71,7 @@ fi
    --deny=warnings \
    --deny=clippy::integer_arithmetic \
 
+_ scripts/cargo-for-all-lock-files.sh -- nightly sort --workspace --check
 _ scripts/cargo-for-all-lock-files.sh -- nightly fmt --all -- --check
 
  _ ci/do-audit.sh

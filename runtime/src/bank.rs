@@ -591,13 +591,6 @@ impl BankRc {
     }
 }
 
-#[derive(Default, Debug, AbiExample)]
-pub struct StatusCacheRc {
-    /// where all the Accounts are stored
-    /// A cache of signature statuses
-    pub status_cache: Arc<RwLock<BankStatusCache>>,
-}
-
 pub type TransactionCheckResult = (Result<()>, Option<NoncePartial>);
 
 pub struct TransactionResults {
@@ -1020,7 +1013,7 @@ impl PartialEq for Bank {
         }
         let Self {
             rc: _,
-            src: _,
+            status_cache: _,
             blockhash_queue,
             ancestors,
             hash,
@@ -1190,7 +1183,8 @@ pub struct Bank {
     /// References to accounts, parent and signature status
     pub rc: BankRc,
 
-    pub src: StatusCacheRc,
+    /// A cache of signature statuses
+    pub status_cache: Arc<RwLock<BankStatusCache>>,
 
     /// FIFO queue of `recent_blockhash` items
     blockhash_queue: RwLock<BlockhashQueue>,
@@ -1396,6 +1390,12 @@ struct StakeReward {
     stake_account: AccountSharedData,
 }
 
+impl StakeReward {
+    pub fn get_stake_reward(&self) -> i64 {
+        self.stake_reward_info.lamports
+    }
+}
+
 /// allow [StakeReward] to be passed to `StoreAccounts` directly without copies or vec construction
 impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
     fn pubkey(&self, index: usize) -> &Pubkey {
@@ -1489,7 +1489,7 @@ impl Bank {
         let mut bank = Self {
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
-            src: StatusCacheRc::default(),
+            status_cache: Arc::<RwLock<BankStatusCache>>::default(),
             blockhash_queue: RwLock::<BlockhashQueue>::default(),
             ancestors: Ancestors::default(),
             hash: RwLock::<Hash>::default(),
@@ -1724,12 +1724,8 @@ impl Bank {
             "bank_rc_creation",
         );
 
-        let (src, status_cache_rc_time) = measure!(
-            StatusCacheRc {
-                status_cache: parent.src.status_cache.clone(),
-            },
-            "status_cache_rc_creation",
-        );
+        let (status_cache, status_cache_time) =
+            measure!(Arc::clone(&parent.status_cache), "status_cache_creation",);
 
         let ((fee_rate_governor, fee_calculator), fee_components_time) = measure!(
             {
@@ -1799,7 +1795,7 @@ impl Bank {
         let mut new = Bank {
             rewrites_skipped_this_slot: Rewrites::default(),
             rc,
-            src,
+            status_cache,
             slot,
             bank_id,
             epoch,
@@ -2027,7 +2023,7 @@ impl Bank {
             ("parent_slot", parent.slot(), i64),
             ("bank_rc_creation_us", bank_rc_time.as_us(), i64),
             ("total_elapsed_us", time.as_us(), i64),
-            ("status_cache_rc_us", status_cache_rc_time.as_us(), i64),
+            ("status_cache_us", status_cache_time.as_us(), i64),
             ("fee_components_us", fee_components_time.as_us(), i64),
             ("blockhash_queue_us", blockhash_queue_time.as_us(), i64),
             ("stakes_cache_us", stakes_cache_time.as_us(), i64),
@@ -2155,7 +2151,7 @@ impl Bank {
         let mut bank = Self {
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: bank_rc,
-            src: new(),
+            status_cache: new(),
             blockhash_queue: RwLock::new(fields.blockhash_queue),
             ancestors,
             hash: RwLock::new(fields.hash),
@@ -2356,7 +2352,7 @@ impl Bank {
     }
 
     pub fn status_cache_ancestors(&self) -> Vec<u64> {
-        let mut roots = self.src.status_cache.read().unwrap().roots().clone();
+        let mut roots = self.status_cache.read().unwrap().roots().clone();
         let min = roots.iter().min().cloned().unwrap_or(0);
         for ancestor in self.ancestors.keys() {
             if ancestor >= min {
@@ -2537,8 +2533,8 @@ impl Bank {
                     .stakes_cache
                     .stakes()
                     .vote_accounts()
-                    .iter()
-                    .map(|(pubkey, (stake, _))| (*pubkey, *stake))
+                    .delegated_stakes_iter()
+                    .map(|(pubkey, stake)| (*pubkey, stake))
                     .collect();
                 info!(
                     "new epoch stakes, epoch: {}, stakes: {:#?}, total_stake: {}",
@@ -2833,6 +2829,8 @@ impl Bank {
                             stake_pubkey,
                             &self.rewrites_skipped_this_slot,
                         );
+                        // prior behavior was to always count any account that mismatched for any reason
+                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                         if &cached_account != stake_account.account() {
                             info!(
                                 "cached stake account mismatch: {}: {:?}, {:?}",
@@ -2840,8 +2838,9 @@ impl Bank {
                                 cached_account,
                                 stake_account.account()
                             );
-                            invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                         } else {
+                            // track how many of 'invalid_cached_stake_accounts' were due to rent_epoch changes
+                            // subtract these to find real invalid cached accounts
                             invalid_cached_stake_accounts_rent_epoch.fetch_add(1, Relaxed);
                         }
                     }
@@ -2855,7 +2854,7 @@ impl Bank {
                         let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
                             Some(vote_account) => {
                                 match cached_vote_account {
-                                    Some((_stake, cached_vote_account))
+                                    Some(cached_vote_account)
                                         if cached_vote_account == &vote_account => {}
                                     _ => {
                                         invalid_cached_vote_accounts.fetch_add(1, Relaxed);
@@ -2959,7 +2958,7 @@ impl Bank {
         let solana_vote_program: Pubkey = solana_vote_program::id();
         let vote_accounts_cache_miss_count = AtomicUsize::default();
         let get_vote_account = |vote_pubkey: &Pubkey| -> Option<VoteAccount> {
-            if let Some((_stake, vote_account)) = cached_vote_accounts.get(vote_pubkey) {
+            if let Some(vote_account) = cached_vote_accounts.get(vote_pubkey) {
                 return Some(vote_account.clone());
             }
             // If accounts-db contains a valid vote account, then it should
@@ -3212,12 +3211,6 @@ impl Bank {
             .store_stake_accounts_us
             .fetch_add(m.as_us(), Relaxed);
 
-        let mut stake_rewards = stake_rewards
-            .into_iter()
-            .filter(|x| x.stake_reward_info.lamports > 0)
-            .map(|x| (x.stake_pubkey, x.stake_reward_info))
-            .collect();
-
         let mut m = Measure::start("store_vote_accounts");
         let mut vote_rewards = vote_account_rewards
             .into_iter()
@@ -3247,15 +3240,20 @@ impl Bank {
                     }
                 },
             )
-            .collect();
+            .collect::<Vec<_>>();
 
         m.stop();
         metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
 
+        let additional_reserve = stake_rewards.len() + vote_rewards.len();
         {
             let mut rewards = self.rewards.write().unwrap();
+            rewards.reserve(additional_reserve);
             rewards.append(&mut vote_rewards);
-            rewards.append(&mut stake_rewards);
+            stake_rewards
+                .into_iter()
+                .filter(|x| x.get_stake_reward() > 0)
+                .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
         }
 
         point_value.rewards as f64 / point_value.points as f64
@@ -3450,7 +3448,7 @@ impl Bank {
         let mut squash_cache_time = Measure::start("squash_cache_time");
         roots
             .iter()
-            .for_each(|slot| self.src.status_cache.write().unwrap().add_root(*slot));
+            .for_each(|slot| self.status_cache.write().unwrap().add_root(*slot));
         squash_cache_time.stop();
 
         SquashTiming {
@@ -3757,15 +3755,11 @@ impl Bank {
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        self.src.status_cache.write().unwrap().clear();
+        self.status_cache.write().unwrap().clear();
     }
 
     pub fn clear_slot_signatures(&self, slot: Slot) {
-        self.src
-            .status_cache
-            .write()
-            .unwrap()
-            .clear_slot_entries(slot);
+        self.status_cache.write().unwrap().clear_slot_entries(slot);
     }
 
     fn update_transaction_statuses(
@@ -3773,7 +3767,7 @@ impl Bank {
         sanitized_txs: &[SanitizedTransaction],
         execution_results: &[TransactionExecutionResult],
     ) {
-        let mut status_cache = self.src.status_cache.write().unwrap();
+        let mut status_cache = self.status_cache.write().unwrap();
         assert_eq!(sanitized_txs.len(), execution_results.len());
         for (tx, execution_result) in sanitized_txs.iter().zip(execution_results) {
             if let Some(details) = execution_result.details() {
@@ -4113,7 +4107,7 @@ impl Bank {
         lock_results: Vec<TransactionCheckResult>,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
-        let rcache = self.src.status_cache.read().unwrap();
+        let rcache = self.status_cache.read().unwrap();
         sanitized_txs
             .iter()
             .zip(lock_results)
@@ -5057,8 +5051,9 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    let node_pubkey = account.vote_state().as_ref().ok()?.node_pubkey;
-                    Some((node_pubkey, *staked))
+                    account
+                        .node_pubkey()
+                        .map(|node_pubkey| (node_pubkey, *staked))
                 }
             })
             .collect::<Vec<(Pubkey, u64)>>();
@@ -5357,6 +5352,7 @@ impl Bank {
         let mut time_storing_accounts_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
         for (pubkey, account, loaded_slot) in accounts.iter_mut() {
+            let old_rent_epoch = account.rent_epoch();
             let (rent_collected_info, measure) =
                 measure!(self.rent_collector.collect_from_existing_account(
                     pubkey,
@@ -5375,7 +5371,7 @@ impl Bank {
                     bank_slot,
                     rent_collected_info.rent_amount,
                     *loaded_slot,
-                    account.rent_epoch(),
+                    old_rent_epoch,
                     account,
                 )
             {
@@ -6647,14 +6643,14 @@ impl Bank {
         signature: &Signature,
         blockhash: &Hash,
     ) -> Option<Result<()>> {
-        let rcache = self.src.status_cache.read().unwrap();
+        let rcache = self.status_cache.read().unwrap();
         rcache
             .get_status(signature, blockhash, &self.ancestors)
             .map(|v| v.1)
     }
 
     pub fn get_signature_status_slot(&self, signature: &Signature) -> Option<(Slot, Result<()>)> {
-        let rcache = self.src.status_cache.read().unwrap();
+        let rcache = self.status_cache.read().unwrap();
         rcache.get_status_any_blockhash(signature, &self.ancestors)
     }
 
@@ -7072,10 +7068,11 @@ impl Bank {
         Arc::from(stakes.vote_accounts())
     }
 
-    /// Vote account for the given vote account pubkey along with the stake.
-    pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<(/*stake:*/ u64, VoteAccount)> {
+    /// Vote account for the given vote account pubkey.
+    pub fn get_vote_account(&self, vote_account: &Pubkey) -> Option<VoteAccount> {
         let stakes = self.stakes_cache.stakes();
-        stakes.vote_accounts().get(vote_account).cloned()
+        let vote_account = stakes.vote_accounts().get(vote_account)?;
+        Some(vote_account.clone())
     }
 
     /// Get the EpochStakes for a given epoch
@@ -9767,6 +9764,57 @@ pub(crate) mod tests {
             bank.slots_by_pubkey(&zero_lamport_pubkey, &ancestors),
             vec![genesis_slot]
         );
+    }
+
+    fn new_from_parent_next_epoch(parent: &Arc<Bank>, epochs: Epoch) -> Bank {
+        let mut slot = parent.slot();
+        let mut epoch = parent.epoch();
+        for _ in 0..epochs {
+            slot += parent.epoch_schedule().get_slots_in_epoch(epoch);
+            epoch = parent.epoch_schedule().get_epoch(slot);
+        }
+
+        Bank::new_from_parent(parent, &Pubkey::default(), slot)
+    }
+
+    #[test]
+    /// tests that an account which has already had rent collected IN this slot does not skip rewrites
+    fn test_collect_rent_from_accounts() {
+        solana_logger::setup();
+
+        let (genesis_config, _mint_keypair) = create_genesis_config(100000);
+
+        let zero_lamport_pubkey = Pubkey::new(&[0; 32]);
+
+        let genesis_bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let first_bank = Arc::new(new_from_parent(&genesis_bank));
+        let first_slot = 1;
+        assert_eq!(first_slot, first_bank.slot());
+        let epoch_delta = 4;
+        let later_bank = Arc::new(new_from_parent_next_epoch(&first_bank, epoch_delta)); // a bank a few epochs in the future
+        let later_slot = later_bank.slot();
+        assert!(later_bank.epoch() == genesis_bank.epoch() + epoch_delta);
+
+        let data_size = 0; // make sure we're rent exempt
+        let lamports = later_bank.get_minimum_balance_for_rent_exemption(data_size); // cannot be 0 or we zero out rent_epoch in rent collection and we need to be rent exempt
+        let mut account = AccountSharedData::new(lamports, data_size, &Pubkey::default());
+        account.set_rent_epoch(later_bank.epoch() - 1); // non-zero, but less than later_bank's epoch
+
+        let just_rewrites = true;
+        // 'later_slot' here is the slot the account was loaded from.
+        // Since 'later_slot' is the same slot the bank is in, this means that the account was already written IN this slot.
+        // So, we should NOT skip rewrites.
+        let result = later_bank.collect_rent_from_accounts(
+            vec![(zero_lamport_pubkey, account.clone(), later_slot)],
+            just_rewrites,
+        );
+        assert!(result.rewrites_skipped.is_empty());
+        // loaded from previous slot, so we skip rent collection on it
+        let result = later_bank.collect_rent_from_accounts(
+            vec![(zero_lamport_pubkey, account, later_slot - 1)],
+            just_rewrites,
+        );
+        assert!(result.rewrites_skipped[0].0 == zero_lamport_pubkey);
     }
 
     #[test]
