@@ -66,7 +66,7 @@ impl VoteAccounts {
     }
 
     pub fn num_staked_nodes(&self) -> usize {
-        self.staked_nodes.read().unwrap().len()
+        self.staked_nodes().len()
     }
 }
 
