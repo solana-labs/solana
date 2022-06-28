@@ -228,6 +228,8 @@ export type SendOptions = {
   preflightCommitment?: Commitment;
   /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
   maxRetries?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -242,6 +244,8 @@ export type ConfirmOptions = {
   preflightCommitment?: Commitment;
   /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
   maxRetries?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -4427,6 +4431,9 @@ export class Connection {
 
     if (options && options.maxRetries) {
       config.maxRetries = options.maxRetries;
+    }
+    if (options && options.minContextSlot != null) {
+      config.minContextSlot = options.minContextSlot;
     }
     if (skipPreflight) {
       config.skipPreflight = skipPreflight;
