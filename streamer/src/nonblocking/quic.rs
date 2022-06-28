@@ -396,7 +396,7 @@ impl ConnectionEntry {
 
 impl Drop for ConnectionEntry {
     fn drop(&mut self) {
-        if let Some(conn) = &self.connection {
+        if let Some(conn) = self.connection.take() {
             conn.close(0u32.into(), &[0u8]);
         }
         self.exit.store(true, Ordering::Relaxed);
