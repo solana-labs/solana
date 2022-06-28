@@ -2098,6 +2098,16 @@ export type GetTokenAccountsByOwnerConfig = {
 };
 
 /**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetTransactionCountConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Information describing an account
  */
 export type AccountInfo<T> = {
@@ -3236,8 +3246,17 @@ export class Connection {
   /**
    * Fetch the current transaction count of the cluster
    */
-  async getTransactionCount(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getTransactionCount(
+    commitmentOrConfig?: Commitment | GetTransactionCountConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getTransactionCount', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
