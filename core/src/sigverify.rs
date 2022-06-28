@@ -14,8 +14,19 @@ use {
     },
     crossbeam_channel::Sender,
     solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
+    solana_rayon_threadlimit::get_thread_count,
     solana_sdk::{packet::Packet, saturating_add_assign},
 };
+
+// "Thumb in the air" number to ensure reasonable latencies through sigverify.
+const MAX_SIGVERIFY_PERIOD_NS: usize = 50_000_000;
+// Rough timing measured from mainnet machines (w/ thread concurrency).
+const DEFAULT_SIGVERIFY_NS_PER_PACKET: usize = 5_000;
+pub const DEFAULT_MAX_SIGVERIFY_BATCH: usize =
+    MAX_SIGVERIFY_PERIOD_NS / DEFAULT_SIGVERIFY_NS_PER_PACKET;
+// Cap the absolute max packets that go into verify to avoid runaway, which could result
+// in the packet queue growing too large and consuming too much memory.
+const MAX_MAX_SIGVERIFY_BATCH: usize = 100_000;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct SigverifyTracerPacketStats {
@@ -62,6 +73,8 @@ pub struct TransactionSigVerifier {
     recycler: Recycler<TxOffset>,
     recycler_out: Recycler<PinnedVec<u8>>,
     reject_non_vote: bool,
+    max_packets: usize,
+    recompute_max_packet_threshold: usize,
 }
 
 impl TransactionSigVerifier {
@@ -73,12 +86,21 @@ impl TransactionSigVerifier {
 
     pub fn new(packet_sender: Sender<<Self as SigVerifier>::SendType>) -> Self {
         init();
+        let recompute_max_packet_threshold =
+            sigverify::VERIFY_MIN_PACKETS_PER_THREAD * get_thread_count();
+        debug!(
+            "verify recompute packet threshold {} with max concurrency of {}",
+            recompute_max_packet_threshold,
+            get_thread_count()
+        );
         Self {
             packet_sender,
             tracer_packet_stats: SigverifyTracerPacketStats::default(),
             recycler: Recycler::warmed(50, 4096),
             recycler_out: Recycler::warmed(50, 4096),
             reject_non_vote: false,
+            max_packets: recompute_max_packet_threshold.max(DEFAULT_MAX_SIGVERIFY_BATCH),
+            recompute_max_packet_threshold,
         }
     }
 }
@@ -150,5 +172,45 @@ impl SigVerifier for TransactionSigVerifier {
             valid_packets,
         );
         batches
+    }
+
+    fn get_max_packets(&self) -> usize {
+        self.max_packets
+    }
+
+    fn update_max_packets(&mut self, packets: u64, time: u64) {
+        if packets < self.recompute_max_packet_threshold as u64 || time == 0 {
+            // Need the following to compute meaninful packet processing ability:
+            // 1. Meaningful timing data
+            // 2. Enough packets to amortize fixed cost
+            // 3. Enough packets to engage full concurrency
+            return;
+        }
+        // Compute verify max capability based on most recent iteration.
+        let ns_per_packet = time.saturating_div(packets).max(1);
+        let max_verify_batch = MAX_SIGVERIFY_PERIOD_NS.saturating_div(ns_per_packet as usize);
+        // Algorithm uses a moving average where each new data point has an initial
+        // weighting of ~3% and grows smaller over time.
+        const MAX_PACKET_WEIGHTING_SHIFT: usize = 5;
+        self.max_packets = self.max_packets.saturating_sub(
+            self.max_packets
+                .checked_shr(MAX_PACKET_WEIGHTING_SHIFT as u32)
+                .unwrap_or_default(),
+        );
+        self.max_packets = self.max_packets.saturating_add(
+            max_verify_batch
+                .checked_shr(MAX_PACKET_WEIGHTING_SHIFT as u32)
+                .unwrap_or_default(),
+        );
+        // Protect from shedding way too many packets.
+        self.max_packets = self.max_packets.max(self.recompute_max_packet_threshold);
+        // Protect from  OOM due to queue growing too large.
+        self.max_packets = self.max_packets.min(MAX_MAX_SIGVERIFY_BATCH);
+        trace!(
+            "update verify: new limit = {}, this iteration = {}, per packet = {}ns",
+            self.max_packets,
+            max_verify_batch,
+            ns_per_packet
+        )
     }
 }

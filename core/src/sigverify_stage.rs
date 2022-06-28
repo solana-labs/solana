@@ -32,9 +32,6 @@ use {
 // 50ms/(300ns/packet) = 166666 packets ~ 1300 batches
 const MAX_DEDUP_BATCH: usize = 165_000;
 
-// 50ms/(25us/packet) = 2000 packets
-const MAX_SIGVERIFY_BATCH: usize = 2_000;
-
 // Packet batch shrinker will reorganize packets into compacted batches if 10%
 // or more of the packets in a group of packet batches have been discarded.
 const MAX_DISCARDED_PACKET_RATE: f64 = 0.10;
@@ -67,6 +64,10 @@ pub trait SigVerifier {
     fn process_excess_packet(&mut self, _packet: &Packet) {}
     fn process_passed_sigverify_packet(&mut self, _packet: &Packet) {}
     fn send_packets(&mut self, packet_batches: Vec<PacketBatch>) -> Result<(), Self::SendType>;
+    fn get_max_packets(&self) -> usize {
+        sigverify::DEFAULT_MAX_SIGVERIFY_BATCH
+    }
+    fn update_max_packets(&mut self, _packets: u64, _time: u64) {}
 }
 
 #[derive(Default, Clone)]
@@ -330,16 +331,16 @@ impl SigVerifyStage {
 
         let mut discard_time = Measure::start("sigverify_discard_time");
         let mut num_packets_to_verify = num_unique;
-        if num_unique > MAX_SIGVERIFY_BATCH {
+        if num_unique > verifier.get_max_packets() {
             Self::discard_excess_packets(
                 &mut batches,
-                MAX_SIGVERIFY_BATCH,
+                verifier.get_max_packets(),
                 #[inline(always)]
                 |excess_packet| verifier.process_excess_packet(excess_packet),
             );
-            num_packets_to_verify = MAX_SIGVERIFY_BATCH;
+            num_packets_to_verify = verifier.get_max_packets();
         }
-        let excess_fail = num_unique.saturating_sub(MAX_SIGVERIFY_BATCH);
+        let excess_fail = num_unique.saturating_sub(verifier.get_max_packets());
         discard_time.stop();
 
         // Pre-shrink packet batches if many packets are discarded from dedup / discard
@@ -353,6 +354,7 @@ impl SigVerifyStage {
             |valid_packet| verifier.process_passed_sigverify_packet(valid_packet),
         );
         verify_time.stop();
+        verifier.update_max_packets(num_packets_to_verify as u64, verify_time.as_ns());
 
         // Post-shrink packet batches if many packets are discarded from sigverify
         let (post_shrink_time_us, post_shrink_total) = Self::maybe_shrink_batches(&mut batches);
@@ -543,10 +545,8 @@ mod tests {
         let use_same_tx = true;
         let now = Instant::now();
         let packets_per_batch = 128;
-        let total_packets = 1920;
-        // This is important so that we don't discard any packets and fail asserts below about
-        // `total_excess_tracer_packets`
-        assert!(total_packets < MAX_SIGVERIFY_BATCH);
+        let total_packets =
+            sigverify::DEFAULT_MAX_SIGVERIFY_BATCH / packets_per_batch * packets_per_batch;
         let mut batches = gen_batches(use_same_tx, packets_per_batch, total_packets);
         trace!(
             "starting... generation took: {} ms batches: {}",
