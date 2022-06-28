@@ -4467,6 +4467,7 @@ version = "1.11.2"
 dependencies = [
  "Inflector",
  "base64 0.13.0",
+ "bincode",
  "chrono",
  "clap 2.33.3",
  "console",
