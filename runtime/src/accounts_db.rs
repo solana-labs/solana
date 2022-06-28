@@ -2994,47 +2994,52 @@ impl AccountsDb {
         );
     }
 
-    fn load_accounts_index_for_shrink<'a, I>(
+    /// load the account index entry for the first `count` items in `accounts`
+    /// store a reference to all alive accounts in `alive_accounts`
+    /// unref and optionally store a reference to all pubkeys that are in the index, but dead in `unrefed_pubkeys`
+    /// return sum of account size for all alive accounts
+    fn load_accounts_index_for_shrink<'a>(
         &'a self,
-        iter: I,
+        accounts: &'a [(Pubkey, FoundStoredAccount<'a>)],
+        count: usize,
         alive_accounts: &mut Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
         mut unrefed_pubkeys: Option<&mut Vec<&'a Pubkey>>,
-    ) -> usize
-    where
-        I: Iterator<Item = &'a (Pubkey, FoundStoredAccount<'a>)>,
-    {
+    ) -> usize {
         let mut alive_total = 0;
 
         let mut alive = 0;
         let mut dead = 0;
-        iter.for_each(|pair| {
-            let pubkey = &pair.0;
-            let stored_account = &pair.1;
-            let lookup = self.accounts_index.get_account_read_entry(pubkey);
-            if let Some(locked_entry) = lookup {
-                let is_alive = locked_entry.slot_list().iter().any(|(_slot, acct_info)| {
-                    acct_info.matches_storage_location(
-                        stored_account.store_id,
-                        stored_account.account.offset,
-                    )
-                });
-                if !is_alive {
-                    // This pubkey was found in the storage, but no longer exists in the index.
-                    // It would have had a ref to the storage from the initial store, but it will
-                    // not exist in the re-written slot. Unref it to keep the index consistent with
-                    // rewriting the storage entries.
-                    if let Some(unrefed_pubkeys) = &mut unrefed_pubkeys {
-                        unrefed_pubkeys.push(pubkey);
+
+        accounts[..std::cmp::min(accounts.len(), count)]
+            .iter()
+            .for_each(|pair| {
+                let pubkey = &pair.0;
+                let stored_account = &pair.1;
+                let lookup = self.accounts_index.get_account_read_entry(pubkey);
+                if let Some(locked_entry) = lookup {
+                    let is_alive = locked_entry.slot_list().iter().any(|(_slot, acct_info)| {
+                        acct_info.matches_storage_location(
+                            stored_account.store_id,
+                            stored_account.account.offset,
+                        )
+                    });
+                    if !is_alive {
+                        // This pubkey was found in the storage, but no longer exists in the index.
+                        // It would have had a ref to the storage from the initial store, but it will
+                        // not exist in the re-written slot. Unref it to keep the index consistent with
+                        // rewriting the storage entries.
+                        if let Some(unrefed_pubkeys) = &mut unrefed_pubkeys {
+                            unrefed_pubkeys.push(pubkey);
+                        }
+                        locked_entry.unref();
+                        dead += 1;
+                    } else {
+                        alive_accounts.push(pair);
+                        alive_total += stored_account.account_size;
+                        alive += 1;
                     }
-                    locked_entry.unref();
-                    dead += 1;
-                } else {
-                    alive_accounts.push(pair);
-                    alive_total += stored_account.account_size;
-                    alive += 1;
                 }
-            }
-        });
+            });
         self.shrink_stats
             .alive_accounts
             .fetch_add(alive, Ordering::Relaxed);
@@ -3117,7 +3122,8 @@ impl AccountsDb {
                 let mut alive_accounts = Vec::with_capacity(chunk_size);
                 let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
                 let alive_total = self.load_accounts_index_for_shrink(
-                    stored_accounts.iter().skip(skip).take(chunk_size),
+                    &stored_accounts[skip..],
+                    chunk_size,
                     &mut alive_accounts,
                     Some(&mut unrefed_pubkeys),
                 );
@@ -3671,7 +3677,8 @@ impl AccountsDb {
 
                     let mut alive_accounts = Vec::with_capacity(chunk_size);
                     let alive_total = self.load_accounts_index_for_shrink(
-                        stored_accounts.iter().skip(skip).take(chunk_size),
+                        &stored_accounts[skip..],
+                        chunk_size,
                         &mut alive_accounts,
                         None,
                     );
