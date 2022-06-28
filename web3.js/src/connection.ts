@@ -2088,6 +2088,16 @@ export type GetStakeActivationConfig = {
 };
 
 /**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetTokenAccountsByOwnerConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Information describing an account
  */
 export type AccountInfo<T> = {
@@ -2636,12 +2646,14 @@ export class Connection {
   async getTokenAccountsByOwner(
     ownerAddress: PublicKey,
     filter: TokenAccountsFilter,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetTokenAccountsByOwnerConfig,
   ): Promise<
     RpcResponseAndContext<
       Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>
     >
   > {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     let _args: any[] = [ownerAddress.toBase58()];
     if ('mint' in filter) {
       _args.push({mint: filter.mint.toBase58()});
@@ -2649,7 +2661,7 @@ export class Connection {
       _args.push({programId: filter.programId.toBase58()});
     }
 
-    const args = this._buildArgs(_args, commitment, 'base64');
+    const args = this._buildArgs(_args, commitment, 'base64', config);
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
     const res = create(unsafeRes, GetTokenAccountsByOwner);
     if ('error' in res) {
