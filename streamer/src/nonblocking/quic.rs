@@ -421,9 +421,15 @@ impl ConnectionTable {
                     }
                 }
             }
-            if let Some(removed) = self.table.remove(&oldest_ip.unwrap()) {
-                self.total_size -= removed.len();
-                num_pruned += removed.len();
+            if let Some(oldest_ip) = oldest_ip {
+                if let Some(removed) = self.table.remove(&oldest_ip) {
+                    self.total_size -= removed.len();
+                    num_pruned += removed.len();
+                }
+            } else {
+                // No valid entries in the table with an IP address. Continuing the loop will cause
+                // infinite looping.
+                break;
             }
         }
         num_pruned
