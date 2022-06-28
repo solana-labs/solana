@@ -877,31 +877,28 @@ impl<'a> InvokeContext<'a> {
         }
 
         self.push(instruction_accounts, program_indices, instruction_data)?;
-
-        let mut result = self.process_executable_chain(compute_units_consumed, timings);
-
-        // Verify the called program has not misbehaved
-        result = result.and_then(|_| {
-            let mut verify_callee_time = Measure::start("verify_callee_time");
-            let result = if is_top_level_instruction {
-                self.verify(instruction_accounts, program_indices)
-            } else {
-                self.verify_and_update(instruction_accounts, false)
-            };
-            verify_callee_time.stop();
-            saturating_add_assign!(
-                timings
-                    .execute_accessories
-                    .process_instructions
-                    .verify_callee_us,
-                verify_callee_time.as_us()
-            );
-            result
-        });
-
-        // Pop if and only if `push` succeeded, independed of `result`.
-        // Thus, the `.and()` instead of an `.and_then()`.
-        result.and(self.pop())
+        self.process_executable_chain(compute_units_consumed, timings)
+            .and_then(|_| {
+                // Verify the called program has not misbehaved
+                let mut verify_callee_time = Measure::start("verify_callee_time");
+                let result = if is_top_level_instruction {
+                    self.verify(instruction_accounts, program_indices)
+                } else {
+                    self.verify_and_update(instruction_accounts, false)
+                };
+                verify_callee_time.stop();
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instructions
+                        .verify_callee_us,
+                    verify_callee_time.as_us()
+                );
+                result
+            })
+            // Pop if and only if `push` succeeded, independed of `result`.
+            // Thus, the `.and()` instead of an `.and_then()`.
+            .and(self.pop())
     }
 
     /// Calls the instruction's program entrypoint method
