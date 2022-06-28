@@ -427,6 +427,16 @@ export type GetAccountInfoConfig = {
 };
 
 /**
+ * Configuration object for changing `getBalance` query behavior
+ */
+export type GetBalanceConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Configuration object for changing `getLargestAccounts` query behavior
  */
 export type GetLargestAccountsConfig = {
@@ -2393,9 +2403,17 @@ export class Connection {
    */
   async getBalanceAndContext(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetBalanceConfig,
   ): Promise<RpcResponseAndContext<number>> {
-    const args = this._buildArgs([publicKey.toBase58()], commitment);
+    /** @internal */
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getBalance', args);
     const res = create(unsafeRes, jsonRpcResultAndContext(number()));
     if ('error' in res) {
@@ -2414,9 +2432,9 @@ export class Connection {
    */
   async getBalance(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetBalanceConfig,
   ): Promise<number> {
-    return await this.getBalanceAndContext(publicKey, commitment)
+    return await this.getBalanceAndContext(publicKey, commitmentOrConfig)
       .then(x => x.value)
       .catch(e => {
         throw new Error(
