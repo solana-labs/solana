@@ -437,6 +437,16 @@ export type GetBalanceConfig = {
 };
 
 /**
+ * Configuration object for changing `getBlockHeight` query behavior
+ */
+export type GetBlockHeightConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Configuration object for changing `getLargestAccounts` query behavior
  */
 export type GetLargestAccountsConfig = {
@@ -3477,8 +3487,17 @@ export class Connection {
   /*
    * Returns the current block height of the node
    */
-  async getBlockHeight(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getBlockHeight(
+    commitmentOrConfig?: Commitment | GetBlockHeightConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getBlockHeight', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
