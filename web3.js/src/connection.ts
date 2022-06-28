@@ -469,6 +469,16 @@ export type GetInflationRewardConfig = {
 };
 
 /**
+ * Configuration object for changing `getLatestBlockhash` query behavior
+ */
+export type GetLatestBlockhashConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Configuration object for changing `getLargestAccounts` query behavior
  */
 export type GetLargestAccountsConfig = {
@@ -3432,10 +3442,10 @@ export class Connection {
    * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhash(
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetLatestBlockhashConfig,
   ): Promise<BlockhashWithExpiryBlockHeight> {
     try {
-      const res = await this.getLatestBlockhashAndContext(commitment);
+      const res = await this.getLatestBlockhashAndContext(commitmentOrConfig);
       return res.value;
     } catch (e) {
       throw new Error('failed to get recent blockhash: ' + e);
@@ -3447,9 +3457,16 @@ export class Connection {
    * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhashAndContext(
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetLatestBlockhashConfig,
   ): Promise<RpcResponseAndContext<BlockhashWithExpiryBlockHeight>> {
-    const args = this._buildArgs([], commitment);
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getLatestBlockhash', args);
     const res = create(unsafeRes, GetLatestBlockhashRpcResult);
     if ('error' in res) {
