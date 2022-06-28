@@ -481,6 +481,16 @@ export type GetLatestBlockhashConfig = {
 };
 
 /**
+ * Configuration object for changing `getSlot` query behavior
+ */
+export type GetSlotConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Configuration object for changing `getLargestAccounts` query behavior
  */
 export type GetLargestAccountsConfig = {
@@ -3089,8 +3099,17 @@ export class Connection {
   /**
    * Fetch the current slot that the node is processing
    */
-  async getSlot(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getSlot(
+    commitmentOrConfig?: Commitment | GetSlotConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getSlot', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
