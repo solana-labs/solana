@@ -993,7 +993,7 @@ pub mod test {
         }
         num_entries += 1;
         table
-            .try_add_connection(&sockets[0], None, 5, max_connections_per_ip)
+            .try_add_connection(&sockets[0], None, 0, 5, max_connections_per_ip)
             .unwrap();
 
         let new_size = 3;
