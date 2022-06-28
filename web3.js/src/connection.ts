@@ -2076,6 +2076,18 @@ export type GetMultipleAccountsConfig = {
 };
 
 /**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetStakeActivationConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** Epoch for which to calculate activation details. If parameter not provided, defaults to current epoch */
+  epoch?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Information describing an account
  */
 export type AccountInfo<T> = {
@@ -2848,14 +2860,19 @@ export class Connection {
    */
   async getStakeActivation(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetStakeActivationConfig,
     epoch?: number,
   ): Promise<StakeActivationData> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
-      undefined,
-      epoch !== undefined ? {epoch} : undefined,
+      undefined /* encoding */,
+      {
+        ...config,
+        epoch: epoch != null ? epoch : config?.epoch,
+      },
     );
 
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
