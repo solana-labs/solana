@@ -441,10 +441,6 @@ impl ConnectionEntry {
     fn last_update(&self) -> u64 {
         self.last_update.load(Ordering::Relaxed)
     }
-
-    fn stake(&self) -> u64 {
-        self.stake
-    }
 }
 
 impl Drop for ConnectionEntry {
@@ -508,6 +504,16 @@ impl ConnectionTable {
         num_pruned
     }
 
+    fn connection_stake(&self, index: usize, default: u64) -> u64 {
+        self.table
+            .get_index(index)
+            .map_or(default, |(_, connection_vec)| {
+                connection_vec
+                    .first()
+                    .map_or(default, |connection| connection.stake)
+            })
+    }
+
     // Randomly select two connections, and evict the one with lower stake. If the stakes of both
     // the connections are higher than the threshold_stake, reject the pruning attempt, and return 0.
     fn prune_random(&mut self, threshold_stake: u64) -> usize {
@@ -516,14 +522,8 @@ impl ConnectionTable {
         let candidate1 = rng.gen_range(0, self.table.len());
         let candidate2 = rng.gen_range(0, self.table.len());
 
-        let candidate1_stake = self
-            .table
-            .get_index(candidate1)
-            .map_or(0, |(_, v)| v[0].stake());
-        let candidate2_stake = self
-            .table
-            .get_index(candidate2)
-            .map_or(0, |(_, v)| v[0].stake());
+        let candidate1_stake = self.connection_stake(candidate1, 0);
+        let candidate2_stake = self.connection_stake(candidate2, 0);
 
         if candidate1_stake < threshold_stake || candidate2_stake < threshold_stake {
             let removed = if candidate1_stake < candidate2_stake {
