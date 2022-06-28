@@ -2045,8 +2045,8 @@ export type GetParsedProgramAccountsConfig = {
 export type GetMultipleAccountsConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
-  /** Optional encoding for account data (default base64) */
-  encoding?: 'base64' | 'jsonParsed';
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -2784,10 +2784,12 @@ export class Connection {
    */
   async getMultipleAccountsInfoAndContext(
     publicKeys: PublicKey[],
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetMultipleAccountsConfig,
   ): Promise<RpcResponseAndContext<(AccountInfo<Buffer> | null)[]>> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const keys = publicKeys.map(key => key.toBase58());
-    const args = this._buildArgs([keys], commitment, 'base64');
+    const args = this._buildArgs([keys], commitment, 'base64', config);
     const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
     const res = create(
       unsafeRes,
@@ -2806,11 +2808,11 @@ export class Connection {
    */
   async getMultipleAccountsInfo(
     publicKeys: PublicKey[],
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetMultipleAccountsConfig,
   ): Promise<(AccountInfo<Buffer> | null)[]> {
     const res = await this.getMultipleAccountsInfoAndContext(
       publicKeys,
-      commitment,
+      commitmentOrConfig,
     );
     return res.value;
   }
