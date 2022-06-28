@@ -2,8 +2,9 @@
 
 #[cfg(not(target_env = "msvc"))]
 use {
+    log::*,
     clap::{
-        crate_description, crate_name, value_t, App, Arg, ArgMatches,
+        crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches,
     },
     solana_core::{
         validator::{ValidatorConfig},
@@ -34,6 +35,7 @@ use {
         net::{SocketAddr,IpAddr, Ipv4Addr},
         str::FromStr,
         process::exit,
+        env, error::Error, ffi::OsString, fs::File, process,
 
     },
     solana_local_cluster::{
@@ -46,12 +48,24 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     tempfile::TempDir,
+    csv::StringRecordsIter,
 
 };
 
 pub const DEFAULT_CLUSTER_LAMPORTS: u64 = 10_000_000 * LAMPORTS_PER_SOL;
 pub const DEFAULT_NODE_STAKE: u64 = 10 * LAMPORTS_PER_SOL;
 pub const DEFAULT_SHRED_VERSION: u16 = 44120;
+
+// struct Accounts<'a> {
+//     pubkey: &'a str,
+//     stake: u64,
+// }
+
+struct Accounts {
+    pubkey: String,
+    stake: u64,
+
+}
 
 fn parse_matches() -> ArgMatches<'static> {
 
@@ -65,7 +79,39 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .help("Filter gossip nodes by this shred version"),
         )
+        .arg(
+            Arg::with_name("account_file")
+                .long("account-file")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("CSV File with Accounts"),
+        )
         .get_matches()
+}
+
+/// Returns the first positional argument sent to this process. If there are no
+/// positional arguments, then this returns an error.
+fn get_first_arg() -> Result<OsString, Box<dyn Error>> {
+    match env::args_os().nth(1) {
+        None => Err(From::from("expected 1 argument, but got none")),
+        Some(file_path) => Ok(file_path),
+    }
+}
+
+fn parse_accounts_file(account_path: &OsString, account_vec: &mut Vec<Accounts>) -> Result<(), Box<dyn Error>> {
+    let file = File::open(account_path)?;
+    let mut rdr = csv::Reader::from_reader(file);
+    for result in rdr.records() {
+        let record = result?;
+        let key: String = record[0].to_string();
+        let stake: String = record[1].to_string();
+        println!("record: {}", stake);
+        // let stake = record[1].parse::<u64>().unwrap();
+
+        // account_vec.push(Accounts { pubkey: key, stake: stake });
+        println!("{:?}", record);
+    }
+    Ok(())
 }
 
 
@@ -75,6 +121,22 @@ pub fn main() {
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
     let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
     let socket_addr_space = SocketAddrSpace::Unspecified;
+    println!("suhh");
+    info!("jeyyy");
+
+    let account_path = value_t_or_exit!(matches, "account_file", OsString);
+
+    let mut accounts: Vec<Accounts> = Vec::new();
+
+    if let Err(err) = parse_accounts_file(&account_path, &mut accounts) {
+        println!("{}", err);
+        process::exit(1);
+    }
+
+    for account in accounts {
+        println!("key: {}", account.pubkey);
+    }
+
 
     //Set dynamic port range for node ports
     let default_dynamic_port_range =
@@ -117,6 +179,9 @@ pub fn main() {
     let node_keypair_2 = Keypair::from_bytes(&priv_node_key_2)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())).unwrap();
 
+    error!("keys: {}, {}, {}", node_keypair_0.pubkey(), node_keypair_1.pubkey(), node_keypair_2.pubkey());
+    println!("suhh");
+
 
     let mut node_keys: Vec<Keypair> = Vec::new();
     let mut stakes_in_genesis: Vec<u64> = Vec::new();
@@ -128,6 +193,7 @@ pub fn main() {
     stakes_in_genesis.push(stake_0);
     stakes_in_genesis.push(stake_1);
     stakes_in_genesis.push(stake_2);
+
 
 
     // let leader_keypair = &keys_in_genesis[0].node_keypair;

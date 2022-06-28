@@ -6763,6 +6763,7 @@ dependencies = [
  "console",
  "core_affinity",
  "crossbeam-channel",
+ "csv",
  "fd-lock",
  "indicatif",
  "jsonrpc-core",
