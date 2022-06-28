@@ -4891,7 +4891,12 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
+<<<<<<< HEAD
  "solana-sdk 1.10.31",
+=======
+ "solana-perf",
+ "solana-sdk 1.11.2",
+>>>>>>> 2436a2bea (client: Use async connection in async TPU client (#25969))
  "solana-streamer",
  "solana-transaction-status",
  "solana-version",
