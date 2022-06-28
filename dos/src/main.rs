@@ -832,6 +832,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
 
@@ -849,6 +850,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
 
@@ -866,6 +868,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
 
@@ -883,6 +886,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
     }
@@ -915,6 +919,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
     }
@@ -960,6 +965,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
 
@@ -986,6 +992,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
 
@@ -1012,6 +1019,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
     }
@@ -1090,6 +1098,7 @@ pub mod test {
                     num_instructions: Some(1),
                 },
                 tpu_use_quic,
+                client_type: ClientType::ThinClient,
             },
         );
 
@@ -1118,6 +1127,7 @@ pub mod test {
                     num_instructions: Some(1),
                 },
                 tpu_use_quic,
+                client_type: ClientType::ThinClient,
             },
         );
         // creates and sends unique transactions of type Transfer
@@ -1145,6 +1155,7 @@ pub mod test {
                     num_instructions: Some(8),
                 },
                 tpu_use_quic,
+                client_type: ClientType::ThinClient,
             },
         );
         // creates and sends unique transactions of type CreateAccount
@@ -1172,6 +1183,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic,
+                client_type: ClientType::ThinClient,
             },
         );
     }

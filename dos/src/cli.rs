@@ -81,6 +81,14 @@ pub struct DosClientParameters {
         help = "Submit transactions via QUIC"
     )]
     pub tpu_use_quic: bool,
+
+    #[clap(
+        long,
+        arg_enum,
+        default_value = "thin-client",
+        help = "Type of the client to submit transactions with"
+    )]
+    pub client_type: ClientType,
 }
 
 #[derive(Args, Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
@@ -157,6 +165,18 @@ pub enum DataType {
 pub enum TransactionType {
     Transfer,
     AccountCreation,
+}
+
+#[derive(ArgEnum, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum ClientType {
+    // Submits transactions to an Rpc node using an RpcClient
+    RpcClient,
+    // Submits transactions directly to leaders using a ThinClient, broadcasting to multiple
+    // leaders when num_nodes > 1
+    ThinClient,
+    // Submits transactions directly to leaders using a TpuClient, broadcasting to upcoming leaders
+    // via TpuClient default configuration
+    TpuClient,
 }
 
 fn addr_parser(addr: &str) -> Result<SocketAddr, &'static str> {
@@ -263,6 +283,7 @@ mod tests {
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
                 num_gen_threads: 1,
+                client_type: ClientType::ThinClient,
             },
         );
     }
@@ -292,6 +313,7 @@ mod tests {
                 allow_private_addr: false,
                 tpu_use_quic: false,
                 num_gen_threads: 1,
+                client_type: ClientType::ThinClient,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: false,
@@ -344,6 +366,7 @@ mod tests {
                     num_instructions: None,
                 },
                 tpu_use_quic: true,
+                client_type: ClientType::ThinClient,
             },
         );
     }
@@ -386,6 +409,7 @@ mod tests {
                     num_instructions: Some(1),
                 },
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
 
@@ -444,6 +468,7 @@ mod tests {
                     num_instructions: Some(8),
                 },
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
     }
@@ -484,6 +509,7 @@ mod tests {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                client_type: ClientType::ThinClient,
             },
         );
     }
