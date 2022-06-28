@@ -843,14 +843,6 @@ impl<'a> InvokeContext<'a> {
         timings: &mut ExecuteTimings,
     ) -> Result<(), InstructionError> {
         *compute_units_consumed = 0;
-        let program_id = program_indices
-            .last()
-            .map(|index| {
-                self.transaction_context
-                    .get_key_of_account_at_index(*index)
-                    .map(|pubkey| *pubkey)
-            })
-            .unwrap_or_else(|| Ok(native_loader::id()))?;
 
         let nesting_level = self
             .transaction_context
@@ -886,14 +878,7 @@ impl<'a> InvokeContext<'a> {
 
         self.push(instruction_accounts, program_indices, instruction_data)?;
 
-        let mut process_executable_chain_time = Measure::start("process_executable_chain_time");
-        self.transaction_context
-            .set_return_data(program_id, Vec::new())?;
-        let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-        let mut result = self.process_executable_chain();
-        let post_remaining_units = self.compute_meter.borrow().get_remaining();
-        *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-        process_executable_chain_time.stop();
+        let mut result = self.process_executable_chain(compute_units_consumed, timings);
 
         // Verify the called program has not misbehaved
         let mut verify_callee_time = Measure::start("verify_callee_time");
@@ -905,14 +890,6 @@ impl<'a> InvokeContext<'a> {
             }
         });
         verify_callee_time.stop();
-
-        saturating_add_assign!(
-            timings
-                .execute_accessories
-                .process_instructions
-                .process_executable_chain_us,
-            process_executable_chain_time.as_us()
-        );
         saturating_add_assign!(
             timings
                 .execute_accessories
@@ -927,8 +904,13 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Calls the instruction's program entrypoint method
-    fn process_executable_chain(&mut self) -> Result<(), InstructionError> {
+    fn process_executable_chain(
+        &mut self,
+        compute_units_consumed: &mut u64,
+        timings: &mut ExecuteTimings,
+    ) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
+        let mut process_executable_chain_time = Measure::start("process_executable_chain_time");
 
         let (first_instruction_account, builtin_id) = {
             let borrowed_root_account = instruction_context
@@ -946,20 +928,36 @@ impl<'a> InvokeContext<'a> {
             if entry.program_id == builtin_id {
                 let program_id =
                     *instruction_context.get_last_program_key(self.transaction_context)?;
-                if builtin_id == program_id {
+                self.transaction_context
+                    .set_return_data(program_id, Vec::new())?;
+
+                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
+                let result = if builtin_id == program_id {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                    return (entry.process_instruction)(first_instruction_account, self)
+                    (entry.process_instruction)(first_instruction_account, self)
                         .map(|()| {
                             stable_log::program_success(&logger, &program_id);
                         })
                         .map_err(|err| {
                             stable_log::program_failure(&logger, &program_id, &err);
                             err
-                        });
+                        })
                 } else {
-                    return (entry.process_instruction)(first_instruction_account, self);
-                }
+                    (entry.process_instruction)(first_instruction_account, self)
+                };
+                let post_remaining_units = self.compute_meter.borrow().get_remaining();
+                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+
+                process_executable_chain_time.stop();
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instructions
+                        .process_executable_chain_us,
+                    process_executable_chain_time.as_us()
+                );
+                return result;
             }
         }
 
