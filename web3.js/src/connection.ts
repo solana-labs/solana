@@ -457,6 +457,18 @@ export type GetEpochInfoConfig = {
 };
 
 /**
+ * Configuration object for changing `getInflationReward` query behavior
+ */
+export type GetInflationRewardConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** An epoch for which the reward occurs. If omitted, the previous epoch will be used */
+  epoch?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Configuration object for changing `getLargestAccounts` query behavior
  */
 export type GetLargestAccountsConfig = {
@@ -3213,14 +3225,17 @@ export class Connection {
   async getInflationReward(
     addresses: PublicKey[],
     epoch?: number,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetInflationRewardConfig,
   ): Promise<(InflationReward | null)[]> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [addresses.map(pubkey => pubkey.toBase58())],
       commitment,
-      undefined,
+      undefined /* encoding */,
       {
-        epoch,
+        ...config,
+        epoch: epoch != null ? epoch : config?.epoch,
       },
     );
     const unsafeRes = await this._rpcRequest('getInflationReward', args);
