@@ -1581,7 +1581,7 @@ impl ReplayStage {
         assert!(parent.is_frozen());
 
         if !parent.is_startup_verification_complete() {
-            // we cannot rely on the results of this validator yet
+            info!("startup verification incomplete, so skipping my leader slot")
             return;
         }
 
@@ -1913,7 +1913,7 @@ impl ReplayStage {
         wait_to_vote_slot: Option<Slot>,
     ) -> Option<Transaction> {
         if !bank.is_startup_verification_complete() {
-            // we cannot rely on the results of this validator yet
+            info!("startup verification incomplete, so unable to vote")
             return None;
         }
 
