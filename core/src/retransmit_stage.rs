@@ -96,32 +96,19 @@ impl RetransmitStats {
         datapoint_info!("retransmit-num_nodes", ("count", num_peers, i64));
         datapoint_info!(
             "retransmit-stage",
-<<<<<<< HEAD
-            ("total_time", stats.total_time, i64),
-            ("epoch_fetch", stats.epoch_fetch, i64),
-            ("epoch_cache_update", stats.epoch_cache_update, i64),
-            ("total_batches", stats.total_batches, i64),
-            ("num_nodes", stats.num_nodes.into_inner(), i64),
-            ("num_addrs_failed", stats.num_addrs_failed.into_inner(), i64),
-            ("num_shreds", stats.num_shreds, i64),
-            (
-                "num_shreds_skipped",
-                stats.num_shreds_skipped.into_inner(),
-                i64
-            ),
-            ("retransmit_total", stats.retransmit_total.into_inner(), i64),
-=======
             ("total_time", self.total_time, i64),
             ("epoch_fetch", self.epoch_fetch, i64),
             ("epoch_cache_update", self.epoch_cache_update, i64),
             ("total_batches", self.total_batches, i64),
-            ("num_small_batches", self.num_small_batches, i64),
             ("num_nodes", *self.num_nodes.get_mut(), i64),
             ("num_addrs_failed", *self.num_addrs_failed.get_mut(), i64),
             ("num_shreds", self.num_shreds, i64),
-            ("num_shreds_skipped", self.num_shreds_skipped, i64),
+            (
+                "num_shreds_skipped",
+                *self.num_shreds_skipped.get_mut(),
+                i64
+            ),
             ("retransmit_total", *self.retransmit_total.get_mut(), i64),
->>>>>>> f875733a9 (patches bug in retransmit stats where slot stats are erroneously dropped (#26317))
             (
                 "compute_turbine",
                 *self.compute_turbine_peers_total.get_mut(),
@@ -129,11 +116,7 @@ impl RetransmitStats {
             ),
             (
                 "unknown_shred_slot_leader",
-<<<<<<< HEAD
-                stats.unknown_shred_slot_leader.into_inner(),
-=======
-                self.unknown_shred_slot_leader,
->>>>>>> f875733a9 (patches bug in retransmit stats where slot stats are erroneously dropped (#26317))
+                *self.unknown_shred_slot_leader.get_mut(),
                 i64
             ),
         );
