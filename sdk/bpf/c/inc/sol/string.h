@@ -13,6 +13,9 @@ extern "C" {
  * Copies memory
  */
 static void sol_memcpy(void *dst, const void *src, int len) {
+  if (dst == (void *)0 || src == (void *)0)
+    return ;
+
   for (int i = 0; i < len; i++) {
     *((uint8_t *)dst + i) = *((const uint8_t *)src + i);
   }
@@ -24,6 +27,9 @@ static void sol_memcpy(void *dst, const void *src, int len) {
  * Compares memory
  */
 static int sol_memcmp(const void *s1, const void *s2, int n) {
+  if (s1 == (void *)0 || s2 == (void *)0)
+    return 1;
+
   for (int i = 0; i < n; i++) {
     uint8_t diff = *((uint8_t *)s1 + i) - *((const uint8_t *)s2 + i);
     if (diff) {
@@ -38,6 +44,10 @@ static int sol_memcmp(const void *s1, const void *s2, int n) {
  */
 static void *sol_memset(void *b, int c, size_t len) {
   uint8_t *a = (uint8_t *) b;
+
+  if (!b)
+    return ;
+
   while (len > 0) {
     *a = c;
     a++;
@@ -51,6 +61,9 @@ static void *sol_memset(void *b, int c, size_t len) {
  */
 static size_t sol_strlen(const char *s) {
   const char *ref = s;
+
+  if (!s)
+    return 0;
 
   while (1)
   {
