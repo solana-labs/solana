@@ -1,5 +1,6 @@
 use {
     itertools::Itertools,
+    once_cell::sync::OnceCell,
     serde::ser::{Serialize, Serializer},
     solana_sdk::{
         account::{accounts_equal, AccountSharedData, ReadableAccount},
@@ -11,16 +12,10 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-        sync::{Arc, Once, RwLock, RwLockReadGuard},
+        sync::{Arc, Once, RwLock},
     },
     thiserror::Error,
 };
-
-// The value here does not matter. It will be overwritten
-// at the first call to VoteAccount::vote_state().
-const INVALID_VOTE_STATE: Result<VoteState, Error> = Err(Error::InstructionError(
-    InstructionError::InvalidAccountData,
-));
 
 #[derive(Clone, Debug, PartialEq, AbiExample, Deserialize)]
 #[serde(try_from = "AccountSharedData")]
@@ -37,8 +32,7 @@ pub enum Error {
 #[derive(Debug, AbiExample)]
 struct VoteAccountInner {
     account: AccountSharedData,
-    vote_state: RwLock<Result<VoteState, Error>>,
-    vote_state_once: Once,
+    vote_state: OnceCell<Result<VoteState, Error>>,
 }
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
@@ -60,16 +54,6 @@ pub struct VoteAccounts {
     staked_nodes_once: Once,
 }
 
-impl VoteAccounts {
-    pub fn num_vote_accounts(&self) -> usize {
-        self.vote_accounts.len()
-    }
-
-    pub fn num_staked_nodes(&self) -> usize {
-        self.staked_nodes().len()
-    }
-}
-
 impl VoteAccount {
     pub(crate) fn lamports(&self) -> u64 {
         self.0.account.lamports()
@@ -79,17 +63,16 @@ impl VoteAccount {
         self.0.account.owner()
     }
 
-    pub fn vote_state(&self) -> RwLockReadGuard<Result<VoteState, Error>> {
-        let inner = &self.0;
-        inner.vote_state_once.call_once(|| {
-            let vote_state = VoteState::deserialize(inner.account.data());
-            *inner.vote_state.write().unwrap() = vote_state.map_err(Error::from);
-        });
-        inner.vote_state.read().unwrap()
+    pub fn vote_state(&self) -> &Result<VoteState, Error> {
+        // VoteState::deserialize deserializes a VoteStateVersions and then
+        // calls VoteStateVersions::convert_to_current.
+        self.0
+            .vote_state
+            .get_or_init(|| VoteState::deserialize(self.0.account.data()).map_err(Error::from))
     }
 
     pub(crate) fn is_deserialized(&self) -> bool {
-        self.0.vote_state_once.is_completed()
+        self.0.vote_state.get().is_some()
     }
 
     /// VoteState.node_pubkey of this vote-account.
@@ -252,8 +235,7 @@ impl TryFrom<AccountSharedData> for VoteAccountInner {
         }
         Ok(Self {
             account,
-            vote_state: RwLock::new(INVALID_VOTE_STATE),
-            vote_state_once: Once::new(),
+            vote_state: OnceCell::new(),
         })
     }
 }
@@ -263,7 +245,6 @@ impl PartialEq<VoteAccountInner> for VoteAccountInner {
         let Self {
             account,
             vote_state: _,
-            vote_state_once: _,
         } = self;
         account == &other.account
     }

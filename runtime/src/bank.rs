@@ -2724,11 +2724,15 @@ impl Bank {
             "distributed inflation: {} (rounded from: {})",
             validator_rewards_paid, validator_rewards
         );
-
-        let num_stake_accounts = self.stakes_cache.num_stake_accounts();
-        let num_vote_accounts = self.stakes_cache.num_vote_accounts();
-        let num_staked_nodes = self.stakes_cache.num_staked_nodes();
-
+        // TODO: staked_nodes forces an eager stakes calculation. remove it!
+        let (num_stake_accounts, num_vote_accounts, num_staked_nodes) = {
+            let stakes = self.stakes_cache.stakes();
+            (
+                stakes.stake_delegations().len(),
+                stakes.vote_accounts().len(),
+                stakes.staked_nodes().len(),
+            )
+        };
         self.capitalization
             .fetch_add(validator_rewards_paid, Relaxed);
 
@@ -2817,6 +2821,7 @@ impl Bank {
                         }
                     };
                     if cached_stake_account != &stake_account {
+                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                         let mut cached_account = cached_stake_account.account().clone();
                         // We could have collected rent on the loaded account already in this new epoch (we could be at partition_index 12, for example).
                         // So, we may need to adjust the rent_epoch of the cached account. So, update rent_epoch and compare just the accounts.
@@ -2829,8 +2834,6 @@ impl Bank {
                             stake_pubkey,
                             &self.rewrites_skipped_this_slot,
                         );
-                        // prior behavior was to always count any account that mismatched for any reason
-                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                         if &cached_account != stake_account.account() {
                             info!(
                                 "cached stake account mismatch: {}: {:?}, {:?}",
@@ -5051,9 +5054,7 @@ impl Bank {
                     None
                 } else {
                     total_staked += *staked;
-                    account
-                        .node_pubkey()
-                        .map(|node_pubkey| (node_pubkey, *staked))
+                    Some((account.node_pubkey()?, *staked))
                 }
             })
             .collect::<Vec<(Pubkey, u64)>>();
