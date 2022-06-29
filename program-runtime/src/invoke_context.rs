@@ -896,7 +896,7 @@ impl<'a> InvokeContext<'a> {
                 );
                 result
             })
-            // Pop if and only if `push` succeeded, independed of `result`.
+            // MUST pop if and only if `push` succeeded, independent of `result`.
             // Thus, the `.and()` instead of an `.and_then()`.
             .and(self.pop())
     }
