@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-cli"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.10.29"
+version = "1.10.30"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -27,29 +27,29 @@ semver = "1.0.6"
 serde = "1.0.136"
 serde_derive = "1.0.103"
 serde_json = "1.0.79"
-solana-account-decoder = { path = "../account-decoder", version = "=1.10.29" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.10.29" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.29" }
-solana-cli-config = { path = "../cli-config", version = "=1.10.29" }
-solana-cli-output = { path = "../cli-output", version = "=1.10.29" }
-solana-client = { path = "../client", version = "=1.10.29" }
-solana-config-program = { path = "../programs/config", version = "=1.10.29" }
-solana-faucet = { path = "../faucet", version = "=1.10.29" }
-solana-logger = { path = "../logger", version = "=1.10.29" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.10.29" }
-solana-remote-wallet = { path = "../remote-wallet", version = "=1.10.29" }
-solana-sdk = { path = "../sdk", version = "=1.10.29" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.10.29" }
-solana-version = { path = "../version", version = "=1.10.29" }
-solana-vote-program = { path = "../programs/vote", version = "=1.10.29" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.10.30" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.10.30" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.10.30" }
+solana-cli-config = { path = "../cli-config", version = "=1.10.30" }
+solana-cli-output = { path = "../cli-output", version = "=1.10.30" }
+solana-client = { path = "../client", version = "=1.10.30" }
+solana-config-program = { path = "../programs/config", version = "=1.10.30" }
+solana-faucet = { path = "../faucet", version = "=1.10.30" }
+solana-logger = { path = "../logger", version = "=1.10.30" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.10.30" }
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.10.30" }
+solana-sdk = { path = "../sdk", version = "=1.10.30" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.10.30" }
+solana-version = { path = "../version", version = "=1.10.30" }
+solana-vote-program = { path = "../programs/vote", version = "=1.10.30" }
 solana_rbpf = "=0.2.24"
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0.30"
 tiny-bip39 = "0.8.2"
 
 [dev-dependencies]
-solana-streamer = { path = "../streamer", version = "=1.10.29" }
-solana-test-validator = { path = "../test-validator", version = "=1.10.29" }
+solana-streamer = { path = "../streamer", version = "=1.10.30" }
+solana-test-validator = { path = "../test-validator", version = "=1.10.30" }
 tempfile = "3.3.0"
 
 [[bin]]
