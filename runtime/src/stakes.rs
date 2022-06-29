@@ -57,7 +57,7 @@ impl StakesCache {
         self.0.read().unwrap()
     }
 
-    pub fn check_and_store(&self, pubkey: &Pubkey, account: &impl ReadableAccount) {
+    pub(crate) fn check_and_store(&self, pubkey: &Pubkey, account: &impl ReadableAccount) {
         // TODO: If the account is already cached as a vote or stake account
         // but the owner changes, then this needs to evict the account from
         // the cache. see:
@@ -110,12 +110,12 @@ impl StakesCache {
         }
     }
 
-    pub fn activate_epoch(&self, next_epoch: Epoch, thread_pool: &ThreadPool) {
+    pub(crate) fn activate_epoch(&self, next_epoch: Epoch, thread_pool: &ThreadPool) {
         let mut stakes = self.0.write().unwrap();
         stakes.activate_epoch(next_epoch, thread_pool)
     }
 
-    pub fn handle_invalid_keys(
+    pub(crate) fn handle_invalid_keys(
         &self,
         invalid_stake_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
         invalid_vote_keys: DashMap<Pubkey, InvalidCacheEntryReason>,
@@ -231,7 +231,7 @@ impl Stakes<StakeAccount> {
         })
     }
 
-    pub fn history(&self) -> &StakeHistory {
+    pub(crate) fn history(&self) -> &StakeHistory {
         &self.stake_history
     }
 
@@ -303,7 +303,7 @@ impl Stakes<StakeAccount> {
     }
 
     /// Sum the lamports of the vote accounts and the delegated stake
-    pub fn vote_balance_and_staked(&self) -> u64 {
+    pub(crate) fn vote_balance_and_staked(&self) -> u64 {
         let get_stake = |stake_account: &StakeAccount| stake_account.delegation().stake;
         let get_lamports = |(_, vote_account): (_, &VoteAccount)| vote_account.lamports();
 
@@ -465,7 +465,7 @@ pub(crate) mod serde_stakes_enum_compat {
 }
 
 #[cfg(test)]
-pub mod tests {
+pub(crate) mod tests {
     use {
         super::*,
         rand::Rng,
@@ -476,7 +476,7 @@ pub mod tests {
     };
 
     //  set up some dummies for a staked node     ((     vote      )  (     stake     ))
-    pub fn create_staked_node_accounts(
+    pub(crate) fn create_staked_node_accounts(
         stake: u64,
     ) -> ((Pubkey, AccountSharedData), (Pubkey, AccountSharedData)) {
         let vote_pubkey = solana_sdk::pubkey::new_rand();
@@ -489,7 +489,10 @@ pub mod tests {
     }
 
     //   add stake to a vote_pubkey                               (   stake    )
-    pub fn create_stake_account(stake: u64, vote_pubkey: &Pubkey) -> (Pubkey, AccountSharedData) {
+    pub(crate) fn create_stake_account(
+        stake: u64,
+        vote_pubkey: &Pubkey,
+    ) -> (Pubkey, AccountSharedData) {
         let stake_pubkey = solana_sdk::pubkey::new_rand();
         (
             stake_pubkey,
@@ -503,7 +506,7 @@ pub mod tests {
         )
     }
 
-    pub fn create_warming_staked_node_accounts(
+    fn create_warming_staked_node_accounts(
         stake: u64,
         epoch: Epoch,
     ) -> ((Pubkey, AccountSharedData), (Pubkey, AccountSharedData)) {
@@ -517,7 +520,7 @@ pub mod tests {
     }
 
     // add stake to a vote_pubkey                               (   stake    )
-    pub fn create_warming_stake_account(
+    fn create_warming_stake_account(
         stake: u64,
         epoch: Epoch,
         vote_pubkey: &Pubkey,
@@ -847,7 +850,7 @@ pub mod tests {
     fn test_vote_balance_and_staked_normal() {
         let stakes_cache = StakesCache::default();
         impl Stakes<StakeAccount> {
-            pub fn vote_balance_and_warmed_staked(&self) -> u64 {
+            fn vote_balance_and_warmed_staked(&self) -> u64 {
                 let vote_balance: u64 = self
                     .vote_accounts
                     .iter()
@@ -855,7 +858,7 @@ pub mod tests {
                     .sum();
                 let warmed_stake: u64 = self
                     .vote_accounts
-                    .delegated_stakes_iter()
+                    .delegated_stakes()
                     .map(|(_pubkey, stake)| stake)
                     .sum();
                 vote_balance + warmed_stake
