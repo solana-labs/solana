@@ -47,11 +47,12 @@ impl HttpSender {
     /// The URL is an HTTP URL, usually for port 8899.
     pub fn new_with_timeout<U: ToString>(url: U, timeout: Duration) -> Self {
         let mut default_headers = header::HeaderMap::new();
-        let user_agent_string =
-            format!("rust-solana-client/{}", solana_version::Version::default());
         default_headers.append(
-            header::USER_AGENT,
-            header::HeaderValue::from_str(user_agent_string.as_str()).unwrap(),
+            header::HeaderName::from_static("solana-client"),
+            header::HeaderValue::from_str(
+                format!("rust/{}", solana_version::Version::default()).as_str(),
+            )
+            .unwrap(),
         );
 
         let client = Arc::new(
