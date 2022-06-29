@@ -184,10 +184,8 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
-                if !snapshot_root_bank.is_startup_verification_complete() {
-                    // this cannot be trusted yet
-                    inc_new_counter_info!("handle_snapshot_requests-startup_verification_incomplete", 1);
-                }
+                // we should not rely on the state of this validator until startup verification is complete
+                assert!(snapshot_root_bank.is_startup_verification_complete());
 
                 let previous_hash = if test_hash_calculation {
                     // We have to use the index version here.
