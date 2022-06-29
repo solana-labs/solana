@@ -639,6 +639,15 @@ impl ScanSlotTracker {
     }
 }
 
+pub enum AccountsIndexScanResult {
+    /// if the entry is not in the in-memory index, do not add it, make no modifications to it
+    None,
+    /// keep the entry in the in-memory index
+    KeepInMemory,
+    /// reduce refcount by 1
+    Unref,
+}
+
 #[derive(Debug)]
 pub struct AccountsIndex<T: IndexValue> {
     pub account_maps: LockMapType<T>,
@@ -1295,13 +1304,12 @@ impl<T: IndexValue> AccountsIndex<T> {
     ///   call `callback`
     pub(crate) fn scan<'a, F, I>(&'a self, pubkeys: I, mut callback: F)
     where
-        // return true if accounts index entry should be put in in_mem cache
         // params:
         //  exists: false if not in index at all
         //  index in slot list where best slot was found or None if nothing found by root criteria
         //  pubkey looked up
         //  refcount of entry in index
-        F: FnMut(bool, &SlotList<T>, &Pubkey, RefCount) -> bool,
+        F: FnMut(bool, &SlotList<T>, &'a Pubkey, RefCount) -> AccountsIndexScanResult,
         I: IntoIterator<Item = &'a Pubkey>,
     {
         let empty_slot_list = vec![];
@@ -1315,13 +1323,24 @@ impl<T: IndexValue> AccountsIndex<T> {
                 last_bin = bin;
             }
             lock.as_ref().unwrap().get_internal(pubkey, |entry| {
-                let cache = match entry {
+                let mut cache = false;
+                match entry {
                     Some(locked_entry) => {
                         let slot_list = &locked_entry.slot_list.read().unwrap();
-                        callback(true, slot_list, pubkey, locked_entry.ref_count())
+                        let result = callback(true, slot_list, pubkey, locked_entry.ref_count());
+                        cache = match result {
+                            AccountsIndexScanResult::Unref => {
+                                locked_entry.add_un_ref(false);
+                                true
+                            }
+                            AccountsIndexScanResult::KeepInMemory => true,
+                            AccountsIndexScanResult::None => false,
+                        };
                     }
-                    None => callback(false, &empty_slot_list, pubkey, RefCount::MAX),
-                };
+                    None => {
+                        callback(false, &empty_slot_list, pubkey, RefCount::MAX);
+                    }
+                }
                 (cache, ())
             });
         });
