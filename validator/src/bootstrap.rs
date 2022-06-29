@@ -949,11 +949,9 @@ fn retain_peer_snapshot_hashes_with_highest_incremental_snapshot_slot(
         };
     });
 
-    if highest_incremental_snapshot_hash.is_some() {
-        peer_snapshot_hashes.retain(|peer_snapshot_hash| {
-            peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
-        });
-    }
+    peer_snapshot_hashes.retain(|peer_snapshot_hash| {
+        peer_snapshot_hash.snapshot_hash.incr == highest_incremental_snapshot_hash
+    });
 
     trace!(
         "retain peer snapshot hashes with highest incremental snapshot slot: {:?}",
