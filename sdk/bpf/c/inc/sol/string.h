@@ -18,6 +18,8 @@ static void sol_memcpy(void *dst, const void *src, int len) {
   }
 }
 
+
+
 /**
  * Compares memory
  */
@@ -45,14 +47,23 @@ static void *sol_memset(void *b, int c, size_t len) {
 
 /**
  * Find length of string
+ * Checks 4 chars at a time for faster performance
  */
 static size_t sol_strlen(const char *s) {
-  size_t len = 0;
-  while (*s) {
-    len++;
-    s++;
+  const char *ref = s;
+
+  while (1)
+  {
+    if (s[0] == "\0")
+      return s - ref + 0;
+    if (s[1] == "\0")
+      return s - ref + 1;
+    if (s[2] == "\0")
+      return s - ref + 2;
+    if (s[3] == "\0")
+      return s - ref + 3;
+    s += 4;
   }
-  return len;
 }
 
 /**
