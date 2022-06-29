@@ -3707,6 +3707,14 @@ impl Bank {
         ))
     }
 
+    pub fn get_validator_initialized(&self) -> &Arc<AtomicBool> {
+        &self.rc.accounts.accounts_db.validator_initialized
+    }
+
+    pub fn is_validator_initialized(&self) -> bool {
+        self.get_validator_initialized().load(Relaxed)
+    }
+
     pub fn get_fee_for_message_with_lamports_per_signature(
         &self,
         message: &SanitizedMessage,
@@ -6736,6 +6744,15 @@ impl Bank {
             can_cached_slot_be_unflushed,
             ignore_mismatch,
         )
+    }
+
+    /// return true if bg hash verification is complete
+    /// return false if bg hash verification has not completed yet
+    /// if hash verification failed, a panic will occur
+    pub fn has_initial_accounts_hash_verification_completed(&self) -> bool {
+        // this will be live shortly
+        // for now, this check occurs at startup, so it must always be true
+        true
     }
 
     pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> SnapshotStorages {

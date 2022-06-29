@@ -184,6 +184,12 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
+                if !snapshot_root_bank.is_validator_initialized() {
+                    // this cannot be trusted yet
+                    // may need a different return value here
+                    return Ok(0);
+                }
+
                 let previous_hash = if test_hash_calculation {
                     // We have to use the index version here.
                     // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality. This comment is out of date and can be re-evaluated.
