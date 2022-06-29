@@ -2532,7 +2532,6 @@ impl AccountsDb {
                         let mut useful = 0;
                         self.accounts_index.scan(
                             pubkeys.iter(),
-                            // return true if we want this item to remain in the cache
                             |exists, slot_list, pubkey, ref_count| {
                                 let mut useless = true;
                                 if !exists {
@@ -3023,7 +3022,6 @@ impl AccountsDb {
             accounts[..std::cmp::min(accounts.len(), count)]
                 .iter()
                 .map(|(key, _)| key),
-            // return true if we want this item to remain in the cache
             |exists, slot_list, pubkey, _ref_count| {
                 let mut result = AccountsIndexScanResult::None;
                 if exists {
