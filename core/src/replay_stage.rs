@@ -1580,7 +1580,7 @@ impl ReplayStage {
 
         assert!(parent.is_frozen());
 
-        if !parent.is_validator_initialized() {
+        if !parent.is_startup_verification_complete() {
             // we cannot rely on the results of this validator yet
             return;
         }
@@ -1912,7 +1912,7 @@ impl ReplayStage {
         has_new_vote_been_rooted: bool,
         wait_to_vote_slot: Option<Slot>,
     ) -> Option<Transaction> {
-        if !bank.is_validator_initialized() {
+        if !bank.is_startup_verification_complete() {
             // we cannot rely on the results of this validator yet
             return None;
         }

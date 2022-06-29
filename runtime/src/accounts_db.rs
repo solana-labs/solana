@@ -1115,7 +1115,7 @@ pub struct AccountsDb {
     /// true if drop_callback is attached to the bank.
     is_bank_drop_callback_enabled: AtomicBool,
 
-    pub validator_initialized: Arc<AtomicBool>,
+    pub startup_verification_complete: Arc<AtomicBool>,
 
     /// Set of slots currently being flushed by `flush_slot_cache()` or removed
     /// by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
@@ -1906,10 +1906,10 @@ impl AccountsDb {
 
         // this will be live shortly
         // for now, this check occurs at startup, so it must always be true
-        let validator_initialized = Arc::new(AtomicBool::new(true));
+        let startup_verification_complete = Arc::new(AtomicBool::new(true));
 
         AccountsDb {
-            validator_initialized,
+            startup_verification_complete,
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),

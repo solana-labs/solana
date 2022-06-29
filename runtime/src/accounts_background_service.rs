@@ -184,7 +184,7 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
-                if !snapshot_root_bank.is_validator_initialized() {
+                if !snapshot_root_bank.is_startup_verification_complete() {
                     // this cannot be trusted yet
                     // may need a different return value here
                     return Ok(0);

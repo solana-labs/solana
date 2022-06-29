@@ -3707,12 +3707,12 @@ impl Bank {
         ))
     }
 
-    pub fn get_validator_initialized(&self) -> &Arc<AtomicBool> {
-        &self.rc.accounts.accounts_db.validator_initialized
+    pub fn get_startup_verification_complete(&self) -> &Arc<AtomicBool> {
+        &self.rc.accounts.accounts_db.startup_verification_complete
     }
 
-    pub fn is_validator_initialized(&self) -> bool {
-        self.get_validator_initialized().load(Relaxed)
+    pub fn is_startup_verification_complete(&self) -> bool {
+        self.get_startup_verification_complete().load(Relaxed)
     }
 
     pub fn get_fee_for_message_with_lamports_per_signature(

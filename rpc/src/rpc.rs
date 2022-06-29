@@ -386,7 +386,7 @@ impl JsonRpcRequestProcessor {
                 None,
                 0,
                 exit.clone(),
-                Arc::clone(bank.get_validator_initialized()),
+                Arc::clone(bank.get_startup_verification_complete()),
             )),
             cluster_info,
             genesis_hash,
