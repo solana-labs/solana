@@ -12,7 +12,7 @@ use {
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         iter::FromIterator,
-        sync::{Arc, Once, RwLock},
+        sync::Arc,
     },
     thiserror::Error,
 };
@@ -37,13 +37,12 @@ struct VoteAccountInner {
 
 pub type VoteAccountsHashMap = HashMap<Pubkey, (/*stake:*/ u64, VoteAccount)>;
 
-#[derive(Debug, AbiExample, Deserialize)]
+#[derive(Clone, Debug, AbiExample, Deserialize)]
 #[serde(from = "Arc<VoteAccountsHashMap>")]
 pub struct VoteAccounts {
     vote_accounts: Arc<VoteAccountsHashMap>,
-    // Inner Arc is meant to implement copy-on-write semantics as opposed to
-    // sharing mutations (hence RwLock<Arc<...>> instead of Arc<RwLock<...>>).
-    staked_nodes: RwLock<
+    // Inner Arc is meant to implement copy-on-write semantics.
+    staked_nodes: OnceCell<
         Arc<
             HashMap<
                 Pubkey, // VoteAccount.vote_state.node_pubkey.
@@ -51,7 +50,6 @@ pub struct VoteAccounts {
             >,
         >,
     >,
-    staked_nodes_once: Once,
 }
 
 impl VoteAccount {
@@ -86,33 +84,34 @@ impl VoteAccounts {
         self.vote_accounts.len()
     }
 
-    pub fn staked_nodes(&self) -> Arc<HashMap<Pubkey, u64>> {
-        self.staked_nodes_once.call_once(|| {
-            let staked_nodes = self
-                .vote_accounts
-                .values()
-                .filter(|(stake, _)| *stake != 0)
-                .filter_map(|(stake, vote_account)| {
-                    let node_pubkey = vote_account.node_pubkey()?;
-                    Some((node_pubkey, stake))
-                })
-                .into_grouping_map()
-                .aggregate(|acc, _node_pubkey, stake| Some(acc.unwrap_or_default() + stake));
-            *self.staked_nodes.write().unwrap() = Arc::new(staked_nodes)
-        });
-        self.staked_nodes.read().unwrap().clone()
+    pub fn staked_nodes(&self) -> Arc<HashMap</*node_pubkey:*/ Pubkey, /*stake:*/ u64>> {
+        self.staked_nodes
+            .get_or_init(|| {
+                Arc::new(
+                    self.vote_accounts
+                        .values()
+                        .filter(|(stake, _)| *stake != 0u64)
+                        .filter_map(|(stake, vote_account)| {
+                            Some((vote_account.node_pubkey()?, stake))
+                        })
+                        .into_grouping_map()
+                        .aggregate(|acc, _node_pubkey, stake| {
+                            Some(acc.unwrap_or_default() + stake)
+                        }),
+                )
+            })
+            .clone()
     }
 
-    pub fn get(&self, pubkey: &Pubkey) -> Option<&VoteAccount> {
-        self.vote_accounts
-            .get(pubkey)
-            .map(|(_stake, vote_account)| vote_account)
+    pub(crate) fn get(&self, pubkey: &Pubkey) -> Option<&VoteAccount> {
+        let (_stake, vote_account) = self.vote_accounts.get(pubkey)?;
+        Some(vote_account)
     }
 
     pub fn get_delegated_stake(&self, pubkey: &Pubkey) -> u64 {
         self.vote_accounts
             .get(pubkey)
-            .map(|(stake, ..)| *stake)
+            .map(|(stake, _vote_account)| *stake)
             .unwrap_or_default()
     }
 
@@ -122,10 +121,10 @@ impl VoteAccounts {
             .map(|(vote_pubkey, (_stake, vote_account))| (vote_pubkey, vote_account))
     }
 
-    pub(crate) fn delegated_stakes_iter(&self) -> impl Iterator<Item = (&Pubkey, u64)> {
+    pub(crate) fn delegated_stakes(&self) -> impl Iterator<Item = (&Pubkey, u64)> {
         self.vote_accounts
             .iter()
-            .map(|(vote_pubkey, (stake, ..))| (vote_pubkey, *stake))
+            .map(|(vote_pubkey, (stake, _vote_account))| (vote_pubkey, *stake))
     }
 
     pub(crate) fn find_max_by_delegated_stake(&self) -> Option<&VoteAccount> {
@@ -172,33 +171,39 @@ impl VoteAccounts {
     }
 
     fn add_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
-        if stake != 0 && self.staked_nodes_once.is_completed() {
-            if let Some(node_pubkey) = vote_account.node_pubkey() {
-                let mut staked_nodes = self.staked_nodes.write().unwrap();
-                let staked_nodes = Arc::make_mut(&mut staked_nodes);
-                staked_nodes
-                    .entry(node_pubkey)
-                    .and_modify(|s| *s += stake)
-                    .or_insert(stake);
-            }
+        if stake == 0u64 {
+            return;
+        }
+        let staked_nodes = match self.staked_nodes.get_mut() {
+            None => return,
+            Some(staked_nodes) => staked_nodes,
+        };
+        if let Some(node_pubkey) = vote_account.node_pubkey() {
+            Arc::make_mut(staked_nodes)
+                .entry(node_pubkey)
+                .and_modify(|s| *s += stake)
+                .or_insert(stake);
         }
     }
 
     fn sub_node_stake(&mut self, stake: u64, vote_account: &VoteAccount) {
-        if stake != 0 && self.staked_nodes_once.is_completed() {
-            if let Some(node_pubkey) = vote_account.node_pubkey() {
-                let mut staked_nodes = self.staked_nodes.write().unwrap();
-                let staked_nodes = Arc::make_mut(&mut staked_nodes);
-                match staked_nodes.entry(node_pubkey) {
-                    Entry::Vacant(_) => panic!("this should not happen!"),
-                    Entry::Occupied(mut entry) => match entry.get().cmp(&stake) {
-                        Ordering::Less => panic!("subtraction value exceeds node's stake"),
-                        Ordering::Equal => {
-                            entry.remove_entry();
-                        }
-                        Ordering::Greater => *entry.get_mut() -= stake,
-                    },
-                }
+        if stake == 0u64 {
+            return;
+        }
+        let staked_nodes = match self.staked_nodes.get_mut() {
+            None => return,
+            Some(staked_nodes) => staked_nodes,
+        };
+        if let Some(node_pubkey) = vote_account.node_pubkey() {
+            match Arc::make_mut(staked_nodes).entry(node_pubkey) {
+                Entry::Vacant(_) => panic!("this should not happen!"),
+                Entry::Occupied(mut entry) => match entry.get().cmp(&stake) {
+                    Ordering::Less => panic!("subtraction value exceeds node's stake"),
+                    Ordering::Equal => {
+                        entry.remove_entry();
+                    }
+                    Ordering::Greater => *entry.get_mut() -= stake,
+                },
             }
         }
     }
@@ -260,29 +265,7 @@ impl Default for VoteAccounts {
     fn default() -> Self {
         Self {
             vote_accounts: Arc::default(),
-            staked_nodes: RwLock::default(),
-            staked_nodes_once: Once::new(),
-        }
-    }
-}
-
-impl Clone for VoteAccounts {
-    fn clone(&self) -> Self {
-        if self.staked_nodes_once.is_completed() {
-            let staked_nodes = self.staked_nodes.read().unwrap().clone();
-            let other = Self {
-                vote_accounts: self.vote_accounts.clone(),
-                staked_nodes: RwLock::new(staked_nodes),
-                staked_nodes_once: Once::new(),
-            };
-            other.staked_nodes_once.call_once(|| {});
-            other
-        } else {
-            Self {
-                vote_accounts: self.vote_accounts.clone(),
-                staked_nodes: RwLock::default(),
-                staked_nodes_once: Once::new(),
-            }
+            staked_nodes: OnceCell::new(),
         }
     }
 }
@@ -292,7 +275,6 @@ impl PartialEq<VoteAccounts> for VoteAccounts {
         let Self {
             vote_accounts,
             staked_nodes: _,
-            staked_nodes_once: _,
         } = self;
         vote_accounts == &other.vote_accounts
     }
@@ -302,8 +284,7 @@ impl From<Arc<VoteAccountsHashMap>> for VoteAccounts {
     fn from(vote_accounts: Arc<VoteAccountsHashMap>) -> Self {
         Self {
             vote_accounts,
-            staked_nodes: RwLock::default(),
-            staked_nodes_once: Once::new(),
+            staked_nodes: OnceCell::new(),
         }
     }
 }
@@ -548,7 +529,7 @@ mod tests {
                 assert_eq!(staked_nodes(&accounts), *vote_accounts.staked_nodes());
             }
         }
-        assert!(vote_accounts.staked_nodes.read().unwrap().is_empty());
+        assert!(vote_accounts.staked_nodes.get().unwrap().is_empty());
     }
 
     // Asserts that returned staked-nodes are copy-on-write references.

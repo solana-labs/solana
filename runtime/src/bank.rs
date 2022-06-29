@@ -2533,7 +2533,7 @@ impl Bank {
                     .stakes_cache
                     .stakes()
                     .vote_accounts()
-                    .delegated_stakes_iter()
+                    .delegated_stakes()
                     .map(|(pubkey, stake)| (*pubkey, stake))
                     .collect();
                 info!(
