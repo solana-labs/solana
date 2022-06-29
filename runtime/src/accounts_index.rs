@@ -215,6 +215,8 @@ pub struct AccountMapEntryMeta {
     pub dirty: AtomicBool,
     /// 'age' at which this entry should be purged from the cache (implements lru)
     pub age: AtomicU8,
+    /// true if we don't know whether this item exists on disk or not
+    pub disk_unknown: AtomicBool,
 }
 
 impl AccountMapEntryMeta {
@@ -222,12 +224,21 @@ impl AccountMapEntryMeta {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(true),
             age: AtomicU8::new(storage.future_age_to_flush()),
+            disk_unknown: AtomicBool::new(false),
+        }
+    }
+    pub fn new_dirty_disk_unknown<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
+        AccountMapEntryMeta {
+            dirty: AtomicBool::new(true),
+            age: AtomicU8::new(storage.future_age_to_flush()),
+            disk_unknown: AtomicBool::new(true),
         }
     }
     pub fn new_clean<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(false),
             age: AtomicU8::new(storage.future_age_to_flush()),
+            disk_unknown: AtomicBool::new(false),
         }
     }
 }
@@ -300,6 +311,14 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
             Ordering::AcqRel,
             Ordering::Relaxed,
         );
+    }
+
+    pub fn set_disk_unknown(&self) {
+        self.meta.disk_unknown.store(true, Ordering::Release);
+    }
+
+    pub fn disk_unknown(&self) -> bool {
+        self.meta.disk_unknown.load(Ordering::Acquire)
     }
 }
 
@@ -2053,6 +2072,7 @@ pub mod tests {
                     let meta = AccountMapEntryMeta {
                         dirty: AtomicBool::new(entry.dirty()),
                         age: AtomicU8::new(entry.age()),
+                        disk_unknown: AtomicBool::new(false),
                     };
                     PreAllocatedAccountMapEntry::Entry(Arc::new(AccountMapEntryInner::new(
                         vec![(slot, account_info)],
