@@ -496,7 +496,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::rent::id(),
@@ -587,7 +587,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: node_pubkey,
@@ -655,7 +655,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: authorized_withdrawer,
@@ -718,7 +718,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::slot_hashes::id(),
@@ -833,7 +833,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -947,7 +947,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1028,7 +1028,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1052,7 +1052,7 @@ mod tests {
         instruction_accounts[1] = AccountMeta {
             pubkey: authorized_withdrawer_pubkey,
             is_signer: true,
-            is_writable: false,
+            is_writable: true,
         };
         transaction_accounts[0] = (vote_pubkey, accounts[0].clone());
         let accounts = process_instruction(
@@ -1136,12 +1136,12 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey_1,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: authorized_withdrawer_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1897,7 +1897,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: clock_address,
