@@ -5649,17 +5649,6 @@ impl Bank {
         end_pubkey[0..PREFIX_SIZE].copy_from_slice(&end_key_prefix.to_be_bytes());
         let start_pubkey_final = Pubkey::new_from_array(start_pubkey);
         let end_pubkey_final = Pubkey::new_from_array(end_pubkey);
-        if start_index != 0 && start_index == end_index {
-            error!(
-                "start=end, {}, {}, start, end: {:?}, {:?}, pubkeys: {}, {}",
-                start_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
-                end_pubkey.iter().map(|x| format!("{:02x}", x)).join(""),
-                start_key_prefix,
-                end_key_prefix,
-                start_pubkey_final,
-                end_pubkey_final
-            );
-        }
         trace!(
             "pubkey_range_from_partition: ({}-{})/{} [{}]: {}-{}",
             start_index,
@@ -9527,6 +9516,33 @@ pub(crate) mod tests {
         let arr = Pubkey::new_from_array([0xff; 32]);
         assert_eq!(highest, arr);
         arr
+    }
+
+    #[test]
+    fn test_rent_pubkey_range_max() {
+        // start==end && start != 0 is curious behavior. Verifying it here.
+        solana_logger::setup();
+        let range = Bank::pubkey_range_from_partition((1, 1, 3));
+        let p = Bank::partition_from_pubkey(range.start(), 3);
+        assert_eq!(p, 2);
+        let range = Bank::pubkey_range_from_partition((1, 2, 3));
+        let p = Bank::partition_from_pubkey(range.start(), 3);
+        assert_eq!(p, 2);
+        let range = Bank::pubkey_range_from_partition((2, 2, 3));
+        let p = Bank::partition_from_pubkey(range.start(), 3);
+        assert_eq!(p, 2);
+        let range = Bank::pubkey_range_from_partition((1, 1, 16));
+        let p = Bank::partition_from_pubkey(range.start(), 16);
+        assert_eq!(p, 2);
+        let range = Bank::pubkey_range_from_partition((1, 2, 16));
+        let p = Bank::partition_from_pubkey(range.start(), 16);
+        assert_eq!(p, 2);
+        let range = Bank::pubkey_range_from_partition((2, 2, 16));
+        let p = Bank::partition_from_pubkey(range.start(), 16);
+        assert_eq!(p, 3);
+        let range = Bank::pubkey_range_from_partition((15, 15, 16));
+        let p = Bank::partition_from_pubkey(range.start(), 16);
+        assert_eq!(p, 15);
     }
 
     #[test]
