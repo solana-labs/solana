@@ -173,7 +173,7 @@ pub enum SingleValidatorVotes {
 }
 
 impl SingleValidatorVotes {
-    fn get_latest_slot_sent_to_bank(&self) -> Slot {
+    fn get_latest_gossip_slot(&self) -> Slot {
         match self {
             Self::FullTowerVote(vote) => vote.slot,
             _ => 0,
@@ -227,12 +227,12 @@ impl VerifiedVotePackets {
 
                     match (vote, is_full_tower_vote_enabled) {
                         (VoteStateUpdate(_), true) => {
-                            let latest_slot_sent_to_bank = match self.0.get(&vote_account_key) {
-                                Some(vote) => vote.get_latest_slot_sent_to_bank(),
+                            let latest_gossip_slot = match self.0.get(&vote_account_key) {
+                                Some(vote) => vote.get_latest_gossip_slot(),
                                 _ => 0,
                             };
                             // Since votes are not incremental, we keep only the latest vote
-                            if slot > latest_slot_sent_to_bank {
+                            if slot > latest_gossip_slot {
                                 self.0.insert(
                                     vote_account_key,
                                     FullTowerVote(GossipVote {
@@ -615,7 +615,7 @@ mod tests {
             .0
             .get(&vote_account_key)
             .unwrap()
-            .get_latest_slot_sent_to_bank();
+            .get_latest_gossip_slot();
         assert_eq!(11, slot);
 
         // Now send the third_vote, it should overwrite second_vote
@@ -634,7 +634,7 @@ mod tests {
             .0
             .get(&vote_account_key)
             .unwrap()
-            .get_latest_slot_sent_to_bank();
+            .get_latest_gossip_slot();
         assert_eq!(13, slot);
 
         // Now send all three, but keep the feature off
@@ -789,7 +789,7 @@ mod tests {
                 .0
                 .get(&vote_account_key)
                 .unwrap()
-                .get_latest_slot_sent_to_bank()
+                .get_latest_gossip_slot()
         );
 
         // Now try to send an incremental vote
@@ -813,7 +813,7 @@ mod tests {
                 .0
                 .get(&vote_account_key)
                 .unwrap()
-                .get_latest_slot_sent_to_bank()
+                .get_latest_gossip_slot()
         );
     }
 }
