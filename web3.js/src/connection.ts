@@ -813,6 +813,7 @@ function createRpcClient(
           'Content-Type': 'application/json',
         },
         httpHeaders || {},
+        COMMON_HTTP_HEADERS,
       ),
     };
 
@@ -2046,7 +2047,12 @@ export type ConfirmedSignatureInfo = {
 /**
  * An object defining headers to be passed to the RPC server
  */
-export type HttpHeaders = {[header: string]: string};
+export type HttpHeaders = {
+  [header: string]: string;
+} & {
+  // Prohibited headers; for internal use only.
+  'solana-client'?: never;
+};
 
 /**
  * A callback used to augment the outgoing HTTP request
@@ -2073,6 +2079,11 @@ export type ConnectionConfig = {
   disableRetryOnRateLimit?: boolean;
   /** time to allow for the server to initially process a transaction (in milliseconds) */
   confirmTransactionInitialTimeout?: number;
+};
+
+/** @internal */
+const COMMON_HTTP_HEADERS = {
+  'solana-client': `js/${process.env.npm_package_version ?? 'UNKNOWN'}`,
 };
 
 /**
