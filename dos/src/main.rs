@@ -50,6 +50,7 @@ use {
     solana_client::{
         connection_cache::{ConnectionCache, UseQUIC, DEFAULT_TPU_CONNECTION_POOL_SIZE},
         rpc_client::RpcClient,
+        tpu_client::{TpuClient, TpuClientConfig},
         tpu_connection::TpuConnection,
     },
     solana_core::serve_repair::RepairProtocol,
@@ -823,7 +824,53 @@ fn main() {
             };
             run_dos(0, client, cmd_params, repair_contact);
         }
-        ClientType::TpuClient => {}
+        ClientType::TpuClient => {
+            let tpu_use_quic =
+                UseQUIC::new(cmd_params.tpu_use_quic).expect("Failed to initialize QUIC flags");
+            let connection_cache = Arc::new(ConnectionCache::new(
+                tpu_use_quic,
+                DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            ));
+
+            // TODO(klykov): not sure that this is the simplest way of creating TpuClient
+            info!("Finding cluster entry: {:?}", cmd_params.entrypoint_addr);
+            let socket_addr_space = SocketAddrSpace::new(cmd_params.allow_private_addr);
+            let (gossip_nodes, validators) = discover(
+                None, // keypair
+                Some(&cmd_params.entrypoint_addr),
+                None,                              // num_nodes
+                Duration::from_secs(60),           // timeout
+                None,                              // find_node_by_pubkey
+                Some(&cmd_params.entrypoint_addr), // find_node_by_gossip_addr
+                None,                              // my_gossip_addr
+                0,                                 // my_shred_version
+                socket_addr_space,
+            )
+            .unwrap_or_else(|err| {
+                eprintln!(
+                    "Failed to discover {} node: {:?}",
+                    cmd_params.entrypoint_addr, err
+                );
+                exit(1);
+            });
+            let rpc_client = get_rpc_client(&gossip_nodes, cmd_params.entrypoint_addr)
+                .expect("Failed to get rpc client");
+            let rpc_client = Arc::new(rpc_client);
+
+            let websocket_url = "";
+            let client = Arc::new(
+                TpuClient::new_with_connection_cache(
+                    rpc_client,
+                    websocket_url,
+                    TpuClientConfig::default(),
+                    connection_cache,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!("Could not create TpuClient {:?}", err);
+                    exit(1);
+                }),
+            );
+        }
         ClientType::RpcClient => {}
     }
 }
