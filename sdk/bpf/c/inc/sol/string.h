@@ -14,8 +14,9 @@ extern "C" {
  * dst and src may not overlap
  */
 static void sol_memcpy(void *dst, const void *src, int len) {
-  if (dst == (void *)0 || src == (void *)0)
+  if (!dst || !src) {
     return ;
+    }
 
   for (int i = 0; i < len; i++) {
     *((uint8_t *)dst + i) = *((const uint8_t *)src + i);
@@ -27,17 +28,20 @@ static void sol_memcpy(void *dst, const void *src, int len) {
  * dst and src may overlap
  */
 static void sol_memmove(void *dst, const void *src, int len) {
-    char *dest = dst;
-    const char *source = src;
+    char *dest = (char *)dst;
+    const char *source = (char *)src;
 
-    if (!dest || !source || source == dest)
+    if (!dest || !source || source == dest){
         return ;
+      }
     // If dst is before source, use memcpy since it copies forward
-    if (dest < source)
+    if (dest < source) {
         sol_memcpy(dst, src, len);
+      }
     // copy from the back
-    for (int i = len - 1; i >= 0; i--)
+    for (int i = len - 1; i >= 0; i--) {
         dest[i] = source[i];
+      }
 }
 
 
@@ -45,8 +49,9 @@ static void sol_memmove(void *dst, const void *src, int len) {
  * Compares memory
  */
 static int sol_memcmp(const void *s1, const void *s2, int n) {
-  if (s1 == (void *)0 || s2 == (void *)0)
+  if (!s1 || !s2) {
     return 1;
+    }
 
   for (int i = 0; i < n; i++) {
     uint8_t diff = *((uint8_t *)s1 + i) - *((const uint8_t *)s2 + i);
@@ -63,8 +68,9 @@ static int sol_memcmp(const void *s1, const void *s2, int n) {
 static void *sol_memset(void *b, int c, size_t len) {
   uint8_t *a = (uint8_t *) b;
 
-  if (!b)
+  if (!b) {
     return ;
+    }
 
   while (len > 0) {
     *a = c;
@@ -80,8 +86,9 @@ static void *sol_memset(void *b, int c, size_t len) {
 static size_t sol_strlen(const char *s) {
   const char *ref = s;
 
-  if (!s)
+  if (!s) {
     return 0;
+    }
 
   while (1)
   {
