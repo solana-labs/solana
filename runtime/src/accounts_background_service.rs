@@ -186,8 +186,7 @@ impl SnapshotRequestHandler {
 
                 if !snapshot_root_bank.is_startup_verification_complete() {
                     // this cannot be trusted yet
-                    // may need a different return value here
-                    return Ok(0);
+                    inc_new_counter_info!("handle_snapshot_requests-startup_verification_incomplete", 1);
                 }
 
                 let previous_hash = if test_hash_calculation {
