@@ -316,6 +316,9 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     pub fn set_disk_unknown(&self) {
         self.meta.disk_unknown.store(true, Ordering::Release);
     }
+    pub fn clear_disk_unknown(&self) {
+        self.meta.disk_unknown.store(false, Ordering::Release);
+    }
 
     pub fn disk_unknown(&self) -> bool {
         self.meta.disk_unknown.load(Ordering::Acquire)
