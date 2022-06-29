@@ -228,6 +228,8 @@ export type SendOptions = {
   preflightCommitment?: Commitment;
   /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
   maxRetries?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -242,6 +244,8 @@ export type ConfirmOptions = {
   preflightCommitment?: Commitment;
   /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
   maxRetries?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -272,6 +276,8 @@ export type SignaturesForAddressOptions = {
   until?: TransactionSignature;
   /** Maximum transaction signatures to return (between 1 and 1,000, default: 1,000). */
   limit?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -296,6 +302,23 @@ export type BlockhashWithExpiryBlockHeight = Readonly<{
 export type BlockheightBasedTransactionConfirmationStrategy = {
   signature: TransactionSignature;
 } & BlockhashWithExpiryBlockHeight;
+
+/** @internal */
+function extractCommitmentFromConfig<TConfig>(
+  commitmentOrConfig?: Commitment | ({commitment?: Commitment} & TConfig),
+) {
+  let commitment: Commitment | undefined;
+  let config: Omit<TConfig, 'commitment'> | undefined;
+  if (typeof commitmentOrConfig === 'string') {
+    commitment = commitmentOrConfig;
+  } else if (commitmentOrConfig) {
+    const {commitment: specifiedCommitment, ...specifiedConfig} =
+      commitmentOrConfig;
+    commitment = specifiedCommitment;
+    config = specifiedConfig;
+  }
+  return {commitment, config};
+}
 
 /**
  * @internal
@@ -398,6 +421,88 @@ export type Finality = 'confirmed' | 'finalized';
  * </pre>
  */
 export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
+
+/**
+ * Configuration object for changing `getAccountInfo` query behavior
+ */
+export type GetAccountInfoConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getBalance` query behavior
+ */
+export type GetBalanceConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getBlockHeight` query behavior
+ */
+export type GetBlockHeightConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getEpochInfo` query behavior
+ */
+export type GetEpochInfoConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getInflationReward` query behavior
+ */
+export type GetInflationRewardConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** An epoch for which the reward occurs. If omitted, the previous epoch will be used */
+  epoch?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getLatestBlockhash` query behavior
+ */
+export type GetLatestBlockhashConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getSlot` query behavior
+ */
+export type GetSlotConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getSlotLeader` query behavior
+ */
+export type GetSlotLeaderConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
 
 /**
  * Configuration object for changing `getLargestAccounts` query behavior
@@ -1949,6 +2054,8 @@ export type GetProgramAccountsConfig = {
   dataSlice?: DataSlice;
   /** Optional array of filters to apply to accounts */
   filters?: GetProgramAccountsFilter[];
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -1959,6 +2066,8 @@ export type GetParsedProgramAccountsConfig = {
   commitment?: Commitment;
   /** Optional array of filters to apply to accounts */
   filters?: GetProgramAccountsFilter[];
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -1967,8 +2076,40 @@ export type GetParsedProgramAccountsConfig = {
 export type GetMultipleAccountsConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
-  /** Optional encoding for account data (default base64) */
-  encoding?: 'base64' | 'jsonParsed';
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetStakeActivationConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** Epoch for which to calculate activation details. If parameter not provided, defaults to current epoch */
+  epoch?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetTokenAccountsByOwnerConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetTransactionCountConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -2377,9 +2518,17 @@ export class Connection {
    */
   async getBalanceAndContext(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetBalanceConfig,
   ): Promise<RpcResponseAndContext<number>> {
-    const args = this._buildArgs([publicKey.toBase58()], commitment);
+    /** @internal */
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getBalance', args);
     const res = create(unsafeRes, jsonRpcResultAndContext(number()));
     if ('error' in res) {
@@ -2398,9 +2547,9 @@ export class Connection {
    */
   async getBalance(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetBalanceConfig,
   ): Promise<number> {
-    return await this.getBalanceAndContext(publicKey, commitment)
+    return await this.getBalanceAndContext(publicKey, commitmentOrConfig)
       .then(x => x.value)
       .catch(e => {
         throw new Error(
@@ -2522,12 +2671,14 @@ export class Connection {
   async getTokenAccountsByOwner(
     ownerAddress: PublicKey,
     filter: TokenAccountsFilter,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetTokenAccountsByOwnerConfig,
   ): Promise<
     RpcResponseAndContext<
       Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>
     >
   > {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     let _args: any[] = [ownerAddress.toBase58()];
     if ('mint' in filter) {
       _args.push({mint: filter.mint.toBase58()});
@@ -2535,7 +2686,7 @@ export class Connection {
       _args.push({programId: filter.programId.toBase58()});
     }
 
-    const args = this._buildArgs(_args, commitment, 'base64');
+    const args = this._buildArgs(_args, commitment, 'base64', config);
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
     const res = create(unsafeRes, GetTokenAccountsByOwner);
     if ('error' in res) {
@@ -2627,9 +2778,16 @@ export class Connection {
    */
   async getAccountInfoAndContext(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
-    const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64');
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      'base64',
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = create(
       unsafeRes,
@@ -2681,10 +2839,13 @@ export class Connection {
    */
   async getAccountInfo(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<AccountInfo<Buffer> | null> {
     try {
-      const res = await this.getAccountInfoAndContext(publicKey, commitment);
+      const res = await this.getAccountInfoAndContext(
+        publicKey,
+        commitmentOrConfig,
+      );
       return res.value;
     } catch (e) {
       throw new Error(
@@ -2698,10 +2859,12 @@ export class Connection {
    */
   async getMultipleAccountsInfoAndContext(
     publicKeys: PublicKey[],
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetMultipleAccountsConfig,
   ): Promise<RpcResponseAndContext<(AccountInfo<Buffer> | null)[]>> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const keys = publicKeys.map(key => key.toBase58());
-    const args = this._buildArgs([keys], commitment, 'base64');
+    const args = this._buildArgs([keys], commitment, 'base64', config);
     const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
     const res = create(
       unsafeRes,
@@ -2720,11 +2883,11 @@ export class Connection {
    */
   async getMultipleAccountsInfo(
     publicKeys: PublicKey[],
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetMultipleAccountsConfig,
   ): Promise<(AccountInfo<Buffer> | null)[]> {
     const res = await this.getMultipleAccountsInfoAndContext(
       publicKeys,
-      commitment,
+      commitmentOrConfig,
     );
     return res.value;
   }
@@ -2734,14 +2897,19 @@ export class Connection {
    */
   async getStakeActivation(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetStakeActivationConfig,
     epoch?: number,
   ): Promise<StakeActivationData> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
-      undefined,
-      epoch !== undefined ? {epoch} : undefined,
+      undefined /* encoding */,
+      {
+        ...config,
+        epoch: epoch != null ? epoch : config?.epoch,
+      },
     );
 
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
@@ -2765,31 +2933,14 @@ export class Connection {
     programId: PublicKey,
     configOrCommitment?: GetProgramAccountsConfig | Commitment,
   ): Promise<Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>> {
-    const extra: Pick<GetProgramAccountsConfig, 'dataSlice' | 'filters'> = {};
-
-    let commitment;
-    let encoding;
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-      } else {
-        commitment = configOrCommitment.commitment;
-        encoding = configOrCommitment.encoding;
-
-        if (configOrCommitment.dataSlice) {
-          extra.dataSlice = configOrCommitment.dataSlice;
-        }
-        if (configOrCommitment.filters) {
-          extra.filters = configOrCommitment.filters;
-        }
-      }
-    }
-
+    const {commitment, config} =
+      extractCommitmentFromConfig(configOrCommitment);
+    const {encoding, ...configWithoutEncoding} = config || {};
     const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
       encoding || 'base64',
-      extra,
+      configWithoutEncoding,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(unsafeRes, jsonRpcResult(array(KeyedAccountInfoResult)));
@@ -2818,26 +2969,13 @@ export class Connection {
       account: AccountInfo<Buffer | ParsedAccountData>;
     }>
   > {
-    const extra: Pick<GetParsedProgramAccountsConfig, 'filters'> = {};
-
-    let commitment;
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-      } else {
-        commitment = configOrCommitment.commitment;
-
-        if (configOrCommitment.filters) {
-          extra.filters = configOrCommitment.filters;
-        }
-      }
-    }
-
+    const {commitment, config} =
+      extractCommitmentFromConfig(configOrCommitment);
     const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
       'jsonParsed',
-      extra,
+      config,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(
@@ -3025,8 +3163,17 @@ export class Connection {
   /**
    * Fetch the current slot that the node is processing
    */
-  async getSlot(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getSlot(
+    commitmentOrConfig?: Commitment | GetSlotConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getSlot', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
@@ -3038,8 +3185,17 @@ export class Connection {
   /**
    * Fetch the current slot leader of the cluster
    */
-  async getSlotLeader(commitment?: Commitment): Promise<string> {
-    const args = this._buildArgs([], commitment);
+  async getSlotLeader(
+    commitmentOrConfig?: Commitment | GetSlotLeaderConfig,
+  ): Promise<string> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getSlotLeader', args);
     const res = create(unsafeRes, jsonRpcResult(string()));
     if ('error' in res) {
@@ -3105,8 +3261,17 @@ export class Connection {
   /**
    * Fetch the current transaction count of the cluster
    */
-  async getTransactionCount(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getTransactionCount(
+    commitmentOrConfig?: Commitment | GetTransactionCountConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getTransactionCount', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
@@ -3149,14 +3314,17 @@ export class Connection {
   async getInflationReward(
     addresses: PublicKey[],
     epoch?: number,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetInflationRewardConfig,
   ): Promise<(InflationReward | null)[]> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [addresses.map(pubkey => pubkey.toBase58())],
       commitment,
-      undefined,
+      undefined /* encoding */,
       {
-        epoch,
+        ...config,
+        epoch: epoch != null ? epoch : config?.epoch,
       },
     );
     const unsafeRes = await this._rpcRequest('getInflationReward', args);
@@ -3170,8 +3338,17 @@ export class Connection {
   /**
    * Fetch the Epoch Info parameters
    */
-  async getEpochInfo(commitment?: Commitment): Promise<EpochInfo> {
-    const args = this._buildArgs([], commitment);
+  async getEpochInfo(
+    commitmentOrConfig?: Commitment | GetEpochInfoConfig,
+  ): Promise<EpochInfo> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
     const res = create(unsafeRes, GetEpochInfoRpcResult);
     if ('error' in res) {
@@ -3344,10 +3521,10 @@ export class Connection {
    * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhash(
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetLatestBlockhashConfig,
   ): Promise<BlockhashWithExpiryBlockHeight> {
     try {
-      const res = await this.getLatestBlockhashAndContext(commitment);
+      const res = await this.getLatestBlockhashAndContext(commitmentOrConfig);
       return res.value;
     } catch (e) {
       throw new Error('failed to get recent blockhash: ' + e);
@@ -3359,9 +3536,16 @@ export class Connection {
    * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhashAndContext(
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetLatestBlockhashConfig,
   ): Promise<RpcResponseAndContext<BlockhashWithExpiryBlockHeight>> {
-    const args = this._buildArgs([], commitment);
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getLatestBlockhash', args);
     const res = create(unsafeRes, GetLatestBlockhashRpcResult);
     if ('error' in res) {
@@ -3433,8 +3617,17 @@ export class Connection {
   /*
    * Returns the current block height of the node
    */
-  async getBlockHeight(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getBlockHeight(
+    commitmentOrConfig?: Commitment | GetBlockHeightConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getBlockHeight', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
@@ -4249,6 +4442,9 @@ export class Connection {
 
     if (options && options.maxRetries) {
       config.maxRetries = options.maxRetries;
+    }
+    if (options && options.minContextSlot != null) {
+      config.minContextSlot = options.minContextSlot;
     }
     if (skipPreflight) {
       config.skipPreflight = skipPreflight;
