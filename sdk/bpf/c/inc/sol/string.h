@@ -11,6 +11,7 @@ extern "C" {
 
 /**
  * Copies memory
+ * dst and src may not overlap
  */
 static void sol_memcpy(void *dst, const void *src, int len) {
   if (dst == (void *)0 || src == (void *)0)
@@ -21,6 +22,23 @@ static void sol_memcpy(void *dst, const void *src, int len) {
   }
 }
 
+/**
+ * Copies memory
+ * dst and src may overlap
+ */
+static void sol_memmove(void *dst, const void *src, int len) {
+    char *dest = dst;
+    const char *source = src;
+
+    if (!dest || !source || source == dest)
+        return ;
+    // If dst is before source, use memcpy since it copies forward
+    if (dest < source)
+        sol_memcpy(dst, src, len);
+    // copy from the back
+    for (int i = len - 1; i >= 0; i--)
+        dest[i] = source[i];
+}
 
 
 /**
