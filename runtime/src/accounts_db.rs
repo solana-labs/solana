@@ -29,9 +29,9 @@ use {
         },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
-            AccountsIndexRootsStats, IndexKey, IndexValue, IsCached, RefCount, ScanConfig,
-            ScanResult, SlotList, SlotSlice, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
-            ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
+            AccountsIndexRootsStats, AccountsIndexScanResult, IndexKey, IndexValue, IsCached,
+            RefCount, ScanConfig, ScanResult, SlotList, SlotSlice, ZeroLamport,
+            ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -2592,7 +2592,11 @@ impl AccountsDb {
                                 if !useless {
                                     useful += 1;
                                 }
-                                !useless
+                                if useless {
+                                    AccountsIndexScanResult::None
+                                } else {
+                                    AccountsIndexScanResult::KeepInMemory
+                                }
                             },
                         );
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
@@ -3014,15 +3018,18 @@ impl AccountsDb {
 
         let mut alive = 0;
         let mut dead = 0;
-
-        accounts[..std::cmp::min(accounts.len(), count)]
-            .iter()
-            .for_each(|pair| {
-                let pubkey = &pair.0;
-                let stored_account = &pair.1;
-                let lookup = self.accounts_index.get_account_read_entry(pubkey);
-                if let Some(locked_entry) = lookup {
-                    let is_alive = locked_entry.slot_list().iter().any(|(_slot, acct_info)| {
+        let mut index = 0;
+        self.accounts_index.scan(
+            accounts[..std::cmp::min(accounts.len(), count)]
+                .iter()
+                .map(|(key, _)| key),
+            // return true if we want this item to remain in the cache
+            |exists, slot_list, pubkey, _ref_count| {
+                let mut result = AccountsIndexScanResult::None;
+                if exists {
+                    let pair = &accounts[index];
+                    let stored_account = &pair.1;
+                    let is_alive = slot_list.iter().any(|(_slot, acct_info)| {
                         acct_info.matches_storage_location(
                             stored_account.store_id,
                             stored_account.account.offset,
@@ -3036,7 +3043,7 @@ impl AccountsDb {
                         if let Some(unrefed_pubkeys) = &mut unrefed_pubkeys {
                             unrefed_pubkeys.push(pubkey);
                         }
-                        locked_entry.unref();
+                        result = AccountsIndexScanResult::Unref;
                         dead += 1;
                     } else {
                         alive_accounts.push(pair);
@@ -3044,7 +3051,11 @@ impl AccountsDb {
                         alive += 1;
                     }
                 }
-            });
+                index += 1;
+                result
+            },
+        );
+        assert_eq!(index, std::cmp::min(accounts.len(), count));
         self.shrink_stats
             .alive_accounts
             .fetch_add(alive, Ordering::Relaxed);
