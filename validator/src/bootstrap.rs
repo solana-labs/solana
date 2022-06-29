@@ -573,7 +573,7 @@ fn get_rpc_node(
         let peer_snapshot_hashes = get_peer_snapshot_hashes(
             cluster_info,
             &rpc_peers,
-            &validator_config.known_validators,
+            validator_config.known_validators.as_ref(),
             bootstrap_config.incremental_snapshot_fetch,
         );
 
@@ -654,7 +654,7 @@ fn get_highest_local_snapshot_hash(
 fn get_peer_snapshot_hashes(
     cluster_info: &ClusterInfo,
     rpc_peers: &[ContactInfo],
-    known_validators: &Option<HashSet<Pubkey>>,
+    known_validators: Option<&HashSet<Pubkey>>,
     incremental_snapshot_fetch: bool,
 ) -> Vec<PeerSnapshotHash> {
     let mut peer_snapshot_hashes =
@@ -692,7 +692,7 @@ type KnownSnapshotHashes = HashMap<(Slot, Hash), HashSet<(Slot, Hash)>>;
 /// This applies to both full and incremental snapshot hashes.
 fn get_snapshot_hashes_from_known_validators(
     cluster_info: &ClusterInfo,
-    known_validators: &Option<HashSet<Pubkey>>,
+    known_validators: Option<&HashSet<Pubkey>>,
     incremental_snapshot_fetch: bool,
 ) -> KnownSnapshotHashes {
     // Get the full snapshot hashes for a node from CRDS
@@ -712,7 +712,6 @@ fn get_snapshot_hashes_from_known_validators(
     };
 
     known_validators
-        .as_ref()
         .map(|known_validators| {
             build_known_snapshot_hashes(
                 known_validators,
