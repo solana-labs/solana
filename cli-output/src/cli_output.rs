@@ -1629,7 +1629,7 @@ impl fmt::Display for CliSignOnlyData {
         writeln!(f)?;
         writeln_name_value(f, "Blockhash:", &self.blockhash)?;
         if let Some(transaction) = self.transaction.as_ref() {
-            writeln_name_value(f, "Transaction:", transaction)?;
+            writeln_name_value(f, "Signed Transaction:", transaction)?;
         }
         if let Some(message) = self.message.as_ref() {
             writeln_name_value(f, "Transaction Message:", message)?;
