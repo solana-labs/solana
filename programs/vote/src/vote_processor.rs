@@ -1139,7 +1139,7 @@ mod tests {
                 is_writable: false,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: authorized_withdrawer_pubkey,
                 is_signer: false,
                 is_writable: false,
             },
