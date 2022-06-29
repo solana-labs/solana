@@ -68,7 +68,7 @@ impl QuicLazyInitializedEndpoint {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
         )
-        .unwrap();
+        .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range");
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -80,7 +80,8 @@ impl QuicLazyInitializedEndpoint {
             QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut config = ClientConfig::new(Arc::new(crypto));
-        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let transport_config = Arc::get_mut(&mut config.transport)
+            .expect("QuicLazyInitializedEndpoint::create_endpoint Arc::get_mut");
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
@@ -137,7 +138,9 @@ impl QuicNewConnection {
         let mut make_connection_measure = Measure::start("make_connection_measure");
         let endpoint = endpoint.get_endpoint().await;
 
-        let connecting = endpoint.connect(addr, "connect").unwrap();
+        let connecting = endpoint
+            .connect(addr, "connect")
+            .expect("QuicNewConnection::make_connection endpoint.connect");
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connecting_result = connecting.await;
         if connecting_result.is_err() {
@@ -157,7 +160,9 @@ impl QuicNewConnection {
     }
 
     fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
-        quinn::Endpoint::new(config, None, client_socket).unwrap().0
+        quinn::Endpoint::new(config, None, client_socket)
+            .expect("QuicNewConnection::create_endpoint quinn::Endpoint::new")
+            .0
     }
 
     // Attempts to make a faster connection by taking advantage of pre-existing key material.
@@ -167,7 +172,10 @@ impl QuicNewConnection {
         addr: SocketAddr,
         stats: &ClientStats,
     ) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self.endpoint.connect(addr, "connect").unwrap();
+        let connecting = self
+            .endpoint
+            .connect(addr, "connect")
+            .expect("QuicNewConnection::make_connection_0rtt endpoint.connect");
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
@@ -349,7 +357,9 @@ impl QuicClient {
             "Ran into an error sending transactions {:?}, exhausted retries to {}",
             last_error, self.addr
         );
-        Err(last_error.unwrap())
+        // If we get here but last_error is None, then we have a logic error
+        // in this function, so panic here with an expect to help debugging
+        Err(last_error.expect("QuicClient::_send_buffer last_error.expect"))
     }
 
     pub async fn send_buffer<T>(
