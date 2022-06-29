@@ -28,6 +28,8 @@ num_cpus = "1.13.1"
 rand = "0.7.0"
 serde = "1.0.137"
 serde_json = "1.0.81"
+serde_yaml = "0.8.24"
+solana-bench-tps = { path = "../bench-tps", version = "=1.11.2" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.2" }
 solana-cli-config = { path = "../cli-config", version = "=1.11.2" }
 solana-client = { path = "../client", version = "=1.11.2" }
@@ -35,6 +37,7 @@ solana-core = { path = "../core", version = "=1.11.2" }
 solana-download-utils = { path = "../download-utils", version = "=1.11.2" }
 solana-entry = { path = "../entry", version = "=1.11.2" }
 solana-faucet = { path = "../faucet", version = "=1.11.2" }
+solana-genesis = { path = "../genesis", version = "=1.11.2" }
 solana-genesis-utils = { path = "../genesis-utils", version = "=1.11.2" }
 solana-gossip = { path = "../gossip", version = "=1.11.2" }
 solana-ledger = { path = "../ledger", version = "=1.11.2" }
