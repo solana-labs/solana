@@ -499,37 +499,35 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             if !already_existed {
                                 self.stats().inc_insert();
                             }
+                        } else if enable_disk_unknown {
+                            // skip checking the disk
+                            self.stats().inc_insert();
+                            let entry = new_value.into_account_map_entry(&self.storage);
+                            entry.set_disk_unknown();
+                            assert!(entry.dirty());
+                            vacant.insert(entry);
+                            self.stats().inc_mem_count(self.bin);
                         } else {
-                            if enable_disk_unknown {
-                                // skip checking the disk
-                                self.stats().inc_insert();
-                                let entry = new_value.into_account_map_entry(&self.storage);
-                                entry.set_disk_unknown();
-                                assert!(entry.dirty());
-                                vacant.insert(entry);
-                                self.stats().inc_mem_count(self.bin);
+                            // go to in-mem cache first
+                            let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                            let new_value = if let Some(disk_entry) = disk_entry {
+                                // on disk, so merge new_value with what was on disk
+                                Self::lock_and_update_slot_list(
+                                    &disk_entry,
+                                    new_value.into(),
+                                    other_slot,
+                                    reclaims,
+                                    previous_slot_entry_was_cached,
+                                );
+                                disk_entry
                             } else {
-                                // go to in-mem cache first
-                                let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                                let new_value = if let Some(disk_entry) = disk_entry {
-                                    // on disk, so merge new_value with what was on disk
-                                    Self::lock_and_update_slot_list(
-                                        &disk_entry,
-                                        new_value.into(),
-                                        other_slot,
-                                        reclaims,
-                                        previous_slot_entry_was_cached,
-                                    );
-                                    disk_entry
-                                } else {
-                                    // not on disk, so insert new thing
-                                    self.stats().inc_insert();
-                                    new_value.into_account_map_entry(&self.storage)
-                                };
-                                assert!(new_value.dirty());
-                                vacant.insert(new_value);
-                                self.stats().inc_mem_count(self.bin);
-                            }
+                                // not on disk, so insert new thing
+                                self.stats().inc_insert();
+                                new_value.into_account_map_entry(&self.storage)
+                            };
+                            assert!(new_value.dirty());
+                            vacant.insert(new_value);
+                            self.stats().inc_mem_count(self.bin);
                         }
                     }
                 }
