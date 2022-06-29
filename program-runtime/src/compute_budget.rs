@@ -59,8 +59,6 @@ pub struct ComputeBudget {
     pub secp256k1_recover_cost: u64,
     /// Number of compute units consumed to do a syscall without any work
     pub syscall_base_cost: u64,
-    /// Number of compute units consumed to call zktoken_crypto_op
-    pub zk_token_elgamal_op_cost: u64, // to be replaced by curve25519 operations
     /// Number of compute units consumed to validate a curve25519 edwards point
     pub curve25519_edwards_validate_point_cost: u64,
     /// Number of compute units consumed to add two curve25519 edwards points
@@ -111,7 +109,6 @@ impl ComputeBudget {
             sysvar_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
-            zk_token_elgamal_op_cost: 25_000,
             curve25519_edwards_validate_point_cost: 5_000, // TODO: precisely determine curve25519 costs
             curve25519_edwards_add_cost: 5_000,
             curve25519_edwards_subtract_cost: 5_000,

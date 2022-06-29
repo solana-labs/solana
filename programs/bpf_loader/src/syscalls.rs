@@ -26,7 +26,6 @@ use {
             curve25519_syscall_enabled, disable_fees_sysvar, executables_incur_cpi_data_cost,
             libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
             prevent_calling_precompiles_as_programs, quick_bail_on_panic, syscall_saturated_math,
-            zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -131,9 +130,6 @@ pub fn register_syscalls(
     let blake3_syscall_enabled = invoke_context
         .feature_set
         .is_active(&blake3_syscall_enabled::id());
-    let zk_token_sdk_enabled = invoke_context
-        .feature_set
-        .is_active(&zk_token_sdk_enabled::id());
     let curve25519_syscall_enabled = invoke_context
         .feature_set
         .is_active(&curve25519_syscall_enabled::id());
@@ -211,29 +207,6 @@ pub fn register_syscalls(
         b"sol_blake3",
         SyscallBlake3::init,
         SyscallBlake3::call,
-    )?;
-
-    // ZK Token
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op",
-        SyscallZkTokenElgamalOp::init,
-        SyscallZkTokenElgamalOp::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op_with_lo_hi",
-        SyscallZkTokenElgamalOpWithLoHi::init,
-        SyscallZkTokenElgamalOpWithLoHi::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op_with_scalar",
-        SyscallZkTokenElgamalOpWithScalar::init,
-        SyscallZkTokenElgamalOpWithScalar::call,
     )?;
 
     // Elliptic Curve Point Validation
@@ -1594,6 +1567,7 @@ declare_syscall!(
             Ok(id) => id,
             Err(_) => {
                 *result = Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
+
                 return;
             }
         };
@@ -1624,186 +1598,6 @@ declare_syscall!(
 
         secp256k1_recover_result.copy_from_slice(&public_key[1..65]);
         *result = Ok(SUCCESS);
-    }
-);
-
-declare_syscall!(
-    SyscallZkTokenElgamalOp,
-    fn call(
-        &mut self,
-        op: u64,
-        ct_0_addr: u64,
-        ct_1_addr: u64,
-        ct_result_addr: u64,
-        _arg5: u64,
-        memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
-
-        let invoke_context = question_mark!(
-            self.invoke_context
-                .try_borrow()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
-        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-        let ct_0 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_0_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-        let ct_1 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_1_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-
-        if let Some(ct_result) = match op {
-            ops::OP_ADD => ops::add(ct_0, ct_1),
-            ops::OP_SUB => ops::subtract(ct_0, ct_1),
-            _ => None,
-        } {
-            *question_mark!(
-                translate_type_mut::<pod::ElGamalCiphertext>(
-                    memory_mapping,
-                    ct_result_addr,
-                    invoke_context.get_check_aligned(),
-                ),
-                result
-            ) = ct_result;
-            *result = Ok(0);
-        } else {
-            *result = Ok(1);
-        }
-    }
-);
-
-declare_syscall!(
-    SyscallZkTokenElgamalOpWithLoHi,
-    fn call(
-        &mut self,
-        op: u64,
-        ct_0_addr: u64,
-        ct_1_lo_addr: u64,
-        ct_1_hi_addr: u64,
-        ct_result_addr: u64,
-        memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
-
-        let invoke_context = question_mark!(
-            self.invoke_context
-                .try_borrow()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
-        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-        let ct_0 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_0_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-        let ct_1_lo = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_1_lo_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-        let ct_1_hi = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_1_hi_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-
-        if let Some(ct_result) = match op {
-            ops::OP_ADD => ops::add_with_lo_hi(ct_0, ct_1_lo, ct_1_hi),
-            ops::OP_SUB => ops::subtract_with_lo_hi(ct_0, ct_1_lo, ct_1_hi),
-            _ => None,
-        } {
-            *question_mark!(
-                translate_type_mut::<pod::ElGamalCiphertext>(
-                    memory_mapping,
-                    ct_result_addr,
-                    invoke_context.get_check_aligned(),
-                ),
-                result
-            ) = ct_result;
-            *result = Ok(0);
-        } else {
-            *result = Ok(1);
-        }
-    }
-);
-
-declare_syscall!(
-    SyscallZkTokenElgamalOpWithScalar,
-    fn call(
-        &mut self,
-        op: u64,
-        ct_addr: u64,
-        scalar: u64,
-        ct_result_addr: u64,
-        _arg5: u64,
-        memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
-
-        let invoke_context = question_mark!(
-            self.invoke_context
-                .try_borrow()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
-        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-        let ct = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-
-        if let Some(ct_result) = match op {
-            ops::OP_ADD => ops::add_to(ct, scalar),
-            ops::OP_SUB => ops::subtract_from(ct, scalar),
-            _ => None,
-        } {
-            *question_mark!(
-                translate_type_mut::<pod::ElGamalCiphertext>(
-                    memory_mapping,
-                    ct_result_addr,
-                    invoke_context.get_check_aligned(),
-                ),
-                result
-            ) = ct_result;
-            *result = Ok(0);
-        } else {
-            *result = Ok(1);
-        }
     }
 );
 
