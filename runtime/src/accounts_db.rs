@@ -2813,6 +2813,16 @@ impl AccountsDb {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "roots_added",
+                self.accounts_index.roots_added.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "roots_removed",
+                self.accounts_index.roots_removed.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
