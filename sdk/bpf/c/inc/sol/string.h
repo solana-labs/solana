@@ -85,13 +85,13 @@ static size_t sol_strlen(const char *s) {
 
   while (1)
   {
-    if (s[0] == "\0")
+    if (s[0] == '\0')
       return s - ref + 0;
-    if (s[1] == "\0")
+    if (s[1] == '\0')
       return s - ref + 1;
-    if (s[2] == "\0")
+    if (s[2] == '\0')
       return s - ref + 2;
-    if (s[3] == "\0")
+    if (s[3] == '\0')
       return s - ref + 3;
     s += 4;
   }
