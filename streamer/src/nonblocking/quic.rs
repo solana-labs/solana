@@ -137,7 +137,7 @@ async fn setup_connection(
 
         let remote_addr = connection.remote_address();
 
-        let (mut connection_table_l, stake) = {
+        let (mut connection_table_l, is_staked_connection_table, stake) = {
             const PRUNE_TABLE_TO_PERCENTAGE: u8 = 90;
             let max_percentage_full = Percentage::from(PRUNE_TABLE_TO_PERCENTAGE);
 
@@ -159,7 +159,7 @@ async fn setup_connection(
                     )
                     .unwrap(),
                 );
-                (connection_table_l, stake)
+                (connection_table_l, true, stake)
             } else {
                 drop(staked_nodes);
                 let mut connection_table_l = connection_table.lock().unwrap();
@@ -171,7 +171,7 @@ async fn setup_connection(
                 connection.set_max_concurrent_uni_streams(
                     VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64).unwrap(),
                 );
-                (connection_table_l, 0)
+                (connection_table_l, false, 0)
             }
         };
 
@@ -184,7 +184,11 @@ async fn setup_connection(
             ) {
                 drop(connection_table_l);
                 let stats = stats.clone();
-                let connection_table1 = connection_table.clone();
+                let connection_table1 = if is_staked_connection_table {
+                    staked_connection_table.clone()
+                } else {
+                    connection_table.clone()
+                };
                 tokio::spawn(handle_connection(
                     uni_streams,
                     packet_sender,
