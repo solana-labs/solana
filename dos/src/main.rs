@@ -248,7 +248,8 @@ impl TransactionGenerator {
 //
 enum TransactionMsg {
     //Transaction(Vec<Vec<u8>>, u64),
-    Transaction(Vec<VersionedTransaction>, u64),
+    //Transaction(Vec<VersionedTransaction>, u64),
+    Transaction(Vec<Transaction>, u64),
     Exit,
 }
 /// number of transactions in one batch for sendmmsg
@@ -280,7 +281,8 @@ fn create_sender_thread<T: 'static + BenchTpsClient + Send + Sync>(
                             let mut measure_send_txs = Measure::start("measure_send_txs");
                             for _ in 0..num_send {
                                 //let res = connection.send_wire_transaction_batch_async(data.clone());
-                                let res = client.send_batch_versioned(data.clone());
+                                //let res = client.send_batch_versioned(data.clone());
+                                let res = client.send_batch(data.clone());
                                 if res.is_err() {
                                     error_count += len;
                                 }
@@ -368,7 +370,8 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
             loop {
                 let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
                 //let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
-                let mut data = Vec::<VersionedTransaction>::with_capacity(SEND_BATCH_MAX_SIZE);
+                //let mut data = Vec::<VersionedTransaction>::with_capacity(SEND_BATCH_MAX_SIZE);
+                let mut data = Vec::<Transaction>::with_capacity(SEND_BATCH_MAX_SIZE);
                 let mut measure_generate_txs = Measure::start("measure_generate_txs");
                 for _ in 0..send_batch_size {
                     let chunk_keypairs = if generate_keypairs {
@@ -389,8 +392,9 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
                         chunk_keypairs,
                         client.as_ref(),
                     );
-                    data.push(VersionedTransaction::from(tx));
                     //data.push(bincode::serialize(&tx).unwrap());
+                    //data.push(VersionedTransaction::from(tx));
+                    data.push(tx);
                 }
                 measure_generate_txs.stop();
 
