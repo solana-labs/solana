@@ -10,7 +10,7 @@ use {
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::Transaction,
+        transaction::{Transaction, VersionedTransaction},
     },
 };
 
@@ -20,6 +20,10 @@ impl BenchTpsClient for ThinClient {
     }
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
         AsyncClient::async_send_batch(self, transactions).map_err(|err| err.into())
+    }
+    fn send_batch_versioned(&self, transactions: Vec<VersionedTransaction>) -> Result<()> {
+        AsyncClient::async_send_versioned_transaction_batch(self, transactions)
+            .map_err(|err| err.into())
     }
     fn get_latest_blockhash(&self) -> Result<Hash> {
         SyncClient::get_latest_blockhash(self).map_err(|err| err.into())

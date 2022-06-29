@@ -1,8 +1,14 @@
 use {
     solana_client::{client_error::ClientError, tpu_client::TpuSenderError},
     solana_sdk::{
-        account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
-        message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
+        account::Account,
+        commitment_config::CommitmentConfig,
+        epoch_info::EpochInfo,
+        hash::Hash,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::{Transaction, VersionedTransaction},
         transport::TransportError,
     },
     thiserror::Error,
@@ -32,6 +38,7 @@ pub trait BenchTpsClient {
 
     /// Send a batch of signed transactions without confirmation.
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()>;
+    fn send_batch_versioned(&self, transactions: Vec<VersionedTransaction>) -> Result<()>;
 
     /// Get latest blockhash
     fn get_latest_blockhash(&self) -> Result<Hash>;

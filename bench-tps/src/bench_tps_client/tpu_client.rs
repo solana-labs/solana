@@ -1,9 +1,15 @@
 use {
-    crate::bench_tps_client::{BenchTpsClient, Result},
+    crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
     solana_client::tpu_client::TpuClient,
     solana_sdk::{
-        account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
-        message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
+        account::Account,
+        commitment_config::CommitmentConfig,
+        epoch_info::EpochInfo,
+        hash::Hash,
+        message::Message,
+        pubkey::Pubkey,
+        signature::Signature,
+        transaction::{Transaction, VersionedTransaction},
     },
 };
 
@@ -18,6 +24,9 @@ impl BenchTpsClient for TpuClient {
             BenchTpsClient::send_transaction(self, transaction)?;
         }
         Ok(())
+    }
+    fn send_batch_versioned(&self, transactions: Vec<VersionedTransaction>) -> Result<()> {
+        Err(BenchTpsError::Custom("Not implemented".to_string()))
     }
     fn get_latest_blockhash(&self) -> Result<Hash> {
         self.rpc_client()
