@@ -16,8 +16,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
-            cap_accounts_data_len, record_instruction_in_transaction_context_push,
-            tx_wide_compute_cap, FeatureSet,
+            cap_accounts_data_len, record_instruction_in_transaction_context_push, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -344,11 +343,6 @@ impl<'a> InvokeContext<'a> {
             == 0
         {
             self.current_compute_budget = self.compute_budget;
-
-            if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter =
-                    ComputeMeter::new_ref(self.current_compute_budget.compute_unit_limit);
-            }
 
             self.pre_accounts = Vec::with_capacity(instruction_accounts.len());
 

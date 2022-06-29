@@ -44,7 +44,7 @@ use {
             cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
             disable_bpf_unresolved_symbols_at_runtime, disable_deploy_of_alloc_free_syscall,
             disable_deprecated_loader, error_on_syscall_bpf_function_hash_collisions,
-            reduce_required_deploy_balance, reject_callx_r10, requestable_heap_size,
+            reduce_required_deploy_balance, reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -296,16 +296,11 @@ pub fn create_vm<'a, 'b>(
 ) -> Result<EbpfVm<'a, RequisiteVerifier, BpfError, ThisInstructionMeter>, EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
     let heap_size = compute_budget.heap_size.unwrap_or(HEAP_LENGTH);
-    if invoke_context
-        .feature_set
-        .is_active(&requestable_heap_size::id())
-    {
-        let _ = invoke_context.get_compute_meter().borrow_mut().consume(
-            ((heap_size as u64).saturating_div(32_u64.saturating_mul(1024)))
-                .saturating_sub(1)
-                .saturating_mul(compute_budget.heap_cost),
-        );
-    }
+    let _ = invoke_context.get_compute_meter().borrow_mut().consume(
+        ((heap_size as u64).saturating_div(32_u64.saturating_mul(1024)))
+            .saturating_sub(1)
+            .saturating_mul(compute_budget.heap_cost),
+    );
     let mut heap =
         AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
     let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
