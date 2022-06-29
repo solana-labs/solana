@@ -39,6 +39,8 @@
 //! ```
 //!
 #![allow(clippy::integer_arithmetic)]
+
+use solana_sdk::nonce::state::Data;
 use {
     crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,
@@ -66,7 +68,7 @@ use {
         stake,
         system_instruction::{self, SystemInstruction},
         system_program,
-        transaction::Transaction,
+        transaction::{Transaction, VersionedTransaction},
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
@@ -245,24 +247,21 @@ impl TransactionGenerator {
 // Here we generate them in `num_gen_threads` threads.
 //
 enum TransactionMsg {
-    Transaction(Vec<Vec<u8>>, u64),
+    //Transaction(Vec<Vec<u8>>, u64),
+    Transaction(Vec<VersionedTransaction>, u64),
     Exit,
 }
 /// number of transactions in one batch for sendmmsg
 const SEND_BATCH_MAX_SIZE: usize = 1 << 14;
 
-fn create_sender_thread(
+fn create_sender_thread<T: 'static + BenchTpsClient + Send + Sync>(
     tx_receiver: Receiver<TransactionMsg>,
     mut n_alive_threads: usize,
-    target: &SocketAddr,
-    tpu_use_quic: bool,
+    client: Arc<T>,
+    //target: &SocketAddr,
+    //tpu_use_quic: bool,
     num_send: usize,
 ) -> thread::JoinHandle<()> {
-    // ConnectionCache is used instead of client because it gives ~6% higher pps
-    let tpu_use_quic = UseQUIC::new(tpu_use_quic).expect("Failed to initialize QUIC flags");
-    let connection_cache = ConnectionCache::new(tpu_use_quic, DEFAULT_TPU_CONNECTION_POOL_SIZE);
-    let connection = connection_cache.get_connection(target);
-
     let timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS as u64));
 
     let mut time_send_ns = 0;
@@ -280,7 +279,8 @@ fn create_sender_thread(
                             let len = data.len();
                             let mut measure_send_txs = Measure::start("measure_send_txs");
                             for _ in 0..num_send {
-                                let res = connection.send_wire_transaction_batch_async(data.clone());
+                                //let res = connection.send_wire_transaction_batch_async(data.clone());
+                                let res = client.send_batch_versioned(data.clone());
                                 if res.is_err() {
                                     error_count += len;
                                 }
@@ -367,7 +367,8 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
             let mut total_count = 0;
             loop {
                 let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
-                let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
+                //let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
+                let mut data = Vec::<VersionedTransaction>::with_capacity(SEND_BATCH_MAX_SIZE);
                 let mut measure_generate_txs = Measure::start("measure_generate_txs");
                 for _ in 0..send_batch_size {
                     let chunk_keypairs = if generate_keypairs {
@@ -388,7 +389,8 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
                         chunk_keypairs,
                         client.as_ref(),
                     );
-                    data.push(bincode::serialize(&tx).unwrap());
+                    data.push(VersionedTransaction::from(tx));
+                    //data.push(bincode::serialize(&tx).unwrap());
                 }
                 measure_generate_txs.stop();
 
@@ -555,11 +557,11 @@ fn get_permutation_size(num_signatures: Option<&usize>, num_instructions: Option
 }
 
 fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
-    target: SocketAddr,
+    //target: SocketAddr,
     iterations: usize,
     client: Option<Arc<T>>,
     transaction_params: TransactionParams,
-    tpu_use_quic: bool,
+    //tpu_use_quic: bool,
     num_gen_threads: usize,
 ) {
     let max_iterations_per_thread = iterations / num_gen_threads;
@@ -576,11 +578,18 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
+    if client.is_none() {
+        panic!("Client must be provided"); // TODO(klykov) move to upper part of the stack
+    }
+
+    let client = client.unwrap();
+
     let sender_thread = create_sender_thread(
         tx_receiver,
         num_gen_threads,
-        &target,
-        tpu_use_quic,
+        //&target,
+        client.clone(),
+        //tpu_use_quic,
         num_send,
     );
     let mut thread_id = 0;
@@ -598,7 +607,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
                 &tx_sender,
                 num_iterations,
                 &mut transaction_generator,
-                client.clone(),
+                Some(client.clone()),
                 payer,
             )
         })
@@ -614,54 +623,64 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
 }
 
 fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
-    nodes: &[ContactInfo],
+    //nodes: &[ContactInfo],
     iterations: usize,
     client: Option<Arc<T>>,
     params: DosClientParameters,
+    repair_contact: Option<ContactInfo>,
 ) {
-    let target = get_target(nodes, params.mode, params.entrypoint_addr);
-
+    //let target = get_target(nodes, params.mode, params.entrypoint_addr);
     if params.mode == Mode::Rpc {
+        if params.client_type != ClientType::RpcClient {
+            panic!("Rpc mode requires RpcClient"); // TODO(klykov): move this check to cli
+        }
         // creating rpc_client because get_account, get_program_accounts are not implemented for BenchTpsClient
-        let rpc_client =
-            get_rpc_client(nodes, params.entrypoint_addr).expect("Failed to get rpc client");
+        //let rpc_client =
+        //    get_rpc_client(nodes, params.entrypoint_addr).expect("Failed to get rpc client");
         // existence of data_input is checked at cli level
-        run_dos_rpc_mode(
-            rpc_client,
-            iterations,
-            params.data_type,
-            &params.data_input.unwrap(),
-        );
+
+        // TODO(klykov): Add get_program_account to BenchTpsClient and refactor accordingly this part of the code
+        //let rpc_client = client.unwrap().as_ref();
+        //run_dos_rpc_mode(
+        //    rpc_client,
+        //    iterations,
+        //    params.data_type,
+        //    &params.data_input.unwrap(),
+        //);
     } else if params.data_type == DataType::Transaction
         && params
             .transaction_params
             .unique_transactions_coefficient
             .is_some()
     {
-        let target = target.expect("should have target");
-        info!("Targeting {}", target);
+        //let target = target.expect("should have target");
+        //info!("Targeting {}", target);
         run_dos_transactions(
-            target,
+            //target,
             iterations,
             client,
             params.transaction_params,
-            params.tpu_use_quic,
+            //params.tpu_use_quic,
             params.num_gen_threads,
         );
     } else {
-        let target = target.expect("should have target");
-        info!("Targeting {}", target);
+        //let target = target.expect("should have target");
+        //info!("Targeting {}", target);
         let mut data = match params.data_type {
             DataType::RepairHighest => {
                 let slot = 100;
-                let req =
-                    RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
+                let req = RepairProtocol::WindowIndexWithNonce(
+                    /*get_repair_contact(nodes)*/ repair_contact.unwrap(),
+                    slot,
+                    0,
+                    0,
+                );
                 bincode::serialize(&req).unwrap()
             }
             DataType::RepairShred => {
                 let slot = 100;
                 let req = RepairProtocol::HighestWindowIndexWithNonce(
-                    get_repair_contact(nodes),
+                    /*get_repair_contact(nodes)*/ repair_contact.unwrap(),
                     slot,
                     0,
                     0,
@@ -670,7 +689,11 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             }
             DataType::RepairOrphan => {
                 let slot = 100;
-                let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
+                let req = RepairProtocol::OrphanWithNonce(
+                    /*get_repair_contact(nodes)*/ repair_contact.unwrap(),
+                    slot,
+                    0,
+                );
                 bincode::serialize(&req).unwrap()
             }
             DataType::Random => {
@@ -713,10 +736,11 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             if params.data_type == DataType::Random {
                 thread_rng().fill(&mut data[..]);
             }
-            let res = socket.send_to(&data, target);
-            if res.is_err() {
-                error_count += 1;
-            }
+            // TODO(klykov): fix later
+            //let res = socket.send_to(&data, target);
+            //if res.is_err() {
+            //    error_count += 1;
+            //}
 
             count += 1;
             total_count += 1;
@@ -741,51 +765,63 @@ fn main() {
     solana_logger::setup_with_default("solana=info");
     let cmd_params = build_cli_parameters();
 
-    let (nodes, client) = if !cmd_params.skip_gossip {
-        info!("Finding cluster entry: {:?}", cmd_params.entrypoint_addr);
-        let socket_addr_space = SocketAddrSpace::new(cmd_params.allow_private_addr);
-        let (gossip_nodes, validators) = discover(
-            None, // keypair
-            Some(&cmd_params.entrypoint_addr),
-            None,                              // num_nodes
-            Duration::from_secs(60),           // timeout
-            None,                              // find_node_by_pubkey
-            Some(&cmd_params.entrypoint_addr), // find_node_by_gossip_addr
-            None,                              // my_gossip_addr
-            0,                                 // my_shred_version
-            socket_addr_space,
-        )
-        .unwrap_or_else(|err| {
-            eprintln!(
-                "Failed to discover {} node: {:?}",
-                cmd_params.entrypoint_addr, err
-            );
-            exit(1);
-        });
+    // TODO(klykov): refactor this code (and for bench-tps as well) to make it shorter and easier to read
+    match cmd_params.client_type {
+        ClientType::ThinClient => {
+            let (nodes, client) = if !cmd_params.skip_gossip {
+                info!("Finding cluster entry: {:?}", cmd_params.entrypoint_addr);
+                let socket_addr_space = SocketAddrSpace::new(cmd_params.allow_private_addr);
+                let (gossip_nodes, validators) = discover(
+                    None, // keypair
+                    Some(&cmd_params.entrypoint_addr),
+                    None,                              // num_nodes
+                    Duration::from_secs(60),           // timeout
+                    None,                              // find_node_by_pubkey
+                    Some(&cmd_params.entrypoint_addr), // find_node_by_gossip_addr
+                    None,                              // my_gossip_addr
+                    0,                                 // my_shred_version
+                    socket_addr_space,
+                )
+                .unwrap_or_else(|err| {
+                    eprintln!(
+                        "Failed to discover {} node: {:?}",
+                        cmd_params.entrypoint_addr, err
+                    );
+                    exit(1);
+                });
 
-        let tpu_use_quic =
-            UseQUIC::new(cmd_params.tpu_use_quic).expect("Failed to initialize QUIC flags");
-        let connection_cache = Arc::new(ConnectionCache::new(
-            tpu_use_quic,
-            DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        ));
-        let (client, num_clients) =
-            get_multi_client(&validators, &SocketAddrSpace::Unspecified, connection_cache);
-        if validators.len() < num_clients {
-            eprintln!(
-                "Error: Insufficient nodes discovered.  Expecting {} or more",
-                validators.len()
-            );
-            exit(1);
+                let tpu_use_quic =
+                    UseQUIC::new(cmd_params.tpu_use_quic).expect("Failed to initialize QUIC flags");
+                let connection_cache = Arc::new(ConnectionCache::new(
+                    tpu_use_quic,
+                    DEFAULT_TPU_CONNECTION_POOL_SIZE,
+                ));
+                let (client, num_clients) =
+                    get_multi_client(&validators, &SocketAddrSpace::Unspecified, connection_cache);
+                if validators.len() < num_clients {
+                    eprintln!(
+                        "Error: Insufficient nodes discovered.  Expecting {} or more",
+                        validators.len()
+                    );
+                    exit(1);
+                }
+                (gossip_nodes, Some(Arc::new(client)))
+            } else {
+                (vec![], None)
+            };
+
+            info!("done found {} nodes", nodes.len());
+            let repair_contact = match cmd_params.data_type {
+                DataType::RepairHighest | DataType::RepairOrphan | DataType::RepairShred => {
+                    Some(get_repair_contact(&nodes))
+                }
+                _ => None,
+            };
+            run_dos(0, client, cmd_params, repair_contact);
         }
-        (gossip_nodes, Some(Arc::new(client)))
-    } else {
-        (vec![], None)
-    };
-
-    info!("done found {} nodes", nodes.len());
-
-    run_dos(&nodes, 0, client, cmd_params);
+        ClientType::TpuClient => {}
+        ClientType::RpcClient => {}
+    }
 }
 
 #[cfg(test)]
