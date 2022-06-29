@@ -53,7 +53,8 @@ use {
 
 const MAX_DUPLICATE_COUNT: usize = 2;
 const DEFAULT_LRU_SIZE: usize = 10_000;
-const RAYON_PAR_ITER_MIN_LEN: usize = 4;
+// Minimum number of shreds to use rayon parallel iterators.
+const PAR_ITER_MIN_NUM_SHREDS: usize = 2;
 
 const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
 const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
@@ -247,7 +248,7 @@ fn retransmit(
         entry.record(now, root_distance, num_nodes);
         stats
     };
-    let slot_stats = if shreds.len() <= RAYON_PAR_ITER_MIN_LEN {
+    let slot_stats = if shreds.len() < PAR_ITER_MIN_NUM_SHREDS {
         stats.num_small_batches += 1;
         shreds
             .into_iter()
@@ -269,7 +270,6 @@ fn retransmit(
         thread_pool.install(|| {
             shreds
                 .into_par_iter()
-                .with_min_len(RAYON_PAR_ITER_MIN_LEN)
                 .map(|(shred, slot_leader, cluster_nodes)| {
                     let index = thread_pool.current_thread_index().unwrap();
                     let (root_distance, num_nodes) = retransmit_shred(
