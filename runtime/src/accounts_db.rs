@@ -1115,6 +1115,8 @@ pub struct AccountsDb {
     /// true if drop_callback is attached to the bank.
     is_bank_drop_callback_enabled: AtomicBool,
 
+    pub startup_verification_complete: Arc<AtomicBool>,
+
     /// Set of slots currently being flushed by `flush_slot_cache()` or removed
     /// by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
     /// can safely clear the set of unrooted slots `slots`.
@@ -1902,7 +1904,12 @@ impl AccountsDb {
         // rayon needs a lot of stack
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
+        // this will be live shortly
+        // for now, this check occurs at startup, so it must always be true
+        let startup_verification_complete = Arc::new(AtomicBool::new(true));
+
         AccountsDb {
+            startup_verification_complete,
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),

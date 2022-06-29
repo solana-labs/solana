@@ -1580,6 +1580,11 @@ impl ReplayStage {
 
         assert!(parent.is_frozen());
 
+        if !parent.is_startup_verification_complete() {
+            info!("startup verification incomplete, so skipping my leader slot");
+            return;
+        }
+
         if bank_forks.read().unwrap().get(poh_slot).is_some() {
             warn!("{} already have bank in forks at {}?", my_pubkey, poh_slot);
             return;
@@ -1907,6 +1912,11 @@ impl ReplayStage {
         has_new_vote_been_rooted: bool,
         wait_to_vote_slot: Option<Slot>,
     ) -> Option<Transaction> {
+        if !bank.is_startup_verification_complete() {
+            info!("startup verification incomplete, so unable to vote");
+            return None;
+        }
+
         if authorized_voter_keypairs.is_empty() {
             return None;
         }

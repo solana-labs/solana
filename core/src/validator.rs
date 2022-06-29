@@ -736,8 +736,10 @@ impl Validator {
         );
 
         let poh_config = Arc::new(genesis_config.poh_config.clone());
+        let startup_verification_complete;
         let (poh_recorder, entry_receiver, record_receiver) = {
             let bank = &bank_forks.read().unwrap().working_bank();
+            startup_verification_complete = Arc::clone(bank.get_startup_verification_complete());
             PohRecorder::new_with_clear_signal(
                 bank.tick_height(),
                 bank.last_blockhash(),
@@ -798,6 +800,7 @@ impl Validator {
                     config.validator_exit.clone(),
                     config.known_validators.clone(),
                     rpc_override_health_check.clone(),
+                    startup_verification_complete,
                     optimistically_confirmed_bank.clone(),
                     config.send_transaction_service_config.clone(),
                     max_slots.clone(),
