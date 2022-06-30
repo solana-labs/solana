@@ -755,33 +755,35 @@ where
             .any(|hay| needle.0 == hay.0 && needle.1 != hay.1)
     }
 
-    'outer: for node in nodes {
+    'to_next_node: for node in nodes {
         // First get the full snapshot hashes for each node and add them as the keys in the
         // known snapshot hashes map.
         let full_snapshot_hashes = get_full_snapshot_hashes_for_node(node);
-        for full_snapshot_hash in &full_snapshot_hashes {
+        '_to_next_full_snapshot: for full_snapshot_hash in &full_snapshot_hashes {
             // Do not add this snapshot hash if there's already a full snapshot hash with the
             // same slot but with a _different_ hash.
             // NOTE: Nodes should not produce snapshots at the same slot with _different_
             // hashes.  So if it happens, keep the first and ignore the rest.
-            if !is_any_same_slot_and_different_hash(
-                full_snapshot_hash,
-                known_snapshot_hashes.keys(),
-            ) {
-                // Insert a new full snapshot hash into the known snapshot hashes IFF an entry
-                // doesn't already exist.  This is to ensure we don't overwrite existing
-                // incremental snapshot hashes that may be present for this full snapshot hash.
-                known_snapshot_hashes
-                    .entry(*full_snapshot_hash)
-                    .or_default();
-            } else {
+            if is_any_same_slot_and_different_hash(full_snapshot_hash, known_snapshot_hashes.keys())
+            {
                 warn!(
-                    "Ignoring all snapshot hashes from node {} since we've seen a different full snapshot hash with this slot. full snapshot hash: {:?}",
-                    node,
-                    full_snapshot_hash,
+                        "Ignoring all snapshot hashes from node {} since we've seen a different full snapshot hash with this slot.\nfull snapshot hash: {:?}",
+                        node,
+                        full_snapshot_hash,
+                    );
+                debug!(
+                    "known full snapshot hashes: {:#?}",
+                    known_snapshot_hashes.keys(),
                 );
-                continue 'outer;
+                continue 'to_next_node;
             }
+
+            // Insert a new full snapshot hash into the known snapshot hashes IFF an entry
+            // doesn't already exist.  This is to ensure we don't overwrite existing
+            // incremental snapshot hashes that may be present for this full snapshot hash.
+            let _ = known_snapshot_hashes
+                .entry(*full_snapshot_hash)
+                .or_default();
         }
 
         if incremental_snapshot_fetch {
@@ -794,34 +796,42 @@ where
                 // has a full snapshot hash that matches its base snapshot hash.
                 if !full_snapshot_hashes.contains(&base_snapshot_hash) {
                     warn!(
-                        "Ignoring all incremental snapshot hashes from node {} since its base snapshot hash does not match any of its full snapshot hashes. base snapshot hash: {:?}, full snapshot hashes: {:?}",
+                        "Ignoring all incremental snapshot hashes from node {} since its base snapshot hash does not match any of its full snapshot hashes.\nbase snapshot hash: {:?}\nfull snapshot hashes: {:?}",
                         node,
                         base_snapshot_hash,
                         full_snapshot_hashes
-                        );
-                    continue 'outer;
+                    );
+                    continue 'to_next_node;
                 }
 
                 if let Some(known_incremental_snapshot_hashes) =
                     known_snapshot_hashes.get_mut(&base_snapshot_hash)
                 {
-                    // Do not add this snapshot hash if there's already an incremental snapshot
-                    // hash with the same slot, but with a _different_ hash.
-                    // NOTE: Nodes should not produce snapshots at the same slot with _different_
-                    // hashes.  So if it happens, keep the first and ignore the rest.
-                    for incremental_snapshot_hash in &incremental_snapshot_hashes {
-                        if !is_any_same_slot_and_different_hash(
+                    'to_next_incremental_snapshot: for incremental_snapshot_hash in
+                        &incremental_snapshot_hashes
+                    {
+                        // Do not add this snapshot hash if there's already an incremental snapshot
+                        // hash with the same slot, but with a _different_ hash.
+                        // NOTE: Nodes should not produce snapshots at the same slot with _different_
+                        // hashes.  So if it happens, keep the first and ignore the rest.
+                        if is_any_same_slot_and_different_hash(
                             incremental_snapshot_hash,
                             known_incremental_snapshot_hashes.iter(),
                         ) {
-                            known_incremental_snapshot_hashes.insert(*incremental_snapshot_hash);
-                        } else {
                             warn!(
-                                "Ignoring incremental snapshot hash from node {} since we've seen a different incremental snapshot hash with this slot. incremental snapshot hash: {:?}",
+                                "Ignoring incremental snapshot hash from node {} since we've seen a different incremental snapshot hash with this slot.\nbase snapshot hash: {:?}\nincremental snapshot hash: {:?}",
                                 node,
+                                base_snapshot_hash,
                                 incremental_snapshot_hash,
                             );
+                            debug!(
+                                "known incremental snapshot hashes at this slot: {:#?}",
+                                known_incremental_snapshot_hashes.iter(),
+                            );
+                            continue 'to_next_incremental_snapshot;
                         }
+
+                        known_incremental_snapshot_hashes.insert(*incremental_snapshot_hash);
                     }
                 } else {
                     // Since incremental snapshots *must* have a valid base (i.e. full)
@@ -834,10 +844,12 @@ where
                         "There must exist a full snapshot hash already in the known snapshot hashes with the same slot but a different hash!",
                     );
                     debug!(
-                        "Ignoring incremental snapshot hashes from node {} since we've seen a different base snapshot hash with this slot. base snapshot hash: {:?}",
+                        "Ignoring incremental snapshot hashes from node {} since we've seen a different base snapshot hash with this slot.\nbase snapshot hash: {:?}\nknown full snapshot hashes: {:?}",
                         node,
                         base_snapshot_hash,
+                        known_snapshot_hashes.keys(),
                     );
+                    continue 'to_next_node;
                 }
             }
         }
@@ -1345,6 +1357,15 @@ mod tests {
             ),
         );
 
+        // full and incremental snapshots, with different incremental hashes
+        oracle.insert(
+            Pubkey::new_unique(),
+            (
+                full_snapshot_hashes1.clone(),
+                Some((*base_snapshot_hash1, incremental_snapshot_hashes2.clone())),
+            ),
+        );
+
         // full and incremental snapshots, with different hashes
         oracle.insert(
             Pubkey::new_unique(),
@@ -1363,12 +1384,30 @@ mod tests {
             ),
         );
 
+        // full and incremental snapshots, with different incremental hashes
+        oracle.insert(
+            Pubkey::new_unique(),
+            (
+                full_snapshot_hashes2.clone(),
+                Some((*base_snapshot_hash2, incremental_snapshot_hashes1.clone())),
+            ),
+        );
+
         // handle duplicates as well
         oracle.insert(
             Pubkey::new_unique(),
             (
                 full_snapshot_hashes1.clone(),
                 Some((*base_snapshot_hash1, incremental_snapshot_hashes1.clone())),
+            ),
+        );
+
+        // handle duplicates as well, with different incremental hashes
+        oracle.insert(
+            Pubkey::new_unique(),
+            (
+                full_snapshot_hashes1.clone(),
+                Some((*base_snapshot_hash1, incremental_snapshot_hashes2.clone())),
             ),
         );
 
@@ -1381,82 +1420,96 @@ mod tests {
             ),
         );
 
+        // handle duplicates, with different incremental hashes
+        oracle.insert(
+            Pubkey::new_unique(),
+            (
+                full_snapshot_hashes2.clone(),
+                Some((*base_snapshot_hash2, incremental_snapshot_hashes1.clone())),
+            ),
+        );
+
         let node_to_full_snapshot_hashes = |node| oracle.get(node).unwrap().clone().0;
         let node_to_incremental_snapshot_hashes = |node| oracle.get(node).unwrap().clone().1;
 
-        let known_snapshot_hashes_with_incremental = build_known_snapshot_hashes(
-            oracle.keys(),
-            node_to_full_snapshot_hashes,
-            node_to_incremental_snapshot_hashes,
-            true,
-        );
-
-        let mut known_full_snapshot_hashes: Vec<_> = known_snapshot_hashes_with_incremental
-            .keys()
-            .copied()
-            .collect();
-        known_full_snapshot_hashes.sort_unstable();
-
-        let known_base_snapshot_hash = known_full_snapshot_hashes.last().unwrap();
-
-        let mut known_incremental_snapshot_hashes: Vec<_> = known_snapshot_hashes_with_incremental
-            .get(known_base_snapshot_hash)
-            .unwrap()
-            .iter()
-            .copied()
-            .collect();
-        known_incremental_snapshot_hashes.sort_unstable();
-
-        assert!(
-            known_full_snapshot_hashes == full_snapshot_hashes1
-                || known_full_snapshot_hashes == full_snapshot_hashes2
-        );
-
-        if known_full_snapshot_hashes == full_snapshot_hashes1 {
-            assert_eq!(known_base_snapshot_hash, base_snapshot_hash1);
-            assert_eq!(
-                known_incremental_snapshot_hashes,
-                incremental_snapshot_hashes1
+        // With incremental snapshots
+        {
+            let known_snapshot_hashes = build_known_snapshot_hashes(
+                oracle.keys(),
+                node_to_full_snapshot_hashes,
+                node_to_incremental_snapshot_hashes,
+                true,
             );
-        } else {
-            assert_eq!(known_base_snapshot_hash, base_snapshot_hash2);
-            assert_eq!(
-                known_incremental_snapshot_hashes,
-                incremental_snapshot_hashes2
+
+            let mut known_full_snapshot_hashes: Vec<_> =
+                known_snapshot_hashes.keys().copied().collect();
+            known_full_snapshot_hashes.sort_unstable();
+
+            let known_base_snapshot_hash = known_full_snapshot_hashes.last().unwrap();
+
+            let mut known_incremental_snapshot_hashes: Vec<_> = known_snapshot_hashes
+                .get(known_base_snapshot_hash)
+                .unwrap()
+                .iter()
+                .copied()
+                .collect();
+            known_incremental_snapshot_hashes.sort_unstable();
+
+            // The resulting `known_snapshot_hashes` can be different from run-to-run due to how
+            // `oracle.keys()` returns nodes during iteration.  Because of that, we cannot just assert
+            // the full and incremental snapshot hashes are `full_snapshot_hashes1` and
+            // `incremental_snapshot_hashes2`.  Instead, we assert that the full and incremental
+            // snapshot hashes are exactly one or the other, since it depends on which nodes are seen
+            // "first" when building the known snapshot hashes.
+
+            assert!(
+                known_full_snapshot_hashes == full_snapshot_hashes1
+                    || known_full_snapshot_hashes == full_snapshot_hashes2
+            );
+
+            if known_full_snapshot_hashes == full_snapshot_hashes1 {
+                assert_eq!(known_base_snapshot_hash, base_snapshot_hash1);
+            } else {
+                assert_eq!(known_base_snapshot_hash, base_snapshot_hash2);
+            }
+
+            assert!(
+                known_incremental_snapshot_hashes == incremental_snapshot_hashes1
+                    || known_incremental_snapshot_hashes == incremental_snapshot_hashes2
             );
         }
 
-        let known_snapshot_hashes_without_incremental = build_known_snapshot_hashes(
-            oracle.keys(),
-            node_to_full_snapshot_hashes,
-            node_to_incremental_snapshot_hashes,
-            false,
-        );
+        // Without incremental snapshots
+        {
+            let known_snapshot_hashes = build_known_snapshot_hashes(
+                oracle.keys(),
+                node_to_full_snapshot_hashes,
+                node_to_incremental_snapshot_hashes,
+                false,
+            );
 
-        let mut known_full_snapshot_hashes: Vec<_> = known_snapshot_hashes_without_incremental
-            .keys()
-            .copied()
-            .collect();
-        known_full_snapshot_hashes.sort_unstable();
+            let mut known_full_snapshot_hashes: Vec<_> =
+                known_snapshot_hashes.keys().copied().collect();
+            known_full_snapshot_hashes.sort_unstable();
 
-        let known_base_snapshot_hash = known_full_snapshot_hashes.last().unwrap();
+            let known_base_snapshot_hash = known_full_snapshot_hashes.last().unwrap();
 
-        let known_incremental_snapshot_hashes: Vec<_> = known_snapshot_hashes_without_incremental
-            .get(known_base_snapshot_hash)
-            .unwrap()
-            .iter()
-            .copied()
-            .collect();
+            let known_incremental_snapshot_hashes =
+                known_snapshot_hashes.get(known_base_snapshot_hash).unwrap();
 
-        assert!(
-            known_full_snapshot_hashes == full_snapshot_hashes1
-                || known_full_snapshot_hashes == full_snapshot_hashes2
-        );
+            // The resulting `known_snapshot_hashes` can be different from run-to-run due to how
+            // `oracle.keys()` returns nodes during iteration.  Because of that, we cannot just
+            // assert the full snapshot hashes are `full_snapshot_hashes1`.  Instead, we assert
+            // that the full snapshot hashes are exactly one or the other, since it depends on
+            // which nodes are seen "first" when building the known snapshot hashes.
 
-        assert_eq!(
-            known_incremental_snapshot_hashes,
-            Vec::<(Slot, Hash)>::new()
-        );
+            assert!(
+                known_full_snapshot_hashes == full_snapshot_hashes1
+                    || known_full_snapshot_hashes == full_snapshot_hashes2
+            );
+
+            assert!(known_incremental_snapshot_hashes.is_empty());
+        }
     }
 
     #[test]
