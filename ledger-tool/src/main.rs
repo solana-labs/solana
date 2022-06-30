@@ -188,6 +188,10 @@ fn output_slot(
     verbose_level: u64,
     all_program_ids: &mut HashMap<Pubkey, u64>,
 ) -> Result<(), String> {
+    for (key, value) in blockstore.dump(slot) {
+        println!("{} {}", key.iter().map(|k| format!("{:02X}", k)).join(""), value.iter().map(|v| format!("{:02X}", v)).join(""));
+    }
+
     if blockstore.is_dead(slot) {
         if allow_dead_slots {
             if *method == LedgerOutputMethod::Print {

@@ -1844,6 +1844,33 @@ impl Blockstore {
         missing_indexes
     }
 
+    fn dump_slot<C>(
+        db_iterator: &mut DBRawIterator,
+        slot: Slot,
+    ) -> Vec<(Vec<u8>, Vec<u8>)>
+    where
+        C: Column<Index = (u64, u64)>,
+    {
+        db_iterator.seek(&C::key((slot, 0)));
+        let mut key_value_pairs = vec![];
+
+        loop {
+            if !db_iterator.valid() {
+                break;
+            }
+            let (current_slot, _index) = C::index(db_iterator.key().expect("Expect a valid key"));
+
+            if current_slot > slot {
+                break;
+            }
+            key_value_pairs.push((db_iterator.key().unwrap().to_vec(), db_iterator.value().unwrap().to_vec()));
+
+            db_iterator.next();
+        }
+
+        key_value_pairs
+    }
+
     pub fn find_missing_data_indexes(
         &self,
         slot: Slot,
@@ -1868,6 +1895,24 @@ impl Blockstore {
             vec![]
         }
     }
+
+    pub fn dump(
+        &self,
+        slot: Slot,
+    ) -> Vec<(Vec<u8>, Vec<u8>)> {
+        if let Ok(mut db_iterator) = self
+            .db
+            .raw_iterator_cf(self.db.cf_handle::<cf::ShredData>())
+        {
+            Self::dump_slot::<cf::ShredData>(
+                &mut db_iterator,
+                slot,
+            )
+        } else {
+            vec![]
+        }
+    }
+
 
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         datapoint_info!("blockstore-rpc-api", ("method", "get_block_time", String));
