@@ -4411,14 +4411,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-bpf-rust-zk_token_elgamal"
-version = "1.11.2"
-dependencies = [
- "solana-program 1.11.2",
- "solana-zk-token-sdk 1.11.2",
-]
-
-[[package]]
 name = "solana-bucket-map"
 version = "1.11.2"
 dependencies = [

@@ -92,7 +92,6 @@ members = [
     "rust/sysvar",
     "rust/upgradeable",
     "rust/upgraded",
-    "rust/zk_token_elgamal",
 ]
 
 [package.metadata.docs.rs]
