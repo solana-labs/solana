@@ -3,7 +3,7 @@
 use {
     log::*,
     clap::{
-        crate_description, crate_name, value_t, value_t_or_exit, App, Arg, ArgMatches,
+        crate_description, crate_name, value_t,  value_t_or_exit, App, Arg, ArgMatches,
     },
     solana_core::{
         validator::{ValidatorConfig},
@@ -84,36 +84,71 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .help("CSV File with Accounts"),
         )
+        .arg(
+            Arg::with_name("write_keys")
+                .long("write-keys")
+                .value_name("KEYS")
+                .takes_value(false)
+                .help("set if you just want to write keys to a file"),
+        )
+        .arg(
+            Arg::with_name("num_keys")
+                .long("num-keys")
+                .value_name("KEYS")
+                .takes_value(true)
+                .help("Number of keys to write"),
+        )
+        .arg(
+            Arg::with_name("num_nodes")
+                .long("num-nodes")
+                .value_name("NODES")
+                .takes_value(true)
+                .help("Number of nodes to spin up"),
+        )
         .get_matches()
 }
 
 pub fn main() {
     solana_logger::setup_with_default("info");
     let matches = parse_matches();
+    let account_infile = value_t_or_exit!(matches, "account_file", String);
+    let write_keys = matches.is_present("write_keys");
+
+    info!("write keys val: {}", write_keys);
+
+
+    if write_keys {
+
+        let keypair_count = value_t!(matches, "num_keys", u64).unwrap_or_else(|_|{
+            error!("Number of keys to write was not specified! Use \"--num-keys <count>\"");
+            exit(1);
+
+        });
+
+        info!("Generating {} keypairs", keypair_count);
+        let id = &Keypair::new();
+        let (keypairs, _) = generate_keypairs(id, keypair_count);
+        let mut accounts = HashMap::new();
+        keypairs.iter().for_each(|keypair| {
+            accounts.insert(
+                serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
+                DEFAULT_NODE_STAKE,         // this value can be a struct if we want. like Base64Account
+            );
+        });
+        info!("Writing {}", account_infile);
+        let serialized = serde_yaml::to_string(&accounts).unwrap();
+        let path = Path::new(&account_infile);
+        let mut file = File::create(path).unwrap();
+        file.write_all(&serialized.into_bytes()).unwrap();
+
+        info!("Wrote {} keys to file: {}", keypair_count, account_infile);
+        exit(0);
+
+    }
+
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
     let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
-    let socket_addr_space = SocketAddrSpace::Unspecified;
-
-    let account_infile = value_t_or_exit!(matches, "account_file", String);
-
-    // WRITE ACCOUNTS TO FILE
-    let keypair_count = 3;
-    info!("Generating {} keypairs", keypair_count);
-    let id = &Keypair::new();
-    let (keypairs, _) = generate_keypairs(id, keypair_count as u64);
-    let mut accounts = HashMap::new();
-    keypairs.iter().for_each(|keypair| {
-        accounts.insert(
-            serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
-            DEFAULT_NODE_STAKE,         // this value can be a struct if we want. like Base64Account
-        );
-    });
-    info!("Writing {}", account_infile);
-    let serialized = serde_yaml::to_string(&accounts).unwrap();
-    let path = Path::new(&account_infile);
-    let mut file = File::create(path).unwrap();
-    file.write_all(&serialized.into_bytes()).unwrap();
-
+    let socket_addr_space = SocketAddrSpace::Unspecified;    
 
     // READ ACCOUNTS FROM FILE
     let path = Path::new(&account_infile);
@@ -121,10 +156,25 @@ pub fn main() {
 
     info!("Reading {}", account_infile);
     let accounts: HashMap<String, u64> = serde_yaml::from_reader(file).unwrap();
+    info!("{} accounts read in", accounts.len());
 
-    info!("Accounts read in:");
+    let num_nodes = value_t!(matches, "num_nodes", usize).unwrap_or_else(|_| {
+        error!("Number of gossip nodes to spin up was not specified! Use \"--num-nodes <count>\"");
+        exit(1);
+    });
+    if num_nodes > accounts.len() {
+        error!("Attempting to spin up more nodes than there are accounts...exiting...");
+        exit(1);
+    }
+
+    info!("Spinning up {} Gossip nodes with the following accounts/stakes: ", num_nodes);
+    let mut count = 0;
     for (k,v) in &accounts {
         println!("{}, {}", k, v);
+        count = count + 1;
+        if count == num_nodes {
+            break;
+        }
     }
 
     let mut node_keys: Vec<Keypair> = Vec::new();
@@ -154,7 +204,6 @@ pub fn main() {
     let leader_keypair = &node_keys[0];
     let leader_pubkey = leader_keypair.pubkey();
 
-    let num_nodes = node_keys.len();
 
     let mut config = ClusterConfig::default();
 
