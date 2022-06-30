@@ -22,7 +22,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         &MetricFamily {
             name: "solana_node_identity_public_key_info",
             help: "The node's current identity",
-            type_: "count",
+            type_: "counter",
             metrics: vec![
                 Metric::new(1).with_label("identity_account", identity_pubkey.to_string())
             ],
@@ -47,7 +47,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         &MetricFamily {
             name: "solana_node_version_info",
             help: "The current Solana node's version",
-            type_: "count",
+            type_: "counter",
             metrics: vec![Metric::new(1).with_label("version", version.to_string())],
         },
     )?;
