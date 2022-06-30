@@ -203,14 +203,18 @@ async fn setup_connection(
         };
 
         if let Some((mut connection_table_l, stake)) = table_and_stake {
-            let max_uni_streams = if stake > 0 {
-                let staked_nodes = staked_nodes.read().unwrap();
-                VarInt::from_u64(
-                    ((stake as f64 / staked_nodes.total_stake as f64)
-                        * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS) as u64,
-                )
-            } else {
-                VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64)
+            let table_type = connection_table_l.peer_type;
+            let max_uni_streams = match table_type {
+                ConnectionPeerType::Unstaked => {
+                    VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64)
+                }
+                ConnectionPeerType::Staked => {
+                    let staked_nodes = staked_nodes.read().unwrap();
+                    VarInt::from_u64(
+                        ((stake as f64 / staked_nodes.total_stake as f64)
+                            * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS) as u64,
+                    )
+                }
             };
 
             if let Ok(max_uni_streams) = max_uni_streams {
@@ -223,7 +227,6 @@ async fn setup_connection(
                     timing::timestamp(),
                     max_connections_per_ip,
                 ) {
-                    let table_type = connection_table_l.peer_type;
                     drop(connection_table_l);
                     let stats = stats.clone();
                     let connection_table = match table_type {
