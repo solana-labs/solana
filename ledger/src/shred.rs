@@ -707,7 +707,7 @@ pub fn should_discard_shred(
     };
     let slot = match layout::get_slot(shred) {
         Some(slot) => {
-            if slot <= root || !slot_bounds.contains(&slot) {
+            if !slot_bounds.contains(&slot) {
                 stats.slot_out_of_range += 1;
                 return true;
             }
@@ -735,6 +735,10 @@ pub fn should_discard_shred(
                 stats.index_out_of_bounds += 1;
                 return true;
             }
+            if slot <= root {
+                stats.slot_out_of_range += 1;
+                return true;
+            }
             false
         }
         ShredType::Data => {
@@ -749,10 +753,6 @@ pub fn should_discard_shred(
                     return true;
                 }
             };
-            if parent_offset == 0 && slot != 0 {
-                stats.bad_parent_offset += 1;
-                return true;
-            }
             let parent = match slot.checked_sub(Slot::from(parent_offset)) {
                 Some(parent) => parent,
                 None => {

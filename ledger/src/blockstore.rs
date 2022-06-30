@@ -5891,6 +5891,21 @@ pub mod tests {
     }
 
     #[test]
+    fn test_verify_shred_slots() {
+        // verify_shred_slots(slot, parent, root)
+        assert!(verify_shred_slots(0, 0, 0));
+        assert!(verify_shred_slots(2, 1, 0));
+        assert!(verify_shred_slots(2, 1, 1));
+        assert!(!verify_shred_slots(2, 3, 0));
+        assert!(!verify_shred_slots(2, 2, 0));
+        assert!(!verify_shred_slots(2, 3, 3));
+        assert!(!verify_shred_slots(2, 2, 2));
+        assert!(!verify_shred_slots(2, 1, 3));
+        assert!(!verify_shred_slots(2, 3, 4));
+        assert!(!verify_shred_slots(2, 2, 3));
+    }
+
+    #[test]
     fn test_should_insert_data_shred() {
         solana_logger::setup();
         let (mut shreds, _) = make_slot_entries(0, 0, 200);
