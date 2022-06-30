@@ -1196,7 +1196,8 @@ pub fn mock_process_instruction(
             &program_indices,
             instruction_data,
         )
-        .and_then(|_| process_instruction(1, &mut invoke_context));
+        .and_then(|_| process_instruction(1, &mut invoke_context))
+        .and_then(|_| invoke_context.verify(&preparation.instruction_accounts, &program_indices));
     invoke_context.pop().unwrap();
     assert_eq!(result, expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
