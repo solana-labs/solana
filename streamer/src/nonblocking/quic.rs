@@ -595,7 +595,7 @@ pub mod test {
             staked_nodes_l
                 .stake_map
                 .insert(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 100000);
-            staked_nodes_l.total_stake = 100000 as f64;
+            staked_nodes_l.total_stake = 100000_f64;
         }
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
