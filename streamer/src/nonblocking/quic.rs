@@ -80,9 +80,9 @@ pub async fn run_server(
 ) {
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
-    let connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(ConnectionTable::new(
-        ConnectionPeerType::Unstaked,
-    )));
+    let unstaked_connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(
+        ConnectionTable::new(ConnectionPeerType::Unstaked),
+    ));
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
         Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
     while !exit.load(Ordering::Relaxed) {
@@ -102,7 +102,7 @@ pub async fn run_server(
         if let Ok(Some(connection)) = timeout_connection {
             tokio::spawn(setup_connection(
                 connection,
-                connection_table.clone(),
+                unstaked_connection_table.clone(),
                 staked_connection_table.clone(),
                 packet_sender.clone(),
                 max_connections_per_ip,
@@ -179,7 +179,7 @@ async fn setup_connection(
         if stake != 0 || max_unstaked_connections > 0 {
             if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
                 &remote_addr,
-                Some(connection.clone()),
+                Some(connection),
                 timing::timestamp(),
                 max_connections_per_ip,
             ) {
@@ -201,7 +201,6 @@ async fn setup_connection(
                     stake,
                 ));
             } else {
-                connection.close(0u32.into(), &[0u8]);
                 stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
             }
         } else {
@@ -575,7 +574,7 @@ pub mod test {
     }
 
     fn setup_quic_server(
-        add_staked_peer: bool,
+        option_staked_nodes: Option<StakedNodes>,
     ) -> (
         JoinHandle<()>,
         Arc<AtomicBool>,
@@ -589,14 +588,12 @@ pub mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
-        if add_staked_peer {
-            let mut staked_nodes_l = staked_nodes.write().unwrap();
-            staked_nodes_l
-                .stake_map
-                .insert(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 100000);
-            staked_nodes_l.total_stake = 100000_f64;
-        }
+        let staked_nodes = if let Some(staked_nodes) = option_staked_nodes {
+            Arc::new(RwLock::new(staked_nodes))
+        } else {
+            Arc::new(RwLock::new(StakedNodes::default()))
+        };
+
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
@@ -754,7 +751,7 @@ pub mod test {
 
     #[tokio::test]
     async fn test_quic_server_exit() {
-        let (t, exit, _receiver, _server_address, _stats) = setup_quic_server(false);
+        let (t, exit, _receiver, _server_address, _stats) = setup_quic_server(None);
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
     }
@@ -762,7 +759,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_timeout() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, _stats) = setup_quic_server(false);
+        let (t, exit, receiver, server_address, _stats) = setup_quic_server(None);
         check_timeout(receiver, server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -771,7 +768,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_stream_timeout() {
         solana_logger::setup();
-        let (t, exit, _receiver, server_address, stats) = setup_quic_server(false);
+        let (t, exit, _receiver, server_address, stats) = setup_quic_server(None);
 
         let conn1 = make_client_endpoint(&server_address).await;
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
@@ -803,7 +800,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_block_multiple_connections() {
         solana_logger::setup();
-        let (t, exit, _receiver, server_address, _stats) = setup_quic_server(false);
+        let (t, exit, _receiver, server_address, _stats) = setup_quic_server(None);
         check_block_multiple_connections(server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -812,7 +809,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_multiple_writes() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, _stats) = setup_quic_server(false);
+        let (t, exit, receiver, server_address, _stats) = setup_quic_server(None);
         check_multiple_writes(receiver, server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -821,7 +818,14 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_staked_connection_removal() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, stats) = setup_quic_server(true);
+
+        let mut staked_nodes = StakedNodes::default();
+        staked_nodes
+            .stake_map
+            .insert(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 100000);
+        staked_nodes.total_stake = 100000_f64;
+
+        let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes));
         check_multiple_writes(receiver, server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -832,7 +836,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_unstaked_connection_removal() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, stats) = setup_quic_server(false);
+        let (t, exit, receiver, server_address, stats) = setup_quic_server(None);
         check_multiple_writes(receiver, server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
