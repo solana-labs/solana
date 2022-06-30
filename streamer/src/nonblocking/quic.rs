@@ -139,7 +139,7 @@ async fn setup_connection(
 
         let remote_addr = connection.remote_address();
 
-        let (connection_table_l, stake) = {
+        let table_and_stake = {
             const PRUNE_TABLE_TO_PERCENTAGE: u8 = 90;
             let max_percentage_full = Percentage::from(PRUNE_TABLE_TO_PERCENTAGE);
 
@@ -172,19 +172,19 @@ async fn setup_connection(
                                 num_pruned = connection_table_l.prune_oldest(max_connections);
                             }
                             stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                            (Some(connection_table_l), stake)
+                            Some((connection_table_l, stake))
                         } else {
                             stats
                                 .connection_add_failed_on_pruning
                                 .fetch_add(1, Ordering::Relaxed);
-                            (None, stake)
+                            None
                         }
                     } else {
                         stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                        (Some(connection_table_l), stake)
+                        Some((connection_table_l, stake))
                     }
                 } else {
-                    (Some(connection_table_l), stake)
+                    Some((connection_table_l, stake))
                 }
             } else if max_unstaked_connections > 0 {
                 drop(staked_nodes);
@@ -197,13 +197,13 @@ async fn setup_connection(
                 connection.set_max_concurrent_uni_streams(
                     VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64).unwrap(),
                 );
-                (Some(connection_table_l), 0)
+                Some((connection_table_l, 0))
             } else {
-                (None, 0)
+                None
             }
         };
 
-        if let Some(mut connection_table_l) = connection_table_l {
+        if let Some((mut connection_table_l, stake)) = table_and_stake {
             if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
                 &remote_addr,
                 Some(connection),
