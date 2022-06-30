@@ -80,10 +80,11 @@ pub async fn run_server(
 ) {
     debug!("spawn quic server");
     let mut last_datapoint = Instant::now();
-    let connection_table: Arc<Mutex<ConnectionTable>> =
-        Arc::new(Mutex::new(ConnectionTable::default()));
+    let connection_table: Arc<Mutex<ConnectionTable>> = Arc::new(Mutex::new(ConnectionTable::new(
+        ConnectionPeerType::Unstaked,
+    )));
     let staked_connection_table: Arc<Mutex<ConnectionTable>> =
-        Arc::new(Mutex::new(ConnectionTable::default()));
+        Arc::new(Mutex::new(ConnectionTable::new(ConnectionPeerType::Staked)));
     while !exit.load(Ordering::Relaxed) {
         const WAIT_FOR_CONNECTION_TIMEOUT_MS: u64 = 1000;
         const WAIT_BETWEEN_NEW_CONNECTIONS_US: u64 = 1000;
@@ -178,24 +179,29 @@ async fn setup_connection(
         if stake != 0 || max_unstaked_connections > 0 {
             if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
                 &remote_addr,
-                Some(connection),
+                Some(connection.clone()),
                 timing::timestamp(),
                 max_connections_per_ip,
             ) {
+                let table_type = connection_table_l.peer_type;
                 drop(connection_table_l);
                 let stats = stats.clone();
-                let connection_table1 = connection_table.clone();
+                let connection_table = match table_type {
+                    ConnectionPeerType::Unstaked => connection_table.clone(),
+                    ConnectionPeerType::Staked => staked_connection_table.clone(),
+                };
                 tokio::spawn(handle_connection(
                     uni_streams,
                     packet_sender,
                     remote_addr,
                     last_update,
-                    connection_table1,
+                    connection_table,
                     stream_exit,
                     stats,
                     stake,
                 ));
             } else {
+                connection.close(0u32.into(), &[0u8]);
                 stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
             }
         } else {
@@ -284,10 +290,17 @@ async fn handle_connection(
             }
         }
     }
-    connection_table
+    if connection_table
         .lock()
         .unwrap()
-        .remove_connection(&remote_addr);
+        .remove_connection(&remote_addr)
+    {
+        stats.connection_removed.fetch_add(1, Ordering::Relaxed);
+    } else {
+        stats
+            .connection_remove_failed
+            .fetch_add(1, Ordering::Relaxed);
+    }
     stats.total_connections.fetch_sub(1, Ordering::Relaxed);
 }
 
@@ -409,16 +422,30 @@ impl Drop for ConnectionEntry {
     }
 }
 
+#[derive(Copy, Clone)]
+enum ConnectionPeerType {
+    Unstaked,
+    Staked,
+}
+
 // Map of IP to list of connection entries
-#[derive(Default, Debug)]
 struct ConnectionTable {
     table: HashMap<IpAddr, Vec<ConnectionEntry>>,
     total_size: usize,
+    peer_type: ConnectionPeerType,
 }
 
 // Prune the connection which has the oldest update
 // Return number pruned
 impl ConnectionTable {
+    fn new(peer_type: ConnectionPeerType) -> Self {
+        Self {
+            table: HashMap::default(),
+            total_size: 0,
+            peer_type,
+        }
+    }
+
     fn prune_oldest(&mut self, max_size: usize) -> usize {
         let mut num_pruned = 0;
         while self.total_size > max_size {
@@ -476,7 +503,7 @@ impl ConnectionTable {
         }
     }
 
-    fn remove_connection(&mut self, addr: &SocketAddr) {
+    fn remove_connection(&mut self, addr: &SocketAddr) -> bool {
         if let Entry::Occupied(mut e) = self.table.entry(addr.ip()) {
             let e_ref = e.get_mut();
             let old_size = e_ref.len();
@@ -488,6 +515,9 @@ impl ConnectionTable {
             self.total_size = self
                 .total_size
                 .saturating_sub(old_size.saturating_sub(new_size));
+            true
+        } else {
+            false
         }
     }
 }
@@ -503,6 +533,7 @@ pub mod test {
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
             signature::Keypair,
         },
+        std::net::Ipv4Addr,
         tokio::time::sleep,
     };
 
@@ -543,7 +574,9 @@ pub mod test {
         config
     }
 
-    fn setup_quic_server() -> (
+    fn setup_quic_server(
+        add_staked_peer: bool,
+    ) -> (
         JoinHandle<()>,
         Arc<AtomicBool>,
         crossbeam_channel::Receiver<PacketBatch>,
@@ -557,6 +590,13 @@ pub mod test {
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        if add_staked_peer {
+            let mut staked_nodes_l = staked_nodes.write().unwrap();
+            staked_nodes_l
+                .stake_map
+                .insert(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 100000);
+            staked_nodes_l.total_stake = 100000 as f64;
+        }
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
@@ -714,7 +754,7 @@ pub mod test {
 
     #[tokio::test]
     async fn test_quic_server_exit() {
-        let (t, exit, _receiver, _server_address, _stats) = setup_quic_server();
+        let (t, exit, _receiver, _server_address, _stats) = setup_quic_server(false);
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
     }
@@ -722,7 +762,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_timeout() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, _stats) = setup_quic_server();
+        let (t, exit, receiver, server_address, _stats) = setup_quic_server(false);
         check_timeout(receiver, server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -731,7 +771,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_stream_timeout() {
         solana_logger::setup();
-        let (t, exit, _receiver, server_address, stats) = setup_quic_server();
+        let (t, exit, _receiver, server_address, stats) = setup_quic_server(false);
 
         let conn1 = make_client_endpoint(&server_address).await;
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
@@ -763,7 +803,7 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_block_multiple_connections() {
         solana_logger::setup();
-        let (t, exit, _receiver, server_address, _stats) = setup_quic_server();
+        let (t, exit, _receiver, server_address, _stats) = setup_quic_server(false);
         check_block_multiple_connections(server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
@@ -772,10 +812,32 @@ pub mod test {
     #[tokio::test]
     async fn test_quic_server_multiple_writes() {
         solana_logger::setup();
-        let (t, exit, receiver, server_address, _stats) = setup_quic_server();
+        let (t, exit, receiver, server_address, _stats) = setup_quic_server(false);
         check_multiple_writes(receiver, server_address).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_quic_server_staked_connection_removal() {
+        solana_logger::setup();
+        let (t, exit, receiver, server_address, stats) = setup_quic_server(true);
+        check_multiple_writes(receiver, server_address).await;
+        exit.store(true, Ordering::Relaxed);
+        t.await.unwrap();
+        assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.connection_remove_failed.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn test_quic_server_unstaked_connection_removal() {
+        solana_logger::setup();
+        let (t, exit, receiver, server_address, stats) = setup_quic_server(false);
+        check_multiple_writes(receiver, server_address).await;
+        exit.store(true, Ordering::Relaxed);
+        t.await.unwrap();
+        assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.connection_remove_failed.load(Ordering::Relaxed), 0);
     }
 
     #[tokio::test]
@@ -848,7 +910,7 @@ pub mod test {
     fn test_prune_table() {
         use std::net::Ipv4Addr;
         solana_logger::setup();
-        let mut table = ConnectionTable::default();
+        let mut table = ConnectionTable::new(ConnectionPeerType::Staked);
         let mut num_entries = 5;
         let max_connections_per_ip = 10;
         let sockets: Vec<_> = (0..num_entries)
@@ -885,7 +947,7 @@ pub mod test {
     fn test_remove_connections() {
         use std::net::Ipv4Addr;
         solana_logger::setup();
-        let mut table = ConnectionTable::default();
+        let mut table = ConnectionTable::new(ConnectionPeerType::Staked);
         let num_ips = 5;
         let max_connections_per_ip = 10;
         let mut sockets: Vec<_> = (0..num_ips)
