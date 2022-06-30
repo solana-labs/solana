@@ -72,6 +72,10 @@ nightly_clippy_allows=(
   # The prost crate, used by solana-storage-proto, generates Rust source that
   # triggers this lint. Need to resolve upstream in prost
   "--allow=clippy::derive_partial_eq_without_eq"
+
+  # This link seems to incorrectly trigger in
+  # `programs/bpf_loader/src/syscalls/{lib,cpi}.rs`
+  "--allow=clippy::explicit-auto-deref"
 )
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
