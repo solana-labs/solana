@@ -23,7 +23,7 @@ use {
         net::{IpAddr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, Mutex, MutexGuard, RwLock,
         },
         time::{Duration, Instant},
     },
@@ -117,6 +117,21 @@ pub async fn run_server(
     }
 }
 
+fn prune_unstaked_connection_table(
+    unstaked_connection_table: &mut MutexGuard<ConnectionTable>,
+    max_unstaked_connections: usize,
+    stats: Arc<StreamStats>,
+) {
+    if unstaked_connection_table.total_size >= max_unstaked_connections {
+        const PRUNE_TABLE_TO_PERCENTAGE: u8 = 90;
+        let max_percentage_full = Percentage::from(PRUNE_TABLE_TO_PERCENTAGE);
+
+        let max_connections = max_percentage_full.apply_to(max_unstaked_connections);
+        let num_pruned = unstaked_connection_table.prune_oldest(max_connections);
+        stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+    }
+}
+
 async fn setup_connection(
     connection: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
@@ -140,38 +155,25 @@ async fn setup_connection(
         let remote_addr = connection.remote_address();
 
         let table_and_stake = {
-            const PRUNE_TABLE_TO_PERCENTAGE: u8 = 90;
-            let max_percentage_full = Percentage::from(PRUNE_TABLE_TO_PERCENTAGE);
-
             let staked_nodes = staked_nodes.read().unwrap();
             if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
                 let stake = *stake;
-                let total_stake = staked_nodes.total_stake;
                 drop(staked_nodes);
-
-                connection.set_max_concurrent_uni_streams(
-                    VarInt::from_u64(
-                        ((stake as f64 / total_stake as f64) * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS)
-                            as u64,
-                    )
-                    .unwrap(),
-                );
 
                 let mut connection_table_l = staked_connection_table.lock().unwrap();
                 if connection_table_l.total_size >= max_staked_connections {
-                    let mut num_pruned = connection_table_l.prune_random(stake);
+                    let num_pruned = connection_table_l.prune_random(stake);
                     if num_pruned == 0 {
                         if max_unstaked_connections > 0 {
                             // If we couldn't prune a connection in the staked connection table, let's
                             // put this connection in the unstaked connection table. If needed, prune a
                             // connection from the unstaked connection table.
-                            connection_table_l = connection_table.lock().unwrap();
-                            if connection_table_l.total_size >= max_unstaked_connections {
-                                let max_connections =
-                                    max_percentage_full.apply_to(max_unstaked_connections);
-                                num_pruned = connection_table_l.prune_oldest(max_connections);
-                            }
-                            stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                            connection_table_l = unstaked_connection_table.lock().unwrap();
+                            prune_unstaked_connection_table(
+                                &mut connection_table_l,
+                                max_unstaked_connections,
+                                stats.clone(),
+                            );
                             Some((connection_table_l, stake))
                         } else {
                             stats
@@ -189,13 +191,10 @@ async fn setup_connection(
             } else if max_unstaked_connections > 0 {
                 drop(staked_nodes);
                 let mut connection_table_l = unstaked_connection_table.lock().unwrap();
-                if connection_table_l.total_size >= max_unstaked_connections {
-                    let max_connections = max_percentage_full.apply_to(max_unstaked_connections);
-                    let num_pruned = connection_table_l.prune_oldest(max_connections);
-                    stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
-                }
-                connection.set_max_concurrent_uni_streams(
-                    VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64).unwrap(),
+                prune_unstaked_connection_table(
+                    &mut connection_table_l,
+                    max_unstaked_connections,
+                    stats.clone(),
                 );
                 Some((connection_table_l, 0))
             } else {
@@ -204,32 +203,50 @@ async fn setup_connection(
         };
 
         if let Some((mut connection_table_l, stake)) = table_and_stake {
-            if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
-                &remote_addr,
-                Some(connection),
-                stake,
-                timing::timestamp(),
-                max_connections_per_ip,
-            ) {
-                let table_type = connection_table_l.peer_type;
-                drop(connection_table_l);
-                let stats = stats.clone();
-                let connection_table = match table_type {
-                    ConnectionPeerType::Unstaked => unstaked_connection_table.clone(),
-                    ConnectionPeerType::Staked => staked_connection_table.clone(),
-                };
-                tokio::spawn(handle_connection(
-                    uni_streams,
-                    packet_sender,
-                    remote_addr,
-                    last_update,
-                    connection_table,
-                    stream_exit,
-                    stats,
-                    stake,
-                ));
+            let max_uni_streams = if stake > 0 {
+                let staked_nodes = staked_nodes.read().unwrap();
+                VarInt::from_u64(
+                    ((stake as f64 / staked_nodes.total_stake as f64)
+                        * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS) as u64,
+                )
             } else {
-                stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64)
+            };
+
+            if let Ok(max_uni_streams) = max_uni_streams {
+                connection.set_max_concurrent_uni_streams(max_uni_streams);
+
+                if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
+                    &remote_addr,
+                    Some(connection),
+                    stake,
+                    timing::timestamp(),
+                    max_connections_per_ip,
+                ) {
+                    let table_type = connection_table_l.peer_type;
+                    drop(connection_table_l);
+                    let stats = stats.clone();
+                    let connection_table = match table_type {
+                        ConnectionPeerType::Unstaked => unstaked_connection_table.clone(),
+                        ConnectionPeerType::Staked => staked_connection_table.clone(),
+                    };
+                    tokio::spawn(handle_connection(
+                        uni_streams,
+                        packet_sender,
+                        remote_addr,
+                        last_update,
+                        connection_table,
+                        stream_exit,
+                        stats,
+                        stake,
+                    ));
+                } else {
+                    stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                }
+            } else {
+                stats
+                    .connection_add_failed_invalid_stream_count
+                    .fetch_add(1, Ordering::Relaxed);
             }
         } else {
             connection.close(0u32.into(), &[0u8]);
@@ -470,7 +487,7 @@ struct ConnectionTable {
 impl ConnectionTable {
     fn new(peer_type: ConnectionPeerType) -> Self {
         Self {
-            table: HashMap::default(),
+            table: IndexMap::default(),
             total_size: 0,
             peer_type,
         }
@@ -888,7 +905,7 @@ pub mod test {
         staked_nodes
             .stake_map
             .insert(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 100000);
-        staked_nodes.total_stake = 100000_f64;
+        staked_nodes.total_stake = 100000;
 
         let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes));
         check_multiple_writes(receiver, server_address).await;
@@ -1016,7 +1033,7 @@ pub mod test {
     fn test_prune_table_random() {
         use std::net::Ipv4Addr;
         solana_logger::setup();
-        let mut table = ConnectionTable::default();
+        let mut table = ConnectionTable::new(ConnectionPeerType::Staked);
         let num_entries = 5;
         let max_connections_per_ip = 10;
         let sockets: Vec<_> = (0..num_entries)
