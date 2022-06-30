@@ -64,7 +64,7 @@ impl TpuConnection for QuicTpuConnection {
     where
         T: AsRef<[u8]> + Send + Sync,
     {
-        let _res = RUNTIME.block_on(self.inner.send_wire_transaction_batch(buffers))?;
+        RUNTIME.block_on(self.inner.send_wire_transaction_batch(buffers))?;
         Ok(())
     }
 
