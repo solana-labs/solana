@@ -95,13 +95,8 @@ impl Stats {
     fn record(&mut self, runtime: Duration) {
         self.num_iterations += 1;
         self.cumulative_runtime += runtime;
-
-        if runtime < self.min_runtime {
-            self.min_runtime = runtime;
-        }
-        if runtime > self.max_runtime {
-            self.max_runtime = runtime;
-        }
+        self.min_runtime = self.min_runtime.min(runtime);
+        self.max_runtime = self.max_runtime.max(runtime);
     }
 
     /// Calculate the mean runtime of all iterations
@@ -133,12 +128,30 @@ mod tests {
     #[test]
     fn test_stats_record() {
         let mut stats = Stats::default();
-        let runtime = Duration::from_secs(1);
-        stats.record(runtime);
+
+        // record first stat, will be both min and max
+        let runtime1 = Duration::from_secs(44);
+        stats.record(runtime1);
         assert_eq!(stats.num_iterations, 1);
-        assert_eq!(stats.cumulative_runtime, runtime);
-        assert_eq!(stats.min_runtime, runtime);
-        assert_eq!(stats.max_runtime, runtime);
+        assert_eq!(stats.cumulative_runtime, runtime1);
+        assert_eq!(stats.min_runtime, runtime1);
+        assert_eq!(stats.max_runtime, runtime1);
+
+        // record a new max
+        let runtime2 = Duration::from_secs(99);
+        stats.record(runtime2);
+        assert_eq!(stats.num_iterations, 2);
+        assert_eq!(stats.cumulative_runtime, runtime1 + runtime2);
+        assert_eq!(stats.min_runtime, runtime1);
+        assert_eq!(stats.max_runtime, runtime2);
+
+        // record a new min
+        let runtime3 = Duration::from_secs(11);
+        stats.record(runtime3);
+        assert_eq!(stats.num_iterations, 3);
+        assert_eq!(stats.cumulative_runtime, runtime1 + runtime2 + runtime3);
+        assert_eq!(stats.min_runtime, runtime3);
+        assert_eq!(stats.max_runtime, runtime2);
     }
 
     #[test]
