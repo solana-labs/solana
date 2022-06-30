@@ -528,7 +528,7 @@ impl ConnectionTable {
         self.table
             .get_index(index)
             .and_then(|(_, connection_vec)| connection_vec.first())
-            .and_then(|connection| Some(connection.stake))
+            .map(|connection| connection.stake)
     }
 
     // Randomly select two connections, and evict the one with lower stake. If the stakes of both
