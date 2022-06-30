@@ -118,7 +118,7 @@ pub async fn run_server(
 
 async fn setup_connection(
     connection: Connecting,
-    connection_table: Arc<Mutex<ConnectionTable>>,
+    unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
     packet_sender: Sender<PacketBatch>,
     max_connections_per_ip: usize,
@@ -163,7 +163,7 @@ async fn setup_connection(
                 (connection_table_l, stake)
             } else {
                 drop(staked_nodes);
-                let mut connection_table_l = connection_table.lock().unwrap();
+                let mut connection_table_l = unstaked_connection_table.lock().unwrap();
                 if connection_table_l.total_size >= max_unstaked_connections {
                     let max_connections = max_percentage_full.apply_to(max_unstaked_connections);
                     let num_pruned = connection_table_l.prune_oldest(max_connections);
@@ -187,7 +187,7 @@ async fn setup_connection(
                 drop(connection_table_l);
                 let stats = stats.clone();
                 let connection_table = match table_type {
-                    ConnectionPeerType::Unstaked => connection_table.clone(),
+                    ConnectionPeerType::Unstaked => unstaked_connection_table.clone(),
                     ConnectionPeerType::Staked => staked_connection_table.clone(),
                 };
                 tokio::spawn(handle_connection(
@@ -588,12 +588,7 @@ pub mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let staked_nodes = if let Some(staked_nodes) = option_staked_nodes {
-            Arc::new(RwLock::new(staked_nodes))
-        } else {
-            Arc::new(RwLock::new(StakedNodes::default()))
-        };
-
+        let staked_nodes = Arc::new(RwLock::new(option_staked_nodes.unwrap_or_default()));
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
