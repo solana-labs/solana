@@ -109,8 +109,7 @@ use {
         feature,
         feature_set::{
             self, add_set_compute_unit_price_ix, default_units_per_instruction,
-            disable_fee_calculator, nonce_must_be_writable, requestable_heap_size,
-            tx_wide_compute_cap, FeatureSet,
+            disable_fee_calculator, nonce_must_be_writable, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -3701,7 +3700,6 @@ impl Bank {
             message,
             lamports_per_signature,
             &self.fee_structure,
-            self.feature_set.is_active(&tx_wide_compute_cap::id()),
             self.feature_set
                 .is_active(&add_set_compute_unit_price_ix::id()),
         ))
@@ -3724,7 +3722,6 @@ impl Bank {
             message,
             lamports_per_signature,
             &self.fee_structure,
-            self.feature_set.is_active(&tx_wide_compute_cap::id()),
             self.feature_set
                 .is_active(&add_set_compute_unit_price_ix::id()),
         )
@@ -4512,32 +4509,25 @@ impl Bank {
                     let compute_budget = if let Some(compute_budget) = self.compute_budget {
                         compute_budget
                     } else {
-                        let tx_wide_compute_cap = feature_set.is_active(&tx_wide_compute_cap::id());
-                        let compute_unit_limit = if tx_wide_compute_cap {
-                            compute_budget::MAX_COMPUTE_UNIT_LIMIT
-                        } else {
-                            compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
-                        };
-                        let mut compute_budget = ComputeBudget::new(compute_unit_limit as u64);
-                        if tx_wide_compute_cap {
-                            let mut compute_budget_process_transaction_time =
-                                Measure::start("compute_budget_process_transaction_time");
-                            let process_transaction_result = compute_budget.process_instructions(
-                                tx.message().program_instructions_iter(),
-                                feature_set.is_active(&requestable_heap_size::id()),
-                                feature_set.is_active(&default_units_per_instruction::id()),
-                                feature_set.is_active(&add_set_compute_unit_price_ix::id()),
-                            );
-                            compute_budget_process_transaction_time.stop();
-                            saturating_add_assign!(
-                                timings
-                                    .execute_accessories
-                                    .compute_budget_process_transaction_us,
-                                compute_budget_process_transaction_time.as_us()
-                            );
-                            if let Err(err) = process_transaction_result {
-                                return TransactionExecutionResult::NotExecuted(err);
-                            }
+                        let mut compute_budget =
+                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+
+                        let mut compute_budget_process_transaction_time =
+                            Measure::start("compute_budget_process_transaction_time");
+                        let process_transaction_result = compute_budget.process_instructions(
+                            tx.message().program_instructions_iter(),
+                            feature_set.is_active(&default_units_per_instruction::id()),
+                            feature_set.is_active(&add_set_compute_unit_price_ix::id()),
+                        );
+                        compute_budget_process_transaction_time.stop();
+                        saturating_add_assign!(
+                            timings
+                                .execute_accessories
+                                .compute_budget_process_transaction_us,
+                            compute_budget_process_transaction_time.as_us()
+                        );
+                        if let Err(err) = process_transaction_result {
+                            return TransactionExecutionResult::NotExecuted(err);
                         }
                         compute_budget
                     };
@@ -4785,56 +4775,49 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
-        tx_wide_compute_cap: bool,
         support_set_compute_unit_price_ix: bool,
     ) -> u64 {
-        if tx_wide_compute_cap {
-            // Fee based on compute units and signatures
-            const BASE_CONGESTION: f64 = 5_000.0;
-            let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
-            let congestion_multiplier = if lamports_per_signature == 0 {
-                0.0 // test only
-            } else {
-                BASE_CONGESTION / current_congestion
-            };
-
-            let mut compute_budget = ComputeBudget::default();
-            let prioritization_fee_details = compute_budget
-                .process_instructions(
-                    message.program_instructions_iter(),
-                    false,
-                    false,
-                    support_set_compute_unit_price_ix,
-                )
-                .unwrap_or_default();
-            let prioritization_fee = prioritization_fee_details.get_fee();
-            let signature_fee = Self::get_num_signatures_in_message(message)
-                .saturating_mul(fee_structure.lamports_per_signature);
-            let write_lock_fee = Self::get_num_write_locks_in_message(message)
-                .saturating_mul(fee_structure.lamports_per_write_lock);
-            let compute_fee = fee_structure
-                .compute_fee_bins
-                .iter()
-                .find(|bin| compute_budget.compute_unit_limit <= bin.limit)
-                .map(|bin| bin.fee)
-                .unwrap_or_else(|| {
-                    fee_structure
-                        .compute_fee_bins
-                        .last()
-                        .map(|bin| bin.fee)
-                        .unwrap_or_default()
-                });
-
-            ((prioritization_fee
-                .saturating_add(signature_fee)
-                .saturating_add(write_lock_fee)
-                .saturating_add(compute_fee) as f64)
-                * congestion_multiplier)
-                .round() as u64
+        // Fee based on compute units and signatures
+        const BASE_CONGESTION: f64 = 5_000.0;
+        let current_congestion = BASE_CONGESTION.max(lamports_per_signature as f64);
+        let congestion_multiplier = if lamports_per_signature == 0 {
+            0.0 // test only
         } else {
-            // Fee based only on signatures
-            lamports_per_signature.saturating_mul(Self::get_num_signatures_in_message(message))
-        }
+            BASE_CONGESTION / current_congestion
+        };
+
+        let mut compute_budget = ComputeBudget::default();
+        let prioritization_fee_details = compute_budget
+            .process_instructions(
+                message.program_instructions_iter(),
+                false,
+                support_set_compute_unit_price_ix,
+            )
+            .unwrap_or_default();
+        let prioritization_fee = prioritization_fee_details.get_fee();
+        let signature_fee = Self::get_num_signatures_in_message(message)
+            .saturating_mul(fee_structure.lamports_per_signature);
+        let write_lock_fee = Self::get_num_write_locks_in_message(message)
+            .saturating_mul(fee_structure.lamports_per_write_lock);
+        let compute_fee = fee_structure
+            .compute_fee_bins
+            .iter()
+            .find(|bin| compute_budget.compute_unit_limit <= bin.limit)
+            .map(|bin| bin.fee)
+            .unwrap_or_else(|| {
+                fee_structure
+                    .compute_fee_bins
+                    .last()
+                    .map(|bin| bin.fee)
+                    .unwrap_or_default()
+            });
+
+        ((prioritization_fee
+            .saturating_add(signature_fee)
+            .saturating_add(write_lock_fee)
+            .saturating_add(compute_fee) as f64)
+            * congestion_multiplier)
+            .round() as u64
     }
 
     fn filter_program_errors_and_collect_fee(
@@ -4872,7 +4855,6 @@ impl Bank {
                     tx.message(),
                     lamports_per_signature,
                     &self.fee_structure,
-                    self.feature_set.is_active(&tx_wide_compute_cap::id()),
                     self.feature_set
                         .is_active(&add_set_compute_unit_price_ix::id()),
                 );
@@ -10326,15 +10308,19 @@ pub(crate) mod tests {
     // This test demonstrates that fees are paid even when a program fails.
     #[test]
     fn test_detect_failed_duplicate_transactions() {
-        let (mut genesis_config, mint_keypair) = create_genesis_config(2);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(1, 0);
+        let (mut genesis_config, mint_keypair) = create_genesis_config(10_000);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(5_000, 0);
         let bank = Bank::new_for_tests(&genesis_config);
 
         let dest = Keypair::new();
 
         // source with 0 program context
-        let tx =
-            system_transaction::transfer(&mint_keypair, &dest.pubkey(), 2, genesis_config.hash());
+        let tx = system_transaction::transfer(
+            &mint_keypair,
+            &dest.pubkey(),
+            10_000,
+            genesis_config.hash(),
+        );
         let signature = tx.signatures[0];
         assert!(!bank.has_signature(&signature));
 
@@ -10350,7 +10336,7 @@ pub(crate) mod tests {
         assert_eq!(bank.get_balance(&dest.pubkey()), 0);
 
         // This should be the original balance minus the transaction fee.
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 5000);
     }
 
     #[test]
@@ -10514,7 +10500,7 @@ pub(crate) mod tests {
     fn test_bank_tx_fee() {
         solana_logger::setup();
 
-        let arbitrary_transfer_amount = 42;
+        let arbitrary_transfer_amount = 42_000;
         let mint = arbitrary_transfer_amount * 100;
         let leader = solana_sdk::pubkey::new_rand();
         let GenesisConfigInfo {
@@ -10522,7 +10508,7 @@ pub(crate) mod tests {
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(mint, &leader, 3);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(4, 0); // something divisible by 2
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0); // something divisible by 2
 
         let expected_fee_paid = genesis_config
             .fee_rate_governor
@@ -10532,7 +10518,6 @@ pub(crate) mod tests {
             genesis_config.fee_rate_governor.burn(expected_fee_paid);
 
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.deactivate_feature(&tx_wide_compute_cap::id());
 
         let capitalization = bank.capitalization();
 
@@ -10640,7 +10625,6 @@ pub(crate) mod tests {
                 .lamports_per_signature,
             &FeeStructure::default(),
             true,
-            true,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -10742,8 +10726,8 @@ pub(crate) mod tests {
         } = create_genesis_config_with_leader(1_000_000, &leader, 3);
         genesis_config
             .fee_rate_governor
-            .target_lamports_per_signature = 1000;
-        genesis_config.fee_rate_governor.target_signatures_per_slot = 1;
+            .target_lamports_per_signature = 5000;
+        genesis_config.fee_rate_governor.target_signatures_per_slot = 0;
 
         let mut bank = Bank::new_for_tests(&genesis_config);
         goto_end_of_slot(&mut bank);
@@ -10752,7 +10736,6 @@ pub(crate) mod tests {
         assert_eq!(cheap_lamports_per_signature, 0);
 
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
-        bank.deactivate_feature(&tx_wide_compute_cap::id());
         goto_end_of_slot(&mut bank);
         let expensive_blockhash = bank.last_blockhash();
         let expensive_lamports_per_signature = bank.get_lamports_per_signature();
@@ -10823,7 +10806,6 @@ pub(crate) mod tests {
             cheap_lamports_per_signature,
             &FeeStructure::default(),
             true,
-            true,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -10841,7 +10823,6 @@ pub(crate) mod tests {
             expensive_lamports_per_signature,
             &FeeStructure::default(),
             true,
-            true,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -10856,10 +10837,9 @@ pub(crate) mod tests {
             mut genesis_config,
             mint_keypair,
             ..
-        } = create_genesis_config_with_leader(100, &leader, 3);
-        genesis_config.fee_rate_governor = FeeRateGovernor::new(2, 0);
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.deactivate_feature(&tx_wide_compute_cap::id());
+        } = create_genesis_config_with_leader(100_000, &leader, 3);
+        genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0);
+        let bank = Bank::new_for_tests(&genesis_config);
 
         let key = Keypair::new();
         let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
@@ -10957,7 +10937,6 @@ pub(crate) mod tests {
                                 .create_fee_calculator()
                                 .lamports_per_signature,
                             &FeeStructure::default(),
-                            true,
                             true,
                         ) * 2
                     )
@@ -12828,11 +12807,15 @@ pub(crate) mod tests {
 
     #[test]
     fn test_check_transaction_for_nonce_ok() {
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set)
-                .unwrap();
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -12859,11 +12842,15 @@ pub(crate) mod tests {
 
     #[test]
     fn test_check_transaction_for_nonce_not_nonce_fail() {
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set)
-                .unwrap();
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -12888,11 +12875,15 @@ pub(crate) mod tests {
 
     #[test]
     fn test_check_transaction_for_nonce_missing_ix_pubkey_fail() {
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set)
-                .unwrap();
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -12918,11 +12909,15 @@ pub(crate) mod tests {
 
     #[test]
     fn test_check_transaction_for_nonce_nonce_acc_does_not_exist_fail() {
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set)
-                .unwrap();
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
         let missing_keypair = Keypair::new();
@@ -12949,11 +12944,15 @@ pub(crate) mod tests {
 
     #[test]
     fn test_check_transaction_for_nonce_bad_tx_hash_fail() {
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set)
-                .unwrap();
+        let (bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
         let custodian_pubkey = custodian_keypair.pubkey();
         let nonce_pubkey = nonce_keypair.pubkey();
 
@@ -13040,11 +13039,15 @@ pub(crate) mod tests {
 
     #[test]
     fn test_nonce_transaction() {
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set)
-                .unwrap();
+        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
         let alice_keypair = Keypair::new();
         let alice_pubkey = alice_keypair.pubkey();
         let custodian_pubkey = custodian_keypair.pubkey();
@@ -13298,11 +13301,15 @@ pub(crate) mod tests {
     #[test]
     fn test_nonce_authority() {
         solana_logger::setup();
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set)
-                .unwrap();
+        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
         let alice_keypair = Keypair::new();
         let alice_pubkey = alice_keypair.pubkey();
         let custodian_pubkey = custodian_keypair.pubkey();
@@ -13355,15 +13362,13 @@ pub(crate) mod tests {
     fn test_nonce_payer() {
         solana_logger::setup();
         let nonce_starting_balance = 250_000;
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
         let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
             10_000_000,
             |_| {},
             5_000_000,
             nonce_starting_balance,
             None,
-            feature_set,
+            FeatureSet::all_enabled(),
         )
         .unwrap();
         let alice_keypair = Keypair::new();
@@ -13488,7 +13493,6 @@ pub(crate) mod tests {
         genesis_config.rent.lamports_per_byte_year = 0;
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.feature_set = Arc::new(FeatureSet::all_enabled());
-        bank.deactivate_feature(&tx_wide_compute_cap::id());
         let mut bank = Arc::new(bank);
 
         // Deliberately use bank 0 to initialize nonce account, so that nonce account fee_calculator indicates 0 fees
@@ -13621,11 +13625,15 @@ pub(crate) mod tests {
 
     #[test]
     fn test_check_ro_durable_nonce_fails() {
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) =
-            setup_nonce_with_bank(10_000_000, |_| {}, 5_000_000, 250_000, None, feature_set)
-                .unwrap();
+        let (mut bank, _mint_keypair, custodian_keypair, nonce_keypair) = setup_nonce_with_bank(
+            10_000_000,
+            |_| {},
+            5_000_000,
+            250_000,
+            None,
+            FeatureSet::all_enabled(),
+        )
+        .unwrap();
         Arc::get_mut(&mut bank)
             .unwrap()
             .activate_feature(&feature_set::nonce_must_be_writable::id());
@@ -13728,8 +13736,8 @@ pub(crate) mod tests {
 
     #[test]
     fn test_pre_post_transaction_balances() {
-        let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
-        let fee_rate_governor = FeeRateGovernor::new(1, 0);
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(500_000);
+        let fee_rate_governor = FeeRateGovernor::new(5000, 0);
         genesis_config.fee_rate_governor = fee_rate_governor;
         let parent = Arc::new(Bank::new_for_tests(&genesis_config));
         let bank0 = Arc::new(new_from_parent(&parent));
@@ -13739,18 +13747,18 @@ pub(crate) mod tests {
         let pubkey0 = solana_sdk::pubkey::new_rand();
         let pubkey1 = solana_sdk::pubkey::new_rand();
         let pubkey2 = solana_sdk::pubkey::new_rand();
-        let keypair0_account = AccountSharedData::new(8, 0, &Pubkey::default());
-        let keypair1_account = AccountSharedData::new(9, 0, &Pubkey::default());
-        let account0 = AccountSharedData::new(11, 0, &Pubkey::default());
+        let keypair0_account = AccountSharedData::new(8_000, 0, &Pubkey::default());
+        let keypair1_account = AccountSharedData::new(9_000, 0, &Pubkey::default());
+        let account0 = AccountSharedData::new(11_000, 0, &Pubkey::default());
         bank0.store_account(&keypair0.pubkey(), &keypair0_account);
         bank0.store_account(&keypair1.pubkey(), &keypair1_account);
         bank0.store_account(&pubkey0, &account0);
 
         let blockhash = bank0.last_blockhash();
 
-        let tx0 = system_transaction::transfer(&keypair0, &pubkey0, 2, blockhash);
-        let tx1 = system_transaction::transfer(&Keypair::new(), &pubkey1, 2, blockhash);
-        let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 12, blockhash);
+        let tx0 = system_transaction::transfer(&keypair0, &pubkey0, 2_000, blockhash);
+        let tx1 = system_transaction::transfer(&Keypair::new(), &pubkey1, 2_000, blockhash);
+        let tx2 = system_transaction::transfer(&keypair1, &pubkey2, 12_000, blockhash);
         let txs = vec![tx0, tx1, tx2];
 
         let lock_result = bank0.prepare_batch_for_tests(txs);
@@ -13769,8 +13777,14 @@ pub(crate) mod tests {
         assert_eq!(transaction_balances_set.post_balances.len(), 3);
 
         assert!(transaction_results.execution_results[0].was_executed_successfully());
-        assert_eq!(transaction_balances_set.pre_balances[0], vec![8, 11, 1]);
-        assert_eq!(transaction_balances_set.post_balances[0], vec![5, 13, 1]);
+        assert_eq!(
+            transaction_balances_set.pre_balances[0],
+            vec![8_000, 11_000, 1]
+        );
+        assert_eq!(
+            transaction_balances_set.post_balances[0],
+            vec![1_000, 13_000, 1]
+        );
 
         // Failed transactions still produce balance sets
         // This is a TransactionError - not possible to charge fees
@@ -13796,8 +13810,8 @@ pub(crate) mod tests {
                 ..
             },
         ));
-        assert_eq!(transaction_balances_set.pre_balances[2], vec![9, 0, 1]);
-        assert_eq!(transaction_balances_set.post_balances[2], vec![8, 0, 1]);
+        assert_eq!(transaction_balances_set.pre_balances[2], vec![9_000, 0, 1]);
+        assert_eq!(transaction_balances_set.post_balances[2], vec![4_000, 0, 1]);
     }
 
     #[test]
@@ -17234,7 +17248,7 @@ pub(crate) mod tests {
     fn test_compute_budget_program_noop() {
         solana_logger::setup();
         let GenesisConfigInfo {
-            mut genesis_config,
+            genesis_config,
             mint_keypair,
             ..
         } = create_genesis_config_with_leader(
@@ -17242,15 +17256,6 @@ pub(crate) mod tests {
             &Pubkey::new_unique(),
             bootstrap_validator_stake_lamports(),
         );
-
-        // activate all features except..
-        activate_all_features(&mut genesis_config);
-        genesis_config
-            .accounts
-            .remove(&feature_set::tx_wide_compute_cap::id());
-        genesis_config
-            .accounts
-            .remove(&feature_set::requestable_heap_size::id());
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
@@ -17261,8 +17266,8 @@ pub(crate) mod tests {
             assert_eq!(
                 *compute_budget,
                 ComputeBudget {
-                    compute_unit_limit: 200_000,
-                    heap_size: None,
+                    compute_unit_limit: 1,
+                    heap_size: Some(48 * 1024),
                     ..ComputeBudget::default()
                 }
             );
@@ -17563,13 +17568,29 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 0, &FeeStructure::default(), false, true),
+            Bank::calculate_fee(
+                &message,
+                0,
+                &FeeStructure {
+                    lamports_per_signature: 0,
+                    ..FeeStructure::default()
+                },
+                true
+            ),
             0
         );
 
         // One signature, a fee.
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
+            Bank::calculate_fee(
+                &message,
+                1,
+                &FeeStructure {
+                    lamports_per_signature: 1,
+                    ..FeeStructure::default()
+                },
+                true
+            ),
             1
         );
 
@@ -17580,14 +17601,25 @@ pub(crate) mod tests {
         let ix1 = system_instruction::transfer(&key1, &key0, 1);
         let message = SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&key0))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 2, &FeeStructure::default(), false, true),
+            Bank::calculate_fee(
+                &message,
+                2,
+                &FeeStructure {
+                    lamports_per_signature: 2,
+                    ..FeeStructure::default()
+                },
+                true
+            ),
             4
         );
     }
 
     #[test]
     fn test_calculate_fee_compute_units() {
-        let fee_structure = FeeStructure::default();
+        let fee_structure = FeeStructure {
+            lamports_per_signature: 1,
+            ..FeeStructure::default()
+        };
         let max_fee = fee_structure.compute_fee_bins.last().unwrap().fee;
         let lamports_per_signature = fee_structure.lamports_per_signature;
 
@@ -17596,7 +17628,7 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true),
+            Bank::calculate_fee(&message, 1, &fee_structure, true),
             max_fee + lamports_per_signature
         );
 
@@ -17608,7 +17640,7 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true),
+            Bank::calculate_fee(&message, 1, &fee_structure, true),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -17636,12 +17668,12 @@ pub(crate) mod tests {
                 &[
                     ComputeBudgetInstruction::set_compute_unit_limit(requested_compute_units),
                     ComputeBudgetInstruction::set_compute_unit_price(PRIORITIZATION_FEE_RATE),
-                    Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                    Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ],
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
+            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true);
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
@@ -17651,6 +17683,10 @@ pub(crate) mod tests {
 
     #[test]
     fn test_calculate_fee_secp256k1() {
+        let fee_structure = FeeStructure {
+            lamports_per_signature: 1,
+            ..FeeStructure::default()
+        };
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
         let ix0 = system_instruction::transfer(&key0, &key1, 1);
@@ -17675,10 +17711,7 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(
-            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
-            2
-        );
+        assert_eq!(Bank::calculate_fee(&message, 1, &fee_structure, true), 2);
 
         secp_instruction1.data = vec![0];
         secp_instruction2.data = vec![10];
@@ -17687,10 +17720,7 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(
-            Bank::calculate_fee(&message, 1, &FeeStructure::default(), false, true),
-            11
-        );
+        assert_eq!(Bank::calculate_fee(&message, 1, &fee_structure, true), 11);
     }
 
     #[test]
