@@ -25,7 +25,7 @@ use {
     solana_ledger::{
         blockstore::Blockstore,
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{Shred, ShredId},
+        shred::{self, ShredId},
     },
     solana_measure::measure::Measure,
     solana_perf::packet::PacketBatch,
@@ -136,11 +136,11 @@ type ShredFilter = LruCache<ShredId, Vec<u64>>;
 
 // Returns true if shred is already received and should skip retransmit.
 fn should_skip_retransmit(
-    shred: &Shred,
+    key: ShredId,
+    shred: &[u8],
     shreds_received: &mut ShredFilter,
     packet_hasher: &PacketHasher,
 ) -> bool {
-    let key = shred.id();
     match shreds_received.get_mut(&key) {
         Some(sent) if sent.len() >= MAX_DUPLICATE_COUNT => true,
         Some(sent) => {
@@ -179,7 +179,7 @@ fn retransmit(
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
     cluster_info: &ClusterInfo,
-    shreds_receiver: &Receiver<Vec<Shred>>,
+    shreds_receiver: &Receiver<Vec</*shred:*/ Vec<u8>>>,
     sockets: &[UdpSocket],
     stats: &mut RetransmitStats,
     cluster_nodes_cache: &ClusterNodesCache<RetransmitStage>,
@@ -211,15 +211,16 @@ fn retransmit(
     // Lookup slot leader and cluster nodes for each slot.
     let shreds: Vec<_> = shreds
         .into_iter()
-        .filter(|shred| {
-            if should_skip_retransmit(shred, shreds_received, packet_hasher) {
+        .filter_map(|shred| {
+            let key = shred::layout::get_shred_id(&shred)?;
+            if should_skip_retransmit(key, &shred, shreds_received, packet_hasher) {
                 stats.num_shreds_skipped += 1;
-                false
+                None
             } else {
-                true
+                Some((key, shred))
             }
         })
-        .into_group_map_by(Shred::slot)
+        .into_group_map_by(|(key, _shred)| key.slot())
         .into_iter()
         .filter_map(|(slot, shreds)| {
             max_slots.retransmit.fetch_max(slot, Ordering::Relaxed);
@@ -255,8 +256,9 @@ fn retransmit(
         shreds
             .into_iter()
             .enumerate()
-            .map(|(index, (shred, slot_leader, cluster_nodes))| {
+            .map(|(index, ((key, shred), slot_leader, cluster_nodes))| {
                 let (root_distance, num_nodes) = retransmit_shred(
+                    &key,
                     &shred,
                     &slot_leader,
                     &root_bank,
@@ -265,16 +267,17 @@ fn retransmit(
                     &sockets[index % sockets.len()],
                     stats,
                 );
-                (shred.slot(), root_distance, num_nodes)
+                (key.slot(), root_distance, num_nodes)
             })
             .fold(HashMap::new(), record)
     } else {
         thread_pool.install(|| {
             shreds
                 .into_par_iter()
-                .map(|(shred, slot_leader, cluster_nodes)| {
+                .map(|((key, shred), slot_leader, cluster_nodes)| {
                     let index = thread_pool.current_thread_index().unwrap();
                     let (root_distance, num_nodes) = retransmit_shred(
+                        &key,
                         &shred,
                         &slot_leader,
                         &root_bank,
@@ -283,7 +286,7 @@ fn retransmit(
                         &sockets[index % sockets.len()],
                         stats,
                     );
-                    (shred.slot(), root_distance, num_nodes)
+                    (key.slot(), root_distance, num_nodes)
                 })
                 .fold(HashMap::new, record)
                 .reduce(HashMap::new, RetransmitSlotStats::merge)
@@ -297,7 +300,8 @@ fn retransmit(
 }
 
 fn retransmit_shred(
-    shred: &Shred,
+    key: &ShredId,
+    shred: &[u8],
     slot_leader: &Pubkey,
     root_bank: &Bank,
     cluster_nodes: &ClusterNodes<RetransmitStage>,
@@ -307,7 +311,7 @@ fn retransmit_shred(
 ) -> (/*root_distance:*/ usize, /*num_nodes:*/ usize) {
     let mut compute_turbine_peers = Measure::start("turbine_start");
     let (root_distance, addrs) =
-        cluster_nodes.get_retransmit_addrs(slot_leader, shred, root_bank, DATA_PLANE_FANOUT);
+        cluster_nodes.get_retransmit_addrs(slot_leader, key, root_bank, DATA_PLANE_FANOUT);
     let addrs: Vec<_> = addrs
         .into_iter()
         .filter(|addr| ContactInfo::is_valid_address(addr, socket_addr_space))
@@ -318,7 +322,7 @@ fn retransmit_shred(
         .fetch_add(compute_turbine_peers.as_us(), Ordering::Relaxed);
 
     let mut retransmit_time = Measure::start("retransmit_to");
-    let num_nodes = match multi_target_send(socket, shred.payload(), &addrs) {
+    let num_nodes = match multi_target_send(socket, shred, &addrs) {
         Ok(()) => addrs.len(),
         Err(SendPktsError::IoError(ioerr, num_failed)) => {
             stats
@@ -354,7 +358,7 @@ pub fn retransmitter(
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     cluster_info: Arc<ClusterInfo>,
-    shreds_receiver: Receiver<Vec<Shred>>,
+    shreds_receiver: Receiver<Vec</*shred:*/ Vec<u8>>>,
     max_slots: Arc<MaxSlots>,
     rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
 ) -> JoinHandle<()> {
@@ -630,7 +634,10 @@ impl RetransmitSlotStats {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_ledger::shred::ShredFlags};
+    use {
+        super::*,
+        solana_ledger::shred::{Shred, ShredFlags},
+    };
 
     #[test]
     fn test_already_received() {
@@ -651,13 +658,15 @@ mod tests {
         let packet_hasher = PacketHasher::default();
         // unique shred for (1, 5) should pass
         assert!(!should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
         // duplicate shred for (1, 5) blocked
         assert!(should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
@@ -674,13 +683,15 @@ mod tests {
         );
         // first duplicate shred for (1, 5) passed
         assert!(!should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
         // then blocked
         assert!(should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
@@ -697,12 +708,14 @@ mod tests {
         );
         // 2nd duplicate shred for (1, 5) blocked
         assert!(should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
         assert!(should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
@@ -710,13 +723,15 @@ mod tests {
         let shred = Shred::new_from_parity_shard(slot, index, &[], 0, 1, 1, 0, version);
         // Coding at (1, 5) passes
         assert!(!should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
         // then blocked
         assert!(should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
@@ -724,13 +739,15 @@ mod tests {
         let shred = Shred::new_from_parity_shard(slot, index, &[], 2, 1, 1, 0, version);
         // 2nd unique coding at (1, 5) passes
         assert!(!should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
         // same again is blocked
         assert!(should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
@@ -738,12 +755,14 @@ mod tests {
         let shred = Shred::new_from_parity_shard(slot, index, &[], 3, 1, 1, 0, version);
         // Another unique coding at (1, 5) always blocked
         assert!(should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
         assert!(should_skip_retransmit(
-            &shred,
+            shred.id(),
+            shred.payload(),
             &mut shreds_received,
             &packet_hasher
         ));
