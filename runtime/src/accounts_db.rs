@@ -5166,7 +5166,11 @@ impl AccountsDb {
             .fetch_add(handle_reclaims_elapsed.as_us(), Ordering::Relaxed);
         // After handling the reclaimed entries, this slot's
         // storage entries should be purged from self.storage
-        assert!(self.storage.get_slot_stores(remove_slot).is_none());
+        assert!(
+            self.storage.get_slot_stores(remove_slot).is_none(),
+            "slot {} is not none",
+            remove_slot
+        );
     }
 
     #[allow(clippy::needless_collect)]
