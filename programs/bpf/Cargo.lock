@@ -5446,6 +5446,7 @@ dependencies = [
  "crossbeam-channel",
  "futures-util",
  "histogram",
+ "indexmap",
  "itertools",
  "libc",
  "log",
