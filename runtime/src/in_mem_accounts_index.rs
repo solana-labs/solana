@@ -303,25 +303,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
     fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: Arc<AccountMapEntryInner<T>>) {
-        // have to consider changes that have occurred to refcount
-        // depends on being in cache or not
-        // slots in 'in_mem' take precedence over slots in 'disk'
         let mut slot_list = in_mem.slot_list.write().unwrap();
+        let slot_list2 = disk.slot_list.write().unwrap();
 
-        let mut slot_list2 = disk.slot_list.write().unwrap();
-        std::mem::swap(&mut slot_list, &mut slot_list2);
-
-        let mut _reclaims = vec![];
+        let v: Vec<u64> = slot_list.iter().map(|x| x.0.to_owned()).collect();
         for (slot, new_entry) in slot_list2.iter().copied() {
-            // When reaching here, in_mem is already cached. Therefore, no need to adjust the refcount.
-            let _addref = Self::update_slot_list(
-                &mut slot_list,
-                slot,
-                new_entry,
-                None,
-                &mut _reclaims,
-                false,
-            );
+            if !v.contains(&slot) {
+                slot_list.push((slot, new_entry));
+            }
         }
     }
 
