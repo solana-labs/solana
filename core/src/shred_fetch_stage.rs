@@ -11,7 +11,6 @@ use {
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
     std::{
         net::UdpSocket,
-        ops::RangeBounds,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -63,12 +62,12 @@ impl ShredFetchStage {
             }
             stats.shred_count += packet_batch.len();
             // Limit shreds to 2 epochs away.
-            let slot_bounds = (last_root + 1)..(last_slot + 2 * slots_per_epoch);
+            let max_slot = last_slot + 2 * slots_per_epoch;
             for packet in packet_batch.iter_mut() {
                 if should_discard_packet(
                     packet,
                     last_root,
-                    slot_bounds.clone(),
+                    max_slot,
                     shred_version,
                     &packet_hasher,
                     &mut shreds_received,
@@ -197,14 +196,13 @@ impl ShredFetchStage {
 fn should_discard_packet(
     packet: &Packet,
     root: Slot,
-    // Range of slots to ingest shreds for.
-    slot_bounds: impl RangeBounds<Slot>,
+    max_slot: Slot, // Max slot to ingest shreds for.
     shred_version: u16,
     packet_hasher: &PacketHasher,
     shreds_received: &mut ShredsReceived,
     stats: &mut ShredFetchStats,
 ) -> bool {
-    if should_discard_shred(packet, root, shred_version, slot_bounds, stats) {
+    if should_discard_shred(packet, root, max_slot, shred_version, stats) {
         return true;
     }
     let hash = packet_hasher.hash_packet(packet);
@@ -253,11 +251,11 @@ mod tests {
         let last_root = 0;
         let last_slot = 100;
         let slots_per_epoch = 10;
-        let slot_bounds = (last_root + 1)..(last_slot + 2 * slots_per_epoch);
+        let max_slot = last_slot + 2 * slots_per_epoch;
         assert!(!should_discard_packet(
             &packet,
             last_root,
-            slot_bounds.clone(),
+            max_slot,
             shred_version,
             &hasher,
             &mut shreds_received,
@@ -272,7 +270,7 @@ mod tests {
         assert!(!should_discard_packet(
             &packet,
             last_root,
-            slot_bounds,
+            max_slot,
             shred_version,
             &hasher,
             &mut shreds_received,
@@ -290,7 +288,7 @@ mod tests {
         let last_slot = 100;
         let slots_per_epoch = 10;
         let shred_version = 59445;
-        let slot_bounds = (last_root + 1)..(last_slot + 2 * slots_per_epoch);
+        let max_slot = last_slot + 2 * slots_per_epoch;
 
         let hasher = PacketHasher::default();
 
@@ -298,7 +296,7 @@ mod tests {
         assert!(should_discard_packet(
             &packet,
             last_root,
-            slot_bounds.clone(),
+            max_slot,
             shred_version,
             &hasher,
             &mut shreds_received,
@@ -321,7 +319,7 @@ mod tests {
         assert!(should_discard_packet(
             &packet,
             3,
-            3..slot_bounds.end,
+            max_slot,
             shred_version,
             &hasher,
             &mut shreds_received,
@@ -332,7 +330,7 @@ mod tests {
         assert!(should_discard_packet(
             &packet,
             last_root,
-            slot_bounds.clone(),
+            max_slot,
             345, // shred_version
             &hasher,
             &mut shreds_received,
@@ -344,7 +342,7 @@ mod tests {
         assert!(!should_discard_packet(
             &packet,
             last_root,
-            slot_bounds.clone(),
+            max_slot,
             shred_version,
             &hasher,
             &mut shreds_received,
@@ -355,7 +353,7 @@ mod tests {
         assert!(should_discard_packet(
             &packet,
             last_root,
-            slot_bounds.clone(),
+            max_slot,
             shred_version,
             &hasher,
             &mut shreds_received,
@@ -379,7 +377,7 @@ mod tests {
         assert!(should_discard_packet(
             &packet,
             last_root,
-            slot_bounds.clone(),
+            max_slot,
             shred_version,
             &hasher,
             &mut shreds_received,
@@ -392,7 +390,7 @@ mod tests {
         assert!(should_discard_packet(
             &packet,
             last_root,
-            slot_bounds,
+            max_slot,
             shred_version,
             &hasher,
             &mut shreds_received,
