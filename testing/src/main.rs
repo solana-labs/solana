@@ -33,11 +33,11 @@ use {
             Arc, RwLock,
         },
         path::Path,
-        net::{SocketAddr,IpAddr, Ipv4Addr},
+        net::{SocketAddr,IpAddr},
         str::FromStr,
         process::exit,
         env,
-        fs::File,
+        fs::{self, File},
         collections::HashMap,
         io::Write,
     },
@@ -113,9 +113,6 @@ pub fn main() {
     let matches = parse_matches();
     let account_infile = value_t_or_exit!(matches, "account_file", String);
     let write_keys = matches.is_present("write_keys");
-
-    info!("write keys val: {}", write_keys);
-
 
     if write_keys {
 
@@ -195,15 +192,12 @@ pub fn main() {
         solana_net_utils::parse_port_range(default_dynamic_port_range)
             .expect("invalid dynamic_port_range");
 
-
     let shred_version = value_t!(matches, "shred_version", u16).unwrap_or_else(|_| {
         DEFAULT_SHRED_VERSION
     });
 
-
     let leader_keypair = &node_keys[0];
     let leader_pubkey = leader_keypair.pubkey();
-
 
     let mut config = ClusterConfig::default();
 
@@ -215,14 +209,23 @@ pub fn main() {
     );
     let genesis_config = &mut genesis_config_info.genesis_config;
 
+
+    let accounts_dir = TempDir::new().unwrap();
+    let ledger_path = accounts_dir.path().to_path_buf();
+    let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
+        eprintln!("Unable to access ledger path: {:?}", err);
+        exit(1);
+    });
+
     let mut gossip_thread_vector: Vec<GossipService> = Vec::new();
 
+    // Loop through nodes, spin up a leader first, then have all others join leader 
     for i in 0..num_nodes {
         let mut entrypoint_addrs: Vec<SocketAddr> = Vec::new();
         let gossip_host = IpAddr::from_str("127.0.0.1").unwrap();
         if i == 0 {
             //Entrypoint to join Gossip Cluster
-            let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8001);
+            let gossip_addr = SocketAddr::new(gossip_host.clone(), 8001);
 
             //create new node with external ip
             let mut leader_node = Node::new_with_external_ip(   
@@ -255,11 +258,10 @@ pub fn main() {
             cluster_info.set_entrypoints(cluster_entrypoints);
             let cluster_info = Arc::new(cluster_info);
 
-                //Generate new bank and bank forks
-            let accounts_dir = TempDir::new().unwrap();
+            //Generate new bank and bank forks
             let bank0 = Bank::new_with_paths_for_tests(
                 genesis_config,
-                vec![accounts_dir.path().to_path_buf()],
+                vec![ledger_path.clone()],
                 None,
                 None,
                 AccountSecondaryIndexes::default(),
@@ -329,14 +331,12 @@ pub fn main() {
                 .collect::<Vec<_>>();
 
             cluster_info.set_entrypoints(cluster_entrypoints);
-            // cluster_info.my_contact_info().
             let cluster_info = Arc::new(cluster_info);
 
             //Generate new bank and bank forks
-            let accounts_dir = TempDir::new().unwrap();
             let bank0 = Bank::new_with_paths_for_tests(
                 genesis_config,
-                vec![accounts_dir.path().to_path_buf()],
+                vec![ledger_path.clone()],
                 None,
                 None,
                 AccountSecondaryIndexes::default(),

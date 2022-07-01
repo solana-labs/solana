@@ -1556,7 +1556,6 @@ impl ClusterInfo {
         sender: &PacketBatchSender,
         generate_pull_requests: bool,
     ) -> Result<(), GossipError> {
-        info!("greg_run_gossip()");
         let reqs = self.generate_new_gossip_requests(
             thread_pool,
             gossip_validators,
@@ -1696,7 +1695,6 @@ impl ClusterInfo {
                 }
                 let mut generate_pull_requests = true;
                 loop {
-                    info!("greg_gossip()");
                     let start = timestamp();
                     if self.contact_debug_interval != 0
                         && start - last_contact_info_trace > self.contact_debug_interval
