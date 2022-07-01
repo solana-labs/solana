@@ -313,7 +313,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
         let mut _reclaims = vec![];
         for (slot, new_entry) in slot_list2.iter().copied() {
-            let addref = Self::update_slot_list(
+            // When reaching here, in_mem is already cached. Therefore, no need to adjust the refcount.
+            let _addref = Self::update_slot_list(
                 &mut slot_list,
                 slot,
                 new_entry,
@@ -321,10 +322,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 &mut _reclaims,
                 false,
             );
-
-            if addref {
-                in_mem.add_un_ref(true);
-            }
         }
     }
 
