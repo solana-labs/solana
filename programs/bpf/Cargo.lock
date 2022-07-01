@@ -5083,6 +5083,7 @@ dependencies = [
  "solana-frozen-abi 1.11.2",
  "solana-frozen-abi-macro 1.11.2",
  "solana-measure",
+ "solana-metrics",
  "solana-sdk 1.11.2",
  "thiserror",
 ]

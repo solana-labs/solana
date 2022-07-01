@@ -495,7 +495,6 @@ pub fn process_entries_for_tests(
     };
 
     let mut entry_starting_index: usize = bank.transaction_count().try_into().unwrap();
-    let mut end_to_end_execute_timings = ThreadExecuteTimings::default();
     let mut confirmation_timing = ConfirmationTiming::default();
     let mut replay_entries: Vec<_> =
         entry::verify_transactions(entries, Arc::new(verify_transaction))?
