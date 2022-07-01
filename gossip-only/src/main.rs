@@ -6,7 +6,6 @@ use {
         crate_description, crate_name, value_t, values_t, value_t_or_exit, App, Arg, ArgMatches,
     },
     solana_core::{
-        validator::{ValidatorConfig},
         gen_keys::GenKeys,
     },
     solana_gossip::{
@@ -41,10 +40,6 @@ use {
         collections::HashMap,
         io::Write,
         collections::HashSet,
-    },
-    solana_local_cluster::{
-        local_cluster::ClusterConfig,
-        validator_configs::make_identical_validator_configs,
     },
     solana_sdk::{
         signature::{Signer, Keypair},
@@ -222,7 +217,6 @@ pub fn main() {
         });
 
     //Setup genesis config.
-    let mut config = ClusterConfig::default();
     let genesis_config_info = &mut create_genesis_config_with_leader(
         cluster_lamports,
         &node_keys[0].pubkey(),
@@ -236,17 +230,6 @@ pub fn main() {
         eprintln!("Unable to access ledger path: {:?}", err);
         exit(1);
     });
-
-    // let accounts_dir = TempDir::new()
-    //     .unwrap()
-    //     .path()
-    //     .to_path_buf();
-
-    // let ledger_path = fs::canonicalize(&accounts_dir)
-    //     .unwrap_or_else(|err| {
-    //         eprintln!("Unable to access ledger path: {:?}", err);
-    //         exit(1);
-    // });
 
     let mut gossip_threads: Vec<GossipService> = Vec::new();
     let gossip_host = entrypoint_addrs[0].ip();

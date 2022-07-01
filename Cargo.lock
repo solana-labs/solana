@@ -1748,19 +1748,10 @@ dependencies = [
 name = "gossip-only"
 version = "1.11.2"
 dependencies = [
- "chrono",
  "clap 2.33.3",
- "console",
- "core_affinity",
  "crossbeam-channel",
  "csv",
- "fd-lock",
  "indicatif",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "jsonrpc-ipc-server",
- "jsonrpc-server-utils",
  "libc",
  "log",
  "num_cpus",
@@ -1777,7 +1768,6 @@ dependencies = [
  "solana-genesis-utils",
  "solana-gossip",
  "solana-ledger",
- "solana-local-cluster",
  "solana-logger 1.11.2",
  "solana-metrics",
  "solana-net-utils",

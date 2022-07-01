@@ -11,18 +11,9 @@ documentation = "https://docs.rs/"
 default-run = "gossip-only"
 
 [dependencies]
-chrono = { version = "0.4.11", features = ["serde"] }
 clap = "2.33.1"
-console = "0.15.0"
-core_affinity = "0.5.10"
 crossbeam-channel = "0.5"
-fd-lock = "3.0.5"
 indicatif = "0.16.2"
-jsonrpc-core = "18.0.0"
-jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }
-jsonrpc-derive = "18.0.0"
-jsonrpc-ipc-server = "18.0.0"
-jsonrpc-server-utils = "18.0.0"
 log = "0.4.17"
 num_cpus = "1.13.1"
 rand = "0.7.0"
@@ -44,7 +35,6 @@ solana-runtime = { path = "../runtime", version = "=1.11.2" }
 solana-sdk = { path = "../sdk", version = "=1.11.2" }
 solana-streamer = { path = "../streamer", version = "=1.11.2" }
 solana-version = { path = "../version", version = "=1.11.2" }
-solana-local-cluster = { path = "../local-cluster", version = "=1.11.2" }
 tempfile = "3.3.0"
 symlink = "0.1.0"
 csv = "1.1"
