@@ -1745,6 +1745,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "gossip-only"
+version = "1.11.2"
+dependencies = [
+ "chrono",
+ "clap 2.33.3",
+ "console",
+ "core_affinity",
+ "crossbeam-channel",
+ "csv",
+ "fd-lock",
+ "indicatif",
+ "jsonrpc-core",
+ "jsonrpc-core-client",
+ "jsonrpc-derive",
+ "jsonrpc-ipc-server",
+ "jsonrpc-server-utils",
+ "libc",
+ "log",
+ "num_cpus",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "signal-hook",
+ "solana-clap-utils",
+ "solana-client",
+ "solana-core",
+ "solana-entry",
+ "solana-genesis",
+ "solana-genesis-utils",
+ "solana-gossip",
+ "solana-ledger",
+ "solana-local-cluster",
+ "solana-logger 1.11.2",
+ "solana-metrics",
+ "solana-net-utils",
+ "solana-runtime",
+ "solana-sdk 1.11.2",
+ "solana-streamer",
+ "solana-version",
+ "symlink",
+ "tempfile",
+ "tikv-jemallocator",
+]
+
+[[package]]
 name = "h2"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6809,63 +6855,6 @@ name = "termtree"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13a4ec180a2de59b57434704ccfad967f789b12737738798fa08798cd5824c16"
-
-[[package]]
-name = "testing"
-version = "1.11.2"
-dependencies = [
- "chrono",
- "clap 2.33.3",
- "console",
- "core_affinity",
- "crossbeam-channel",
- "csv",
- "fd-lock",
- "indicatif",
- "jsonrpc-core",
- "jsonrpc-core-client",
- "jsonrpc-derive",
- "jsonrpc-ipc-server",
- "jsonrpc-server-utils",
- "libc",
- "log",
- "num_cpus",
- "rand 0.7.3",
- "serde",
- "serde_json",
- "serde_yaml",
- "signal-hook",
- "solana-bench-tps",
- "solana-clap-utils",
- "solana-cli-config",
- "solana-client",
- "solana-core",
- "solana-download-utils",
- "solana-entry",
- "solana-faucet",
- "solana-genesis",
- "solana-genesis-utils",
- "solana-gossip",
- "solana-ledger",
- "solana-local-cluster",
- "solana-logger 1.11.2",
- "solana-metrics",
- "solana-net-utils",
- "solana-perf",
- "solana-poh",
- "solana-rpc",
- "solana-runtime",
- "solana-sdk 1.11.2",
- "solana-send-transaction-service",
- "solana-storage-bigtable",
- "solana-streamer",
- "solana-test-validator",
- "solana-version",
- "solana-vote-program",
- "symlink",
- "tempfile",
- "tikv-jemallocator",
-]
 
 [[package]]
 name = "textwrap"
