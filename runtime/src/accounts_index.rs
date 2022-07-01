@@ -1711,9 +1711,9 @@ impl<T: IndexValue> AccountsIndex<T> {
             is_slot_list_empty = slot_list.is_empty();
         });
 
-        // If the slot list is empty, remove the pubkey from `account_maps`.  Make sure to grab the
+        // If the slot list is empty, remove the pubkey from `account_maps`. Make sure to grab the
         // lock and double check the slot list is still empty, because another writer could have
-        // locked and inserted the pubkey inbetween when `is_slot_list_empty=true` and the call to
+        // locked and inserted the pubkey in-between when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
             let w_maps = self.get_account_maps_write_lock(pubkey);

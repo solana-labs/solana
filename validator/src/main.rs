@@ -942,7 +942,7 @@ pub fn main() {
                 .long("contact-debug-interval")
                 .value_name("CONTACT_DEBUG_INTERVAL")
                 .takes_value(true)
-                .default_value("10000")
+                .default_value("120000")
                 .help("Milliseconds between printing contact debug from gossip."),
         )
         .arg(

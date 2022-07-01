@@ -827,7 +827,7 @@ impl Accounts {
             can_cached_slot_be_unflushed,
             ignore_mismatch,
         ) {
-            warn!("verify_bank_hash failed: {:?}", err);
+            warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
         } else {
             true
