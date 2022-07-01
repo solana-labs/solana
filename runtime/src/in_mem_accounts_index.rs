@@ -245,12 +245,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     match disk_entry {
                         Some(disk_entry) => {
                             Self::merge_slot_lists(entry, disk_entry);
-                            entry.clear_disk_unknown();
                         }
-                        None => {
-                            entry.clear_disk_unknown();
-                        }
+                        None => {}
                     }
+                    entry.clear_disk_unknown();
                 }
                 entry.set_age(self.storage.future_age_to_flush());
                 callback(Some(entry)).1
@@ -274,12 +272,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             match disk_entry {
                                 Some(disk_entry) => {
                                     Self::merge_slot_lists(entry, disk_entry);
-                                    entry.clear_disk_unknown();
                                 }
-                                None => {
-                                    entry.clear_disk_unknown();
-                                }
+                                None => {}
                             }
+                            entry.clear_disk_unknown();
                         }
                         callback(Some(entry)).1
                     }
@@ -339,13 +335,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let disk_entry = self.load_account_entry_from_disk(key);
                     match disk_entry {
                         Some(disk_entry) => {
-                            entry.clear_disk_unknown();
-                            Self::merge_slot_lists(entry, disk_entry)
+                            Self::merge_slot_lists(entry, disk_entry);
                         }
-                        None => {
-                            entry.clear_disk_unknown();
-                        }
+                        None => {}
                     }
+                    entry.clear_disk_unknown();
                 }
 
                 let result =
