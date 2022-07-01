@@ -124,8 +124,8 @@ pub fn main() {
     let account_infile = value_t_or_exit!(matches, "account_file", String);
     let write_keys = matches.is_present("write_keys");
 
+    //Write keys to file and exit
     if write_keys {
-
         let keypair_count = value_t!(matches, "num_keys", u64).unwrap_or_else(|_|{
             error!("Number of keys to write was not specified! Use \"--num-keys <count>\"");
             exit(1);
@@ -153,17 +153,36 @@ pub fn main() {
 
     }
 
+    // Read keys from file and spin up gossip nodes
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
     let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
     let socket_addr_space = SocketAddrSpace::Unspecified;    
 
-    //Entrypoint to join Gossip Cluster
-    let entrypoint_addr = value_t_or_exit!(matches, "entrypoint", String);
-    let entrypoint_addr = solana_net_utils::parse_host_port(&entrypoint_addr).unwrap_or_else(|e| {
-        eprintln!("failed to parse entrypoint address: {}", e);
-        exit(1);
+    //Set dynamic port range for node ports
+    let default_dynamic_port_range =
+        &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
+    let dynamic_port_range =
+        solana_net_utils::parse_port_range(default_dynamic_port_range)
+            .expect("invalid dynamic_port_range");
+
+    let shred_version = value_t!(matches, "shred_version", u16).unwrap_or_else(|_| {
+        DEFAULT_SHRED_VERSION
     });
-    println!("entrypoint_addr: {:?}", entrypoint_addr);
+
+     //Entrypoint to join Gossip Cluster
+     let entrypoint_addrs = values_t!(matches, "entrypoint", String)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|entrypoint| {
+            solana_net_utils::parse_host_port(&entrypoint).unwrap_or_else(|e| {
+                eprintln!("failed to parse entrypoint address: {}", e);
+                exit(1);
+            })
+        })
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    println!("entrypoint_addr: {:?}", entrypoint_addrs);
 
     // READ ACCOUNTS FROM FILE
     let path = Path::new(&account_infile);
@@ -194,7 +213,6 @@ pub fn main() {
 
     let mut node_keys: Vec<Keypair> = Vec::new();
     let mut node_stakes: Vec<u64> = Vec::new();
-
     accounts
         .into_iter()
         .for_each(|(keypair, stake)| {
@@ -203,191 +221,102 @@ pub fn main() {
             node_stakes.push(stake);
         });
 
-    //Set dynamic port range for node ports
-    let default_dynamic_port_range =
-        &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
-    let dynamic_port_range =
-        solana_net_utils::parse_port_range(default_dynamic_port_range)
-            .expect("invalid dynamic_port_range");
-
-    let shred_version = value_t!(matches, "shred_version", u16).unwrap_or_else(|_| {
-        DEFAULT_SHRED_VERSION
-    });
-
-    let leader_keypair = &node_keys[0];
-    let leader_pubkey = leader_keypair.pubkey();
-
-    let mut config = ClusterConfig::default();
-
     //Setup genesis config.
+    let mut config = ClusterConfig::default();
     let genesis_config_info = &mut create_genesis_config_with_leader(
         cluster_lamports,
-        &leader_pubkey,
+        &node_keys[0].pubkey(),
         node_stakes[0],
     );
     let genesis_config = &mut genesis_config_info.genesis_config;
 
+    let accounts_dir = TempDir::new()
+        .unwrap()
+        .path()
+        .to_path_buf();
 
-    let accounts_dir = TempDir::new().unwrap();
-    let ledger_path = accounts_dir.path().to_path_buf();
-    let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
-        eprintln!("Unable to access ledger path: {:?}", err);
-        exit(1);
+    let ledger_path = fs::canonicalize(&accounts_dir)
+        .unwrap_or_else(|err| {
+            eprintln!("Unable to access ledger path: {:?}", err);
+            exit(1);
     });
 
-    let mut gossip_thread_vector: Vec<GossipService> = Vec::new();
-
-    let gossip_host = entrypoint_addr.ip();
-    let mut entrypoint_addrs: Vec<SocketAddr> = Vec::new();
+    let mut gossip_threads: Vec<GossipService> = Vec::new();
+    let gossip_host = entrypoint_addrs[0].ip();
+    let gossip_addr = SocketAddr::new(
+        gossip_host,
+        solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
+            |err| {
+                eprintln!("Unable to find an available gossip port: {}", err);
+                exit(1);
+            }
+        )
+    );
 
     //set entrypoints for gossip
-    // let cluster_entrypoints = entrypoint_addrs
-    //     .iter()
-    //     .map(ContactInfo::new_gossip_entry_point)
-    //     .collect::<Vec<_>>();
+    let cluster_entrypoints = entrypoint_addrs
+        .iter()
+        .map(ContactInfo::new_gossip_entry_point)
+        .collect::<Vec<_>>();
 
     // Loop through nodes, spin up a leader first, then have all others join leader 
     for i in 0..num_nodes {
-        if i == 0 {
-            //Entrypoint to join Gossip Cluster
-            let gossip_addr = entrypoint_addr;
+        //create new node with external ip
+        let mut node = Node::new_with_external_ip( 
+            &node_keys[i].pubkey(),
+            &gossip_addr,
+            dynamic_port_range,
+            bind_address,
+            None,
+        );
+        let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[i].to_bytes()).unwrap());
+        node.info.shred_version = shred_version;
 
-            //create new node with external ip
-            let mut leader_node = Node::new_with_external_ip(   
-                &leader_pubkey,
-                &gossip_addr,
-                dynamic_port_range,
-                bind_address,
-                None,
-            );
-            let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
-            leader_node.info.shred_version = shred_version;
-        
+        let cluster_info = ClusterInfo::new(
+            node.info.clone(),
+            my_keypair.clone(),
+            socket_addr_space,
+        );
 
-            config.node_stakes = node_stakes.clone();
-            config.cluster_lamports = cluster_lamports;
-            config.validator_configs = make_identical_validator_configs(&ValidatorConfig::default_for_test(), 1);
+        cluster_info.set_entrypoints(cluster_entrypoints.clone());
+        let cluster_info = Arc::new(cluster_info);
 
-            let cluster_info = ClusterInfo::new(
-                leader_node.info.clone(),
-                leader_keypair.clone(),
-                socket_addr_space,
-            );
+        //Generate new bank and bank forks
+        let bank0 = Bank::new_with_paths_for_tests(
+            genesis_config,
+            vec![ledger_path.clone()],
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            accounts_db::AccountShrinkThreshold::default(),
+            false,
+        );
+        bank0.freeze();
+        let bank_forks = BankForks::new(bank0);
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
 
-            // //set entrypoints for gossip
-            let cluster_entrypoints = entrypoint_addrs
-                .iter()
-                .map(ContactInfo::new_gossip_entry_point)
-                .collect::<Vec<_>>();
+        let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
-            cluster_info.set_entrypoints(cluster_entrypoints.clone());
-            let cluster_info = Arc::new(cluster_info);
+        // Run Gossip
+        let exit_gossip = Arc::new(AtomicBool::new(false));
+        let gossip_service = GossipService::new(
+            &cluster_info,
+            Some(bank_forks.clone()),
+            node.sockets.gossip,
+            None,
+            true,   //should check dup instance
+            Some(stats_reporter_sender.clone()),
 
-            //Generate new bank and bank forks
-            let bank0 = Bank::new_with_paths_for_tests(
-                genesis_config,
-                vec![ledger_path.clone()],
-                None,
-                None,
-                AccountSecondaryIndexes::default(),
-                false,
-                accounts_db::AccountShrinkThreshold::default(),
-                false,
-            );
-            bank0.freeze();
-            let bank_forks = BankForks::new(bank0);
-            let bank_forks = Arc::new(RwLock::new(bank_forks));
+            &exit_gossip,
+        );
 
-            let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
-
-            // Run Gossip
-            let exit_gossip = Arc::new(AtomicBool::new(false));
-            let gossip_service = GossipService::new(
-                &cluster_info,
-                Some(Arc::clone(&bank_forks.clone())),
-                leader_node.sockets.gossip,
-                None,
-                true,   //should check dup instance
-                Some(stats_reporter_sender.clone()),
-
-                &exit_gossip,
-            );
-
-            gossip_thread_vector.push(gossip_service);
-        } 
-        else {
-            entrypoint_addrs.push(entrypoint_addr);
-            let gossip_addr = SocketAddr::new(
-                gossip_host,
-                solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
-                    |err| {
-                        eprintln!("Unable to find an available gossip port: {}", err);
-                        exit(1);
-                    }
-                )
-            );
-
-            //create new node with external ip
-            let mut my_node = Node::new_with_external_ip( 
-                &node_keys[i].pubkey(),
-                &gossip_addr,
-                dynamic_port_range,
-                bind_address,
-                None,
-            );
-            let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[i].to_bytes()).unwrap());
-            my_node.info.shred_version = shred_version;
-
-            let cluster_info = ClusterInfo::new(
-                my_node.info.clone(),
-                my_keypair.clone(),
-                socket_addr_space,
-            );
-
-            //set entrypoints for gossip
-            let cluster_entrypoints = entrypoint_addrs
-                .iter()
-                .map(ContactInfo::new_gossip_entry_point)
-                .collect::<Vec<_>>();
-
-            cluster_info.set_entrypoints(cluster_entrypoints.clone());
-            let cluster_info = Arc::new(cluster_info);
-
-            //Generate new bank and bank forks
-            let bank0 = Bank::new_with_paths_for_tests(
-                genesis_config,
-                vec![ledger_path.clone()],
-                None,
-                None,
-                AccountSecondaryIndexes::default(),
-                false,
-                accounts_db::AccountShrinkThreshold::default(),
-                false,
-            );
-            bank0.freeze();
-            let bank_forks = BankForks::new(bank0);
-            let bank_forks = Arc::new(RwLock::new(bank_forks));
-
-            let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
-
-            // Run Gossip
-            let exit_gossip = Arc::new(AtomicBool::new(false));
-            let gossip_service = GossipService::new(
-                &cluster_info,
-                Some(bank_forks.clone()),
-                my_node.sockets.gossip,
-                None,
-                true,   //should check dup instance
-                Some(stats_reporter_sender.clone()),
-
-                &exit_gossip,
-            );
-
-            gossip_thread_vector.push(gossip_service);
-        }
+        gossip_threads.push(gossip_service);
     }
-    for thread in gossip_thread_vector {
-        thread.join().unwrap();
+    for thread in gossip_threads {
+        thread
+            .join()
+            .unwrap();
     }
 
 }
