@@ -275,6 +275,9 @@ impl<T: Clone + Copy> Bucket<T> {
             let cap_power = best_bucket.capacity_pow2;
             let cap = best_bucket.capacity();
             let pos = thread_rng().gen_range(0, cap);
+            // We are just looking for any arbitrary vacancy within the file. We could search more items here at probably a low cost.
+            // It may be useful to have metrics on how full the bucket is when we resize.
+            // We could also search more the more empty the bucket is, but that seems unlikely to perform better in practice since we randomly start at a search index.
             for i in pos..pos + self.index.max_search() {
                 let ix = i % cap;
                 if best_bucket.is_free(ix) {
