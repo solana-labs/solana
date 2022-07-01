@@ -23,7 +23,7 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
             Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults,
+            TransactionExecutionResult, TransactionResults, VerifyBankHash,
         },
         bank_forks::BankForks,
         bank_utils,
@@ -1422,7 +1422,13 @@ fn load_frozen_forks(
             if slot >= halt_at_slot {
                 bank.force_flush_accounts_cache();
                 let can_cached_slot_be_unflushed = true;
-                let _ = bank.verify_bank_hash(false, can_cached_slot_be_unflushed, true);
+                // note that this slot may not be a root
+                let _ = bank.verify_bank_hash(VerifyBankHash {
+                    test_hash_calculation: false,
+                    can_cached_slot_be_unflushed,
+                    ignore_mismatch: true,
+                    require_rooted_bank: false,
+                });
                 break;
             }
         }
