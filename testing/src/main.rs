@@ -230,16 +230,23 @@ pub fn main() {
     );
     let genesis_config = &mut genesis_config_info.genesis_config;
 
-    let accounts_dir = TempDir::new()
-        .unwrap()
-        .path()
-        .to_path_buf();
-
-    let ledger_path = fs::canonicalize(&accounts_dir)
-        .unwrap_or_else(|err| {
-            eprintln!("Unable to access ledger path: {:?}", err);
-            exit(1);
+    let accounts_dir = TempDir::new().unwrap();
+    let ledger_path = accounts_dir.path().to_path_buf();
+    let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
+        eprintln!("Unable to access ledger path: {:?}", err);
+        exit(1);
     });
+
+    // let accounts_dir = TempDir::new()
+    //     .unwrap()
+    //     .path()
+    //     .to_path_buf();
+
+    // let ledger_path = fs::canonicalize(&accounts_dir)
+    //     .unwrap_or_else(|err| {
+    //         eprintln!("Unable to access ledger path: {:?}", err);
+    //         exit(1);
+    // });
 
     let mut gossip_threads: Vec<GossipService> = Vec::new();
     let gossip_host = entrypoint_addrs[0].ip();
