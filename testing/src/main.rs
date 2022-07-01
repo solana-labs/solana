@@ -3,7 +3,7 @@
 use {
     log::*,
     clap::{
-        crate_description, crate_name, value_t,  value_t_or_exit, App, Arg, ArgMatches,
+        crate_description, crate_name, value_t, values_t, value_t_or_exit, App, Arg, ArgMatches,
     },
     solana_core::{
         validator::{ValidatorConfig},
@@ -40,6 +40,7 @@ use {
         fs::{self, File},
         collections::HashMap,
         io::Write,
+        collections::HashSet,
     },
     solana_local_cluster::{
         local_cluster::ClusterConfig,
@@ -105,6 +106,15 @@ fn parse_matches() -> ArgMatches<'static> {
                 .takes_value(true)
                 .help("Number of nodes to spin up"),
         )
+        .arg(
+            Arg::with_name("entrypoint")
+                .short("n")
+                .long("entrypoint")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host_port)
+                .help("Rendezvous with the cluster at this entrypoint"),
+        )
         .get_matches()
 }
 
@@ -146,6 +156,14 @@ pub fn main() {
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
     let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
     let socket_addr_space = SocketAddrSpace::Unspecified;    
+
+    //Entrypoint to join Gossip Cluster
+    let entrypoint_addr = value_t_or_exit!(matches, "entrypoint", String);
+    let entrypoint_addr = solana_net_utils::parse_host_port(&entrypoint_addr).unwrap_or_else(|e| {
+        eprintln!("failed to parse entrypoint address: {}", e);
+        exit(1);
+    });
+    println!("entrypoint_addr: {:?}", entrypoint_addr);
 
     // READ ACCOUNTS FROM FILE
     let path = Path::new(&account_infile);
@@ -219,13 +237,20 @@ pub fn main() {
 
     let mut gossip_thread_vector: Vec<GossipService> = Vec::new();
 
+    let gossip_host = entrypoint_addr.ip();
+    let mut entrypoint_addrs: Vec<SocketAddr> = Vec::new();
+
+    //set entrypoints for gossip
+    // let cluster_entrypoints = entrypoint_addrs
+    //     .iter()
+    //     .map(ContactInfo::new_gossip_entry_point)
+    //     .collect::<Vec<_>>();
+
     // Loop through nodes, spin up a leader first, then have all others join leader 
     for i in 0..num_nodes {
-        let mut entrypoint_addrs: Vec<SocketAddr> = Vec::new();
-        let gossip_host = IpAddr::from_str("127.0.0.1").unwrap();
         if i == 0 {
             //Entrypoint to join Gossip Cluster
-            let gossip_addr = SocketAddr::new(gossip_host.clone(), 8001);
+            let gossip_addr = entrypoint_addr;
 
             //create new node with external ip
             let mut leader_node = Node::new_with_external_ip(   
@@ -249,13 +274,13 @@ pub fn main() {
                 socket_addr_space,
             );
 
-            //set entrypoints for gossip
+            // //set entrypoints for gossip
             let cluster_entrypoints = entrypoint_addrs
                 .iter()
                 .map(ContactInfo::new_gossip_entry_point)
                 .collect::<Vec<_>>();
 
-            cluster_info.set_entrypoints(cluster_entrypoints);
+            cluster_info.set_entrypoints(cluster_entrypoints.clone());
             let cluster_info = Arc::new(cluster_info);
 
             //Generate new bank and bank forks
@@ -291,12 +316,7 @@ pub fn main() {
             gossip_thread_vector.push(gossip_service);
         } 
         else {
-            let entrypoint = "127.0.0.1:8001";
-            entrypoint_addrs.push(
-                entrypoint
-                .parse()
-                .expect("Unable to parse socket address")
-            );
+            entrypoint_addrs.push(entrypoint_addr);
             let gossip_addr = SocketAddr::new(
                 gossip_host,
                 solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
@@ -308,7 +328,7 @@ pub fn main() {
             );
 
             //create new node with external ip
-            let mut my_node = Node::new_with_external_ip( //run this with pubkey[i]
+            let mut my_node = Node::new_with_external_ip( 
                 &node_keys[i].pubkey(),
                 &gossip_addr,
                 dynamic_port_range,
@@ -330,7 +350,7 @@ pub fn main() {
                 .map(ContactInfo::new_gossip_entry_point)
                 .collect::<Vec<_>>();
 
-            cluster_info.set_entrypoints(cluster_entrypoints);
+            cluster_info.set_entrypoints(cluster_entrypoints.clone());
             let cluster_info = Arc::new(cluster_info);
 
             //Generate new bank and bank forks
