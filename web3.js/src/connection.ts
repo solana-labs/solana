@@ -4442,7 +4442,7 @@ export class Connection {
     const preflightCommitment =
       (options && options.preflightCommitment) || this.commitment;
 
-    if (options && options.maxRetries) {
+    if (options && options.maxRetries != null) {
       config.maxRetries = options.maxRetries;
     }
     if (options && options.minContextSlot != null) {
