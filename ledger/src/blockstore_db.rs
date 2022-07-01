@@ -5,6 +5,7 @@ use {
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
             BlockstoreRocksDbColumnFamilyMetrics, PerfSamplingStatus, PERF_METRIC_OP_NAME_GET,
+            PERF_METRIC_OP_NAME_PUT, PERF_METRIC_OP_NAME_WRITE_BATCH,
         },
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
@@ -486,8 +487,8 @@ impl Rocks {
         let result = self.db.write(batch);
         if let Some(op_start_instant) = op_start_instant {
             report_rocksdb_write_perf(
-                "write_batch", // We use write_batch as cf_name for write batch.
-                "write_batch", // op_name
+                PERF_METRIC_OP_NAME_WRITE_BATCH, // We use write_batch as cf_name for write batch.
+                PERF_METRIC_OP_NAME_WRITE_BATCH, // op_name
                 &op_start_instant.elapsed(),
                 &self.column_options,
             );
@@ -1221,7 +1222,7 @@ where
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_write_perf(
                 C::NAME,
-                "put",
+                PERF_METRIC_OP_NAME_PUT,
                 &op_start_instant.elapsed(),
                 &self.column_options,
             );
@@ -1280,7 +1281,7 @@ where
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_write_perf(
                 C::NAME,
-                "put",
+                PERF_METRIC_OP_NAME_PUT,
                 &op_start_instant.elapsed(),
                 &self.column_options,
             );
@@ -1373,7 +1374,7 @@ where
         if let Some(op_start_instant) = is_perf_enabled {
             report_rocksdb_write_perf(
                 C::NAME,
-                "put",
+                PERF_METRIC_OP_NAME_PUT,
                 &op_start_instant.elapsed(),
                 &self.column_options,
             );
