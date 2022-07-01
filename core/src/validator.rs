@@ -106,7 +106,7 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -341,7 +341,7 @@ pub struct Validator {
     serve_repair_service: ServeRepairService,
     completed_data_sets_service: CompletedDataSetsService,
     snapshot_packager_service: Option<SnapshotPackagerService>,
-    poh_recorder: Arc<Mutex<PohRecorder>>,
+    poh_recorder: Arc<RwLock<PohRecorder>>,
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
@@ -755,7 +755,7 @@ impl Validator {
                 exit.clone(),
             )
         };
-        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+        let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
         let use_quic = UseQUIC::new(use_quic).expect("Failed to initialize QUIC flags");
         let connection_cache = Arc::new(ConnectionCache::new(use_quic, tpu_connection_pool_size));

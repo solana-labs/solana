@@ -71,7 +71,7 @@ use {
         result,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -360,7 +360,7 @@ impl ReplayStage {
         cluster_info: Arc<ClusterInfo>,
         ledger_signal_receiver: Receiver<bool>,
         duplicate_slots_receiver: DuplicateSlotReceiver,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
         maybe_process_blockstore: Option<ProcessBlockStore>,
         vote_tracker: Arc<VoteTracker>,
         cluster_slots: Arc<ClusterSlots>,
@@ -476,7 +476,7 @@ impl ReplayStage {
                     );
                     generate_new_bank_forks_time.stop();
 
-                    let mut tpu_has_bank = poh_recorder.lock().unwrap().has_bank();
+                    let mut tpu_has_bank = poh_recorder.read().unwrap().has_bank();
 
                     let mut replay_active_banks_time = Measure::start("replay_active_banks_time");
                     let mut ancestors = bank_forks.read().unwrap().ancestors();
@@ -833,7 +833,7 @@ impl ReplayStage {
                     let mut start_leader_time = Measure::start("start_leader_time");
                     let mut dump_then_repair_correct_slots_time = Measure::start("dump_then_repair_correct_slots_time");
                     // Used for correctness check
-                    let poh_bank = poh_recorder.lock().unwrap().bank();
+                    let poh_bank = poh_recorder.read().unwrap().bank();
                     // Dump any duplicate slots that have been confirmed by the network in
                     // anticipation of repairing the confirmed version of the slot.
                     //
@@ -868,7 +868,7 @@ impl ReplayStage {
                             transaction_status_sender.is_some(),
                         );
 
-                        let poh_bank = poh_recorder.lock().unwrap().bank();
+                        let poh_bank = poh_recorder.read().unwrap().bank();
                         if let Some(bank) = poh_bank {
                             Self::log_leader_change(
                                 &my_pubkey,
@@ -1000,11 +1000,11 @@ impl ReplayStage {
     }
 
     fn retransmit_latest_unpropagated_leader_slot(
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         retransmit_slots_sender: &RetransmitSlotsSender,
         progress: &mut ProgressMap,
     ) {
-        let start_slot = poh_recorder.lock().unwrap().start_slot();
+        let start_slot = poh_recorder.read().unwrap().start_slot();
 
         if let (false, Some(latest_leader_slot)) =
             progress.get_leader_propagation_slot_must_exist(start_slot)
@@ -1545,7 +1545,7 @@ impl ReplayStage {
     fn maybe_start_leader(
         my_pubkey: &Pubkey,
         bank_forks: &Arc<RwLock<BankForks>>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
         progress_map: &mut ProgressMap,
@@ -1554,12 +1554,12 @@ impl ReplayStage {
         has_new_vote_been_rooted: bool,
         track_transaction_indexes: bool,
     ) {
-        // all the individual calls to poh_recorder.lock() are designed to
+        // all the individual calls to poh_recorder.read() are designed to
         // increase granularity, decrease contention
 
-        assert!(!poh_recorder.lock().unwrap().has_bank());
+        assert!(!poh_recorder.read().unwrap().has_bank());
 
-        let (poh_slot, parent_slot) = match poh_recorder.lock().unwrap().reached_leader_slot() {
+        let (poh_slot, parent_slot) = match poh_recorder.read().unwrap().reached_leader_slot() {
             PohLeaderStatus::Reached {
                 poh_slot,
                 parent_slot,
@@ -1674,7 +1674,7 @@ impl ReplayStage {
 
             let tpu_bank = bank_forks.write().unwrap().insert(tpu_bank);
             poh_recorder
-                .lock()
+                .write()
                 .unwrap()
                 .set_bank(&tpu_bank, track_transaction_indexes);
         } else {
@@ -2150,7 +2150,7 @@ impl ReplayStage {
         my_pubkey: &Pubkey,
         blockstore: &Blockstore,
         bank: &Arc<Bank>,
-        poh_recorder: &Mutex<PohRecorder>,
+        poh_recorder: &RwLock<PohRecorder>,
         leader_schedule_cache: &LeaderScheduleCache,
     ) {
         let next_leader_slot = leader_schedule_cache.next_leader_slot(
@@ -2161,7 +2161,7 @@ impl ReplayStage {
             GRACE_TICKS_FACTOR * MAX_GRACE_SLOTS,
         );
         poh_recorder
-            .lock()
+            .write()
             .unwrap()
             .reset(bank.clone(), next_leader_slot);
 
@@ -3271,7 +3271,7 @@ pub(crate) mod tests {
         my_pubkey: Pubkey,
         cluster_info: ClusterInfo,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
-        poh_recorder: Mutex<PohRecorder>,
+        poh_recorder: RwLock<PohRecorder>,
         tower: Tower,
         rpc_subscriptions: Arc<RpcSubscriptions>,
         pub vote_simulator: VoteSimulator,
@@ -3322,7 +3322,7 @@ pub(crate) mod tests {
 
         // PohRecorder
         let working_bank = bank_forks.read().unwrap().working_bank();
-        let poh_recorder = Mutex::new(
+        let poh_recorder = RwLock::new(
             PohRecorder::new(
                 working_bank.tick_height(),
                 working_bank.last_blockhash(),
