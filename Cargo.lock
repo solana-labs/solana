@@ -1697,8 +1697,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcd999463524c52659517fe2cea98493cfe485d10565e7b0fb07dbba7ad2753"
 dependencies = [
  "cfg-if 1.0.0",
+ "js-sys",
  "libc",
  "wasi 0.10.2+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -5114,21 +5116,32 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.11.3"
 dependencies = [
+ "ahash",
+ "blake3",
+ "block-buffer 0.9.0",
  "bs58",
  "bv",
+ "byteorder",
+ "cc",
+ "either",
  "generic-array 0.14.5",
+ "getrandom 0.1.16",
+ "hashbrown 0.11.2",
  "im",
  "lazy_static",
  "log",
  "memmap2",
  "once_cell",
+ "rand_core 0.6.3",
  "rustc_version 0.4.0",
  "serde",
  "serde_bytes",
  "serde_derive",
+ "serde_json",
  "sha2 0.10.2",
  "solana-frozen-abi-macro 1.11.3",
  "solana-logger 1.11.3",
+ "subtle",
  "thiserror",
 ]
 
@@ -5675,13 +5688,15 @@ dependencies = [
  "bs58",
  "bv",
  "bytemuck",
+ "cc",
  "console_error_panic_hook",
  "console_log",
  "curve25519-dalek",
- "getrandom 0.1.16",
+ "getrandom 0.2.3",
  "itertools",
  "js-sys",
  "lazy_static",
+ "libc",
  "libsecp256k1",
  "log",
  "memoffset",
@@ -5689,6 +5704,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.1",
  "rand 0.7.3",
+ "rand_chacha 0.2.2",
  "rustc_version 0.4.0",
  "rustversion",
  "serde",
@@ -5703,7 +5719,9 @@ dependencies = [
  "solana-sdk-macro 1.11.3",
  "static_assertions",
  "thiserror",
+ "tiny-bip39",
  "wasm-bindgen",
+ "zeroize",
 ]
 
 [[package]]
