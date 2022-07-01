@@ -80,6 +80,9 @@ impl core::fmt::Debug for Metrics {
     }
 }
 
+// The auxiliary variable that must always be provided to eager_macro_rules! must use the
+// identifier `eager_1`. Macros declared with `eager_macro_rules!` can then be used inside
+// an eager! block.
 eager_macro_rules! { $eager_1
     #[macro_export]
     macro_rules! report_execute_timings {
@@ -299,6 +302,8 @@ impl ThreadExecuteTimings {
                 ("slot", slot as i64, i64),
                 ("total_thread_us", self.total_thread_us as i64, i64),
                 ("total_transactions_executed", self.total_transactions_executed as i64, i64),
+                // Everything inside the `eager!` block will be eagerly expanded before
+                // evaluation of the rest of the surrounding macro.
                 eager!{report_execute_timings!(self.execute_timings)}
             );
         };

@@ -73,6 +73,8 @@ impl ReplaySlotStats {
                 ("bank_complete_time_us", bank_complete_time_us, i64),
                 ("total_entries", num_entries as i64, i64),
                 ("total_shreds", num_shreds as i64, i64),
+                // Everything inside the `eager!` block will be eagerly expanded before
+                // evaluation of the rest of the surrounding macro.
                 eager!{report_execute_timings!(self.execute_timings)}
             );
         };
