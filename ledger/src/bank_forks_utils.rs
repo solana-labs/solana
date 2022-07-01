@@ -9,6 +9,9 @@ use {
     },
     log::*,
     solana_runtime::{
+        accounts_background_service::{
+            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService,
+        },
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -21,7 +24,10 @@ use {
         fs,
         path::PathBuf,
         process, result,
-        sync::{Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
     },
 };
 
@@ -61,16 +67,57 @@ pub fn load(
         accounts_update_notifier,
     );
 
-    blockstore_processor::process_blockstore_from_root(
+    /// maximum drop bank signal queue length
+    /// (consider de-duping this const and `solana-core::validator::MAX_DROP_BANK_SIGNAL_QUEUE_SIZE`)
+    const MAX_DROP_BANK_SIGNAL_QUEUE_SIZE: usize = 10_000;
+
+    // There should only be one bank, the root bank in BankForks. Thus all banks added to
+    // BankForks from now on will be descended from the root bank and thus will inherit
+    // the bank drop callback.
+    assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
+    let (pruned_banks_sender, pruned_banks_receiver) =
+        crossbeam_channel::bounded(MAX_DROP_BANK_SIGNAL_QUEUE_SIZE);
+    {
+        let root_bank = bank_forks.read().unwrap().root_bank();
+        root_bank.set_callback(Some(Box::new(
+            root_bank
+                .rc
+                .accounts
+                .accounts_db
+                .create_drop_bank_callback(pruned_banks_sender),
+        )));
+    }
+
+    let abs_request_handler = AbsRequestHandler {
+        snapshot_request_handler: None,
+        pruned_banks_receiver,
+    };
+    let exit = Arc::new(AtomicBool::new(false));
+
+    let accounts_background_service = AccountsBackgroundService::new(
+        bank_forks.clone(),
+        &exit,
+        abs_request_handler,
+        false,
+        true,
+        None,
+    );
+
+    let load_result = blockstore_processor::process_blockstore_from_root(
         blockstore,
         &bank_forks,
         &leader_schedule_cache,
         &process_options,
         transaction_status_sender,
         cache_block_meta_sender,
-        &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+        &AbsRequestSender::default(),
     )
-    .map(|_| (bank_forks, leader_schedule_cache, starting_snapshot_hashes))
+    .map(|_| (bank_forks, leader_schedule_cache, starting_snapshot_hashes));
+
+    exit.store(true, Ordering::Relaxed);
+    accounts_background_service.join().unwrap();
+
+    load_result
 }
 
 #[allow(clippy::too_many_arguments)]
