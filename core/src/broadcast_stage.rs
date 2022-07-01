@@ -419,7 +419,7 @@ pub fn broadcast_shreds(
             let root_bank = root_bank.clone();
             shreds.flat_map(move |shred| {
                 repeat(shred.payload()).zip(cluster_nodes.get_broadcast_addrs(
-                    shred,
+                    &shred.id(),
                     &root_bank,
                     DATA_PLANE_FANOUT,
                     socket_addr_space,

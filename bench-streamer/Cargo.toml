@@ -9,8 +9,8 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-crossbeam-channel = "0.5"
 clap = { version = "3.1.5", features = ["cargo"] }
+crossbeam-channel = "0.5"
 solana-net-utils = { path = "../net-utils", version = "=1.11.2" }
 solana-streamer = { path = "../streamer", version = "=1.11.2" }
 solana-version = { path = "../version", version = "=1.11.2" }

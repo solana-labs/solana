@@ -64,6 +64,9 @@ pub enum VoteError {
 
     #[error("Proposed root is not in slot hashes")]
     RootOnDifferentFork,
+
+    #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
+    ActiveVoteAccountClose,
 }
 
 impl<E> DecodeError<E> for VoteError {

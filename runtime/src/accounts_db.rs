@@ -29,9 +29,9 @@ use {
         },
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
-            AccountsIndexRootsStats, IndexKey, IndexValue, IsCached, RefCount, ScanConfig,
-            ScanResult, SlotList, SlotSlice, ZeroLamport, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
-            ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
+            AccountsIndexRootsStats, AccountsIndexScanResult, IndexKey, IndexValue, IsCached,
+            RefCount, ScanConfig, ScanResult, SlotList, SlotSlice, ZeroLamport,
+            ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -1115,6 +1115,8 @@ pub struct AccountsDb {
     /// true if drop_callback is attached to the bank.
     is_bank_drop_callback_enabled: AtomicBool,
 
+    pub startup_verification_complete: Arc<AtomicBool>,
+
     /// Set of slots currently being flushed by `flush_slot_cache()` or removed
     /// by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
     /// can safely clear the set of unrooted slots `slots`.
@@ -1902,7 +1904,12 @@ impl AccountsDb {
         // rayon needs a lot of stack
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
+        // this will be live shortly
+        // for now, this check occurs at startup, so it must always be true
+        let startup_verification_complete = Arc::new(AtomicBool::new(true));
+
         AccountsDb {
+            startup_verification_complete,
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),
@@ -2531,14 +2538,18 @@ impl AccountsDb {
                         let mut missing = 0;
                         let mut useful = 0;
                         self.accounts_index.scan(
-                            pubkeys,
-                            max_clean_root,
-                            // return true if we want this item to remain in the cache
-                            |exists, slot_list, index_in_slot_list, pubkey, ref_count| {
+                            pubkeys.iter(),
+                            |exists, slot_list, pubkey, ref_count| {
                                 let mut useless = true;
                                 if !exists {
                                     missing += 1;
                                 } else {
+                                    let index_in_slot_list = self.accounts_index.latest_slot(
+                                        None,
+                                        slot_list,
+                                        max_clean_root,
+                                    );
+
                                     match index_in_slot_list {
                                         Some(index_in_slot_list) => {
                                             // found info relative to max_clean_root
@@ -2587,7 +2598,11 @@ impl AccountsDb {
                                 if !useless {
                                     useful += 1;
                                 }
-                                !useless
+                                if useless {
+                                    AccountsIndexScanResult::None
+                                } else {
+                                    AccountsIndexScanResult::KeepInMemory
+                                }
                             },
                         );
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
@@ -2805,6 +2820,16 @@ impl AccountsDb {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "roots_added",
+                self.accounts_index.roots_added.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "roots_removed",
+                self.accounts_index.roots_removed.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
@@ -2994,43 +3019,58 @@ impl AccountsDb {
         );
     }
 
-    fn load_accounts_index_for_shrink<'a, I>(
+    /// load the account index entry for the first `count` items in `accounts`
+    /// store a reference to all alive accounts in `alive_accounts`
+    /// unref and optionally store a reference to all pubkeys that are in the index, but dead in `unrefed_pubkeys`
+    /// return sum of account size for all alive accounts
+    fn load_accounts_index_for_shrink<'a>(
         &'a self,
-        iter: I,
-        alive_accounts: &mut Vec<(&'a Pubkey, &'a FoundStoredAccount<'a>)>,
-        unrefed_pubkeys: &mut Vec<&'a Pubkey>,
-    ) -> usize
-    where
-        I: Iterator<Item = &'a (Pubkey, FoundStoredAccount<'a>)>,
-    {
+        accounts: &'a [(Pubkey, FoundStoredAccount<'a>)],
+        count: usize,
+        alive_accounts: &mut Vec<&'a (Pubkey, FoundStoredAccount<'a>)>,
+        mut unrefed_pubkeys: Option<&mut Vec<&'a Pubkey>>,
+    ) -> usize {
         let mut alive_total = 0;
 
         let mut alive = 0;
         let mut dead = 0;
-        iter.for_each(|(pubkey, stored_account)| {
-            let lookup = self.accounts_index.get_account_read_entry(pubkey);
-            if let Some(locked_entry) = lookup {
-                let is_alive = locked_entry.slot_list().iter().any(|(_slot, acct_info)| {
-                    acct_info.matches_storage_location(
-                        stored_account.store_id,
-                        stored_account.account.offset,
-                    )
-                });
-                if !is_alive {
-                    // This pubkey was found in the storage, but no longer exists in the index.
-                    // It would have had a ref to the storage from the initial store, but it will
-                    // not exist in the re-written slot. Unref it to keep the index consistent with
-                    // rewriting the storage entries.
-                    unrefed_pubkeys.push(pubkey);
-                    locked_entry.unref();
-                    dead += 1;
-                } else {
-                    alive_accounts.push((pubkey, stored_account));
-                    alive_total += stored_account.account_size;
-                    alive += 1;
+        let mut index = 0;
+        self.accounts_index.scan(
+            accounts[..std::cmp::min(accounts.len(), count)]
+                .iter()
+                .map(|(key, _)| key),
+            |exists, slot_list, pubkey, _ref_count| {
+                let mut result = AccountsIndexScanResult::None;
+                if exists {
+                    let pair = &accounts[index];
+                    let stored_account = &pair.1;
+                    let is_alive = slot_list.iter().any(|(_slot, acct_info)| {
+                        acct_info.matches_storage_location(
+                            stored_account.store_id,
+                            stored_account.account.offset,
+                        )
+                    });
+                    if !is_alive {
+                        // This pubkey was found in the storage, but no longer exists in the index.
+                        // It would have had a ref to the storage from the initial store, but it will
+                        // not exist in the re-written slot. Unref it to keep the index consistent with
+                        // rewriting the storage entries.
+                        if let Some(unrefed_pubkeys) = &mut unrefed_pubkeys {
+                            unrefed_pubkeys.push(pubkey);
+                        }
+                        result = AccountsIndexScanResult::Unref;
+                        dead += 1;
+                    } else {
+                        alive_accounts.push(pair);
+                        alive_total += stored_account.account_size;
+                        alive += 1;
+                    }
                 }
-            }
-        });
+                index += 1;
+                result
+            },
+        );
+        assert_eq!(index, std::cmp::min(accounts.len(), count));
         self.shrink_stats
             .alive_accounts
             .fetch_add(alive, Ordering::Relaxed);
@@ -3113,9 +3153,10 @@ impl AccountsDb {
                 let mut alive_accounts = Vec::with_capacity(chunk_size);
                 let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
                 let alive_total = self.load_accounts_index_for_shrink(
-                    stored_accounts.iter().skip(skip).take(chunk_size),
+                    &stored_accounts[skip..],
+                    chunk_size,
                     &mut alive_accounts,
-                    &mut unrefed_pubkeys,
+                    Some(&mut unrefed_pubkeys),
                 );
 
                 // collect
@@ -3666,11 +3707,11 @@ impl AccountsDb {
                     let skip = chunk * chunk_size;
 
                     let mut alive_accounts = Vec::with_capacity(chunk_size);
-                    let mut unrefed_pubkeys = Vec::with_capacity(chunk_size);
                     let alive_total = self.load_accounts_index_for_shrink(
-                        stored_accounts.iter().skip(skip).take(chunk_size),
+                        &stored_accounts[skip..],
+                        chunk_size,
                         &mut alive_accounts,
-                        &mut unrefed_pubkeys,
+                        None,
                     );
 
                     // collect

@@ -230,6 +230,122 @@ describe('Transaction', () => {
       expect(message.header.numReadonlySignedAccounts).to.eq(0);
       expect(message.header.numReadonlyUnsignedAccounts).to.eq(1);
     });
+
+    it('uses the nonce as the recent blockhash when compiling nonce-based transactions', () => {
+      const nonce = new PublicKey(1);
+      const nonceAuthority = new PublicKey(2);
+      const nonceInfo = {
+        nonce: nonce.toBase58(),
+        nonceInstruction: SystemProgram.nonceAdvance({
+          noncePubkey: nonce,
+          authorizedPubkey: nonceAuthority,
+        }),
+      };
+      const transaction = new Transaction({
+        feePayer: nonceAuthority,
+        nonceInfo,
+      });
+      const message = transaction.compileMessage();
+      expect(message.recentBlockhash).to.equal(nonce.toBase58());
+    });
+
+    it('prepends the nonce advance instruction when compiling nonce-based transactions', () => {
+      const nonce = new PublicKey(1);
+      const nonceAuthority = new PublicKey(2);
+      const nonceInfo = {
+        nonce: nonce.toBase58(),
+        nonceInstruction: SystemProgram.nonceAdvance({
+          noncePubkey: nonce,
+          authorizedPubkey: nonceAuthority,
+        }),
+      };
+      const transaction = new Transaction({
+        feePayer: nonceAuthority,
+        nonceInfo,
+      }).add(
+        SystemProgram.transfer({
+          fromPubkey: nonceAuthority,
+          lamports: 1,
+          toPubkey: new PublicKey(3),
+        }),
+      );
+      const message = transaction.compileMessage();
+      expect(message.instructions).to.have.length(2);
+      const expectedNonceAdvanceCompiledInstruction = {
+        accounts: [1, 4, 0],
+        data: (() => {
+          const expectedData = Buffer.alloc(4);
+          expectedData.writeInt32LE(
+            4 /* SystemInstruction::AdvanceNonceAccount */,
+            0,
+          );
+          return bs58.encode(expectedData);
+        })(),
+        programIdIndex: (() => {
+          let foundIndex = -1;
+          message.accountKeys.find((publicKey, ii) => {
+            if (publicKey.equals(SystemProgram.programId)) {
+              foundIndex = ii;
+              return true;
+            }
+          });
+          return foundIndex;
+        })(),
+      };
+      expect(message.instructions[0]).to.deep.equal(
+        expectedNonceAdvanceCompiledInstruction,
+      );
+    });
+
+    it('does not prepend the nonce advance instruction when compiling nonce-based transactions if it is already there', () => {
+      const nonce = new PublicKey(1);
+      const nonceAuthority = new PublicKey(2);
+      const nonceInfo = {
+        nonce: nonce.toBase58(),
+        nonceInstruction: SystemProgram.nonceAdvance({
+          noncePubkey: nonce,
+          authorizedPubkey: nonceAuthority,
+        }),
+      };
+      const transaction = new Transaction({
+        feePayer: nonceAuthority,
+        nonceInfo,
+      })
+        .add(nonceInfo.nonceInstruction)
+        .add(
+          SystemProgram.transfer({
+            fromPubkey: nonceAuthority,
+            lamports: 1,
+            toPubkey: new PublicKey(3),
+          }),
+        );
+      const message = transaction.compileMessage();
+      expect(message.instructions).to.have.length(2);
+      const expectedNonceAdvanceCompiledInstruction = {
+        accounts: [1, 4, 0],
+        data: (() => {
+          const expectedData = Buffer.alloc(4);
+          expectedData.writeInt32LE(
+            4 /* SystemInstruction::AdvanceNonceAccount */,
+            0,
+          );
+          return bs58.encode(expectedData);
+        })(),
+        programIdIndex: (() => {
+          let foundIndex = -1;
+          message.accountKeys.find((publicKey, ii) => {
+            if (publicKey.equals(SystemProgram.programId)) {
+              foundIndex = ii;
+              return true;
+            }
+          });
+          return foundIndex;
+        })(),
+      };
+      expect(message.instructions[0]).to.deep.equal(
+        expectedNonceAdvanceCompiledInstruction,
+      );
+    });
   });
 
   if (process.env.TEST_LIVE) {
@@ -455,15 +571,8 @@ describe('Transaction', () => {
     );
     transferTransaction.sign(account1);
 
-    let expectedData = Buffer.alloc(4);
-    expectedData.writeInt32LE(4, 0);
-
-    expect(transferTransaction.instructions).to.have.length(2);
-    expect(transferTransaction.instructions[0].programId).to.eql(
-      SystemProgram.programId,
-    );
-    expect(transferTransaction.instructions[0].data).to.eql(expectedData);
-    expect(transferTransaction.recentBlockhash).to.eq(nonce);
+    expect(transferTransaction.instructions).to.have.length(1);
+    expect(transferTransaction.recentBlockhash).to.be.undefined;
 
     const stakeAccount = Keypair.generate();
     const voteAccount = Keypair.generate();
@@ -476,12 +585,8 @@ describe('Transaction', () => {
     );
     stakeTransaction.sign(account1);
 
-    expect(stakeTransaction.instructions).to.have.length(2);
-    expect(stakeTransaction.instructions[0].programId).to.eql(
-      SystemProgram.programId,
-    );
-    expect(stakeTransaction.instructions[0].data).to.eql(expectedData);
-    expect(stakeTransaction.recentBlockhash).to.eq(nonce);
+    expect(stakeTransaction.instructions).to.have.length(1);
+    expect(stakeTransaction.recentBlockhash).to.be.undefined;
   });
 
   it('parse wire format and serialize', () => {
@@ -594,6 +699,22 @@ describe('Transaction', () => {
     transaction.recentBlockhash = new PublicKey(100).toString();
     const compiledMessage3 = transaction.compileMessage();
     expect(compiledMessage3).not.to.eql(message);
+  });
+
+  it('constructs a transaction with nonce info', () => {
+    const nonce = new PublicKey(1);
+    const nonceAuthority = new PublicKey(2);
+    const nonceInfo = {
+      nonce: nonce.toBase58(),
+      nonceInstruction: SystemProgram.nonceAdvance({
+        noncePubkey: nonce,
+        authorizedPubkey: nonceAuthority,
+      }),
+    };
+    const transaction = new Transaction({nonceInfo});
+    expect(transaction.recentBlockhash).to.be.undefined;
+    expect(transaction.lastValidBlockHeight).to.be.undefined;
+    expect(transaction.nonceInfo).to.equal(nonceInfo);
   });
 
   it('constructs a transaction with last valid block height', () => {

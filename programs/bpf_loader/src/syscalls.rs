@@ -26,7 +26,6 @@ use {
             curve25519_syscall_enabled, disable_fees_sysvar, executables_incur_cpi_data_cost,
             libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
             prevent_calling_precompiles_as_programs, quick_bail_on_panic, syscall_saturated_math,
-            update_syscall_base_costs, zk_token_sdk_enabled,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -131,9 +130,6 @@ pub fn register_syscalls(
     let blake3_syscall_enabled = invoke_context
         .feature_set
         .is_active(&blake3_syscall_enabled::id());
-    let zk_token_sdk_enabled = invoke_context
-        .feature_set
-        .is_active(&zk_token_sdk_enabled::id());
     let curve25519_syscall_enabled = invoke_context
         .feature_set
         .is_active(&curve25519_syscall_enabled::id());
@@ -211,29 +207,6 @@ pub fn register_syscalls(
         b"sol_blake3",
         SyscallBlake3::init,
         SyscallBlake3::call,
-    )?;
-
-    // ZK Token
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op",
-        SyscallZkTokenElgamalOp::init,
-        SyscallZkTokenElgamalOp::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op_with_lo_hi",
-        SyscallZkTokenElgamalOpWithLoHi::init,
-        SyscallZkTokenElgamalOpWithLoHi::call,
-    )?;
-    register_feature_gated_syscall!(
-        syscall_registry,
-        zk_token_sdk_enabled,
-        b"sol_zk_token_elgamal_op_with_scalar",
-        SyscallZkTokenElgamalOpWithScalar::init,
-        SyscallZkTokenElgamalOpWithScalar::call,
     )?;
 
     // Elliptic Curve Point Validation
@@ -577,12 +550,9 @@ declare_syscall!(
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        if !invoke_context
+        if invoke_context
             .feature_set
-            .is_active(&update_syscall_base_costs::id())
-            || invoke_context
-                .feature_set
-                .is_active(&quick_bail_on_panic::id())
+            .is_active(&quick_bail_on_panic::id())
         {
             question_mark!(invoke_context.get_compute_meter().consume(len), result);
         }
@@ -617,17 +587,10 @@ declare_syscall!(
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let cost = if invoke_context
-            .feature_set
-            .is_active(&update_syscall_base_costs::id())
-        {
-            invoke_context
-                .get_compute_budget()
-                .syscall_base_cost
-                .max(len)
-        } else {
-            len
-        };
+        let cost = invoke_context
+            .get_compute_budget()
+            .syscall_base_cost
+            .max(len);
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         question_mark!(
@@ -700,14 +663,7 @@ declare_syscall!(
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        let cost = if invoke_context
-            .feature_set
-            .is_active(&update_syscall_base_costs::id())
-        {
-            invoke_context.get_compute_budget().syscall_base_cost
-        } else {
-            0
-        };
+        let cost = invoke_context.get_compute_budget().syscall_base_cost;
         question_mark!(invoke_context.get_compute_meter().consume(cost), result);
 
         ic_logger_msg!(
@@ -1006,11 +962,7 @@ declare_syscall!(
             result
         );
         let compute_budget = invoke_context.get_compute_budget();
-        if invoke_context
-            .feature_set
-            .is_active(&update_syscall_base_costs::id())
-            && compute_budget.sha256_max_slices < vals_len
-        {
+        if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
                 invoke_context,
                 "Sha256 hashing {} sequences in one syscall is over the limit {}",
@@ -1060,20 +1012,11 @@ declare_syscall!(
                     ),
                     result
                 );
-                let cost = if invoke_context
-                    .feature_set
-                    .is_active(&update_syscall_base_costs::id())
-                {
-                    compute_budget.mem_op_base_cost.max(
-                        compute_budget
-                            .sha256_byte_cost
-                            .saturating_mul((val.len() as u64).saturating_div(2)),
-                    )
-                } else {
+                let cost = compute_budget.mem_op_base_cost.max(
                     compute_budget
                         .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2))
-                };
+                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                );
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
             }
@@ -1243,11 +1186,7 @@ declare_syscall!(
             result
         );
         let compute_budget = invoke_context.get_compute_budget();
-        if invoke_context
-            .feature_set
-            .is_active(&update_syscall_base_costs::id())
-            && compute_budget.sha256_max_slices < vals_len
-        {
+        if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
                 invoke_context,
                 "Keccak256 hashing {} sequences in one syscall is over the limit {}",
@@ -1297,20 +1236,11 @@ declare_syscall!(
                     ),
                     result
                 );
-                let cost = if invoke_context
-                    .feature_set
-                    .is_active(&update_syscall_base_costs::id())
-                {
-                    compute_budget.mem_op_base_cost.max(
-                        compute_budget
-                            .sha256_byte_cost
-                            .saturating_mul((val.len() as u64).saturating_div(2)),
-                    )
-                } else {
+                let cost = compute_budget.mem_op_base_cost.max(
                     compute_budget
                         .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2))
-                };
+                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                );
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
             }
@@ -1325,16 +1255,9 @@ fn mem_op_consume<'a, 'b>(
     n: u64,
 ) -> Result<(), EbpfError<BpfError>> {
     let compute_budget = invoke_context.get_compute_budget();
-    let cost = if invoke_context
-        .feature_set
-        .is_active(&update_syscall_base_costs::id())
-    {
-        compute_budget
-            .mem_op_base_cost
-            .max(n.saturating_div(compute_budget.cpi_bytes_per_unit))
-    } else {
-        n.saturating_div(compute_budget.cpi_bytes_per_unit)
-    };
+    let cost = compute_budget
+        .mem_op_base_cost
+        .max(n.saturating_div(compute_budget.cpi_bytes_per_unit));
     invoke_context.get_compute_meter().consume(cost)
 }
 
@@ -1357,17 +1280,7 @@ declare_syscall!(
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        // When deprecating `update_syscall_base_costs` switch to `mem_op_consume`
-        let compute_budget = invoke_context.get_compute_budget();
-        let update_syscall_base_costs = invoke_context
-            .feature_set
-            .is_active(&update_syscall_base_costs::id());
-        if update_syscall_base_costs {
-            let cost = compute_budget
-                .mem_op_base_cost
-                .max(n.saturating_div(compute_budget.cpi_bytes_per_unit));
-            question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-        }
+        question_mark!(mem_op_consume(&invoke_context, n), result);
 
         let do_check_physical_overlapping = invoke_context
             .feature_set
@@ -1377,11 +1290,6 @@ declare_syscall!(
             *result = Err(SyscallError::CopyOverlapping.into());
             return;
         }
-
-        if !update_syscall_base_costs {
-            let cost = n.saturating_div(compute_budget.cpi_bytes_per_unit);
-            question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-        };
 
         let dst_ptr = question_mark!(
             translate_slice_mut::<u8>(
@@ -1659,6 +1567,7 @@ declare_syscall!(
             Ok(id) => id,
             Err(_) => {
                 *result = Ok(Secp256k1RecoverError::InvalidRecoveryId.into());
+
                 return;
             }
         };
@@ -1689,186 +1598,6 @@ declare_syscall!(
 
         secp256k1_recover_result.copy_from_slice(&public_key[1..65]);
         *result = Ok(SUCCESS);
-    }
-);
-
-declare_syscall!(
-    SyscallZkTokenElgamalOp,
-    fn call(
-        &mut self,
-        op: u64,
-        ct_0_addr: u64,
-        ct_1_addr: u64,
-        ct_result_addr: u64,
-        _arg5: u64,
-        memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
-
-        let invoke_context = question_mark!(
-            self.invoke_context
-                .try_borrow()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
-        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-        let ct_0 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_0_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-        let ct_1 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_1_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-
-        if let Some(ct_result) = match op {
-            ops::OP_ADD => ops::add(ct_0, ct_1),
-            ops::OP_SUB => ops::subtract(ct_0, ct_1),
-            _ => None,
-        } {
-            *question_mark!(
-                translate_type_mut::<pod::ElGamalCiphertext>(
-                    memory_mapping,
-                    ct_result_addr,
-                    invoke_context.get_check_aligned(),
-                ),
-                result
-            ) = ct_result;
-            *result = Ok(0);
-        } else {
-            *result = Ok(1);
-        }
-    }
-);
-
-declare_syscall!(
-    SyscallZkTokenElgamalOpWithLoHi,
-    fn call(
-        &mut self,
-        op: u64,
-        ct_0_addr: u64,
-        ct_1_lo_addr: u64,
-        ct_1_hi_addr: u64,
-        ct_result_addr: u64,
-        memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
-
-        let invoke_context = question_mark!(
-            self.invoke_context
-                .try_borrow()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
-        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-        let ct_0 = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_0_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-        let ct_1_lo = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_1_lo_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-        let ct_1_hi = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_1_hi_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-
-        if let Some(ct_result) = match op {
-            ops::OP_ADD => ops::add_with_lo_hi(ct_0, ct_1_lo, ct_1_hi),
-            ops::OP_SUB => ops::subtract_with_lo_hi(ct_0, ct_1_lo, ct_1_hi),
-            _ => None,
-        } {
-            *question_mark!(
-                translate_type_mut::<pod::ElGamalCiphertext>(
-                    memory_mapping,
-                    ct_result_addr,
-                    invoke_context.get_check_aligned(),
-                ),
-                result
-            ) = ct_result;
-            *result = Ok(0);
-        } else {
-            *result = Ok(1);
-        }
-    }
-);
-
-declare_syscall!(
-    SyscallZkTokenElgamalOpWithScalar,
-    fn call(
-        &mut self,
-        op: u64,
-        ct_addr: u64,
-        scalar: u64,
-        ct_result_addr: u64,
-        _arg5: u64,
-        memory_mapping: &mut MemoryMapping,
-        result: &mut Result<u64, EbpfError<BpfError>>,
-    ) {
-        use solana_zk_token_sdk::zk_token_elgamal::{ops, pod};
-
-        let invoke_context = question_mark!(
-            self.invoke_context
-                .try_borrow()
-                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
-            result
-        );
-        let cost = invoke_context.get_compute_budget().zk_token_elgamal_op_cost;
-        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
-
-        let ct = question_mark!(
-            translate_type::<pod::ElGamalCiphertext>(
-                memory_mapping,
-                ct_addr,
-                invoke_context.get_check_aligned()
-            ),
-            result
-        );
-
-        if let Some(ct_result) = match op {
-            ops::OP_ADD => ops::add_to(ct, scalar),
-            ops::OP_SUB => ops::subtract_from(ct, scalar),
-            _ => None,
-        } {
-            *question_mark!(
-                translate_type_mut::<pod::ElGamalCiphertext>(
-                    memory_mapping,
-                    ct_result_addr,
-                    invoke_context.get_check_aligned(),
-                ),
-                result
-            ) = ct_result;
-            *result = Ok(0);
-        } else {
-            *result = Ok(1);
-        }
     }
 );
 
@@ -2224,11 +1953,7 @@ declare_syscall!(
             result
         );
         let compute_budget = invoke_context.get_compute_budget();
-        if invoke_context
-            .feature_set
-            .is_active(&update_syscall_base_costs::id())
-            && compute_budget.sha256_max_slices < vals_len
-        {
+        if compute_budget.sha256_max_slices < vals_len {
             ic_msg!(
                 invoke_context,
                 "Blake3 hashing {} sequences in one syscall is over the limit {}",
@@ -2278,28 +2003,11 @@ declare_syscall!(
                     ),
                     result
                 );
-                let cost = if invoke_context
-                    .feature_set
-                    .is_active(&update_syscall_base_costs::id())
-                {
-                    compute_budget.mem_op_base_cost.max(
-                        compute_budget
-                            .sha256_byte_cost
-                            .saturating_mul((val.len() as u64).saturating_div(2)),
-                    )
-                } else if invoke_context
-                    .feature_set
-                    .is_active(&syscall_saturated_math::id())
-                {
+                let cost = compute_budget.mem_op_base_cost.max(
                     compute_budget
                         .sha256_byte_cost
-                        .saturating_mul((val.len() as u64).saturating_div(2))
-                } else {
-                    #[allow(clippy::integer_arithmetic)]
-                    {
-                        compute_budget.sha256_byte_cost * (val.len() as u64 / 2)
-                    }
-                };
+                        .saturating_mul((val.len() as u64).saturating_div(2)),
+                );
                 question_mark!(invoke_context.get_compute_meter().consume(cost), result);
                 hasher.hash(bytes);
             }

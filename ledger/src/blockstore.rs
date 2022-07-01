@@ -525,11 +525,26 @@ impl Blockstore {
         Ok(slot_iterator.take_while(move |((shred_slot, _), _)| *shred_slot == slot))
     }
 
-    pub fn rooted_slot_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = u64> + '_> {
+    fn prepare_rooted_slot_iterator(
+        &self,
+        slot: Slot,
+        direction: IteratorDirection,
+    ) -> Result<impl Iterator<Item = Slot> + '_> {
         let slot_iterator = self
             .db
-            .iter::<cf::Root>(IteratorMode::From(slot, IteratorDirection::Forward))?;
+            .iter::<cf::Root>(IteratorMode::From(slot, direction))?;
         Ok(slot_iterator.map(move |(rooted_slot, _)| rooted_slot))
+    }
+
+    pub fn rooted_slot_iterator(&self, slot: Slot) -> Result<impl Iterator<Item = Slot> + '_> {
+        self.prepare_rooted_slot_iterator(slot, IteratorDirection::Forward)
+    }
+
+    pub fn reversed_rooted_slot_iterator(
+        &self,
+        slot: Slot,
+    ) -> Result<impl Iterator<Item = Slot> + '_> {
+        self.prepare_rooted_slot_iterator(slot, IteratorDirection::Reverse)
     }
 
     /// Determines if starting_slot and ending_slot are connected
@@ -783,7 +798,7 @@ impl Blockstore {
         is_repaired: Vec<bool>,
         leader_schedule: Option<&LeaderScheduleCache>,
         is_trusted: bool,
-        retransmit_sender: Option<&Sender<Vec<Shred>>>,
+        retransmit_sender: Option<&Sender<Vec</*shred:*/ Vec<u8>>>>,
         handle_duplicate: &F,
         metrics: &mut BlockstoreInsertionMetrics,
     ) -> Result<(Vec<CompletedDataSetInfo>, Vec<usize>)>
@@ -922,7 +937,12 @@ impl Blockstore {
                 .collect();
             if !recovered_data_shreds.is_empty() {
                 if let Some(retransmit_sender) = retransmit_sender {
-                    let _ = retransmit_sender.send(recovered_data_shreds);
+                    let _ = retransmit_sender.send(
+                        recovered_data_shreds
+                            .into_iter()
+                            .map(Shred::into_payload)
+                            .collect(),
+                    );
                 }
             }
         }
@@ -1743,6 +1763,13 @@ impl Blockstore {
     /// Dangerous. Use with care.
     pub fn put_meta_bytes(&self, slot: Slot, bytes: &[u8]) -> Result<()> {
         self.meta_cf.put_bytes(slot, bytes)
+    }
+
+    /// Manually update the meta for a slot.
+    /// Can interfere with automatic meta update and potentially break chaining.
+    /// Dangerous. Use with care.
+    pub fn put_meta(&self, slot: Slot, meta: &SlotMeta) -> Result<()> {
+        self.put_meta_bytes(slot, &bincode::serialize(meta)?)
     }
 
     // Given a start and end entry index, find all the missing
@@ -3043,6 +3070,22 @@ impl Blockstore {
         Ok(())
     }
 
+    pub fn mark_slots_as_if_rooted_normally_at_startup(
+        &self,
+        slots: Vec<(Slot, Option<Hash>)>,
+        with_hash: bool,
+    ) -> Result<()> {
+        self.set_roots(slots.iter().map(|(slot, _hash)| slot))?;
+        if with_hash {
+            self.set_duplicate_confirmed_slots_and_hashes(
+                slots
+                    .into_iter()
+                    .map(|(slot, maybe_hash)| (slot, maybe_hash.unwrap())),
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn is_dead(&self, slot: Slot) -> bool {
         matches!(
             self.db
@@ -3988,7 +4031,7 @@ macro_rules! create_new_tmp_ledger_fifo_auto_delete {
     };
 }
 
-pub fn verify_shred_slots(slot: Slot, parent: Slot, root: Slot) -> bool {
+pub(crate) fn verify_shred_slots(slot: Slot, parent: Slot, root: Slot) -> bool {
     if slot == 0 && parent == 0 && root == 0 {
         return true; // valid write to slot zero.
     }
@@ -4218,7 +4261,10 @@ fn adjust_ulimit_nofile(_enforce_ulimit_nofile: bool) -> Result<()> {
 fn adjust_ulimit_nofile(enforce_ulimit_nofile: bool) -> Result<()> {
     // Rocks DB likes to have many open files.  The default open file descriptor limit is
     // usually not enough
-    let desired_nofile = 500000;
+    // AppendVecs and disk Account Index are also heavy users of mmapped files.
+    // This should be kept in sync with published validator instructions.
+    // https://docs.solana.com/running-validator/validator-start#increased-memory-mapped-files-limit
+    let desired_nofile = 1_000_000;
 
     fn get_nofile() -> libc::rlimit {
         let mut nofile = libc::rlimit {
@@ -4744,7 +4790,7 @@ pub mod tests {
     */
 
     #[test]
-    pub fn test_get_slot_entries1() {
+    fn test_get_slot_entries1() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let entries = create_ticks(8, 0, Hash::default());
@@ -4801,7 +4847,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_get_slot_entries3() {
+    fn test_get_slot_entries3() {
         // Test inserting/fetching shreds which contain multiple entries per shred
         let ledger_path = get_tmp_ledger_path_auto_delete!();
 
@@ -4825,7 +4871,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_insert_data_shreds_consecutive() {
+    fn test_insert_data_shreds_consecutive() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         // Create enough entries to ensure there are at least two shreds created
@@ -4921,7 +4967,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_new_shreds_signal() {
+    fn test_new_shreds_signal() {
         // Initialize blockstore
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals {
@@ -5004,7 +5050,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_completed_shreds_signal() {
+    fn test_completed_shreds_signal() {
         // Initialize blockstore
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals {
@@ -5029,7 +5075,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_completed_shreds_signal_orphans() {
+    fn test_completed_shreds_signal_orphans() {
         // Initialize blockstore
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals {
@@ -5074,7 +5120,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_completed_shreds_signal_many() {
+    fn test_completed_shreds_signal_many() {
         // Initialize blockstore
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let BlockstoreSignals {
@@ -5108,7 +5154,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_handle_chaining_basic() {
+    fn test_handle_chaining_basic() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5171,7 +5217,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_handle_chaining_missing_slots() {
+    fn test_handle_chaining_missing_slots() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5437,7 +5483,7 @@ pub mod tests {
         }
     */
     #[test]
-    pub fn test_slots_connected_chain() {
+    fn test_slots_connected_chain() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5457,7 +5503,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_slots_connected_disconnected() {
+    fn test_slots_connected_disconnected() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5480,7 +5526,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_get_slots_since() {
+    fn test_get_slots_since() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5820,7 +5866,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_no_missing_shred_indexes() {
+    fn test_no_missing_shred_indexes() {
         let slot = 0;
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
@@ -5845,7 +5891,22 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_should_insert_data_shred() {
+    fn test_verify_shred_slots() {
+        // verify_shred_slots(slot, parent, root)
+        assert!(verify_shred_slots(0, 0, 0));
+        assert!(verify_shred_slots(2, 1, 0));
+        assert!(verify_shred_slots(2, 1, 1));
+        assert!(!verify_shred_slots(2, 3, 0));
+        assert!(!verify_shred_slots(2, 2, 0));
+        assert!(!verify_shred_slots(2, 3, 3));
+        assert!(!verify_shred_slots(2, 2, 2));
+        assert!(!verify_shred_slots(2, 1, 3));
+        assert!(!verify_shred_slots(2, 3, 4));
+        assert!(!verify_shred_slots(2, 2, 3));
+    }
+
+    #[test]
+    fn test_should_insert_data_shred() {
         solana_logger::setup();
         let (mut shreds, _) = make_slot_entries(0, 0, 200);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
@@ -5932,7 +5993,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_is_data_shred_present() {
+    fn test_is_data_shred_present() {
         let (shreds, _) = make_slot_entries(0, 0, 200);
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
@@ -5966,7 +6027,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_check_insert_coding_shred() {
+    fn test_check_insert_coding_shred() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -6023,7 +6084,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_should_insert_coding_shred() {
+    fn test_should_insert_coding_shred() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
         let last_root = RwLock::new(0);
@@ -6091,7 +6152,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_insert_multiple_is_last() {
+    fn test_insert_multiple_is_last() {
         solana_logger::setup();
         let (shreds, _) = make_slot_entries(0, 0, 20);
         let num_shreds = shreds.len() as u64;
@@ -8892,7 +8953,7 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_insert_data_shreds_same_slot_last_index() {
+    fn test_insert_data_shreds_same_slot_last_index() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 

@@ -205,7 +205,7 @@ pub fn serialize_parameters_aligned(
             size += size_of::<u8>() // is_signer
                 + size_of::<u8>() // is_writable
                 + size_of::<u8>() // executable
-                + 4 // padding to 128-bit aligned
+                + size_of::<u32>() // original_data_len
                 + size_of::<Pubkey>()  // key
                 + size_of::<Pubkey>() // owner
                 + size_of::<u64>()  // lamports
@@ -300,7 +300,7 @@ pub fn deserialize_parameters_aligned(
             start += size_of::<u8>() // is_signer
                 + size_of::<u8>() // is_writable
                 + size_of::<u8>() // executable
-                + 4 // padding to 128-bit aligned
+                + size_of::<u32>() // original_data_len
                 + size_of::<Pubkey>(); // key
             let _ = borrowed_account.set_owner(
                 buffer

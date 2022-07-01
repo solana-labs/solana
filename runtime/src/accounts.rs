@@ -34,7 +34,7 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
-        feature_set::{self, add_set_compute_unit_price_ix, tx_wide_compute_cap, FeatureSet},
+        feature_set::{self, add_set_compute_unit_price_ix, FeatureSet},
         fee::FeeStructure,
         genesis_config::ClusterType,
         hash::Hash,
@@ -547,7 +547,6 @@ impl Accounts {
                             tx.message(),
                             lamports_per_signature,
                             fee_structure,
-                            feature_set.is_active(&tx_wide_compute_cap::id()),
                             feature_set.is_active(&add_set_compute_unit_price_ix::id()),
                         )
                     } else {
@@ -1642,6 +1641,7 @@ mod tests {
 
     #[test]
     fn test_load_accounts_insufficient_funds() {
+        let lamports_per_signature = 5000;
         let mut accounts: Vec<TransactionAccount> = Vec::new();
         let mut error_counters = TransactionErrorMetrics::default();
 
@@ -1662,14 +1662,14 @@ mod tests {
 
         let fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
-            10,
+            lamports_per_signature,
             &FeeStructure::default(),
-            false,
             true,
         );
-        assert_eq!(fee, 10);
+        assert_eq!(fee, lamports_per_signature);
 
-        let loaded_accounts = load_accounts_with_fee(tx, &accounts, 10, &mut error_counters);
+        let loaded_accounts =
+            load_accounts_with_fee(tx, &accounts, lamports_per_signature, &mut error_counters);
 
         assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
@@ -1711,9 +1711,8 @@ mod tests {
 
     #[test]
     fn test_load_accounts_fee_payer_is_nonce() {
+        let lamports_per_signature = 5000;
         let mut error_counters = TransactionErrorMetrics::default();
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
         let rent_collector = RentCollector::new(
             0,
             &EpochSchedule::default(),
@@ -1728,7 +1727,7 @@ mod tests {
         let mut accounts = vec![(
             nonce.pubkey(),
             AccountSharedData::new_data(
-                min_balance * 2,
+                min_balance + lamports_per_signature,
                 &NonceVersions::new(
                     NonceState::Initialized(nonce::state::Data::default()),
                     true, // separate_domains
@@ -1750,10 +1749,10 @@ mod tests {
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            min_balance,
+            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &feature_set,
+            &FeatureSet::all_enabled(),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -1762,14 +1761,14 @@ mod tests {
         assert_eq!(loaded_transaction.accounts[0].1.lamports(), min_balance);
 
         // Fee leaves zero balance fails
-        accounts[0].1.set_lamports(min_balance);
+        accounts[0].1.set_lamports(lamports_per_signature);
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx.clone(),
             &accounts,
-            min_balance,
+            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &feature_set,
+            &FeatureSet::all_enabled(),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);
@@ -1777,14 +1776,16 @@ mod tests {
         assert_eq!(*load_res, Err(TransactionError::InsufficientFundsForFee));
 
         // Fee leaves non-zero, but sub-min_balance balance fails
-        accounts[0].1.set_lamports(3 * min_balance / 2);
+        accounts[0]
+            .1
+            .set_lamports(lamports_per_signature + min_balance / 2);
         let loaded_accounts = load_accounts_with_fee_and_rent(
             tx,
             &accounts,
-            min_balance,
+            lamports_per_signature,
             &rent_collector,
             &mut error_counters,
-            &feature_set,
+            &FeatureSet::all_enabled(),
             &FeeStructure::default(),
         );
         assert_eq!(loaded_accounts.len(), 1);

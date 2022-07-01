@@ -10,8 +10,8 @@ documentation = "https://docs.rs/solana-bpf-rust-128bit"
 edition = "2021"
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.11.2" }
 solana-bpf-rust-128bit-dep = { path = "../128bit_dep", version = "=1.11.2" }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.2" }
 
 [lib]
 crate-type = ["cdylib"]

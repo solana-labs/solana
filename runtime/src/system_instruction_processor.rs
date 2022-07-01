@@ -686,12 +686,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -726,12 +726,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -768,12 +768,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: base,
@@ -862,12 +862,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -900,12 +900,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(SystemError::ResultWithNegativeLamports.into()),
@@ -916,19 +916,19 @@ mod tests {
     #[test]
     fn test_request_more_than_allowed_data_length() {
         let from = Pubkey::new_unique();
-        let from_account = AccountSharedData::new(100, 0, &Pubkey::new_unique());
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let to = Pubkey::new_unique();
         let to_account = AccountSharedData::new(0, 0, &Pubkey::default());
         let instruction_accounts = vec![
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: to,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1169,12 +1169,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Ok(()),
@@ -1251,7 +1251,7 @@ mod tests {
                 AccountMeta {
                     pubkey: new,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(InstructionError::InvalidArgument),
@@ -1275,7 +1275,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1288,7 +1288,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
             super::process_instruction,
@@ -1300,7 +1300,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1316,7 +1316,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
             super::process_instruction,
@@ -1359,7 +1359,7 @@ mod tests {
     #[test]
     fn test_transfer_lamports() {
         let from = Pubkey::new_unique();
-        let from_account = AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let to = Pubkey::new(&[3; 32]);
         let to_account = AccountSharedData::new(1, 0, &to); // account owner should not matter
         let transaction_accounts = vec![(from, from_account), (to, to_account)];
@@ -1367,12 +1367,12 @@ mod tests {
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: to,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1417,12 +1417,12 @@ mod tests {
                 AccountMeta {
                     pubkey: from,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: to,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ],
             Err(InstructionError::MissingRequiredSignature),
@@ -1439,7 +1439,7 @@ mod tests {
         let from_seed = "42".to_string();
         let from_owner = system_program::id();
         let from = Pubkey::create_with_seed(&base, from_seed.as_str(), &from_owner).unwrap();
-        let from_account = AccountSharedData::new(100, 0, &Pubkey::new(&[2; 32])); // account owner should not matter
+        let from_account = AccountSharedData::new(100, 0, &system_program::id());
         let to = Pubkey::new(&[3; 32]);
         let to_account = AccountSharedData::new(1, 0, &to); // account owner should not matter
         let transaction_accounts =
@@ -1448,7 +1448,7 @@ mod tests {
             AccountMeta {
                 pubkey: from,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: base,
@@ -1458,7 +1458,7 @@ mod tests {
             AccountMeta {
                 pubkey: to,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1949,7 +1949,7 @@ mod tests {
                 AccountMeta {
                     pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: blockhash_id,
