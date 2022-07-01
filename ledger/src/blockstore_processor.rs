@@ -58,7 +58,7 @@ use {
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
-        sync::{Arc, RwLock},
+        sync::{Arc, Mutex, RwLock},
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -268,7 +268,7 @@ fn execute_batch(
 
 #[derive(Default)]
 struct ExecuteBatchesInternalMetrics {
-    execution_timings_per_thread: RwLock<HashMap<usize, ThreadExecuteTimings>>,
+    execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
     total_batches_len: u64,
     execute_batches_us: u64,
 }
@@ -283,8 +283,8 @@ fn execute_batches_internal(
     tx_costs: &[u64],
 ) -> Result<ExecuteBatchesInternalMetrics> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
-    let execution_timings_per_thread: RwLock<HashMap<usize, ThreadExecuteTimings>> =
-        RwLock::new(HashMap::new());
+    let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
+        Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
@@ -318,7 +318,7 @@ fn execute_batches_internal(
 
                 let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
                 execution_timings_per_thread
-                    .write()
+                    .lock()
                     .unwrap()
                     .entry(thread_index)
                     .and_modify(|thread_execution_time| {
@@ -347,7 +347,7 @@ fn execute_batches_internal(
     first_err(&results)?;
 
     Ok(ExecuteBatchesInternalMetrics {
-        execution_timings_per_thread,
+        execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
         total_batches_len: batches.len() as u64,
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
@@ -1012,8 +1012,6 @@ impl ConfirmationTiming {
         let mut current_max_thread_execution_time: Option<ThreadExecuteTimings> = None;
         for (_, thread_execution_time) in execute_batches_internal_metrics
             .execution_timings_per_thread
-            .into_inner()
-            .unwrap()
             .into_iter()
         {
             let ThreadExecuteTimings {
