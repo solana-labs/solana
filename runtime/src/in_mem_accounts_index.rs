@@ -244,8 +244,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let disk_entry = self.load_account_entry_from_disk(pubkey);
                     match disk_entry {
                         Some(disk_entry) => {
+                            Self::merge_slot_lists(entry, disk_entry);
                             entry.clear_disk_unknown();
-                            Self::merge_slot_lists(entry, disk_entry)
                         }
                         None => {
                             entry.clear_disk_unknown();
@@ -273,8 +273,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // we need to make sure this gets covered
                             match disk_entry {
                                 Some(disk_entry) => {
+                                    Self::merge_slot_lists(entry, disk_entry);
                                     entry.clear_disk_unknown();
-                                    Self::merge_slot_lists(entry, disk_entry)
                                 }
                                 None => {
                                     entry.clear_disk_unknown();
@@ -499,7 +499,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             if !already_existed {
                                 self.stats().inc_insert();
                             }
-                        } else if enable_disk_unknown {
+                        } else if enable_disk_unknown && previous_slot_entry_was_cached {
                             // skip checking the disk
                             self.stats().inc_insert();
                             let entry = new_value.into_account_map_entry(&self.storage);
