@@ -3155,7 +3155,7 @@ describe('Connection', function () {
   });
 
   [undefined, 'confirmed' as Commitment].forEach(function (commitment) {
-    describe.only(
+    describe(
       "when the connection's default commitment is `" + commitment + '`',
       () => {
         let connectionWithCommitment: Connection;
