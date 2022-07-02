@@ -19,6 +19,7 @@ import {
   tuple,
   unknown,
   any,
+  object,
 } from 'superstruct';
 import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
@@ -711,11 +712,17 @@ export type SimulatedTransactionAccountInfo = {
   rentEpoch?: number;
 };
 
+export type SimulatedTransactionReturnData = {
+  programId : string ;
+  data : string[];
+}
+
 export type SimulatedTransactionResponse = {
   err: TransactionError | string | null;
   logs: Array<string> | null;
   accounts?: (SimulatedTransactionAccountInfo | null)[] | null;
   unitsConsumed?: number;
+  returnData?: SimulatedTransactionReturnData | null;
 };
 
 const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
@@ -738,6 +745,10 @@ const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
       ),
     ),
     unitsConsumed: optional(number()),
+    returnData: optional(nullable(pick({
+      programId : string(),
+      data : array(string()),
+    }))),
   }),
 );
 
@@ -4283,7 +4294,6 @@ export class Connection {
       // HACK: this function relies on mutating the populated transaction
       transaction._message = transaction._json = undefined;
     }
-
     if (transaction.nonceInfo && signers) {
       transaction.sign(...signers);
     } else {
