@@ -3,6 +3,7 @@ import type {Buffer} from 'buffer';
 import {
   BlockheightBasedTransactionConfirmationStrategy,
   Connection,
+  NonceBasedTransactionConfirmationStrategy,
 } from '../connection';
 import type {TransactionSignature} from '../transaction';
 import type {ConfirmOptions} from '../connection';
@@ -42,12 +43,14 @@ export async function sendAndConfirmRawTransaction(
   rawTransaction: Buffer,
   confirmationStrategyOrConfirmOptions:
     | BlockheightBasedTransactionConfirmationStrategy
+    | NonceBasedTransactionConfirmationStrategy
     | ConfirmOptions
     | undefined,
   maybeConfirmOptions?: ConfirmOptions,
 ): Promise<TransactionSignature> {
   let confirmationStrategy:
     | BlockheightBasedTransactionConfirmationStrategy
+    | NonceBasedTransactionConfirmationStrategy
     | undefined;
   let options: ConfirmOptions | undefined;
   if (
@@ -59,6 +62,16 @@ export async function sendAndConfirmRawTransaction(
   ) {
     confirmationStrategy =
       confirmationStrategyOrConfirmOptions as BlockheightBasedTransactionConfirmationStrategy;
+    options = maybeConfirmOptions;
+  } else if (
+    confirmationStrategyOrConfirmOptions &&
+    Object.prototype.hasOwnProperty.call(
+      confirmationStrategyOrConfirmOptions,
+      'nonceValue',
+    )
+  ) {
+    confirmationStrategy =
+      confirmationStrategyOrConfirmOptions as NonceBasedTransactionConfirmationStrategy;
     options = maybeConfirmOptions;
   } else {
     options = confirmationStrategyOrConfirmOptions as
