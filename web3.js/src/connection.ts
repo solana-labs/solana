@@ -28,7 +28,7 @@ import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
 import fetchImpl, {Response} from './fetch-impl';
-import {NonceAccount} from './nonce-account';
+import {DurableNonce, NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
@@ -45,6 +45,7 @@ import {sleep} from './utils/sleep';
 import {toBuffer} from './utils/to-buffer';
 import {
   TransactionExpiredBlockheightExceededError,
+  TransactionExpiredNonceInvalidError,
   TransactionExpiredTimeoutError,
 } from './transaction/expiry-custom-errors';
 import {makeWebsocketUrl} from './utils/makeWebsocketUrl';
@@ -337,6 +338,17 @@ function extractCommitmentFromConfig<TConfig>(
   }
   return {commitment, config};
 }
+
+/**
+ * A strategy for confirming transactions that depend on the
+ * existence of a durable nonce.
+ */
+export type NonceBasedTransactionConfirmationStrategy = {
+  minContextSlot: number;
+  nonceAccountPubkey: PublicKey;
+  nonceValue: DurableNonce;
+  signature: TransactionSignature;
+};
 
 /**
  * @internal
@@ -3368,7 +3380,9 @@ export class Connection {
   }
 
   confirmTransaction(
-    strategy: BlockheightBasedTransactionConfirmationStrategy,
+    strategy:
+      | BlockheightBasedTransactionConfirmationStrategy
+      | NonceBasedTransactionConfirmationStrategy,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
@@ -3383,6 +3397,7 @@ export class Connection {
   async confirmTransaction(
     strategy:
       | BlockheightBasedTransactionConfirmationStrategy
+      | NonceBasedTransactionConfirmationStrategy
       | TransactionSignature,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
@@ -3391,8 +3406,9 @@ export class Connection {
     if (typeof strategy == 'string') {
       rawSignature = strategy;
     } else {
-      const config =
-        strategy as BlockheightBasedTransactionConfirmationStrategy;
+      const config = strategy as
+        | BlockheightBasedTransactionConfirmationStrategy
+        | NonceBasedTransactionConfirmationStrategy;
       rawSignature = config.signature;
     }
 
@@ -3413,6 +3429,12 @@ export class Connection {
         commitment: commitment || this.commitment,
         strategy: strategy as BlockheightBasedTransactionConfirmationStrategy,
         signature: rawSignature,
+      });
+    } else if (Object.prototype.hasOwnProperty.call(strategy, 'nonceValue')) {
+      return await this.confirmTransactionUsingDurableNonceStrategy({
+        commitment: commitment || this.commitment,
+        signature: rawSignature,
+        strategy: strategy as NonceBasedTransactionConfirmationStrategy,
       });
     } else {
       return await this.confirmTransactionUsingLegacyTimeoutStrategy({
@@ -3582,6 +3604,143 @@ export class Connection {
         result = outcome.response;
       } else {
         throw new TransactionExpiredBlockheightExceededError(signature);
+      }
+    } finally {
+      done = true;
+      cancelConfirmationDetector();
+    }
+    return result;
+  }
+
+  private async confirmTransactionUsingDurableNonceStrategy({
+    commitment,
+    signature,
+    strategy: {minContextSlot, nonceAccountPubkey, nonceValue},
+  }: {
+    commitment?: Commitment;
+    signature: string;
+    strategy: NonceBasedTransactionConfirmationStrategy;
+  }) {
+    let done: boolean = false;
+    const expiryPromise = new Promise<{
+      __type: TransactionStatus.NONCE_INVALID;
+    }>(resolve => {
+      const INVALID_NONCE_ERROR_SENTINEL = {} as const;
+      let currentNonceValue = nonceValue;
+      const getCurrentNonceValue = async () => {
+        try {
+          const nonceAccount = await this.getNonce(nonceAccountPubkey, {
+            commitment,
+            minContextSlot,
+          });
+          if (nonceAccount == null) {
+            throw INVALID_NONCE_ERROR_SENTINEL;
+          }
+          return nonceAccount.nonce;
+        } catch (e) {
+          if (e === INVALID_NONCE_ERROR_SENTINEL) {
+            throw e;
+          }
+          // If for whatever reason we can't reach/read the nonce
+          // account, just keep using the last-known value.
+          return currentNonceValue;
+        }
+      };
+      (async () => {
+        try {
+          currentNonceValue = await getCurrentNonceValue();
+          if (done) return;
+          while (
+            true // eslint-disable-line no-constant-condition
+          ) {
+            if (nonceValue !== currentNonceValue) {
+              resolve({__type: TransactionStatus.NONCE_INVALID});
+              return;
+            }
+            await sleep(2000);
+            if (done) return;
+            currentNonceValue = await getCurrentNonceValue();
+            if (done) return;
+          }
+        } catch (e) {
+          if (e === INVALID_NONCE_ERROR_SENTINEL) {
+            resolve({__type: TransactionStatus.NONCE_INVALID});
+            return;
+          } else {
+            throw e;
+          }
+        }
+      })();
+    });
+    const [confirmationPromise, cancelConfirmationDetector] =
+      this.getTransactionConfirmationPromise({commitment, signature});
+    let result: RpcResponseAndContext<SignatureResult>;
+    try {
+      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      if (outcome.__type === TransactionStatus.PROCESSED) {
+        result = outcome.response;
+      } else {
+        // Double check that the transaction is indeed unconfirmed.
+        let signatureStatus:
+          | RpcResponseAndContext<SignatureStatus | null>
+          | null
+          | undefined;
+        while (
+          true // eslint-disable-line no-constant-condition
+        ) {
+          const status = await this.getSignatureStatus(signature);
+          if (status == null) {
+            break;
+          }
+          if (status.context.slot < minContextSlot) {
+            await sleep(400);
+            continue;
+          }
+          signatureStatus = status;
+          break;
+        }
+        if (signatureStatus?.value) {
+          const commitmentForStatus = commitment || 'finalized';
+          const {confirmationStatus} = signatureStatus.value;
+          switch (commitmentForStatus) {
+            case 'processed':
+            case 'recent':
+              if (
+                confirmationStatus !== 'processed' &&
+                confirmationStatus !== 'confirmed' &&
+                confirmationStatus !== 'finalized'
+              ) {
+                throw new TransactionExpiredNonceInvalidError(signature);
+              }
+              break;
+            case 'confirmed':
+            case 'single':
+            case 'singleGossip':
+              if (
+                confirmationStatus !== 'confirmed' &&
+                confirmationStatus !== 'finalized'
+              ) {
+                throw new TransactionExpiredNonceInvalidError(signature);
+              }
+              break;
+            case 'finalized':
+            case 'max':
+            case 'root':
+              if (confirmationStatus !== 'finalized') {
+                throw new TransactionExpiredNonceInvalidError(signature);
+              }
+              break;
+            default:
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              ((_: never) => {})(commitmentForStatus);
+          }
+          result = {
+            context: signatureStatus.context,
+            value: {err: signatureStatus.value.err},
+          };
+        } else {
+          throw new TransactionExpiredNonceInvalidError(signature);
+        }
       }
     } finally {
       done = true;
