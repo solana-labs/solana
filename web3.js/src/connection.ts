@@ -195,6 +195,9 @@ type RpcRequest = (methodName: string, args: Array<any>) => Promise<any>;
 
 type RpcBatchRequest = (requests: RpcParams[]) => Promise<any[]>;
 
+const NO_COMMITMENT =
+  typeof Symbol === 'function' ? Symbol('NO_COMMITMENT') : ({} as const);
+
 /**
  * @internal
  */
@@ -3431,7 +3434,7 @@ export class Connection {
   async getRecentPerformanceSamples(
     limit?: number,
   ): Promise<Array<PerfSample>> {
-    const args = this._buildArgs(limit ? [limit] : []);
+    const args = this._buildArgs(limit ? [limit] : [], NO_COMMITMENT);
     const unsafeRes = await this._rpcRequest(
       'getRecentPerformanceSamples',
       args,
@@ -5062,11 +5065,12 @@ export class Connection {
 
   _buildArgs(
     args: Array<any>,
-    override?: Commitment,
+    override?: Commitment | typeof NO_COMMITMENT,
     encoding?: 'jsonParsed' | 'base64',
     extra?: any,
   ): Array<any> {
-    const commitment = override || this._commitment;
+    const commitment =
+      override === NO_COMMITMENT ? undefined : override || this._commitment;
     if (commitment || encoding || extra) {
       let options: any = {};
       if (encoding) {

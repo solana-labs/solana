@@ -3154,29 +3154,41 @@ describe('Connection', function () {
     expect(supply.nonCirculatingAccounts.length).to.eq(0);
   });
 
-  it('get performance samples', async () => {
-    await mockRpcResponse({
-      method: 'getRecentPerformanceSamples',
-      params: [],
-      value: [
-        {
-          slot: 1234,
-          numTransactions: 1000,
-          numSlots: 60,
-          samplePeriodSecs: 60,
-        },
-      ],
-    });
+  [undefined, 'confirmed' as Commitment].forEach(function (commitment) {
+    describe.only(
+      "when the connection's default commitment is `" + commitment + '`',
+      () => {
+        let connectionWithCommitment: Connection;
+        beforeEach(() => {
+          connectionWithCommitment = new Connection(url, commitment);
+        });
+        it('get performance samples', async () => {
+          await mockRpcResponse({
+            method: 'getRecentPerformanceSamples',
+            params: [],
+            value: [
+              {
+                slot: 1234,
+                numTransactions: 1000,
+                numSlots: 60,
+                samplePeriodSecs: 60,
+              },
+            ],
+          });
 
-    const perfSamples = await connection.getRecentPerformanceSamples();
-    expect(Array.isArray(perfSamples)).to.be.true;
+          const perfSamples =
+            await connectionWithCommitment.getRecentPerformanceSamples();
+          expect(Array.isArray(perfSamples)).to.be.true;
 
-    if (perfSamples.length > 0) {
-      expect(perfSamples[0].slot).to.be.greaterThan(0);
-      expect(perfSamples[0].numTransactions).to.be.greaterThan(0);
-      expect(perfSamples[0].numSlots).to.be.greaterThan(0);
-      expect(perfSamples[0].samplePeriodSecs).to.be.greaterThan(0);
-    }
+          if (perfSamples.length > 0) {
+            expect(perfSamples[0].slot).to.be.greaterThan(0);
+            expect(perfSamples[0].numTransactions).to.be.greaterThan(0);
+            expect(perfSamples[0].numSlots).to.be.greaterThan(0);
+            expect(perfSamples[0].samplePeriodSecs).to.be.greaterThan(0);
+          }
+        });
+      },
+    );
   });
 
   it('get performance samples limit too high', async () => {
