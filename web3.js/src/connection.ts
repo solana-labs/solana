@@ -2439,6 +2439,26 @@ export type GetTransactionCountConfig = {
 };
 
 /**
+ * Configuration object for `getNonce`
+ */
+export type GetNonceConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for `getNonceAndContext`
+ */
+export type GetNonceAndContextConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
  * Information describing an account
  */
 export type AccountInfo<T> = {
@@ -4773,11 +4793,11 @@ export class Connection {
    */
   async getNonceAndContext(
     nonceAccount: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetNonceAndContextConfig,
   ): Promise<RpcResponseAndContext<NonceAccount | null>> {
     const {context, value: accountInfo} = await this.getAccountInfoAndContext(
       nonceAccount,
-      commitment,
+      commitmentOrConfig,
     );
 
     let value = null;
@@ -4796,9 +4816,9 @@ export class Connection {
    */
   async getNonce(
     nonceAccount: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetNonceConfig,
   ): Promise<NonceAccount | null> {
-    return await this.getNonceAndContext(nonceAccount, commitment)
+    return await this.getNonceAndContext(nonceAccount, commitmentOrConfig)
       .then(x => x.value)
       .catch(e => {
         throw new Error(
