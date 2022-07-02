@@ -169,6 +169,14 @@ use {
     },
 };
 
+/// params to `verify_bank_hash`
+pub struct VerifyBankHash {
+    pub test_hash_calculation: bool,
+    pub can_cached_slot_be_unflushed: bool,
+    pub ignore_mismatch: bool,
+    pub require_rooted_bank: bool,
+}
+
 #[derive(Debug, Default)]
 struct RewardsMetrics {
     load_vote_and_stake_accounts_us: AtomicU64,
@@ -6699,21 +6707,34 @@ impl Bank {
     /// snapshot.
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_bank_hash(
-        &self,
-        test_hash_calculation: bool,
-        can_cached_slot_be_unflushed: bool,
-        ignore_mismatch: bool,
-    ) -> bool {
+    pub fn verify_bank_hash(&self, config: VerifyBankHash) -> bool {
+        if config.require_rooted_bank
+            && !self
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .is_alive_root(self.slot())
+        {
+            if let Some(parent) = self.parent() {
+                info!("{} is not a root, so attempting to verify bank hash on parent bank at slot: {}", self.slot(), parent.slot());
+                return parent.verify_bank_hash(config);
+            } else {
+                // this will result in mismatch errors
+                // accounts hash calc doesn't include unrooted slots
+                panic!("cannot verify bank hash when bank is not a root");
+            }
+        }
+
         self.rc.accounts.verify_bank_hash_and_lamports(
             self.slot(),
             &self.ancestors,
             self.capitalization(),
-            test_hash_calculation,
+            config.test_hash_calculation,
             self.epoch_schedule(),
             &self.rent_collector,
-            can_cached_slot_be_unflushed,
-            ignore_mismatch,
+            config.can_cached_slot_be_unflushed,
+            config.ignore_mismatch,
         )
     }
 
@@ -6943,7 +6964,12 @@ impl Bank {
         let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
             info!("verify_bank_hash..");
             let mut verify_time = Measure::start("verify_bank_hash");
-            let verify = self.verify_bank_hash(test_hash_calculation, false, false);
+            let verify = self.verify_bank_hash(VerifyBankHash {
+                test_hash_calculation,
+                can_cached_slot_be_unflushed: false,
+                ignore_mismatch: false,
+                require_rooted_bank: false,
+            });
             verify_time.stop();
             (verify, verify_time.as_us())
         } else {
@@ -10132,6 +10158,17 @@ pub(crate) mod tests {
         }
     }
 
+    impl VerifyBankHash {
+        fn default_for_test() -> Self {
+            Self {
+                test_hash_calculation: true,
+                can_cached_slot_be_unflushed: false,
+                ignore_mismatch: false,
+                require_rooted_bank: false,
+            }
+        }
+    }
+
     // Test that purging 0 lamports accounts works.
     #[test]
     fn test_purge_empty_accounts() {
@@ -10195,17 +10232,17 @@ pub(crate) mod tests {
         );
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
-        assert!(bank0.verify_bank_hash(true, false, false));
+        assert!(bank0.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         // Squash and then verify hash_internal value
         bank0.freeze();
         bank0.squash();
-        assert!(bank0.verify_bank_hash(true, false, false));
+        assert!(bank0.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         bank1.freeze();
         bank1.squash();
         bank1.update_accounts_hash();
-        assert!(bank1.verify_bank_hash(true, false, false));
+        assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
@@ -10213,7 +10250,7 @@ pub(crate) mod tests {
         bank1.force_flush_accounts_cache();
         bank1.clean_accounts(false, false, None);
 
-        assert!(bank1.verify_bank_hash(true, false, false));
+        assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
 
     #[test]
@@ -11320,7 +11357,7 @@ pub(crate) mod tests {
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false, false));
+        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
 
     #[test]
@@ -11345,19 +11382,19 @@ pub(crate) mod tests {
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false, false));
+        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
-        assert!(bank2.verify_bank_hash(true, false, false));
+        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
         bank3.update_accounts_hash();
-        assert!(bank3.verify_bank_hash(true, false, false));
+        assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false, false));
-        assert!(bank3.verify_bank_hash(true, false, false));
+        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
+        assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
 
     #[test]
