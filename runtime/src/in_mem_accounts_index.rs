@@ -235,7 +235,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> RT {
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
-                if entry.disk_unknown() {
+                if entry.lazy_disk_load() {
                     // disk_unknown is marked, load from the disk and merge with in-mem entry
                     // we found the pubkey
                     // but, we haven't checked to see if there is more on disk
@@ -248,7 +248,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         }
                         None => {}
                     }
-                    entry.clear_disk_unknown();
+                    entry.clear_lazy_disk_load();
                 }
                 entry.set_age(self.storage.future_age_to_flush());
                 callback(Some(entry)).1
@@ -262,7 +262,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 match entry {
                     Entry::Occupied(occupied) => {
                         let entry = occupied.get();
-                        if entry.disk_unknown() {
+                        if entry.lazy_disk_load() {
                             // we found the pubkey
                             // but, we haven't checked to see if there is more on disk
                             // so, we have to load from disk first, then merge with in-mem
@@ -275,7 +275,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 }
                                 None => {}
                             }
-                            entry.clear_disk_unknown();
+                            entry.clear_lazy_disk_load();
                         }
                         callback(Some(entry)).1
                     }
@@ -327,7 +327,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
         match entry {
             Entry::Occupied(occupied) => {
-                if occupied.get().disk_unknown() {
+                if occupied.get().lazy_disk_load() {
                     // merge memory with disk
                     let entry = occupied.get();
                     let key = occupied.key();
@@ -338,7 +338,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         }
                         None => {}
                     }
-                    entry.clear_disk_unknown();
+                    entry.clear_lazy_disk_load();
                 }
 
                 let result =
@@ -482,7 +482,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // skip checking the disk
                             self.stats().inc_insert();
                             let entry = new_value.into_account_map_entry(&self.storage);
-                            entry.set_disk_unknown();
+                            entry.set_lazy_disk_load();
                             assert!(entry.dirty());
                             vacant.insert(entry);
                             self.stats().inc_mem_count(self.bin);
