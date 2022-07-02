@@ -3386,31 +3386,56 @@ export class Connection {
 
     assert(decodedSignature.length === 64, 'signature has invalid length');
 
-    const confirmationCommitment = commitment || this.commitment;
-    let timeoutId;
+    if (
+      Object.prototype.hasOwnProperty.call(strategy, 'lastValidBlockHeight')
+    ) {
+      return await this.confirmTransactionUsingBlockheightExceedenceStrategy({
+        commitment: commitment || this.commitment,
+        strategy: strategy as BlockheightBasedTransactionConfirmationStrategy,
+        signature: rawSignature,
+      });
+    } else {
+      return await this.confirmTransactionUsingLegacyTimeoutStrategy({
+        commitment: commitment || this.commitment,
+        signature: rawSignature,
+      });
+    }
+  }
+
+  private getTransactionConfirmationPromise({
+    commitment,
+    signature,
+  }: {
+    commitment?: Commitment;
+    signature: string;
+  }): [
+    Promise<{
+      __type: TransactionStatus.PROCESSED;
+      response: RpcResponseAndContext<SignatureResult>;
+    }>,
+    () => void,
+  ] {
     let signatureSubscriptionId: number | undefined;
     let disposeSignatureSubscriptionStateChangeObserver:
       | SubscriptionStateChangeDisposeFn
       | undefined;
     let done = false;
-
     const confirmationPromise = new Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
     }>((resolve, reject) => {
       try {
         signatureSubscriptionId = this.onSignature(
-          rawSignature,
+          signature,
           (result: SignatureResult, context: Context) => {
             signatureSubscriptionId = undefined;
             const response = {
               context,
               value: result,
             };
-            done = true;
             resolve({__type: TransactionStatus.PROCESSED, response});
           },
-          confirmationCommitment,
+          commitment,
         );
         const subscriptionSetupPromise = new Promise<void>(
           resolveSubscriptionSetup => {
@@ -3432,7 +3457,7 @@ export class Connection {
         (async () => {
           await subscriptionSetupPromise;
           if (done) return;
-          const response = await this.getSignatureStatus(rawSignature);
+          const response = await this.getSignatureStatus(signature);
           if (done) return;
           if (response == null) {
             return;
@@ -3444,7 +3469,7 @@ export class Connection {
           if (value?.err) {
             reject(value.err);
           } else {
-            switch (confirmationCommitment) {
+            switch (commitment) {
               case 'confirmed':
               case 'single':
               case 'singleGossip': {
@@ -3482,80 +3507,120 @@ export class Connection {
         reject(err);
       }
     });
-
-    const expiryPromise = new Promise<
-      | {__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED}
-      | {__type: TransactionStatus.TIMED_OUT; timeoutMs: number}
-    >(resolve => {
-      if (typeof strategy === 'string') {
-        let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
-        switch (confirmationCommitment) {
-          case 'processed':
-          case 'recent':
-          case 'single':
-          case 'confirmed':
-          case 'singleGossip': {
-            timeoutMs = this._confirmTransactionInitialTimeout || 30 * 1000;
-            break;
-          }
-          // exhaust enums to ensure full coverage
-          case 'finalized':
-          case 'max':
-          case 'root':
-        }
-
-        timeoutId = setTimeout(
-          () => resolve({__type: TransactionStatus.TIMED_OUT, timeoutMs}),
-          timeoutMs,
-        );
-      } else {
-        let config =
-          strategy as BlockheightBasedTransactionConfirmationStrategy;
-        const checkBlockHeight = async () => {
-          try {
-            const blockHeight = await this.getBlockHeight(commitment);
-            return blockHeight;
-          } catch (_e) {
-            return -1;
-          }
-        };
-        (async () => {
-          let currentBlockHeight = await checkBlockHeight();
-          if (done) return;
-          while (currentBlockHeight <= config.lastValidBlockHeight) {
-            await sleep(1000);
-            if (done) return;
-            currentBlockHeight = await checkBlockHeight();
-            if (done) return;
-          }
-          resolve({__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED});
-        })();
-      }
-    });
-
-    let result: RpcResponseAndContext<SignatureResult>;
-    try {
-      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
-      switch (outcome.__type) {
-        case TransactionStatus.BLOCKHEIGHT_EXCEEDED:
-          throw new TransactionExpiredBlockheightExceededError(rawSignature);
-        case TransactionStatus.PROCESSED:
-          result = outcome.response;
-          break;
-        case TransactionStatus.TIMED_OUT:
-          throw new TransactionExpiredTimeoutError(
-            rawSignature,
-            outcome.timeoutMs / 1000,
-          );
-      }
-    } finally {
-      clearTimeout(timeoutId);
+    const cancel = () => {
       if (disposeSignatureSubscriptionStateChangeObserver) {
         disposeSignatureSubscriptionStateChangeObserver();
+        disposeSignatureSubscriptionStateChangeObserver = undefined;
       }
       if (signatureSubscriptionId) {
         this.removeSignatureListener(signatureSubscriptionId);
+        signatureSubscriptionId = undefined;
       }
+    };
+    return [confirmationPromise, cancel];
+  }
+
+  private async confirmTransactionUsingBlockheightExceedenceStrategy({
+    commitment,
+    strategy: {lastValidBlockHeight},
+    signature,
+  }: {
+    commitment?: Commitment;
+    strategy: BlockheightBasedTransactionConfirmationStrategy;
+    signature: string;
+  }) {
+    let done: boolean = false;
+    const expiryPromise = new Promise<{
+      __type: TransactionStatus.BLOCKHEIGHT_EXCEEDED;
+    }>(resolve => {
+      const checkBlockHeight = async () => {
+        try {
+          const blockHeight = await this.getBlockHeight(commitment);
+          return blockHeight;
+        } catch (_e) {
+          return -1;
+        }
+      };
+      (async () => {
+        let currentBlockHeight = await checkBlockHeight();
+        if (done) return;
+        while (currentBlockHeight <= lastValidBlockHeight) {
+          await sleep(1000);
+          if (done) return;
+          currentBlockHeight = await checkBlockHeight();
+          if (done) return;
+        }
+        resolve({__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED});
+      })();
+    });
+    const [confirmationPromise, cancelConfirmationDetector] =
+      this.getTransactionConfirmationPromise({commitment, signature});
+    let result: RpcResponseAndContext<SignatureResult>;
+    try {
+      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      if (outcome.__type === TransactionStatus.PROCESSED) {
+        result = outcome.response;
+      } else {
+        throw new TransactionExpiredBlockheightExceededError(signature);
+      }
+    } finally {
+      done = true;
+      cancelConfirmationDetector();
+    }
+    return result;
+  }
+
+  private async confirmTransactionUsingLegacyTimeoutStrategy({
+    commitment,
+    signature,
+  }: {
+    commitment?: Commitment;
+    signature: string;
+  }) {
+    let timeoutId;
+    const expiryPromise = new Promise<{
+      __type: TransactionStatus.TIMED_OUT;
+      timeoutMs: number;
+    }>(resolve => {
+      let timeoutMs = this._confirmTransactionInitialTimeout || 60 * 1000;
+      switch (commitment) {
+        case 'processed':
+        case 'recent':
+        case 'single':
+        case 'confirmed':
+        case 'singleGossip': {
+          timeoutMs = this._confirmTransactionInitialTimeout || 30 * 1000;
+          break;
+        }
+        // exhaust enums to ensure full coverage
+        case 'finalized':
+        case 'max':
+        case 'root':
+      }
+      timeoutId = setTimeout(
+        () => resolve({__type: TransactionStatus.TIMED_OUT, timeoutMs}),
+        timeoutMs,
+      );
+    });
+    const [confirmationPromise, cancelConfirmationDetector] =
+      this.getTransactionConfirmationPromise({
+        commitment,
+        signature,
+      });
+    let result: RpcResponseAndContext<SignatureResult>;
+    try {
+      const outcome = await Promise.race([confirmationPromise, expiryPromise]);
+      if (outcome.__type === TransactionStatus.PROCESSED) {
+        result = outcome.response;
+      } else {
+        throw new TransactionExpiredTimeoutError(
+          signature,
+          outcome.timeoutMs / 1000,
+        );
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      cancelConfirmationDetector();
     }
     return result;
   }
