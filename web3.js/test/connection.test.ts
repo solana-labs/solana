@@ -3760,11 +3760,11 @@ describe('Connection', function () {
     it('returnData on simulateTransaction' , async()=>{
       const tx = new Transaction();
       tx.feePayer = Keypair.generate().publicKey;
-      
+
       const getLatestBlockhashResponse = {
         method: 'getLatestBlockhash',
         params: [],
-        value: 
+        value:
           {
             "blockhash": "CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR",
             "feeCalculator": {
@@ -3804,7 +3804,7 @@ describe('Connection', function () {
         data: [ 'Kg==', 'base64' ],
         programId: '83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri'
       })
-  
+
     })
   }
 

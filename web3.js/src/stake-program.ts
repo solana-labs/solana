@@ -456,7 +456,8 @@ export type StakeInstructionType =
   | 'Initialize'
   | 'Merge'
   | 'Split'
-  | 'Withdraw';
+  | 'Withdraw'
+  | 'GetMinimumDelegation';
 
 type StakeInstructionInputData = {
   Authorize: IInstructionInputData &
@@ -488,6 +489,7 @@ type StakeInstructionInputData = {
     Readonly<{
       lamports: number;
     }>;
+  GetMinimumDelegation: IInstructionInputData;
 };
 
 /**
@@ -559,6 +561,12 @@ export const STAKE_INSTRUCTION_LAYOUTS = Object.freeze<{
       ],
     ),
   },
+  GetMinimumDelegation: {
+    index: 13,
+    layout: BufferLayout.struct<StakeInstructionInputData['GetMinimumDelegation']>([
+      BufferLayout.u32('instruction'),
+    ]),
+  }
 });
 
 /**
@@ -920,4 +928,18 @@ export class StakeProgram {
       data,
     });
   }
+
+   /**
+   * Generate a Transaction that returns the minimum stake delegation.
+   */
+    static getMinimumDelegation(): Transaction {
+      const type = STAKE_INSTRUCTION_LAYOUTS.GetMinimumDelegation;
+      const data = encodeData(type);
+
+      return new Transaction().add({
+        keys: [],
+        programId: this.programId,
+        data,
+      });
+    }
 }

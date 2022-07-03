@@ -19,7 +19,6 @@ import {
   tuple,
   unknown,
   any,
-  object,
 } from 'superstruct';
 import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';

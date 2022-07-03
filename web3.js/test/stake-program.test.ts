@@ -318,7 +318,10 @@ describe('StakeProgram', () => {
     const [stakeInstruction] = transaction.instructions;
     expect(params).to.eql(StakeInstruction.decodeDeactivate(stakeInstruction));
   });
-
+  it('getMinimumDelegation', () => {
+    const transaction = StakeProgram.getMinimumDelegation();
+    expect(transaction.instructions).to.have.length(1);
+  });
   it('StakeInstructions', async () => {
     const from = Keypair.generate();
     const seed = 'test string';
@@ -697,6 +700,11 @@ describe('StakeProgram', () => {
       await sendAndConfirmTransaction(connection, authorize, [payer], {
         preflightCommitment: 'confirmed',
       });
+
+      // Test Simulating getMinimumDelegation Transaction and expecting return data
+      let minimumDelegation = StakeProgram.getMinimumDelegation();
+      const tx = await connection.simulateTransaction(minimumDelegation,[payer]);
+      expect(tx.value.returnData).to.not.be.null;
     }).timeout(10 * 1000);
   }
 });
