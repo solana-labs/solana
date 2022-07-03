@@ -38,7 +38,7 @@ use {
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_rpc::{
-        rpc::{JsonRpcConfig, RpcBigtableConfig},
+        rpc::{JsonRpcConfig, RpcBigtableConfig, MAX_REQUEST_PAYLOAD_SIZE},
         rpc_pubsub_service::PubSubConfig,
     },
     solana_runtime::{
@@ -75,9 +75,6 @@ use {
     solana_validator::{
         admin_rpc_service, bootstrap, dashboard::Dashboard, ledger_lockfile, lock_ledger,
         new_spinner_progress_bar, println_name_value, redirect_stderr_to_file,
-    },
-    solana_rpc::{
-        rpc::MAX_REQUEST_PAYLOAD_SIZE,
     },
     std::{
         collections::{HashSet, VecDeque},
@@ -2586,7 +2583,11 @@ pub fn main() {
             rpc_niceness_adj: value_t_or_exit!(matches, "rpc_niceness_adj", i8),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
-            rpc_max_request_payload_size: value_t_or_exit!(matches, "rpc_max_request_payload_size", usize)
+            rpc_max_request_payload_size: value_t_or_exit!(
+                matches, 
+                "rpc_max_request_payload_size", 
+                usize
+            ),
         },
         geyser_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
