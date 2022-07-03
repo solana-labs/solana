@@ -2584,8 +2584,8 @@ pub fn main() {
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
             rpc_max_request_payload_size: value_t_or_exit!(
-                matches, 
-                "rpc_max_request_payload_size", 
+                matches,
+                "rpc_max_request_payload_size",
                 usize
             ),
         },
