@@ -160,6 +160,7 @@ pub struct JsonRpcConfig {
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
+    pub rpc_max_request_payload_size: usize,
 }
 
 impl JsonRpcConfig {

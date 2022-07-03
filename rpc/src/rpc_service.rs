@@ -444,6 +444,7 @@ impl JsonRpcService {
 
         let full_api = config.full_api;
         let obsolete_v1_7_api = config.obsolete_v1_7_api;
+        let rpc_max_request_payload_size = config.rpc_max_request_payload_size;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             config,
             snapshot_config.clone(),
@@ -515,7 +516,7 @@ impl JsonRpcService {
                 ]))
                 .cors_max_age(86400)
                 .request_middleware(request_middleware)
-                .max_request_body_size(MAX_REQUEST_PAYLOAD_SIZE)
+                .max_request_body_size(rpc_max_request_payload_size)
                 .start_http(&rpc_addr);
 
                 if let Err(e) = server {
