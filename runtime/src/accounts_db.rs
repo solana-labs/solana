@@ -2804,6 +2804,25 @@ impl AccountsDb {
                 self.accounts_index.roots_removed.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
+            (
+                "active_scans",
+                self.accounts_index.active_scans.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "max_distance_to_min_scan_slot",
+                {
+                    let mut val = 0;
+                    let mut lock = self
+                        .accounts_index
+                        .max_distance_to_min_scan_slot
+                        .lock()
+                        .unwrap();
+                    std::mem::swap(&mut val, &mut lock);
+                    val
+                },
+                i64
+            ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
