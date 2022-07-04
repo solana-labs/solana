@@ -1,48 +1,6 @@
 // Long-running bank_forks tests
 #![allow(clippy::integer_arithmetic)]
 
-macro_rules! DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS {
-    ($x:ident, $y:ident, $z:ident) => {
-        #[allow(non_snake_case)]
-        mod $z {
-            use super::*;
-
-            const SNAPSHOT_VERSION: SnapshotVersion = SnapshotVersion::$x;
-            const CLUSTER_TYPE: ClusterType = ClusterType::$y;
-
-            #[test]
-            fn test_bank_forks_status_cache_snapshot_n() {
-                run_test_bank_forks_status_cache_snapshot_n(SNAPSHOT_VERSION, CLUSTER_TYPE)
-            }
-
-            #[test]
-            fn test_bank_forks_snapshot_n() {
-                run_test_bank_forks_snapshot_n(SNAPSHOT_VERSION, CLUSTER_TYPE)
-            }
-
-            #[test]
-            fn test_concurrent_snapshot_packaging() {
-                run_test_concurrent_snapshot_packaging(SNAPSHOT_VERSION, CLUSTER_TYPE)
-            }
-
-            #[test]
-            fn test_slots_to_snapshot() {
-                run_test_slots_to_snapshot(SNAPSHOT_VERSION, CLUSTER_TYPE)
-            }
-
-            #[test]
-            fn test_bank_forks_incremental_snapshot_n() {
-                run_test_bank_forks_incremental_snapshot_n(SNAPSHOT_VERSION, CLUSTER_TYPE)
-            }
-
-            #[test]
-            fn test_snapshots_with_background_services() {
-                run_test_snapshots_with_background_services(SNAPSHOT_VERSION, CLUSTER_TYPE)
-            }
-        }
-    };
-}
-
 #[cfg(test)]
 mod tests {
     use {
@@ -72,12 +30,18 @@ mod tests {
                 AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
                 SnapshotType,
             },
-            snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
+            snapshot_utils::{
+                self, ArchiveFormat,
+                SnapshotVersion::{self, V1_2_0},
+            },
             status_cache::MAX_CACHE_ENTRIES,
         },
         solana_sdk::{
             clock::Slot,
-            genesis_config::{ClusterType, GenesisConfig},
+            genesis_config::{
+                ClusterType::{self, Development, Devnet, MainnetBeta, Testnet},
+                GenesisConfig,
+            },
             hash::{hashv, Hash},
             pubkey::Pubkey,
             signature::{Keypair, Signer},
@@ -97,12 +61,8 @@ mod tests {
             time::Duration,
         },
         tempfile::TempDir,
+        test_case::test_case,
     };
-
-    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Development, V1_2_0_Development);
-    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Devnet, V1_2_0_Devnet);
-    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, Testnet, V1_2_0_Testnet);
-    DEFINE_SNAPSHOT_VERSION_PARAMETERIZED_TEST_FUNCTIONS!(V1_2_0, MainnetBeta, V1_2_0_MainnetBeta);
 
     struct SnapshotTestConfig {
         accounts_dir: TempDir,
@@ -318,10 +278,11 @@ mod tests {
         restore_from_snapshot(bank_forks, last_slot, genesis_config, account_paths);
     }
 
-    fn run_test_bank_forks_snapshot_n(
-        snapshot_version: SnapshotVersion,
-        cluster_type: ClusterType,
-    ) {
+    #[test_case(V1_2_0, Development)]
+    #[test_case(V1_2_0, Devnet)]
+    #[test_case(V1_2_0, Testnet)]
+    #[test_case(V1_2_0, MainnetBeta)]
+    fn test_bank_forks_snapshot(snapshot_version: SnapshotVersion, cluster_type: ClusterType) {
         // create banks up to slot 4 and create 1 new account in each bank. test that bank 4 snapshots
         // and restores correctly
         run_bank_forks_snapshot_n(
@@ -357,7 +318,11 @@ mod tests {
         }
     }
 
-    fn run_test_concurrent_snapshot_packaging(
+    #[test_case(V1_2_0, Development)]
+    #[test_case(V1_2_0, Devnet)]
+    #[test_case(V1_2_0, Testnet)]
+    #[test_case(V1_2_0, MainnetBeta)]
+    fn test_concurrent_snapshot_packaging(
         snapshot_version: SnapshotVersion,
         cluster_type: ClusterType,
     ) {
@@ -587,7 +552,11 @@ mod tests {
         );
     }
 
-    fn run_test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: ClusterType) {
+    #[test_case(V1_2_0, Development)]
+    #[test_case(V1_2_0, Devnet)]
+    #[test_case(V1_2_0, Testnet)]
+    #[test_case(V1_2_0, MainnetBeta)]
+    fn test_slots_to_snapshot(snapshot_version: SnapshotVersion, cluster_type: ClusterType) {
         solana_logger::setup();
         let num_set_roots = MAX_CACHE_ENTRIES * 2;
 
@@ -637,7 +606,11 @@ mod tests {
         }
     }
 
-    fn run_test_bank_forks_status_cache_snapshot_n(
+    #[test_case(V1_2_0, Development)]
+    #[test_case(V1_2_0, Devnet)]
+    #[test_case(V1_2_0, Testnet)]
+    #[test_case(V1_2_0, MainnetBeta)]
+    fn test_bank_forks_status_cache_snapshot(
         snapshot_version: SnapshotVersion,
         cluster_type: ClusterType,
     ) {
@@ -674,7 +647,11 @@ mod tests {
         }
     }
 
-    fn run_test_bank_forks_incremental_snapshot_n(
+    #[test_case(V1_2_0, Development)]
+    #[test_case(V1_2_0, Devnet)]
+    #[test_case(V1_2_0, Testnet)]
+    #[test_case(V1_2_0, MainnetBeta)]
+    fn test_bank_forks_incremental_snapshot(
         snapshot_version: SnapshotVersion,
         cluster_type: ClusterType,
     ) {
@@ -882,7 +859,11 @@ mod tests {
     }
 
     /// Spin up the background services fully and test taking snapshots
-    fn run_test_snapshots_with_background_services(
+    #[test_case(V1_2_0, Development)]
+    #[test_case(V1_2_0, Devnet)]
+    #[test_case(V1_2_0, Testnet)]
+    #[test_case(V1_2_0, MainnetBeta)]
+    fn test_snapshots_with_background_services(
         snapshot_version: SnapshotVersion,
         cluster_type: ClusterType,
     ) {
