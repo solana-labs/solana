@@ -59,14 +59,20 @@ impl BanksWithCommitments {
     }
 
     /// Call function callback for each commitment level, and returns a vector of metrics.
-    pub fn for_each_commitment<F: Fn(&Bank) -> Option<Metric>>(
-        &self,
-        get: F,
-    ) -> Option<Vec<Metric>> {
-        Some(vec![
-            get(&self.finalized_bank)?.with_label("commitment_level", "finalized".to_owned()),
-            get(&self.confirmed_bank)?.with_label("commitment_level", "confirmed".to_owned()),
-            get(&self.processed_bank)?.with_label("commitment_level", "processed".to_owned()),
-        ])
+    pub fn for_each_commitment<F: Fn(&Bank) -> Option<Metric>>(&self, get: F) -> Vec<Metric> {
+        let mut result = Vec::with_capacity(3);
+        result.extend(
+            get(&self.finalized_bank)
+                .map(|m| m.with_label("commitment_level", "finalized".to_owned())),
+        );
+        result.extend(
+            get(&self.confirmed_bank)
+                .map(|m| m.with_label("commitment_level", "confirmed".to_owned())),
+        );
+        result.extend(
+            get(&self.processed_bank)
+                .map(|m| m.with_label("commitment_level", "processed".to_owned())),
+        );
+        result
     }
 }
