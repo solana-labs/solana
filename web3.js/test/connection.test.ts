@@ -2988,14 +2988,14 @@ describe('Connection', function () {
         expect(isValid.value).to.be.true;
       });
 
-      it('is blockhash valid - blockhash only and mint slot (live)', async () => {
-        const blockhash = await connection.getLatestBlockhashAndContext('finalized');
+      it('is blockhash valid - blockhash only and min slot (live)', async () => {
+        const blockhash = await connection.getLatestBlockhashAndContext('processed');
 
         const isValid = await connection.isBlockhashValid(
           blockhash.value.blockhash,
           {
             commitment: 'finalized',
-            minContextSlot: Number.MAX_SAFE_INTEGER
+            minContextSlot: blockhash.context.slot
           });
         expect(isValid.value).to.be.false;
       });
