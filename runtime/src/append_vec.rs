@@ -198,6 +198,7 @@ impl Drop for AppendVec {
                 // disabled due to many false positive warnings while running tests.
                 // blocked by rpc's upgrade to jsonrpc v17
                 //error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
+                inc_new_counter_info!("append_vec_drop_fail", 1);
             }
         }
     }
