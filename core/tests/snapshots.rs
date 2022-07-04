@@ -1,4 +1,3 @@
-// Long-running bank_forks tests
 #![allow(clippy::integer_arithmetic)]
 
 use {
