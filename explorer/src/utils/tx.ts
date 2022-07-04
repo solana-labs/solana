@@ -23,7 +23,7 @@ import { TokenInfoMap } from "@solana/spl-token-registry";
 
 export enum PROGRAM_NAMES {
   // native built-ins
-  ADDRESS_MAP = "Address Map Program",
+  ADDRESS_LOOKUP_TABLE = "Address Lookup Table Program",
   COMPUTE_BUDGET = "Compute Budget Program",
   CONFIG = "Config Program",
   STAKE = "Stake Program",
@@ -114,8 +114,8 @@ export type ProgramInfo = {
 
 export const PROGRAM_INFO_BY_ID: { [address: string]: ProgramInfo } = {
   // native built-ins
-  AddressMap111111111111111111111111111111111: {
-    name: PROGRAM_NAMES.ADDRESS_MAP,
+  AddressLookupTab1e1111111111111111111111111: {
+    name: PROGRAM_NAMES.ADDRESS_LOOKUP_TABLE,
     deployments: ALL_CLUSTERS,
   },
   ComputeBudget111111111111111111111111111111: {
