@@ -356,7 +356,7 @@ function DetailsSection({ signature }: SignatureProps) {
 
   if (!status?.data?.info) {
     return null;
-  } else if (!details) {
+  } else if (!details || details.status === FetchStatus.Fetching) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Failed to fetch details" />;

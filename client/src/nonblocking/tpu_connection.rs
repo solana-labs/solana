@@ -1,7 +1,7 @@
 //! Trait defining async send functions, to be used for UDP or QUIC sending
 
 use {
-    crate::nonblocking::udp_client::UdpTpuConnection,
+    crate::nonblocking::{quic_client::QuicTpuConnection, udp_client::UdpTpuConnection},
     async_trait::async_trait,
     enum_dispatch::enum_dispatch,
     solana_sdk::{transaction::VersionedTransaction, transport::Result as TransportResult},
@@ -13,6 +13,7 @@ use {
 // trying to convert later.
 #[enum_dispatch]
 pub enum NonblockingConnection {
+    QuicTpuConnection,
     UdpTpuConnection,
 }
 

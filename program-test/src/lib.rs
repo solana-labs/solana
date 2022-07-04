@@ -101,11 +101,10 @@ pub fn builtin_process_instruction(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    let indices_in_instruction = instruction_context.get_number_of_program_accounts()
-        ..instruction_context.get_number_of_accounts();
+    let instruction_account_indices = 0..instruction_context.get_number_of_instruction_accounts();
 
     let log_collector = invoke_context.get_log_collector();
-    let program_id = instruction_context.get_program_key(transaction_context)?;
+    let program_id = instruction_context.get_last_program_key(transaction_context)?;
     stable_log::program_invoke(
         &log_collector,
         program_id,
@@ -113,14 +112,14 @@ pub fn builtin_process_instruction(
     );
 
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
-    let deduplicated_indices: HashSet<usize> = indices_in_instruction.clone().collect();
+    let deduplicated_indices: HashSet<usize> = instruction_account_indices.clone().collect();
 
     // Create copies of the accounts
     let mut account_copies = deduplicated_indices
         .iter()
-        .map(|index_in_instruction| {
+        .map(|instruction_account_index| {
             let borrowed_account = instruction_context
-                .try_borrow_account(transaction_context, *index_in_instruction)?;
+                .try_borrow_instruction_account(transaction_context, *instruction_account_index)?;
             Ok((
                 *borrowed_account.get_key(),
                 *borrowed_account.get_owner(),
@@ -144,15 +143,15 @@ pub fn builtin_process_instruction(
         .collect();
 
     // Create AccountInfos
-    let account_infos = indices_in_instruction
-        .map(|index_in_instruction| {
+    let account_infos = instruction_account_indices
+        .map(|instruction_account_index| {
             let account_copy_index = deduplicated_indices
                 .iter()
-                .position(|index| *index == index_in_instruction)
+                .position(|index| *index == instruction_account_index)
                 .unwrap();
             let (key, owner, lamports, data) = &account_refs[account_copy_index];
             let borrowed_account = instruction_context
-                .try_borrow_account(transaction_context, index_in_instruction)?;
+                .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
             Ok(AccountInfo {
                 key,
                 is_signer: borrowed_account.is_signer(),
@@ -175,12 +174,12 @@ pub fn builtin_process_instruction(
     stable_log::program_success(&log_collector, program_id);
 
     // Commit AccountInfo changes back into KeyedAccounts
-    for (index_in_instruction, (_key, _owner, lamports, data)) in deduplicated_indices
+    for (instruction_account_index, (_key, _owner, lamports, data)) in deduplicated_indices
         .into_iter()
         .zip(account_copies.into_iter())
     {
-        let mut borrowed_account =
-            instruction_context.try_borrow_account(transaction_context, index_in_instruction)?;
+        let mut borrowed_account = instruction_context
+            .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
         if borrowed_account.is_writable() {
             borrowed_account.set_lamports(lamports)?;
             borrowed_account.set_data(&data)?;
@@ -253,7 +252,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .get_current_instruction_context()
             .unwrap();
         let caller = instruction_context
-            .get_program_key(transaction_context)
+            .get_last_program_key(transaction_context)
             .unwrap();
 
         stable_log::program_invoke(
@@ -379,7 +378,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .get_current_instruction_context()
             .unwrap();
         let caller = *instruction_context
-            .get_program_key(transaction_context)
+            .get_last_program_key(transaction_context)
             .unwrap();
         transaction_context
             .set_return_data(caller, data.to_vec())

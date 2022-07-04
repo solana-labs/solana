@@ -10,9 +10,11 @@ use std::{
     time::Duration,
 };
 
-pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 50;
+// Obsolete limits
+const _MAX_ALLOWABLE_DRIFT_PERCENTAGE: u32 = 50;
+const _MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW: u32 = 80;
+
 pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_FAST: u32 = 25;
-pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW: u32 = 80;
 pub(crate) const MAX_ALLOWABLE_DRIFT_PERCENTAGE_SLOW_V2: u32 = 150;
 
 #[derive(Copy, Clone)]

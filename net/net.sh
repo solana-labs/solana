@@ -193,9 +193,13 @@ build() {
       buildVariant=--debug
     fi
 
+    if $profileBuild; then
+      profilerFlags="RUSTFLAGS='-C force-frame-pointers=y -g ${RUSTFLAGS}'"
+    fi
+
     $MAYBE_DOCKER bash -c "
       set -ex
-      scripts/cargo-install-all.sh farf $buildVariant --validator-only
+      $profilerFlags scripts/cargo-install-all.sh farf $buildVariant --validator-only
     "
   )
 
@@ -783,6 +787,7 @@ maybeAllowPrivateAddr=""
 maybeAccountsDbSkipShrink=""
 maybeSkipRequireTower=""
 debugBuild=false
+profileBuild=false
 doBuild=true
 gpuMode=auto
 netemPartition=""
@@ -868,6 +873,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 = --debug ]]; then
       debugBuild=true
+      shift 1
+    elif [[ $1 = --profile ]]; then
+      profileBuild=true
       shift 1
     elif [[ $1 = --partition ]]; then
       netemPartition=$2

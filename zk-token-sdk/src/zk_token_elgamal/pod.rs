@@ -31,10 +31,6 @@ impl From<PodU64> for u64 {
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct Scalar(pub [u8; 32]);
-
-#[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]
-#[repr(transparent)]
 pub struct CompressedRistretto(pub [u8; 32]);
 
 #[derive(Clone, Copy, Pod, Zeroable, PartialEq, Eq)]

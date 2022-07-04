@@ -1,4 +1,5 @@
 use {
+    crate::streamer::StakedNodes,
     crossbeam_channel::Sender,
     pem::Pem,
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
@@ -7,11 +8,10 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
-        quic::{QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS},
+        quic::{QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
     },
     std::{
-        collections::HashMap,
         error::Error,
         net::{IpAddr, UdpSocket},
         sync::{
@@ -49,7 +49,7 @@ pub(crate) fn configure_server(
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
     // QUIC_MAX_CONCURRENT_STREAMS doubled, which was found to improve reliability
-    const MAX_CONCURRENT_UNI_STREAMS: u32 = (QUIC_MAX_CONCURRENT_STREAMS * 2) as u32;
+    const MAX_CONCURRENT_UNI_STREAMS: u32 = (QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS * 2) as u32;
     config.max_concurrent_uni_streams(MAX_CONCURRENT_UNI_STREAMS.into());
     config.stream_receive_window((PACKET_DATA_SIZE as u32).into());
     config.receive_window((PACKET_DATA_SIZE as u32 * MAX_CONCURRENT_UNI_STREAMS).into());
@@ -155,10 +155,15 @@ pub struct StreamStats {
     pub(crate) total_packet_batches_sent: AtomicUsize,
     pub(crate) total_packet_batches_none: AtomicUsize,
     pub(crate) total_stream_read_errors: AtomicUsize,
+    pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
     pub(crate) connection_add_failed: AtomicUsize,
+    pub(crate) connection_add_failed_invalid_stream_count: AtomicUsize,
     pub(crate) connection_add_failed_unstaked_node: AtomicUsize,
+    pub(crate) connection_add_failed_on_pruning: AtomicUsize,
     pub(crate) connection_setup_timeout: AtomicUsize,
+    pub(crate) connection_removed: AtomicUsize,
+    pub(crate) connection_remove_failed: AtomicUsize,
 }
 
 impl StreamStats {
@@ -196,9 +201,31 @@ impl StreamStats {
                 i64
             ),
             (
+                "connection_add_failed_invalid_stream_count",
+                self.connection_add_failed_invalid_stream_count
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
                 "connection_add_failed_unstaked_node",
                 self.connection_add_failed_unstaked_node
                     .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_add_failed_on_pruning",
+                self.connection_add_failed_on_pruning
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_removed",
+                self.connection_removed.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_remove_failed",
+                self.connection_remove_failed.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -246,6 +273,11 @@ impl StreamStats {
                 self.total_stream_read_errors.swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "stream_read_timeouts",
+                self.total_stream_read_timeouts.swap(0, Ordering::Relaxed),
+                i64
+            ),
         );
     }
 }
@@ -258,7 +290,7 @@ pub fn spawn_server(
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
     max_connections_per_ip: usize,
-    staked_nodes: Arc<RwLock<HashMap<IpAddr, u64>>>,
+    staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
@@ -306,7 +338,7 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
@@ -361,7 +393,7 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,
@@ -403,7 +435,7 @@ mod test {
         let keypair = Keypair::new();
         let ip = "127.0.0.1".parse().unwrap();
         let server_address = s.local_addr().unwrap();
-        let staked_nodes = Arc::new(RwLock::new(HashMap::new()));
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let stats = Arc::new(StreamStats::default());
         let t = spawn_server(
             s,

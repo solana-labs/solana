@@ -393,7 +393,6 @@ fn get_priority_details(message: &SanitizedVersionedMessage) -> Option<Transacti
     let prioritization_fee_details = compute_budget
         .process_instructions(
             message.program_instructions_iter(),
-            true, // don't reject txs that use request heap size ix
             true, // use default units per instruction
             true, // don't reject txs that use set compute unit price ix
         )

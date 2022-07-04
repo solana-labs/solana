@@ -240,6 +240,21 @@ pub enum VoteAuthorize {
     Withdrawer,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct VoteAuthorizeWithSeedArgs {
+    pub authorization_type: VoteAuthorize,
+    pub current_authority_derived_key_owner: Pubkey,
+    pub current_authority_derived_key_seed: String,
+    pub new_authority: Pubkey,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct VoteAuthorizeCheckedWithSeedArgs {
+    pub authorization_type: VoteAuthorize,
+    pub current_authority_derived_key_owner: Pubkey,
+    pub current_authority_derived_key_seed: String,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone, AbiExample)]
 pub struct BlockTimestamp {
     pub slot: Slot,
@@ -1294,8 +1309,8 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     rent_sysvar: Option<&Rent>,
     clock: Option<&Clock>,
 ) -> Result<(), InstructionError> {
-    let mut vote_account =
-        instruction_context.try_borrow_account(transaction_context, vote_account_index)?;
+    let mut vote_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, vote_account_index)?;
     let vote_state: VoteState = vote_account
         .get_state::<VoteStateVersions>()?
         .convert_to_current();
@@ -1321,7 +1336,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 
         if reject_active_vote_account_close {
             datapoint_debug!("vote-account-close", ("reject-active", 1, i64));
-            return Err(InstructionError::ActiveVoteAccountClose);
+            return Err(VoteError::ActiveVoteAccountClose.into());
         } else {
             // Deinitialize upon zero-balance
             datapoint_debug!("vote-account-close", ("allow", 1, i64));
@@ -1336,8 +1351,8 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 
     vote_account.checked_sub_lamports(lamports)?;
     drop(vote_account);
-    let mut to_account =
-        instruction_context.try_borrow_account(transaction_context, to_account_index)?;
+    let mut to_account = instruction_context
+        .try_borrow_instruction_account(transaction_context, to_account_index)?;
     to_account.checked_add_lamports(lamports)?;
     Ok(())
 }

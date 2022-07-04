@@ -26,7 +26,7 @@ import RpcClient from 'jayson/lib/client/browser';
 
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
-import {SendTransactionError} from './errors';
+import {SendTransactionError, SolanaJSONRPCError} from './errors';
 import fetchImpl, {Response} from './fetch-impl';
 import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
@@ -191,9 +191,9 @@ type Subscription = BaseSubscription &
   StatefulSubscription &
   DistributiveOmit<SubscriptionConfig, 'callback'>;
 
-type RpcRequest = (methodName: string, args: Array<any>) => any;
+type RpcRequest = (methodName: string, args: Array<any>) => Promise<any>;
 
-type RpcBatchRequest = (requests: RpcParams[]) => any;
+type RpcBatchRequest = (requests: RpcParams[]) => Promise<any[]>;
 
 /**
  * @internal
@@ -228,6 +228,8 @@ export type SendOptions = {
   preflightCommitment?: Commitment;
   /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
   maxRetries?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -242,6 +244,8 @@ export type ConfirmOptions = {
   preflightCommitment?: Commitment;
   /** Maximum number of times for the RPC node to retry sending the transaction to the leader. */
   maxRetries?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -272,6 +276,8 @@ export type SignaturesForAddressOptions = {
   until?: TransactionSignature;
   /** Maximum transaction signatures to return (between 1 and 1,000, default: 1,000). */
   limit?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -296,6 +302,23 @@ export type BlockhashWithExpiryBlockHeight = Readonly<{
 export type BlockheightBasedTransactionConfirmationStrategy = {
   signature: TransactionSignature;
 } & BlockhashWithExpiryBlockHeight;
+
+/** @internal */
+function extractCommitmentFromConfig<TConfig>(
+  commitmentOrConfig?: Commitment | ({commitment?: Commitment} & TConfig),
+) {
+  let commitment: Commitment | undefined;
+  let config: Omit<TConfig, 'commitment'> | undefined;
+  if (typeof commitmentOrConfig === 'string') {
+    commitment = commitmentOrConfig;
+  } else if (commitmentOrConfig) {
+    const {commitment: specifiedCommitment, ...specifiedConfig} =
+      commitmentOrConfig;
+    commitment = specifiedCommitment;
+    config = specifiedConfig;
+  }
+  return {commitment, config};
+}
 
 /**
  * @internal
@@ -398,6 +421,88 @@ export type Finality = 'confirmed' | 'finalized';
  * </pre>
  */
 export type LargestAccountsFilter = 'circulating' | 'nonCirculating';
+
+/**
+ * Configuration object for changing `getAccountInfo` query behavior
+ */
+export type GetAccountInfoConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getBalance` query behavior
+ */
+export type GetBalanceConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getBlockHeight` query behavior
+ */
+export type GetBlockHeightConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getEpochInfo` query behavior
+ */
+export type GetEpochInfoConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getInflationReward` query behavior
+ */
+export type GetInflationRewardConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** An epoch for which the reward occurs. If omitted, the previous epoch will be used */
+  epoch?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getLatestBlockhash` query behavior
+ */
+export type GetLatestBlockhashConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getSlot` query behavior
+ */
+export type GetSlotConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getSlotLeader` query behavior
+ */
+export type GetSlotLeaderConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
 
 /**
  * Configuration object for changing `getLargestAccounts` query behavior
@@ -1005,6 +1110,7 @@ function createRpcClient(
           'Content-Type': 'application/json',
         },
         httpHeaders || {},
+        COMMON_HTTP_HEADERS,
       ),
     };
 
@@ -1958,6 +2064,8 @@ export type GetProgramAccountsConfig = {
   dataSlice?: DataSlice;
   /** Optional array of filters to apply to accounts */
   filters?: GetProgramAccountsFilter[];
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -1968,6 +2076,8 @@ export type GetParsedProgramAccountsConfig = {
   commitment?: Commitment;
   /** Optional array of filters to apply to accounts */
   filters?: GetProgramAccountsFilter[];
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -1976,8 +2086,40 @@ export type GetParsedProgramAccountsConfig = {
 export type GetMultipleAccountsConfig = {
   /** Optional commitment level */
   commitment?: Commitment;
-  /** Optional encoding for account data (default base64) */
-  encoding?: 'base64' | 'jsonParsed';
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetStakeActivationConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** Epoch for which to calculate activation details. If parameter not provided, defaults to current epoch */
+  epoch?: number;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetTokenAccountsByOwnerConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
+};
+
+/**
+ * Configuration object for `getStakeActivation`
+ */
+export type GetTransactionCountConfig = {
+  /** Optional commitment level */
+  commitment?: Commitment;
+  /** The minimum slot that the request can be evaluated at */
+  minContextSlot?: number;
 };
 
 /**
@@ -2168,7 +2310,12 @@ export type ConfirmedSignatureInfo = {
 /**
  * An object defining headers to be passed to the RPC server
  */
-export type HttpHeaders = {[header: string]: string};
+export type HttpHeaders = {
+  [header: string]: string;
+} & {
+  // Prohibited headers; for internal use only.
+  'solana-client'?: never;
+};
 
 /**
  * The type of the JavaScript `fetch()` API
@@ -2202,6 +2349,11 @@ export type ConnectionConfig = {
   disableRetryOnRateLimit?: boolean;
   /** time to allow for the server to initially process a transaction (in milliseconds) */
   confirmTransactionInitialTimeout?: number;
+};
+
+/** @internal */
+const COMMON_HTTP_HEADERS = {
+  'solana-client': `js/${process.env.npm_package_version ?? 'UNKNOWN'}`,
 };
 
 /**
@@ -2376,17 +2528,23 @@ export class Connection {
    */
   async getBalanceAndContext(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetBalanceConfig,
   ): Promise<RpcResponseAndContext<number>> {
-    const args = this._buildArgs([publicKey.toBase58()], commitment);
+    /** @internal */
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getBalance', args);
     const res = create(unsafeRes, jsonRpcResultAndContext(number()));
     if ('error' in res) {
-      throw new Error(
-        'failed to get balance for ' +
-          publicKey.toBase58() +
-          ': ' +
-          res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get balance for ${publicKey.toBase58()}`,
       );
     }
     return res.result;
@@ -2397,9 +2555,9 @@ export class Connection {
    */
   async getBalance(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetBalanceConfig,
   ): Promise<number> {
-    return await this.getBalanceAndContext(publicKey, commitment)
+    return await this.getBalanceAndContext(publicKey, commitmentOrConfig)
       .then(x => x.value)
       .catch(e => {
         throw new Error(
@@ -2415,8 +2573,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getBlockTime', [slot]);
     const res = create(unsafeRes, jsonRpcResult(nullable(number())));
     if ('error' in res) {
-      throw new Error(
-        'failed to get block time for slot ' + slot + ': ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get block time for slot ${slot}`,
       );
     }
     return res.result;
@@ -2430,8 +2589,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('minimumLedgerSlot', []);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
-      throw new Error(
-        'failed to get minimum ledger slot: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get minimum ledger slot',
       );
     }
     return res.result;
@@ -2444,8 +2604,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getFirstAvailableBlock', []);
     const res = create(unsafeRes, SlotRpcResult);
     if ('error' in res) {
-      throw new Error(
-        'failed to get first available block: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get first available block',
       );
     }
     return res.result;
@@ -2474,7 +2635,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getSupply', [configArg]);
     const res = create(unsafeRes, GetSupplyRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get supply: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get supply');
     }
     return res.result;
   }
@@ -2490,7 +2651,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getTokenSupply', args);
     const res = create(unsafeRes, jsonRpcResultAndContext(TokenAmountResult));
     if ('error' in res) {
-      throw new Error('failed to get token supply: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get token supply');
     }
     return res.result;
   }
@@ -2506,8 +2667,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getTokenAccountBalance', args);
     const res = create(unsafeRes, jsonRpcResultAndContext(TokenAmountResult));
     if ('error' in res) {
-      throw new Error(
-        'failed to get token account balance: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get token account balance',
       );
     }
     return res.result;
@@ -2521,12 +2683,14 @@ export class Connection {
   async getTokenAccountsByOwner(
     ownerAddress: PublicKey,
     filter: TokenAccountsFilter,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetTokenAccountsByOwnerConfig,
   ): Promise<
     RpcResponseAndContext<
       Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>
     >
   > {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     let _args: any[] = [ownerAddress.toBase58()];
     if ('mint' in filter) {
       _args.push({mint: filter.mint.toBase58()});
@@ -2534,15 +2698,13 @@ export class Connection {
       _args.push({programId: filter.programId.toBase58()});
     }
 
-    const args = this._buildArgs(_args, commitment, 'base64');
+    const args = this._buildArgs(_args, commitment, 'base64', config);
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
     const res = create(unsafeRes, GetTokenAccountsByOwner);
     if ('error' in res) {
-      throw new Error(
-        'failed to get token accounts owned by account ' +
-          ownerAddress.toBase58() +
-          ': ' +
-          res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get token accounts owned by account ${ownerAddress.toBase58()}`,
       );
     }
     return res.result;
@@ -2573,11 +2735,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getTokenAccountsByOwner', args);
     const res = create(unsafeRes, GetParsedTokenAccountsByOwner);
     if ('error' in res) {
-      throw new Error(
-        'failed to get token accounts owned by account ' +
-          ownerAddress.toBase58() +
-          ': ' +
-          res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get token accounts owned by account ${ownerAddress.toBase58()}`,
       );
     }
     return res.result;
@@ -2597,7 +2757,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getLargestAccounts', args);
     const res = create(unsafeRes, GetLargestAccountsRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get largest accounts: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get largest accounts');
     }
     return res.result;
   }
@@ -2614,8 +2774,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getTokenLargestAccounts', args);
     const res = create(unsafeRes, GetTokenLargestAccountsResult);
     if ('error' in res) {
-      throw new Error(
-        'failed to get token largest accounts: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get token largest accounts',
       );
     }
     return res.result;
@@ -2626,20 +2787,25 @@ export class Connection {
    */
   async getAccountInfoAndContext(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<RpcResponseAndContext<AccountInfo<Buffer> | null>> {
-    const args = this._buildArgs([publicKey.toBase58()], commitment, 'base64');
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [publicKey.toBase58()],
+      commitment,
+      'base64',
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = create(
       unsafeRes,
       jsonRpcResultAndContext(nullable(AccountInfoResult)),
     );
     if ('error' in res) {
-      throw new Error(
-        'failed to get info about account ' +
-          publicKey.toBase58() +
-          ': ' +
-          res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get info about account ${publicKey.toBase58()}`,
       );
     }
     return res.result;
@@ -2665,11 +2831,9 @@ export class Connection {
       jsonRpcResultAndContext(nullable(ParsedAccountInfoResult)),
     );
     if ('error' in res) {
-      throw new Error(
-        'failed to get info about account ' +
-          publicKey.toBase58() +
-          ': ' +
-          res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get info about account ${publicKey.toBase58()}`,
       );
     }
     return res.result;
@@ -2680,10 +2844,13 @@ export class Connection {
    */
   async getAccountInfo(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<AccountInfo<Buffer> | null> {
     try {
-      const res = await this.getAccountInfoAndContext(publicKey, commitment);
+      const res = await this.getAccountInfoAndContext(
+        publicKey,
+        commitmentOrConfig,
+      );
       return res.value;
     } catch (e) {
       throw new Error(
@@ -2697,18 +2864,21 @@ export class Connection {
    */
   async getMultipleAccountsInfoAndContext(
     publicKeys: PublicKey[],
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetMultipleAccountsConfig,
   ): Promise<RpcResponseAndContext<(AccountInfo<Buffer> | null)[]>> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const keys = publicKeys.map(key => key.toBase58());
-    const args = this._buildArgs([keys], commitment, 'base64');
+    const args = this._buildArgs([keys], commitment, 'base64', config);
     const unsafeRes = await this._rpcRequest('getMultipleAccounts', args);
     const res = create(
       unsafeRes,
       jsonRpcResultAndContext(array(nullable(AccountInfoResult))),
     );
     if ('error' in res) {
-      throw new Error(
-        'failed to get info for accounts ' + keys + ': ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get info for accounts ${keys}`,
       );
     }
     return res.result;
@@ -2719,11 +2889,11 @@ export class Connection {
    */
   async getMultipleAccountsInfo(
     publicKeys: PublicKey[],
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetMultipleAccountsConfig,
   ): Promise<(AccountInfo<Buffer> | null)[]> {
     const res = await this.getMultipleAccountsInfoAndContext(
       publicKeys,
-      commitment,
+      commitmentOrConfig,
     );
     return res.value;
   }
@@ -2733,23 +2903,27 @@ export class Connection {
    */
   async getStakeActivation(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetStakeActivationConfig,
     epoch?: number,
   ): Promise<StakeActivationData> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
-      undefined,
-      epoch !== undefined ? {epoch} : undefined,
+      undefined /* encoding */,
+      {
+        ...config,
+        epoch: epoch != null ? epoch : config?.epoch,
+      },
     );
 
     const unsafeRes = await this._rpcRequest('getStakeActivation', args);
     const res = create(unsafeRes, jsonRpcResult(StakeActivationResult));
     if ('error' in res) {
-      throw new Error(
-        `failed to get Stake Activation ${publicKey.toBase58()}: ${
-          res.error.message
-        }`,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get Stake Activation ${publicKey.toBase58()}`,
       );
     }
     return res.result;
@@ -2764,40 +2938,21 @@ export class Connection {
     programId: PublicKey,
     configOrCommitment?: GetProgramAccountsConfig | Commitment,
   ): Promise<Array<{pubkey: PublicKey; account: AccountInfo<Buffer>}>> {
-    const extra: Pick<GetProgramAccountsConfig, 'dataSlice' | 'filters'> = {};
-
-    let commitment;
-    let encoding;
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-      } else {
-        commitment = configOrCommitment.commitment;
-        encoding = configOrCommitment.encoding;
-
-        if (configOrCommitment.dataSlice) {
-          extra.dataSlice = configOrCommitment.dataSlice;
-        }
-        if (configOrCommitment.filters) {
-          extra.filters = configOrCommitment.filters;
-        }
-      }
-    }
-
+    const {commitment, config} =
+      extractCommitmentFromConfig(configOrCommitment);
+    const {encoding, ...configWithoutEncoding} = config || {};
     const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
       encoding || 'base64',
-      extra,
+      configWithoutEncoding,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(unsafeRes, jsonRpcResult(array(KeyedAccountInfoResult)));
     if ('error' in res) {
-      throw new Error(
-        'failed to get accounts owned by program ' +
-          programId.toBase58() +
-          ': ' +
-          res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get accounts owned by program ${programId.toBase58()}`,
       );
     }
     return res.result;
@@ -2817,26 +2972,13 @@ export class Connection {
       account: AccountInfo<Buffer | ParsedAccountData>;
     }>
   > {
-    const extra: Pick<GetParsedProgramAccountsConfig, 'filters'> = {};
-
-    let commitment;
-    if (configOrCommitment) {
-      if (typeof configOrCommitment === 'string') {
-        commitment = configOrCommitment;
-      } else {
-        commitment = configOrCommitment.commitment;
-
-        if (configOrCommitment.filters) {
-          extra.filters = configOrCommitment.filters;
-        }
-      }
-    }
-
+    const {commitment, config} =
+      extractCommitmentFromConfig(configOrCommitment);
     const args = this._buildArgs(
       [programId.toBase58()],
       commitment,
       'jsonParsed',
-      extra,
+      config,
     );
     const unsafeRes = await this._rpcRequest('getProgramAccounts', args);
     const res = create(
@@ -2844,11 +2986,9 @@ export class Connection {
       jsonRpcResult(array(KeyedParsedAccountInfoResult)),
     );
     if ('error' in res) {
-      throw new Error(
-        'failed to get accounts owned by program ' +
-          programId.toBase58() +
-          ': ' +
-          res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get accounts owned by program ${programId.toBase58()}`,
       );
     }
     return res.result;
@@ -2921,15 +3061,6 @@ export class Connection {
       }
     });
 
-    const checkBlockHeight = async () => {
-      try {
-        const blockHeight = await this.getBlockHeight(commitment);
-        return blockHeight;
-      } catch (_e) {
-        return -1;
-      }
-    };
-
     const expiryPromise = new Promise<
       | {__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED}
       | {__type: TransactionStatus.TIMED_OUT; timeoutMs: number}
@@ -2958,6 +3089,14 @@ export class Connection {
       } else {
         let config =
           strategy as BlockheightBasedTransactionConfirmationStrategy;
+        const checkBlockHeight = async () => {
+          try {
+            const blockHeight = await this.getBlockHeight(commitment);
+            return blockHeight;
+          } catch (_e) {
+            return -1;
+          }
+        };
         (async () => {
           let currentBlockHeight = await checkBlockHeight();
           if (done) return;
@@ -3003,7 +3142,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getClusterNodes', []);
     const res = create(unsafeRes, jsonRpcResult(array(ContactInfoResult)));
     if ('error' in res) {
-      throw new Error('failed to get cluster nodes: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get cluster nodes');
     }
     return res.result;
   }
@@ -3016,7 +3155,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getVoteAccounts', args);
     const res = create(unsafeRes, GetVoteAccounts);
     if ('error' in res) {
-      throw new Error('failed to get vote accounts: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get vote accounts');
     }
     return res.result;
   }
@@ -3024,12 +3163,21 @@ export class Connection {
   /**
    * Fetch the current slot that the node is processing
    */
-  async getSlot(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getSlot(
+    commitmentOrConfig?: Commitment | GetSlotConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getSlot', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
-      throw new Error('failed to get slot: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get slot');
     }
     return res.result;
   }
@@ -3037,12 +3185,21 @@ export class Connection {
   /**
    * Fetch the current slot leader of the cluster
    */
-  async getSlotLeader(commitment?: Commitment): Promise<string> {
-    const args = this._buildArgs([], commitment);
+  async getSlotLeader(
+    commitmentOrConfig?: Commitment | GetSlotLeaderConfig,
+  ): Promise<string> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getSlotLeader', args);
     const res = create(unsafeRes, jsonRpcResult(string()));
     if ('error' in res) {
-      throw new Error('failed to get slot leader: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get slot leader');
     }
     return res.result;
   }
@@ -3061,7 +3218,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getSlotLeaders', args);
     const res = create(unsafeRes, jsonRpcResult(array(PublicKeyFromString)));
     if ('error' in res) {
-      throw new Error('failed to get slot leaders: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get slot leaders');
     }
     return res.result;
   }
@@ -3096,7 +3253,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getSignatureStatuses', params);
     const res = create(unsafeRes, GetSignatureStatusesRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get signature status: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get signature status');
     }
     return res.result;
   }
@@ -3104,12 +3261,24 @@ export class Connection {
   /**
    * Fetch the current transaction count of the cluster
    */
-  async getTransactionCount(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getTransactionCount(
+    commitmentOrConfig?: Commitment | GetTransactionCountConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getTransactionCount', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
-      throw new Error('failed to get transaction count: ' + res.error.message);
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get transaction count',
+      );
     }
     return res.result;
   }
@@ -3137,7 +3306,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getInflationGovernor', args);
     const res = create(unsafeRes, GetInflationGovernorRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get inflation: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get inflation');
     }
     return res.result;
   }
@@ -3148,20 +3317,23 @@ export class Connection {
   async getInflationReward(
     addresses: PublicKey[],
     epoch?: number,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetInflationRewardConfig,
   ): Promise<(InflationReward | null)[]> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [addresses.map(pubkey => pubkey.toBase58())],
       commitment,
-      undefined,
+      undefined /* encoding */,
       {
-        epoch,
+        ...config,
+        epoch: epoch != null ? epoch : config?.epoch,
       },
     );
     const unsafeRes = await this._rpcRequest('getInflationReward', args);
     const res = create(unsafeRes, GetInflationRewardResult);
     if ('error' in res) {
-      throw new Error('failed to get inflation reward: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get inflation reward');
     }
     return res.result;
   }
@@ -3169,12 +3341,21 @@ export class Connection {
   /**
    * Fetch the Epoch Info parameters
    */
-  async getEpochInfo(commitment?: Commitment): Promise<EpochInfo> {
-    const args = this._buildArgs([], commitment);
+  async getEpochInfo(
+    commitmentOrConfig?: Commitment | GetEpochInfoConfig,
+  ): Promise<EpochInfo> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getEpochInfo', args);
     const res = create(unsafeRes, GetEpochInfoRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get epoch info: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get epoch info');
     }
     return res.result;
   }
@@ -3186,7 +3367,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getEpochSchedule', []);
     const res = create(unsafeRes, GetEpochScheduleRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get epoch schedule: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get epoch schedule');
     }
     const epochSchedule = res.result;
     return new EpochSchedule(
@@ -3206,7 +3387,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getLeaderSchedule', []);
     const res = create(unsafeRes, GetLeaderScheduleRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get leader schedule: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get leader schedule');
     }
     return res.result;
   }
@@ -3247,7 +3428,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getRecentBlockhash', args);
     const res = create(unsafeRes, GetRecentBlockhashAndContextRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get recent blockhash: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get recent blockhash');
     }
     return res.result;
   }
@@ -3259,15 +3440,15 @@ export class Connection {
   async getRecentPerformanceSamples(
     limit?: number,
   ): Promise<Array<PerfSample>> {
-    const args = this._buildArgs(limit ? [limit] : []);
     const unsafeRes = await this._rpcRequest(
       'getRecentPerformanceSamples',
-      args,
+      limit ? [limit] : [],
     );
     const res = create(unsafeRes, GetRecentPerformanceSamplesRpcResult);
     if ('error' in res) {
-      throw new Error(
-        'failed to get recent performance samples: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get recent performance samples',
       );
     }
 
@@ -3291,7 +3472,7 @@ export class Connection {
 
     const res = create(unsafeRes, GetFeeCalculatorRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get fee calculator: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get fee calculator');
     }
     const {context, value} = res.result;
     return {
@@ -3313,7 +3494,7 @@ export class Connection {
 
     const res = create(unsafeRes, jsonRpcResultAndContext(nullable(number())));
     if ('error' in res) {
-      throw new Error('failed to get slot: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get slot');
     }
     if (res.result === null) {
       throw new Error('invalid blockhash');
@@ -3343,10 +3524,10 @@ export class Connection {
    * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhash(
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetLatestBlockhashConfig,
   ): Promise<BlockhashWithExpiryBlockHeight> {
     try {
-      const res = await this.getLatestBlockhashAndContext(commitment);
+      const res = await this.getLatestBlockhashAndContext(commitmentOrConfig);
       return res.value;
     } catch (e) {
       throw new Error('failed to get recent blockhash: ' + e);
@@ -3358,13 +3539,20 @@ export class Connection {
    * @return {Promise<BlockhashWithExpiryBlockHeight>}
    */
   async getLatestBlockhashAndContext(
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetLatestBlockhashConfig,
   ): Promise<RpcResponseAndContext<BlockhashWithExpiryBlockHeight>> {
-    const args = this._buildArgs([], commitment);
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getLatestBlockhash', args);
     const res = create(unsafeRes, GetLatestBlockhashRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get latest blockhash: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get latest blockhash');
     }
     return res.result;
   }
@@ -3418,7 +3606,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getVersion', []);
     const res = create(unsafeRes, jsonRpcResult(VersionResult));
     if ('error' in res) {
-      throw new Error('failed to get version: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get version');
     }
     return res.result;
   }
@@ -3430,7 +3618,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getGenesisHash', []);
     const res = create(unsafeRes, jsonRpcResult(string()));
     if ('error' in res) {
-      throw new Error('failed to get genesis hash: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get genesis hash');
     }
     return res.result;
   }
@@ -3450,7 +3638,7 @@ export class Connection {
     const res = create(unsafeRes, GetBlockRpcResult);
 
     if ('error' in res) {
-      throw new Error('failed to get confirmed block: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get confirmed block');
     }
 
     const result = res.result;
@@ -3474,13 +3662,23 @@ export class Connection {
   /*
    * Returns the current block height of the node
    */
-  async getBlockHeight(commitment?: Commitment): Promise<number> {
-    const args = this._buildArgs([], commitment);
+  async getBlockHeight(
+    commitmentOrConfig?: Commitment | GetBlockHeightConfig,
+  ): Promise<number> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
+    const args = this._buildArgs(
+      [],
+      commitment,
+      undefined /* encoding */,
+      config,
+    );
     const unsafeRes = await this._rpcRequest('getBlockHeight', args);
     const res = create(unsafeRes, jsonRpcResult(number()));
     if ('error' in res) {
-      throw new Error(
-        'failed to get block height information: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get block height information',
       );
     }
 
@@ -3508,8 +3706,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getBlockProduction', args);
     const res = create(unsafeRes, BlockProductionResponseStruct);
     if ('error' in res) {
-      throw new Error(
-        'failed to get block production information: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get block production information',
       );
     }
 
@@ -3530,7 +3729,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getTransaction', args);
     const res = create(unsafeRes, GetTransactionRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get transaction: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get transaction');
     }
 
     const result = res.result;
@@ -3560,7 +3759,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getTransaction', args);
     const res = create(unsafeRes, GetParsedTransactionRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get transaction: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get transaction');
     }
     return res.result;
   }
@@ -3588,7 +3787,7 @@ export class Connection {
     const res = unsafeRes.map((unsafeRes: any) => {
       const res = create(unsafeRes, GetParsedTransactionRpcResult);
       if ('error' in res) {
-        throw new Error('failed to get transactions: ' + res.error.message);
+        throw new SolanaJSONRPCError(res.error, 'failed to get transactions');
       }
       return res.result;
     });
@@ -3616,9 +3815,18 @@ export class Connection {
     const res = unsafeRes.map((unsafeRes: any) => {
       const res = create(unsafeRes, GetTransactionRpcResult);
       if ('error' in res) {
-        throw new Error('failed to get transactions: ' + res.error.message);
+        throw new SolanaJSONRPCError(res.error, 'failed to get transactions');
       }
-      return res.result;
+      const result = res.result;
+      if (!result) return result;
+
+      return {
+        ...result,
+        transaction: {
+          ...result.transaction,
+          message: new Message(result.transaction.message),
+        },
+      };
     });
 
     return res;
@@ -3639,7 +3847,7 @@ export class Connection {
     const res = create(unsafeRes, GetConfirmedBlockRpcResult);
 
     if ('error' in res) {
-      throw new Error('failed to get confirmed block: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get confirmed block');
     }
 
     const result = res.result;
@@ -3690,7 +3898,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getBlocks', args);
     const res = create(unsafeRes, jsonRpcResult(array(number())));
     if ('error' in res) {
-      throw new Error('failed to get blocks: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get blocks');
     }
     return res.result;
   }
@@ -3714,7 +3922,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getBlock', args);
     const res = create(unsafeRes, GetBlockSignaturesRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get block: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get block');
     }
     const result = res.result;
     if (!result) {
@@ -3744,7 +3952,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getConfirmedBlock', args);
     const res = create(unsafeRes, GetBlockSignaturesRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get confirmed block: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get confirmed block');
     }
     const result = res.result;
     if (!result) {
@@ -3766,7 +3974,7 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
     const res = create(unsafeRes, GetTransactionRpcResult);
     if ('error' in res) {
-      throw new Error('failed to get transaction: ' + res.error.message);
+      throw new SolanaJSONRPCError(res.error, 'failed to get transaction');
     }
 
     const result = res.result;
@@ -3797,8 +4005,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getConfirmedTransaction', args);
     const res = create(unsafeRes, GetParsedTransactionRpcResult);
     if ('error' in res) {
-      throw new Error(
-        'failed to get confirmed transaction: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get confirmed transaction',
       );
     }
     return res.result;
@@ -3829,8 +4038,9 @@ export class Connection {
     const res = unsafeRes.map((unsafeRes: any) => {
       const res = create(unsafeRes, GetParsedTransactionRpcResult);
       if ('error' in res) {
-        throw new Error(
-          'failed to get confirmed transactions: ' + res.error.message,
+        throw new SolanaJSONRPCError(
+          res.error,
+          'failed to get confirmed transactions',
         );
       }
       return res.result;
@@ -3935,8 +4145,9 @@ export class Connection {
     );
     const res = create(unsafeRes, GetConfirmedSignaturesForAddress2RpcResult);
     if ('error' in res) {
-      throw new Error(
-        'failed to get confirmed signatures for address: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get confirmed signatures for address',
       );
     }
     return res.result;
@@ -3964,8 +4175,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('getSignaturesForAddress', args);
     const res = create(unsafeRes, GetSignaturesForAddressRpcResult);
     if ('error' in res) {
-      throw new Error(
-        'failed to get signatures for address: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'failed to get signatures for address',
       );
     }
     return res.result;
@@ -4037,8 +4249,9 @@ export class Connection {
     ]);
     const res = create(unsafeRes, RequestAirdropRpcResult);
     if ('error' in res) {
-      throw new Error(
-        'airdrop to ' + to.toBase58() + ' failed: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        `airdrop to ${to.toBase58()} failed`,
       );
     }
     return res.result;
@@ -4279,8 +4492,11 @@ export class Connection {
     const preflightCommitment =
       (options && options.preflightCommitment) || this.commitment;
 
-    if (options && options.maxRetries) {
+    if (options && options.maxRetries != null) {
       config.maxRetries = options.maxRetries;
+    }
+    if (options && options.minContextSlot != null) {
+      config.minContextSlot = options.minContextSlot;
     }
     if (skipPreflight) {
       config.skipPreflight = skipPreflight;

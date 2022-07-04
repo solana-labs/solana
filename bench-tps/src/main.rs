@@ -8,7 +8,7 @@ use {
         keypairs::get_keypairs,
     },
     solana_client::{
-        connection_cache::ConnectionCache,
+        connection_cache::{ConnectionCache, UseQUIC},
         rpc_client::RpcClient,
         thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
@@ -49,6 +49,7 @@ fn main() {
         target_node,
         external_client_type,
         use_quic,
+        tpu_connection_pool_size,
         ..
     } = &cli_config;
 
@@ -102,7 +103,10 @@ fn main() {
             do_bench_tps(client, cli_config, keypairs);
         }
         ExternalClientType::ThinClient => {
-            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
+            let use_quic = UseQUIC::new(*use_quic).expect("Failed to initialize QUIC flags");
+            let connection_cache =
+                Arc::new(ConnectionCache::new(use_quic, *tpu_connection_pool_size));
+
             let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
                 let rpc = rpc_addr.parse().unwrap_or_else(|e| {
                     eprintln!("RPC address should parse as socketaddr {:?}", e);
@@ -172,7 +176,10 @@ fn main() {
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            let connection_cache = Arc::new(ConnectionCache::new(*use_quic));
+            let use_quic = UseQUIC::new(*use_quic).expect("Failed to initialize QUIC flags");
+            let connection_cache =
+                Arc::new(ConnectionCache::new(use_quic, *tpu_connection_pool_size));
+
             let client = Arc::new(
                 TpuClient::new_with_connection_cache(
                     rpc_client,

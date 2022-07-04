@@ -73,7 +73,7 @@ impl ProofInstruction {
     }
 
     pub fn decode_type(input: &[u8]) -> Option<Self> {
-        input.get(0).and_then(|x| FromPrimitive::from_u8(*x))
+        input.first().and_then(|x| FromPrimitive::from_u8(*x))
     }
 
     pub fn decode_data<T: Pod>(input: &[u8]) -> Option<&T> {

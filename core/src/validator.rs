@@ -8,7 +8,7 @@ use {
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
-        consensus::{reconcile_blockstore_roots_with_tower, Tower},
+        consensus::{reconcile_blockstore_roots_with_external_source, ExternalRootSource, Tower},
         ledger_metric_report_service::LedgerMetricReportService,
         poh_timing_report_service::PohTimingReportService,
         rewards_recorder_service::{RewardsRecorderSender, RewardsRecorderService},
@@ -25,7 +25,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
-    solana_client::connection_cache::ConnectionCache,
+    solana_client::connection_cache::{ConnectionCache, UseQUIC},
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -90,7 +90,7 @@ use {
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         exit::Exit,
-        genesis_config::GenesisConfig,
+        genesis_config::{ClusterType, GenesisConfig},
         hash::Hash,
         pubkey::Pubkey,
         shred_version::compute_shred_version,
@@ -134,7 +134,7 @@ pub struct ValidatorConfig {
     pub snapshot_config: Option<SnapshotConfig>,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
-    pub turbine_disabled: Option<Arc<AtomicBool>>,
+    pub turbine_disabled: Arc<AtomicBool>,
     pub enforce_ulimit_nofile: bool,
     pub fixed_leader_schedule: Option<FixedSchedule>,
     pub wait_for_supermajority: Option<Slot>,
@@ -176,6 +176,7 @@ pub struct ValidatorConfig {
     pub wait_to_vote_slot: Option<Slot>,
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
+    pub enable_quic_servers: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -195,7 +196,7 @@ impl Default for ValidatorConfig {
             pubsub_config: PubSubConfig::default(),
             snapshot_config: None,
             broadcast_stage_type: BroadcastStageType::Standard,
-            turbine_disabled: None,
+            turbine_disabled: Arc::<AtomicBool>::default(),
             enforce_ulimit_nofile: true,
             fixed_leader_schedule: None,
             wait_for_supermajority: None,
@@ -237,6 +238,7 @@ impl Default for ValidatorConfig {
             wait_to_vote_slot: None,
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
+            enable_quic_servers: false,
         }
     }
 }
@@ -381,6 +383,7 @@ impl Validator {
         start_progress: Arc<RwLock<ValidatorStartProgress>>,
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
+        tpu_connection_pool_size: usize,
     ) -> Self {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
@@ -511,6 +514,7 @@ impl Validator {
             genesis_config,
             bank_forks,
             blockstore,
+            original_blockstore_root,
             ledger_signal_receiver,
             completed_slots_receiver,
             leader_schedule_cache,
@@ -666,6 +670,7 @@ impl Validator {
             vote_account,
             &start_progress,
             &blockstore,
+            original_blockstore_root,
             &bank_forks,
             &leader_schedule_cache,
             &blockstore_process_options,
@@ -698,10 +703,12 @@ impl Validator {
             };
 
         let mut block_commitment_cache = BlockCommitmentCache::default();
+        let bank_forks_guard = bank_forks.read().unwrap();
         block_commitment_cache.initialize_slots(
-            bank_forks.read().unwrap().working_bank().slot(),
-            bank_forks.read().unwrap().root(),
+            bank_forks_guard.working_bank().slot(),
+            bank_forks_guard.root(),
         );
+        drop(bank_forks_guard);
         let block_commitment_cache = Arc::new(RwLock::new(block_commitment_cache));
 
         let optimistically_confirmed_bank =
@@ -729,8 +736,10 @@ impl Validator {
         );
 
         let poh_config = Arc::new(genesis_config.poh_config.clone());
+        let startup_verification_complete;
         let (poh_recorder, entry_receiver, record_receiver) = {
             let bank = &bank_forks.read().unwrap().working_bank();
+            startup_verification_complete = Arc::clone(bank.get_startup_verification_complete());
             PohRecorder::new_with_clear_signal(
                 bank.tick_height(),
                 bank.last_blockhash(),
@@ -748,7 +757,8 @@ impl Validator {
         };
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        let connection_cache = Arc::new(ConnectionCache::new(use_quic));
+        let use_quic = UseQUIC::new(use_quic).expect("Failed to initialize QUIC flags");
+        let connection_cache = Arc::new(ConnectionCache::new(use_quic, tpu_connection_pool_size));
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
@@ -775,35 +785,29 @@ impl Validator {
             } else {
                 None
             };
-
-            let json_rpc_service = JsonRpcService::new(
-                rpc_addr,
-                config.rpc_config.clone(),
-                config.snapshot_config.clone(),
-                bank_forks.clone(),
-                block_commitment_cache.clone(),
-                blockstore.clone(),
-                cluster_info.clone(),
-                Some(poh_recorder.clone()),
-                genesis_config.hash(),
-                ledger_path,
-                config.validator_exit.clone(),
-                config.known_validators.clone(),
-                rpc_override_health_check.clone(),
-                optimistically_confirmed_bank.clone(),
-                config.send_transaction_service_config.clone(),
-                max_slots.clone(),
-                leader_schedule_cache.clone(),
-                connection_cache.clone(),
-                max_complete_transaction_status_slot,
-            )
-            .unwrap_or_else(|s| {
-                error!("Failed to create JSON RPC Service: {}", s);
-                abort();
-            });
-
             (
-                Some(json_rpc_service),
+                Some(JsonRpcService::new(
+                    rpc_addr,
+                    config.rpc_config.clone(),
+                    config.snapshot_config.clone(),
+                    bank_forks.clone(),
+                    block_commitment_cache.clone(),
+                    blockstore.clone(),
+                    cluster_info.clone(),
+                    Some(poh_recorder.clone()),
+                    genesis_config.hash(),
+                    ledger_path,
+                    config.validator_exit.clone(),
+                    config.known_validators.clone(),
+                    rpc_override_health_check.clone(),
+                    startup_verification_complete,
+                    optimistically_confirmed_bank.clone(),
+                    config.send_transaction_service_config.clone(),
+                    max_slots.clone(),
+                    leader_schedule_cache.clone(),
+                    connection_cache.clone(),
+                    max_complete_transaction_status_slot,
+                )),
                 if !config.rpc_config.full_api {
                     None
                 } else {
@@ -946,7 +950,7 @@ impl Validator {
             ledger_signal_receiver,
             &rpc_subscriptions,
             &poh_recorder,
-            process_blockstore,
+            Some(process_blockstore),
             config.tower_storage.clone(),
             &leader_schedule_cache,
             &exit,
@@ -979,6 +983,18 @@ impl Validator {
             &connection_cache,
         );
 
+        let enable_quic_servers = if genesis_config.cluster_type == ClusterType::MainnetBeta {
+            config.enable_quic_servers
+        } else {
+            if config.enable_quic_servers {
+                warn!(
+                    "ignoring --enable-quic-servers. QUIC is always enabled for cluster type: {:?}",
+                    genesis_config.cluster_type
+                );
+            }
+            true
+        };
+
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -1010,6 +1026,7 @@ impl Validator {
             &cost_model,
             &connection_cache,
             &identity_keypair,
+            enable_quic_servers,
         );
 
         datapoint_info!(
@@ -1223,6 +1240,17 @@ fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u6
     }
 }
 
+fn maybe_cluster_restart_with_hard_fork(config: &ValidatorConfig, root_slot: Slot) -> Option<Slot> {
+    // detect cluster restart (hard fork) indirectly via wait_for_supermajority...
+    if let Some(wait_slot_for_supermajority) = config.wait_for_supermajority {
+        if wait_slot_for_supermajority == root_slot {
+            return Some(wait_slot_for_supermajority);
+        }
+    }
+
+    None
+}
+
 fn post_process_restored_tower(
     restored_tower: crate::consensus::Result<Tower>,
     validator_identity: &Pubkey,
@@ -1236,29 +1264,28 @@ fn post_process_restored_tower(
         .and_then(|tower| {
             let root_bank = bank_forks.root_bank();
             let slot_history = root_bank.get_slot_history();
+            // make sure tower isn't corrupted first before the following hard fork check
             let tower = tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history);
 
-            if let Some(wait_slot_for_supermajority) = config.wait_for_supermajority {
-                if root_bank.slot() == wait_slot_for_supermajority {
-                    // intentionally fail to restore tower; we're supposedly in a new hard fork; past
-                    // out-of-chain vote state doesn't make sense at all
-                    // what if --wait-for-supermajority again if the validator restarted?
-                    let message = format!("Hardfork is detected; discarding tower restoration result: {:?}", tower);
-                    datapoint_error!(
-                        "tower_error",
-                        (
-                            "error",
-                            message,
-                            String
-                        ),
-                    );
-                    error!("{}", message);
+            if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(config, root_bank.slot()) {
+                // intentionally fail to restore tower; we're supposedly in a new hard fork; past
+                // out-of-chain vote state doesn't make sense at all
+                // what if --wait-for-supermajority again if the validator restarted?
+                let message = format!("Hard fork is detected; discarding tower restoration result: {:?}", tower);
+                datapoint_error!(
+                    "tower_error",
+                    (
+                        "error",
+                        message,
+                        String
+                    ),
+                );
+                error!("{}", message);
 
-                    // unconditionally relax tower requirement so that we can always restore tower
-                    // from root bank.
-                    should_require_tower = false;
-                    return Err(crate::consensus::TowerError::HardFork(wait_slot_for_supermajority));
-                }
+                // unconditionally relax tower requirement so that we can always restore tower
+                // from root bank.
+                should_require_tower = false;
+                return Err(crate::consensus::TowerError::HardFork(hard_fork_restart_slot));
             }
 
             if let Some(warp_slot) = config.warp_slot {
@@ -1325,6 +1352,7 @@ fn load_blockstore(
     GenesisConfig,
     Arc<RwLock<BankForks>>,
     Arc<Blockstore>,
+    Slot,
     Receiver<bool>,
     CompletedSlotsReceiver,
     LeaderScheduleCache,
@@ -1377,6 +1405,9 @@ fn load_blockstore(
     .expect("Failed to open ledger database");
     blockstore.set_no_compaction(config.no_rocksdb_compaction);
     blockstore.shred_timing_point_sender = poh_timing_point_sender;
+    // following boot sequence (esp BankForks) could set root. so stash the original value
+    // of blockstore root away here as soon as possible.
+    let original_blockstore_root = blockstore.last_root();
 
     let blockstore = Arc::new(blockstore);
     let blockstore_root_scan = BlockstoreRootScan::new(config, &blockstore, exit);
@@ -1481,6 +1512,7 @@ fn load_blockstore(
         genesis_config,
         bank_forks,
         blockstore,
+        original_blockstore_root,
         ledger_signal_receiver,
         completed_slots_receiver,
         leader_schedule_cache,
@@ -1515,11 +1547,12 @@ fn highest_slot(blockstore: &Blockstore) -> Option<Slot> {
     highest_slot
 }
 
-struct ProcessBlockStore<'a> {
+pub struct ProcessBlockStore<'a> {
     id: &'a Pubkey,
     vote_account: &'a Pubkey,
     start_progress: &'a Arc<RwLock<ValidatorStartProgress>>,
     blockstore: &'a Blockstore,
+    original_blockstore_root: Slot,
     bank_forks: &'a Arc<RwLock<BankForks>>,
     leader_schedule_cache: &'a LeaderScheduleCache,
     process_options: &'a blockstore_processor::ProcessOptions,
@@ -1538,6 +1571,7 @@ impl<'a> ProcessBlockStore<'a> {
         vote_account: &'a Pubkey,
         start_progress: &'a Arc<RwLock<ValidatorStartProgress>>,
         blockstore: &'a Blockstore,
+        original_blockstore_root: Slot,
         bank_forks: &'a Arc<RwLock<BankForks>>,
         leader_schedule_cache: &'a LeaderScheduleCache,
         process_options: &'a blockstore_processor::ProcessOptions,
@@ -1552,6 +1586,7 @@ impl<'a> ProcessBlockStore<'a> {
             vote_account,
             start_progress,
             blockstore,
+            original_blockstore_root,
             bank_forks,
             leader_schedule_cache,
             process_options,
@@ -1564,7 +1599,7 @@ impl<'a> ProcessBlockStore<'a> {
         }
     }
 
-    fn process(&mut self) {
+    pub(crate) fn process(&mut self) {
         if self.tower.is_none() {
             let previous_start_process = *self.start_progress.read().unwrap();
             *self.start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
@@ -1621,12 +1656,16 @@ impl<'a> ProcessBlockStore<'a> {
             self.tower = Some({
                 let restored_tower = Tower::restore(self.config.tower_storage.as_ref(), self.id);
                 if let Ok(tower) = &restored_tower {
-                    reconcile_blockstore_roots_with_tower(tower, self.blockstore).unwrap_or_else(
-                        |err| {
-                            error!("Failed to reconcile blockstore with tower: {:?}", err);
-                            abort()
-                        },
-                    );
+                    // reconciliation attempt 1 of 2 with tower
+                    reconcile_blockstore_roots_with_external_source(
+                        ExternalRootSource::Tower(tower.root()),
+                        self.blockstore,
+                        &mut self.original_blockstore_root,
+                    )
+                    .unwrap_or_else(|err| {
+                        error!("Failed to reconcile blockstore with tower: {:?}", err);
+                        abort()
+                    });
                 }
 
                 post_process_restored_tower(
@@ -1638,15 +1677,30 @@ impl<'a> ProcessBlockStore<'a> {
                 )
             });
 
+            if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(
+                self.config,
+                self.bank_forks.read().unwrap().root_bank().slot(),
+            ) {
+                // reconciliation attempt 2 of 2 with hard fork
+                // this should be #2 because hard fork root > tower root in almost all cases
+                reconcile_blockstore_roots_with_external_source(
+                    ExternalRootSource::HardFork(hard_fork_restart_slot),
+                    self.blockstore,
+                    &mut self.original_blockstore_root,
+                )
+                .unwrap_or_else(|err| {
+                    error!("Failed to reconcile blockstore with hard fork: {:?}", err);
+                    abort()
+                });
+            }
+
             *self.start_progress.write().unwrap() = previous_start_process;
         }
     }
-}
 
-impl<'a> From<ProcessBlockStore<'a>> for Tower {
-    fn from(mut process_blockstore: ProcessBlockStore<'a>) -> Self {
-        process_blockstore.process();
-        process_blockstore.tower.expect("valid tower")
+    pub(crate) fn process_to_create_tower(mut self) -> Tower {
+        self.process();
+        self.tower.unwrap()
     }
 }
 
@@ -1944,11 +1998,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
         if activated_stake == 0 {
             continue;
         }
-        let vote_state_node_pubkey = vote_account
-            .vote_state()
-            .as_ref()
-            .map(|vote_state| vote_state.node_pubkey)
-            .unwrap_or_default();
+        let vote_state_node_pubkey = vote_account.node_pubkey().unwrap_or_default();
 
         if let Some(peer) = peers.get(&vote_state_node_pubkey) {
             if peer.shred_version == my_shred_version {
@@ -2047,7 +2097,7 @@ mod tests {
     use {
         super::*,
         crossbeam_channel::{bounded, RecvTimeoutError},
-        solana_client::connection_cache::DEFAULT_TPU_USE_QUIC,
+        solana_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
         std::{fs::remove_dir_all, thread, time::Duration},
@@ -2084,25 +2134,13 @@ mod tests {
             start_progress.clone(),
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
+            DEFAULT_TPU_CONNECTION_POOL_SIZE,
         );
         assert_eq!(
             *start_progress.read().unwrap(),
             ValidatorStartProgress::Running
         );
-
-        // spawn a new thread to wait for validator close
-        let (sender, receiver) = bounded(0);
-        let _ = thread::spawn(move || {
-            validator.close();
-            sender.send(()).unwrap();
-        });
-
-        // exit can deadlock. put an upper-bound on how long we wait for it
-        let timeout = Duration::from_secs(30);
-        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
-            panic!("timeout for closing validator");
-        }
-
+        validator.close();
         remove_dir_all(validator_ledger_path).unwrap();
     }
 
@@ -2179,6 +2217,7 @@ mod tests {
                     Arc::new(RwLock::new(ValidatorStartProgress::default())),
                     SocketAddrSpace::Unspecified,
                     DEFAULT_TPU_USE_QUIC,
+                    DEFAULT_TPU_CONNECTION_POOL_SIZE,
                 )
             })
             .collect();

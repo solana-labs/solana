@@ -56,22 +56,20 @@ pub use {
 };
 use {
     self::{shred_code::ShredCode, traits::Shred as _},
-    crate::blockstore::MAX_DATA_SHREDS_PER_SLOT,
+    crate::blockstore::{self, MAX_DATA_SHREDS_PER_SLOT},
     bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
-    solana_perf::packet::{deserialize_from_with_limit, Packet},
-    solana_runtime::bank::Bank,
+    solana_perf::packet::Packet,
     solana_sdk::{
         clock::Slot,
-        feature_set,
         hash::{hashv, Hash},
         pubkey::Pubkey,
         signature::{Keypair, Signature, Signer},
     },
     static_assertions::const_assert_eq,
-    std::fmt::Debug,
+    std::{fmt::Debug, ops::RangeBounds},
     thiserror::Error,
 };
 
@@ -124,8 +122,6 @@ pub enum Error {
     BincodeError(#[from] bincode::Error),
     #[error(transparent)]
     ErasureError(#[from] reed_solomon_erasure::Error),
-    #[error("Invalid data shred index: {0}")]
-    InvalidDataShredIndex(/*shred index:*/ u32),
     #[error("Invalid data size: {size}, payload: {payload}")]
     InvalidDataSize { size: u16, payload: usize },
     #[error("Invalid erasure shard index: {0:?}")]
@@ -144,6 +140,8 @@ pub enum Error {
     InvalidProofSize(/*proof_size:*/ u8),
     #[error("Invalid shred flags: {0}")]
     InvalidShredFlags(u8),
+    #[error("Invalid {0:?} shred index: {1}")]
+    InvalidShredIndex(ShredType, /*shred index:*/ u32),
     #[error("Invalid shred type")]
     InvalidShredType,
     #[error("Invalid shred variant")]
@@ -217,7 +215,7 @@ pub enum Shred {
 }
 
 /// Tuple which uniquely identifies a shred should it exists.
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Debug, Hash, PartialEq)]
 pub struct ShredId(Slot, /*shred index:*/ u32, ShredType);
 
 impl ShredId {
@@ -225,8 +223,23 @@ impl ShredId {
         ShredId(slot, index, shred_type)
     }
 
+    pub fn slot(&self) -> Slot {
+        self.0
+    }
+
     pub(crate) fn unwrap(&self) -> (Slot, /*shred index:*/ u32, ShredType) {
         (self.0, self.1, self.2)
+    }
+
+    pub fn seed(&self, leader: &Pubkey) -> [u8; 32] {
+        let ShredId(slot, index, shred_type) = self;
+        hashv(&[
+            &slot.to_le_bytes(),
+            &u8::from(*shred_type).to_le_bytes(),
+            &index.to_le_bytes(),
+            AsRef::<[u8]>::as_ref(leader),
+        ])
+        .to_bytes()
     }
 }
 
@@ -433,24 +446,6 @@ impl Shred {
         self.set_signature(signature);
     }
 
-    pub fn seed(&self, leader_pubkey: Pubkey, root_bank: &Bank) -> [u8; 32] {
-        if add_shred_type_to_shred_seed(self.slot(), root_bank) {
-            hashv(&[
-                &self.slot().to_le_bytes(),
-                &u8::from(self.shred_type()).to_le_bytes(),
-                &self.index().to_le_bytes(),
-                &leader_pubkey.to_bytes(),
-            ])
-        } else {
-            hashv(&[
-                &self.slot().to_le_bytes(),
-                &self.index().to_le_bytes(),
-                &leader_pubkey.to_bytes(),
-            ])
-        }
-        .to_bytes()
-    }
-
     #[inline]
     pub fn shred_type(&self) -> ShredType {
         ShredType::from(self.common_header().shred_variant)
@@ -558,17 +553,49 @@ pub mod layout {
         ShredVariant::try_from(shred_variant).map_err(|_| Error::InvalidShredVariant)
     }
 
+    #[inline]
     pub(super) fn get_shred_type(shred: &[u8]) -> Result<ShredType, Error> {
         let shred_variant = get_shred_variant(shred)?;
         Ok(ShredType::from(shred_variant))
     }
 
+    #[inline]
     pub fn get_slot(shred: &[u8]) -> Option<Slot> {
-        deserialize_from_with_limit(shred.get(OFFSET_OF_SHRED_SLOT..)?).ok()
+        <[u8; 8]>::try_from(shred.get(OFFSET_OF_SHRED_SLOT..)?.get(..8)?)
+            .map(Slot::from_le_bytes)
+            .ok()
     }
 
+    #[inline]
     pub(super) fn get_index(shred: &[u8]) -> Option<u32> {
-        deserialize_from_with_limit(shred.get(OFFSET_OF_SHRED_INDEX..)?).ok()
+        <[u8; 4]>::try_from(shred.get(OFFSET_OF_SHRED_INDEX..)?.get(..4)?)
+            .map(u32::from_le_bytes)
+            .ok()
+    }
+
+    pub fn get_version(shred: &[u8]) -> Option<u16> {
+        const OFFSET_OF_SHRED_VERSION: usize = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX;
+        <[u8; 2]>::try_from(shred.get(OFFSET_OF_SHRED_VERSION..)?.get(..2)?)
+            .map(u16::from_le_bytes)
+            .ok()
+    }
+
+    // The caller should verify first that the shred is data and not code!
+    pub(super) fn get_parent_offset(shred: &[u8]) -> Option<u16> {
+        const OFFSET_OF_SHRED_PARENT: usize = SIZE_OF_COMMON_SHRED_HEADER;
+        debug_assert_eq!(get_shred_type(shred).unwrap(), ShredType::Data);
+        <[u8; 2]>::try_from(shred.get(OFFSET_OF_SHRED_PARENT..)?.get(..2)?)
+            .map(u16::from_le_bytes)
+            .ok()
+    }
+
+    #[inline]
+    pub fn get_shred_id(shred: &[u8]) -> Option<ShredId> {
+        Some(ShredId(
+            get_slot(shred)?,
+            get_index(shred)?,
+            get_shred_type(shred).ok()?,
+        ))
     }
 
     // Returns slice range of the shred payload which is signed.
@@ -651,48 +678,95 @@ impl TryFrom<u8> for ShredVariant {
     }
 }
 
-// Get slot, index, and type from a packet with partial deserialize
-pub fn get_shred_slot_index_type(
+#[must_use]
+pub fn should_discard_shred(
     packet: &Packet,
+    root: Slot,
+    shred_version: u16,
+    // Range of slots to ingest shreds for.
+    slot_bounds: impl RangeBounds<Slot>,
     stats: &mut ShredFetchStats,
-) -> Option<(Slot, u32, ShredType)> {
+) -> bool {
     let shred = match layout::get_shred(packet) {
         None => {
             stats.index_overrun += 1;
-            return None;
+            return true;
         }
         Some(shred) => shred,
     };
     if OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX > shred.len() {
         stats.index_overrun += 1;
-        return None;
+        return true;
     }
     let shred_type = match layout::get_shred_type(shred) {
         Ok(shred_type) => shred_type,
         Err(_) => {
             stats.bad_shred_type += 1;
-            return None;
+            return true;
         }
     };
     let slot = match layout::get_slot(shred) {
-        Some(slot) => slot,
+        Some(slot) => {
+            if !slot_bounds.contains(&slot) {
+                stats.slot_out_of_range += 1;
+                return true;
+            }
+            slot
+        }
         None => {
             stats.slot_bad_deserialize += 1;
-            return None;
+            return true;
         }
     };
     let index = match layout::get_index(shred) {
         Some(index) => index,
         None => {
             stats.index_bad_deserialize += 1;
-            return None;
+            return true;
         }
     };
-    if index >= MAX_DATA_SHREDS_PER_SLOT as u32 {
-        stats.index_out_of_bounds += 1;
-        return None;
+    if layout::get_version(shred) != Some(shred_version) {
+        stats.shred_version_mismatch += 1;
+        return true;
     }
-    Some((slot, index, shred_type))
+    match shred_type {
+        ShredType::Code => {
+            if index >= shred_code::MAX_CODE_SHREDS_PER_SLOT as u32 {
+                stats.index_out_of_bounds += 1;
+                return true;
+            }
+            if slot <= root {
+                stats.slot_out_of_range += 1;
+                return true;
+            }
+            false
+        }
+        ShredType::Data => {
+            if index >= MAX_DATA_SHREDS_PER_SLOT as u32 {
+                stats.index_out_of_bounds += 1;
+                return true;
+            }
+            let parent_offset = match layout::get_parent_offset(shred) {
+                Some(parent_offset) => parent_offset,
+                None => {
+                    stats.bad_parent_offset += 1;
+                    return true;
+                }
+            };
+            let parent = match slot.checked_sub(Slot::from(parent_offset)) {
+                Some(parent) => parent,
+                None => {
+                    stats.bad_parent_offset += 1;
+                    return true;
+                }
+            };
+            if !blockstore::verify_shred_slots(slot, parent, root) {
+                stats.slot_out_of_range += 1;
+                return true;
+            }
+            false
+        }
+    }
 }
 
 pub fn max_ticks_per_n_shreds(num_shreds: u64, shred_data_size: Option<usize>) -> u64 {
@@ -739,21 +813,6 @@ pub fn verify_test_data_shred(
         assert!(shred.data_complete());
     } else {
         assert!(!shred.data_complete());
-    }
-}
-
-fn add_shred_type_to_shred_seed(shred_slot: Slot, bank: &Bank) -> bool {
-    let feature_slot = bank
-        .feature_set
-        .activated_slot(&feature_set::add_shred_type_to_shred_seed::id());
-    match feature_slot {
-        None => false,
-        Some(feature_slot) => {
-            let epoch_schedule = bank.epoch_schedule();
-            let feature_epoch = epoch_schedule.get_epoch(feature_slot);
-            let shred_epoch = epoch_schedule.get_epoch(shred_slot);
-            feature_epoch < shred_epoch
-        }
     }
 }
 
@@ -876,38 +935,82 @@ mod tests {
     }
 
     #[test]
-    fn test_shred_offsets() {
+    fn test_should_discard_shred() {
         solana_logger::setup();
         let mut packet = Packet::default();
-        let shred = Shred::new_from_data(1, 3, 0, &[], ShredFlags::LAST_SHRED_IN_SLOT, 0, 0, 0);
+        let root = 1;
+        let shred_version = 798;
+        let slot_bounds = ..16;
+        let shred = Shred::new_from_data(
+            2,   // slot
+            3,   // index
+            1,   // parent_offset
+            &[], // data
+            ShredFlags::LAST_SHRED_IN_SLOT,
+            0, // reference_tick
+            shred_version,
+            0, // fec_set_index
+        );
         shred.copy_to_packet(&mut packet);
         let mut stats = ShredFetchStats::default();
-        let ret = get_shred_slot_index_type(&packet, &mut stats);
-        assert_eq!(Some((1, 3, ShredType::Data)), ret);
+        assert!(!should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
         assert_eq!(stats, ShredFetchStats::default());
 
         packet.meta.size = OFFSET_OF_SHRED_VARIANT;
-        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert!(should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
         assert_eq!(stats.index_overrun, 1);
 
         packet.meta.size = OFFSET_OF_SHRED_INDEX;
-        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert!(should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
         assert_eq!(stats.index_overrun, 2);
 
         packet.meta.size = OFFSET_OF_SHRED_INDEX + 1;
-        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert!(should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
         assert_eq!(stats.index_overrun, 3);
 
         packet.meta.size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX - 1;
-        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert!(should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
         assert_eq!(stats.index_overrun, 4);
 
-        packet.meta.size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX;
-        assert_eq!(
-            Some((1, 3, ShredType::Data)),
-            get_shred_slot_index_type(&packet, &mut stats)
-        );
-        assert_eq!(stats.index_overrun, 4);
+        packet.meta.size = OFFSET_OF_SHRED_INDEX + SIZE_OF_SHRED_INDEX + 2;
+        assert!(should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
+        assert_eq!(stats.bad_parent_offset, 1);
 
         let shred = Shred::new_from_parity_shard(
             8,   // slot
@@ -917,26 +1020,35 @@ mod tests {
             30,  // num_data
             4,   // num_code
             1,   // position
-            200, // version
+            shred_version,
         );
         shred.copy_to_packet(&mut packet);
-        assert_eq!(
-            Some((8, 2, ShredType::Code)),
-            get_shred_slot_index_type(&packet, &mut stats)
-        );
+        assert!(!should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
 
         let shred = Shred::new_from_data(
-            1,
-            std::u32::MAX - 10,
-            0,
-            &[],
+            2,                  // slot
+            std::u32::MAX - 10, // index
+            1,                  // parent_offset
+            &[],                // data
             ShredFlags::LAST_SHRED_IN_SLOT,
-            0,
-            0,
-            0,
+            0, // reference_tick
+            shred_version,
+            0, // fec_set_index
         );
         shred.copy_to_packet(&mut packet);
-        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert!(should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
         assert_eq!(1, stats.index_out_of_bounds);
 
         let shred = Shred::new_from_parity_shard(
@@ -952,7 +1064,13 @@ mod tests {
         shred.copy_to_packet(&mut packet);
         packet.buffer_mut()[OFFSET_OF_SHRED_VARIANT] = u8::MAX;
 
-        assert_eq!(None, get_shred_slot_index_type(&packet, &mut stats));
+        assert!(should_discard_shred(
+            &packet,
+            root,
+            shred_version,
+            slot_bounds,
+            &mut stats
+        ));
         assert_eq!(1, stats.bad_shred_type);
     }
 
@@ -1091,6 +1209,60 @@ mod tests {
     }
 
     #[test]
+    fn test_shred_seed() {
+        let mut rng = ChaChaRng::from_seed([147u8; 32]);
+        let leader = Pubkey::new_from_array(rng.gen());
+        let key = ShredId(
+            141939602, // slot
+            28685,     // index
+            ShredType::Data,
+        );
+        assert_eq!(
+            bs58::encode(key.seed(&leader)).into_string(),
+            "Gp4kUM4ZpWGQN5XSCyM9YHYWEBCAZLa94ZQuSgDE4r56"
+        );
+        let leader = Pubkey::new_from_array(rng.gen());
+        let key = ShredId(
+            141945197, // slot
+            23418,     // index
+            ShredType::Code,
+        );
+        assert_eq!(
+            bs58::encode(key.seed(&leader)).into_string(),
+            "G1gmFe1QUM8nhDApk6BqvPgw3TQV2Qc5bpKppa96qbVb"
+        );
+    }
+
+    fn verify_shred_layout(shred: &Shred, packet: &Packet) {
+        let data = layout::get_shred(packet).unwrap();
+        assert_eq!(data, packet.data(..).unwrap());
+        assert_eq!(layout::get_slot(data), Some(shred.slot()));
+        assert_eq!(layout::get_index(data), Some(shred.index()));
+        assert_eq!(layout::get_version(data), Some(shred.version()));
+        assert_eq!(layout::get_shred_id(data), Some(shred.id()));
+        assert_eq!(layout::get_signature(data), Some(shred.signature()));
+        assert_eq!(layout::get_shred_type(data).unwrap(), shred.shred_type());
+        match shred.shred_type() {
+            ShredType::Code => {
+                assert_matches!(
+                    layout::get_reference_tick(data),
+                    Err(Error::InvalidShredType)
+                );
+            }
+            ShredType::Data => {
+                assert_eq!(
+                    layout::get_reference_tick(data).unwrap(),
+                    shred.reference_tick()
+                );
+                let parent_offset = layout::get_parent_offset(data).unwrap();
+                let slot = layout::get_slot(data).unwrap();
+                let parent = slot.checked_sub(Slot::from(parent_offset)).unwrap();
+                assert_eq!(parent, shred.parent().unwrap());
+            }
+        }
+    }
+
+    #[test]
     fn test_serde_compat_shred_data() {
         const SEED: &str = "6qG9NGWEtoTugS4Zgs46u8zTccEJuRHtrNMiUayLHCxt";
         const PAYLOAD: &str = "hNX8YgJCQwSFGJkZ6qZLiepwPjpctC9UCsMD1SNNQurBXv\
@@ -1127,18 +1299,7 @@ mod tests {
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
-        assert_eq!(
-            shred.reference_tick(),
-            layout::get_reference_tick(packet.data(..).unwrap()).unwrap()
-        );
-        assert_eq!(
-            layout::get_slot(packet.data(..).unwrap()),
-            Some(shred.slot())
-        );
-        assert_eq!(
-            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
-            Some((shred.slot(), shred.index(), shred.shred_type()))
-        );
+        verify_shred_layout(&shred, &packet);
     }
 
     #[test]
@@ -1171,18 +1332,7 @@ mod tests {
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
-        assert_eq!(
-            shred.reference_tick(),
-            layout::get_reference_tick(packet.data(..).unwrap()).unwrap()
-        );
-        assert_eq!(
-            layout::get_slot(packet.data(..).unwrap()),
-            Some(shred.slot())
-        );
-        assert_eq!(
-            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
-            Some((shred.slot(), shred.index(), shred.shred_type()))
-        );
+        verify_shred_layout(&shred, &packet);
     }
 
     #[test]
@@ -1222,14 +1372,7 @@ mod tests {
         packet.meta.size = payload.len();
         assert_eq!(shred.bytes_to_store(), payload);
         assert_eq!(shred, Shred::new_from_serialized_shred(payload).unwrap());
-        assert_eq!(
-            layout::get_slot(packet.data(..).unwrap()),
-            Some(shred.slot())
-        );
-        assert_eq!(
-            get_shred_slot_index_type(&packet, &mut ShredFetchStats::default()),
-            Some((shred.slot(), shred.index(), shred.shred_type()))
-        );
+        verify_shred_layout(&shred, &packet);
     }
 
     #[test]

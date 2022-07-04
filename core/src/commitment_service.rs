@@ -489,7 +489,7 @@ mod tests {
     #[test]
     fn test_highest_confirmed_root_advance() {
         fn get_vote_account_root_slot(vote_pubkey: Pubkey, bank: &Arc<Bank>) -> Slot {
-            let (_stake, vote_account) = bank.get_vote_account(&vote_pubkey).unwrap();
+            let vote_account = bank.get_vote_account(&vote_pubkey).unwrap();
             let slot = vote_account
                 .vote_state()
                 .as_ref()

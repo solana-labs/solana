@@ -45,7 +45,7 @@ pub async fn upload_confirmed_blocks(
     blockstore: Arc<Blockstore>,
     bigtable: solana_storage_bigtable::LedgerStorage,
     starting_slot: Slot,
-    ending_slot: Option<Slot>,
+    ending_slot: Slot,
     config: ConfirmedBlockUploadConfig,
     exit: Arc<AtomicBool>,
 ) -> Result<Slot, Box<dyn std::error::Error>> {
@@ -60,14 +60,7 @@ pub async fn upload_confirmed_blocks(
                 starting_slot, err
             )
         })?
-        .map_while(|slot| {
-            if let Some(ending_slot) = &ending_slot {
-                if slot > *ending_slot {
-                    return None;
-                }
-            }
-            Some(slot)
-        })
+        .map_while(|slot| (slot <= ending_slot).then(|| slot))
         .collect();
 
     if blockstore_slots.is_empty() {

@@ -4,22 +4,29 @@
 use {
     crate::{
         client_error::ClientErrorKind, connection_cache::ConnectionCacheStats,
-        tpu_connection::ClientStats,
+        nonblocking::tpu_connection::TpuConnection, tpu_connection::ClientStats,
     },
     async_mutex::Mutex,
+    async_trait::async_trait,
     futures::future::join_all,
     itertools::Itertools,
+    log::*,
     quinn::{
         ClientConfig, Endpoint, EndpointConfig, IdleTimeout, NewConnection, VarInt, WriteError,
     },
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
-    solana_sdk::quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_CONCURRENT_STREAMS, QUIC_MAX_TIMEOUT_MS},
+    solana_sdk::{
+        quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
+        transport::Result as TransportResult,
+    },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
+        thread,
         time::Duration,
     },
+    tokio::sync::RwLock,
 };
 
 struct SkipServerVerification;
@@ -44,23 +51,24 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
-/// A wrapper over NewConnection with additional capability to create the endpoint as part
-/// of creating a new connection.
-#[derive(Clone)]
-struct QuicNewConnection {
-    endpoint: Endpoint,
-    connection: Arc<NewConnection>,
+/// A lazy-initialized Quic Endpoint
+pub struct QuicLazyInitializedEndpoint {
+    endpoint: RwLock<Option<Arc<Endpoint>>>,
 }
 
-impl QuicNewConnection {
-    /// Create a QuicNewConnection given the remote address 'addr'.
-    async fn make_connection(addr: SocketAddr, stats: &ClientStats) -> Result<Self, WriteError> {
-        let mut make_connection_measure = Measure::start("make_connection_measure");
+impl QuicLazyInitializedEndpoint {
+    pub fn new() -> Self {
+        Self {
+            endpoint: RwLock::new(None),
+        }
+    }
+
+    fn create_endpoint() -> Endpoint {
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
         )
-        .unwrap();
+        .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range");
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -72,14 +80,67 @@ impl QuicNewConnection {
             QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket);
 
         let mut config = ClientConfig::new(Arc::new(crypto));
-        let transport_config = Arc::get_mut(&mut config.transport).unwrap();
+        let transport_config = Arc::get_mut(&mut config.transport)
+            .expect("QuicLazyInitializedEndpoint::create_endpoint Arc::get_mut");
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
 
         endpoint.set_default_client_config(config);
+        endpoint
+    }
 
-        let connecting = endpoint.connect(addr, "connect").unwrap();
+    async fn get_endpoint(&self) -> Arc<Endpoint> {
+        let lock = self.endpoint.read().await;
+        let endpoint = lock.as_ref();
+
+        match endpoint {
+            Some(endpoint) => endpoint.clone(),
+            None => {
+                drop(lock);
+                let mut lock = self.endpoint.write().await;
+                let endpoint = lock.as_ref();
+
+                match endpoint {
+                    Some(endpoint) => endpoint.clone(),
+                    None => {
+                        let connection = Arc::new(Self::create_endpoint());
+                        *lock = Some(connection.clone());
+                        connection
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Default for QuicLazyInitializedEndpoint {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A wrapper over NewConnection with additional capability to create the endpoint as part
+/// of creating a new connection.
+#[derive(Clone)]
+struct QuicNewConnection {
+    endpoint: Arc<Endpoint>,
+    connection: Arc<NewConnection>,
+}
+
+impl QuicNewConnection {
+    /// Create a QuicNewConnection given the remote address 'addr'.
+    async fn make_connection(
+        endpoint: Arc<QuicLazyInitializedEndpoint>,
+        addr: SocketAddr,
+        stats: &ClientStats,
+    ) -> Result<Self, WriteError> {
+        let mut make_connection_measure = Measure::start("make_connection_measure");
+        let endpoint = endpoint.get_endpoint().await;
+
+        let connecting = endpoint
+            .connect(addr, "connect")
+            .expect("QuicNewConnection::make_connection endpoint.connect");
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connecting_result = connecting.await;
         if connecting_result.is_err() {
@@ -99,7 +160,9 @@ impl QuicNewConnection {
     }
 
     fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
-        quinn::Endpoint::new(config, None, client_socket).unwrap().0
+        quinn::Endpoint::new(config, None, client_socket)
+            .expect("QuicNewConnection::create_endpoint quinn::Endpoint::new")
+            .0
     }
 
     // Attempts to make a faster connection by taking advantage of pre-existing key material.
@@ -109,7 +172,10 @@ impl QuicNewConnection {
         addr: SocketAddr,
         stats: &ClientStats,
     ) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self.endpoint.connect(addr, "connect").unwrap();
+        let connecting = self
+            .endpoint
+            .connect(addr, "connect")
+            .expect("QuicNewConnection::make_connection_0rtt endpoint.connect");
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
@@ -132,14 +198,16 @@ impl QuicNewConnection {
 }
 
 pub struct QuicClient {
+    endpoint: Arc<QuicLazyInitializedEndpoint>,
     connection: Arc<Mutex<Option<QuicNewConnection>>>,
     addr: SocketAddr,
     stats: Arc<ClientStats>,
 }
 
 impl QuicClient {
-    pub fn new(addr: SocketAddr) -> Self {
+    pub fn new(endpoint: Arc<QuicLazyInitializedEndpoint>, addr: SocketAddr) -> Self {
         Self {
+            endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
             stats: Arc::new(ClientStats::default()),
@@ -165,63 +233,133 @@ impl QuicClient {
         stats: &ClientStats,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Result<Arc<NewConnection>, WriteError> {
-        let connection = {
-            let mut conn_guard = self.connection.lock().await;
+        let mut connection_try_count = 0;
+        let mut last_connection_id = 0;
+        let mut last_error = None;
 
-            let maybe_conn = conn_guard.clone();
-            match maybe_conn {
-                Some(conn) => {
-                    stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
-                    conn.connection.clone()
+        while connection_try_count < 2 {
+            let connection = {
+                let mut conn_guard = self.connection.lock().await;
+
+                let maybe_conn = conn_guard.as_mut();
+                match maybe_conn {
+                    Some(conn) => {
+                        if conn.connection.connection.stable_id() == last_connection_id {
+                            // this is the problematic connection we had used before, create a new one
+                            let conn = conn.make_connection_0rtt(self.addr, stats).await;
+                            match conn {
+                                Ok(conn) => {
+                                    info!(
+                                        "Made 0rtt connection to {} with id {} try_count {}, last_connection_id: {}, last_error: {:?}",
+                                        self.addr,
+                                        conn.connection.stable_id(),
+                                        connection_try_count,
+                                        last_connection_id,
+                                        last_error,
+                                    );
+                                    connection_try_count += 1;
+                                    conn
+                                }
+                                Err(err) => {
+                                    info!(
+                                        "Cannot make 0rtt connection to {}, error {:}",
+                                        self.addr, err
+                                    );
+                                    return Err(err);
+                                }
+                            }
+                        } else {
+                            stats.connection_reuse.fetch_add(1, Ordering::Relaxed);
+                            conn.connection.clone()
+                        }
+                    }
+                    None => {
+                        let conn = QuicNewConnection::make_connection(
+                            self.endpoint.clone(),
+                            self.addr,
+                            stats,
+                        )
+                        .await;
+                        match conn {
+                            Ok(conn) => {
+                                *conn_guard = Some(conn.clone());
+                                info!(
+                                    "Made connection to {} id {} try_count {}",
+                                    self.addr,
+                                    conn.connection.connection.stable_id(),
+                                    connection_try_count
+                                );
+                                connection_try_count += 1;
+                                conn.connection.clone()
+                            }
+                            Err(err) => {
+                                info!("Cannot make connection to {}, error {:}", self.addr, err);
+                                return Err(err);
+                            }
+                        }
+                    }
                 }
-                None => {
-                    let conn = QuicNewConnection::make_connection(self.addr, stats).await?;
-                    *conn_guard = Some(conn.clone());
-                    conn.connection.clone()
+            };
+
+            let new_stats = connection.connection.stats();
+
+            connection_stats
+                .total_client_stats
+                .congestion_events
+                .update_stat(
+                    &self.stats.congestion_events,
+                    new_stats.path.congestion_events,
+                );
+
+            connection_stats
+                .total_client_stats
+                .tx_streams_blocked_uni
+                .update_stat(
+                    &self.stats.tx_streams_blocked_uni,
+                    new_stats.frame_tx.streams_blocked_uni,
+                );
+
+            connection_stats
+                .total_client_stats
+                .tx_data_blocked
+                .update_stat(&self.stats.tx_data_blocked, new_stats.frame_tx.data_blocked);
+
+            connection_stats
+                .total_client_stats
+                .tx_acks
+                .update_stat(&self.stats.tx_acks, new_stats.frame_tx.acks);
+
+            last_connection_id = connection.connection.stable_id();
+            match Self::_send_buffer_using_conn(data, &connection).await {
+                Ok(()) => {
+                    return Ok(connection);
                 }
-            }
-        };
-
-        let new_stats = connection.connection.stats();
-
-        connection_stats
-            .total_client_stats
-            .congestion_events
-            .update_stat(
-                &self.stats.congestion_events,
-                new_stats.path.congestion_events,
-            );
-
-        connection_stats
-            .total_client_stats
-            .tx_streams_blocked_uni
-            .update_stat(
-                &self.stats.tx_streams_blocked_uni,
-                new_stats.frame_tx.streams_blocked_uni,
-            );
-
-        connection_stats
-            .total_client_stats
-            .tx_data_blocked
-            .update_stat(&self.stats.tx_data_blocked, new_stats.frame_tx.data_blocked);
-
-        connection_stats
-            .total_client_stats
-            .tx_acks
-            .update_stat(&self.stats.tx_acks, new_stats.frame_tx.acks);
-
-        match Self::_send_buffer_using_conn(data, &connection).await {
-            Ok(()) => Ok(connection),
-            _ => {
-                let connection = {
-                    let mut conn_guard = self.connection.lock().await;
-                    let conn = conn_guard.as_mut().unwrap();
-                    conn.make_connection_0rtt(self.addr, stats).await?
-                };
-                Self::_send_buffer_using_conn(data, &connection).await?;
-                Ok(connection)
+                Err(err) => match err {
+                    WriteError::ConnectionLost(_) => {
+                        last_error = Some(err);
+                    }
+                    _ => {
+                        info!(
+                            "Error sending to {} with id {}, error {:?} thread: {:?}",
+                            self.addr,
+                            connection.connection.stable_id(),
+                            err,
+                            thread::current().id(),
+                        );
+                        return Err(err);
+                    }
+                },
             }
         }
+
+        // if we come here, that means we have exhausted maximum retries, return the error
+        info!(
+            "Ran into an error sending transactions {:?}, exhausted retries to {}",
+            last_error, self.addr
+        );
+        // If we get here but last_error is None, then we have a logic error
+        // in this function, so panic here with an expect to help debugging
+        Err(last_error.expect("QuicClient::_send_buffer last_error.expect"))
     }
 
     pub async fn send_buffer<T>(
@@ -271,7 +409,7 @@ impl QuicClient {
 
         let chunks = buffers[1..buffers.len()]
             .iter()
-            .chunks(QUIC_MAX_CONCURRENT_STREAMS);
+            .chunks(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS);
 
         let futures: Vec<_> = chunks
             .into_iter()
@@ -296,5 +434,80 @@ impl QuicClient {
 
     pub fn stats(&self) -> Arc<ClientStats> {
         self.stats.clone()
+    }
+}
+
+pub struct QuicTpuConnection {
+    client: Arc<QuicClient>,
+    connection_stats: Arc<ConnectionCacheStats>,
+}
+
+impl QuicTpuConnection {
+    pub fn base_stats(&self) -> Arc<ClientStats> {
+        self.client.stats()
+    }
+
+    pub fn new(
+        endpoint: Arc<QuicLazyInitializedEndpoint>,
+        addr: SocketAddr,
+        connection_stats: Arc<ConnectionCacheStats>,
+    ) -> Self {
+        let client = Arc::new(QuicClient::new(endpoint, addr));
+        Self::new_with_client(client, connection_stats)
+    }
+
+    pub fn new_with_client(
+        client: Arc<QuicClient>,
+        connection_stats: Arc<ConnectionCacheStats>,
+    ) -> Self {
+        Self {
+            client,
+            connection_stats,
+        }
+    }
+}
+
+#[async_trait]
+impl TpuConnection for QuicTpuConnection {
+    fn tpu_addr(&self) -> &SocketAddr {
+        self.client.tpu_addr()
+    }
+
+    async fn send_wire_transaction_batch<T>(&self, buffers: &[T]) -> TransportResult<()>
+    where
+        T: AsRef<[u8]> + Send + Sync,
+    {
+        let stats = ClientStats::default();
+        let len = buffers.len();
+        let res = self
+            .client
+            .send_batch(buffers, &stats, self.connection_stats.clone())
+            .await;
+        self.connection_stats
+            .add_client_stats(&stats, len, res.is_ok());
+        res?;
+        Ok(())
+    }
+
+    async fn send_wire_transaction<T>(&self, wire_transaction: T) -> TransportResult<()>
+    where
+        T: AsRef<[u8]> + Send + Sync,
+    {
+        let stats = Arc::new(ClientStats::default());
+        let send_buffer =
+            self.client
+                .send_buffer(wire_transaction, &stats, self.connection_stats.clone());
+        if let Err(e) = send_buffer.await {
+            warn!(
+                "Failed to send transaction async to {}, error: {:?} ",
+                self.tpu_addr(),
+                e
+            );
+            datapoint_warn!("send-wire-async", ("failure", 1, i64),);
+            self.connection_stats.add_client_stats(&stats, 1, false);
+        } else {
+            self.connection_stats.add_client_stats(&stats, 1, true);
+        }
+        Ok(())
     }
 }

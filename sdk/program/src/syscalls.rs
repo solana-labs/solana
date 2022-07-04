@@ -46,9 +46,6 @@ define_syscall!(fn sol_sha256(vals: *const u8, val_len: u64, hash_result: *mut u
 define_syscall!(fn sol_keccak256(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
 define_syscall!(fn sol_secp256k1_recover(hash: *const u8, recovery_id: u64, signature: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_blake3(vals: *const u8, val_len: u64, hash_result: *mut u8) -> u64);
-define_syscall!(fn sol_zk_token_elgamal_op(op: u64, ct_0: *const u8, ct_1: *const u8, ct_result: *mut u8) -> u64);
-define_syscall!(fn sol_zk_token_elgamal_op_with_lo_hi(op: u64, ct_0: *const u8, ct_1_lo: *const u8, ct_1_hi: *const u8, ct_result: *mut u8) -> u64);
-define_syscall!(fn sol_zk_token_elgamal_op_with_scalar(op: u64, ct: *const u8, scalar: u64, ct_result: *mut u8) -> u64);
 define_syscall!(fn sol_get_clock_sysvar(addr: *mut u8) -> u64);
 define_syscall!(fn sol_get_epoch_schedule_sysvar(addr: *mut u8) -> u64);
 define_syscall!(fn sol_get_fees_sysvar(addr: *mut u8) -> u64);
@@ -65,7 +62,7 @@ define_syscall!(fn sol_log_data(data: *const u8, data_len: u64));
 define_syscall!(fn sol_get_processed_sibling_instruction(index: u64, meta: *mut ProcessedSiblingInstruction, program_id: *mut Pubkey, data: *mut u8, accounts: *mut AccountMeta) -> u64);
 define_syscall!(fn sol_get_stack_height() -> u64);
 define_syscall!(fn sol_curve_validate_point(curve_id: u64, point: *const u8, result: *mut u8) -> u64);
-define_syscall!(fn sol_curve_op(curve_id: u64, op_id: u64, left_point: *const u8, right_point: *const u8, result: *mut u8) -> u64);
+define_syscall!(fn sol_curve_group_op(curve_id: u64, op_id: u64, left_point: *const u8, right_point: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_curve_multiscalar_mul(curve_id: u64, scalars: *const u8, points: *const u8, result: *mut u8) -> u64);
 define_syscall!(fn sol_curve_pairing_map(curve_id: u64, point: *const u8, result: *mut u8) -> u64);
 
