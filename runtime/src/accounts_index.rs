@@ -34,7 +34,7 @@ use {
         },
         path::PathBuf,
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+            atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
             Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
     },
@@ -887,6 +887,11 @@ pub struct AccountsIndex<T: IndexValue> {
 
     /// when a scan's accumulated data exceeds this limit, abort the scan
     pub scan_results_limit_bytes: Option<usize>,
+
+    /// # scans active currently
+    pub active_scans: AtomicUsize,
+    /// # of slots between latest max and latest scan
+    pub max_distance_to_min_scan_slot: Mutex<Slot>,
 }
 
 impl<T: IndexValue> AccountsIndex<T> {
@@ -916,6 +921,8 @@ impl<T: IndexValue> AccountsIndex<T> {
             removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
             storage,
             scan_results_limit_bytes,
+            active_scans: AtomicUsize::default(),
+            max_distance_to_min_scan_slot: Mutex::default(),
         }
     }
 
@@ -952,6 +959,10 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.storage.storage.is_disk_index_enabled()
     }
 
+    fn min_ongoing_scan_root_from_btree(ongoing_scan_roots: &BTreeMap<Slot, u64>) -> Option<Slot> {
+        ongoing_scan_roots.keys().next().cloned()
+    }
+
     fn do_checked_scan_accounts<F, R>(
         &self,
         metric_name: &'static str,
@@ -975,6 +986,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             }
         }
 
+        self.active_scans.fetch_add(1, Ordering::Relaxed);
         let max_root = {
             let mut w_ongoing_scan_roots = self
                 // This lock is also grabbed by clean_accounts(), so clean
@@ -989,6 +1001,17 @@ impl<T: IndexValue> AccountsIndex<T> {
             // make sure inverse doesn't happen to avoid
             // deadlock
             let max_root_inclusive = self.max_root_inclusive();
+            if let Some(min_ongoing_scan_root) =
+                Self::min_ongoing_scan_root_from_btree(&w_ongoing_scan_roots)
+            {
+                if min_ongoing_scan_root < max_root_inclusive {
+                    let current = max_root_inclusive - min_ongoing_scan_root;
+                    let mut distance = self.max_distance_to_min_scan_slot.lock().unwrap();
+                    if current > *distance || *distance == 0 {
+                        *distance = current;
+                    }
+                }
+            }
             *w_ongoing_scan_roots.entry(max_root_inclusive).or_default() += 1;
 
             max_root_inclusive
@@ -1147,6 +1170,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         }
 
         {
+            self.active_scans.fetch_sub(1, Ordering::Relaxed);
             let mut ongoing_scan_roots = self.ongoing_scan_roots.write().unwrap();
             let count = ongoing_scan_roots.get_mut(&max_root).unwrap();
             *count -= 1;
@@ -1449,12 +1473,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn min_ongoing_scan_root(&self) -> Option<Slot> {
-        self.ongoing_scan_roots
-            .read()
-            .unwrap()
-            .keys()
-            .next()
-            .cloned()
+        Self::min_ongoing_scan_root_from_btree(&self.ongoing_scan_roots.read().unwrap())
     }
 
     // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element
