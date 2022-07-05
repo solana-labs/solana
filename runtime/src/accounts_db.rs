@@ -2384,6 +2384,33 @@ impl AccountsDb {
         self.remove_uncleaned_slots_and_collect_pubkeys(uncleaned_slots)
     }
 
+    fn add_old_roots_to_dirty_stores(&self) {
+        let accounts_hash_complete_one_epoch_old =
+            *self.accounts_hash_complete_one_epoch_old.read().unwrap();
+        let old_roots = self
+            .accounts_index
+            .roots_tracker
+            .read()
+            .unwrap()
+            .alive_roots
+            .get_all_less_than(accounts_hash_complete_one_epoch_old);
+        old_roots.iter().for_each(|slot| {
+            if let Some(storages) = self.get_storages_for_slot(*slot) {
+                storages.iter().for_each(|storage| {
+                    match self.dirty_stores.entry((*slot, storage.append_vec_id())) {
+                        Occupied(_occupied_entry) => {
+                            // already present
+                        }
+
+                        Vacant(vacant_entry) => {
+                            vacant_entry.insert(Arc::clone(storage));
+                        }
+                    }
+                });
+            }
+        });
+    }
+
     // Construct a vec of pubkeys for cleaning from:
     //   uncleaned_pubkeys - the delta set of updated pubkeys in rooted slots from the last clean
     //   dirty_stores - set of stores which had accounts removed or recently rooted
@@ -2396,6 +2423,7 @@ impl AccountsDb {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
+        self.add_old_roots_to_dirty_stores();
         self.dirty_stores.retain(|(slot, _store_id), store| {
             if *slot > max_slot {
                 true
