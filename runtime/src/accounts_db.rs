@@ -2118,7 +2118,11 @@ impl AccountsDb {
         max_clean_root: Option<Slot>,
     ) -> ReclaimResult {
         if purges.is_empty() {
-            error!("jw:clean_accounts_older_than_root: {}, root: {:?}, empty purges", purges.len(), max_clean_root);
+            error!(
+                "jw:clean_accounts_older_than_root: {}, root: {:?}, empty purges",
+                purges.len(),
+                max_clean_root
+            );
             return ReclaimResult::default();
         }
         // This number isn't carefully chosen; just guessed randomly such that
@@ -2137,7 +2141,12 @@ impl AccountsDb {
                 reclaims
             });
         let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
-        error!("clean_accounts_older_than_root: {}, root: {:?}, reclaims: {}", purges.len(), max_clean_root, reclaims.len());
+        error!(
+            "clean_accounts_older_than_root: {}, root: {:?}, reclaims: {}",
+            purges.len(),
+            max_clean_root,
+            reclaims.len()
+        );
         clean_rooted.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
         self.clean_accounts_stats
@@ -2416,7 +2425,10 @@ impl AccountsDb {
         });
         m.stop();
         if added > 0 {
-            error!("added: {}, already present: {}, {}", added, already_present, m);
+            error!(
+                "added: {}, already present: {}, {}",
+                added, already_present, m
+            );
         }
     }
 
@@ -3035,8 +3047,7 @@ impl AccountsDb {
         if dead_slots.is_empty() {
             error!("process_dead_slots is empty");
             return;
-        }
-        else {
+        } else {
             error!("jw:process_dead_slots: {}", dead_slots.len());
         }
         let mut clean_dead_slots = Measure::start("reclaims::clean_dead_slots");
@@ -3415,7 +3426,7 @@ impl AccountsDb {
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
             let stores: Vec<Arc<AccountStorageEntry>> =
                 stores_lock.read().unwrap().values().cloned().collect();
-            if !Self::is_shrinking_productive(slot, &stores) {
+            if !self.is_shrinking_productive(slot, &stores) {
                 return 0;
             }
             self.do_shrink_slot_stores(slot, stores.iter())
@@ -5132,7 +5143,11 @@ impl AccountsDb {
         let num_purged_keys = pubkey_to_slot_set.len();
         let reclaims = self.purge_keys_exact(pubkey_to_slot_set.iter());
         assert_eq!(reclaims.len(), num_purged_keys);
-        error!("jw:purge_slot_cache_pubkeys, {}, reclaims: {}", purged_slot_pubkeys.len(), reclaims.len());
+        error!(
+            "jw:purge_slot_cache_pubkeys, {}, reclaims: {}",
+            purged_slot_pubkeys.len(),
+            reclaims.len()
+        );
         if is_dead {
             self.remove_dead_slots_metadata(
                 std::iter::once(&purged_slot),
@@ -7173,7 +7188,12 @@ impl AccountsDb {
         aligned_bytes + PAGE_SIZE > total_bytes && num_stores == 1
     }
 
-    fn is_shrinking_productive(slot: Slot, stores: &[Arc<AccountStorageEntry>]) -> bool {
+    fn is_shrinking_productive(&self, slot: Slot, stores: &[Arc<AccountStorageEntry>]) -> bool {
+        let accounts_hash_complete_one_epoch_old =
+            *self.accounts_hash_complete_one_epoch_old.read().unwrap();
+        if slot < accounts_hash_complete_one_epoch_old {
+            return true;
+        }
         let mut alive_count = 0;
         let mut stored_count = 0;
         let mut alive_bytes = 0;
@@ -7274,7 +7294,7 @@ impl AccountsDb {
                         .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
-                    && Self::is_shrinking_productive(*slot, &[store.clone()])
+                    && self.is_shrinking_productive(*slot, &[store.clone()])
                     && self.is_candidate_for_shrink(&store, false)
                 {
                     // Checking that this single storage entry is ready for shrinking,
@@ -7287,12 +7307,10 @@ impl AccountsDb {
                             .or_default()
                             .insert(store.append_vec_id(), store);
                     }
-                }
-                else {
+                } else {
                     slot_counts.insert(*slot, count);
                 }
-            }
-            else {
+            } else {
                 missing_entries += 1;
             }
         }
@@ -7372,7 +7390,10 @@ impl AccountsDb {
         purged_stored_account_slots: Option<&mut AccountSlots>,
         max_slot: Slot,
     ) {
-        error!("jw:remove_dead_slots_metadata: {}", purged_slot_pubkeys.len());
+        error!(
+            "jw:remove_dead_slots_metadata: {}",
+            purged_slot_pubkeys.len()
+        );
 
         let mut measure = Measure::start("remove_dead_slots_metadata-ms");
         self.clean_dead_slots_from_accounts_index(
@@ -7444,7 +7465,13 @@ impl AccountsDb {
         error!("clean_dead_slots: {}", dead_slots.len());
         accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
         info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
-        info!("jw:remove_dead_slots_metadata_dist: slots {:?}", dead_slots.iter().map(|s| (max_slot - s, s)).collect::<Vec<_>>());
+        info!(
+            "jw:remove_dead_slots_metadata_dist: slots {:?}",
+            dead_slots
+                .iter()
+                .map(|s| (max_slot - s, s))
+                .collect::<Vec<_>>()
+        );
 
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
         accounts_index_root_stats.unrooted_cleaned_count += unrooted_cleaned_count;
@@ -7772,7 +7799,7 @@ impl AccountsDb {
         let expected_single_dead_slot =
             (!accounts.contains_multiple_slots()).then(|| accounts.target_slot());
 
-        let temp_max_slot=  accounts.target_slot();
+        let temp_max_slot = accounts.target_slot();
         // If the cache was flushed, then because `update_index` occurs
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
@@ -7810,7 +7837,13 @@ impl AccountsDb {
         if !reclaims.is_empty() {
             error!("jw: hr note empty, store_accounts_custom");
         }
-        self.handle_reclaims(&reclaims, expected_single_dead_slot, None, reset_accounts, temp_max_slot);
+        self.handle_reclaims(
+            &reclaims,
+            expected_single_dead_slot,
+            None,
+            reset_accounts,
+            temp_max_slot,
+        );
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims

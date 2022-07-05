@@ -1861,11 +1861,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                 );
             }
             if !logged {
-                inc_new_counter_error!(
-                    "jw:clean_dead_slot-not_removed",
-                    1,
-                    1
-                );
+                inc_new_counter_error!("jw:clean_dead_slot-not_removed", 1, 1);
             }
             false
         } else {
