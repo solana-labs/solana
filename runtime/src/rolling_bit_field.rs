@@ -158,7 +158,7 @@ impl RollingBitField {
                     self.purge(key);
                 }
                 else {
-                    error!("jw: fail remove when get = false: {}, {}, root: {}, items: {}", key, self.max_exclusive, self.count);
+                    error!("jw: fail remove when get = false: {}, {}, items: {}", key, self.max_exclusive, self.count);
                 }
                 get
             } else {
