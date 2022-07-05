@@ -7288,7 +7288,7 @@ impl AccountsDb {
             true
         });
         let final_ct = dead_slots.len();
-        error!("jw:remove_dead_accounts from {} down to {}, shrink candidates: {}, reset_accounts: {}", orig_ct, final_ct, sc.len(), reset_accounts);
+        error!("jw:remove_dead_accounts from {} down to {}, shrink candidates: {}, reset_accounts: {}", orig_ct, final_ct, sc, reset_accounts);
 
         dead_slots
     }
