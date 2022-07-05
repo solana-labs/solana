@@ -2909,25 +2909,28 @@ impl AccountsDb {
                     storages.iter().map(|s| s.count()).sum::<usize>()
                 );
                 error!("jw2:log_old_slots_pubkeys: {:?}", {
-                    let mut my_stored = stored_accounts.iter().map(|(k,v)| *k).collect::<Vec<_>>();
+                    let mut my_stored = stored_accounts.iter().map(|(k, v)| *k).collect::<Vec<_>>();
                     my_stored.sort();
-                    my_stored.into_iter().map(|pubkey| {
-                        let lookup = self.accounts_index.get_account_read_entry(&pubkey);
-                        (
-                            pubkey,
-                            if let Some(locked_entry) = lookup {
-                                let mut slots = locked_entry
-                                    .slot_list()
-                                    .iter()
-                                    .map(|(slot, _)| *slot)
-                                    .collect::<Vec<_>>();
-                                slots.sort();
-                                slots
-                            } else {
-                                vec![]
-                            },
-                        )
-                    }).collect::<Vec<_>>()
+                    my_stored
+                        .into_iter()
+                        .map(|pubkey| {
+                            let lookup = self.accounts_index.get_account_read_entry(&pubkey);
+                            (
+                                pubkey,
+                                if let Some(locked_entry) = lookup {
+                                    let mut slots = locked_entry
+                                        .slot_list()
+                                        .iter()
+                                        .map(|(slot, _)| *slot)
+                                        .collect::<Vec<_>>();
+                                    slots.sort();
+                                    slots
+                                } else {
+                                    vec![]
+                                },
+                            )
+                        })
+                        .collect::<Vec<_>>()
                 });
                 log += 1;
             }
@@ -3502,14 +3505,18 @@ impl AccountsDb {
     /// achieved, it will stop and return the filtered-down candidates and the candidates which
     /// are skipped in this round and might be eligible for the future shrink.
     fn select_candidates_by_total_usage(
+        &self,
         shrink_slots: &ShrinkCandidates,
         shrink_ratio: f64,
     ) -> (ShrinkCandidates, ShrinkCandidates) {
         struct StoreUsageInfo {
+            newer: bool,
             slot: Slot,
             alive_ratio: f64,
             store: Arc<AccountStorageEntry>,
         }
+        let accounts_hash_complete_one_epoch_old =
+            *self.accounts_hash_complete_one_epoch_old.read().unwrap();
         let mut measure = Measure::start("select_top_sparse_storage_entries-ms");
         let mut store_usage: Vec<StoreUsageInfo> = Vec::with_capacity(shrink_slots.len());
         let mut total_alive_bytes: u64 = 0;
@@ -3524,6 +3531,8 @@ impl AccountsDb {
                 let alive_ratio = Self::page_align(store.alive_bytes() as u64) as f64
                     / store.total_bytes() as f64;
                 store_usage.push(StoreUsageInfo {
+                    // prioritize old slots
+                    newer: *slot > accounts_hash_complete_one_epoch_old,
                     slot: *slot,
                     alive_ratio,
                     store: store.clone(),
@@ -3532,9 +3541,11 @@ impl AccountsDb {
             }
         }
         store_usage.sort_by(|a, b| {
-            a.alive_ratio
-                .partial_cmp(&b.alive_ratio)
-                .unwrap_or(std::cmp::Ordering::Equal)
+            a.newer.partial_cmp(&b.newer).unwrap_or_else(|| {
+                a.alive_ratio
+                    .partial_cmp(&b.alive_ratio)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
         });
 
         // Working from the beginning of store_usage which are the most sparse and see when we can stop
@@ -3986,7 +3997,7 @@ impl AccountsDb {
         let (shrink_slots, shrink_slots_next_batch) = {
             if let AccountShrinkThreshold::TotalSpace { shrink_ratio } = self.shrink_ratio {
                 let (shrink_slots, shrink_slots_next_batch) =
-                    Self::select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
+                    self.select_candidates_by_total_usage(&shrink_candidates_slots, shrink_ratio);
                 (shrink_slots, Some(shrink_slots_next_batch))
             } else {
                 (shrink_candidates_slots, None)
