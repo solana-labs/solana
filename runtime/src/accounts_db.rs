@@ -2895,6 +2895,7 @@ impl AccountsDb {
             expected_single_dead_slot,
             reclaimed_offsets,
             reset_accounts,
+            max_slot,
         );
 
         if let Some(purge_stats) = purge_stats {
@@ -7197,6 +7198,7 @@ impl AccountsDb {
         expected_slot: Option<Slot>,
         mut reclaimed_offsets: Option<&mut AppendVecOffsets>,
         reset_accounts: bool,
+        max_root: Slot,
     ) -> HashSet<Slot> {
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
@@ -7308,14 +7310,15 @@ impl AccountsDb {
             true
         });
         let final_ct = dead_slots.len();
+        let oldest = max_root - 432_000;
         error!("jw:remove_dead_accounts from {} down to {}, shrink candidates: {}, reset_accounts: {}, missing entries: {}, slot_counts: {:?}, shrink_candidates: {:?}", orig_ct, final_ct, sc, reset_accounts, missing_entries, 
         {
-            let mut a = slot_counts.iter().collect::<Vec<_>>();
+            let mut a = slot_counts.iter().filter(|(a,b)| **a < oldest).map(|(a,b)| (oldest-a, b)).collect::<Vec<_>>();
             a.sort();
             a
         },
         {
-            let mut a = sc_c.iter().map(|(k,_)| k).collect::<Vec<_>>();
+            let mut a = sc_c.iter().map(|(k,_)| k).filter(|k| **k<oldest).map(|k| oldest-*k).collect::<Vec<_>>();
             a.sort();
             a
         },
