@@ -74,7 +74,7 @@ fn bench_consume_buffered(bencher: &mut Bencher) {
         let (exit, poh_recorder, poh_service, _signal_receiver) =
             create_test_recorder(&bank, &blockstore, None, None);
 
-        let recorder = poh_recorder.lock().unwrap().recorder();
+        let recorder = poh_recorder.read().unwrap().recorder();
 
         let tx = test_tx();
         let transactions = vec![tx; 4194304];
@@ -233,7 +233,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             Arc::new(RwLock::new(CostModel::default())),
             Arc::new(ConnectionCache::default()),
         );
-        poh_recorder.lock().unwrap().set_bank(&bank, false);
+        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         let chunk_len = verified.len() / CHUNKS;
         let mut start = 0;

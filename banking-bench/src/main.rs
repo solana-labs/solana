@@ -30,7 +30,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        sync::{atomic::Ordering, Arc, Mutex, RwLock},
+        sync::{atomic::Ordering, Arc, RwLock},
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -39,7 +39,7 @@ use {
 fn check_txs(
     receiver: &Arc<Receiver<WorkingBankEntry>>,
     ref_tx_count: usize,
-    poh_recorder: &Arc<Mutex<PohRecorder>>,
+    poh_recorder: &Arc<RwLock<PohRecorder>>,
 ) -> bool {
     let mut total = 0;
     let now = Instant::now();
@@ -55,7 +55,7 @@ fn check_txs(
         if now.elapsed().as_secs() > 60 {
             break;
         }
-        if poh_recorder.lock().unwrap().bank().is_none() {
+        if poh_recorder.read().unwrap().bank().is_none() {
             no_bank = true;
             break;
         }
@@ -358,7 +358,7 @@ fn main() {
                 DEFAULT_TPU_CONNECTION_POOL_SIZE,
             )),
         );
-        poh_recorder.lock().unwrap().set_bank(&bank, false);
+        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         // This is so that the signal_receiver does not go out of scope after the closure.
         // If it is dropped before poh_service, then poh_service will error when
@@ -396,7 +396,7 @@ fn main() {
                     if bank.get_signature_status(&tx.signatures[0]).is_some() {
                         break;
                     }
-                    if poh_recorder.lock().unwrap().bank().is_none() {
+                    if poh_recorder.read().unwrap().bank().is_none() {
                         break;
                     }
                     sleep(Duration::from_millis(5));
@@ -418,7 +418,7 @@ fn main() {
 
                 let mut poh_time = Measure::start("poh_time");
                 poh_recorder
-                    .lock()
+                    .write()
                     .unwrap()
                     .reset(bank.clone(), Some((bank.slot(), bank.slot() + 1)));
                 poh_time.stop();
@@ -439,8 +439,8 @@ fn main() {
                     std::u64::MAX,
                 );
 
-                poh_recorder.lock().unwrap().set_bank(&bank, false);
-                assert!(poh_recorder.lock().unwrap().bank().is_some());
+                poh_recorder.write().unwrap().set_bank(&bank, false);
+                assert!(poh_recorder.read().unwrap().bank().is_some());
                 if bank.slot() > 32 {
                     leader_schedule_cache.set_root(&bank);
                     bank_forks.set_root(root, &AbsRequestSender::default(), None);

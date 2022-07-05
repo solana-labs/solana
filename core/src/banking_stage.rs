@@ -69,7 +69,7 @@ use {
         rc::Rc,
         sync::{
             atomic::{AtomicU64, AtomicUsize, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -411,7 +411,7 @@ impl BankingStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         verified_receiver: BankingPacketReceiver,
         tpu_verified_vote_receiver: BankingPacketReceiver,
         verified_vote_receiver: BankingPacketReceiver,
@@ -437,7 +437,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         verified_receiver: BankingPacketReceiver,
         tpu_verified_vote_receiver: BankingPacketReceiver,
         verified_vote_receiver: BankingPacketReceiver,
@@ -539,7 +539,7 @@ impl BankingStage {
         connection_cache: &ConnectionCache,
         forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         socket: &UdpSocket,
         filter_forwarding_results: &FilterForwardingResults,
         data_budget: &DataBudget,
@@ -640,7 +640,7 @@ impl BankingStage {
     pub fn consume_buffered_packets(
         my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -672,8 +672,8 @@ impl BankingStage {
                 // TODO: Right now we iterate through buffer and try the highest weighted transaction once
                 // but we should retry the highest weighted transactions more often.
                 let (bank_start, poh_recorder_lock_time) = measure!(
-                    poh_recorder.lock().unwrap().bank_start(),
-                    "poh_recorder_lock",
+                    poh_recorder.read().unwrap().bank_start(),
+                    "poh_recorder.read",
                 );
                 slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
                     poh_recorder_lock_time.as_us(),
@@ -718,7 +718,7 @@ impl BankingStage {
                     {
                         let poh_recorder_lock_time = {
                             let (poh_recorder_locked, poh_recorder_lock_time) =
-                                measure!(poh_recorder.lock().unwrap(), "poh_recorder_lock");
+                                measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
 
                             reached_end_of_slot = Some(EndOfSlot {
                                 next_slot_leader: poh_recorder_locked.next_slot_leader(),
@@ -783,7 +783,7 @@ impl BankingStage {
                     // packet batches in buffer
                     let poh_recorder_lock_time = {
                         let (poh_recorder_locked, poh_recorder_lock_time) =
-                            measure!(poh_recorder.lock().unwrap(), "poh_recorder_lock");
+                            measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
 
                         reached_end_of_slot = Some(EndOfSlot {
                             next_slot_leader: poh_recorder_locked.next_slot_leader(),
@@ -907,7 +907,7 @@ impl BankingStage {
     fn process_buffered_packets(
         my_pubkey: &Pubkey,
         socket: &UdpSocket,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         forward_option: &ForwardOption,
@@ -930,7 +930,7 @@ impl BankingStage {
                     would_be_leader,
                     would_be_leader_shortly,
                 ) = {
-                    let poh = poh_recorder.lock().unwrap();
+                    let poh = poh_recorder.read().unwrap();
                     bank_start = poh.bank_start();
                     (
                         poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
@@ -1037,7 +1037,7 @@ impl BankingStage {
         forward_option: &ForwardOption,
         cluster_info: &ClusterInfo,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         socket: &UdpSocket,
         hold: bool,
         data_budget: &DataBudget,
@@ -1100,7 +1100,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
         verified_receiver: &BankingPacketReceiver,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
         forward_option: ForwardOption,
@@ -1112,7 +1112,7 @@ impl BankingStage {
         cost_model: Arc<RwLock<CostModel>>,
         connection_cache: Arc<ConnectionCache>,
     ) {
-        let recorder = poh_recorder.lock().unwrap().recorder();
+        let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packet_batches = UnprocessedPacketBatches::with_capacity(batch_limit);
         let mut banking_stage_stats = BankingStageStats::new(id);
@@ -2237,35 +2237,35 @@ impl BankingStage {
 
 pub(crate) fn next_leader_tpu(
     cluster_info: &ClusterInfo,
-    poh_recorder: &Mutex<PohRecorder>,
+    poh_recorder: &RwLock<PohRecorder>,
 ) -> Option<(Pubkey, std::net::SocketAddr)> {
     next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu)
 }
 
 fn next_leader_tpu_forwards(
     cluster_info: &ClusterInfo,
-    poh_recorder: &Mutex<PohRecorder>,
+    poh_recorder: &RwLock<PohRecorder>,
 ) -> Option<(Pubkey, std::net::SocketAddr)> {
     next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu_forwards)
 }
 
 pub(crate) fn next_leader_tpu_vote(
     cluster_info: &ClusterInfo,
-    poh_recorder: &Mutex<PohRecorder>,
+    poh_recorder: &RwLock<PohRecorder>,
 ) -> Option<(Pubkey, std::net::SocketAddr)> {
     next_leader_x(cluster_info, poh_recorder, |leader| leader.tpu_vote)
 }
 
 fn next_leader_x<F>(
     cluster_info: &ClusterInfo,
-    poh_recorder: &Mutex<PohRecorder>,
+    poh_recorder: &RwLock<PohRecorder>,
     port_selector: F,
 ) -> Option<(Pubkey, std::net::SocketAddr)>
 where
     F: FnOnce(&ContactInfo) -> SocketAddr,
 {
     let leader_pubkey = poh_recorder
-        .lock()
+        .read()
         .unwrap()
         .leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET);
     if let Some(leader_pubkey) = leader_pubkey {
@@ -2711,11 +2711,11 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(&bank, false);
             let pubkey = solana_sdk::pubkey::new_rand();
             let keypair2 = Keypair::new();
             let pubkey2 = solana_sdk::pubkey::new_rand();
@@ -2740,7 +2740,7 @@ mod tests {
             assert!(entry_receiver.try_recv().is_err());
 
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
@@ -2933,11 +2933,11 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
@@ -2964,8 +2964,8 @@ mod tests {
             assert!(commit_transactions_result.is_ok());
 
             // Tick up to max tick height
-            while poh_recorder.lock().unwrap().tick_height() != bank.max_tick_height() {
-                poh_recorder.lock().unwrap().tick();
+            while poh_recorder.read().unwrap().tick_height() != bank.max_tick_height() {
+                poh_recorder.write().unwrap().tick();
             }
 
             let mut done = false;
@@ -3021,7 +3021,7 @@ mod tests {
             );
 
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
@@ -3068,11 +3068,11 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let process_transactions_batch_output = BankingStage::process_and_record_transactions(
@@ -3104,7 +3104,7 @@ mod tests {
             );
 
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
@@ -3141,11 +3141,11 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(&bank, false);
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             let qos_service = QosService::new(Arc::new(RwLock::new(CostModel::default())), 1);
@@ -3229,7 +3229,7 @@ mod tests {
             assert_eq!(get_tx_count(), 2);
 
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
@@ -3240,10 +3240,10 @@ mod tests {
 
     fn simulate_poh(
         record_receiver: CrossbeamReceiver<Record>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
     ) -> JoinHandle<()> {
         let poh_recorder = poh_recorder.clone();
-        let is_exited = poh_recorder.lock().unwrap().is_exited.clone();
+        let is_exited = poh_recorder.read().unwrap().is_exited.clone();
         let tick_producer = Builder::new()
             .name("solana-simulate_poh".to_string())
             .spawn(move || loop {
@@ -3293,9 +3293,9 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(&bank, false);
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -3312,7 +3312,7 @@ mod tests {
             );
 
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
@@ -3431,7 +3431,7 @@ mod tests {
             // record
             let recorder = poh_recorder.recorder();
 
-            let poh_simulator = simulate_poh(record_receiver, &Arc::new(Mutex::new(poh_recorder)));
+            let poh_simulator = simulate_poh(record_receiver, &Arc::new(RwLock::new(poh_recorder)));
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
@@ -3493,9 +3493,9 @@ mod tests {
             Arc::new(AtomicBool::default()),
         );
         let recorder = poh_recorder.recorder();
-        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+        let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-        poh_recorder.lock().unwrap().set_bank(&bank, false);
+        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
@@ -3512,7 +3512,7 @@ mod tests {
         );
 
         poh_recorder
-            .lock()
+            .read()
             .unwrap()
             .is_exited
             .store(true, Ordering::Relaxed);
@@ -3698,11 +3698,11 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -3756,7 +3756,7 @@ mod tests {
             assert_eq!(actual_tx_results, expected_tx_results);
 
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
@@ -3859,11 +3859,11 @@ mod tests {
                 Arc::new(AtomicBool::default()),
             );
             let recorder = poh_recorder.recorder();
-            let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+            let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
             let poh_simulator = simulate_poh(record_receiver, &poh_recorder);
 
-            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(&bank, false);
 
             let shreds = entries_to_test_shreds(&entries, bank.slot(), 0, true, 0);
             blockstore.insert_shreds(shreds, None, false).unwrap();
@@ -3914,7 +3914,7 @@ mod tests {
                 }
             );
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
@@ -3929,7 +3929,7 @@ mod tests {
     ) -> (
         Vec<Transaction>,
         Arc<Bank>,
-        Arc<Mutex<PohRecorder>>,
+        Arc<RwLock<PohRecorder>>,
         Receiver<WorkingBankEntry>,
         JoinHandle<()>,
     ) {
@@ -3956,7 +3956,7 @@ mod tests {
             &Arc::new(PohConfig::default()),
             exit,
         );
-        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+        let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
         // Set up unparallelizable conflicting transactions
         let pubkey0 = solana_sdk::pubkey::new_rand();
@@ -3984,7 +3984,7 @@ mod tests {
         {
             let (transactions, bank, poh_recorder, _entry_receiver, poh_simulator) =
                 setup_conflicting_transactions(ledger_path.path());
-            let recorder = poh_recorder.lock().unwrap().recorder();
+            let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
                 unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
@@ -3999,7 +3999,7 @@ mod tests {
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
 
             // When the working bank in poh_recorder is None, no packets should be processed
-            assert!(!poh_recorder.lock().unwrap().has_bank());
+            assert!(!poh_recorder.read().unwrap().has_bank());
             let max_tx_processing_ns = std::u128::MAX;
             BankingStage::consume_buffered_packets(
                 &Pubkey::default(),
@@ -4020,7 +4020,7 @@ mod tests {
             // Processes one packet per iteration of the loop
             let num_packets_to_process_per_iteration = num_conflicting_transactions;
             for num_expected_unprocessed in (0..num_conflicting_transactions).rev() {
-                poh_recorder.lock().unwrap().set_bank(&bank, false);
+                poh_recorder.write().unwrap().set_bank(&bank, false);
                 BankingStage::consume_buffered_packets(
                     &Pubkey::default(),
                     max_tx_processing_ns,
@@ -4042,7 +4042,7 @@ mod tests {
                 }
             }
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
@@ -4069,9 +4069,9 @@ mod tests {
             // each iteration of this loop will process one element of the batch per iteration of the
             // loop.
             let interrupted_iteration = 1;
-            poh_recorder.lock().unwrap().set_bank(&bank, false);
+            poh_recorder.write().unwrap().set_bank(&bank, false);
             let poh_recorder_ = poh_recorder.clone();
-            let recorder = poh_recorder_.lock().unwrap().recorder();
+            let recorder = poh_recorder_.read().unwrap().recorder();
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
             // Start up thread to process the banks
             let t_consume = Builder::new()
@@ -4126,7 +4126,7 @@ mod tests {
                 finished_packet_receiver.recv().unwrap();
                 if i == interrupted_iteration {
                     poh_recorder
-                        .lock()
+                        .write()
                         .unwrap()
                         .schedule_dummy_max_height_reached_failure();
                 }
@@ -4135,7 +4135,7 @@ mod tests {
 
             t_consume.join().unwrap();
             poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .is_exited
                 .store(true, Ordering::Relaxed);
