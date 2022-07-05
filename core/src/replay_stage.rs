@@ -3624,7 +3624,6 @@ pub(crate) mod tests {
                 &blockstore,
                 &leader_schedule_cache,
                 &Arc::new(PohConfig::default()),
-                Arc::new(AtomicBool::new(false)),
             )
             .0,
         );

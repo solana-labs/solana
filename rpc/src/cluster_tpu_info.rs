@@ -75,7 +75,6 @@ mod test {
             timing::timestamp,
         },
         solana_streamer::socket::SocketAddrSpace,
-        std::sync::atomic::AtomicBool,
     };
 
     #[test]
@@ -109,7 +108,6 @@ mod test {
                 &Arc::new(blockstore),
                 &Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 &Arc::new(PohConfig::default()),
-                Arc::new(AtomicBool::default()),
             );
 
             let node_keypair = Arc::new(Keypair::new());

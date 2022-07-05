@@ -748,7 +748,6 @@ impl Validator {
                 &leader_schedule_cache,
                 &poh_config,
                 Some(poh_timing_point_sender),
-                exit.clone(),
             )
         };
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
@@ -912,8 +911,8 @@ impl Validator {
 
         let poh_service = PohService::new(
             poh_recorder.clone(),
-            &poh_config,
-            &exit,
+            poh_config,
+            exit.clone(),
             bank_forks.read().unwrap().root_bank().ticks_per_slot(),
             config.poh_pinned_cpu_core,
             config.poh_hashes_per_batch,
