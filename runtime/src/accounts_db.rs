@@ -3385,7 +3385,7 @@ impl AccountsDb {
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
             let stores: Vec<Arc<AccountStorageEntry>> =
                 stores_lock.read().unwrap().values().cloned().collect();
-            if !Self::is_shrinking_productive(slot, &stores) {
+            if !Self::is_shrinking_productive(slot, stores.iter()) {
                 return 0;
             }
             self.do_shrink_slot_stores(slot, stores.iter())
@@ -7140,13 +7140,18 @@ impl AccountsDb {
         aligned_bytes + PAGE_SIZE > total_bytes && num_stores == 1
     }
 
-    fn is_shrinking_productive(slot: Slot, stores: &[Arc<AccountStorageEntry>]) -> bool {
+    fn is_shrinking_productive<'a, I>(slot: Slot, stores: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Arc<AccountStorageEntry>>,
+    {
         let mut alive_count = 0;
         let mut stored_count = 0;
         let mut alive_bytes = 0;
         let mut total_bytes = 0;
+        let mut count = 0;
 
         for store in stores {
+            count += 1;
             alive_count += store.count();
             stored_count += store.approx_stored_count();
             alive_bytes += store.alive_bytes();
@@ -7154,11 +7159,11 @@ impl AccountsDb {
         }
 
         let aligned_bytes = Self::page_align(alive_bytes as u64);
-        if Self::should_not_shrink(aligned_bytes, total_bytes, stores.len()) {
+        if Self::should_not_shrink(aligned_bytes, total_bytes, count) {
             trace!(
                 "shrink_slot_forced ({}, {}): not able to shrink at all: alive/stored: ({} / {}) ({}b / {}b) save: {}",
                 slot,
-                stores.len(),
+                count,
                 alive_count,
                 stored_count,
                 aligned_bytes,
@@ -7237,7 +7242,7 @@ impl AccountsDb {
                         .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
-                    && Self::is_shrinking_productive(*slot, &[store.clone()])
+                    && Self::is_shrinking_productive(*slot, [&store].into_iter())
                     && self.is_candidate_for_shrink(&store, false)
                 {
                     // Checking that this single storage entry is ready for shrinking,
