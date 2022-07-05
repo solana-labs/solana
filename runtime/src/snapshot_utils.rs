@@ -1847,6 +1847,7 @@ fn get_snapshot_storages(bank: &Bank) -> SnapshotStorages {
 
 /// Convenience function to create a full snapshot archive out of any Bank, regardless of state.
 /// The Bank will be frozen during the process.
+/// This is only called from ledger-tool or tests. Warping is a special case as well.
 ///
 /// Requires:
 ///     - `bank` is complete
@@ -1890,6 +1891,7 @@ pub fn bank_to_full_snapshot_archive(
 
 /// Convenience function to create an incremental snapshot archive out of any Bank, regardless of
 /// state.  The Bank will be frozen during the process.
+/// This is only called from ledger-tool or tests. Warping is a special case as well.
 ///
 /// Requires:
 ///     - `bank` is complete
