@@ -7407,7 +7407,7 @@ impl AccountsDb {
         error!("clean_dead_slots: {}", dead_slots.len());
         accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
         info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
-        info!("jw:remove_dead_slots_metadata_dist: slots {:?}", dead_slots.iter().map(|s| /*max_slot - */s).collect::<Vec<_>>());
+        info!("jw:remove_dead_slots_metadata_dist: slots {:?}", dead_slots.iter().map(|s| (max_slot - s, s)).collect::<Vec<_>>());
 
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
         accounts_index_root_stats.unrooted_cleaned_count += unrooted_cleaned_count;
