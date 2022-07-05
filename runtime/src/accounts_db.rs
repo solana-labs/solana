@@ -2349,7 +2349,7 @@ impl AccountsDb {
             std::cmp::max(*accounts_hash_complete_one_epoch_old, one_epoch_old_slot);
         let accounts_hash_complete_one_epoch_old = *accounts_hash_complete_one_epoch_old;
 
-        // now that calculate_accounts_hash_without_index is complete, we can remove old historical roots
+        // now that calculate_accounts_hash_from_storages is complete, we can remove old historical roots
         self.remove_old_historical_roots(accounts_hash_complete_one_epoch_old);
     }
 
@@ -6061,7 +6061,8 @@ impl AccountsDb {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
-    fn calculate_accounts_hash(
+    /// Calculate the accounts hash, using the accounts index
+    fn calculate_accounts_hash_from_index(
         &self,
         max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
@@ -6215,40 +6216,6 @@ impl AccountsDb {
         let bank_hashes = self.bank_hashes.read().unwrap();
         let bank_hash_info = bank_hashes.get(&slot).unwrap();
         bank_hash_info.snapshot_hash
-    }
-
-    pub fn update_accounts_hash(
-        &self,
-        slot: Slot,
-        ancestors: &Ancestors,
-        epoch_schedule: &EpochSchedule,
-        rent_collector: &RentCollector,
-    ) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(
-            true,
-            false,
-            slot,
-            ancestors,
-            None,
-            false,
-            epoch_schedule,
-            rent_collector,
-            false,
-        )
-    }
-
-    pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
-        self.update_accounts_hash_with_index_option(
-            true,
-            true,
-            slot,
-            ancestors,
-            None,
-            false,
-            &EpochSchedule::default(),
-            &RentCollector::default(),
-            false,
-        )
     }
 
     fn scan_multiple_account_storages_one_slot<S>(
@@ -6553,70 +6520,86 @@ impl AccountsDb {
         }
     }
 
-    pub(crate) fn calculate_accounts_hash_helper(
+    /// Calculate the accounts hash
+    pub(crate) fn calculate_accounts_hash(
         &self,
-        use_index: bool,
+        accounts_data_source: AccountsDataSource,
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
-        if !use_index {
-            let mut collect_time = Measure::start("collect");
-            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
-            collect_time.stop();
+        match accounts_data_source {
+            AccountsDataSource::Storages => {
+                let mut collect_time = Measure::start("collect");
+                let (combined_maps, slots) =
+                    self.get_snapshot_storages(slot, None, config.ancestors);
+                collect_time.stop();
 
-            let mut sort_time = Measure::start("sort_storages");
-            let min_root = self.accounts_index.min_alive_root();
-            let storages = SortedStorages::new_with_slots(
-                combined_maps.iter().zip(slots.into_iter()),
-                min_root,
-                Some(slot),
-            );
+                let mut sort_time = Measure::start("sort_storages");
+                let min_root = self.accounts_index.min_alive_root();
+                let storages = SortedStorages::new_with_slots(
+                    combined_maps.iter().zip(slots.into_iter()),
+                    min_root,
+                    Some(slot),
+                );
 
-            self.mark_old_slots_as_dirty(&storages, Some(config.epoch_schedule.slots_per_epoch));
-            sort_time.stop();
+                self.mark_old_slots_as_dirty(
+                    &storages,
+                    Some(config.epoch_schedule.slots_per_epoch),
+                );
+                sort_time.stop();
 
-            let mut timings = HashStats {
-                collect_snapshots_us: collect_time.as_us(),
-                storage_sort_us: sort_time.as_us(),
-                ..HashStats::default()
-            };
-            timings.calc_storage_size_quartiles(&combined_maps);
+                let mut timings = HashStats {
+                    collect_snapshots_us: collect_time.as_us(),
+                    storage_sort_us: sort_time.as_us(),
+                    ..HashStats::default()
+                };
+                timings.calc_storage_size_quartiles(&combined_maps);
 
-            self.calculate_accounts_hash_without_index(config, &storages, timings)
-        } else {
-            self.calculate_accounts_hash(slot, config)
+                self.calculate_accounts_hash_from_storages(config, &storages, timings)
+            }
+            AccountsDataSource::Index => self.calculate_accounts_hash_from_index(slot, config),
         }
     }
 
+    /// Calculate the accounts hash and optionally verify
+    ///
+    /// Verification calculates the accounts hash with the other accounts data source and then
+    /// ensures the values are equal.
     #[allow(clippy::too_many_arguments)]
-    fn calculate_accounts_hash_helper_with_verify(
+    fn calculate_accounts_hash_with_verify(
         &self,
-        use_index: bool,
+        accounts_data_source: AccountsDataSource,
         debug_verify: bool,
         slot: Slot,
         config: CalcAccountsHashConfig<'_>,
         expected_capitalization: Option<u64>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let (hash, total_lamports) =
-            self.calculate_accounts_hash_helper(use_index, slot, &config)?;
+            self.calculate_accounts_hash(accounts_data_source, slot, &config)?;
         if debug_verify {
             // calculate the other way (store or non-store) and verify results match.
+            use AccountsDataSource::*;
+            let accounts_data_source_other = match accounts_data_source {
+                Index => Storages,
+                Storages => Index,
+            };
             let (hash_other, total_lamports_other) =
-                self.calculate_accounts_hash_helper(!use_index, slot, &config)?;
+                self.calculate_accounts_hash(accounts_data_source_other, slot, &config)?;
 
             let success = hash == hash_other
                 && total_lamports == total_lamports_other
                 && total_lamports == expected_capitalization.unwrap_or(total_lamports);
-            assert!(success, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, using index: {}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, use_index, slot);
+            assert!(success, "update_accounts_hash_with_index_option mismatch. hashes: {}, {}; lamports: {}, {}; expected lamports: {:?}, accounts data source: {:?}, slot: {}", hash, hash_other, total_lamports, total_lamports_other, expected_capitalization, accounts_data_source, slot);
         }
         Ok((hash, total_lamports))
     }
 
+    /// Calculate and set the accounts hash
     #[allow(clippy::too_many_arguments)]
-    pub fn update_accounts_hash_with_index_option(
+    pub fn update_accounts_hash(
         &self,
-        use_index: bool,
+        accounts_data_source: AccountsDataSource,
         debug_verify: bool,
         slot: Slot,
         ancestors: &Ancestors,
@@ -6628,8 +6611,8 @@ impl AccountsDb {
     ) -> (Hash, u64) {
         let check_hash = false;
         let (hash, total_lamports) = self
-            .calculate_accounts_hash_helper_with_verify(
-                use_index,
+            .calculate_accounts_hash_with_verify(
+                accounts_data_source,
                 debug_verify,
                 slot,
                 CalcAccountsHashConfig {
@@ -6752,9 +6735,10 @@ impl AccountsDb {
         );
     }
 
+    /// Calculate the accounts hash, using the storages
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
-    pub fn calculate_accounts_hash_without_index(
+    pub fn calculate_accounts_hash_from_storages(
         &self,
         config: &CalcAccountsHashConfig<'_>,
         storages: &SortedStorages<'_>,
@@ -6885,24 +6869,22 @@ impl AccountsDb {
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
-        let use_index = false;
         let check_hash = false; // this will not be supported anymore
         let is_startup = true;
-        let (calculated_hash, calculated_lamports) = self
-            .calculate_accounts_hash_helper_with_verify(
-                use_index,
-                test_hash_calculation,
-                slot,
-                CalcAccountsHashConfig {
-                    use_bg_thread_pool: !is_startup,
-                    check_hash,
-                    ancestors: Some(ancestors),
-                    use_write_cache: can_cached_slot_be_unflushed,
-                    epoch_schedule,
-                    rent_collector,
-                },
-                None,
-            )?;
+        let (calculated_hash, calculated_lamports) = self.calculate_accounts_hash_with_verify(
+            AccountsDataSource::Storages,
+            test_hash_calculation,
+            slot,
+            CalcAccountsHashConfig {
+                use_bg_thread_pool: !is_startup,
+                check_hash,
+                ancestors: Some(ancestors),
+                use_write_cache: can_cached_slot_be_unflushed,
+                epoch_schedule,
+                rent_collector,
+            },
+            None,
+        )?;
 
         if calculated_lamports != total_lamports {
             warn!(
@@ -8751,6 +8733,15 @@ impl AccountsDb {
     }
 }
 
+/// Used to specify the source of the accounts data when calculating the accounts hash
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccountsDataSource {
+    /// Get the accounts data from the accounts index
+    Index,
+    /// Get the accounts data from the snapshot storages
+    Storages,
+}
+
 #[cfg(test)]
 pub mod tests {
     use {
@@ -8816,6 +8807,25 @@ pub mod tests {
                     rent_collector: &RentCollector::default(),
                 },
                 None,
+            )
+        }
+
+        fn update_accounts_hash_for_tests(
+            &self,
+            debug_verify: bool,
+            slot: Slot,
+            ancestors: &Ancestors,
+        ) -> (Hash, u64) {
+            self.update_accounts_hash(
+                AccountsDataSource::Index,
+                debug_verify,
+                slot,
+                ancestors,
+                None,
+                false,
+                &EpochSchedule::default(),
+                &RentCollector::default(),
+                false,
             )
         }
     }
@@ -9189,13 +9199,13 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accountsdb_calculate_accounts_hash_without_index_simple() {
+    fn test_accountsdb_calculate_accounts_hash_from_storages_simple() {
         solana_logger::setup();
 
         let (storages, _size, _slot_expected) = sample_storage();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
-            .calculate_accounts_hash_without_index(
+            .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: false,
                     check_hash: false,
@@ -9213,7 +9223,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_accountsdb_calculate_accounts_hash_without_index() {
+    fn test_accountsdb_calculate_accounts_hash_from_storages() {
         solana_logger::setup();
 
         let (storages, raw_expected) = sample_storages_and_accounts();
@@ -9224,7 +9234,7 @@ pub mod tests {
         let sum = raw_expected.iter().map(|item| item.lamports).sum();
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
-            .calculate_accounts_hash_without_index(
+            .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: false,
                     check_hash: false,
@@ -10759,18 +10769,8 @@ pub mod tests {
 
         let ancestors = linear_ancestors(latest_slot);
         assert_eq!(
-            daccounts.update_accounts_hash(
-                latest_slot,
-                &ancestors,
-                &EpochSchedule::default(),
-                &RentCollector::default()
-            ),
-            accounts.update_accounts_hash(
-                latest_slot,
-                &ancestors,
-                &EpochSchedule::default(),
-                &RentCollector::default()
-            )
+            daccounts.update_accounts_hash_for_tests(false, latest_slot, &ancestors,),
+            accounts.update_accounts_hash_for_tests(false, latest_slot, &ancestors,)
         );
     }
 
@@ -10927,12 +10927,12 @@ pub mod tests {
 
         let ancestors = linear_ancestors(current_slot);
         info!("ancestors: {:?}", ancestors);
-        let hash = accounts.update_accounts_hash_test(current_slot, &ancestors);
+        let hash = accounts.update_accounts_hash_for_tests(true, current_slot, &ancestors);
 
         accounts.clean_accounts(None, false, None);
 
         assert_eq!(
-            accounts.update_accounts_hash_test(current_slot, &ancestors),
+            accounts.update_accounts_hash_for_tests(true, current_slot, &ancestors),
             hash
         );
 
@@ -11049,12 +11049,7 @@ pub mod tests {
         accounts.add_root(current_slot);
 
         accounts.print_accounts_stats("pre_f");
-        accounts.update_accounts_hash(
-            4,
-            &Ancestors::default(),
-            &EpochSchedule::default(),
-            &RentCollector::default(),
-        );
+        accounts.update_accounts_hash_for_tests(false, 4, &Ancestors::default());
 
         let accounts = f(accounts, current_slot);
 
@@ -11375,10 +11370,10 @@ pub mod tests {
         );
         db.add_root(some_slot);
         let check_hash = true;
-        for use_index in [true, false] {
+        for accounts_data_source in [AccountsDataSource::Index, AccountsDataSource::Storages] {
             assert!(db
-                .calculate_accounts_hash_helper(
-                    use_index,
+                .calculate_accounts_hash(
+                    accounts_data_source,
                     some_slot,
                     &CalcAccountsHashConfig {
                         use_bg_thread_pool: true, // is_startup used to be false
@@ -11409,8 +11404,8 @@ pub mod tests {
         db.add_root(some_slot);
         let check_hash = true;
         assert_eq!(
-            db.calculate_accounts_hash_helper(
-                false,
+            db.calculate_accounts_hash(
+                AccountsDataSource::Storages,
                 some_slot,
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: true, // is_startup used to be false
@@ -11422,8 +11417,8 @@ pub mod tests {
                 },
             )
             .unwrap(),
-            db.calculate_accounts_hash_helper(
-                true,
+            db.calculate_accounts_hash(
+                AccountsDataSource::Index,
                 some_slot,
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: true, // is_startup used to be false
@@ -11452,7 +11447,7 @@ pub mod tests {
 
         db.store_uncached(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors);
+        db.update_accounts_hash_for_tests(true, some_slot, &ancestors);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -11518,7 +11513,7 @@ pub mod tests {
 
         db.store_uncached(some_slot, &[(&key, &account)]);
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors);
+        db.update_accounts_hash_for_tests(true, some_slot, &ancestors);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -11540,7 +11535,7 @@ pub mod tests {
                 &solana_sdk::native_loader::create_loadable_account_for_test("foo"),
             )],
         );
-        db.update_accounts_hash_test(some_slot, &ancestors);
+        db.update_accounts_hash_for_tests(true, some_slot, &ancestors);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -11573,7 +11568,7 @@ pub mod tests {
             .unwrap()
             .insert(some_slot, BankHashInfo::default());
         db.add_root(some_slot);
-        db.update_accounts_hash_test(some_slot, &ancestors);
+        db.update_accounts_hash_for_tests(true, some_slot, &ancestors);
         assert_matches!(
             db.verify_bank_hash_and_lamports(
                 some_slot,
@@ -12225,12 +12220,7 @@ pub mod tests {
             );
 
             let no_ancestors = Ancestors::default();
-            accounts.update_accounts_hash(
-                current_slot,
-                &no_ancestors,
-                &EpochSchedule::default(),
-                &RentCollector::default(),
-            );
+            accounts.update_accounts_hash_for_tests(false, current_slot, &no_ancestors);
             accounts
                 .verify_bank_hash_and_lamports(
                     current_slot,

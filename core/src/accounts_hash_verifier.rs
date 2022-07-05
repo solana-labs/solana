@@ -133,7 +133,7 @@ impl AccountsHashVerifier {
         let (accounts_hash, lamports) = accounts_package
             .accounts
             .accounts_db
-            .calculate_accounts_hash_without_index(
+            .calculate_accounts_hash_from_storages(
                 &CalcAccountsHashConfig {
                     use_bg_thread_pool: true,
                     check_hash: false,

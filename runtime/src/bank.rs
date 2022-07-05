@@ -43,7 +43,7 @@ use {
             TransactionLoadResult,
         },
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, SnapshotStorages,
+            AccountShrinkThreshold, AccountsDataSource, AccountsDbConfig, SnapshotStorages,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{AccountSecondaryIndexes, IndexKey, ScanConfig, ScanResult, ZeroLamport},
@@ -6864,27 +6864,18 @@ impl Bank {
             .load_account_into_read_cache(&self.ancestors, key);
     }
 
-    pub fn update_accounts_hash_with_index_option(
-        &self,
-        use_index: bool,
-        mut debug_verify: bool,
-        is_startup: bool,
-    ) -> Hash {
-        let (hash, total_lamports) = self
-            .rc
-            .accounts
-            .accounts_db
-            .update_accounts_hash_with_index_option(
-                use_index,
-                debug_verify,
-                self.slot(),
-                &self.ancestors,
-                Some(self.capitalization()),
-                false,
-                self.epoch_schedule(),
-                &self.rent_collector,
-                is_startup,
-            );
+    pub fn update_accounts_hash(&self) -> Hash {
+        let (hash, total_lamports) = self.rc.accounts.accounts_db.update_accounts_hash(
+            AccountsDataSource::Index,
+            false,
+            self.slot(),
+            &self.ancestors,
+            Some(self.capitalization()),
+            false,
+            self.epoch_schedule(),
+            &self.rent_collector,
+            false,
+        );
         if total_lamports != self.capitalization() {
             datapoint_info!(
                 "capitalization_mismatch",
@@ -6893,25 +6884,19 @@ impl Bank {
                 ("capitalization", self.capitalization(), i64),
             );
 
-            if !debug_verify {
-                // cap mismatch detected. It has been logged to metrics above.
-                // Run both versions of the calculation to attempt to get more info.
-                debug_verify = true;
-                self.rc
-                    .accounts
-                    .accounts_db
-                    .update_accounts_hash_with_index_option(
-                        use_index,
-                        debug_verify,
-                        self.slot(),
-                        &self.ancestors,
-                        Some(self.capitalization()),
-                        false,
-                        self.epoch_schedule(),
-                        &self.rent_collector,
-                        is_startup,
-                    );
-            }
+            // cap mismatch detected. It has been logged to metrics above.
+            // Run both versions of the calculation to attempt to get more info.
+            self.rc.accounts.accounts_db.update_accounts_hash(
+                AccountsDataSource::Index,
+                true,
+                self.slot(),
+                &self.ancestors,
+                Some(self.capitalization()),
+                false,
+                self.epoch_schedule(),
+                &self.rent_collector,
+                false,
+            );
 
             panic!(
                 "capitalization_mismatch. slot: {}, calculated_lamports: {}, capitalization: {}",
@@ -6921,10 +6906,6 @@ impl Bank {
             );
         }
         hash
-    }
-
-    pub fn update_accounts_hash(&self) -> Hash {
-        self.update_accounts_hash_with_index_option(true, false, false)
     }
 
     /// A snapshot bank should be purged of 0 lamport accounts which are not part of the hash

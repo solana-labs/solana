@@ -9,7 +9,7 @@ use {
     rayon::iter::{IntoParallelRefIterator, ParallelIterator},
     solana_runtime::{
         accounts::{test_utils::create_test_accounts, AccountAddressFilter, Accounts},
-        accounts_db::AccountShrinkThreshold,
+        accounts_db::{AccountShrinkThreshold, AccountsDataSource},
         accounts_index::{AccountSecondaryIndexes, ScanConfig},
         ancestors::Ancestors,
         bank::*,
@@ -110,10 +110,15 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
     create_test_accounts(&accounts, &mut pubkeys, num_accounts, slot);
     let ancestors = Ancestors::from(vec![0]);
     let (_, total_lamports) = accounts.accounts_db.update_accounts_hash(
+        AccountsDataSource::Index,
+        false,
         0,
         &ancestors,
+        None,
+        false,
         &EpochSchedule::default(),
         &RentCollector::default(),
+        false,
     );
     let test_hash_calculation = false;
     bencher.iter(|| {
@@ -145,10 +150,15 @@ fn test_update_accounts_hash(bencher: &mut Bencher) {
     let ancestors = Ancestors::from(vec![0]);
     bencher.iter(|| {
         accounts.accounts_db.update_accounts_hash(
+            AccountsDataSource::Index,
+            false,
             0,
             &ancestors,
+            None,
+            false,
             &EpochSchedule::default(),
             &RentCollector::default(),
+            false,
         );
     });
 }

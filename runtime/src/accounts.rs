@@ -3,8 +3,8 @@ use {
         account_overrides::AccountOverrides,
         account_rent_state::{check_rent_state_with_account, RentState},
         accounts_db::{
-            AccountShrinkThreshold, AccountsAddRootTiming, AccountsDb, AccountsDbConfig,
-            BankHashInfo, LoadHint, LoadedAccount, ScanStorageResult,
+            AccountShrinkThreshold, AccountsAddRootTiming, AccountsDataSource, AccountsDb,
+            AccountsDbConfig, BankHashInfo, LoadHint, LoadedAccount, ScanStorageResult,
             ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS, ACCOUNTS_DB_CONFIG_FOR_TESTING,
         },
         accounts_index::{
@@ -787,11 +787,10 @@ impl Accounts {
         epoch_schedule: &EpochSchedule,
         rent_collector: &RentCollector,
     ) -> u64 {
-        let use_index = false;
         let is_startup = true;
         self.accounts_db
-            .update_accounts_hash_with_index_option(
-                use_index,
+            .update_accounts_hash(
+                AccountsDataSource::Storages,
                 debug_verify,
                 slot,
                 ancestors,

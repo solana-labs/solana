@@ -10,7 +10,7 @@ use {
             test_utils::{create_test_accounts, update_accounts_bench},
             Accounts,
         },
-        accounts_db::AccountShrinkThreshold,
+        accounts_db::{AccountShrinkThreshold, AccountsDataSource},
         accounts_index::AccountSecondaryIndexes,
         ancestors::Ancestors,
         rent_collector::RentCollector,
@@ -121,15 +121,20 @@ fn main() {
             let mut pubkeys: Vec<Pubkey> = vec![];
             let mut time = Measure::start("hash");
             let results = accounts.accounts_db.update_accounts_hash(
-                0,
+                AccountsDataSource::Index,
+                false,
+                solana_sdk::clock::Slot::default(),
                 &ancestors,
+                None,
+                false,
                 &EpochSchedule::default(),
                 &RentCollector::default(),
+                false,
             );
             time.stop();
             let mut time_store = Measure::start("hash using store");
-            let results_store = accounts.accounts_db.update_accounts_hash_with_index_option(
-                false,
+            let results_store = accounts.accounts_db.update_accounts_hash(
+                AccountsDataSource::Storages,
                 false,
                 solana_sdk::clock::Slot::default(),
                 &ancestors,
