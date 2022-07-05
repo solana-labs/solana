@@ -158,6 +158,7 @@ impl RollingBitField {
                 }
                 get
             } else {
+                error!("jw: fail remove when root >= max: {}, {}", key, self.max_exclusive);
                 false
             }
         } else {
@@ -165,6 +166,9 @@ impl RollingBitField {
             let remove = self.excess.remove(key);
             if remove {
                 self.count -= 1;
+            }
+            else {
+                error!("jw: fail remove when not in excess {}, {}", key, self.min);
             }
             remove
         }
