@@ -2768,6 +2768,8 @@ impl AccountsDb {
         reclaims_time.stop();
         measure_all.stop();
 
+        self.log_old_slots();
+
         self.clean_accounts_stats.report();
         datapoint_info!(
             "clean_accounts",
@@ -2879,6 +2881,55 @@ impl AccountsDb {
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
+    }
+
+    fn log_old_slots(&self) {
+        let accounts_hash_complete_one_epoch_old =
+            *self.accounts_hash_complete_one_epoch_old.read().unwrap();
+        let old_roots = self
+            .accounts_index
+            .roots_tracker
+            .read()
+            .unwrap()
+            .alive_roots
+            .get_all_less_than(accounts_hash_complete_one_epoch_old);
+        let mut log = 0;
+        old_roots.iter().for_each(|slot| {
+            if log > 10 {
+                return;
+            }
+            if let Some(storages) = self.get_storages_for_slot(*slot) {
+                let (stored_accounts, num_stores, original_bytes) =
+                    self.get_unique_accounts_from_storages(storages.iter());
+                error!(
+                    "jw:log_old_slots: slot: {}, # accounts: {}, alive bytes: {}, count: {}",
+                    slot,
+                    stored_accounts.len(),
+                    storages.iter().map(|s| s.alive_bytes()).sum::<usize>(),
+                    storages.iter().map(|s| s.count()).sum::<usize>()
+                );
+                error!("jw2:log_old_slots_pubkeys: {:?}", {
+                    let mut my_stored = stored_accounts.iter().map(|(k,v)| *k).collect::<Vec<_>>();
+                    my_stored.sort();
+                    my_stored.into_iter().map(|pubkey| {
+                        let lookup = self.accounts_index.get_account_read_entry(&pubkey);
+                        (
+                            pubkey,
+                            if let Some(locked_entry) = lookup {
+                                locked_entry
+                                    .slot_list()
+                                    .iter()
+                                    .map(|(slot, _)| *slot)
+                                    .collect::<Vec<_>>()
+                            } else {
+                                vec![]
+                            },
+                        )
+                    })
+                });
+                log += 1;
+            }
+        });
     }
 
     /// Removes the accounts in the input `reclaims` from the tracked "count" of
