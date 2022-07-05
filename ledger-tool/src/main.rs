@@ -1156,6 +1156,7 @@ fn main() {
         .max(rent.minimum_balance(StakeState::size_of()))
         .to_string();
 
+    let mut measure_total_execution_time = Measure::start("ledger tool");
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -3715,5 +3716,7 @@ fn main() {
             }
             _ => unreachable!(),
         };
+        measure_total_execution_time.stop();
+        info!("{}", measure_total_execution_time);
     }
 }
