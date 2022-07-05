@@ -4029,8 +4029,8 @@ impl AccountsDb {
             shrink_slots
                 .into_par_iter()
                 .map(|(slot, slot_shrink_candidates)| {
-                    if slot < &accounts_hash_complete_one_epoch_old {
-                        old_ones_shrink.fetch_add(1, ORdering::Relaxed);
+                    if slot < accounts_hash_complete_one_epoch_old {
+                        old_ones_shrink.fetch_add(1, Ordering::Relaxed);
                     }
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
                     self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
