@@ -3,8 +3,9 @@
 mod current;
 pub use current::{Data, DurableNonce, State};
 use {
-    crate::hash::Hash,
+    crate::{hash::Hash, pubkey::Pubkey},
     serde_derive::{Deserialize, Serialize},
+    std::collections::HashSet,
 };
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -12,6 +13,12 @@ pub enum Versions {
     Legacy(Box<State>),
     /// Current variants have durable nonce and blockhash domains separated.
     Current(Box<State>),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum AuthorizeNonceError {
+    MissingRequiredSignature(/*account authority:*/ Pubkey),
+    Uninitialized,
 }
 
 impl Versions {
@@ -27,14 +34,6 @@ impl Versions {
         match self {
             Self::Legacy(state) => state,
             Self::Current(state) => state,
-        }
-    }
-
-    /// Returns true if the durable nonce is not in the blockhash domain.
-    pub fn separate_domains(&self) -> bool {
-        match self {
-            Self::Legacy(_) => false,
-            Self::Current(_) => true,
         }
     }
 
@@ -63,7 +62,7 @@ impl Versions {
         }
     }
 
-    // Upgrades legacy nonces out of chain blockhash domains.
+    /// Upgrades legacy nonces out of chain blockhash domains.
     pub fn upgrade(self) -> Option<Self> {
         match self {
             Self::Legacy(mut state) => {
@@ -85,6 +84,35 @@ impl Versions {
             Self::Current(_) => None,
         }
     }
+
+    /// Updates the authority pubkey on the nonce account.
+    pub fn authorize(
+        self,
+        signers: &HashSet<Pubkey>,
+        authority: Pubkey,
+    ) -> Result<Self, AuthorizeNonceError> {
+        let data = match self.state() {
+            State::Uninitialized => return Err(AuthorizeNonceError::Uninitialized),
+            State::Initialized(data) => data,
+        };
+        if !signers.contains(&data.authority) {
+            return Err(AuthorizeNonceError::MissingRequiredSignature(
+                data.authority,
+            ));
+        }
+        let data = Data::new(
+            authority,
+            data.durable_nonce,
+            data.get_lamports_per_signature(),
+        );
+        let state = Box::new(State::Initialized(data));
+        // Preserve Version variant since cannot
+        // change durable_nonce field here.
+        Ok(match self {
+            Self::Legacy(_) => Self::Legacy,
+            Self::Current(_) => Self::Current,
+        }(state))
+    }
 }
 
 impl From<Versions> for State {
@@ -101,6 +129,7 @@ mod tests {
     use {
         super::*,
         crate::{fee_calculator::FeeCalculator, pubkey::Pubkey},
+        std::iter::repeat_with,
     };
 
     #[test]
@@ -230,5 +259,65 @@ mod tests {
             Versions::Current(Box::new(State::Initialized(data)))
         );
         assert_eq!(versions.upgrade(), None);
+    }
+
+    #[test]
+    fn test_nonce_versions_authorize() {
+        // Uninitialized
+        let mut signers = repeat_with(Pubkey::new_unique).take(16).collect();
+        let versions = Versions::Legacy(Box::new(State::Uninitialized));
+        assert_eq!(
+            versions.authorize(&signers, Pubkey::new_unique()),
+            Err(AuthorizeNonceError::Uninitialized)
+        );
+        let versions = Versions::Current(Box::new(State::Uninitialized));
+        assert_eq!(
+            versions.authorize(&signers, Pubkey::new_unique()),
+            Err(AuthorizeNonceError::Uninitialized)
+        );
+        // Initialized, Legacy
+        let blockhash = Hash::from([171; 32]);
+        let durable_nonce =
+            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
+        let data = Data {
+            authority: Pubkey::new_unique(),
+            durable_nonce,
+            fee_calculator: FeeCalculator {
+                lamports_per_signature: 2718,
+            },
+        };
+        let account_authority = data.authority;
+        let versions = Versions::Legacy(Box::new(State::Initialized(data.clone())));
+        let authority = Pubkey::new_unique();
+        assert_ne!(authority, account_authority);
+        let data = Data { authority, ..data };
+        assert_eq!(
+            versions.clone().authorize(&signers, authority),
+            Err(AuthorizeNonceError::MissingRequiredSignature(
+                account_authority
+            )),
+        );
+        assert!(signers.insert(account_authority));
+        assert_eq!(
+            versions.authorize(&signers, authority),
+            Ok(Versions::Legacy(Box::new(State::Initialized(data.clone()))))
+        );
+        // Initialized, Current
+        let account_authority = data.authority;
+        let versions = Versions::Current(Box::new(State::Initialized(data.clone())));
+        let authority = Pubkey::new_unique();
+        assert_ne!(authority, account_authority);
+        let data = Data { authority, ..data };
+        assert_eq!(
+            versions.clone().authorize(&signers, authority),
+            Err(AuthorizeNonceError::MissingRequiredSignature(
+                account_authority
+            )),
+        );
+        assert!(signers.insert(account_authority));
+        assert_eq!(
+            versions.authorize(&signers, authority),
+            Ok(Versions::Current(Box::new(State::Initialized(data))))
+        );
     }
 }

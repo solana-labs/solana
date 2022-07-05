@@ -51,7 +51,7 @@ pub struct ComputeBudget {
     pub log_pubkey_units: u64,
     /// Maximum cross-program invocation instruction size
     pub max_cpi_instruction_size: usize,
-    /// Number of account data bytes per conpute unit charged during a cross-program invocation
+    /// Number of account data bytes per compute unit charged during a cross-program invocation
     pub cpi_bytes_per_unit: u64,
     /// Base number of compute units consumed to get a sysvar
     pub sysvar_base_cost: u64,
@@ -59,8 +59,6 @@ pub struct ComputeBudget {
     pub secp256k1_recover_cost: u64,
     /// Number of compute units consumed to do a syscall without any work
     pub syscall_base_cost: u64,
-    /// Number of compute units consumed to call zktoken_crypto_op
-    pub zk_token_elgamal_op_cost: u64, // to be replaced by curve25519 operations
     /// Number of compute units consumed to validate a curve25519 edwards point
     pub curve25519_edwards_validate_point_cost: u64,
     /// Number of compute units consumed to add two curve25519 edwards points
@@ -111,7 +109,6 @@ impl ComputeBudget {
             sysvar_base_cost: 100,
             secp256k1_recover_cost: 25_000,
             syscall_base_cost: 100,
-            zk_token_elgamal_op_cost: 25_000,
             curve25519_edwards_validate_point_cost: 5_000, // TODO: precisely determine curve25519 costs
             curve25519_edwards_add_cost: 5_000,
             curve25519_edwards_subtract_cost: 5_000,
@@ -129,7 +126,6 @@ impl ComputeBudget {
     pub fn process_instructions<'a>(
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
-        requestable_heap_size: bool,
         default_units_per_instruction: bool,
         support_set_compute_unit_price_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
@@ -213,8 +209,7 @@ impl ComputeBudget {
         }
 
         if let Some((bytes, i)) = requested_heap_size {
-            if !requestable_heap_size
-                || bytes > MAX_HEAP_FRAME_BYTES
+            if bytes > MAX_HEAP_FRAME_BYTES
                 || bytes < MIN_HEAP_FRAME_BYTES as u32
                 || bytes % 1024 != 0
             {
@@ -283,7 +278,6 @@ mod tests {
             let result = compute_budget.process_instructions(
                 tx.message().program_instructions_iter(),
                 true,
-                true,
                 $type_change,
             );
             assert_eq!($expected_result, result);
@@ -308,7 +302,7 @@ mod tests {
         test!(
             &[
                 ComputeBudgetInstruction::set_compute_unit_limit(1),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ],
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
@@ -319,7 +313,7 @@ mod tests {
         test!(
             &[
                 ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT + 1),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ],
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
@@ -329,7 +323,7 @@ mod tests {
         );
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
             ],
             Ok(PrioritizationFeeDetails::default()),
@@ -340,9 +334,9 @@ mod tests {
         );
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::set_compute_unit_limit(1),
             ],
             Ok(PrioritizationFeeDetails::default()),
@@ -354,9 +348,9 @@ mod tests {
 
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::set_compute_unit_limit(1), // ignored
             ],
             Ok(PrioritizationFeeDetails::default()),
@@ -421,7 +415,7 @@ mod tests {
         test!(
             &[
                 ComputeBudgetInstruction::request_heap_frame(40 * 1024),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ],
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
@@ -433,7 +427,7 @@ mod tests {
         test!(
             &[
                 ComputeBudgetInstruction::request_heap_frame(40 * 1024 + 1),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ],
             Err(TransactionError::InstructionError(
                 0,
@@ -444,7 +438,7 @@ mod tests {
         test!(
             &[
                 ComputeBudgetInstruction::request_heap_frame(31 * 1024),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ],
             Err(TransactionError::InstructionError(
                 0,
@@ -455,7 +449,7 @@ mod tests {
         test!(
             &[
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES + 1),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ],
             Err(TransactionError::InstructionError(
                 0,
@@ -465,7 +459,7 @@ mod tests {
         );
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
             ],
             Ok(PrioritizationFeeDetails::default()),
@@ -477,9 +471,9 @@ mod tests {
         );
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(1),
             ],
             Err(TransactionError::InstructionError(
@@ -491,14 +485,14 @@ mod tests {
 
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
             ],
             Ok(PrioritizationFeeDetails::default()),
             ComputeBudget {
@@ -510,7 +504,7 @@ mod tests {
         // Combined
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
                 ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
                 ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
@@ -528,7 +522,7 @@ mod tests {
 
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
                 ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
                 ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
@@ -543,7 +537,7 @@ mod tests {
 
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::set_compute_unit_limit(1),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES),
                 ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
@@ -561,7 +555,7 @@ mod tests {
 
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 request_units_deprecated(MAX_COMPUTE_UNIT_LIMIT, u32::MAX),
                 ComputeBudgetInstruction::request_heap_frame(MIN_HEAP_FRAME_BYTES as u32),
             ],
@@ -580,7 +574,7 @@ mod tests {
         // Duplicates
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT),
                 ComputeBudgetInstruction::set_compute_unit_limit(MAX_COMPUTE_UNIT_LIMIT - 1),
             ],
@@ -590,7 +584,7 @@ mod tests {
 
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::request_heap_frame(MIN_HEAP_FRAME_BYTES as u32),
                 ComputeBudgetInstruction::request_heap_frame(MAX_HEAP_FRAME_BYTES as u32),
             ],
@@ -600,7 +594,7 @@ mod tests {
 
         test!(
             &[
-                Instruction::new_with_bincode(Pubkey::new_unique(), &0, vec![]),
+                Instruction::new_with_bincode(Pubkey::new_unique(), &0_u8, vec![]),
                 ComputeBudgetInstruction::set_compute_unit_price(0),
                 ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
             ],

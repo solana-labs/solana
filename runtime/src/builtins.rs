@@ -1,8 +1,5 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
-#[cfg(debug_assertions)]
-#[allow(deprecated)]
-use solana_sdk::AutoTraitBreakSendSync;
 use {
     crate::system_instruction_processor,
     solana_program_runtime::invoke_context::{InvokeContext, ProcessInstructionWithContext},
@@ -69,7 +66,7 @@ pub enum BuiltinAction {
 /// State transition enum used for adding and removing builtin programs through
 /// feature activations.
 #[derive(Debug, Clone, AbiExample)]
-enum InnerBuiltinFeatureTransition {
+pub enum BuiltinFeatureTransition {
     /// Add a builtin program if a feature is activated.
     Add {
         builtin: Builtin,
@@ -84,40 +81,15 @@ enum InnerBuiltinFeatureTransition {
     },
 }
 
-#[allow(deprecated)]
-#[cfg(debug_assertions)]
-impl AutoTraitBreakSendSync for InnerBuiltinFeatureTransition {}
-
-#[derive(AbiExample, Clone, Debug)]
-pub struct BuiltinFeatureTransition(InnerBuiltinFeatureTransition);
-
-// https://github.com/solana-labs/solana/pull/23233 added `BuiltinFeatureTransition`
-// to `Bank` which triggers https://github.com/rust-lang/rust/issues/92987 while
-// attempting to resolve `Sync` on `BankRc` in `AccountsBackgroundService::new` ala,
-//
-// query stack during panic:
-// #0 [evaluate_obligation] evaluating trait selection obligation `bank::BankRc: core::marker::Sync`
-// #1 [typeck] type-checking `accounts_background_service::<impl at runtime/src/accounts_background_service.rs:358:1: 520:2>::new`
-// #2 [typeck_item_bodies] type-checking all item bodies
-// #3 [analysis] running analysis passes on this crate
-// end of query stack
-//
-// Yoloing a `Sync` onto it avoids the auto trait evaluation and thus the ICE.
-//
-// We should remove this when upgrading to Rust 1.60.0, where the bug has been
-// fixed by https://github.com/rust-lang/rust/pull/93064
-unsafe impl Send for BuiltinFeatureTransition {}
-unsafe impl Sync for BuiltinFeatureTransition {}
-
 impl BuiltinFeatureTransition {
     pub fn to_action(
         &self,
         should_apply_action_for_feature: &impl Fn(&Pubkey) -> bool,
     ) -> Option<BuiltinAction> {
-        match &self.0 {
-            InnerBuiltinFeatureTransition::Add {
+        match self {
+            Self::Add {
                 builtin,
-                ref feature_id,
+                feature_id,
             } => {
                 if should_apply_action_for_feature(feature_id) {
                     Some(BuiltinAction::Add(builtin.clone()))
@@ -125,10 +97,10 @@ impl BuiltinFeatureTransition {
                     None
                 }
             }
-            InnerBuiltinFeatureTransition::RemoveOrRetain {
+            Self::RemoveOrRetain {
                 previously_added_builtin,
-                ref addition_feature_id,
-                ref removal_feature_id,
+                addition_feature_id,
+                removal_feature_id,
             } => {
                 if should_apply_action_for_feature(removal_feature_id) {
                     Some(BuiltinAction::Remove(previously_added_builtin.id))
@@ -180,15 +152,15 @@ fn dummy_process_instruction(
 /// Dynamic feature transitions for builtin programs
 fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "compute_budget_program",
                 solana_sdk::compute_budget::id(),
                 solana_compute_budget_program::process_instruction,
             ),
             feature_id: feature_set::add_compute_budget_program::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::RemoveOrRetain {
+        },
+        BuiltinFeatureTransition::RemoveOrRetain {
             previously_added_builtin: Builtin::new(
                 "secp256k1_program",
                 solana_sdk::secp256k1_program::id(),
@@ -196,8 +168,8 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             ),
             addition_feature_id: feature_set::secp256k1_program_enabled::id(),
             removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::RemoveOrRetain {
+        },
+        BuiltinFeatureTransition::RemoveOrRetain {
             previously_added_builtin: Builtin::new(
                 "ed25519_program",
                 solana_sdk::ed25519_program::id(),
@@ -205,23 +177,23 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
             ),
             addition_feature_id: feature_set::ed25519_program_enabled::id(),
             removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        },
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "address_lookup_table_program",
                 solana_address_lookup_table_program::id(),
                 solana_address_lookup_table_program::processor::process_instruction,
             ),
             feature_id: feature_set::versioned_tx_message_enabled::id(),
-        }),
-        BuiltinFeatureTransition(InnerBuiltinFeatureTransition::Add {
+        },
+        BuiltinFeatureTransition::Add {
             builtin: Builtin::new(
                 "zk_token_proof_program",
                 solana_zk_token_sdk::zk_token_proof_program::id(),
                 solana_zk_token_proof_program::process_instruction,
             ),
             feature_id: feature_set::zk_token_sdk_enabled::id(),
-        }),
+        },
     ]
 }
 
@@ -238,21 +210,9 @@ pub fn get_pubkeys() -> Vec<Pubkey> {
 
     let mut pubkeys = Vec::new();
     pubkeys.extend(builtins.genesis_builtins.iter().map(|b| b.id));
-    pubkeys.extend(
-        builtins
-            .feature_transitions
-            .iter()
-            .filter_map(|f| match &f.0 {
-                InnerBuiltinFeatureTransition::Add {
-                    builtin,
-                    feature_id: _,
-                } => Some(builtin.id),
-                InnerBuiltinFeatureTransition::RemoveOrRetain {
-                    previously_added_builtin: _,
-                    addition_feature_id: _,
-                    removal_feature_id: _,
-                } => None,
-            }),
-    );
+    pubkeys.extend(builtins.feature_transitions.iter().filter_map(|f| match f {
+        BuiltinFeatureTransition::Add { builtin, .. } => Some(builtin.id),
+        BuiltinFeatureTransition::RemoveOrRetain { .. } => None,
+    }));
     pubkeys
 }

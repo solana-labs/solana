@@ -1,7 +1,7 @@
 use {
     super::*,
     solana_entry::entry::Entry,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
 };
 
@@ -60,6 +60,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
             self.next_code_index,
+            &mut ProcessShredsStats::default(),
         );
 
         // If the last blockhash is default, a new block is being created
@@ -78,6 +79,7 @@ impl BroadcastRun for BroadcastFakeShredsRun {
             last_tick_height == bank.max_tick_height(),
             next_shred_index,
             self.next_code_index,
+            &mut ProcessShredsStats::default(),
         );
 
         if let Some(index) = coding_shreds

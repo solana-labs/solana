@@ -109,10 +109,6 @@ pub mod vote_stake_checked_instructions {
     solana_sdk::declare_id!("BcWknVcgvonN8sL4HE4XFuEVgfcee5MwxWPAgP6ZV89X");
 }
 
-pub mod neon_evm_compute_budget {
-    solana_sdk::declare_id!("GLrVvDPkQi5PMYUrsYWT9doZhSHr1BVZXqj5DbFps3rS");
-}
-
 pub mod rent_for_sysvars {
     solana_sdk::declare_id!("BKCPBQQBZqggVnFso5nQ8rQ4RwwogYwjuUt9biBjxwNF");
 }
@@ -408,6 +404,10 @@ pub mod include_account_index_in_rent_error {
     solana_sdk::declare_id!("2R72wpcQ7qV7aTJWUumdn8u5wmmTyXbK7qzEy7YSAgyY");
 }
 
+pub mod add_shred_type_to_shred_seed {
+    solana_sdk::declare_id!("Ds87KVeqhbv7Jw8W6avsS1mqz3Mw5J3pRTpPoDQ2QdiJ");
+}
+
 pub mod warp_timestamp_with_a_vengeance {
     solana_sdk::declare_id!("3BX6SBeEBibHaVQXywdkcgyUk6evfYZkHdztXiDtEpFS");
 }
@@ -466,7 +466,6 @@ lazy_static! {
         (dedupe_config_program_signers::id(), "dedupe config program signers"),
         (verify_tx_signatures_len::id(), "prohibit extra transaction signatures"),
         (vote_stake_checked_instructions::id(), "vote/state program checked instructions #18345"),
-        (neon_evm_compute_budget::id(), "bump neon_evm's compute budget"),
         (rent_for_sysvars::id(), "collect rent from accounts owned by sysvars"),
         (libsecp256k1_0_5_upgrade_enabled::id(), "upgrade libsecp256k1 to v0.5.0"),
         (tx_wide_compute_cap::id(), "transaction wide compute cap"),
@@ -528,7 +527,7 @@ lazy_static! {
         (error_on_syscall_bpf_function_hash_collisions::id(), "error on bpf function hash collisions"),
         (reject_callx_r10::id(), "Reject bpf callx r10 instructions"),
         (drop_redundant_turbine_path::id(), "drop redundant turbine path"),
-        (executables_incur_cpi_data_cost::id(), "Executables incure CPI data costs"),
+        (executables_incur_cpi_data_cost::id(), "Executables incur CPI data costs"),
         (fix_recent_blockhashes::id(), "stop adding hashes for skipped slots to recent blockhashes"),
         (update_rewards_from_cached_accounts::id(), "update rewards from cached accounts"),
         (spl_token_v3_4_0::id(), "SPL Token Program version 3.4.0 release #24740"),
@@ -540,6 +539,7 @@ lazy_static! {
         (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
+        (add_shred_type_to_shred_seed::id(), "add shred-type to shred seed #25556"),
         (warp_timestamp_with_a_vengeance::id(), "warp timestamp again, adjust bounding to 150% slow #25666"),
         (separate_nonce_from_blockhash::id(), "separate durable nonce and blockhash domains #25744"),
         (enable_durable_nonce::id(), "enable durable nonce #25744"),

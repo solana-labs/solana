@@ -16,9 +16,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
-            cap_accounts_data_len, neon_evm_compute_budget,
-            record_instruction_in_transaction_context_push, requestable_heap_size,
-            tx_wide_compute_cap, FeatureSet,
+            cap_accounts_data_len, record_instruction_in_transaction_context_push, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -344,27 +342,7 @@ impl<'a> InvokeContext<'a> {
             .get_instruction_context_stack_height()
             == 0
         {
-            let mut compute_budget = self.compute_budget;
-            if !self.feature_set.is_active(&tx_wide_compute_cap::id())
-                && self.feature_set.is_active(&neon_evm_compute_budget::id())
-                && program_id == &crate::neon_evm_program::id()
-            {
-                // Bump the compute budget for neon_evm
-                compute_budget.compute_unit_limit = compute_budget.compute_unit_limit.max(500_000);
-            }
-            if !self.feature_set.is_active(&requestable_heap_size::id())
-                && self.feature_set.is_active(&neon_evm_compute_budget::id())
-                && program_id == &crate::neon_evm_program::id()
-            {
-                // Bump the compute budget for neon_evm
-                compute_budget.heap_size = Some(256_usize.saturating_mul(1024));
-            }
-            self.current_compute_budget = compute_budget;
-
-            if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter =
-                    ComputeMeter::new_ref(self.current_compute_budget.compute_unit_limit);
-            }
+            self.current_compute_budget = self.compute_budget;
 
             self.pre_accounts = Vec::with_capacity(instruction_accounts.len());
 
@@ -859,14 +837,6 @@ impl<'a> InvokeContext<'a> {
         timings: &mut ExecuteTimings,
     ) -> Result<(), InstructionError> {
         *compute_units_consumed = 0;
-        let program_id = program_indices
-            .last()
-            .map(|index| {
-                self.transaction_context
-                    .get_key_of_account_at_index(*index)
-                    .map(|pubkey| *pubkey)
-            })
-            .unwrap_or_else(|| Ok(native_loader::id()))?;
 
         let nesting_level = self
             .transaction_context
@@ -900,37 +870,17 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        let result = self
-            .push(instruction_accounts, program_indices, instruction_data)
+        self.push(instruction_accounts, program_indices, instruction_data)?;
+        self.process_executable_chain(compute_units_consumed, timings)
             .and_then(|_| {
-                let mut process_executable_chain_time =
-                    Measure::start("process_executable_chain_time");
-                self.transaction_context
-                    .set_return_data(program_id, Vec::new())?;
-                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-                let execution_result = self.process_executable_chain();
-                let post_remaining_units = self.compute_meter.borrow().get_remaining();
-                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-                process_executable_chain_time.stop();
-
                 // Verify the called program has not misbehaved
                 let mut verify_callee_time = Measure::start("verify_callee_time");
-                let result = execution_result.and_then(|_| {
-                    if is_top_level_instruction {
-                        self.verify(instruction_accounts, program_indices)
-                    } else {
-                        self.verify_and_update(instruction_accounts, false)
-                    }
-                });
+                let result = if is_top_level_instruction {
+                    self.verify(instruction_accounts, program_indices)
+                } else {
+                    self.verify_and_update(instruction_accounts, false)
+                };
                 verify_callee_time.stop();
-
-                saturating_add_assign!(
-                    timings
-                        .execute_accessories
-                        .process_instructions
-                        .process_executable_chain_us,
-                    process_executable_chain_time.as_us()
-                );
                 saturating_add_assign!(
                     timings
                         .execute_accessories
@@ -938,25 +888,28 @@ impl<'a> InvokeContext<'a> {
                         .verify_callee_us,
                     verify_callee_time.as_us()
                 );
-
                 result
-            });
-
-        // Pop the invoke_stack to restore previous state
-        let _ = self.pop();
-        result
+            })
+            // MUST pop if and only if `push` succeeded, independent of `result`.
+            // Thus, the `.and()` instead of an `.and_then()`.
+            .and(self.pop())
     }
 
     /// Calls the instruction's program entrypoint method
-    fn process_executable_chain(&mut self) -> Result<(), InstructionError> {
+    fn process_executable_chain(
+        &mut self,
+        compute_units_consumed: &mut u64,
+        timings: &mut ExecuteTimings,
+    ) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
+        let mut process_executable_chain_time = Measure::start("process_executable_chain_time");
 
         let (first_instruction_account, builtin_id) = {
             let borrowed_root_account = instruction_context
                 .try_borrow_program_account(self.transaction_context, 0)
                 .map_err(|_| InstructionError::UnsupportedProgramId)?;
             let owner_id = borrowed_root_account.get_owner();
-            if solana_sdk::native_loader::check_id(owner_id) {
+            if native_loader::check_id(owner_id) {
                 (1, *borrowed_root_account.get_key())
             } else {
                 (0, *owner_id)
@@ -967,20 +920,36 @@ impl<'a> InvokeContext<'a> {
             if entry.program_id == builtin_id {
                 let program_id =
                     *instruction_context.get_last_program_key(self.transaction_context)?;
-                if builtin_id == program_id {
+                self.transaction_context
+                    .set_return_data(program_id, Vec::new())?;
+
+                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
+                let result = if builtin_id == program_id {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                    return (entry.process_instruction)(first_instruction_account, self)
+                    (entry.process_instruction)(first_instruction_account, self)
                         .map(|()| {
                             stable_log::program_success(&logger, &program_id);
                         })
                         .map_err(|err| {
                             stable_log::program_failure(&logger, &program_id, &err);
                             err
-                        });
+                        })
                 } else {
-                    return (entry.process_instruction)(first_instruction_account, self);
-                }
+                    (entry.process_instruction)(first_instruction_account, self)
+                };
+                let post_remaining_units = self.compute_meter.borrow().get_remaining();
+                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+
+                process_executable_chain_time.stop();
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instructions
+                        .process_executable_chain_us,
+                    process_executable_chain_time.as_us()
+                );
+                return result;
             }
         }
 
@@ -1161,7 +1130,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     let transaction_accounts = vec![
         (
             loader_id,
-            AccountSharedData::new(0, 0, &solana_sdk::native_loader::id()),
+            AccountSharedData::new(0, 0, &native_loader::id()),
         ),
         (
             Pubkey::new_unique(),
@@ -1205,7 +1174,7 @@ pub fn mock_process_instruction(
     program_indices.insert(0, transaction_accounts.len());
     let mut preparation =
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
-    let processor_account = AccountSharedData::new(0, 0, &solana_sdk::native_loader::id());
+    let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     preparation
         .transaction_accounts
         .push((*loader_id, processor_account));
@@ -1227,7 +1196,8 @@ pub fn mock_process_instruction(
             &program_indices,
             instruction_data,
         )
-        .and_then(|_| process_instruction(1, &mut invoke_context));
+        .and_then(|_| process_instruction(1, &mut invoke_context))
+        .and_then(|_| invoke_context.verify(&preparation.instruction_accounts, &program_indices));
     invoke_context.pop().unwrap();
     assert_eq!(result, expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
@@ -1668,38 +1638,12 @@ mod tests {
 
     #[test]
     fn test_invoke_context_compute_budget() {
-        let accounts = vec![
-            (solana_sdk::pubkey::new_rand(), AccountSharedData::default()),
-            (crate::neon_evm_program::id(), AccountSharedData::default()),
-        ];
+        let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        feature_set.deactivate(&requestable_heap_size::id());
         let mut transaction_context = TransactionContext::new(accounts, 1, 3);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.feature_set = Arc::new(feature_set);
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
-
-        invoke_context.push(&[], &[0], &[]).unwrap();
-        assert_eq!(
-            *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
-        );
-        invoke_context.pop().unwrap();
-
-        invoke_context.push(&[], &[1], &[]).unwrap();
-        let expected_compute_budget = ComputeBudget {
-            compute_unit_limit: 500_000,
-            heap_size: Some(256_usize.saturating_mul(1024)),
-            ..ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
-        };
-        assert_eq!(
-            *invoke_context.get_compute_budget(),
-            expected_compute_budget
-        );
-        invoke_context.pop().unwrap();
 
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(

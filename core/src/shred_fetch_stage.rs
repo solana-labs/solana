@@ -4,7 +4,7 @@ use {
     crate::packet_hasher::PacketHasher,
     crossbeam_channel::{unbounded, Sender},
     lru::LruCache,
-    solana_ledger::shred::{self, get_shred_slot_index_type, ShredFetchStats},
+    solana_ledger::shred::{should_discard_shred, ShredFetchStats},
     solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
     solana_runtime::bank_forks::BankForks,
     solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
@@ -67,6 +67,7 @@ impl ShredFetchStage {
             for packet in packet_batch.iter_mut() {
                 if should_discard_packet(
                     packet,
+                    last_root,
                     slot_bounds.clone(),
                     shred_version,
                     &packet_hasher,
@@ -195,6 +196,7 @@ impl ShredFetchStage {
 #[must_use]
 fn should_discard_packet(
     packet: &Packet,
+    root: Slot,
     // Range of slots to ingest shreds for.
     slot_bounds: impl RangeBounds<Slot>,
     shred_version: u16,
@@ -202,17 +204,7 @@ fn should_discard_packet(
     shreds_received: &mut ShredsReceived,
     stats: &mut ShredFetchStats,
 ) -> bool {
-    let slot = match get_shred_slot_index_type(packet, stats) {
-        None => return true,
-        Some((slot, _index, _shred_type)) => slot,
-    };
-    if !slot_bounds.contains(&slot) {
-        stats.slot_out_of_range += 1;
-        return true;
-    }
-    let shred = shred::layout::get_shred(packet);
-    if shred.and_then(shred::layout::get_version) != Some(shred_version) {
-        stats.shred_version_mismatch += 1;
+    if should_discard_shred(packet, root, shred_version, slot_bounds, stats) {
         return true;
     }
     let hash = packet_hasher.hash_packet(packet);
@@ -242,12 +234,12 @@ mod tests {
         let mut packet = Packet::default();
         let mut stats = ShredFetchStats::default();
 
-        let slot = 1;
+        let slot = 2;
         let shred_version = 45189;
         let shred = Shred::new_from_data(
             slot,
             3,   // shred index
-            0,   // parent offset
+            1,   // parent offset
             &[], // data
             ShredFlags::LAST_SHRED_IN_SLOT,
             0, // reference_tick
@@ -264,6 +256,7 @@ mod tests {
         let slot_bounds = (last_root + 1)..(last_slot + 2 * slots_per_epoch);
         assert!(!should_discard_packet(
             &packet,
+            last_root,
             slot_bounds.clone(),
             shred_version,
             &hasher,
@@ -278,6 +271,7 @@ mod tests {
         coding[0].copy_to_packet(&mut packet);
         assert!(!should_discard_packet(
             &packet,
+            last_root,
             slot_bounds,
             shred_version,
             &hasher,
@@ -303,6 +297,7 @@ mod tests {
         // packet size is 0, so cannot get index
         assert!(should_discard_packet(
             &packet,
+            last_root,
             slot_bounds.clone(),
             shred_version,
             &hasher,
@@ -311,20 +306,21 @@ mod tests {
         ));
         assert_eq!(stats.index_overrun, 1);
         let shred = Shred::new_from_data(
-            1,
-            3,
-            0,
-            &[],
+            2,   // slot
+            3,   // index
+            1,   // parent_offset
+            &[], // data
             ShredFlags::LAST_SHRED_IN_SLOT,
-            0,
+            0, // reference_tick
             shred_version,
-            0,
+            0, // fec_set_index
         );
         shred.copy_to_packet(&mut packet);
 
-        // rejected slot is 1, root is 3
+        // rejected slot is 2, root is 3
         assert!(should_discard_packet(
             &packet,
+            3,
             3..slot_bounds.end,
             shred_version,
             &hasher,
@@ -335,6 +331,7 @@ mod tests {
 
         assert!(should_discard_packet(
             &packet,
+            last_root,
             slot_bounds.clone(),
             345, // shred_version
             &hasher,
@@ -346,6 +343,7 @@ mod tests {
         // Accepted for 1,3
         assert!(!should_discard_packet(
             &packet,
+            last_root,
             slot_bounds.clone(),
             shred_version,
             &hasher,
@@ -356,6 +354,7 @@ mod tests {
         // shreds_received should filter duplicate
         assert!(should_discard_packet(
             &packet,
+            last_root,
             slot_bounds.clone(),
             shred_version,
             &hasher,
@@ -379,6 +378,7 @@ mod tests {
         // Slot 1 million is too high
         assert!(should_discard_packet(
             &packet,
+            last_root,
             slot_bounds.clone(),
             shred_version,
             &hasher,
@@ -391,6 +391,7 @@ mod tests {
         shred.copy_to_packet(&mut packet);
         assert!(should_discard_packet(
             &packet,
+            last_root,
             slot_bounds,
             shred_version,
             &hasher,

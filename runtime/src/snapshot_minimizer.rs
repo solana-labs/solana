@@ -411,7 +411,7 @@ mod tests {
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount, WritableAccount},
             bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-            genesis_config::create_genesis_config,
+            genesis_config::{create_genesis_config, GenesisConfig},
             pubkey::Pubkey,
             signer::Signer,
             stake,
@@ -423,7 +423,7 @@ mod tests {
     fn test_get_rent_collection_accounts() {
         solana_logger::setup();
 
-        let (genesis_config, _) = create_genesis_config(1_000_000);
+        let genesis_config = GenesisConfig::default();
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
         // Slots correspond to subrange: A52Kf8KJNVhs1y61uhkzkSF82TXCLxZekqmFwiFXLnHu..=ChWNbfHUHLvFY3uhXj6kQhJ7a9iZB4ykh34WRGS5w9NE

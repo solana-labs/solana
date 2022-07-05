@@ -5,7 +5,7 @@ use {
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_client::connection_cache::{ConnectionCache, UseQUIC, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+    solana_client::connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
     solana_core::banking_stage::BankingStage,
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
@@ -30,7 +30,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        sync::{atomic::Ordering, Arc, Mutex, RwLock},
+        sync::{atomic::Ordering, Arc, RwLock},
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -39,7 +39,7 @@ use {
 fn check_txs(
     receiver: &Arc<Receiver<WorkingBankEntry>>,
     ref_tx_count: usize,
-    poh_recorder: &Arc<Mutex<PohRecorder>>,
+    poh_recorder: &Arc<RwLock<PohRecorder>>,
 ) -> bool {
     let mut total = 0;
     let now = Instant::now();
@@ -55,7 +55,7 @@ fn check_txs(
         if now.elapsed().as_secs() > 60 {
             break;
         }
-        if poh_recorder.lock().unwrap().bank().is_none() {
+        if poh_recorder.read().unwrap().bank().is_none() {
             no_bank = true;
             break;
         }
@@ -341,8 +341,11 @@ fn main() {
             SocketAddrSpace::Unspecified,
         );
         let cluster_info = Arc::new(cluster_info);
-        let tpu_use_quic = UseQUIC::new(matches.is_present("tpu_use_quic"))
-            .expect("Failed to initialize QUIC flags");
+        let tpu_use_quic = matches.is_present("tpu_use_quic");
+        let connection_cache = match tpu_use_quic {
+            true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+            false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        };
         let banking_stage = BankingStage::new_num_threads(
             &cluster_info,
             &poh_recorder,
@@ -353,12 +356,9 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
-            Arc::new(ConnectionCache::new(
-                tpu_use_quic,
-                DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            )),
+            Arc::new(connection_cache),
         );
-        poh_recorder.lock().unwrap().set_bank(&bank);
+        poh_recorder.write().unwrap().set_bank(&bank, false);
 
         // This is so that the signal_receiver does not go out of scope after the closure.
         // If it is dropped before poh_service, then poh_service will error when
@@ -396,7 +396,7 @@ fn main() {
                     if bank.get_signature_status(&tx.signatures[0]).is_some() {
                         break;
                     }
-                    if poh_recorder.lock().unwrap().bank().is_none() {
+                    if poh_recorder.read().unwrap().bank().is_none() {
                         break;
                     }
                     sleep(Duration::from_millis(5));
@@ -418,7 +418,7 @@ fn main() {
 
                 let mut poh_time = Measure::start("poh_time");
                 poh_recorder
-                    .lock()
+                    .write()
                     .unwrap()
                     .reset(bank.clone(), Some((bank.slot(), bank.slot() + 1)));
                 poh_time.stop();
@@ -439,8 +439,8 @@ fn main() {
                     std::u64::MAX,
                 );
 
-                poh_recorder.lock().unwrap().set_bank(&bank);
-                assert!(poh_recorder.lock().unwrap().bank().is_some());
+                poh_recorder.write().unwrap().set_bank(&bank, false);
+                assert!(poh_recorder.read().unwrap().bank().is_some());
                 if bank.slot() > 32 {
                     leader_schedule_cache.set_root(&bank);
                     bank_forks.set_root(root, &AbsRequestSender::default(), None);

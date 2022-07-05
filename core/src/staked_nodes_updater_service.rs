@@ -42,7 +42,7 @@ impl StakedNodesUpdaterService {
                         &cluster_info,
                     ) {
                         let mut shared = shared_staked_nodes.write().unwrap();
-                        shared.total_stake = total_stake as f64;
+                        shared.total_stake = total_stake;
                         shared.stake_map = new_ip_to_stake;
                     }
                 }

@@ -47,7 +47,7 @@ impl<T: Serialize + Clone> Default for StatusCache<T> {
         Self {
             cache: HashMap::default(),
             // 0 is always a root
-            roots: [0].iter().cloned().collect(),
+            roots: HashSet::from([0]),
             slot_deltas: HashMap::default(),
         }
     }
@@ -175,7 +175,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         self.purge_roots();
     }
 
-    pub fn roots(&self) -> &HashSet<u64> {
+    pub fn roots(&self) -> &HashSet<Slot> {
         &self.roots
     }
 
@@ -230,7 +230,21 @@ impl<T: Serialize + Clone> StatusCache<T> {
                 (
                     *slot,
                     self.roots.contains(slot),
-                    self.slot_deltas.get(slot).unwrap_or(&empty).clone(),
+                    Arc::clone(self.slot_deltas.get(slot).unwrap_or(&empty)),
+                )
+            })
+            .collect()
+    }
+
+    /// Get the statuses for all the root slots
+    pub fn root_slot_deltas(&self) -> Vec<SlotDelta<T>> {
+        self.roots
+            .iter()
+            .map(|slot| {
+                (
+                    *slot,
+                    true,
+                    self.slot_deltas.get(slot).cloned().unwrap_or_default(),
                 )
             })
             .collect()
@@ -450,7 +464,7 @@ mod tests {
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
         }
-        let slots: Vec<_> = (0_u64..MAX_CACHE_ENTRIES as u64 + 1).collect();
+        let slots: Vec<_> = (0..MAX_CACHE_ENTRIES as u64 + 1).collect();
         assert_eq!(status_cache.slot_deltas.len(), 1);
         assert!(status_cache.slot_deltas.get(&1).is_some());
         let slot_deltas = status_cache.slot_deltas(&slots);

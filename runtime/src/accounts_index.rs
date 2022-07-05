@@ -34,7 +34,7 @@ use {
         },
         path::PathBuf,
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
+            atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
             Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
     },
@@ -639,6 +639,15 @@ impl ScanSlotTracker {
     }
 }
 
+pub enum AccountsIndexScanResult {
+    /// if the entry is not in the in-memory index, do not add it, make no modifications to it
+    None,
+    /// keep the entry in the in-memory index
+    KeepInMemory,
+    /// reduce refcount by 1
+    Unref,
+}
+
 #[derive(Debug)]
 pub struct AccountsIndex<T: IndexValue> {
     pub account_maps: LockMapType<T>,
@@ -664,6 +673,11 @@ pub struct AccountsIndex<T: IndexValue> {
 
     /// when a scan's accumulated data exceeds this limit, abort the scan
     pub scan_results_limit_bytes: Option<usize>,
+
+    /// # roots added since last check
+    pub roots_added: AtomicUsize,
+    /// # roots removed since last check
+    pub roots_removed: AtomicUsize,
 }
 
 impl<T: IndexValue> AccountsIndex<T> {
@@ -693,6 +707,8 @@ impl<T: IndexValue> AccountsIndex<T> {
             removed_bank_ids: Mutex::<HashSet<BankId>>::default(),
             storage,
             scan_results_limit_bytes,
+            roots_added: AtomicUsize::default(),
+            roots_removed: AtomicUsize::default(),
         }
     }
 
@@ -1236,7 +1252,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     // Given a SlotSlice `L`, a list of ancestors and a maximum slot, find the latest element
     // in `L`, where the slot `S` is an ancestor or root, and if `S` is a root, then `S <= max_root`
-    fn latest_slot(
+    pub(crate) fn latest_slot(
         &self,
         ancestors: Option<&Ancestors>,
         slice: SlotSlice<T>,
@@ -1291,23 +1307,22 @@ impl<T: IndexValue> AccountsIndex<T> {
         self.storage.get_startup_remaining_items_to_flush_estimate()
     }
 
-    /// For each pubkey, find the latest account that appears in `roots` and <= `max_root`
+    /// For each pubkey, find the slot list in the accounts index
     ///   call `callback`
-    pub(crate) fn scan<F>(&self, pubkeys: &[Pubkey], max_root: Option<Slot>, mut callback: F)
+    pub(crate) fn scan<'a, F, I>(&'a self, pubkeys: I, mut callback: F)
     where
-        // return true if accounts index entry should be put in in_mem cache
         // params:
         //  exists: false if not in index at all
-        //  slot list found at slot at most max_root or empty slot list
         //  index in slot list where best slot was found or None if nothing found by root criteria
         //  pubkey looked up
         //  refcount of entry in index
-        F: FnMut(bool, &SlotList<T>, Option<usize>, &Pubkey, RefCount) -> bool,
+        F: FnMut(bool, &SlotList<T>, &'a Pubkey, RefCount) -> AccountsIndexScanResult,
+        I: IntoIterator<Item = &'a Pubkey>,
     {
         let empty_slot_list = vec![];
         let mut lock = None;
         let mut last_bin = self.bins(); // too big, won't match
-        pubkeys.iter().for_each(|pubkey| {
+        pubkeys.into_iter().for_each(|pubkey| {
             let bin = self.bin_calculator.bin_from_pubkey(pubkey);
             if bin != last_bin {
                 // cannot re-use lock since next pubkey is in a different bin than previous one
@@ -1315,20 +1330,24 @@ impl<T: IndexValue> AccountsIndex<T> {
                 last_bin = bin;
             }
             lock.as_ref().unwrap().get_internal(pubkey, |entry| {
-                let cache = match entry {
+                let mut cache = false;
+                match entry {
                     Some(locked_entry) => {
                         let slot_list = &locked_entry.slot_list.read().unwrap();
-                        let found_index = self.latest_slot(None, slot_list, max_root);
-                        callback(
-                            true,
-                            slot_list,
-                            found_index,
-                            pubkey,
-                            locked_entry.ref_count(),
-                        )
+                        let result = callback(true, slot_list, pubkey, locked_entry.ref_count());
+                        cache = match result {
+                            AccountsIndexScanResult::Unref => {
+                                locked_entry.add_un_ref(false);
+                                true
+                            }
+                            AccountsIndexScanResult::KeepInMemory => true,
+                            AccountsIndexScanResult::None => false,
+                        };
                     }
-                    None => callback(false, &empty_slot_list, None, pubkey, RefCount::MAX),
-                };
+                    None => {
+                        callback(false, &empty_slot_list, pubkey, RefCount::MAX);
+                    }
+                }
                 (cache, ())
             });
         });
@@ -1692,9 +1711,9 @@ impl<T: IndexValue> AccountsIndex<T> {
             is_slot_list_empty = slot_list.is_empty();
         });
 
-        // If the slot list is empty, remove the pubkey from `account_maps`.  Make sure to grab the
+        // If the slot list is empty, remove the pubkey from `account_maps`. Make sure to grab the
         // lock and double check the slot list is still empty, because another writer could have
-        // locked and inserted the pubkey inbetween when `is_slot_list_empty=true` and the call to
+        // locked and inserted the pubkey in-between when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
             let w_maps = self.get_account_maps_write_lock(pubkey);
@@ -1745,6 +1764,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn add_root(&self, slot: Slot, caching_enabled: bool) {
+        self.roots_added.fetch_add(1, Ordering::Relaxed);
         let mut w_roots_tracker = self.roots_tracker.write().unwrap();
         // `AccountsDb::flush_accounts_cache()` relies on roots being added in order
         assert!(slot >= w_roots_tracker.alive_roots.max_inclusive());
@@ -1851,6 +1871,8 @@ impl<T: IndexValue> AccountsIndex<T> {
                 Some(w_roots_tracker.previous_uncleaned_roots.len());
             stats.roots_range = Some(w_roots_tracker.alive_roots.range_width());
             stats.historical_roots_len = Some(w_roots_tracker.historical_roots.len());
+            drop(w_roots_tracker);
+            self.roots_removed.fetch_add(1, Ordering::Relaxed);
             true
         }
     }

@@ -419,7 +419,7 @@ pub fn broadcast_shreds(
             let root_bank = root_bank.clone();
             shreds.flat_map(move |shred| {
                 repeat(shred.payload()).zip(cluster_nodes.get_broadcast_addrs(
-                    shred,
+                    &shred.id(),
                     &root_bank,
                     DATA_PLANE_FANOUT,
                     socket_addr_space,
@@ -449,7 +449,7 @@ pub mod test {
         solana_entry::entry::create_ticks,
         solana_gossip::cluster_info::{ClusterInfo, Node},
         solana_ledger::{
-            blockstore::{make_slot_entries, Blockstore},
+            blockstore::Blockstore,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
             shred::{max_ticks_per_n_shreds, ProcessShredsStats, Shredder},
@@ -479,16 +479,19 @@ pub mod test {
         Vec<Arc<Vec<Shred>>>,
     ) {
         let num_entries = max_ticks_per_n_shreds(num, None);
-        let (data_shreds, _) = make_slot_entries(slot, 0, num_entries);
-        let keypair = Keypair::new();
-        let coding_shreds = Shredder::data_shreds_to_coding_shreds(
-            &keypair,
-            &data_shreds[0..],
-            true, // is_last_in_slot
-            0,    // next_code_index
-            &mut ProcessShredsStats::default(),
+        let entries = create_ticks(num_entries, /*hashes_per_tick:*/ 0, Hash::default());
+        let shredder = Shredder::new(
+            slot, /*parent_slot:*/ 0, /*reference_tick:*/ 0, /*version:*/ 0,
         )
         .unwrap();
+        let (data_shreds, coding_shreds) = shredder.entries_to_shreds(
+            &Keypair::new(),
+            &entries,
+            true, // is_last_in_slot
+            0,    // next_shred_index,
+            0,    // next_code_index
+            &mut ProcessShredsStats::default(),
+        );
         (
             data_shreds.clone(),
             coding_shreds.clone(),

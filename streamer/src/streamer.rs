@@ -27,7 +27,7 @@ use {
 // Total stake and nodes => stake map
 #[derive(Default)]
 pub struct StakedNodes {
-    pub total_stake: f64,
+    pub total_stake: u64,
     pub stake_map: HashMap<IpAddr, u64>,
 }
 

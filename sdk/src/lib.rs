@@ -97,14 +97,6 @@ pub use solana_sdk_macro::pubkeys;
 #[rustversion::since(1.46.0)]
 pub use solana_sdk_macro::respan;
 
-#[deprecated(
-    since = "1.9.0",
-    note = "use only to break https://github.com/rust-lang/rust/issues/92987. remove when we move to Rust 1.60.0"
-)]
-#[doc(hidden)]
-#[cfg(debug_assertions)]
-pub trait AutoTraitBreakSendSync: Send + Sync {}
-
 // Unused `solana_sdk::program_stubs!()` macro retained for source backwards compatibility with older programs
 #[macro_export]
 #[deprecated(
