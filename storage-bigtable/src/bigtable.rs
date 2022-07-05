@@ -125,13 +125,20 @@ impl BigTableConnection {
     /// The BIGTABLE_PROXY environment variable is used to configure the gRPC connection through a
     /// forward proxy (see HTTP_PROXY).
     ///
-    pub async fn new(
+    pub async fn new<C>(
         instance_name: &str,
         app_profile_id: &str,
         read_only: bool,
         timeout: Option<Duration>,
         credential_type: CredentialType,
-    ) -> Result<Self> {
+        connector: Option<C>,
+    ) -> Result<Self>
+    where
+        C: tower::make::MakeConnection<tonic::transport::Uri> + Send + 'static,
+        C::Connection: Unpin + Send + 'static,
+        C::Future: Send + 'static,
+        Box<dyn std::error::Error + Send + Sync>: From<C::Error> + Send + 'static,
+    {
         match std::env::var("BIGTABLE_EMULATOR_HOST") {
             Ok(endpoint) => {
                 info!("Connecting to bigtable emulator at {}", endpoint);
@@ -193,13 +200,27 @@ impl BigTableConnection {
                                 .parse::<http::Uri>()
                                 .map_err(|err| Error::InvalidUri(proxy_uri, err.to_string()))?,
                         );
-                        let mut proxy_connector =
-                            hyper_proxy::ProxyConnector::from_proxy(http, proxy)?;
-                        // tonic handles TLS as a separate layer
-                        proxy_connector.set_tls(None);
-                        endpoint.connect_with_connector_lazy(proxy_connector)
+                        match connector {
+                            Some(connector) => {
+                                let mut proxy_connector =
+                                    hyper_proxy::ProxyConnector::from_proxy(connector, proxy)?;
+                                // tonic handles TLS as a separate layer
+                                proxy_connector.set_tls(None);
+                                endpoint.connect_with_connector_lazy(proxy_connector)
+                            }
+                            None => {
+                                let mut proxy_connector =
+                                    hyper_proxy::ProxyConnector::from_proxy(http, proxy)?;
+                                // tonic handles TLS as a separate layer
+                                proxy_connector.set_tls(None);
+                                endpoint.connect_with_connector_lazy(proxy_connector)
+                            }
+                        }
                     }
-                    _ => endpoint.connect_with_connector_lazy(http),
+                    _ => match connector {
+                        Some(connector) => endpoint.connect_with_connector_lazy(connector),
+                        None => endpoint.connect_with_connector_lazy(http),
+                    },
                 };
 
                 Ok(Self {
