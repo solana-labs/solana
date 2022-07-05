@@ -2916,11 +2916,13 @@ impl AccountsDb {
                         (
                             pubkey,
                             if let Some(locked_entry) = lookup {
-                                locked_entry
+                                let mut slots = locked_entry
                                     .slot_list()
                                     .iter()
                                     .map(|(slot, _)| *slot)
-                                    .collect::<Vec<_>>()
+                                    .collect::<Vec<_>>();
+                                slots.sort();
+                                slots
                             } else {
                                 vec![]
                             },
