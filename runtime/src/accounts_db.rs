@@ -7313,12 +7313,12 @@ impl AccountsDb {
         let oldest = max_root - 432_000;
         error!("jw:remove_dead_accounts from {} down to {}, shrink candidates: {}, reset_accounts: {}, missing entries: {}, slot_counts: {:?}, shrink_candidates: {:?}", orig_ct, final_ct, sc, reset_accounts, missing_entries, 
         {
-            let mut a = slot_counts.iter().filter(|(a,b)| **a < oldest).map(|(a,b)| (oldest-a, b)).collect::<Vec<_>>();
+            let mut a = slot_counts.iter().filter(|(a,b)| **a < oldest).map(|(a,b)| (a, b)).collect::<Vec<_>>();
             a.sort();
             a
         },
         {
-            let mut a = sc_c.iter().map(|(k,_)| k).filter(|k| **k<oldest).map(|k| oldest-*k).collect::<Vec<_>>();
+            let mut a = sc_c.iter().map(|(k,_)| k).filter(|k| **k<oldest).map(|k| k).collect::<Vec<_>>();
             a.sort();
             a
         },
