@@ -2126,7 +2126,6 @@ impl AccountsDb {
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
 
         let mut clean_rooted = Measure::start("clean_old_root-ms");
-        error!("clean_accounts_older_than_root: {}, root: {:?}", purges.len(), max_clean_root);
         let reclaim_vecs = purges
             .par_chunks(INDEX_CLEAN_BULK_COUNT)
             .map(|pubkeys: &[Pubkey]| {
@@ -2138,6 +2137,7 @@ impl AccountsDb {
                 reclaims
             });
         let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
+        error!("clean_accounts_older_than_root: {}, root: {:?}, reclaims: {}", purges.len(), max_clean_root, reclaims.len());
         clean_rooted.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
         self.clean_accounts_stats
@@ -2867,7 +2867,7 @@ impl AccountsDb {
         reset_accounts: bool,
     ) {
         if reclaims.is_empty() {
-            error!("jw:handle_reclaims is empty");
+            //error!("jw:handle_reclaims is empty");
             return;
         }
 
@@ -5133,6 +5133,9 @@ impl AccountsDb {
                 self.purge_keys_exact(stored_keys.lock().unwrap().iter())
             }
         };
+        if !reclaims.is_empty() {
+            error!("jw: reclaims not empty, purge_slot_storage");
+        }
         purge_accounts_index_elapsed.stop();
         purge_stats
             .purge_accounts_index_elapsed
@@ -7729,6 +7732,9 @@ impl AccountsDb {
         // From 1) and 2) we guarantee passing `no_purge_stats` == None, which is
         // equivalent to asserting there will be no dead slots, is safe.
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
+        if !reclaims.is_empty() {
+            error!("jw: hr note empty, store_accounts_custom");
+        }
         self.handle_reclaims(&reclaims, expected_single_dead_slot, None, reset_accounts);
         handle_reclaims_time.stop();
         self.stats
