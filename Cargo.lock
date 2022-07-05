@@ -1214,6 +1214,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
+name = "eager"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abe71d579d1812060163dff96056261deb5bf6729b100fa2e36a68b9649ba3d3"
+
+[[package]]
 name = "ed25519"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4932,6 +4938,7 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "dashmap",
+ "eager",
  "etcd-client",
  "fs_extra",
  "histogram",
@@ -5705,6 +5712,7 @@ version = "1.11.2"
 dependencies = [
  "base64 0.13.0",
  "bincode",
+ "eager",
  "enum-iterator",
  "itertools",
  "libc",
@@ -5718,6 +5726,7 @@ dependencies = [
  "solana-frozen-abi-macro 1.11.2",
  "solana-logger 1.11.2",
  "solana-measure",
+ "solana-metrics",
  "solana-sdk 1.11.2",
  "thiserror",
 ]
