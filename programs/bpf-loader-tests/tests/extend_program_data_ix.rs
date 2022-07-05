@@ -23,15 +23,13 @@ async fn test_extend_program_data() {
 
     let program_data_address = Pubkey::new_unique();
     let program_data_len = 100;
-    let program_data_state = UpgradeableLoaderState::ProgramData {
-        slot: 0,
-        upgrade_authority_address: Some(Pubkey::new_unique()),
-    };
-
     add_upgradeable_loader_account(
         &mut context,
         &program_data_address,
-        &program_data_state,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(Pubkey::new_unique()),
+        },
         program_data_len,
     )
     .await;
@@ -68,17 +66,14 @@ async fn test_extend_program_data_not_upgradeable() {
     let mut context = setup_test_context().await;
 
     let program_data_address = Pubkey::new_unique();
-    let program_data_len = 100;
-    let program_data_state = UpgradeableLoaderState::ProgramData {
-        slot: 0,
-        upgrade_authority_address: None,
-    };
-
     add_upgradeable_loader_account(
         &mut context,
         &program_data_address,
-        &program_data_state,
-        program_data_len,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: None,
+        },
+        100,
     )
     .await;
 
@@ -98,17 +93,14 @@ async fn test_extend_program_data_by_zero_bytes() {
     let mut context = setup_test_context().await;
 
     let program_data_address = Pubkey::new_unique();
-    let program_data_len = 100;
-    let program_data_state = UpgradeableLoaderState::ProgramData {
-        slot: 0,
-        upgrade_authority_address: Some(Pubkey::new_unique()),
-    };
-
     add_upgradeable_loader_account(
         &mut context,
         &program_data_address,
-        &program_data_state,
-        program_data_len,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(Pubkey::new_unique()),
+        },
+        100,
     )
     .await;
 
@@ -128,17 +120,14 @@ async fn test_extend_program_data_past_max_size() {
     let mut context = setup_test_context().await;
 
     let program_data_address = Pubkey::new_unique();
-    let program_data_len = MAX_PERMITTED_DATA_LENGTH as usize;
-    let program_data_state = UpgradeableLoaderState::ProgramData {
-        slot: 0,
-        upgrade_authority_address: Some(Pubkey::new_unique()),
-    };
-
     add_upgradeable_loader_account(
         &mut context,
         &program_data_address,
-        &program_data_state,
-        program_data_len,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(Pubkey::new_unique()),
+        },
+        MAX_PERMITTED_DATA_LENGTH as usize,
     )
     .await;
 
@@ -159,17 +148,14 @@ async fn test_extend_program_data_with_invalid_payer() {
     let rent = context.banks_client.get_rent().await.unwrap();
 
     let program_data_address = Pubkey::new_unique();
-    let program_data_len = 100;
-    let program_data_state = UpgradeableLoaderState::ProgramData {
-        slot: 0,
-        upgrade_authority_address: Some(Pubkey::new_unique()),
-    };
-
     add_upgradeable_loader_account(
         &mut context,
         &program_data_address,
-        &program_data_state,
-        program_data_len,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(Pubkey::new_unique()),
+        },
+        100,
     )
     .await;
 
@@ -225,13 +211,12 @@ async fn test_extend_program_data_with_invalid_payer() {
 
     // Demote payer account meta to non-signer so that transaction signing succeeds
     {
-        let payer_account_meta = ix.accounts.last_mut().unwrap();
-        assert_eq!(
-            payer_account_meta.pubkey,
-            payer_with_sufficient_funds.pubkey(),
-            "expected to modify payer account meta"
-        );
-        payer_account_meta.is_signer = false;
+        let payer_meta = ix
+            .accounts
+            .iter_mut()
+            .find(|meta| meta.pubkey == payer_with_sufficient_funds.pubkey())
+            .expect("expected to find payer account meta");
+        payer_meta.is_signer = false;
     }
 
     assert_ix_error(
@@ -251,15 +236,13 @@ async fn test_extend_program_data_without_payer() {
 
     let program_data_address = Pubkey::new_unique();
     let program_data_len = 100;
-    let program_data_state = UpgradeableLoaderState::ProgramData {
-        slot: 0,
-        upgrade_authority_address: Some(Pubkey::new_unique()),
-    };
-
     add_upgradeable_loader_account(
         &mut context,
         &program_data_address,
-        &program_data_state,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(Pubkey::new_unique()),
+        },
         program_data_len,
     )
     .await;
@@ -314,6 +297,18 @@ async fn test_extend_program_data_with_invalid_program_data() {
     let rent = context.banks_client.get_rent().await.unwrap();
     let payer_address = context.payer.pubkey();
 
+    let program_data_address = Pubkey::new_unique();
+    add_upgradeable_loader_account(
+        &mut context,
+        &program_data_address,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(Pubkey::new_unique()),
+        },
+        100,
+    )
+    .await;
+
     let program_data_address_with_invalid_state = Pubkey::new_unique();
     {
         let mut account = AccountSharedData::new(rent.minimum_balance(100), 100, &id());
@@ -361,6 +356,27 @@ async fn test_extend_program_data_with_invalid_program_data() {
         None,
         InstructionError::InvalidAccountOwner,
         "should fail because the program data account owner isn't valid",
+    )
+    .await;
+
+    let mut ix = extend_program_data(&program_data_address, Some(&payer_address), 1);
+
+    // Demote ProgramData account meta to read-only
+    {
+        let program_data_meta = ix
+            .accounts
+            .iter_mut()
+            .find(|meta| meta.pubkey == program_data_address)
+            .expect("expected to find program data account meta");
+        program_data_meta.is_writable = false;
+    }
+
+    assert_ix_error(
+        &mut context,
+        ix,
+        None,
+        InstructionError::InvalidArgument,
+        "should fail because the program data account is not writable",
     )
     .await;
 }

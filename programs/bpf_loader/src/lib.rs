@@ -1082,8 +1082,12 @@ fn process_loader_upgradeable_instruction(
             let programdata_key = *programdata_account.get_key();
 
             if program_id != programdata_account.get_owner() {
-                ic_logger_msg!(log_collector, "ProgramData owner is invalid",);
+                ic_logger_msg!(log_collector, "ProgramData owner is invalid");
                 return Err(InstructionError::InvalidAccountOwner);
+            }
+            if !programdata_account.is_writable() {
+                ic_logger_msg!(log_collector, "ProgramData is not writable");
+                return Err(InstructionError::InvalidArgument);
             }
 
             let old_len = programdata_account.get_data().len();
@@ -1111,7 +1115,7 @@ fn process_loader_upgradeable_instruction(
                     return Err(InstructionError::Immutable);
                 }
             } else {
-                ic_logger_msg!(log_collector, "Invalid ProgramData account");
+                ic_logger_msg!(log_collector, "ProgramData state is invalid");
                 return Err(InstructionError::InvalidAccountData);
             }
 
