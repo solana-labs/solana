@@ -2386,6 +2386,7 @@ impl AccountsDb {
 
     fn add_old_roots_to_dirty_stores(&self) {
         let mut added = 0;
+        let mut already_present = 0;
         let mut m = Measure::start("figuring out old append vecs");
         let accounts_hash_complete_one_epoch_old =
             *self.accounts_hash_complete_one_epoch_old.read().unwrap();
@@ -2402,6 +2403,7 @@ impl AccountsDb {
                     match self.dirty_stores.entry((*slot, storage.append_vec_id())) {
                         Occupied(_occupied_entry) => {
                             // already present
+                            already_present += 1;
                         }
 
                         Vacant(vacant_entry) => {
@@ -2414,7 +2416,7 @@ impl AccountsDb {
         });
         m.stop();
         if added > 0 {
-            error!("added: {}, {:?}", added, m);
+            error!("added: {}, already present: {}, {:?}", added, already_present, m);
         }
     }
 
