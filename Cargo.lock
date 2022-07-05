@@ -5744,12 +5744,8 @@ dependencies = [
  "solana-frozen-abi-macro 1.10.30",
  "solana-logger 1.10.30",
  "solana-measure",
-<<<<<<< HEAD
- "solana-sdk 1.10.30",
-=======
  "solana-metrics",
- "solana-sdk 1.11.2",
->>>>>>> ce39c1402 (Add end-to-end replay slot metrics (#25752))
+ "solana-sdk 1.10.30",
  "thiserror",
 ]
 

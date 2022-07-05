@@ -6,13 +6,8 @@ use {
         replay_stage::SUPERMINORITY_THRESHOLD,
     },
     solana_ledger::blockstore_processor::{ConfirmationProgress, ConfirmationTiming},
-<<<<<<< HEAD
-    solana_program_runtime::timings::ExecuteTimingType,
-    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
-=======
     solana_program_runtime::{report_execute_timings, timings::ExecuteTimingType},
-    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccountsHashMap},
->>>>>>> ce39c1402 (Add end-to-end replay slot metrics (#25752))
+    solana_runtime::{bank::Bank, bank_forks::BankForks, vote_account::VoteAccount},
     solana_sdk::{clock::Slot, hash::Hash, pubkey::Pubkey},
     std::{
         collections::{BTreeMap, HashMap, HashSet},
