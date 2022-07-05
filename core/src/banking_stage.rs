@@ -712,7 +712,7 @@ impl BankingStage {
                         )
                     {
                         let poh_recorder_lock_time = {
-                            let (poh_recorder_locked, poh_recorder_lock_time) =
+                            let (_poh_recorder_locked, poh_recorder_lock_time) =
                                 measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
 
                             reached_end_of_slot = true;
@@ -774,7 +774,7 @@ impl BankingStage {
                     // mark as end-of-slot to avoid aggressively lock poh for the remaining for
                     // packet batches in buffer
                     let poh_recorder_lock_time = {
-                        let (poh_recorder_locked, poh_recorder_lock_time) =
+                        let (_poh_recorder_locked, poh_recorder_lock_time) =
                             measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
 
                         reached_end_of_slot = true;
