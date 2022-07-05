@@ -235,7 +235,7 @@ fn buffer_iter_desc_and_forward(
         timer.stop();
 
         let batched_filter_forwarding_results: usize = forward_packet_batches_by_accounts
-            .get_batches()
+            .iter_batches()
             .map(|forward_batch| forward_batch.len())
             .sum();
         log::info!(

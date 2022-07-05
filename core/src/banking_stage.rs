@@ -515,7 +515,7 @@ impl BankingStage {
                     saturating_add_assign!(total_forwardable_tracer_packets, 1);
                 }
                 result = forward_packet_batches_by_accounts
-                    .fill(deserialized_packet.immutable_section().clone());
+                    .add_packet(deserialized_packet.immutable_section().clone());
                 if !result {
                     saturating_add_assign!(dropped_tx_before_forwarding_count, 1);
                 }
@@ -799,7 +799,7 @@ impl BankingStage {
                 .set_end_of_slot_unprocessed_buffer_len(buffered_packet_batches.len() as u64);
 
             // We've hit the end of this slot, no need to perform more processing,
-            // Packety filtering will bw done at `forward_packet_batches_by_accounts.fill()`
+            // Packet filtering will be done at `forward_packet_batches_by_accounts.add_packet()`
         }
 
         proc_start.stop();
@@ -1016,7 +1016,7 @@ impl BankingStage {
         }
 
         // get current root bank from bank_forks, use it to sanitize transaction and
-        // load all accoutns from address loader;
+        // load all accounts from address loader;
         let current_bank = bank_forks.read().unwrap().root_bank();
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits(current_bank);
@@ -1025,7 +1025,7 @@ impl BankingStage {
             &mut forward_packet_batches_by_accounts,
         );
         forward_packet_batches_by_accounts
-            .get_batches()
+            .iter_batches()
             .filter(|&batch| !batch.is_empty())
             .for_each(|forward_batch| {
                 slot_metrics_tracker.increment_forwardable_batches_count(1);
@@ -3302,7 +3302,7 @@ mod tests {
             // sorting
             let expected_ports: Vec<_> = (0..256).collect();
             let mut forwarded_ports: Vec<_> = forward_packet_batches_by_accounts
-                .get_batches()
+                .iter_batches()
                 .flat_map(|batch| {
                     batch
                         .get_forwardable_packets()

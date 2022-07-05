@@ -11,22 +11,23 @@ use {
 };
 
 /// `ForwardBatch` to have half of default cost_tracker limits, as smaller batch
-/// allows better granularity in interating through buffer, and faster forwarding.
-const DEFAULT_LIMIT_RATIO: u32 = 2;
-/// this number divided by`DEFAULT_LIMIT_RATIO` is the total blocks to forward.
+/// allows better granularity in composing forwarding transactions; e.g.,
+/// transactions in each batch are potentially more evenly distributed across accounts.
+const FORWARDED_BLOCK_COMPUTE_RATIO: u32 = 2;
+/// this number divided by`FORWARDED_BLOCK_COMPUTE_RATIO` is the total blocks to forward.
 /// To accommodate transactions without `compute_budget` instruction, which will
 /// have default 200_000 compute units, it has 100 batches as default to forward
 /// up to 12_000 such transaction. (120 such transactions fill up a batch, 100
 /// batches allows 12_000 transactions)
 const DEFAULT_NUMBER_OF_BATCHES: u32 = 100;
 
-/// `ForwardBatch` keeps forwardable packets in a vector in its original fee prioritized order,
-/// Number of packets are limited by `cost_tracker` with customized `limit_ratio` to lower
-/// (when `limit_ratio` > 1) `cost_tracker`'s default limits.
-/// Lower limits yield smaller batch for forwarding.
+/// `ForwardBatch` represents one forwardable batch of transactions with a
+/// limited number of total compute units
 #[derive(Debug)]
 pub struct ForwardBatch {
     cost_tracker: CostTracker,
+    // `forwardable_packets` keeps forwardable packets in a vector in its
+    // original fee prioritized order
     forwardable_packets: Vec<Rc<ImmutableDeserializedPacket>>,
 }
 
@@ -38,6 +39,10 @@ impl Default for ForwardBatch {
 }
 
 impl ForwardBatch {
+    /// `ForwardBatch` keeps forwardable packets in a vector in its original fee prioritized order,
+    /// Number of packets are limited by `cost_tracker` with customized `limit_ratio` to lower
+    /// (when `limit_ratio` > 1) `cost_tracker`'s default limits.
+    /// Lower limits yield smaller batch for forwarding.
     fn new(limit_ratio: u32) -> Self {
         let mut cost_tracker = CostTracker::default();
         cost_tracker.set_limits(
@@ -85,10 +90,9 @@ impl ForwardBatch {
 }
 
 /// To avoid forward queue being saturated by transactions for single hot account,
-/// Forwarder should group and send prioritized transactions by account limit
-/// to allow transactions on non-congested accounts being forwarded with those
-/// for highly demanded account(s), which would be expected to have higher fee
-/// priorities.
+/// the forwarder will group and send prioritized transactions by account limit
+/// to allow transactions on non-congested accounts to be forwarded alongside higher fee
+/// transactions that saturate those highly demanded accounts.
 #[derive(Debug)]
 pub struct ForwardPacketBatchesByAccounts {
     // Need a `bank` to load all accounts for VersionedTransaction. Currently
@@ -102,7 +106,11 @@ pub struct ForwardPacketBatchesByAccounts {
 
 impl ForwardPacketBatchesByAccounts {
     pub fn new_with_default_batch_limits(current_bank: Arc<Bank>) -> Self {
-        Self::new(current_bank, DEFAULT_LIMIT_RATIO, DEFAULT_NUMBER_OF_BATCHES)
+        Self::new(
+            current_bank,
+            FORWARDED_BLOCK_COMPUTE_RATIO,
+            DEFAULT_NUMBER_OF_BATCHES,
+        )
     }
 
     pub fn new(current_bank: Arc<Bank>, limit_ratio: u32, number_of_batches: u32) -> Self {
@@ -115,7 +123,7 @@ impl ForwardPacketBatchesByAccounts {
         }
     }
 
-    pub fn fill(&mut self, packet: Rc<ImmutableDeserializedPacket>) -> bool {
+    pub fn add_packet(&mut self, packet: Rc<ImmutableDeserializedPacket>) -> bool {
         // do not forward packet that cannot be sanitized
         if let Some(sanitized_transaction) =
             unprocessed_packet_batches::transaction_from_deserialized_packet(
@@ -144,20 +152,20 @@ impl ForwardPacketBatchesByAccounts {
             let requested_cu = packet.compute_unit_limit();
 
             // try to fill into forward batches
-            self.fill_batches(&write_lock_accounts, requested_cu, packet)
+            self.add_packet_to_batches(&write_lock_accounts, requested_cu, packet)
         } else {
             false
         }
     }
 
-    pub fn get_batches(&self) -> impl Iterator<Item = &ForwardBatch> {
+    pub fn iter_batches(&self) -> impl Iterator<Item = &ForwardBatch> {
         self.forward_batches.iter()
     }
 
     /// transaction will try to be filled into 'batches', if can't fit into first batch
     /// due to cost_tracker (eg., exceeding account limit or block limit), it will try
     /// next batch until either being added to one of 'bucket' or not being forwarded.
-    fn fill_batches(
+    fn add_packet_to_batches(
         &mut self,
         write_lock_accounts: &[Pubkey],
         compute_units: u64,
@@ -250,7 +258,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fill_batches() {
+    fn test_add_packet_to_batches() {
         solana_logger::setup();
         // set test batch limit to be 1 millionth of regular block limit
         let limit_ratio = 1_000_000u32;
@@ -267,7 +275,7 @@ mod tests {
 
         // initially both batches are empty
         {
-            let mut batches = forward_packet_batches_by_accounts.get_batches();
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
             assert_eq!(0, batches.next().unwrap().len());
             assert_eq!(0, batches.next().unwrap().len());
             assert!(batches.next().is_none());
@@ -283,12 +291,12 @@ mod tests {
 
         // 1st high-priority packet added to 1st batch
         {
-            forward_packet_batches_by_accounts.fill_batches(
+            forward_packet_batches_by_accounts.add_packet_to_batches(
                 &[hot_account],
                 requested_cu,
                 packet_high_priority.immutable_section().clone(),
             );
-            let mut batches = forward_packet_batches_by_accounts.get_batches();
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
             assert_eq!(1, batches.next().unwrap().len());
             assert_eq!(0, batches.next().unwrap().len());
             assert!(batches.next().is_none());
@@ -296,24 +304,24 @@ mod tests {
 
         // 2nd high-priority packet added to 2nd packet
         {
-            forward_packet_batches_by_accounts.fill_batches(
+            forward_packet_batches_by_accounts.add_packet_to_batches(
                 &[hot_account],
                 requested_cu,
                 packet_high_priority.immutable_section().clone(),
             );
-            let mut batches = forward_packet_batches_by_accounts.get_batches();
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
             assert_eq!(1, batches.next().unwrap().len());
             assert_eq!(1, batches.next().unwrap().len());
         }
 
         // 3rd high-priority packet not included in forwarding
         {
-            forward_packet_batches_by_accounts.fill_batches(
+            forward_packet_batches_by_accounts.add_packet_to_batches(
                 &[hot_account],
                 requested_cu,
                 packet_high_priority.immutable_section().clone(),
             );
-            let mut batches = forward_packet_batches_by_accounts.get_batches();
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
             assert_eq!(1, batches.next().unwrap().len());
             assert_eq!(1, batches.next().unwrap().len());
             assert!(batches.next().is_none());
@@ -321,12 +329,12 @@ mod tests {
 
         // 4rd lower priority packet added to 1st bucket on non-content account
         {
-            forward_packet_batches_by_accounts.fill_batches(
+            forward_packet_batches_by_accounts.add_packet_to_batches(
                 &[other_account],
                 requested_cu,
                 packet_low_priority.immutable_section().clone(),
             );
-            let mut batches = forward_packet_batches_by_accounts.get_batches();
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
             assert_eq!(2, batches.next().unwrap().len());
             assert_eq!(1, batches.next().unwrap().len());
             assert!(batches.next().is_none());
