@@ -146,6 +146,7 @@ impl RollingBitField {
 
     /// remove key from set, return if item was in the set
     pub fn remove(&mut self, key: &u64) -> bool {
+        use log::*;
         if key >= &self.min {
             // if asked to remove something bigger than max, then no-op
             if key < &self.max_exclusive {
