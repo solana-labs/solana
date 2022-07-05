@@ -2453,11 +2453,18 @@ impl AccountsDb {
                 false
             }
         });
+
+        let pk_special = Pubkey::from_str("EnWuWsJDqecxJSRbRN4hDw6mKPtfupLeYRaNK5PADqfR").unwrap();
+        
+        
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
         for (_slot, store) in dirty_stores {
             for account in store.accounts.accounts(0) {
-                pubkeys.insert(account.meta.pubkey);
+                if &pk_special == account.meta.pubkey {
+                    error!("jw3: inserting key to search, pk: {}, {:?}", pk_special, (exists, slot_list, index_in_slot_list, ref_count));
+                }
+pubkeys.insert(account.meta.pubkey);
             }
         }
         trace!(
@@ -2559,6 +2566,8 @@ impl AccountsDb {
         let missing_accum = AtomicU64::new(0);
         let useful_accum = AtomicU64::new(0);
 
+        let pk_special = Pubkey::from_str("EnWuWsJDqecxJSRbRN4hDw6mKPtfupLeYRaNK5PADqfR").unwrap();
+
         // parallel scan the index.
         let (mut purges_zero_lamports, purges_old_accounts) = {
             let do_clean_scan = || {
@@ -2577,6 +2586,9 @@ impl AccountsDb {
                             // return true if we want this item to remain in the cache
                             |exists, slot_list, index_in_slot_list, pubkey, ref_count| {
                                 let mut useless = true;
+                                if &pk_special == pubkey {
+                                    error!("jw3: pk: {}, {:?}", pk_special, (exists, slot_list, index_in_slot_list, ref_count));
+                                }
                                 if !exists {
                                     missing += 1;
                                 } else {
