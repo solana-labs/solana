@@ -2156,6 +2156,7 @@ impl AccountsDb {
             None,
             Some((&self.clean_accounts_stats.purge_stats, &mut reclaim_result)),
             reset_accounts,
+            max_clean_root.unwrap_or_default(),
         );
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
@@ -2712,6 +2713,7 @@ impl AccountsDb {
             None,
             Some((&self.clean_accounts_stats.purge_stats, &mut reclaim_result)),
             reset_accounts,
+            max_clean_root.unwrap_or_default(),
         );
 
         reclaims_time.stop();
@@ -2866,6 +2868,7 @@ impl AccountsDb {
         expected_single_dead_slot: Option<Slot>,
         purge_stats_and_reclaim_result: Option<(&PurgeStats, &mut ReclaimResult)>,
         reset_accounts: bool,
+        max_slot: Slot,
     ) {
         if reclaims.is_empty() {
             //error!("jw:handle_reclaims is empty");
@@ -2902,7 +2905,7 @@ impl AccountsDb {
                 }
             }
 
-            self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
+            self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats, max_slot);
         } else {
             error!("jw:handle_reclaims no result");
             // not sure why this fails yet with ancient append vecs
@@ -2989,6 +2992,7 @@ impl AccountsDb {
         dead_slots: &HashSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
         purge_stats: &PurgeStats,
+        max_slot: Slot,
     ) {
         if dead_slots.is_empty() {
             error!("process_dead_slots is empty");
@@ -2998,7 +3002,7 @@ impl AccountsDb {
             error!("jw:process_dead_slots: {}", dead_slots.len());
         }
         let mut clean_dead_slots = Measure::start("reclaims::clean_dead_slots");
-        self.clean_stored_dead_slots(dead_slots, purged_account_slots);
+        self.clean_stored_dead_slots(dead_slots, purged_account_slots, max_slot);
         clean_dead_slots.stop();
 
         let mut purge_removed_slots = Measure::start("reclaims::purge_removed_slots");
@@ -5096,6 +5100,7 @@ impl AccountsDb {
                 std::iter::once(&purged_slot),
                 purged_slot_pubkeys,
                 None,
+                purged_slot, // not right?
             );
         }
     }
@@ -5152,6 +5157,7 @@ impl AccountsDb {
             expected_dead_slot,
             Some((purge_stats, &mut ReclaimResult::default())),
             false,
+            remove_slot,
         );
         handle_reclaims_elapsed.stop();
         purge_stats
@@ -7324,6 +7330,7 @@ impl AccountsDb {
         purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
         // Should only be `Some` for non-cached slots
         purged_stored_account_slots: Option<&mut AccountSlots>,
+        max_slot: Slot,
     ) {
         error!("jw:remove_dead_slots_metadata: {}", purged_slot_pubkeys.len());
 
@@ -7332,6 +7339,7 @@ impl AccountsDb {
             dead_slots_iter.clone(),
             purged_slot_pubkeys,
             purged_stored_account_slots,
+            max_slot,
         );
         {
             let mut bank_hashes = self.bank_hashes.write().unwrap();
@@ -7349,6 +7357,7 @@ impl AccountsDb {
         purged_slot_pubkeys: HashSet<(Slot, Pubkey)>,
         // Should only be `Some` for non-cached slots
         purged_stored_account_slots: Option<&mut AccountSlots>,
+        max_slot: Slot,
     ) {
         let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
         let mut measure = Measure::start("unref_from_storage");
@@ -7395,6 +7404,7 @@ impl AccountsDb {
         error!("clean_dead_slots: {}", dead_slots.len());
         accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
         info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
+        info!("jw:remove_dead_slots_metadata_dist: slots {:?}", dead_slots.iter().map(|s| max_slot - s).collect::<Vec<_>>());
 
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
         accounts_index_root_stats.unrooted_cleaned_count += unrooted_cleaned_count;
@@ -7408,6 +7418,7 @@ impl AccountsDb {
         &self,
         dead_slots: &HashSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
+        max_slot: Slot,
     ) {
         error!("jw:clean_stored_dead_slots: {}", dead_slots.len());
 
@@ -7442,6 +7453,7 @@ impl AccountsDb {
             dead_slots.iter(),
             purged_slot_pubkeys,
             purged_account_slots,
+            max_slot,
         );
         measure.stop();
         inc_new_counter_info!("clean_stored_dead_slots-ms", measure.as_ms() as usize);
@@ -7720,6 +7732,7 @@ impl AccountsDb {
         let expected_single_dead_slot =
             (!accounts.contains_multiple_slots()).then(|| accounts.target_slot());
 
+        let temp_max_slot=  accounts.target_slot();
         // If the cache was flushed, then because `update_index` occurs
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
@@ -7757,7 +7770,7 @@ impl AccountsDb {
         if !reclaims.is_empty() {
             error!("jw: hr note empty, store_accounts_custom");
         }
-        self.handle_reclaims(&reclaims, expected_single_dead_slot, None, reset_accounts);
+        self.handle_reclaims(&reclaims, expected_single_dead_slot, None, reset_accounts, temp_max_slot);
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
