@@ -24,13 +24,20 @@ package.
 
 ## Downgrade
 
-If a new column family has been introduced to the validator blockstore a subsequent
-downgrade will cause the validator to fail during startup.
+If a new column family has been introduced to the validator blockstore a
+subsequent downgrade of the validator to a version prior to the version where
+the new column family was intoduced will cause the validator to fail during
+startup.
 
-To list the `rocksdb` column families:
-`ldb --db=<validator ledger path>/rocksdb/ list_column_families`
+List column families:
+```
+ldb --db=<validator ledger path>/rocksdb/ list_column_families
+```
 
-**Warning**: Please seek guidance on discord before modifying the validator blockstore.
+**Warning**: Please seek guidance on discord before modifying the validator
+blockstore.
 
-A newly created column family can be dropped:
-`ldb --db=<validator ledger path>/rocksdb drop_column_family <column family name>`
+Drop a column family:
+```
+ldb --db=<validator ledger path>/rocksdb drop_column_family <column family name>
+```
