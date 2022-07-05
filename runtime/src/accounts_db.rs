@@ -2881,6 +2881,8 @@ impl AccountsDb {
                 (None, None, None)
             };
 
+        error!("remove_dead_accounts: {}", reclaims.len());
+
         let dead_slots = self.remove_dead_accounts(
             reclaims,
             expected_single_dead_slot,
@@ -2898,6 +2900,7 @@ impl AccountsDb {
 
             self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
         } else {
+            error!("handle_reclaims no result");
             // not sure why this fails yet with ancient append vecs
             if !self.ancient_append_vecs {
                 assert!(dead_slots.is_empty());
@@ -2984,6 +2987,7 @@ impl AccountsDb {
         purge_stats: &PurgeStats,
     ) {
         if dead_slots.is_empty() {
+            error!("process_dead_slots is empty");
             return;
         }
         let mut clean_dead_slots = Measure::start("reclaims::clean_dead_slots");
@@ -7348,6 +7352,7 @@ impl AccountsDb {
             })
             .collect();
         measure.stop();
+        error!("clean_dead_slots: {}", dead_slots.len());
         accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
         info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
 
