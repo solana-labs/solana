@@ -247,52 +247,55 @@ pub(crate) fn bank_from_streams<R>(
 where
     R: Read,
 {
-    macro_rules! INTO {
-        ($style:ident) => {{
+    let (
+        full_snapshot_bank_fields,
+        full_snapshot_accounts_db_fields,
+        incremental_snapshot_bank_fields,
+        incremental_snapshot_accounts_db_fields,
+    ) = match serde_style {
+        SerdeStyle::Newer => {
             let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
-                $style::Context::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
+                newer::Context::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
             let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
                 if let Some(ref mut incremental_snapshot_stream) =
                     snapshot_streams.incremental_snapshot_stream
                 {
                     let (bank_fields, accounts_db_fields) =
-                        $style::Context::deserialize_bank_fields(incremental_snapshot_stream)?;
+                        newer::Context::deserialize_bank_fields(incremental_snapshot_stream)?;
                     (Some(bank_fields), Some(accounts_db_fields))
                 } else {
                     (None, None)
                 };
-
-            let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
+            (
+                full_snapshot_bank_fields,
                 full_snapshot_accounts_db_fields,
+                incremental_snapshot_bank_fields,
                 incremental_snapshot_accounts_db_fields,
-            };
-            let bank = reconstruct_bank_from_fields(
-                incremental_snapshot_bank_fields.unwrap_or(full_snapshot_bank_fields),
-                snapshot_accounts_db_fields,
-                genesis_config,
-                account_paths,
-                unpacked_append_vec_map,
-                debug_keys,
-                additional_builtins,
-                account_secondary_indexes,
-                caching_enabled,
-                limit_load_slot_count_from_snapshot,
-                shrink_ratio,
-                verify_index,
-                accounts_db_config,
-                accounts_update_notifier,
-                accounts_db_skip_shrink,
-            )?;
-            Ok(bank)
-        }};
-    }
-    match serde_style {
-        SerdeStyle::Newer => INTO!(newer),
-    }
-    .map_err(|err| {
-        warn!("bankrc_from_stream error: {:?}", err);
-        err
-    })
+            )
+        }
+    };
+
+    let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
+        full_snapshot_accounts_db_fields,
+        incremental_snapshot_accounts_db_fields,
+    };
+    reconstruct_bank_from_fields(
+        incremental_snapshot_bank_fields.unwrap_or(full_snapshot_bank_fields),
+        snapshot_accounts_db_fields,
+        genesis_config,
+        account_paths,
+        unpacked_append_vec_map,
+        debug_keys,
+        additional_builtins,
+        account_secondary_indexes,
+        caching_enabled,
+        limit_load_slot_count_from_snapshot,
+        shrink_ratio,
+        verify_index,
+        accounts_db_config,
+        accounts_update_notifier,
+        accounts_db_skip_shrink,
+    )
 }
 
 pub(crate) fn bank_to_stream<W>(
@@ -304,25 +307,16 @@ pub(crate) fn bank_to_stream<W>(
 where
     W: Write,
 {
-    macro_rules! INTO {
-        ($style:ident) => {
-            bincode::serialize_into(
-                stream,
-                &SerializableBankAndStorage::<$style::Context> {
-                    bank,
-                    snapshot_storages,
-                    phantom: std::marker::PhantomData::default(),
-                },
-            )
-        };
-    }
     match serde_style {
-        SerdeStyle::Newer => INTO!(newer),
+        SerdeStyle::Newer => bincode::serialize_into(
+            stream,
+            &SerializableBankAndStorage::<newer::Context> {
+                bank,
+                snapshot_storages,
+                phantom: std::marker::PhantomData::default(),
+            },
+        ),
     }
-    .map_err(|err| {
-        warn!("bankrc_to_stream error: {:?}", err);
-        err
-    })
 }
 
 #[cfg(test)]
@@ -335,25 +329,16 @@ pub(crate) fn bank_to_stream_no_extra_fields<W>(
 where
     W: Write,
 {
-    macro_rules! INTO {
-        ($style:ident) => {
-            bincode::serialize_into(
-                stream,
-                &SerializableBankAndStorageNoExtra::<$style::Context> {
-                    bank,
-                    snapshot_storages,
-                    phantom: std::marker::PhantomData::default(),
-                },
-            )
-        };
-    }
     match serde_style {
-        SerdeStyle::Newer => INTO!(newer),
+        SerdeStyle::Newer => bincode::serialize_into(
+            stream,
+            &SerializableBankAndStorageNoExtra::<newer::Context> {
+                bank,
+                snapshot_storages,
+                phantom: std::marker::PhantomData::default(),
+            },
+        ),
     }
-    .map_err(|err| {
-        warn!("bankrc_to_stream error: {:?}", err);
-        err
-    })
 }
 
 /// deserialize the bank from 'stream_reader'
