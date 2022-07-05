@@ -2867,6 +2867,7 @@ impl AccountsDb {
         reset_accounts: bool,
     ) {
         if reclaims.is_empty() {
+            error!("jw:handle_reclaims is empty");
             return;
         }
 
@@ -2883,7 +2884,7 @@ impl AccountsDb {
                 (None, None, None)
             };
 
-        error!("remove_dead_accounts: {}", reclaims.len());
+        error!("jw:remove_dead_accounts: {}", reclaims.len());
 
         let dead_slots = self.remove_dead_accounts(
             reclaims,
@@ -2902,7 +2903,7 @@ impl AccountsDb {
 
             self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
         } else {
-            error!("handle_reclaims no result");
+            error!("jw:handle_reclaims no result");
             // not sure why this fails yet with ancient append vecs
             if !self.ancient_append_vecs {
                 assert!(dead_slots.is_empty());
@@ -7190,6 +7191,7 @@ impl AccountsDb {
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
         let mut measure = Measure::start("remove");
+        let mut sc = 0;
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
             assert!(!account_info.is_cached());
@@ -7238,6 +7240,7 @@ impl AccountsDb {
             }
         }
         measure.stop();
+        let sc = new_shrink_candidates.len();
         self.clean_accounts_stats
             .remove_dead_accounts_remove_us
             .fetch_add(measure.as_us(), Ordering::Relaxed);
@@ -7273,6 +7276,7 @@ impl AccountsDb {
                 .fetch_add(measure.as_us(), Ordering::Relaxed);
         }
 
+        let orig_ct = dead_slots.len();
         dead_slots.retain(|slot| {
             if let Some(slot_stores) = self.storage.get_slot_stores(*slot) {
                 for x in slot_stores.read().unwrap().values() {
@@ -7283,6 +7287,8 @@ impl AccountsDb {
             }
             true
         });
+        let final_ct = dead_slots.len();
+        error!("jw:remove_dead_accounts from {} down to {}, shrink candidates: {}, reset_accounts: {}", orig_ct, final_ct, sc.len(), reset_accounts);
 
         dead_slots
     }
