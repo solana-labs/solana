@@ -15,7 +15,7 @@ bv = { version = "0.11.1", features = ["serde"] }
 lazy_static = "1.4.0"
 log = "0.4.17"
 once_cell = "1.12.0"
-serde = "1.0.137"
+serde = "1.0.138"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
 sha2 = "0.10.2"

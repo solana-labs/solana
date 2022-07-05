@@ -13,7 +13,7 @@ edition = "2021"
 bincode = "1.3.3"
 bs58 = "0.4.0"
 prost = "0.10.4"
-serde = "1.0.137"
+serde = "1.0.138"
 solana-account-decoder = { path = "../account-decoder", version = "=1.11.2" }
 solana-sdk = { path = "../sdk", version = "=1.11.2" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.2" }
