@@ -2125,6 +2125,7 @@ impl AccountsDb {
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
 
         let mut clean_rooted = Measure::start("clean_old_root-ms");
+        error!("clean_accounts_older_than_root: {}, root: {:?}", purges.len(), max_clean_root);
         let reclaim_vecs = purges
             .par_chunks(INDEX_CLEAN_BULK_COUNT)
             .map(|pubkeys: &[Pubkey]| {
