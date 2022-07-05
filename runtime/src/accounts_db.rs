@@ -2909,26 +2909,28 @@ impl AccountsDb {
                     storages.iter().map(|s| s.count()).sum::<usize>()
                 );
                 error!("jw2:log_old_slots_pubkeys: {:?}", {
-                    let mut my_stored = stored_accounts.iter().map(|(k, v)| *k).collect::<Vec<_>>();
-                    my_stored.sort();
+                    let mut my_stored = stored_accounts.iter().collect::<Vec<_>>();
+                    my_stored.sort_by(|a, b| {
+                        a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)});
                     my_stored
                         .into_iter()
-                        .map(|pubkey| {
+                        .filter_map(|(pubkey, acct)| {
                             let lookup = self.accounts_index.get_account_read_entry(&pubkey);
-                            (
+                            let result = (
                                 pubkey,
                                 if let Some(locked_entry) = lookup {
                                     let mut slots = locked_entry
                                         .slot_list()
                                         .iter()
-                                        .map(|(slot, _)| *slot)
+                                        .map(|(slot, v)| (*slot, v.is_zero_lamport() ))
                                         .collect::<Vec<_>>();
                                     slots.sort();
                                     slots
                                 } else {
                                     vec![]
                                 },
-                            )
+                            );
+                            Some(result)
                         })
                         .collect::<Vec<_>>()
                 });
