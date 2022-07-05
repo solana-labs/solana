@@ -2539,11 +2539,9 @@ impl AccountsDb {
                         let mut useful = 0;
                         self.accounts_index.scan(
                             pubkeys.iter(),
-                            |exists, slot_list, pubkey, ref_count| {
+                            |pubkey, slots_refs| {
                                 let mut useless = true;
-                                if !exists {
-                                    missing += 1;
-                                } else {
+                                if let Some((slot_list, ref_count)) = slots_refs {
                                     let index_in_slot_list = self.accounts_index.latest_slot(
                                         None,
                                         slot_list,
@@ -2594,6 +2592,8 @@ impl AccountsDb {
                                             purges_old_accounts.push(*pubkey);
                                         }
                                     }
+                                } else {
+                                    missing += 1;
                                 }
                                 if !useless {
                                     useful += 1;
@@ -3039,9 +3039,9 @@ impl AccountsDb {
             accounts[..std::cmp::min(accounts.len(), count)]
                 .iter()
                 .map(|(key, _)| key),
-            |exists, slot_list, pubkey, _ref_count| {
+            |pubkey, slots_refs| {
                 let mut result = AccountsIndexScanResult::None;
-                if exists {
+                if let Some((slot_list, _ref_count)) = slots_refs {
                     let pair = &accounts[index];
                     let stored_account = &pair.1;
                     let is_alive = slot_list.iter().any(|(_slot, acct_info)| {
