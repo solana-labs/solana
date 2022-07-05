@@ -2925,7 +2925,7 @@ impl AccountsDb {
                                 vec![]
                             },
                         )
-                    })::collect::<Vec<_>>()
+                    }).collect::<Vec<_>>()
                 });
                 log += 1;
             }
