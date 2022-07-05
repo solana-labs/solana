@@ -2706,6 +2706,7 @@ impl AccountsDb {
         // and those stores may be used for background hashing.
         let reset_accounts = false;
         let mut reclaim_result = ReclaimResult::default();
+        error!("jw:2nd handle_reclaims call, reclaims: {}", reclaims.len());
         self.handle_reclaims(
             &reclaims,
             None,
@@ -7195,6 +7196,8 @@ impl AccountsDb {
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
         let mut measure = Measure::start("remove");
         let mut sc = 0;
+        let mut missing_entries = 0;
+        let mut slot_counts = HashMap::<Slot, usize>::default();
         for (slot, account_info) in reclaims {
             // No cached accounts should make it here
             assert!(!account_info.is_cached());
@@ -7240,6 +7243,12 @@ impl AccountsDb {
                             .insert(store.append_vec_id(), store);
                     }
                 }
+                else {
+                    slot_counts.insert(*slot, count);
+                }
+            }
+            else {
+                missing_entries += 1;
             }
         }
         measure.stop();
@@ -7247,6 +7256,8 @@ impl AccountsDb {
         self.clean_accounts_stats
             .remove_dead_accounts_remove_us
             .fetch_add(measure.as_us(), Ordering::Relaxed);
+
+        let sc_c = new_shrink_candidates.clone();
 
         if self.caching_enabled {
             let mut measure = Measure::start("shrink");
@@ -7291,7 +7302,18 @@ impl AccountsDb {
             true
         });
         let final_ct = dead_slots.len();
-        error!("jw:remove_dead_accounts from {} down to {}, shrink candidates: {}, reset_accounts: {}", orig_ct, final_ct, sc, reset_accounts);
+        error!("jw:remove_dead_accounts from {} down to {}, shrink candidates: {}, reset_accounts: {}, missing entries: {}, slot_counts: {:?}, shrink_candidates: {:?}", orig_ct, final_ct, sc, reset_accounts, missing_entries, 
+        {
+            let mut a = slot_counts.iter().collect::<Vec<_>>();
+            a.sort();
+            a
+        },
+        {
+            let mut a = sc_c.iter().map(|(k,_)| k).collect::<Vec<_>>();
+            a.sort();
+            a
+        },
+    );
 
         dead_slots
     }
