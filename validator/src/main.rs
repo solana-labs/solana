@@ -1604,8 +1604,9 @@ pub fn main() {
         .arg(
             Arg::with_name("disable_accounts_disk_index")
                 .long("disable-accounts-disk-index")
-                .help("Disable the disk-based accounts index if it is enabled by default.")
+                .help("Disable the disk-based accounts index if it is enabled.")
                 .conflicts_with("accounts_index_memory_limit_mb")
+                .hidden(true)
         )
         .arg(
             Arg::with_name("accounts_index_bins")
