@@ -249,6 +249,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         None => {}
                     }
                     entry.clear_lazy_disk_load();
+                    Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
                 }
                 entry.set_age(self.storage.future_age_to_flush());
                 callback(Some(entry)).1
@@ -276,6 +277,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 None => {}
                             }
                             entry.clear_lazy_disk_load();
+                            Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
                         }
                         callback(Some(entry)).1
                     }
@@ -339,6 +341,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         None => {}
                     }
                     entry.clear_lazy_disk_load();
+                    Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
                 }
 
                 let result =
@@ -486,6 +489,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             assert!(entry.dirty());
                             vacant.insert(entry);
                             self.stats().inc_mem_count(self.bin);
+                            Self::update_stat(&self.stats().lazy_disk_index_lookup_set_count, 1);
                         } else {
                             // go to in-mem cache first
                             let disk_entry = self.load_account_entry_from_disk(vacant.key());
