@@ -2461,8 +2461,8 @@ impl AccountsDb {
         let pubkeys = DashSet::new();
         for (_slot, store) in dirty_stores {
             for account in store.accounts.accounts(0) {
-                if &pk_special == account.meta.pubkey {
-                    error!("jw3: inserting key to search, pk: {}, {:?}", pk_special, (exists, slot_list, index_in_slot_list, ref_count));
+                if pk_special == account.meta.pubkey {
+                    error!("jw3: inserting key to search, pk: {}, slot: {}", pk_special, _slot);
                 }
 pubkeys.insert(account.meta.pubkey);
             }
