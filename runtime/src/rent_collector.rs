@@ -172,14 +172,14 @@ impl RentCollector {
             return RentResult::LeaveAloneNoRent;
         }
 
-        let epoch_increment = match rent_due {
+        let new_rent_epoch = match rent_due {
             // Rent isn't collected for the next epoch
             // Make sure to check exempt status again later in current epoch
-            RentDue::Exempt => 0,
+            RentDue::Exempt => self.epoch,
             // Rent is collected for next epoch
-            RentDue::Paying(_) => 1,
+            RentDue::Paying(_) => self.epoch + 1,
         };
-        RentResult::CollectRent((self.epoch + epoch_increment, rent_due.lamports()))
+        RentResult::CollectRent((new_rent_epoch, rent_due.lamports()))
     }
 
     #[must_use = "add to Bank::collected_rent"]
