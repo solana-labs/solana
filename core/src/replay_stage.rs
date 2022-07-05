@@ -91,7 +91,7 @@ const MAX_VOTE_REFRESH_INTERVAL_MILLIS: usize = 5000;
 
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(2)
+        .num_threads(4)
         .thread_name(|ix| format!("replay_{}", ix))
         .build()
         .unwrap();
@@ -2222,7 +2222,7 @@ impl ReplayStage {
         transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
     ) -> bool {
-        let did_complete_bank = RwLock::new(false);
+        let did_complete_bank = AtomicBool::new(false);
         let tx_count = RwLock::new(0);
         let execute_timings = ExecuteTimings::default();
         let active_banks = bank_forks.read().unwrap().active_banks();
@@ -2256,21 +2256,21 @@ impl ReplayStage {
         PAR_THREAD_POOL.install(|| {
             active_banks
                 .into_par_iter()
-                .map(|bank_slot| {
+                .for_each(|bank_slot| {
                 let idx = PAR_THREAD_POOL.current_thread_index().unwrap();
-                warn!("REPLAY ACTIVE BANK THREAD IDX {}", idx);
+                warn!("REPLAY ACTIVE BANK: SLOT {} THREAD IDX {}", bank_slot, idx);
                 // If the fork was marked as dead, don't replay it
-                let mut progress2 = progress.write().unwrap();
-                if progress2.get(&bank_slot).map(|p| p.is_dead).unwrap_or(false) {
+                let mut progress_lock = progress.write().unwrap();
+                if progress_lock.get(&bank_slot).map(|p| p.is_dead).unwrap_or(false) {
                     debug!("bank_slot {:?} is marked dead", bank_slot);
                     return;
                 }
 
                 let bank = bank_forks.read().unwrap().get(bank_slot).unwrap();
                 let parent_slot = bank.parent_slot();
-                let prev_leader_slot = progress2.get_bank_prev_leader_slot(&bank);
+                let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(&bank);
                 let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
-                    let stats = progress2
+                    let stats = progress_lock
                         .get(&parent_slot)
                         .expect("parent of active bank must exist in progress map");
                     let num_blocks_on_fork = stats.num_blocks_on_fork + 1;
@@ -2280,7 +2280,7 @@ impl ReplayStage {
                     (num_blocks_on_fork, num_dropped_blocks_on_fork)
                 };
 
-                let bank_progress = progress2.entry(bank.slot()).or_insert_with(|| {
+                let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
                     ForkProgress::new_from_bank(
                         &bank,
                         &my_pubkey.read().unwrap(),
@@ -2293,9 +2293,9 @@ impl ReplayStage {
 
                 let replay_stats = bank_progress.replay_stats.clone();
                 let replay_progress = bank_progress.replay_progress.clone();
+                drop(progress_lock);
 
-                let x = *my_pubkey.read().unwrap();
-                if bank.collector_id() != x {
+                if bank.collector_id() != *my_pubkey.read().unwrap() {
                     let root_slot = bank_forks.read().unwrap().root();
                     let mut replay_blockstore_time = Measure::start("replay_blockstore_into_bank");
                     
@@ -2311,7 +2311,9 @@ impl ReplayStage {
                         );
                     
                     replay_blockstore_time.stop();
-                    replay_timing.write().unwrap().replay_blockstore_us += replay_blockstore_time.as_us();
+                    let mut replay_timing_lock = replay_timing.write().unwrap();
+                    replay_timing_lock.replay_blockstore_us += replay_blockstore_time.as_us();
+                    drop(replay_timing_lock);
                     match replay_result {
                         Ok(replay_tx_count) => *tx_count.write().unwrap() += replay_tx_count,
                         Err(err) => {
@@ -2338,6 +2340,7 @@ impl ReplayStage {
                 }
                 assert_eq!(bank_slot, bank.slot());
                 if bank.is_complete() {
+                    warn!("Completed slot {}",bank_slot);
                     let mut bank_complete_time = Measure::start("bank_complete_time");
 
                     let r_replay_stats = replay_stats.read().unwrap();
@@ -2347,8 +2350,7 @@ impl ReplayStage {
                         bank.slot(),
                         r_replay_stats.execute_timings
                         );
-
-                    *did_complete_bank.write().unwrap() = true;
+                    did_complete_bank.store(true, Ordering::Relaxed);
                     info!("bank frozen: {}", bank.slot());
                     let _ = cluster_slots_update_sender.read().unwrap().send(vec![bank_slot]);
                     if let Some(transaction_status_sender) = *transaction_status_sender.read().unwrap() {
@@ -2371,7 +2373,19 @@ impl ReplayStage {
                         (bank.slot(), bank.hash()),
                         Some((bank.parent_slot(), bank.parent_hash())),
                     );
+                    let mut progress_lock = progress.write().unwrap();
+                    let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
+                        ForkProgress::new_from_bank(
+                            &bank,
+                            &my_pubkey.read().unwrap(),
+                            &vote_account.read().unwrap(),
+                            prev_leader_slot,
+                            num_blocks_on_fork,
+                            num_dropped_blocks_on_fork,
+                        )
+                    });
                     bank_progress.fork_stats.bank_hash = Some(bank.hash());
+                    drop(progress_lock);
                     let bank_frozen_state = BankFrozenState::new_from_state(
                         bank.slot(),
                         bank.hash(),
@@ -2451,7 +2465,7 @@ impl ReplayStage {
         }
 
         inc_new_counter_info!("replay_stage-replay_transactions", *tx_count.read().unwrap());
-        let x = *did_complete_bank.read().unwrap(); x
+        did_complete_bank.load(Ordering::SeqCst)
     }
 
     #[allow(clippy::too_many_arguments)]
