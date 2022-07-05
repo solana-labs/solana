@@ -2680,6 +2680,9 @@ impl AccountsDb {
                     .get(key)
                     .map(|slots_removed| slots_removed.contains(slot))
                     .unwrap_or(false);
+                if slot == &137801196 {
+                    error!("jw3: key: {}, was_slot_purged: {}, ref_count: {}", key, was_slot_purged, ref_count);
+                }
                 if was_slot_purged {
                     // No need to look up the slot storage below if the entire
                     // slot was purged
@@ -2692,9 +2695,15 @@ impl AccountsDb {
                     .map(|store_removed| store_removed.contains(&account_info.offset()))
                     .unwrap_or(false);
                 if was_reclaimed {
-                    return false;
+                    if slot == &137801196 {
+                        error!("jw3: key: {}, was_slot_purged: {}, ref_count: {}, was_reclaimed", key, was_slot_purged, ref_count);
+                    }
+                        return false;
                 }
                 if let Some(store_count) = store_counts.get_mut(&account_info.store_id()) {
+                    if slot == &137801196 {
+                        error!("jw3: store count: key: {}, was_slot_purged: {}, ref_count: {}, {}", key, was_slot_purged, ref_count, store_count.0);
+                    }
                     store_count.0 -= 1;
                     store_count.1.insert(*key);
                 } else {
@@ -2715,6 +2724,10 @@ impl AccountsDb {
                         "store_counts, inserting slot: {}, store id: {}, count: {}",
                         slot, account_info.store_id(), count
                     );
+                    if slot == &137801196 {
+                        error!("jw3: store count inserted: key: {}, was_slot_purged: {}, ref_count: {}, count: {}, key_set: {:?}", key, was_slot_purged, ref_count, count, key_set);
+                    }
+
                     store_counts.insert(account_info.store_id(), (count, key_set));
                 }
                 true
