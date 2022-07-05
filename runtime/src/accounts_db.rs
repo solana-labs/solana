@@ -2416,7 +2416,7 @@ impl AccountsDb {
         });
         m.stop();
         if added > 0 {
-            error!("added: {}, already present: {}, {:?}", added, already_present, m);
+            error!("added: {}, already present: {}, {}", added, already_present, m);
         }
     }
 
