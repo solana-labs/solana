@@ -32,7 +32,7 @@ quinn-proto = "0.8.3"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.3"
-reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+reqwest = { version = "0.11.11", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
 rustls = { version = "0.20.6", features = ["dangerous_configuration"] }
 semver = "1.0.10"
 serde = "1.0.137"
