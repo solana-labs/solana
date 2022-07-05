@@ -3554,7 +3554,10 @@ impl AccountsDb {
         // shrinking while still achieving the overall goals.
         let mut shrink_slots: ShrinkCandidates = HashMap::new();
         let mut shrink_slots_next_batch: ShrinkCandidates = HashMap::new();
+        let mut last_was_newer = false;
         for usage in &store_usage {
+            assert!(usage.newer == last_was_newer || usage.newer && !last_was_newer); // assert search order is what we thought
+            last_was_newer = usage.newer;
             let store = &usage.store;
             let alive_ratio = (total_alive_bytes as f64) / (total_bytes as f64);
             debug!("alive_ratio: {:?} store_id: {:?}, store_ratio: {:?} requirment: {:?}, total_bytes: {:?} total_alive_bytes: {:?}",
@@ -4016,13 +4019,19 @@ impl AccountsDb {
         }
 
         let _guard = self.active_stats.activate(ActiveStatItem::Shrink);
+        let accounts_hash_complete_one_epoch_old =
+            *self.accounts_hash_complete_one_epoch_old.read().unwrap();
 
         let mut measure_shrink_all_candidates = Measure::start("shrink_all_candidate_slots-ms");
         let num_candidates = shrink_slots.len();
+        let old_ones_shrink = AtomicUsize::default();
         let shrink_candidates_count: usize = self.thread_pool_clean.install(|| {
             shrink_slots
                 .into_par_iter()
                 .map(|(slot, slot_shrink_candidates)| {
+                    if slot < &accounts_hash_complete_one_epoch_old {
+                        old_ones_shrink.fetch_add(1, ORdering::Relaxed);
+                    }
                     let mut measure = Measure::start("shrink_candidate_slots-ms");
                     self.do_shrink_slot_stores(slot, slot_shrink_candidates.values());
                     measure.stop();
@@ -4031,6 +4040,7 @@ impl AccountsDb {
                 })
                 .sum()
         });
+        error!("jw:shrunk old: {}", old_ones_shrink.load(Ordering::Relaxed));
         measure_shrink_all_candidates.stop();
         inc_new_counter_info!(
             "shrink_all_candidate_slots-ms",
