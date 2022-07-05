@@ -242,11 +242,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // so, we have to load from disk first, then merge with in-mem
                     // right now we have a read lock on the in-mem idx, fwiw
                     let disk_entry = self.load_account_entry_from_disk(pubkey);
-                    match disk_entry {
-                        Some(disk_entry) => {
-                            Self::merge_slot_lists(entry, disk_entry);
-                        }
-                        None => {}
+                    if let Some(disk_entry) = disk_entry {
+                        Self::merge_slot_lists(entry, disk_entry);
                     }
                     entry.clear_lazy_disk_load();
                     Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
@@ -270,11 +267,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // right now we have a write lock on the in-mem idx, fwiw
                             // NB: we remove a slot from the slot list through calling slot_list_mut
                             // we need to make sure this gets covered
-                            match disk_entry {
-                                Some(disk_entry) => {
-                                    Self::merge_slot_lists(entry, disk_entry);
-                                }
-                                None => {}
+                            if let Some(disk_entry) = disk_entry {
+                                Self::merge_slot_lists(entry, disk_entry);
                             }
                             entry.clear_lazy_disk_load();
                             Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
@@ -334,11 +328,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let entry = occupied.get();
                     let key = occupied.key();
                     let disk_entry = self.load_account_entry_from_disk(key);
-                    match disk_entry {
-                        Some(disk_entry) => {
-                            Self::merge_slot_lists(entry, disk_entry);
-                        }
-                        None => {}
+                    if let Some(disk_entry) = disk_entry {
+                        Self::merge_slot_lists(entry, disk_entry);
                     }
                     entry.clear_lazy_disk_load();
                     Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
