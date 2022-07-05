@@ -2385,6 +2385,8 @@ impl AccountsDb {
     }
 
     fn add_old_roots_to_dirty_stores(&self) {
+        let mut added = 0;
+        let mut m = Measure::start("figuring out old append vecs");
         let accounts_hash_complete_one_epoch_old =
             *self.accounts_hash_complete_one_epoch_old.read().unwrap();
         let old_roots = self
@@ -2403,12 +2405,17 @@ impl AccountsDb {
                         }
 
                         Vacant(vacant_entry) => {
+                            added += 1;
                             vacant_entry.insert(Arc::clone(storage));
                         }
                     }
                 });
             }
         });
+        m.stop();
+        if added > 0 {
+            error!("added: {}, {:?}", added, m);
+        }
     }
 
     // Construct a vec of pubkeys for cleaning from:
