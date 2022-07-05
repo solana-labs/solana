@@ -1798,6 +1798,13 @@ impl Bank {
         let (feature_set, feature_set_time) =
             measure!(parent.feature_set.clone(), "feature_set_creation");
 
+        let mut rent_collector = Self::get_rent_collector_from(&parent.rent_collector, epoch);
+        if !rent_collector.rent_exempt_accounts_ignore_rent_epoch
+            && parent.should_rent_exempt_accounts_ignore_rent_epoch()
+        {
+            rent_collector.rent_exempt_accounts_ignore_rent_epoch = true;
+        }
+
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
             rewrites_skipped_this_slot: Rewrites::default(),
@@ -1816,7 +1823,7 @@ impl Bank {
             slots_per_year: parent.slots_per_year,
             epoch_schedule,
             collected_rent: AtomicU64::new(0),
-            rent_collector: Self::get_rent_collector_from(&parent.rent_collector, epoch),
+            rent_collector,
             max_tick_height: (slot + 1) * parent.ticks_per_slot,
             block_height: parent.block_height + 1,
             fee_calculator,
@@ -2067,6 +2074,11 @@ impl Bank {
             .submit(parent.slot());
 
         new
+    }
+
+    pub fn should_rent_exempt_accounts_ignore_rent_epoch(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
     }
 
     pub fn byte_limit_for_scans(&self) -> Option<usize> {
@@ -3539,6 +3551,7 @@ impl Bank {
             self.epoch_schedule(),
             self.slots_per_year,
             &genesis_config.rent,
+            self.should_rent_exempt_accounts_ignore_rent_epoch(),
         );
 
         // Add additional builtin programs specified in the genesis config

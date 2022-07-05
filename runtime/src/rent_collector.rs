@@ -18,6 +18,7 @@ pub struct RentCollector {
     pub epoch_schedule: EpochSchedule,
     pub slots_per_year: f64,
     pub rent: Rent,
+    pub rent_exempt_accounts_ignore_rent_epoch: bool,
 }
 
 impl Default for RentCollector {
@@ -28,6 +29,7 @@ impl Default for RentCollector {
             // derive default value using GenesisConfig::default()
             slots_per_year: GenesisConfig::default().slots_per_year(),
             rent: Rent::default(),
+            rent_exempt_accounts_ignore_rent_epoch: false,
         }
     }
 }
@@ -48,12 +50,14 @@ impl RentCollector {
         epoch_schedule: &EpochSchedule,
         slots_per_year: f64,
         rent: &Rent,
+        rent_exempt_accounts_ignore_rent_epoch: bool,
     ) -> Self {
         Self {
             epoch,
             epoch_schedule: *epoch_schedule,
             slots_per_year,
             rent: *rent,
+            rent_exempt_accounts_ignore_rent_epoch,
         }
     }
 
@@ -175,7 +179,15 @@ impl RentCollector {
         let new_rent_epoch = match rent_due {
             // Rent isn't collected for the next epoch
             // Make sure to check exempt status again later in current epoch
-            RentDue::Exempt => self.epoch,
+            RentDue::Exempt => {
+                if self.rent_exempt_accounts_ignore_rent_epoch {
+                    // account's rent_epoch remains the same
+                    account.rent_epoch()
+                } else {
+                    // account's rent_epoch should be the slot's epoch
+                    self.epoch
+                }
+            }
             // Rent is collected for next epoch
             RentDue::Paying(_) => self.epoch + 1,
         };

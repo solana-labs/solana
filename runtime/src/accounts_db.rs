@@ -8151,11 +8151,13 @@ impl AccountsDb {
         }
         let max_slot = slots.last().cloned().unwrap_or_default();
         let schedule = genesis_config.epoch_schedule;
+        let rent_exempt_accounts_ignore_rent_epoch = false; // this is irrelevant here. We only need to know if rent paying or not.
         let rent_collector = RentCollector::new(
             schedule.get_epoch(max_slot),
             &schedule,
             genesis_config.slots_per_year(),
             &genesis_config.rent,
+            rent_exempt_accounts_ignore_rent_epoch,
         );
         let accounts_data_len = AtomicU64::new(0);
 
