@@ -1842,17 +1842,27 @@ impl<T: IndexValue> AccountsIndex<T> {
         let removed_from_previous_uncleaned_roots =
             w_roots_tracker.previous_uncleaned_roots.remove(&slot);
         if !w_roots_tracker.alive_roots.remove(&slot) {
+            let mut logged = false;
             if removed_from_unclean_roots {
                 error!("clean_dead_slot-removed_from_unclean_roots: {}", slot);
                 inc_new_counter_error!("clean_dead_slot-removed_from_unclean_roots", 1, 1);
+                logged = true;
             }
             if removed_from_previous_uncleaned_roots {
+                logged = true;
                 error!(
                     "clean_dead_slot-removed_from_previous_uncleaned_roots: {}",
                     slot
                 );
                 inc_new_counter_error!(
                     "clean_dead_slot-removed_from_previous_uncleaned_roots",
+                    1,
+                    1
+                );
+            }
+            if !logged {
+                inc_new_counter_error!(
+                    "jw:clean_dead_slot-not_removed",
                     1,
                     1
                 );

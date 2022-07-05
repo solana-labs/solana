@@ -2118,6 +2118,7 @@ impl AccountsDb {
         max_clean_root: Option<Slot>,
     ) -> ReclaimResult {
         if purges.is_empty() {
+            error!("jw:clean_accounts_older_than_root: {}, root: {:?}, empty purges", purges.len(), max_clean_root);
             return ReclaimResult::default();
         }
         // This number isn't carefully chosen; just guessed randomly such that
@@ -2991,6 +2992,9 @@ impl AccountsDb {
             error!("process_dead_slots is empty");
             return;
         }
+        else {
+            error!("jw:process_dead_slots: {}", dead_slots.len());
+        }
         let mut clean_dead_slots = Measure::start("reclaims::clean_dead_slots");
         self.clean_stored_dead_slots(dead_slots, purged_account_slots);
         clean_dead_slots.stop();
@@ -3854,6 +3858,7 @@ impl AccountsDb {
         }
 
         if !dropped_roots.is_empty() {
+            error!("jw:clean_dead_slot ancient");
             dropped_roots.iter().for_each(|slot| {
                 self.accounts_index
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
@@ -5083,6 +5088,7 @@ impl AccountsDb {
         let num_purged_keys = pubkey_to_slot_set.len();
         let reclaims = self.purge_keys_exact(pubkey_to_slot_set.iter());
         assert_eq!(reclaims.len(), num_purged_keys);
+        error!("jw:purge_slot_cache_pubkeys, {}, reclaims: {}", purged_slot_pubkeys.len(), reclaims.len());
         if is_dead {
             self.remove_dead_slots_metadata(
                 std::iter::once(&purged_slot),
@@ -7288,6 +7294,8 @@ impl AccountsDb {
         // Should only be `Some` for non-cached slots
         purged_stored_account_slots: Option<&mut AccountSlots>,
     ) {
+        error!("jw:remove_dead_slots_metadata: {}", purged_slot_pubkeys.len());
+
         let mut measure = Measure::start("remove_dead_slots_metadata-ms");
         self.clean_dead_slots_from_accounts_index(
             dead_slots_iter.clone(),
@@ -7370,6 +7378,8 @@ impl AccountsDb {
         dead_slots: &HashSet<Slot>,
         purged_account_slots: Option<&mut AccountSlots>,
     ) {
+        error!("jw:clean_stored_dead_slots: {}", dead_slots.len());
+
         let mut measure = Measure::start("clean_stored_dead_slots-ms");
         let mut stores: Vec<Arc<AccountStorageEntry>> = vec![];
         for slot in dead_slots.iter() {
