@@ -4944,7 +4944,6 @@ impl Bank {
             &self.rent_collector,
             &durable_nonce,
             lamports_per_signature,
-            self.leave_nonce_on_success(),
         );
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
@@ -7292,11 +7291,6 @@ impl Bank {
     pub fn credits_auto_rewind(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::credits_auto_rewind::id())
-    }
-
-    pub fn leave_nonce_on_success(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::leave_nonce_on_success::id())
     }
 
     pub fn send_to_tpu_vote_port_enabled(&self) -> bool {

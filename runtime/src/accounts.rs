@@ -1193,7 +1193,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-        leave_nonce_on_success: bool,
     ) {
         let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
             txs,
@@ -1202,7 +1201,6 @@ impl Accounts {
             rent_collector,
             durable_nonce,
             lamports_per_signature,
-            leave_nonce_on_success,
         );
         self.accounts_db
             .store_cached((slot, &accounts_to_store[..]), Some(&txn_signatures));
@@ -1229,7 +1227,6 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
-        leave_nonce_on_success: bool,
     ) -> (
         Vec<(&'a Pubkey, &'a AccountSharedData)>,
         Vec<Option<&'a Signature>>,
@@ -1249,17 +1246,10 @@ impl Accounts {
             };
 
             let maybe_nonce = match (execution_status, &*nonce) {
-                (Ok(()), Some(nonce)) => {
-                    if leave_nonce_on_success {
-                        None
-                    } else {
-                        Some((nonce, false /* rollback */))
-                    }
-                }
+                (Ok(_), _) => None, // Success, don't do any additional nonce processing
                 (Err(_), Some(nonce)) => {
                     Some((nonce, true /* rollback */))
                 }
-                (Ok(_), None) => None, // Success, don't do any additional nonce processing
                 (Err(_), None) => {
                     // Fees for failed transactions which don't use durable nonces are
                     // deducted in Bank::filter_program_errors_and_collect_fee
@@ -3037,7 +3027,6 @@ mod tests {
             &rent_collector,
             &DurableNonce::default(),
             0,
-            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -3521,7 +3510,6 @@ mod tests {
             &rent_collector,
             &durable_nonce,
             0,
-            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -3636,7 +3624,6 @@ mod tests {
             &rent_collector,
             &durable_nonce,
             0,
-            true, // leave_nonce_on_success
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts
