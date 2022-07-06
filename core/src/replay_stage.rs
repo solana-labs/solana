@@ -73,7 +73,7 @@ use {
         collections::{HashMap, HashSet},
         result,
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -2222,48 +2222,49 @@ impl ReplayStage {
         transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
     ) -> bool {
+        // Writable
         let did_complete_bank = AtomicBool::new(false);
-        let tx_count = RwLock::new(0);
-        let execute_timings = ExecuteTimings::default();
-        let active_banks = bank_forks.read().unwrap().active_banks();
-        warn!("active banks {:?}", active_banks);
-
+        let tx_count = AtomicUsize::new(0);
+        let progress = RwLock::new(progress);
+        let heaviest_subtree_fork_choice = RwLock::new(heaviest_subtree_fork_choice);
+        let duplicate_slots_tracker = RwLock::new(duplicate_slots_tracker);
+        let epoch_slots_frozen_slots = RwLock::new(epoch_slots_frozen_slots);
+        let unfrozen_gossip_verified_vote_hashes = RwLock::new(unfrozen_gossip_verified_vote_hashes);
+        let latest_validator_votes_for_frozen_banks = RwLock::new(latest_validator_votes_for_frozen_banks);
+        let duplicate_slots_to_repair = RwLock::new(duplicate_slots_to_repair);
+        let replay_timing = RwLock::new(replay_timing);
+        
+        // Read only
         let blockstore = RwLock::new(blockstore);
         let my_pubkey = RwLock::new(my_pubkey);
         let vote_account = RwLock::new(vote_account);
-        let progress = RwLock::new(progress);
         let transaction_status_sender = RwLock::new(transaction_status_sender);
         let cache_block_meta_sender = RwLock::new(cache_block_meta_sender);
         let verify_recyclers = RwLock::new(verify_recyclers);
-        let heaviest_subtree_fork_choice = RwLock::new(heaviest_subtree_fork_choice);
         let replay_vote_sender = RwLock::new(replay_vote_sender);
         let bank_notification_sender = RwLock::new(bank_notification_sender);
         let rewards_recorder_sender = RwLock::new(rewards_recorder_sender);
         let rpc_subscriptions = RwLock::new(rpc_subscriptions);
-        let duplicate_slots_tracker = RwLock::new(duplicate_slots_tracker);
         let gossip_duplicate_confirmed_slots = RwLock::new(gossip_duplicate_confirmed_slots);
-        let epoch_slots_frozen_slots = RwLock::new(epoch_slots_frozen_slots);
-        let unfrozen_gossip_verified_vote_hashes = RwLock::new(unfrozen_gossip_verified_vote_hashes);
-        let latest_validator_votes_for_frozen_banks = RwLock::new(latest_validator_votes_for_frozen_banks);
         let cluster_slots_update_sender = RwLock::new(cluster_slots_update_sender);
         let cost_update_sender = RwLock::new(cost_update_sender);
-        let duplicate_slots_to_repair = RwLock::new(duplicate_slots_to_repair);
         let ancestor_hashes_replay_update_sender = RwLock::new(ancestor_hashes_replay_update_sender);
         let block_metadata_notifier = RwLock::new(block_metadata_notifier);
         let transaction_cost_metrics_sender = RwLock::new(transaction_cost_metrics_sender);
-        let replay_timing = RwLock::new(replay_timing);
-
-        PAR_THREAD_POOL.install(|| {
+        
+        let active_banks = bank_forks.read().unwrap().active_banks();
+        warn!("active banks {:?}", active_banks);
+        let execute_timings_vec: Vec<Option<ExecuteTimings>> = PAR_THREAD_POOL.install(|| {
             active_banks
                 .into_par_iter()
-                .for_each(|bank_slot| {
+                .map(|bank_slot| {
                 let idx = PAR_THREAD_POOL.current_thread_index().unwrap();
-                warn!("REPLAY ACTIVE BANK: SLOT {} THREAD IDX {}", bank_slot, idx);
+                warn!("REPLAY ACTIVE BANK START: SLOT {} THREAD IDX {}", bank_slot, idx);
                 // If the fork was marked as dead, don't replay it
                 let mut progress_lock = progress.write().unwrap();
                 if progress_lock.get(&bank_slot).map(|p| p.is_dead).unwrap_or(false) {
                     debug!("bank_slot {:?} is marked dead", bank_slot);
-                    return;
+                    return None;
                 }
 
                 let bank = bank_forks.read().unwrap().get(bank_slot).unwrap();
@@ -2298,24 +2299,24 @@ impl ReplayStage {
                 if bank.collector_id() != *my_pubkey.read().unwrap() {
                     let root_slot = bank_forks.read().unwrap().root();
                     let mut replay_blockstore_time = Measure::start("replay_blockstore_into_bank");
-                    
-                        let replay_result = Self::replay_blockstore_into_bank(
-                            &bank,
-                            &blockstore.read().unwrap(),
-                            &replay_stats,
-                            &replay_progress,
-                            *transaction_status_sender.read().unwrap(),
-                            &replay_vote_sender.read().unwrap(),
-                            *transaction_cost_metrics_sender.read().unwrap(),
-                            &verify_recyclers.read().unwrap(),
-                        );
-                    
+                    warn!("REPLAY ACTIVE BANK BLOCKSTORE START: SLOT {} THREAD IDX {}", bank_slot, idx);
+                    let replay_result = Self::replay_blockstore_into_bank(
+                        &bank,
+                        &blockstore.read().unwrap(),
+                        &replay_stats,
+                        &replay_progress,
+                        *transaction_status_sender.read().unwrap(),
+                        &replay_vote_sender.read().unwrap(),
+                        *transaction_cost_metrics_sender.read().unwrap(),
+                        &verify_recyclers.read().unwrap(),
+                    );
+                    warn!("REPLAY ACTIVE BANK BLOCKSTORE END: SLOT {} THREAD IDX {}", bank_slot, idx);
                     replay_blockstore_time.stop();
                     let mut replay_timing_lock = replay_timing.write().unwrap();
                     replay_timing_lock.replay_blockstore_us += replay_blockstore_time.as_us();
                     drop(replay_timing_lock);
                     match replay_result {
-                        Ok(replay_tx_count) => *tx_count.write().unwrap() += replay_tx_count,
+                        Ok(replay_tx_count) => _ = tx_count.fetch_add(replay_tx_count, Ordering::Relaxed),
                         Err(err) => {
                             // Error means the slot needs to be marked as dead
                             Self::mark_dead_slot(
@@ -2334,18 +2335,17 @@ impl ReplayStage {
                             );
                             // If the bank was corrupted, don't try to run the below logic to check if the
                             // bank is completed
-                            return;
+                            return None;
                         }
                     }
                 }
                 assert_eq!(bank_slot, bank.slot());
                 if bank.is_complete() {
-                    warn!("Completed slot {}",bank_slot);
+                    warn!("REPLAY ACTIVE BANK COMPLETED SLOT {}",bank_slot);
                     let mut bank_complete_time = Measure::start("bank_complete_time");
 
                     let r_replay_stats = replay_stats.read().unwrap();
                     let r_replay_progress = replay_progress.read().unwrap();
-                    //execute_timings.write().unwrap().accumulate(&r_replay_stats.execute_timings);
                     debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
                         bank.slot(),
                         r_replay_stats.execute_timings
@@ -2444,18 +2444,32 @@ impl ReplayStage {
                         r_replay_progress.num_shreds,
                         bank_complete_time.as_us(),
                     );
+                    let mut execute_timings = ExecuteTimings::default();
+                    execute_timings.accumulate(&r_replay_stats.execute_timings);
+                    return Some(execute_timings);
                 } else {
-                    trace!(
+                    warn!("REPLAY ACTIVE BANK NOT COMPLETED: SLOT {} THREAD IDX {}", bank_slot, idx);
+                    warn!(
                         "bank {} not completed tick_height: {}, max_tick_height: {}",
                         bank.slot(),
                         bank.tick_height(),
                         bank.max_tick_height()
                     );
-                }
-            });
+                    return None;
+                };
+            }).collect()
         });
 
-        // send accumulated execute-timings to cost_update_service
+        // Accumulate execution timings for completed slots.
+        let mut execute_timings = ExecuteTimings::default();
+        for execute_timing in execute_timings_vec {
+            if let Some(execute_timing) = execute_timing {
+                warn!("execute_timing {:?}", execute_timing);
+                execute_timings.accumulate(&execute_timing);
+            }
+        }
+
+        // Send accumulated execute-timings to cost_update_service.
         if !execute_timings.details.per_program_timings.is_empty() {
             cost_update_sender.read().unwrap()
                 .send(CostUpdate::ExecuteTiming {
@@ -2464,7 +2478,7 @@ impl ReplayStage {
                 .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
         }
 
-        inc_new_counter_info!("replay_stage-replay_transactions", *tx_count.read().unwrap());
+        inc_new_counter_info!("replay_stage-replay_transactions", tx_count.load(Ordering::Relaxed));
         did_complete_bank.load(Ordering::SeqCst)
     }
 
