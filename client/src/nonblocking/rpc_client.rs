@@ -19,6 +19,7 @@ use {
         mock_sender::MockSender,
         rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClientConfig},
         rpc_config::{RpcAccountInfoConfig, *},
+        rpc_filter::{MemcmpEncodedBytes, RpcFilterType},
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
         rpc_sender::*,
@@ -578,6 +579,33 @@ impl RpcClient {
             };
         }
         Ok(request)
+    }
+
+    #[allow(deprecated)]
+    async fn maybe_map_filters(
+        &self,
+        mut filters: Vec<RpcFilterType>,
+    ) -> Result<Vec<RpcFilterType>, RpcError> {
+        let node_version = self.get_node_version().await?;
+        if node_version < semver::Version::new(1, 11, 2) {
+            for filter in filters.iter_mut() {
+                if let RpcFilterType::Memcmp(memcmp) = filter {
+                    match &memcmp.bytes {
+                        MemcmpEncodedBytes::Base58(string) => {
+                            memcmp.bytes = MemcmpEncodedBytes::Binary(string.clone());
+                        }
+                        MemcmpEncodedBytes::Base64(_) => {
+                            return Err(RpcError::RpcRequestError(format!(
+                                "RPC node on old version {} does not support base64 encoding for memcmp filters",
+                                node_version
+                            )));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        Ok(filters)
     }
 
     /// Submit a transaction and wait for confirmation.
@@ -4498,6 +4526,9 @@ impl RpcClient {
             .unwrap_or_else(|| self.commitment());
         let commitment = self.maybe_map_commitment(commitment).await?;
         config.account_config.commitment = Some(commitment);
+        if let Some(filters) = config.filters {
+            config.filters = Some(self.maybe_map_filters(filters).await?);
+        }
         let accounts: Vec<RpcKeyedAccount> = self
             .send(
                 RpcRequest::GetProgramAccounts,
