@@ -22,12 +22,14 @@ The validator blockstore rocksdb database can be inspected using the `ldb` tool.
 `ldb` is part of the `rocksdb` code base and is also available in the `rocksdb-tools`
 package.
 
+[RocksDB Administration and Data Access Tool](https://github.com/facebook/rocksdb/wiki/Administration-and-Data-Access-Tool)
+
 ## Downgrade
 
 If a new column family has been introduced to the validator blockstore a
 subsequent downgrade of the validator to a version prior to the version where
-the new column family was intoduced will cause the validator to fail during
-startup.
+the new column family was introduced will cause the validator to fail while
+opening the blockstore during startup.
 
 List column families:
 ```
