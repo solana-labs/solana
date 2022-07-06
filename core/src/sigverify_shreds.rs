@@ -14,7 +14,10 @@ use {
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
         collections::HashMap,
-        sync::{Arc, RwLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, RwLock,
+        },
     },
 };
 
@@ -24,7 +27,9 @@ pub struct ShredSigVerifier {
     bank_forks: Arc<RwLock<BankForks>>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     recycler_cache: RecyclerCache,
+    retransmit_sender: Sender<Vec</*shred:*/ Vec<u8>>>,
     packet_sender: Sender<Vec<PacketBatch>>,
+    turbine_disabled: Arc<AtomicBool>,
 }
 
 impl ShredSigVerifier {
@@ -32,7 +37,9 @@ impl ShredSigVerifier {
         pubkey: Pubkey,
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
+        retransmit_sender: Sender<Vec</*shred:*/ Vec<u8>>>,
         packet_sender: Sender<Vec<PacketBatch>>,
+        turbine_disabled: Arc<AtomicBool>,
     ) -> Self {
         sigverify::init();
         Self {
@@ -40,7 +47,9 @@ impl ShredSigVerifier {
             bank_forks,
             leader_schedule_cache,
             recycler_cache: RecyclerCache::warmed(),
+            retransmit_sender,
             packet_sender,
+            turbine_disabled,
         }
     }
 }
@@ -52,6 +61,20 @@ impl SigVerifier for ShredSigVerifier {
         &mut self,
         packet_batches: Vec<PacketBatch>,
     ) -> Result<(), SigVerifyServiceError<Self::SendType>> {
+        if self.turbine_disabled.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        // Exclude repair packets from retransmit.
+        // TODO: return the error here!
+        let _ = self.retransmit_sender.send(
+            packet_batches
+                .iter()
+                .flat_map(PacketBatch::iter)
+                .filter(|packet| !packet.meta.discard() && !packet.meta.repair())
+                .filter_map(shred::layout::get_shred)
+                .map(<[u8]>::to_vec)
+                .collect(),
+        );
         self.packet_sender.send(packet_batches)?;
         Ok(())
     }
@@ -140,8 +163,15 @@ pub mod tests {
         let cache = Arc::new(LeaderScheduleCache::new_from_bank(&bank));
         let bf = Arc::new(RwLock::new(BankForks::new(bank)));
         let (sender, receiver) = unbounded();
-        let mut verifier = ShredSigVerifier::new(Pubkey::new_unique(), bf, cache, sender);
-
+        let (retransmit_sender, _retransmit_receiver) = unbounded();
+        let mut verifier = ShredSigVerifier::new(
+            Pubkey::new_unique(),
+            bf,
+            cache,
+            retransmit_sender,
+            sender,
+            Arc::<AtomicBool>::default(), // turbine_disabled
+        );
         let batch_size = 2;
         let mut batch = PacketBatch::with_capacity(batch_size);
         batch.resize(batch_size, Packet::default());

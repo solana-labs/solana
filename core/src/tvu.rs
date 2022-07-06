@@ -10,10 +10,12 @@ use {
             VerifiedVoteReceiver, VoteTracker,
         },
         cluster_slots::ClusterSlots,
+        cluster_slots_service::ClusterSlotsService,
         completed_data_sets_service::CompletedDataSetsSender,
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
+        repair_service::RepairInfo,
         replay_stage::{ReplayStage, ReplayStageConfig},
         retransmit_stage::RetransmitStage,
         rewards_recorder_service::RewardsRecorderSender,
@@ -24,6 +26,7 @@ use {
         validator::ProcessBlockStore,
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
+        window_service::WindowService,
     },
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
@@ -61,6 +64,8 @@ pub struct Tvu {
     fetch_stage: ShredFetchStage,
     sigverify_stage: SigVerifyStage,
     retransmit_stage: RetransmitStage,
+    window_service: WindowService,
+    cluster_slots_service: ClusterSlotsService,
     replay_stage: ReplayStage,
     ledger_cleanup_service: Option<LedgerCleanupService>,
     cost_update_service: CostUpdateService,
@@ -157,45 +162,69 @@ impl Tvu {
         );
 
         let (verified_sender, verified_receiver) = unbounded();
+        let (retransmit_sender, retransmit_receiver) = unbounded();
         let sigverify_stage = SigVerifyStage::new(
             fetch_receiver,
             ShredSigVerifier::new(
                 cluster_info.id(),
                 bank_forks.clone(),
                 leader_schedule_cache.clone(),
+                retransmit_sender.clone(),
                 verified_sender,
+                turbine_disabled,
             ),
             "shred-verifier",
+        );
+
+        let retransmit_stage = RetransmitStage::new(
+            bank_forks.clone(),
+            leader_schedule_cache.clone(),
+            cluster_info.clone(),
+            Arc::new(retransmit_sockets),
+            retransmit_receiver,
+            max_slots.clone(),
+            Some(rpc_subscriptions.clone()),
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
-        let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
-        let retransmit_stage = RetransmitStage::new(
-            bank_forks.clone(),
-            leader_schedule_cache.clone(),
+        let window_service = {
+            let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
+            let repair_info = RepairInfo {
+                bank_forks: bank_forks.clone(),
+                epoch_schedule,
+                duplicate_slots_reset_sender,
+                repair_validators: tvu_config.repair_validators,
+                cluster_info: cluster_info.clone(),
+                cluster_slots: cluster_slots.clone(),
+            };
+            WindowService::new(
+                blockstore.clone(),
+                verified_receiver,
+                retransmit_sender,
+                repair_socket,
+                ancestor_hashes_socket,
+                exit.clone(),
+                repair_info,
+                leader_schedule_cache.clone(),
+                verified_vote_receiver,
+                completed_data_sets_sender,
+                duplicate_slots_sender,
+                ancestor_hashes_replay_update_receiver,
+            )
+        };
+
+        let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
+        let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
-            cluster_info.clone(),
-            Arc::new(retransmit_sockets),
-            repair_socket,
-            ancestor_hashes_socket,
-            verified_receiver,
-            exit.clone(),
-            cluster_slots_update_receiver,
-            *bank_forks.read().unwrap().working_bank().epoch_schedule(),
-            turbine_disabled,
             cluster_slots.clone(),
-            duplicate_slots_reset_sender,
-            verified_vote_receiver,
-            tvu_config.repair_validators,
-            completed_data_sets_sender,
-            max_slots.clone(),
-            Some(rpc_subscriptions.clone()),
-            duplicate_slots_sender,
-            ancestor_hashes_replay_update_receiver,
+            bank_forks.clone(),
+            cluster_info.clone(),
+            cluster_slots_update_receiver,
+            exit.clone(),
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();
@@ -292,6 +321,8 @@ impl Tvu {
             fetch_stage,
             sigverify_stage,
             retransmit_stage,
+            window_service,
+            cluster_slots_service,
             replay_stage,
             ledger_cleanup_service,
             cost_update_service,
@@ -304,6 +335,8 @@ impl Tvu {
 
     pub fn join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
+        self.window_service.join()?;
+        self.cluster_slots_service.join()?;
         self.fetch_stage.join()?;
         self.sigverify_stage.join()?;
         if self.ledger_cleanup_service.is_some() {

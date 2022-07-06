@@ -3,17 +3,10 @@
 
 use {
     crate::{
-        ancestor_hashes_service::AncestorHashesReplayUpdateReceiver,
-        cluster_info_vote_listener::VerifiedVoteReceiver,
         cluster_nodes::{ClusterNodes, ClusterNodesCache},
-        cluster_slots::ClusterSlots,
-        cluster_slots_service::{ClusterSlotsService, ClusterSlotsUpdateReceiver},
-        completed_data_sets_service::CompletedDataSetsSender,
         packet_hasher::PacketHasher,
-        repair_service::{DuplicateSlotsResetSender, RepairInfo},
-        window_service::WindowService,
     },
-    crossbeam_channel::{unbounded, Receiver, RecvTimeoutError, Sender},
+    crossbeam_channel::{Receiver, RecvTimeoutError},
     itertools::{izip, Itertools},
     lru::LruCache,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
@@ -23,27 +16,25 @@ use {
         contact_info::ContactInfo,
     },
     solana_ledger::{
-        blockstore::Blockstore,
         leader_schedule_cache::LeaderScheduleCache,
         shred::{self, ShredId},
     },
     solana_measure::measure::Measure,
-    solana_perf::packet::PacketBatch,
     solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
-    solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, pubkey::Pubkey, timing::timestamp},
+    solana_sdk::{clock::Slot, pubkey::Pubkey, timing::timestamp},
     solana_streamer::{
         sendmmsg::{multi_target_send, SendPktsError},
         socket::SocketAddrSpace,
     },
     std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         iter::repeat,
         net::UdpSocket,
         ops::AddAssign,
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+            atomic::{AtomicU64, AtomicUsize, Ordering},
             Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -378,122 +369,61 @@ pub fn retransmitter(
         .unwrap();
     Builder::new()
         .name("solana-retransmitter".to_string())
-        .spawn(move || {
-            trace!("retransmitter started");
-            loop {
-                match retransmit(
-                    &thread_pool,
-                    &bank_forks,
-                    &leader_schedule_cache,
-                    &cluster_info,
-                    &shreds_receiver,
-                    &sockets,
-                    &mut stats,
-                    &cluster_nodes_cache,
-                    &mut hasher_reset_ts,
-                    &mut shreds_received,
-                    &mut packet_hasher,
-                    &max_slots,
-                    rpc_subscriptions.as_deref(),
-                ) {
-                    Ok(()) => (),
-                    Err(RecvTimeoutError::Timeout) => (),
-                    Err(RecvTimeoutError::Disconnected) => break,
-                }
+        .spawn(move || loop {
+            match retransmit(
+                &thread_pool,
+                &bank_forks,
+                &leader_schedule_cache,
+                &cluster_info,
+                &shreds_receiver,
+                &sockets,
+                &mut stats,
+                &cluster_nodes_cache,
+                &mut hasher_reset_ts,
+                &mut shreds_received,
+                &mut packet_hasher,
+                &max_slots,
+                rpc_subscriptions.as_deref(),
+            ) {
+                Ok(()) => (),
+                Err(RecvTimeoutError::Timeout) => (),
+                Err(RecvTimeoutError::Disconnected) => break,
             }
-            trace!("exiting retransmitter");
         })
         .unwrap()
 }
 
 pub struct RetransmitStage {
     retransmit_thread_handle: JoinHandle<()>,
-    window_service: WindowService,
-    cluster_slots_service: ClusterSlotsService,
 }
 
 impl RetransmitStage {
-    #[allow(clippy::new_ret_no_self)]
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
-        blockstore: Arc<Blockstore>,
         cluster_info: Arc<ClusterInfo>,
         retransmit_sockets: Arc<Vec<UdpSocket>>,
-        repair_socket: Arc<UdpSocket>,
-        ancestor_hashes_socket: Arc<UdpSocket>,
-        verified_receiver: Receiver<Vec<PacketBatch>>,
-        exit: Arc<AtomicBool>,
-        cluster_slots_update_receiver: ClusterSlotsUpdateReceiver,
-        epoch_schedule: EpochSchedule,
-        turbine_disabled: Arc<AtomicBool>,
-        cluster_slots: Arc<ClusterSlots>,
-        duplicate_slots_reset_sender: DuplicateSlotsResetSender,
-        verified_vote_receiver: VerifiedVoteReceiver,
-        repair_validators: Option<HashSet<Pubkey>>,
-        completed_data_sets_sender: CompletedDataSetsSender,
+        retransmit_receiver: Receiver<Vec</*shred:*/ Vec<u8>>>,
         max_slots: Arc<MaxSlots>,
         rpc_subscriptions: Option<Arc<RpcSubscriptions>>,
-        duplicate_slots_sender: Sender<Slot>,
-        ancestor_hashes_replay_update_receiver: AncestorHashesReplayUpdateReceiver,
     ) -> Self {
-        let (retransmit_sender, retransmit_receiver) = unbounded();
-
         let retransmit_thread_handle = retransmitter(
             retransmit_sockets,
-            bank_forks.clone(),
-            leader_schedule_cache.clone(),
-            cluster_info.clone(),
+            bank_forks,
+            leader_schedule_cache,
+            cluster_info,
             retransmit_receiver,
             max_slots,
             rpc_subscriptions,
         );
 
-        let cluster_slots_service = ClusterSlotsService::new(
-            blockstore.clone(),
-            cluster_slots.clone(),
-            bank_forks.clone(),
-            cluster_info.clone(),
-            cluster_slots_update_receiver,
-            exit.clone(),
-        );
-
-        let repair_info = RepairInfo {
-            bank_forks,
-            epoch_schedule,
-            duplicate_slots_reset_sender,
-            repair_validators,
-            cluster_info,
-            cluster_slots,
-        };
-        let window_service = WindowService::new(
-            blockstore,
-            verified_receiver,
-            retransmit_sender,
-            repair_socket,
-            ancestor_hashes_socket,
-            exit,
-            repair_info,
-            leader_schedule_cache,
-            turbine_disabled,
-            verified_vote_receiver,
-            completed_data_sets_sender,
-            duplicate_slots_sender,
-            ancestor_hashes_replay_update_receiver,
-        );
-
         Self {
             retransmit_thread_handle,
-            window_service,
-            cluster_slots_service,
         }
     }
 
     pub(crate) fn join(self) -> thread::Result<()> {
-        self.retransmit_thread_handle.join()?;
-        self.window_service.join()?;
-        self.cluster_slots_service.join()
+        self.retransmit_thread_handle.join()
     }
 }
 
