@@ -5,6 +5,8 @@ use {
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
+        rent::Rent,
+        system_instruction::MAX_PERMITTED_DATA_LENGTH,
     },
     std::{
         cell::{RefCell, RefMut},
@@ -49,6 +51,7 @@ pub struct TransactionContext {
     instruction_trace: InstructionTrace,
     return_data: TransactionReturnData,
     total_resize_delta: RefCell<i64>,
+    rent: Option<Rent>,
 }
 
 impl TransactionContext {
@@ -72,6 +75,7 @@ impl TransactionContext {
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: TransactionReturnData::default(),
             total_resize_delta: RefCell::new(0),
+            rent: None,
         }
     }
 
@@ -84,6 +88,16 @@ impl TransactionContext {
             .into_iter()
             .map(|account| account.into_inner())
             .collect())
+    }
+
+    /// Call this if `enable_early_verification_of_account_modifications` is active
+    pub fn enable_early_verification_of_account_modifications(&mut self, rent: &Rent) {
+        self.rent = Some(*rent);
+    }
+
+    /// Returns true if `enable_early_verification_of_account_modifications` is active
+    pub fn is_early_verification_of_account_modifications_enabled(&self) -> bool {
+        self.rent.is_some()
     }
 
     /// Returns the total number of accounts loaded in this Transaction
@@ -540,6 +554,27 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Assignes the owner of this account (transaction wide)
     pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
+        if self
+            .transaction_context
+            .is_early_verification_of_account_modifications_enabled()
+        {
+            // Only the owner can assign a new owner
+            if !self.is_owned_by_current_program() {
+                return Err(InstructionError::ModifiedProgramId);
+            }
+            // and only if the account is writable
+            if !self.is_writable() {
+                return Err(InstructionError::ModifiedProgramId);
+            }
+            // and only if the account is not executable
+            if self.is_executable() {
+                return Err(InstructionError::ModifiedProgramId);
+            }
+            // and only if the data is zero-initialized or empty
+            if !is_zeroed(self.get_data()) {
+                return Err(InstructionError::ModifiedProgramId);
+            }
+        }
         self.account.copy_into_owner_from_slice(pubkey);
         Ok(())
     }
@@ -551,6 +586,23 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Overwrites the number of lamports of this account (transaction wide)
     pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
+        if self
+            .transaction_context
+            .is_early_verification_of_account_modifications_enabled()
+        {
+            // An account not owned by the program cannot have its balance decrease
+            if !self.is_owned_by_current_program() && lamports < self.get_lamports() {
+                return Err(InstructionError::ExternalAccountLamportSpend);
+            }
+            // The balance of read-only may not change
+            if !self.is_writable() {
+                return Err(InstructionError::ReadonlyLamportChange);
+            }
+            // The balance of executable accounts may not change
+            if self.is_executable() {
+                return Err(InstructionError::ExecutableLamportChange);
+            }
+        }
         self.account.set_lamports(lamports);
         Ok(())
     }
@@ -580,11 +632,14 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns a writable slice of the account data (transaction wide)
     pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
+        self.can_data_be_changed()?;
         Ok(self.account.data_as_mut_slice())
     }
 
     /// Overwrites the account data and size (transaction wide)
     pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
+        self.can_data_be_resized(data.len())?;
+        self.can_data_be_changed()?;
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
@@ -600,6 +655,8 @@ impl<'a> BorrowedAccount<'a> {
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
     pub fn set_data_length(&mut self, new_length: usize) -> Result<(), InstructionError> {
+        self.can_data_be_resized(new_length)?;
+        self.can_data_be_changed()?;
         let mut total_resize_delta = self.transaction_context.total_resize_delta.borrow_mut();
         *total_resize_delta = total_resize_delta
             .saturating_add((new_length as i64).saturating_sub(self.get_data().len() as i64));
@@ -616,7 +673,7 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Serializes a state into the account data
     pub fn set_state<T: serde::Serialize>(&mut self, state: &T) -> Result<(), InstructionError> {
-        let data = self.account.data_as_mut_slice();
+        let data = self.get_data_mut()?;
         let serialized_size =
             bincode::serialized_size(state).map_err(|_| InstructionError::GenericError)?;
         if serialized_size > data.len() as u64 {
@@ -633,6 +690,24 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Configures whether this account is executable (transaction wide)
     pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
+        if let Some(rent) = self.transaction_context.rent {
+            // To become executable an account must be rent exempt
+            if !rent.is_exempt(self.get_lamports(), self.get_data().len()) {
+                return Err(InstructionError::ExecutableAccountNotRentExempt);
+            }
+            // Only the owner can set the executable flag
+            if !self.is_owned_by_current_program() {
+                return Err(InstructionError::ExecutableModified);
+            }
+            // and only if the account is writable
+            if !self.is_writable() {
+                return Err(InstructionError::ExecutableModified);
+            }
+            // and only if the account is not executable (one can not clear the executable flag)
+            if self.is_executable() {
+                return Err(InstructionError::ExecutableModified);
+            }
+        }
         self.account.set_executable(is_executable);
         Ok(())
     }
@@ -667,6 +742,56 @@ impl<'a> BorrowedAccount<'a> {
             )
             .unwrap_or_default()
     }
+
+    /// Returns true if the owner of this account is the current `InstructionContext`s last program (instruction wide)
+    pub fn is_owned_by_current_program(&self) -> bool {
+        self.instruction_context
+            .get_last_program_key(self.transaction_context)
+            .map(|key| key == self.get_owner())
+            .unwrap_or_default()
+    }
+
+    /// Returns an error if the account data can not be mutated by the current program
+    pub fn can_data_be_changed(&self) -> Result<(), InstructionError> {
+        if !self
+            .transaction_context
+            .is_early_verification_of_account_modifications_enabled()
+        {
+            return Ok(());
+        }
+        // Only non-executable accounts data can be changed
+        if self.is_executable() {
+            return Err(InstructionError::ExecutableDataModified);
+        }
+        // and only if the account is writable
+        if !self.is_writable() {
+            return Err(InstructionError::ReadonlyDataModified);
+        }
+        // and only if we are the owner
+        if !self.is_owned_by_current_program() {
+            return Err(InstructionError::ExternalAccountDataModified);
+        }
+        Ok(())
+    }
+
+    /// Returns an error if the account data can not be resized to the given length
+    pub fn can_data_be_resized(&self, new_length: usize) -> Result<(), InstructionError> {
+        if !self
+            .transaction_context
+            .is_early_verification_of_account_modifications_enabled()
+        {
+            return Ok(());
+        }
+        // Only the owner can change the length of the data
+        if new_length != self.get_data().len() && !self.is_owned_by_current_program() {
+            return Err(InstructionError::AccountDataSizeChanged);
+        }
+        // The new length can not exceed the maximum permitted length
+        if new_length > MAX_PERMITTED_DATA_LENGTH as usize {
+            return Err(InstructionError::InvalidRealloc);
+        }
+        Ok(())
+    }
 }
 
 /// Everything that needs to be recorded from a TransactionContext after execution
@@ -693,5 +818,17 @@ impl From<TransactionContext> for ExecutionRecord {
             return_data: context.return_data,
             total_resize_delta: RefCell::into_inner(context.total_resize_delta),
         }
+    }
+}
+
+fn is_zeroed(buf: &[u8]) -> bool {
+    const ZEROS_LEN: usize = 1024;
+    const ZEROS: [u8; ZEROS_LEN] = [0; ZEROS_LEN];
+    let mut chunks = buf.chunks_exact(ZEROS_LEN);
+
+    #[allow(clippy::indexing_slicing)]
+    {
+        chunks.all(|chunk| chunk == &ZEROS[..])
+            && chunks.remainder() == &ZEROS[..chunks.remainder().len()]
     }
 }
