@@ -3564,28 +3564,13 @@ export class Connection {
     blockhash: string,
     config?: IsBlockhashValidConfig,
   ): Promise<RpcResponseAndContext<boolean>> {
-    const extra: Pick<IsBlockhashValidConfig, 'minContextSlot'> = {};
-
-    let commitment;
-    if (config) {
-      if (config.minContextSlot) {
-        extra.minContextSlot = config.minContextSlot;
-      }
-
-      if (config.commitment) {
-        commitment = config.commitment;
-      } else {
-        commitment = this._commitment || 'finalized';
-      }
-    } else {
-      commitment = this._commitment || 'finalized';
-    }
-
+    const {commitment, config: configWithoutCommitment} =
+      extractCommitmentFromConfig(config);
     const args = this._buildArgs(
       [blockhash],
       commitment,
       'jsonParsed',
-      extra,
+      configWithoutCommitment,
     );
 
     const unsafeRes = await this._rpcRequest('isBlockhashValid', args);
