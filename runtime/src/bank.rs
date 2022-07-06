@@ -3536,9 +3536,9 @@ impl Bank {
 
         self.rent_collector = RentCollector::new(
             self.epoch,
-            self.epoch_schedule(),
+            *self.epoch_schedule(),
             self.slots_per_year,
-            &genesis_config.rent,
+            genesis_config.rent,
         );
 
         // Add additional builtin programs specified in the genesis config

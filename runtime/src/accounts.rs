@@ -1703,9 +1703,9 @@ mod tests {
         let mut error_counters = TransactionErrorMetrics::default();
         let rent_collector = RentCollector::new(
             0,
-            &EpochSchedule::default(),
+            EpochSchedule::default(),
             500_000.0,
-            &Rent {
+            Rent {
                 lamports_per_byte_year: 42,
                 ..Rent::default()
             },

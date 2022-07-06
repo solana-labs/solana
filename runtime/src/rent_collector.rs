@@ -34,44 +34,33 @@ impl Default for RentCollector {
 
 /// when rent is collected for this account, this is the action to apply to the account
 #[derive(Debug)]
-pub enum RentResult {
+pub(crate) enum RentResult {
     /// maybe collect rent later, leave account alone
     LeaveAloneNoRent,
     /// collect rent
-    /// value is (new rent epoch, lamports of rent_due)
-    CollectRent((Epoch, u64)),
+    CollectRent {
+        new_rent_epoch: Epoch,
+        rent_due: u64, // lamports
+    },
 }
 
 impl RentCollector {
-    pub fn new(
+    pub(crate) fn new(
         epoch: Epoch,
-        epoch_schedule: &EpochSchedule,
+        epoch_schedule: EpochSchedule,
         slots_per_year: f64,
-        rent: &Rent,
+        rent: Rent,
     ) -> Self {
         Self {
             epoch,
-            epoch_schedule: *epoch_schedule,
+            epoch_schedule,
             slots_per_year,
-            rent: *rent,
+            rent,
         }
     }
 
-    pub fn clone_with_epoch(&self, epoch: Epoch) -> Self {
-        self.clone_with_epoch_and_rate(epoch, self.rent.lamports_per_byte_year)
-    }
-
-    pub fn clone_with_epoch_and_rate(&self, epoch: Epoch, lamports_per_byte_year: u64) -> Self {
-        let rent = if lamports_per_byte_year != self.rent.lamports_per_byte_year {
-            Rent {
-                lamports_per_byte_year,
-                ..self.rent
-            }
-        } else {
-            self.rent
-        };
+    pub(crate) fn clone_with_epoch(&self, epoch: Epoch) -> Self {
         Self {
-            rent,
             epoch,
             ..self.clone()
         }
@@ -85,7 +74,7 @@ impl RentCollector {
 
     /// given an account that 'should_collect_rent'
     /// returns (amount rent due, is_exempt_from_rent)
-    pub fn get_rent_due(&self, account: &impl ReadableAccount) -> RentDue {
+    pub(crate) fn get_rent_due(&self, account: &impl ReadableAccount) -> RentDue {
         if self
             .rent
             .is_exempt(account.lamports(), account.data().len())
@@ -127,7 +116,7 @@ impl RentCollector {
     // This is NOT thread safe at some level. If we try to collect from the same account in
     // parallel, we may collect twice.
     #[must_use = "add to Bank::collected_rent"]
-    pub fn collect_from_existing_account(
+    pub(crate) fn collect_from_existing_account(
         &self,
         address: &Pubkey,
         account: &mut AccountSharedData,
@@ -135,28 +124,32 @@ impl RentCollector {
     ) -> CollectedInfo {
         match self.calculate_rent_result(address, account, filler_account_suffix) {
             RentResult::LeaveAloneNoRent => CollectedInfo::default(),
-            RentResult::CollectRent((next_epoch, rent_due)) => {
-                account.set_rent_epoch(next_epoch);
-
-                let begin_lamports = account.lamports();
-                account.saturating_sub_lamports(rent_due);
-                let end_lamports = account.lamports();
-                let mut account_data_len_reclaimed = 0;
-                if end_lamports == 0 {
-                    account_data_len_reclaimed = account.data().len() as u64;
-                    *account = AccountSharedData::default();
+            RentResult::CollectRent {
+                new_rent_epoch,
+                rent_due,
+            } => match account.lamports().checked_sub(rent_due) {
+                None | Some(0) => {
+                    let account = std::mem::take(account);
+                    CollectedInfo {
+                        rent_amount: account.lamports(),
+                        account_data_len_reclaimed: account.data().len() as u64,
+                    }
                 }
-                CollectedInfo {
-                    rent_amount: begin_lamports - end_lamports,
-                    account_data_len_reclaimed,
+                Some(lamports) => {
+                    account.set_lamports(lamports);
+                    account.set_rent_epoch(new_rent_epoch);
+                    CollectedInfo {
+                        rent_amount: rent_due,
+                        account_data_len_reclaimed: 0u64,
+                    }
                 }
-            }
+            },
         }
     }
 
     /// determine what should happen to collect rent from this account
     #[must_use]
-    pub fn calculate_rent_result(
+    pub(crate) fn calculate_rent_result(
         &self,
         address: &Pubkey,
         account: &impl ReadableAccount,
@@ -165,25 +158,25 @@ impl RentCollector {
         if self.can_skip_rent_collection(address, account, filler_account_suffix) {
             return RentResult::LeaveAloneNoRent;
         }
-
-        let rent_due = self.get_rent_due(account);
-        if let RentDue::Paying(0) = rent_due {
-            // maybe collect rent later, leave account alone
-            return RentResult::LeaveAloneNoRent;
+        match self.get_rent_due(account) {
+            // Rent isn't collected for the next epoch.
+            // Make sure to check exempt status again later in current epoch.
+            RentDue::Exempt => RentResult::CollectRent {
+                new_rent_epoch: self.epoch,
+                rent_due: 0,
+            },
+            // Maybe collect rent later, leave account alone.
+            RentDue::Paying(0) => RentResult::LeaveAloneNoRent,
+            // Rent is collected for next epoch.
+            RentDue::Paying(rent_due) => RentResult::CollectRent {
+                new_rent_epoch: self.epoch + 1,
+                rent_due,
+            },
         }
-
-        let new_rent_epoch = match rent_due {
-            // Rent isn't collected for the next epoch
-            // Make sure to check exempt status again later in current epoch
-            RentDue::Exempt => self.epoch,
-            // Rent is collected for next epoch
-            RentDue::Paying(_) => self.epoch + 1,
-        };
-        RentResult::CollectRent((new_rent_epoch, rent_due.lamports()))
     }
 
     #[must_use = "add to Bank::collected_rent"]
-    pub fn collect_from_created_account(
+    pub(crate) fn collect_from_created_account(
         &self,
         address: &Pubkey,
         account: &mut AccountSharedData,
