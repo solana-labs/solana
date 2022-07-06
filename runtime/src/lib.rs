@@ -1,5 +1,6 @@
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(min_specialization))]
 #![allow(clippy::integer_arithmetic)]
+#![feature(default_free_fn)]
 
 #[macro_use]
 extern crate lazy_static;

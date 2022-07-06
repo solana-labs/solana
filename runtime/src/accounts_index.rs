@@ -265,6 +265,18 @@ pub struct AccountMapEntryInner<T> {
     pub meta: AccountMapEntryMeta,
 }
 
+#[derive(Debug, Default)]
+pub struct AccountMapEntryInner2 {
+    ref_count: AtomicU64,
+
+    pub meta: AccountMapEntryMeta,
+}
+
+#[derive(Debug, Default)]
+pub struct AccountMapEntryInner3 {
+    pub slot_list: RwLock<SlotList<u8>>,
+}
+
 impl<T: IndexValue> AccountMapEntryInner<T> {
     pub fn new(slot_list: SlotList<T>, ref_count: RefCount, meta: AccountMapEntryMeta) -> Self {
         Self {
@@ -2012,7 +2024,7 @@ pub mod tests {
             pubkey::PUBKEY_BYTES,
             signature::{Keypair, Signer},
         },
-        std::ops::RangeInclusive,
+        std::{default::default, ops::RangeInclusive},
     };
 
     pub enum SecondaryIndexTypes<'a> {
@@ -3980,5 +3992,15 @@ pub mod tests {
 
         let config = config.recreate_with_abort();
         assert!(config.is_aborted());
+    }
+
+    /// old: 56 bytes
+    /// new: 56 bytes
+    /// w/o rwlock:
+    #[test]
+    fn test_padding() {
+        use std::mem::size_of;
+        let s = size_of::<AccountMapEntryInner3>();
+        assert_eq!(s, 0);
     }
 }
