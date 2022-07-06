@@ -2535,13 +2535,10 @@ impl AccountsDb {
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
                         let mut useful = 0;
-                        self.accounts_index.scan(
-                            pubkeys.iter(),
-                            |exists, slot_list, pubkey, ref_count| {
+                        self.accounts_index
+                            .scan(pubkeys.iter(), |pubkey, slots_refs| {
                                 let mut useless = true;
-                                if !exists {
-                                    missing += 1;
-                                } else {
+                                if let Some((slot_list, ref_count)) = slots_refs {
                                     let index_in_slot_list = self.accounts_index.latest_slot(
                                         None,
                                         slot_list,
@@ -2590,6 +2587,8 @@ impl AccountsDb {
                                             purges_old_accounts.push(*pubkey);
                                         }
                                     }
+                                } else {
+                                    missing += 1;
                                 }
                                 if !useless {
                                     useful += 1;
@@ -2599,8 +2598,7 @@ impl AccountsDb {
                                 } else {
                                     AccountsIndexScanResult::KeepInMemory
                                 }
-                            },
-                        );
+                            });
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
                         missing_accum.fetch_add(missing, Ordering::Relaxed);
@@ -3035,9 +3033,9 @@ impl AccountsDb {
             accounts[..std::cmp::min(accounts.len(), count)]
                 .iter()
                 .map(|(key, _)| key),
-            |exists, slot_list, pubkey, _ref_count| {
+            |pubkey, slots_refs| {
                 let mut result = AccountsIndexScanResult::None;
-                if exists {
+                if let Some((slot_list, _ref_count)) = slots_refs {
                     let pair = &accounts[index];
                     let stored_account = &pair.1;
                     let is_alive = slot_list.iter().any(|(_slot, acct_info)| {
