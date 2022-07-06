@@ -3591,8 +3591,9 @@ export class Connection {
     const unsafeRes = await this._rpcRequest('isBlockhashValid', args);
     const res = create(unsafeRes, jsonRpcResultAndContext(boolean()));
     if ('error' in res) {
-      throw new Error(
-        'Could not determine if blockhash ' + blockhash + ' was valid: ' + res.error.message,
+      throw new SolanaJSONRPCError(
+        res.error,
+        'Could not determine if blockhash `' + blockhash + '` was valid',
       );
     }
     return res.result;
