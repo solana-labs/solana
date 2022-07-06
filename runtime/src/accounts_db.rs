@@ -8142,7 +8142,6 @@ impl AccountsDb {
         limit_load_slot_count_from_snapshot: Option<usize>,
         verify: bool,
         genesis_config: &GenesisConfig,
-        accounts_db_skip_shrink: bool,
     ) -> IndexGenerationInfo {
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
@@ -8345,12 +8344,7 @@ impl AccountsDb {
             if pass == 0 {
                 // Need to add these last, otherwise older updates will be cleaned
                 for slot in &slots {
-                    // passing 'false' to 'add_root' causes all slots to be added to 'uncleaned_slots'
-                    // passing 'true' to 'add_root' does NOT add all slots to 'uncleaned_slots'
-                    // if we are skipping shrink, this potentially massive amount of work is never processed at startup, when all threads can be used.
-                    // This causes failures such as oom during the first bg clean, which is expecting to work in 'normal' operating circumstances.
-                    // So, don't add all slots to 'uncleaned_slots' here since by requesting to skip clean and shrink, caller is expecting the starting snapshot to be reasonable.
-                    self.accounts_index.add_root(*slot, accounts_db_skip_shrink);
+                    self.accounts_index.add_root(*slot, false);
                 }
 
                 self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
