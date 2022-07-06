@@ -73,7 +73,7 @@ use {
         collections::{HashMap, HashSet},
         result,
         sync::{
-            atomic::{AtomicBool, AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, Mutex, RwLock,
         },
         thread::{self, Builder, JoinHandle},
@@ -2223,51 +2223,37 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
     ) -> bool {
         // Writable
-        let did_complete_bank = AtomicBool::new(false);
-        let tx_count = AtomicUsize::new(0);
+        let mut did_complete_bank = false;
+        let mut tx_count = 0;
         let progress = RwLock::new(progress);
-        let heaviest_subtree_fork_choice = RwLock::new(heaviest_subtree_fork_choice);
-        let duplicate_slots_tracker = RwLock::new(duplicate_slots_tracker);
-        let epoch_slots_frozen_slots = RwLock::new(epoch_slots_frozen_slots);
-        let unfrozen_gossip_verified_vote_hashes = RwLock::new(unfrozen_gossip_verified_vote_hashes);
-        let latest_validator_votes_for_frozen_banks = RwLock::new(latest_validator_votes_for_frozen_banks);
-        let duplicate_slots_to_repair = RwLock::new(duplicate_slots_to_repair);
-        let replay_timing = RwLock::new(replay_timing);
+        let longest_replay_time_us = AtomicU64::new(0);
         
         // Read only
         let blockstore = RwLock::new(blockstore);
         let my_pubkey = RwLock::new(my_pubkey);
         let vote_account = RwLock::new(vote_account);
         let transaction_status_sender = RwLock::new(transaction_status_sender);
-        let cache_block_meta_sender = RwLock::new(cache_block_meta_sender);
         let verify_recyclers = RwLock::new(verify_recyclers);
         let replay_vote_sender = RwLock::new(replay_vote_sender);
-        let bank_notification_sender = RwLock::new(bank_notification_sender);
-        let rewards_recorder_sender = RwLock::new(rewards_recorder_sender);
-        let rpc_subscriptions = RwLock::new(rpc_subscriptions);
-        let gossip_duplicate_confirmed_slots = RwLock::new(gossip_duplicate_confirmed_slots);
-        let cluster_slots_update_sender = RwLock::new(cluster_slots_update_sender);
-        let cost_update_sender = RwLock::new(cost_update_sender);
-        let ancestor_hashes_replay_update_sender = RwLock::new(ancestor_hashes_replay_update_sender);
-        let block_metadata_notifier = RwLock::new(block_metadata_notifier);
         let transaction_cost_metrics_sender = RwLock::new(transaction_cost_metrics_sender);
-        
-        let active_banks = bank_forks.read().unwrap().active_banks();
-        warn!("active banks {:?}", active_banks);
-        let execute_timings_vec: Vec<Option<ExecuteTimings>> = PAR_THREAD_POOL.install(|| {
+        let bank_forks_read_lock = bank_forks.read().unwrap();
+        let active_banks = bank_forks_read_lock.active_banks();
+        let root_slot = bank_forks_read_lock.root();
+
+        let replay_result_vec: Vec<(bool, &Arc<Bank>, Option<Result<usize, BlockstoreProcessorError>>)> = PAR_THREAD_POOL.install(|| {
             active_banks
                 .into_par_iter()
-                .map(|bank_slot| {
+                .map(|bank| {
                 let idx = PAR_THREAD_POOL.current_thread_index().unwrap();
+                let bank_slot = bank.slot();
                 warn!("REPLAY ACTIVE BANK START: SLOT {} THREAD IDX {}", bank_slot, idx);
                 // If the fork was marked as dead, don't replay it
                 let mut progress_lock = progress.write().unwrap();
                 if progress_lock.get(&bank_slot).map(|p| p.is_dead).unwrap_or(false) {
                     debug!("bank_slot {:?} is marked dead", bank_slot);
-                    return None;
+                    return (true, bank, None);
                 }
 
-                let bank = bank_forks.read().unwrap().get(bank_slot).unwrap();
                 let parent_slot = bank.parent_slot();
                 let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(&bank);
                 let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
@@ -2297,7 +2283,6 @@ impl ReplayStage {
                 drop(progress_lock);
 
                 if bank.collector_id() != *my_pubkey.read().unwrap() {
-                    let root_slot = bank_forks.read().unwrap().root();
                     let mut replay_blockstore_time = Measure::start("replay_blockstore_into_bank");
                     warn!("REPLAY ACTIVE BANK BLOCKSTORE START: SLOT {} THREAD IDX {}", bank_slot, idx);
                     let replay_result = Self::replay_blockstore_into_bank(
@@ -2312,174 +2297,193 @@ impl ReplayStage {
                     );
                     warn!("REPLAY ACTIVE BANK BLOCKSTORE END: SLOT {} THREAD IDX {}", bank_slot, idx);
                     replay_blockstore_time.stop();
-                    let mut replay_timing_lock = replay_timing.write().unwrap();
-                    replay_timing_lock.replay_blockstore_us += replay_blockstore_time.as_us();
-                    drop(replay_timing_lock);
-                    match replay_result {
-                        Ok(replay_tx_count) => _ = tx_count.fetch_add(replay_tx_count, Ordering::Relaxed),
-                        Err(err) => {
-                            // Error means the slot needs to be marked as dead
-                            Self::mark_dead_slot(
-                                &blockstore.read().unwrap(),
-                                &bank,
-                                root_slot,
-                                &err,
-                                &rpc_subscriptions.read().unwrap(),
-                                &mut duplicate_slots_tracker.write().unwrap(),
-                                &gossip_duplicate_confirmed_slots.read().unwrap(),
-                                &mut epoch_slots_frozen_slots.write().unwrap(),
-                                &mut progress.write().unwrap(),
-                                &mut heaviest_subtree_fork_choice.write().unwrap(),
-                                &mut duplicate_slots_to_repair.write().unwrap(),
-                                &ancestor_hashes_replay_update_sender.read().unwrap(),
-                            );
-                            // If the bank was corrupted, don't try to run the below logic to check if the
-                            // bank is completed
-                            return None;
-                        }
-                    }
-                }
-                assert_eq!(bank_slot, bank.slot());
-                if bank.is_complete() {
-                    warn!("REPLAY ACTIVE BANK COMPLETED SLOT {}",bank_slot);
-                    let mut bank_complete_time = Measure::start("bank_complete_time");
-
-                    let r_replay_stats = replay_stats.read().unwrap();
-                    let r_replay_progress = replay_progress.read().unwrap();
-                    debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
-                        bank.slot(),
-                        r_replay_stats.execute_timings
-                        );
-                    did_complete_bank.store(true, Ordering::Relaxed);
-                    info!("bank frozen: {}", bank.slot());
-                    let _ = cluster_slots_update_sender.read().unwrap().send(vec![bank_slot]);
-                    if let Some(transaction_status_sender) = *transaction_status_sender.read().unwrap() {
-                        transaction_status_sender.send_transaction_status_freeze_message(&bank);
-                    }
-                    bank.freeze();
-                    // report cost tracker stats
-                    cost_update_sender.read().unwrap()
-                        .send(CostUpdate::FrozenBank { bank: bank.clone() })
-                        .unwrap_or_else(|err| {
-                            warn!("cost_update_sender failed sending bank stats: {:?}", err)
-                        });
-
-                    let bank_hash = bank.hash();
-                    assert_ne!(bank_hash, Hash::default());
-                    // Needs to be updated before `check_slot_agrees_with_cluster()` so that
-                    // any updates in `check_slot_agrees_with_cluster()` on fork choice take
-                    // effect
-                    heaviest_subtree_fork_choice.write().unwrap().add_new_leaf_slot(
-                        (bank.slot(), bank.hash()),
-                        Some((bank.parent_slot(), bank.parent_hash())),
-                    );
-                    let mut progress_lock = progress.write().unwrap();
-                    let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
-                        ForkProgress::new_from_bank(
-                            &bank,
-                            &my_pubkey.read().unwrap(),
-                            &vote_account.read().unwrap(),
-                            prev_leader_slot,
-                            num_blocks_on_fork,
-                            num_dropped_blocks_on_fork,
-                        )
-                    });
-                    bank_progress.fork_stats.bank_hash = Some(bank.hash());
-                    drop(progress_lock);
-                    let bank_frozen_state = BankFrozenState::new_from_state(
-                        bank.slot(),
-                        bank.hash(),
-                        &mut duplicate_slots_tracker.write().unwrap(),
-                        &gossip_duplicate_confirmed_slots.read().unwrap(),
-                        &mut heaviest_subtree_fork_choice.write().unwrap(),
-                        &mut epoch_slots_frozen_slots.write().unwrap(),
-                    );
-                    check_slot_agrees_with_cluster(
-                        bank.slot(),
-                        bank_forks.read().unwrap().root(),
-                        &blockstore.read().unwrap(),
-                        &mut duplicate_slots_tracker.write().unwrap(),
-                        &mut epoch_slots_frozen_slots.write().unwrap(),
-                        &mut heaviest_subtree_fork_choice.write().unwrap(),
-                        &mut duplicate_slots_to_repair.write().unwrap(),
-                        &ancestor_hashes_replay_update_sender.read().unwrap(),
-                        SlotStateUpdate::BankFrozen(bank_frozen_state),
-                    );
-                    if let Some(sender) = *bank_notification_sender.read().unwrap() {
-                        sender
-                            .send(BankNotification::Frozen(bank.clone()))
-                            .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
-                    }
-                    blockstore_processor::cache_block_meta(&bank, *cache_block_meta_sender.read().unwrap());
-
-                    let bank_hash = bank.hash();
-                    if let Some(new_frozen_voters) =
-                        unfrozen_gossip_verified_vote_hashes.write().unwrap().remove_slot_hash(bank.slot(), &bank_hash)
-                    {
-                        for pubkey in new_frozen_voters {
-                            latest_validator_votes_for_frozen_banks.write().unwrap().check_add_vote(
-                                pubkey,
-                                bank.slot(),
-                                Some(bank_hash),
-                                false,
-                            );
-                        }
-                    }
-                    Self::record_rewards(&bank, &rewards_recorder_sender.read().unwrap());
-                    if let Some(ref block_metadata_notifier) = *block_metadata_notifier.read().unwrap() {
-                        let block_metadata_notifier = block_metadata_notifier.read().unwrap();
-                        block_metadata_notifier.notify_block_metadata(
-                            bank.slot(),
-                            &bank.last_blockhash().to_string(),
-                            &bank.rewards,
-                            Some(bank.clock().unix_timestamp),
-                            Some(bank.block_height()),
-                        )
-                    }
-                    bank_complete_time.stop();
-
-                    r_replay_stats.report_stats(
-                        bank.slot(),
-                        r_replay_progress.num_entries,
-                        r_replay_progress.num_shreds,
-                        bank_complete_time.as_us(),
-                    );
-                    let mut execute_timings = ExecuteTimings::default();
-                    execute_timings.accumulate(&r_replay_stats.execute_timings);
-                    return Some(execute_timings);
+                    longest_replay_time_us.fetch_max(replay_blockstore_time.as_us(), Ordering::Relaxed);
+                    return (false, bank, Some(replay_result));
                 } else {
-                    warn!("REPLAY ACTIVE BANK NOT COMPLETED: SLOT {} THREAD IDX {}", bank_slot, idx);
-                    warn!(
-                        "bank {} not completed tick_height: {}, max_tick_height: {}",
-                        bank.slot(),
-                        bank.tick_height(),
-                        bank.max_tick_height()
-                    );
-                    return None;
-                };
+                    return (false, bank, None);
+                }
             }).collect()
         });
 
-        // Accumulate execution timings for completed slots.
+        replay_timing.replay_blockstore_us += longest_replay_time_us.load(Ordering::Relaxed);
+
         let mut execute_timings = ExecuteTimings::default();
-        for execute_timing in execute_timings_vec {
-            if let Some(execute_timing) = execute_timing {
-                warn!("execute_timing {:?}", execute_timing);
-                execute_timings.accumulate(&execute_timing);
+        for (slot_is_dead, bank, replay_result) in replay_result_vec {
+            if slot_is_dead {
+                continue;
             }
+
+            let bank_slot = bank.slot();
+            if let Some(replay_result) = replay_result {    
+                match replay_result {
+                    Ok(replay_tx_count) => tx_count += replay_tx_count,
+                    Err(err) => {
+                        // Error means the slot needs to be marked as dead
+                        Self::mark_dead_slot(
+                            &blockstore.read().unwrap(),
+                            &bank,
+                            root_slot,
+                            &err,
+                            rpc_subscriptions,
+                            duplicate_slots_tracker,
+                            gossip_duplicate_confirmed_slots,
+                            epoch_slots_frozen_slots,
+                            &mut progress.write().unwrap(),
+                            heaviest_subtree_fork_choice,
+                            duplicate_slots_to_repair,
+                            ancestor_hashes_replay_update_sender,
+                        );
+                        // If the bank was corrupted, don't try to run the below logic to check if the
+                        // bank is completed
+                        continue;
+                    }
+                }
+            }
+
+            assert_eq!(bank_slot, bank.slot());
+            if bank.is_complete() {
+                warn!("REPLAY ACTIVE BANK COMPLETED SLOT {}",bank_slot);
+                let mut bank_complete_time = Measure::start("bank_complete_time");
+
+                let mut progress_lock = progress.write().unwrap();
+                let parent_slot = bank.parent_slot();
+                let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(&bank);
+                let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
+                    let stats = progress_lock
+                        .get(&parent_slot)
+                        .expect("parent of active bank must exist in progress map");
+                    let num_blocks_on_fork = stats.num_blocks_on_fork + 1;
+                    let new_dropped_blocks = bank.slot() - parent_slot - 1;
+                    let num_dropped_blocks_on_fork =
+                        stats.num_dropped_blocks_on_fork + new_dropped_blocks;
+                    (num_blocks_on_fork, num_dropped_blocks_on_fork)
+                };
+                let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
+                    ForkProgress::new_from_bank(
+                        &bank,
+                        &my_pubkey.read().unwrap(),
+                        &vote_account.read().unwrap(),
+                        prev_leader_slot,
+                        num_blocks_on_fork,
+                        num_dropped_blocks_on_fork,
+                    )
+                });
+
+                let replay_stats = bank_progress.replay_stats.clone();
+                let r_replay_stats = replay_stats.read().unwrap();
+                let replay_progress = bank_progress.replay_progress.clone();
+                let r_replay_progress = replay_progress.read().unwrap();
+                debug!("bank {} is completed replay from blockstore, contribute to update cost with {:?}",
+                    bank.slot(),
+                    r_replay_stats.execute_timings
+                    );
+                did_complete_bank = true;
+                info!("bank frozen: {}", bank.slot());
+                let _ = cluster_slots_update_sender.send(vec![bank_slot]);
+                if let Some(transaction_status_sender) = *transaction_status_sender.read().unwrap() {
+                    transaction_status_sender.send_transaction_status_freeze_message(&bank);
+                }
+                bank.freeze();
+                // report cost tracker stats
+                cost_update_sender
+                    .send(CostUpdate::FrozenBank { bank: bank.clone() })
+                    .unwrap_or_else(|err| {
+                        warn!("cost_update_sender failed sending bank stats: {:?}", err)
+                    });
+
+                let bank_hash = bank.hash();
+                assert_ne!(bank_hash, Hash::default());
+                // Needs to be updated before `check_slot_agrees_with_cluster()` so that
+                // any updates in `check_slot_agrees_with_cluster()` on fork choice take
+                // effect
+                heaviest_subtree_fork_choice.add_new_leaf_slot(
+                    (bank.slot(), bank.hash()),
+                    Some((bank.parent_slot(), bank.parent_hash())),
+                );
+
+                bank_progress.fork_stats.bank_hash = Some(bank.hash());
+                drop(progress_lock);
+                let bank_frozen_state = BankFrozenState::new_from_state(
+                    bank.slot(),
+                    bank.hash(),
+                    duplicate_slots_tracker,
+                    gossip_duplicate_confirmed_slots,
+                    heaviest_subtree_fork_choice,
+                    epoch_slots_frozen_slots,
+                );
+                check_slot_agrees_with_cluster(
+                    bank.slot(),
+                    root_slot,
+                    &blockstore.read().unwrap(),
+                    duplicate_slots_tracker,
+                    epoch_slots_frozen_slots,
+                    heaviest_subtree_fork_choice,
+                    duplicate_slots_to_repair,
+                    ancestor_hashes_replay_update_sender,
+                    SlotStateUpdate::BankFrozen(bank_frozen_state),
+                );
+                if let Some(sender) = bank_notification_sender {
+                    sender
+                        .send(BankNotification::Frozen(bank.clone()))
+                        .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
+                }
+                blockstore_processor::cache_block_meta(&bank, cache_block_meta_sender);
+
+                let bank_hash = bank.hash();
+                if let Some(new_frozen_voters) =
+                    unfrozen_gossip_verified_vote_hashes.remove_slot_hash(bank.slot(), &bank_hash)
+                {
+                    for pubkey in new_frozen_voters {
+                        latest_validator_votes_for_frozen_banks.check_add_vote(
+                            pubkey,
+                            bank.slot(),
+                            Some(bank_hash),
+                            false,
+                        );
+                    }
+                }
+                Self::record_rewards(&bank, rewards_recorder_sender);
+                if let Some(ref block_metadata_notifier) = block_metadata_notifier {
+                    let block_metadata_notifier = block_metadata_notifier.read().unwrap();
+                    block_metadata_notifier.notify_block_metadata(
+                        bank.slot(),
+                        &bank.last_blockhash().to_string(),
+                        &bank.rewards,
+                        Some(bank.clock().unix_timestamp),
+                        Some(bank.block_height()),
+                    )
+                }
+                bank_complete_time.stop();
+
+                r_replay_stats.report_stats(
+                    bank.slot(),
+                    r_replay_progress.num_entries,
+                    r_replay_progress.num_shreds,
+                    bank_complete_time.as_us(),
+                );
+                execute_timings.accumulate(&r_replay_stats.execute_timings);
+            } else {
+                warn!("REPLAY ACTIVE BANK NOT COMPLETED: SLOT {}", bank_slot);
+                warn!(
+                    "bank {} not completed tick_height: {}, max_tick_height: {}",
+                    bank.slot(),
+                    bank.tick_height(),
+                    bank.max_tick_height()
+                );
+            };
         }
 
         // Send accumulated execute-timings to cost_update_service.
         if !execute_timings.details.per_program_timings.is_empty() {
-            cost_update_sender.read().unwrap()
+            cost_update_sender
                 .send(CostUpdate::ExecuteTiming {
                     execute_timings: Box::new(execute_timings),
                 })
                 .unwrap_or_else(|err| warn!("cost_update_sender failed: {:?}", err));
         }
 
-        inc_new_counter_info!("replay_stage-replay_transactions", tx_count.load(Ordering::Relaxed));
-        did_complete_bank.load(Ordering::SeqCst)
+        inc_new_counter_info!("replay_stage-replay_transactions", tx_count);
+        did_complete_bank
     }
 
     #[allow(clippy::too_many_arguments)]
