@@ -8356,7 +8356,7 @@ impl AccountsDb {
                 for root in &slots {
                     // passing 'false' to 'add_root' causes 'root' to be added to 'accounts_index.roots_tracker.uncleaned_roots'
                     // passing 'true' to 'add_root' does NOT add 'root' to 'accounts_index.roots_tracker.uncleaned_roots'
-                    // So, don't add all slots to 'uncleaned_roots' here since by requesting to skip clean and shrink, caller is expecting the starting snapshot to be reasonable.
+                    // So, don't add all slots to 'uncleaned_roots' here since we know which slots contain duplicate pubkeys.
                     let uncleaned_root = uncleaned_roots.contains(root);
                     self.accounts_index.add_root(*root, !uncleaned_root);
                 }
@@ -8408,24 +8408,26 @@ impl AccountsDb {
                     return;
                 }
                 // Only the account data len in the highest slot should be used, and the rest are
-                // duplicates.  So sort the slot list in descending slot order, skip the first
-                // item, then sum up the remaining data len, which are the duplicates.
-                let mut slot_list = slot_list.clone();
-                slot_list
-                    .select_nth_unstable_by(0, |a, b| b.0.cmp(&a.0))
-                    .2
-                    .iter()
-                    .for_each(|(slot, account_info)| {
-                        uncleaned_slots.insert(*slot);
-                        let maybe_storage_entry = self
-                            .storage
-                            .get_account_storage_entry(*slot, account_info.store_id());
-                        let mut accessor = LoadedAccountAccessor::Stored(
-                            maybe_storage_entry.map(|entry| (entry, account_info.offset())),
-                        );
-                        let loaded_account = accessor.check_and_get_loaded_account();
-                        accounts_data_len_from_duplicates += loaded_account.data().len();
-                    });
+                // duplicates.  So find the max slot to keep.
+                // Then sum up the remaining data len, which are the duplicates.
+                // All of the slots need to go in the 'uncleaned_slots' list. For clean to work properly,
+                // the slot where duplicate accounts are found in the index need to be in 'uncleaned_slots' list, too.
+                let max = slot_list.iter().map(|(slot, _)| slot).max().unwrap();
+                slot_list.iter().for_each(|(slot, account_info)| {
+                    uncleaned_slots.insert(*slot);
+                    if slot == max {
+                        // the info in 'max' is the most recent, current info for this pubkey
+                        return;
+                    }
+                    let maybe_storage_entry = self
+                        .storage
+                        .get_account_storage_entry(*slot, account_info.store_id());
+                    let mut accessor = LoadedAccountAccessor::Stored(
+                        maybe_storage_entry.map(|entry| (entry, account_info.offset())),
+                    );
+                    let loaded_account = accessor.check_and_get_loaded_account();
+                    accounts_data_len_from_duplicates += loaded_account.data().len();
+                });
             }
         });
         (accounts_data_len_from_duplicates as u64, uncleaned_slots)
@@ -10801,9 +10803,8 @@ pub mod tests {
 
     fn assert_not_load_account(accounts: &AccountsDb, slot: Slot, pubkey: Pubkey) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
-        assert!(accounts
-            .load_without_fixed_root(&ancestors, &pubkey)
-            .is_none());
+        let load = accounts.load_without_fixed_root(&ancestors, &pubkey);
+        assert!(load.is_none(), "{:?}", load);
     }
 
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDb, slot: Slot) -> AccountsDb {
