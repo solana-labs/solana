@@ -46,7 +46,7 @@ impl<'a> AccountsToStore<'a> {
         // index of the first account that doesn't fit in the current append vec
         let mut index_first_item_overflow = num_accounts; // assume all fit
         stored_accounts.iter().for_each(|account| {
-            let account_size = account.1.account_size as u64;
+            let account_size = account.1.account.stored_size as u64;
             if available_bytes >= account_size {
                 available_bytes = available_bytes.saturating_sub(account_size);
             } else if index_first_item_overflow == num_accounts {
@@ -147,7 +147,6 @@ pub mod tests {
             rent_epoch: 0,
         };
         let offset = 3;
-        let stored_size = 4;
         let hash = Hash::new(&[2; 32]);
         let stored_meta = StoredMeta {
             /// global write version
@@ -162,15 +161,10 @@ pub mod tests {
             account_meta: &account_meta,
             data: account.data(),
             offset,
-            stored_size,
+            stored_size: account_size,
             hash: &hash,
         };
-        // let account = StoredAccountMeta::new();
-        let found = FoundStoredAccount {
-            account,
-            store_id,
-            account_size,
-        };
+        let found = FoundStoredAccount { account, store_id };
         let item = (pubkey, found);
         let map = vec![&item];
         for (selector, available_bytes) in [
