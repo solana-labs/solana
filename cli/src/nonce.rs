@@ -5,12 +5,14 @@ use {
             log_instruction_custom_error, log_instruction_custom_error_ex, CliCommand,
             CliCommandInfo, CliConfig, CliError, ProcessResult,
         },
+        compute_unit_price::WithComputeUnitPrice,
         feature::get_feature_is_active,
         memo::WithMemo,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{App, Arg, ArgMatches, SubCommand},
     solana_clap_utils::{
+        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         input_parsers::*,
         input_validators::*,
         keypair::{CliSigners, DefaultSigner, SignerIndex},
@@ -63,7 +65,8 @@ impl NonceSubCommands for App<'_, '_> {
                         "Account to be granted authority of the nonce account. "),
                 )
                 .arg(nonce_authority_arg())
-                .arg(memo_arg()),
+                .arg(memo_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("create-nonce-account")
@@ -99,7 +102,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .takes_value(true)
                         .help("Seed for address generation; if specified, the resulting account will be at a derived address of the NONCE_ACCOUNT pubkey")
                 )
-                .arg(memo_arg()),
+                .arg(memo_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("nonce")
@@ -124,7 +128,8 @@ impl NonceSubCommands for App<'_, '_> {
                         "Address of the nonce account. "),
                 )
                 .arg(nonce_authority_arg())
-                .arg(memo_arg()),
+                .arg(memo_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("nonce-account")
@@ -171,7 +176,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .help("The amount to withdraw from the nonce account, in SOL"),
                 )
                 .arg(nonce_authority_arg())
-                .arg(memo_arg()),
+                .arg(memo_arg())
+                .arg(compute_unit_price_arg()),
         )
         .subcommand(
             SubCommand::with_name("upgrade-nonce-account")
@@ -184,7 +190,8 @@ impl NonceSubCommands for App<'_, '_> {
                         .required(true),
                         "Nonce account to upgrade. "),
                 )
-                .arg(memo_arg()),
+                .arg(memo_arg())
+                .arg(compute_unit_price_arg()),
         )
     }
 }
@@ -206,6 +213,7 @@ pub fn parse_authorize_nonce_account(
         matches,
         wallet_manager,
     )?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::AuthorizeNonceAccount {
@@ -213,6 +221,7 @@ pub fn parse_authorize_nonce_account(
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
             new_authority,
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -236,6 +245,7 @@ pub fn parse_nonce_create_account(
         matches,
         wallet_manager,
     )?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateNonceAccount {
@@ -244,6 +254,7 @@ pub fn parse_nonce_create_account(
             nonce_authority,
             memo,
             amount,
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -278,12 +289,14 @@ pub fn parse_new_nonce(
         matches,
         wallet_manager,
     )?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::NewNonce {
             nonce_account,
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -325,6 +338,7 @@ pub fn parse_withdraw_from_nonce_account(
         matches,
         wallet_manager,
     )?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawFromNonceAccount {
@@ -333,6 +347,7 @@ pub fn parse_withdraw_from_nonce_account(
             memo,
             destination_account_pubkey,
             lamports,
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -343,10 +358,12 @@ pub(crate) fn parse_upgrade_nonce_account(
 ) -> Result<CliCommandInfo, CliError> {
     let nonce_account = pubkey_of(matches, "nonce_account_pubkey").unwrap();
     let memo = matches.value_of(MEMO_ARG.name).map(String::from);
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
     Ok(CliCommandInfo {
         command: CliCommand::UpgradeNonceAccount {
             nonce_account,
             memo,
+            compute_unit_price,
         },
         signers: CliSigners::default(),
     })
@@ -387,6 +404,7 @@ pub fn process_authorize_nonce_account(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     new_authority: &Pubkey,
+    compute_unit_price: &Option<u64>,
 ) -> ProcessResult {
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -396,7 +414,8 @@ pub fn process_authorize_nonce_account(
         &nonce_authority.pubkey(),
         new_authority,
     )]
-    .with_memo(memo);
+    .with_memo(memo)
+    .with_compute_unit_price(*compute_unit_price);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, latest_blockhash)?;
@@ -432,6 +451,7 @@ pub fn process_create_nonce_account(
     nonce_authority: Option<Pubkey>,
     memo: Option<&String>,
     amount: SpendAmount,
+    compute_unit_price: &Option<u64>,
 ) -> ProcessResult {
     let nonce_account_pubkey = config.signers[nonce_account].pubkey();
     let nonce_account_address = if let Some(ref seed) = seed {
@@ -458,6 +478,7 @@ pub fn process_create_nonce_account(
                 lamports,
             )
             .with_memo(memo)
+            .with_compute_unit_price(*compute_unit_price)
         } else {
             create_nonce_account(
                 &config.signers[0].pubkey(),
@@ -466,6 +487,7 @@ pub fn process_create_nonce_account(
                 lamports,
             )
             .with_memo(memo)
+            .with_compute_unit_price(*compute_unit_price)
         };
         Message::new(&ixs, Some(&config.signers[0].pubkey()))
     };
@@ -561,6 +583,7 @@ pub fn process_new_nonce(
     nonce_account: &Pubkey,
     nonce_authority: SignerIndex,
     memo: Option<&String>,
+    compute_unit_price: &Option<u64>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
@@ -580,7 +603,8 @@ pub fn process_new_nonce(
         nonce_account,
         &nonce_authority.pubkey(),
     )]
-    .with_memo(memo);
+    .with_memo(memo)
+    .with_compute_unit_price(*compute_unit_price);
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
@@ -646,6 +670,7 @@ pub fn process_withdraw_from_nonce_account(
     memo: Option<&String>,
     destination_account_pubkey: &Pubkey,
     lamports: u64,
+    compute_unit_price: &Option<u64>,
 ) -> ProcessResult {
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -656,7 +681,8 @@ pub fn process_withdraw_from_nonce_account(
         destination_account_pubkey,
         lamports,
     )]
-    .with_memo(memo);
+    .with_memo(memo)
+    .with_compute_unit_price(*compute_unit_price);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, latest_blockhash)?;
@@ -688,9 +714,10 @@ pub(crate) fn process_upgrade_nonce_account(
     config: &CliConfig,
     nonce_account: Pubkey,
     memo: Option<&String>,
+    compute_unit_price: &Option<u64>,
 ) -> ProcessResult {
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    let ixs = vec![upgrade_nonce_account(nonce_account)].with_memo(memo);
+    let ixs = vec![upgrade_nonce_account(nonce_account)].with_memo(memo).with_compute_unit_price(*compute_unit_price);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, latest_blockhash)?;
@@ -774,6 +801,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     new_authority: Pubkey::default(),
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -796,6 +824,7 @@ mod tests {
                     nonce_authority: 1,
                     memo: None,
                     new_authority: Pubkey::default(),
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -820,6 +849,7 @@ mod tests {
                     nonce_authority: None,
                     memo: None,
                     amount: SpendAmount::Some(50_000_000_000),
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -846,6 +876,7 @@ mod tests {
                     nonce_authority: Some(nonce_authority_keypair.pubkey()),
                     memo: None,
                     amount: SpendAmount::Some(50_000_000_000),
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -881,6 +912,7 @@ mod tests {
                     nonce_account: nonce_account.pubkey(),
                     nonce_authority: 0,
                     memo: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -902,6 +934,7 @@ mod tests {
                     nonce_account: nonce_account.pubkey(),
                     nonce_authority: 1,
                     memo: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -949,6 +982,7 @@ mod tests {
                     memo: None,
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42_000_000_000
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -978,6 +1012,7 @@ mod tests {
                     memo: None,
                     destination_account_pubkey: nonce_account_pubkey,
                     lamports: 42_000_000_000
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -998,6 +1033,7 @@ mod tests {
                 command: CliCommand::UpgradeNonceAccount {
                     nonce_account: nonce_account_pubkey,
                     memo: None,
+                    compute_unit_price: None,
                 },
                 signers: CliSigners::default(),
             }
