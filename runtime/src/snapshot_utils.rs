@@ -842,21 +842,25 @@ fn verify_and_unarchive_snapshots(
     Ok((unarchived_full_snapshot, unarchived_incremental_snapshot))
 }
 
+/// Utility for parsing out bank specific information from a snapshot archive. This utility can be used
+/// to parse out bank specific information like the leader schedule, epoch schedule, etc.
 pub fn bank_fields_from_snapshot_archives(
-    // Pass in path to the directory containing the snapshot archive
     bank_snapshots_dir: impl AsRef<Path>,
+    full_snapshot_archives_dir: impl AsRef<Path>,
+    incremental_snapshot_archives_dir: impl AsRef<Path>,
 ) -> Result<BankFieldsToDeserialize> {
-    let full_snapshot_archive_info = get_highest_full_snapshot_archive_info(&bank_snapshots_dir)
-        .ok_or(SnapshotError::NoSnapshotArchives)?;
+    let full_snapshot_archive_info =
+        get_highest_full_snapshot_archive_info(&full_snapshot_archives_dir)
+            .ok_or(SnapshotError::NoSnapshotArchives)?;
 
     let incremental_snapshot_archive_info = get_highest_incremental_snapshot_archive_info(
-        &bank_snapshots_dir,
+        &incremental_snapshot_archives_dir,
         full_snapshot_archive_info.slot(),
     );
 
     let temp_dir = tempfile::Builder::new()
         .prefix("dummy-accounts-path")
-        .tempdir_in(&bank_snapshots_dir)?;
+        .tempdir()?;
 
     let account_paths = vec![temp_dir.path().to_path_buf()];
 
@@ -3755,7 +3759,12 @@ mod tests {
         )
         .unwrap();
 
-        let bank_fields = bank_fields_from_snapshot_archives(&all_snapshots_dir).unwrap();
+        let bank_fields = bank_fields_from_snapshot_archives(
+            &all_snapshots_dir,
+            &all_snapshots_dir,
+            &all_snapshots_dir,
+        )
+        .unwrap();
         assert_eq!(bank_fields.slot, bank2.slot());
         assert_eq!(bank_fields.parent_slot, bank2.parent_slot());
     }
