@@ -136,6 +136,10 @@ pub struct Memcmp {
     /// Bytes, encoded with specified encoding, or default Binary
     pub bytes: MemcmpEncodedBytes,
     /// Optional encoding specification
+    #[deprecated(
+        since = "1.11.2",
+        note = "Field has no server-side effect. Specify encoding with `MemcmpEncodedBytes` variant instead."
+    )]
     pub encoding: Option<MemcmpEncoding>,
 }
 
