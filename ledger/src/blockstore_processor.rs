@@ -57,7 +57,6 @@ use {
     },
     std::{
         borrow::Cow,
-        cell::RefCell,
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
@@ -96,12 +95,13 @@ impl BlockCostCapacityMeter {
     }
 }
 
-thread_local!(static PAR_THREAD_POOL: RefCell<ThreadPool> = RefCell::new(rayon::ThreadPoolBuilder::new()
-                    .num_threads(get_thread_count())
-                    .thread_name(|ix| format!("blockstore_processor_{}", ix))
-                    .build()
-                    .unwrap())
-);
+lazy_static! {
+    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
+        .num_threads(get_thread_count())
+        .thread_name(|ix| format!("transaction_sender_stake_stage_{}", ix))
+        .build()
+        .unwrap();
+}
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
     for r in results {
@@ -268,58 +268,54 @@ fn execute_batches_internal(
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.with(|thread_pool| {
-        thread_pool
-            .borrow()
-            .install(|| {
-                batches.into_par_iter().map(|batch| {
-                    let transaction_count = batch.sanitized_transactions().len() as u64;
-                    let mut timings = ExecuteTimings::default();
-                    let (result, execute_batches_time): (Result<()>, Measure) = Measure::this(
-                        |_| {
-                            let result = execute_batch(
-                                batch,
-                                bank,
-                                transaction_status_sender,
-                                replay_vote_sender,
-                                &mut timings,
-                                cost_capacity_meter.clone(),
-                            );
-                            if let Some(entry_callback) = entry_callback {
-                                entry_callback(bank);
-                            }
-                            result
-                        },
-                        (),
-                        "execute_batch",
-                    );
+    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+        batches
+            .into_par_iter()
+            .map(|batch| {
+                let transaction_count = batch.sanitized_transactions().len() as u64;
+                let mut timings = ExecuteTimings::default();
+                let (result, execute_batches_time): (Result<()>, Measure) = Measure::this(
+                    |_| {
+                        let result = execute_batch(
+                            batch,
+                            bank,
+                            transaction_status_sender,
+                            replay_vote_sender,
+                            &mut timings,
+                            cost_capacity_meter.clone(),
+                        );
+                        if let Some(entry_callback) = entry_callback {
+                            entry_callback(bank);
+                        }
+                        result
+                    },
+                    (),
+                    "execute_batch",
+                );
 
-                    let thread_index = PAR_THREAD_POOL
-                        .with(|par_thread_pool| par_thread_pool.borrow().current_thread_index())
-                        .unwrap();
-                    execution_timings_per_thread
-                        .lock()
-                        .unwrap()
-                        .entry(thread_index)
-                        .and_modify(|thread_execution_time| {
-                            let ThreadExecuteTimings {
-                                total_thread_us,
-                                total_transactions_executed,
-                                execute_timings: total_thread_execute_timings,
-                            } = thread_execution_time;
-                            *total_thread_us += execute_batches_time.as_us();
-                            *total_transactions_executed += transaction_count;
-                            total_thread_execute_timings
-                                .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
-                            total_thread_execute_timings.accumulate(&timings);
-                        })
-                        .or_insert(ThreadExecuteTimings {
-                            total_thread_us: execute_batches_time.as_us(),
-                            total_transactions_executed: transaction_count,
-                            execute_timings: timings,
-                        });
-                    result
-                })
+                let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
+                execution_timings_per_thread
+                    .lock()
+                    .unwrap()
+                    .entry(thread_index)
+                    .and_modify(|thread_execution_time| {
+                        let ThreadExecuteTimings {
+                            total_thread_us,
+                            total_transactions_executed,
+                            execute_timings: total_thread_execute_timings,
+                        } = thread_execution_time;
+                        *total_thread_us += execute_batches_time.as_us();
+                        *total_transactions_executed += transaction_count;
+                        total_thread_execute_timings
+                            .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
+                        total_thread_execute_timings.accumulate(&timings);
+                    })
+                    .or_insert(ThreadExecuteTimings {
+                        total_thread_us: execute_batches_time.as_us(),
+                        total_transactions_executed: transaction_count,
+                        execute_timings: timings,
+                    });
+                result
             })
             .collect()
     });
@@ -697,15 +693,6 @@ pub fn process_blockstore_from_root(
     accounts_package_sender: AccountsPackageSender,
     pruned_banks_receiver: DroppedSlotsReceiver,
 ) -> result::Result<Option<Slot>, BlockstoreProcessorError> {
-    if let Some(num_threads) = opts.override_num_threads {
-        PAR_THREAD_POOL.with(|pool| {
-            *pool.borrow_mut() = rayon::ThreadPoolBuilder::new()
-                .num_threads(num_threads)
-                .build()
-                .unwrap()
-        });
-    }
-
     // Starting slot must be a root, and thus has no parents
     assert_eq!(bank_forks.banks().len(), 1);
     let bank = bank_forks.root_bank();
@@ -2513,9 +2500,7 @@ pub mod tests {
             ..ProcessOptions::default()
         };
         test_process_blockstore(&genesis_config, &blockstore, opts);
-        PAR_THREAD_POOL.with(|pool| {
-            assert_eq!(pool.borrow().current_num_threads(), 1);
-        });
+        assert_eq!(PAR_THREAD_POOL.current_num_threads(), 1);
     }
 
     #[test]
