@@ -3095,7 +3095,7 @@ describe('Connection', function () {
         method: 'isBlockhashValid',
         params: [blockhash],
         value: true,
-        withContext: true
+        withContext: true,
       });
 
       const isValid = await connection.isBlockhashValid(blockhash);
@@ -3109,10 +3109,12 @@ describe('Connection', function () {
         method: 'isBlockhashValid',
         params: [blockhash, {minContextSlot: 2}],
         value: true,
-        withContext: true
+        withContext: true,
       });
 
-      const isValid = await connection.isBlockhashValid(blockhash, {minContextSlot: 2});
+      const isValid = await connection.isBlockhashValid(blockhash, {
+        minContextSlot: 2,
+      });
       expect(isValid.value).to.be.true;
     });
 
@@ -3124,19 +3126,24 @@ describe('Connection', function () {
       });
 
       it('is blockhash valid - blockhash only and min slot (live)', async () => {
-        const blockhash = await connection.getLatestBlockhashAndContext('processed');
+        const blockhash = await connection.getLatestBlockhashAndContext(
+          'processed',
+        );
 
         const isValid = await connection.isBlockhashValid(
           blockhash.value.blockhash,
           {
             commitment: 'finalized',
-            minContextSlot: blockhash.context.slot
-          });
+            minContextSlot: blockhash.context.slot,
+          },
+        );
         expect(isValid.value).to.be.false;
       });
 
       it('is blockhash valid - junk blockhash (live)', async () => {
-        const isValid = await connection.isBlockhashValid('57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy');
+        const isValid = await connection.isBlockhashValid(
+          '57zQNBZBEiHsCZFqsaY6h176ioXy5MsSLmcvHkEyaLGy',
+        );
         expect(isValid.value).to.be.false;
       });
     }

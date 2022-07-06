@@ -1050,7 +1050,7 @@ export type IsBlockhashValidConfig = {
   commitment?: Commitment;
   /** The minimum slot that the request can be evaluated at */
   minContextSlot?: number;
-}
+};
 
 /**
  * A performance sample
@@ -3562,7 +3562,7 @@ export class Connection {
    */
   async isBlockhashValid(
     blockhash: string,
-    config?: IsBlockhashValidConfig
+    config?: IsBlockhashValidConfig,
   ): Promise<RpcResponseAndContext<boolean>> {
     const extra: Pick<IsBlockhashValidConfig, 'minContextSlot'> = {};
 
