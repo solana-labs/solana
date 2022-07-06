@@ -254,39 +254,34 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 // not in cache, look on disk
                 let stats = &self.stats();
                 let disk_entry = self.load_account_entry_from_disk(pubkey);
+                // pubkey is not in memory and not on disk, immediately return None to shorten holding of the lock.
+                if disk_entry.is_none() {
+                    return callback(None).1;
+                }
 
+                let disk_entry = disk_entry.unwrap();
                 let mut map = self.map_internal.write().unwrap();
                 let entry = map.entry(*pubkey);
                 match entry {
                     Entry::Occupied(occupied) => {
                         let entry = occupied.get();
                         if entry.lazy_disk_load() {
-                            // we found the pubkey
-                            // but, we haven't checked to see if there is more on disk
-                            // so, we have to load from disk first, then merge with in-mem
-                            // right now we have a write lock on the in-mem idx, fwiw
-                            // NB: we remove a slot from the slot list through calling slot_list_mut
-                            // we need to make sure this gets covered
-                            if let Some(disk_entry) = disk_entry {
-                                Self::merge_slot_lists(entry, disk_entry);
-                            }
+                            Self::merge_slot_lists(entry, disk_entry);
+
                             entry.clear_lazy_disk_load();
                             Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
                         }
                         callback(Some(entry)).1
                     }
-                    Entry::Vacant(vacant) => match disk_entry {
-                        Some(disk_entry) => {
-                            let (add_to_cache, rt) = callback(Some(&disk_entry));
+                    Entry::Vacant(vacant) => {
+                        let (add_to_cache, rt) = callback(Some(&disk_entry));
 
-                            if add_to_cache {
-                                stats.inc_mem_count(self.bin);
-                                vacant.insert(disk_entry);
-                            }
-                            rt
+                        if add_to_cache {
+                            stats.inc_mem_count(self.bin);
+                            vacant.insert(disk_entry);
                         }
-                        None => callback(None).1,
-                    },
+                        rt
+                    }
                 }
             }
         })
