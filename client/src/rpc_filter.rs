@@ -144,6 +144,14 @@ pub struct Memcmp {
 }
 
 impl Memcmp {
+    pub fn new_raw_bytes(offset: usize, bytes: Vec<u8>) -> Self {
+        Self {
+            offset,
+            bytes: MemcmpEncodedBytes::Bytes(bytes),
+            encoding: None,
+        }
+    }
+
     pub fn bytes(&self) -> Option<Cow<Vec<u8>>> {
         use MemcmpEncodedBytes::*;
         match &self.bytes {
