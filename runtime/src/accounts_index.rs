@@ -215,7 +215,7 @@ pub struct AccountMapEntryMeta {
     pub dirty: AtomicBool,
     /// 'age' at which this entry should be purged from the cache (implements lru)
     pub age: AtomicU8,
-    /// true if there might be on-disk idx that hasn't be loaded yet
+    /// true if there might be on-disk idx that hasn't been loaded yet
     pub lazy_disk_load: AtomicBool,
 }
 
