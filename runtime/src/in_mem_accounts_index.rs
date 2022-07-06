@@ -390,7 +390,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 true,
                 entry.map(|entry| {
                     let result = user(&mut entry.slot_list.write().unwrap());
-                    entry.set_dirty(true);
+                    entry.set_dirty();
                     result
                 }),
             )
@@ -545,7 +545,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if addref {
             current.add_un_ref(true);
         }
-        current.set_dirty(true);
+        current.set_dirty();
     }
 
     /// modifies slot_list

@@ -207,38 +207,45 @@ impl AccountSecondaryIndexes {
     }
 }
 
+#[allow(non_snake_case)]
+pub mod AccountMapEntryFlags {
+    /// entry in in-mem idx has changes and needs to be written to disk
+    pub const DIRTY: u8 = 0x1;
+
+    /// there might be on-disk idx that hasn't be loaded yet
+    pub const LAZY_DISK_LOAD: u8 = 0x2;
+}
+
 #[derive(Debug, Default)]
 /// data per entry in in-mem accounts index
 /// used to keep track of consistency with disk index
 pub struct AccountMapEntryMeta {
-    /// true if entry in in-mem idx has changes and needs to be written to disk
-    pub dirty: AtomicBool,
     /// 'age' at which this entry should be purged from the cache (implements lru)
     pub age: AtomicU8,
-    /// true if there might be on-disk idx that hasn't be loaded yet
-    pub lazy_disk_load: AtomicBool,
+
+    /// AccountMpaEntryFlags
+    pub flags: AtomicU8,
 }
 
 impl AccountMapEntryMeta {
     pub fn new_dirty<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
         AccountMapEntryMeta {
-            dirty: AtomicBool::new(true),
             age: AtomicU8::new(storage.future_age_to_flush()),
-            lazy_disk_load: AtomicBool::new(false),
+            flags: AtomicU8::new(AccountMapEntryFlags::DIRTY),
         }
     }
     pub fn new_dirty_lazy_disk_load<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
         AccountMapEntryMeta {
-            dirty: AtomicBool::new(true),
             age: AtomicU8::new(storage.future_age_to_flush()),
-            lazy_disk_load: AtomicBool::new(true),
+            flags: AtomicU8::new(
+                AccountMapEntryFlags::DIRTY | AccountMapEntryFlags::LAZY_DISK_LOAD,
+            ),
         }
     }
     pub fn new_clean<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
         AccountMapEntryMeta {
-            dirty: AtomicBool::new(false),
             age: AtomicU8::new(storage.future_age_to_flush()),
-            lazy_disk_load: AtomicBool::new(false),
+            flags: AtomicU8::default(),
         }
     }
 }
@@ -276,22 +283,33 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         } else {
             self.ref_count.fetch_sub(1, Ordering::Relaxed);
         }
-        self.set_dirty(true);
+        self.set_dirty();
+    }
+
+    pub fn flags(&self) -> u8 {
+        self.meta.flags.load(Ordering::Acquire)
     }
 
     pub fn dirty(&self) -> bool {
-        self.meta.dirty.load(Ordering::Acquire)
+        self.meta.flags.load(Ordering::Acquire) & AccountMapEntryFlags::DIRTY != 0
     }
 
-    pub fn set_dirty(&self, value: bool) {
-        self.meta.dirty.store(value, Ordering::Release)
+    pub fn set_dirty(&self) {
+        self.meta
+            .flags
+            .fetch_or(AccountMapEntryFlags::DIRTY, Ordering::Release);
     }
 
     /// set dirty to false, return true if was dirty
     pub fn clear_dirty(&self) -> bool {
+        let f = self.meta.flags.load(Ordering::Acquire);
+        if (f & AccountMapEntryFlags::DIRTY) == 0 {
+            return false;
+        }
+        let f_new = f & !AccountMapEntryFlags::DIRTY;
         self.meta
-            .dirty
-            .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
+            .flags
+            .compare_exchange(f, f_new, Ordering::AcqRel, Ordering::Relaxed)
             .is_ok()
     }
 
@@ -314,14 +332,18 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn set_lazy_disk_load(&self) {
-        self.meta.lazy_disk_load.store(true, Ordering::Release);
+        self.meta
+            .flags
+            .fetch_or(AccountMapEntryFlags::LAZY_DISK_LOAD, Ordering::Release);
     }
     pub fn clear_lazy_disk_load(&self) {
-        self.meta.lazy_disk_load.store(false, Ordering::Release);
+        self.meta
+            .flags
+            .fetch_and(!AccountMapEntryFlags::LAZY_DISK_LOAD, Ordering::Release);
     }
 
     pub fn lazy_disk_load(&self) -> bool {
-        self.meta.lazy_disk_load.load(Ordering::Acquire)
+        self.meta.flags.load(Ordering::Acquire) & AccountMapEntryFlags::LAZY_DISK_LOAD != 0
     }
 }
 
@@ -2073,9 +2095,8 @@ pub mod tests {
                 PreAllocatedAccountMapEntry::Entry(entry) => {
                     let (slot, account_info) = entry.slot_list.read().unwrap()[0];
                     let meta = AccountMapEntryMeta {
-                        dirty: AtomicBool::new(entry.dirty()),
                         age: AtomicU8::new(entry.age()),
-                        lazy_disk_load: AtomicBool::new(false),
+                        flags: AtomicU8::new(entry.flags()),
                     };
                     PreAllocatedAccountMapEntry::Entry(Arc::new(AccountMapEntryInner::new(
                         vec![(slot, account_info)],
