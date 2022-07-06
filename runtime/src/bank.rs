@@ -923,8 +923,13 @@ impl NonceInfo for NonceFull {
 // Bank's common fields shared by all supported snapshot versions for deserialization.
 // Sync fields with BankFieldsToSerialize! This is paired with it.
 // All members are made public to remain Bank's members private and to make versioned deserializer workable on this
+<<<<<<< HEAD
 #[derive(Clone, Debug, Default)]
 pub(crate) struct BankFieldsToDeserialize {
+=======
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BankFieldsToDeserialize {
+>>>>>>> 90ef2cd02 (Parse snapshot for bank fields (#26016))
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: AncestorsForSerialization,
     pub(crate) hash: Hash,

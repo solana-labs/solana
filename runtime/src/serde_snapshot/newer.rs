@@ -9,7 +9,7 @@ use {
     std::{cell::RefCell, collections::HashSet, sync::RwLock},
 };
 
-type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
+pub(super) type AccountsDbFields = super::AccountsDbFields<SerializableAccountStorageEntry>;
 
 #[derive(Default, Clone, PartialEq, Debug, Deserialize, Serialize, AbiExample)]
 struct UnusedAccounts {

@@ -14,6 +14,11 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
+<<<<<<< HEAD
+=======
+        serde_snapshot::storage::SerializableAccountStorageEntry,
+        snapshot_utils::{self, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
+>>>>>>> 90ef2cd02 (Parse snapshot for bank fields (#26016))
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -62,8 +67,13 @@ pub(crate) enum SerdeStyle {
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
+<<<<<<< HEAD
 #[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample)]
 struct AccountsDbFields<T>(
+=======
+#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq)]
+pub struct AccountsDbFields<T>(
+>>>>>>> 90ef2cd02 (Parse snapshot for bank fields (#26016))
     HashMap<Slot, Vec<T>>,
     StoredMetaWriteVersion,
     Slot,
@@ -86,7 +96,7 @@ pub struct SnapshotStreams<'a, R> {
 /// Helper type to wrap AccountsDbFields when reconstructing AccountsDb from either just a full
 /// snapshot, or both a full and incremental snapshot
 #[derive(Debug)]
-struct SnapshotAccountsDbFields<T> {
+pub struct SnapshotAccountsDbFields<T> {
     full_snapshot_accounts_db_fields: AccountsDbFields<T>,
     incremental_snapshot_accounts_db_fields: Option<AccountsDbFields<T>>,
 }
@@ -196,23 +206,38 @@ where
         .deserialize_from::<R, T>(reader)
 }
 
+<<<<<<< HEAD
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn bank_from_streams<R>(
+=======
+/// used by tests to compare contents of serialized bank fields
+/// serialized format is not deterministic - likely due to randomness in structs like hashmaps
+pub(crate) fn compare_two_serialized_banks(
+    path1: impl AsRef<Path>,
+    path2: impl AsRef<Path>,
+) -> std::result::Result<bool, Error> {
+    use std::fs::File;
+    let file1 = File::open(path1)?;
+    let mut stream1 = BufReader::new(file1);
+    let file2 = File::open(path2)?;
+    let mut stream2 = BufReader::new(file2);
+
+    let fields1 = newer::Context::deserialize_bank_fields(&mut stream1)?;
+    let fields2 = newer::Context::deserialize_bank_fields(&mut stream2)?;
+    Ok(fields1 == fields2)
+}
+
+pub(crate) fn fields_from_streams<R>(
+>>>>>>> 90ef2cd02 (Parse snapshot for bank fields (#26016))
     serde_style: SerdeStyle,
     snapshot_streams: &mut SnapshotStreams<R>,
-    account_paths: &[PathBuf],
-    unpacked_append_vec_map: UnpackedAppendVecMap,
-    genesis_config: &GenesisConfig,
-    debug_keys: Option<Arc<HashSet<Pubkey>>>,
-    additional_builtins: Option<&Builtins>,
-    account_secondary_indexes: AccountSecondaryIndexes,
-    caching_enabled: bool,
-    limit_load_slot_count_from_snapshot: Option<usize>,
-    shrink_ratio: AccountShrinkThreshold,
-    verify_index: bool,
-    accounts_db_config: Option<AccountsDbConfig>,
-    accounts_update_notifier: Option<AccountsUpdateNotifier>,
-) -> std::result::Result<Bank, Error>
+) -> std::result::Result<
+    (
+        BankFieldsToDeserialize,
+        SnapshotAccountsDbFields<SerializableAccountStorageEntry>,
+    ),
+    Error,
+>
 where
     R: Read,
 {
@@ -234,6 +259,7 @@ where
             let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
                 full_snapshot_accounts_db_fields,
                 incremental_snapshot_accounts_db_fields,
+<<<<<<< HEAD
             };
             let bank = reconstruct_bank_from_fields(
                 incremental_snapshot_bank_fields.unwrap_or(full_snapshot_bank_fields),
@@ -261,6 +287,59 @@ where
         warn!("bankrc_from_stream error: {:?}", err);
         err
     })
+=======
+            )
+        }
+    };
+
+    let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
+        full_snapshot_accounts_db_fields,
+        incremental_snapshot_accounts_db_fields,
+    };
+    Ok((
+        incremental_snapshot_bank_fields.unwrap_or(full_snapshot_bank_fields),
+        snapshot_accounts_db_fields,
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn bank_from_streams<R>(
+    serde_style: SerdeStyle,
+    snapshot_streams: &mut SnapshotStreams<R>,
+    account_paths: &[PathBuf],
+    unpacked_append_vec_map: UnpackedAppendVecMap,
+    genesis_config: &GenesisConfig,
+    debug_keys: Option<Arc<HashSet<Pubkey>>>,
+    additional_builtins: Option<&Builtins>,
+    account_secondary_indexes: AccountSecondaryIndexes,
+    caching_enabled: bool,
+    limit_load_slot_count_from_snapshot: Option<usize>,
+    shrink_ratio: AccountShrinkThreshold,
+    verify_index: bool,
+    accounts_db_config: Option<AccountsDbConfig>,
+    accounts_update_notifier: Option<AccountsUpdateNotifier>,
+) -> std::result::Result<Bank, Error>
+where
+    R: Read,
+{
+    let (bank_fields, accounts_db_fields) = fields_from_streams(serde_style, snapshot_streams)?;
+    reconstruct_bank_from_fields(
+        bank_fields,
+        accounts_db_fields,
+        genesis_config,
+        account_paths,
+        unpacked_append_vec_map,
+        debug_keys,
+        additional_builtins,
+        account_secondary_indexes,
+        caching_enabled,
+        limit_load_slot_count_from_snapshot,
+        shrink_ratio,
+        verify_index,
+        accounts_db_config,
+        accounts_update_notifier,
+    )
+>>>>>>> 90ef2cd02 (Parse snapshot for bank fields (#26016))
 }
 
 pub(crate) fn bank_to_stream<W>(
