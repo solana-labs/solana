@@ -189,8 +189,8 @@ impl Memcmp {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 enum DataType {
-    String(String),
-    Bytes(Vec<u8>),
+    Encoded(String),
+    Raw(Vec<u8>),
 }
 
 // Internal struct used to specify explicit Base58 and Base64 encoding
@@ -219,15 +219,15 @@ impl From<Memcmp> for RpcMemcmp {
     fn from(memcmp: Memcmp) -> RpcMemcmp {
         let (bytes, encoding) = match memcmp.bytes {
             MemcmpEncodedBytes::Binary(string) => {
-                (DataType::String(string), Some(RpcMemcmpEncoding::Binary))
+                (DataType::Encoded(string), Some(RpcMemcmpEncoding::Binary))
             }
             MemcmpEncodedBytes::Base58(string) => {
-                (DataType::String(string), Some(RpcMemcmpEncoding::Base58))
+                (DataType::Encoded(string), Some(RpcMemcmpEncoding::Base58))
             }
             MemcmpEncodedBytes::Base64(string) => {
-                (DataType::String(string), Some(RpcMemcmpEncoding::Base64))
+                (DataType::Encoded(string), Some(RpcMemcmpEncoding::Base64))
             }
-            MemcmpEncodedBytes::Bytes(vector) => (DataType::Bytes(vector), None),
+            MemcmpEncodedBytes::Bytes(vector) => (DataType::Raw(vector), None),
         };
         RpcMemcmp {
             offset: memcmp.offset,
@@ -241,14 +241,12 @@ impl From<RpcMemcmp> for Memcmp {
     fn from(memcmp: RpcMemcmp) -> Memcmp {
         let encoding = memcmp.encoding.unwrap_or(RpcMemcmpEncoding::Binary);
         let bytes = match (encoding, memcmp.bytes) {
-            (RpcMemcmpEncoding::Binary, DataType::String(string))
-            | (RpcMemcmpEncoding::Base58, DataType::String(string)) => {
+            (RpcMemcmpEncoding::Binary, DataType::Encoded(string))
+            | (RpcMemcmpEncoding::Base58, DataType::Encoded(string)) => {
                 MemcmpEncodedBytes::Base58(string)
             }
-            (RpcMemcmpEncoding::Binary, DataType::Bytes(vector)) => {
-                MemcmpEncodedBytes::Bytes(vector)
-            }
-            (RpcMemcmpEncoding::Base64, DataType::String(string)) => {
+            (RpcMemcmpEncoding::Binary, DataType::Raw(vector)) => MemcmpEncodedBytes::Bytes(vector),
+            (RpcMemcmpEncoding::Base64, DataType::Encoded(string)) => {
                 MemcmpEncodedBytes::Base64(string)
             }
             _ => unreachable!(),
