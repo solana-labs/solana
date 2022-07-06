@@ -53,11 +53,7 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
-<<<<<<< HEAD
-        transaction::{self, AddressLoader, SanitizedTransaction, TransactionError},
-=======
-        transaction::{self, SanitizedTransaction, TransactionError, VersionedTransaction},
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
+        transaction::{self, SanitizedTransaction, TransactionError},
         transport::TransportError,
     },
     solana_streamer::sendmmsg::batch_send,
@@ -720,16 +716,11 @@ impl BankingStage {
                         )
                     {
                         let poh_recorder_lock_time = {
-<<<<<<< HEAD
-                            let (poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
+                            let (_poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
                                 |_| poh_recorder.lock().unwrap(),
                                 (),
-                                "poh_recorder_lock",
+                                "poh_recorder.lock",
                             );
-=======
-                            let (_poh_recorder_locked, poh_recorder_lock_time) =
-                                measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
 
                             reached_end_of_slot = true;
                             poh_recorder_lock_time
@@ -790,16 +781,11 @@ impl BankingStage {
                     // mark as end-of-slot to avoid aggressively lock poh for the remaining for
                     // packet batches in buffer
                     let poh_recorder_lock_time = {
-<<<<<<< HEAD
-                        let (poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
+                        let (_poh_recorder_locked, poh_recorder_lock_time) = Measure::this(
                             |_| poh_recorder.lock().unwrap(),
                             (),
-                            "poh_recorder_lock",
+                            "poh_recorder.lock",
                         );
-=======
-                        let (_poh_recorder_locked, poh_recorder_lock_time) =
-                            measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
 
                         reached_end_of_slot = true;
                         poh_recorder_lock_time
@@ -965,7 +951,6 @@ impl BankingStage {
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
             }
             BufferedPacketsDecision::Forward => {
-<<<<<<< HEAD
                 let (_, forward_time) = Measure::this(
                     |_| {
                         Self::handle_forwarding(
@@ -980,32 +965,15 @@ impl BankingStage {
                             banking_stage_stats,
                             connection_cache,
                             tracer_packet_stats,
+                            bank_forks,
                         )
                     },
                     (),
-=======
-                let (_, forward_time) = measure!(
-                    Self::handle_forwarding(
-                        forward_option,
-                        cluster_info,
-                        buffered_packet_batches,
-                        poh_recorder,
-                        socket,
-                        false,
-                        data_budget,
-                        slot_metrics_tracker,
-                        banking_stage_stats,
-                        connection_cache,
-                        tracer_packet_stats,
-                        bank_forks,
-                    ),
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
                     "forward",
                 );
                 slot_metrics_tracker.increment_forward_us(forward_time.as_us());
             }
             BufferedPacketsDecision::ForwardAndHold => {
-<<<<<<< HEAD
                 let (_, forward_and_hold_time) = Measure::this(
                     |_| {
                         Self::handle_forwarding(
@@ -1020,26 +988,10 @@ impl BankingStage {
                             banking_stage_stats,
                             connection_cache,
                             tracer_packet_stats,
+                            bank_forks,
                         )
                     },
                     (),
-=======
-                let (_, forward_and_hold_time) = measure!(
-                    Self::handle_forwarding(
-                        forward_option,
-                        cluster_info,
-                        buffered_packet_batches,
-                        poh_recorder,
-                        socket,
-                        true,
-                        data_budget,
-                        slot_metrics_tracker,
-                        banking_stage_stats,
-                        connection_cache,
-                        tracer_packet_stats,
-                        bank_forks,
-                    ),
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
                     "forward_and_hold",
                 );
                 slot_metrics_tracker.increment_forward_and_hold_us(forward_and_hold_time.as_us());
@@ -1164,8 +1116,9 @@ impl BankingStage {
 
         loop {
             let my_pubkey = cluster_info.id();
-<<<<<<< HEAD
-            if !buffered_packet_batches.is_empty() {
+            if !buffered_packet_batches.is_empty()
+                || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
+            {
                 let (_, process_buffered_packets_time) = Measure::this(
                     |_| {
                         Self::process_buffered_packets(
@@ -1184,33 +1137,10 @@ impl BankingStage {
                             &mut slot_metrics_tracker,
                             &connection_cache,
                             &mut tracer_packet_stats,
+                            bank_forks,
                         )
                     },
                     (),
-=======
-            if !buffered_packet_batches.is_empty()
-                || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
-            {
-                let (_, process_buffered_packets_time) = measure!(
-                    Self::process_buffered_packets(
-                        &my_pubkey,
-                        &socket,
-                        poh_recorder,
-                        cluster_info,
-                        &mut buffered_packet_batches,
-                        &forward_option,
-                        transaction_status_sender.clone(),
-                        &gossip_vote_sender,
-                        &banking_stage_stats,
-                        &recorder,
-                        data_budget,
-                        &qos_service,
-                        &mut slot_metrics_tracker,
-                        &connection_cache,
-                        &mut tracer_packet_stats,
-                        bank_forks,
-                    ),
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
                     "process_buffered_packets",
                 );
                 slot_metrics_tracker
@@ -2007,13 +1937,12 @@ impl BankingStage {
         let ((transactions, transaction_to_packet_indexes), packet_conversion_time): (
             (Vec<SanitizedTransaction>, Vec<usize>),
             _,
-<<<<<<< HEAD
         ) = Measure::this(
             |_| {
                 deserialized_packets
                     .enumerate()
                     .filter_map(|(i, deserialized_packet)| {
-                        Self::transaction_from_deserialized_packet(
+                        unprocessed_packet_batches::transaction_from_deserialized_packet(
                             deserialized_packet,
                             &bank.feature_set,
                             bank.vote_only_bank(),
@@ -2024,21 +1953,6 @@ impl BankingStage {
                     .unzip()
             },
             (),
-=======
-        ) = measure!(
-            deserialized_packets
-                .enumerate()
-                .filter_map(|(i, deserialized_packet)| {
-                    unprocessed_packet_batches::transaction_from_deserialized_packet(
-                        deserialized_packet,
-                        &bank.feature_set,
-                        bank.vote_only_bank(),
-                        bank.as_ref(),
-                    )
-                    .map(|transaction| (transaction, i))
-                })
-                .unzip(),
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
             "packet_conversion",
         );
 
@@ -2352,11 +2266,7 @@ mod tests {
         },
         solana_program_runtime::{invoke_context::Executors, timings::ProgramTiming},
         solana_rpc::transaction_status_service::TransactionStatusService,
-<<<<<<< HEAD
-        solana_runtime::bank::TransactionExecutionDetails,
-=======
-        solana_runtime::bank_forks::BankForks,
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
+        solana_runtime::{bank::TransactionExecutionDetails, bank_forks::BankForks},
         solana_sdk::{
             account::AccountSharedData,
             hash::Hash,

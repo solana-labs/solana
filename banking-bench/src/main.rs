@@ -353,15 +353,11 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
-<<<<<<< HEAD
             Arc::new(ConnectionCache::new(
                 tpu_use_quic,
                 DEFAULT_TPU_CONNECTION_POOL_SIZE,
             )),
-=======
-            Arc::new(connection_cache),
             bank_forks.clone(),
->>>>>>> c1d89ad74 (forward packets by prioritization in desc order (#25406))
         );
         poh_recorder.lock().unwrap().set_bank(&bank);
 
