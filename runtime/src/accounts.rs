@@ -1680,9 +1680,9 @@ mod tests {
         feature_set.deactivate(&tx_wide_compute_cap::id());
         let rent_collector = RentCollector::new(
             0,
-            &EpochSchedule::default(),
+            EpochSchedule::default(),
             500_000.0,
-            &Rent {
+            Rent {
                 lamports_per_byte_year: 42,
                 ..Rent::default()
             },
