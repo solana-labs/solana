@@ -70,6 +70,16 @@ pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
 pub type AccountMap<V> = Arc<InMemAccountsIndex<V>>;
 
+#[derive(Debug, Clone, Copy)]
+/// how accounts index 'upsert' should handle reclaims
+pub enum UpsertReclaim {
+    /// previous entry for this slot in the index is expected to be cached, so irrelevant to reclaims
+    PreviousSlotEntryWasCached,
+    /// previous entry for this slot in the index may need to be reclaimed, so return it.
+    /// reclaims is the only output of upsert, requiring a synchronous execution
+    PopulateReclaims,
+}
+
 #[derive(Debug, Default)]
 pub struct ScanConfig {
     /// checked by the scan. When true, abort scan.
@@ -1605,7 +1615,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         account_indexes: &AccountSecondaryIndexes,
         account_info: T,
         reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
+        reclaim: UpsertReclaim,
     ) {
         // vast majority of updates are to item already in accounts index, so store as raw to avoid unnecessary allocations
         let store_raw = true;
@@ -1631,13 +1641,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
         {
             let r_account_maps = map.read().unwrap();
-            r_account_maps.upsert(
-                pubkey,
-                new_item,
-                Some(old_slot),
-                reclaims,
-                previous_slot_entry_was_cached,
-            );
+            r_account_maps.upsert(pubkey, new_item, Some(old_slot), reclaims, reclaim);
         }
         self.update_secondary_indexes(pubkey, account, account_indexes);
     }
@@ -2301,7 +2305,8 @@ pub mod tests {
         assert!(index.include_key(&pk2));
     }
 
-    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: bool = false;
+    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: UpsertReclaim =
+        UpsertReclaim::PopulateReclaims;
 
     #[test]
     fn test_insert_no_ancestors() {
