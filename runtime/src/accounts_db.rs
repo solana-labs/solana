@@ -8395,10 +8395,15 @@ impl AccountsDb {
         }
     }
 
-    /// Used during generate_index() to get the _duplicate_ accounts data len from the given pubkeys
+    /// Used during generate_index() to:
+    /// 1. get the _duplicate_ accounts data len from the given pubkeys
+    /// 2. get the slots that contained duplicate pubkeys
     /// Note this should only be used when ALL entries in the accounts index are roots.
-    /// returns (data len removed because were duplicates, slots that contained older duplicate pubkeys)
-    fn get_duplicate_accounts_slots_and_data_len(&self, pubkeys: &[Pubkey]) -> (u64, HashSet<Slot>) {
+    /// returns (data len sum of all older duplicates, slots that contained duplicate pubkeys)
+    fn get_duplicate_accounts_slots_and_data_len(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> (u64, HashSet<Slot>) {
         let mut accounts_data_len_from_duplicates = 0;
         let mut uncleaned_slots = HashSet::<Slot>::default();
         pubkeys.iter().for_each(|pubkey| {
