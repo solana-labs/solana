@@ -6231,7 +6231,8 @@ impl AccountsDb {
         )
     }
 
-    pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
+    #[cfg(test)]
+    fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
             true,
             true,
@@ -8151,9 +8152,9 @@ impl AccountsDb {
         let schedule = genesis_config.epoch_schedule;
         let rent_collector = RentCollector::new(
             schedule.get_epoch(max_slot),
-            &schedule,
+            schedule,
             genesis_config.slots_per_year(),
-            &genesis_config.rent,
+            genesis_config.rent,
         );
         let accounts_data_len = AtomicU64::new(0);
 
