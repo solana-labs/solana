@@ -3866,10 +3866,7 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
+        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
@@ -3889,10 +3886,7 @@ impl Bank {
                 )
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
+        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -3905,10 +3899,7 @@ impl Bank {
         &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(txs.iter(), &self.feature_set);
+        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -3920,11 +3911,10 @@ impl Bank {
         transaction_results: impl Iterator<Item = &'b Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
-        let lock_results = self.rc.accounts.lock_accounts_with_results(
-            transactions.iter(),
-            transaction_results,
-            &self.feature_set,
-        );
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts_with_results(transactions.iter(), transaction_results);
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
@@ -3933,7 +3923,7 @@ impl Bank {
         &'a self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'a, '_> {
-        let lock_result = transaction.get_account_locks(&self.feature_set).map(|_| ());
+        let lock_result = transaction.get_account_locks().map(|_| ());
         let mut batch =
             TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
         batch.set_needs_unlock(false);
