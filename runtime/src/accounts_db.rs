@@ -6534,8 +6534,8 @@ impl AccountsDb {
             .collect()
     }
 
-    // storages are sorted by slot and have range info.
-    // if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
+    /// storages are sorted by slot and have range info.
+    /// if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
     fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Option<Slot>) {
         if let Some(slots_per_epoch) = slots_per_epoch {
             let max = storages.max_slot_inclusive();
@@ -6572,8 +6572,6 @@ impl AccountsDb {
                 min_root,
                 Some(slot),
             );
-
-            self.mark_old_slots_as_dirty(&storages, Some(config.epoch_schedule.slots_per_epoch));
             sort_time.stop();
 
             let mut timings = HashStats {
@@ -6760,6 +6758,8 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        self.mark_old_slots_as_dirty(storages, Some(config.epoch_schedule.slots_per_epoch));
+
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let mut scan_and_hash = move || {
