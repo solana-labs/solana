@@ -1199,7 +1199,7 @@ mod tests {
         super::*,
         crate::compute_budget,
         serde::{Deserialize, Serialize},
-        solana_sdk::account::{ReadableAccount, WritableAccount},
+        solana_sdk::account::WritableAccount,
     };
 
     #[derive(Debug, Serialize, Deserialize)]
@@ -1277,16 +1277,13 @@ mod tests {
                 MockInstruction::NoopFail => return Err(InstructionError::GenericError),
                 MockInstruction::ModifyOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&[1])
-                    .unwrap(),
+                    .set_data(&[1])?,
                 MockInstruction::ModifyNotOwned => instruction_context
                     .try_borrow_instruction_account(transaction_context, 1)?
-                    .set_data(&[1])
-                    .unwrap(),
+                    .set_data(&[1])?,
                 MockInstruction::ModifyReadonly => instruction_context
                     .try_borrow_instruction_account(transaction_context, 2)?
-                    .set_data(&[1])
-                    .unwrap(),
+                    .set_data(&[1])?,
                 MockInstruction::ConsumeComputeUnits {
                     compute_units_to_consume,
                     desired_result,
@@ -1294,14 +1291,12 @@ mod tests {
                     invoke_context
                         .get_compute_meter()
                         .borrow_mut()
-                        .consume(compute_units_to_consume)
-                        .unwrap();
+                        .consume(compute_units_to_consume)?;
                     return desired_result;
                 }
                 MockInstruction::Resize { new_len } => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&vec![0; new_len as usize])
-                    .unwrap(),
+                    .set_data(&vec![0; new_len as usize])?,
             }
         } else {
             return Err(InstructionError::InvalidInstructionData);
