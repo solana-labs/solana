@@ -26,10 +26,10 @@ package.
 
 ## Downgrade
 
-If a new column family has been introduced to the validator blockstore a
-subsequent downgrade of the validator to a version prior to the version where
-the new column family was introduced will cause the validator to fail while
-opening the blockstore during startup.
+If a new column family has been introduced to the validator blockstore, a
+subsequent downgrade of the validator to a version that predates the new column
+family will cause the validator to fail while opening the blockstore during
+startup.
 
 List column families:
 ```
