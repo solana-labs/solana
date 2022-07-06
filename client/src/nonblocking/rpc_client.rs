@@ -4490,21 +4490,14 @@ impl RpcClient {
     pub async fn get_program_accounts_with_config(
         &self,
         pubkey: &Pubkey,
-        config: RpcProgramAccountsConfig,
+        mut config: RpcProgramAccountsConfig,
     ) -> ClientResult<Vec<(Pubkey, Account)>> {
         let commitment = config
             .account_config
             .commitment
             .unwrap_or_else(|| self.commitment());
         let commitment = self.maybe_map_commitment(commitment).await?;
-        let account_config = RpcAccountInfoConfig {
-            commitment: Some(commitment),
-            ..config.account_config
-        };
-        let config = RpcProgramAccountsConfig {
-            account_config,
-            ..config
-        };
+        config.account_config.commitment = Some(commitment);
         let accounts: Vec<RpcKeyedAccount> = self
             .send(
                 RpcRequest::GetProgramAccounts,
