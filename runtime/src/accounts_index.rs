@@ -1313,9 +1313,10 @@ impl<T: IndexValue> AccountsIndex<T> {
     where
         // params:
         //  pubkey looked up
-        // slots_refs is Option<(slot_list, ref_count)>
-        //  slot_list: index in slot list where best slot was found or None if nothing found by root criteria
-        //  ref_count: refcount of entry in index
+        //  slots_refs is Option<(slot_list, ref_count)>
+        //    None if 'pubkey' is not in accounts index.
+        //   slot_list: comes from accounts index for 'pubkey'
+        //   ref_count: refcount of entry in index
         F: FnMut(&'a Pubkey, Option<(&SlotList<T>, RefCount)>) -> AccountsIndexScanResult,
         I: IntoIterator<Item = &'a Pubkey>,
     {
