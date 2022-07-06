@@ -163,6 +163,12 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
+pub struct GetUniqueAccountsResult<'a> {
+    pub stored_accounts: HashMap<Pubkey, FoundStoredAccount<'a>>,
+    pub num_stores: usize,
+    pub original_bytes: u64,
+}
+
 pub struct AccountsAddRootTiming {
     pub index_us: u64,
     pub cache_us: u64,
@@ -3080,7 +3086,7 @@ impl AccountsDb {
     pub(crate) fn get_unique_accounts_from_storages<'a, I>(
         &'a self,
         stores: I,
-    ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
+    ) -> GetUniqueAccountsResult<'a>
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -3113,7 +3119,11 @@ impl AccountsDb {
             }
             num_stores += 1;
         }
-        (stored_accounts, num_stores, original_bytes)
+        GetUniqueAccountsResult {
+            stored_accounts,
+            num_stores,
+            original_bytes,
+        }
     }
 
     fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
@@ -3121,8 +3131,11 @@ impl AccountsDb {
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
         debug!("do_shrink_slot_stores: slot: {}", slot);
-        let (stored_accounts, num_stores, original_bytes) =
-            self.get_unique_accounts_from_storages(stores);
+        let GetUniqueAccountsResult {
+            stored_accounts,
+            num_stores,
+            original_bytes,
+        } = self.get_unique_accounts_from_storages(stores);
 
         // sort by pubkey to keep account index lookups close
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
@@ -3678,8 +3691,11 @@ impl AccountsDb {
             }
 
             // this code is copied from shrink. I would like to combine it into a helper function, but the borrow checker has defeated my efforts so far.
-            let (stored_accounts, _num_stores, original_bytes) =
-                self.get_unique_accounts_from_storages(old_storages.iter());
+            let GetUniqueAccountsResult {
+                stored_accounts,
+                num_stores: _num_stores,
+                original_bytes,
+            } = self.get_unique_accounts_from_storages(old_storages.iter());
 
             // sort by pubkey to keep account index lookups close
             let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
