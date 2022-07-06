@@ -1195,6 +1195,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         }
                         // if we are evicting it, then we need to update disk if we're dirty
                         if v.clear_dirty() {
+                            // check to see if needed to lazy disk index before flushing.
+                            if v.lazy_disk_load() {
+                                let disk_entry = self.load_account_entry_from_disk(k);
+                                if let Some(disk_entry) = disk_entry {
+                                    Self::merge_slot_lists(&v, disk_entry);
+                                }
+                                v.clear_lazy_disk_load();
+                                Self::update_stat(
+                                    &self.stats().lazy_disk_index_lookup_clear_count,
+                                    1,
+                                );
+                            }
+
                             // step 1: clear the dirty flag
                             // step 2: perform the update on disk based on the fields in the entry
                             // If a parallel operation dirties the item again - even while this flush is occurring,
