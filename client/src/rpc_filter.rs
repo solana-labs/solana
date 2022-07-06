@@ -152,6 +152,14 @@ impl Memcmp {
         }
     }
 
+    pub fn new_base58_encoded(offset: usize, bytes: &[u8]) -> Self {
+        Self {
+            offset,
+            bytes: MemcmpEncodedBytes::Base58(bs58::encode(bytes).into_string()),
+            encoding: None,
+        }
+    }
+
     pub fn bytes(&self) -> Option<Cow<Vec<u8>>> {
         use MemcmpEncodedBytes::*;
         match &self.bytes {
