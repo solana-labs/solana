@@ -29,6 +29,7 @@ package.
 If a new software version introduces a new column family to the blockstore,
 that new (empty) column will be automatically created. This is the same logic
 that allows a validator to start fresh without the blockstore directory.
+
 ## Downgrade
 
 If a new column family has been introduced to the validator blockstore, a
