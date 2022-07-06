@@ -8282,7 +8282,7 @@ impl AccountsDb {
                 m.stop();
                 index_flush_us = m.as_us();
 
-                // this has to happen before pubkeys_to_duplicate_accounts_data_len below
+                // this has to happen before get_duplicate_accounts_slots_and_data_len below
                 // get duplicate keys from acct idx. We have to wait until we've finished flushing.
                 for (slot, key) in self
                     .accounts_index
@@ -8315,7 +8315,7 @@ impl AccountsDb {
                     .par_chunks(4096)
                     .map(|pubkeys| {
                         let (count, uncleaned_roots_this_group) =
-                            self.pubkeys_to_duplicate_accounts_data_len(pubkeys);
+                            self.get_duplicate_accounts_slots_and_data_len(pubkeys);
                         let mut uncleaned_roots = uncleaned_roots.lock().unwrap();
                         uncleaned_roots_this_group.into_iter().for_each(|slot| {
                             uncleaned_roots.insert(slot);
@@ -8398,7 +8398,7 @@ impl AccountsDb {
     /// Used during generate_index() to get the _duplicate_ accounts data len from the given pubkeys
     /// Note this should only be used when ALL entries in the accounts index are roots.
     /// returns (data len removed because were duplicates, slots that contained older duplicate pubkeys)
-    fn pubkeys_to_duplicate_accounts_data_len(&self, pubkeys: &[Pubkey]) -> (u64, HashSet<Slot>) {
+    fn get_duplicate_accounts_slots_and_data_len(&self, pubkeys: &[Pubkey]) -> (u64, HashSet<Slot>) {
         let mut accounts_data_len_from_duplicates = 0;
         let mut uncleaned_slots = HashSet::<Slot>::default();
         pubkeys.iter().for_each(|pubkey| {
