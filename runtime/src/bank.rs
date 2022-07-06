@@ -4140,16 +4140,11 @@ impl Bank {
         let nonce_data =
             nonce_account::verify_nonce_account(&nonce_account, message.recent_blockhash())?;
 
-        if self
-            .feature_set
-            .is_active(&feature_set::nonce_must_be_authorized::ID)
-        {
-            let nonce_is_authorized = message
-                .get_ix_signers(NONCED_TX_MARKER_IX_INDEX as usize)
-                .any(|signer| signer == &nonce_data.authority);
-            if !nonce_is_authorized {
-                return None;
-            }
+        let nonce_is_authorized = message
+            .get_ix_signers(NONCED_TX_MARKER_IX_INDEX as usize)
+            .any(|signer| signer == &nonce_data.authority);
+        if !nonce_is_authorized {
+            return None;
         }
 
         Some((*nonce_address, nonce_account))
