@@ -4061,11 +4061,6 @@ impl Bank {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 
-    pub fn separate_nonce_from_blockhash(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::separate_nonce_from_blockhash::id())
-    }
-
     fn check_age<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -4073,15 +4068,12 @@ impl Bank {
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
-        let separate_nonce_from_blockhash = self.separate_nonce_from_blockhash();
-        let enable_durable_nonce = separate_nonce_from_blockhash
-            && self
-                .feature_set
-                .is_active(&feature_set::enable_durable_nonce::id());
+        let enable_durable_nonce = self
+            .feature_set
+            .is_active(&feature_set::enable_durable_nonce::id());
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
-        let next_durable_nonce =
-            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash);
+        let next_durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
 
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
@@ -4155,11 +4147,8 @@ impl Bank {
         let nonce_address =
             message.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))?;
         let nonce_account = self.get_account_with_fixed_root(nonce_address)?;
-        let nonce_data = nonce_account::verify_nonce_account(
-            &nonce_account,
-            message.recent_blockhash(),
-            self.separate_nonce_from_blockhash(),
-        )?;
+        let nonce_data =
+            nonce_account::verify_nonce_account(&nonce_account, message.recent_blockhash())?;
 
         if self
             .feature_set
@@ -4946,12 +4935,7 @@ impl Bank {
         }
 
         let mut write_time = Measure::start("write_time");
-        let durable_nonce = {
-            let separate_nonce_from_blockhash = self.separate_nonce_from_blockhash();
-            let durable_nonce =
-                DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash);
-            (durable_nonce, separate_nonce_from_blockhash)
-        };
+        let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
         self.rc.accounts.store_cached(
             self.slot(),
             sanitized_txs,
@@ -7893,18 +7877,14 @@ pub(crate) mod tests {
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
 
-        let durable_nonce =
-            DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let nonce_account = AccountSharedData::new_data(
             43,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(nonce::state::Data::new(
-                    Pubkey::default(),
-                    durable_nonce,
-                    lamports_per_signature,
-                )),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::new(
+                Pubkey::default(),
+                durable_nonce,
+                lamports_per_signature,
+            ))),
             &system_program::id(),
         )
         .unwrap();
@@ -10516,10 +10496,7 @@ pub(crate) mod tests {
         let nonce = Keypair::new();
         let nonce_account = AccountSharedData::new_data(
             min_balance + 42,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(nonce::state::Data::default()),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &system_program::id(),
         )
         .unwrap();
@@ -12844,12 +12821,9 @@ pub(crate) mod tests {
 
     impl Bank {
         fn next_durable_nonce(&self) -> DurableNonce {
-            let separate_nonce_from_blockhash = self
-                .feature_set
-                .is_active(&feature_set::separate_nonce_from_blockhash::id());
             let hash_queue = self.blockhash_queue.read().unwrap();
             let last_blockhash = hash_queue.last_hash();
-            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash)
+            DurableNonce::from_blockhash(&last_blockhash)
         }
     }
 
@@ -13029,10 +13003,7 @@ pub(crate) mod tests {
         let nonce = Keypair::new();
         let nonce_account = AccountSharedData::new_data(
             42_424_242,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(nonce::state::Data::default()),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &system_program::id(),
         )
         .unwrap();
@@ -13058,18 +13029,14 @@ pub(crate) mod tests {
         let bank = Arc::new(bank);
         let nonce_keypair = Keypair::new();
         let nonce_authority = nonce_keypair.pubkey();
-        let durable_nonce =
-            DurableNonce::from_blockhash(&bank.last_blockhash(), true /* separate domains */);
+        let durable_nonce = DurableNonce::from_blockhash(&bank.last_blockhash());
         let nonce_account = AccountSharedData::new_data(
             42_424_242,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(nonce::state::Data::new(
-                    nonce_authority,
-                    durable_nonce,
-                    5000,
-                )),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::new(
+                nonce_authority,
+                durable_nonce,
+                5000,
+            ))),
             &system_program::id(),
         )
         .unwrap();
