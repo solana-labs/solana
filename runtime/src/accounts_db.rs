@@ -2240,11 +2240,10 @@ impl AccountsDb {
                 while !pending_store_ids.is_empty() {
                     let id = pending_store_ids.iter().next().cloned().unwrap();
                     pending_store_ids.remove(&id);
-                    if already_counted.contains(&id) {
+                    if !already_counted.insert(id) {
                         continue;
                     }
                     store_counts.get_mut(&id).unwrap().0 += 1;
-                    already_counted.insert(id);
 
                     let affected_pubkeys = &store_counts.get(&id).unwrap().1;
                     for key in affected_pubkeys {
