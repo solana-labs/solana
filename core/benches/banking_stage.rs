@@ -25,7 +25,7 @@ use {
     },
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
-    solana_runtime::{bank::Bank, cost_model::CostModel},
+    solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
     solana_sdk::{
         genesis_config::GenesisConfig,
         hash::Hash,
@@ -170,7 +170,8 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
     let mut bank = Bank::new_for_benches(&genesis_config);
     // Allow arbitrary transaction processing time for the purposes of this bench
     bank.ns_per_slot = u128::MAX;
-    let bank = Arc::new(bank);
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+    let bank = bank_forks.read().unwrap().get(0).unwrap();
 
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
@@ -232,6 +233,7 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
             s,
             Arc::new(RwLock::new(CostModel::default())),
             Arc::new(ConnectionCache::default()),
+            bank_forks,
         );
         poh_recorder.write().unwrap().set_bank(&bank, false);
 

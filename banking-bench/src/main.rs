@@ -249,8 +249,8 @@ fn main() {
     let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();
     let bank0 = Bank::new_for_benches(&genesis_config);
-    let mut bank_forks = BankForks::new(bank0);
-    let mut bank = bank_forks.working_bank();
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
+    let mut bank = bank_forks.read().unwrap().working_bank();
 
     // set cost tracker limits to MAX so it will not filter out TXs
     bank.write_cost_tracker()
@@ -357,6 +357,7 @@ fn main() {
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
             Arc::new(connection_cache),
+            bank_forks.clone(),
         );
         poh_recorder.write().unwrap().set_bank(&bank, false);
 
@@ -428,8 +429,8 @@ fn main() {
                 new_bank_time.stop();
 
                 let mut insert_time = Measure::start("insert_time");
-                bank_forks.insert(new_bank);
-                bank = bank_forks.working_bank();
+                bank_forks.write().unwrap().insert(new_bank);
+                bank = bank_forks.read().unwrap().working_bank();
                 insert_time.stop();
 
                 // set cost tracker limits to MAX so it will not filter out TXs
@@ -443,7 +444,10 @@ fn main() {
                 assert!(poh_recorder.read().unwrap().bank().is_some());
                 if bank.slot() > 32 {
                     leader_schedule_cache.set_root(&bank);
-                    bank_forks.set_root(root, &AbsRequestSender::default(), None);
+                    bank_forks
+                        .write()
+                        .unwrap()
+                        .set_root(root, &AbsRequestSender::default(), None);
                     root += 1;
                 }
                 debug!(
@@ -476,7 +480,11 @@ fn main() {
                 }
             }
         }
-        let txs_processed = bank_forks.working_bank().transaction_count();
+        let txs_processed = bank_forks
+            .read()
+            .unwrap()
+            .working_bank()
+            .transaction_count();
         debug!("processed: {} base: {}", txs_processed, base_tx_count);
         eprintln!(
             "{{'name': 'banking_bench_total', 'median': '{:.2}'}}",

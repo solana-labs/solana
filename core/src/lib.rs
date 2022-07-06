@@ -27,6 +27,7 @@ pub mod duplicate_repair_status;
 pub mod fetch_stage;
 pub mod find_packet_sender_stake_stage;
 pub mod fork_choice;
+pub mod forward_packet_batches_by_accounts;
 pub mod gen_keys;
 pub mod heaviest_subtree_fork_choice;
 pub mod latest_validator_votes_for_frozen_banks;

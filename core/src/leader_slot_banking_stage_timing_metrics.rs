@@ -227,9 +227,6 @@ pub(crate) struct ConsumeBufferedPacketsTimings {
     // Time spent grabbing poh recorder lock
     pub poh_recorder_lock_us: u64,
 
-    // Time spent filtering invalid packets after leader slot has ended
-    pub end_of_slot_filtering_us: u64,
-
     // Time spent processing transactions
     pub process_packets_transactions_us: u64,
 }
@@ -243,11 +240,6 @@ impl ConsumeBufferedPacketsTimings {
             (
                 "poh_recorder_lock_us",
                 self.poh_recorder_lock_us as i64,
-                i64
-            ),
-            (
-                "end_of_slot_filtering_us",
-                self.end_of_slot_filtering_us as i64,
                 i64
             ),
             (
