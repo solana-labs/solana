@@ -3497,6 +3497,7 @@ impl Bank {
             );
             self.store_account(pubkey, account);
             self.capitalization.fetch_add(account.lamports(), Relaxed);
+            self.accounts_data_size_initial += account.data().len() as u64;
         }
         // updating sysvars (the fees sysvar in this case) now depends on feature activations in
         // genesis_config.accounts above
@@ -3509,6 +3510,7 @@ impl Bank {
                 pubkey
             );
             self.store_account(pubkey, account);
+            self.accounts_data_size_initial += account.data().len() as u64;
         }
 
         // highest staked node is the first collector
@@ -3548,12 +3550,14 @@ impl Bank {
     }
 
     fn burn_and_purge_account(&self, program_id: &Pubkey, mut account: AccountSharedData) {
+        let data_size = account.data().len() as i64;
         self.capitalization.fetch_sub(account.lamports(), Relaxed);
         // Both resetting account balance to 0 and zeroing the account data
         // is needed to really purge from AccountsDb and flush the Stakes cache
         account.set_lamports(0);
         account.data_as_mut_slice().fill(0);
         self.store_account(program_id, &account);
+        self.update_accounts_data_size_delta_off_chain(data_size.saturating_neg());
     }
 
     // NOTE: must hold idempotent for the same set of arguments
@@ -6267,6 +6271,7 @@ impl Bank {
         pubkey: &Pubkey,
         new_account: &AccountSharedData,
     ) {
+        let old_account_data_size;
         if let Some(old_account) = self.get_account_with_fixed_root(pubkey) {
             match new_account.lamports().cmp(&old_account.lamports()) {
                 std::cmp::Ordering::Greater => {
@@ -6289,6 +6294,7 @@ impl Bank {
                 }
                 std::cmp::Ordering::Equal => {}
             }
+            old_account_data_size = old_account.data().len();
         } else {
             trace!(
                 "store_account_and_update_capitalization: created: {} {}",
@@ -6297,9 +6303,14 @@ impl Bank {
             );
             self.capitalization
                 .fetch_add(new_account.lamports(), Relaxed);
+            old_account_data_size = 0;
         }
 
         self.store_account(pubkey, new_account);
+
+        let size_delta =
+            (new_account.data().len() as i64).saturating_sub(old_account_data_size as i64);
+        self.update_accounts_data_size_delta_off_chain(size_delta);
     }
 
     fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
@@ -7486,6 +7497,10 @@ impl Bank {
                 self.store_account(new_address, &AccountSharedData::default());
 
                 self.remove_executor(old_address);
+
+                let data_size_delta = (new_account.data().len() as i64)
+                    .saturating_sub(old_account.data().len() as i64);
+                self.update_accounts_data_size_delta_off_chain(data_size_delta);
             }
         }
     }
@@ -7510,9 +7525,11 @@ impl Bank {
             // As a workaround for
             // https://github.com/solana-labs/solana-program-library/issues/374, ensure that the
             // spl-token 2 native mint account is owned by the spl-token 2 program.
+            let old_account_data_size;
             let store = if let Some(existing_native_mint_account) =
                 self.get_account_with_fixed_root(&inline_spl_token::native_mint::id())
             {
+                old_account_data_size = existing_native_mint_account.data().len();
                 if existing_native_mint_account.owner() == &solana_sdk::system_program::id() {
                     native_mint_account.set_lamports(existing_native_mint_account.lamports());
                     true
@@ -7520,6 +7537,7 @@ impl Bank {
                     false
                 }
             } else {
+                old_account_data_size = 0;
                 self.capitalization
                     .fetch_add(native_mint_account.lamports(), Relaxed);
                 true
@@ -7527,6 +7545,9 @@ impl Bank {
 
             if store {
                 self.store_account(&inline_spl_token::native_mint::id(), &native_mint_account);
+                let data_size_delta = (native_mint_account.data().len() as i64)
+                    .saturating_sub(old_account_data_size as i64);
+                self.update_accounts_data_size_delta_off_chain(data_size_delta);
             }
         }
     }
@@ -19237,5 +19258,62 @@ pub(crate) mod tests {
         // NOTE: Use `>=` here (instead of `==`) since other accounts could
         // also be reclaimed by rent collection.
         assert!(reclaimed_data_size >= data_size);
+    }
+
+    #[test]
+    fn test_accounts_data_size_with_default_bank() {
+        let bank = Bank::default_for_tests();
+        assert_eq!(
+            bank.load_accounts_data_size() as usize,
+            bank.get_total_accounts_stats().unwrap().data_len
+        );
+    }
+
+    #[test]
+    fn test_accounts_data_size_from_genesis() {
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = genesis_utils::create_genesis_config_with_leader(
+            1_000_000 * LAMPORTS_PER_SOL,
+            &Pubkey::new_unique(),
+            100 * LAMPORTS_PER_SOL,
+        );
+        genesis_config.rent = Rent::default();
+        genesis_config.ticks_per_slot = 3;
+
+        let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        assert_eq!(
+            bank.load_accounts_data_size() as usize,
+            bank.get_total_accounts_stats().unwrap().data_len
+        );
+
+        // Create accounts over a number of banks and ensure the accounts data size remains correct
+        for _ in 0..10 {
+            bank = Arc::new(Bank::new_from_parent(
+                &bank,
+                &Pubkey::default(),
+                bank.slot() + 1,
+            ));
+
+            // Store an account into the bank that is rent-exempt and has data
+            let data_size = rand::thread_rng().gen_range(3333, 4444);
+            let transaction = system_transaction::create_account(
+                &mint_keypair,
+                &Keypair::new(),
+                bank.last_blockhash(),
+                genesis_config.rent.minimum_balance(data_size),
+                data_size as u64,
+                &solana_sdk::system_program::id(),
+            );
+            bank.process_transaction(&transaction).unwrap();
+            bank.fill_bank_with_ticks_for_tests();
+
+            assert_eq!(
+                bank.load_accounts_data_size() as usize,
+                bank.get_total_accounts_stats().unwrap().data_len,
+            );
+        }
     }
 }
