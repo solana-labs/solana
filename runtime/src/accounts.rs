@@ -3620,13 +3620,27 @@ mod tests {
             AccountShrinkThreshold::default(),
         );
 
-        let pubkey0 = Pubkey::new_unique();
+        /* This test assumes pubkey0 < pubkey1 < pubkey2.
+         * But the keys created with new_unique() does not gurantee this
+         * order because of the endianness.  new_unique() calls add 1 at each
+         * key generaration as the little endian integer.  A pubkey stores its
+         * value in a 32-byte array bytes, and its eq-partial trait considers
+         * the lower-address bytes more significant, which is the big-endian
+         * order.
+         * So, sort first to ensure the order assumption holds.
+         */
+        let mut keys = vec![];
+        for _idx in 0..3 {
+            keys.push(Pubkey::new_unique());
+        }
+        keys.sort();
+        let pubkey2 = keys.pop().unwrap();
+        let pubkey1 = keys.pop().unwrap();
+        let pubkey0 = keys.pop().unwrap();
         let account0 = AccountSharedData::new(42, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey0, &account0);
-        let pubkey1 = Pubkey::new_unique();
         let account1 = AccountSharedData::new(42, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey1, &account1);
-        let pubkey2 = Pubkey::new_unique();
         let account2 = AccountSharedData::new(41, 0, &Pubkey::default());
         accounts.store_slow_uncached(0, &pubkey2, &account2);
 
