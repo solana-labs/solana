@@ -24,6 +24,11 @@ package.
 
 [RocksDB Administration and Data Access Tool](https://github.com/facebook/rocksdb/wiki/Administration-and-Data-Access-Tool)
 
+## Upgrade
+
+If a new software version introduces a new column family to the blockstore,
+that new (empty) column will be automatically created. This is the same logic
+that allows a validator to start fresh without the blockstore directory.
 ## Downgrade
 
 If a new column family has been introduced to the validator blockstore, a
