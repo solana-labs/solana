@@ -4283,12 +4283,14 @@ impl Bank {
             get_executors_time.as_us()
         );
 
+        let prev_accounts_data_len = self.load_accounts_data_size();
         let mut transaction_accounts = Vec::new();
         std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
             compute_budget.max_invoke_depth.saturating_add(1),
             tx.message().instructions().len(),
+            MAX_ACCOUNTS_DATA_LEN.saturating_sub(prev_accounts_data_len),
         );
 
         let pre_account_state_info =
@@ -4319,7 +4321,7 @@ impl Bank {
             &*self.sysvar_cache.read().unwrap(),
             blockhash,
             lamports_per_signature,
-            self.load_accounts_data_size(),
+            prev_accounts_data_len,
             &mut executed_units,
         );
         process_message_time.stop();
@@ -4376,6 +4378,7 @@ impl Bank {
             accounts,
             instruction_trace,
             mut return_data,
+            ..
         } = transaction_context.into();
         loaded_transaction.accounts = accounts;
 
@@ -18574,6 +18577,7 @@ pub(crate) mod tests {
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             compute_budget.max_invoke_depth.saturating_add(1),
             number_of_instructions_at_transaction_level,
+            0,
         );
 
         assert_eq!(
