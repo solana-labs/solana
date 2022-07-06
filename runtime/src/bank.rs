@@ -4159,11 +4159,8 @@ impl Bank {
         let durable_nonces_enabled = enable_durable_nonce
             || self.slot() <= 135986379
             || self.cluster_type() != ClusterType::MainnetBeta;
-        let nonce_must_be_advanceable = self
-            .feature_set
-            .is_active(&feature_set::nonce_must_be_advanceable::ID);
         let nonce_is_advanceable = tx.message().recent_blockhash() != next_durable_nonce.as_hash();
-        (durable_nonces_enabled && (nonce_is_advanceable || !nonce_must_be_advanceable))
+        (durable_nonces_enabled && nonce_is_advanceable)
             .then(|| self.check_message_for_nonce(tx.message()))
             .flatten()
     }
