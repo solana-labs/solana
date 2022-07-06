@@ -236,7 +236,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
                 if entry.lazy_disk_load() {
-                    // disk_unknown is marked, load from the disk and merge with in-mem entry
+                    // lazy_disk_load is marked, load from the disk and merge with in-mem entry
                     // we found the pubkey
                     // but, we haven't checked to see if there is more on disk
                     // so, we have to load from disk first, then merge with in-mem
@@ -452,7 +452,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         // but, this has proven to be far too slow at high account counts
                         let directly_to_disk = false;
 
-                        let enable_disk_unknown = true;
+                        let enable_lazy_disk_load = true;
                         if directly_to_disk {
                             // We may like this to always run, but it is unclear.
                             // If disk bucket needs to resize, then this call can stall for a long time.
@@ -467,7 +467,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             if !already_existed {
                                 self.stats().inc_insert();
                             }
-                        } else if enable_disk_unknown && previous_slot_entry_was_cached {
+                        } else if enable_lazy_disk_load && previous_slot_entry_was_cached {
                             // skip checking the disk
                             self.stats().inc_insert();
                             let entry = new_value.into_account_map_entry(&self.storage);
