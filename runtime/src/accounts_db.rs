@@ -2422,9 +2422,9 @@ impl AccountsDb {
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
         for (_slot, store) in dirty_stores {
-            for account in store.accounts.accounts(0) {
+            AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
                 pubkeys.insert(account.meta.pubkey);
-            }
+            });
         }
         trace!(
             "dirty_stores.len: {} pubkeys.len: {}",
