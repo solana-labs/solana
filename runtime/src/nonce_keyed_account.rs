@@ -1,7 +1,7 @@
 use {
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
-        feature_set::{self, nonce_must_be_writable},
+        feature_set,
         instruction::{checked_add, InstructionError},
         nonce::{
             self,
@@ -25,11 +25,7 @@ pub fn advance_nonce_account(
         .feature_set
         .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-    if invoke_context
-        .feature_set
-        .is_active(&nonce_must_be_writable::id())
-        && !account.is_writable()
-    {
+    if !account.is_writable() {
         ic_msg!(
             invoke_context,
             "Advance nonce account: Account {} must be writeable",
@@ -98,11 +94,7 @@ pub fn withdraw_nonce_account(
         .feature_set
         .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-    if invoke_context
-        .feature_set
-        .is_active(&nonce_must_be_writable::id())
-        && !from.is_writable()
-    {
+    if !from.is_writable() {
         ic_msg!(
             invoke_context,
             "Withdraw nonce account: Account {} must be writeable",
@@ -184,11 +176,7 @@ pub fn initialize_nonce_account(
         .feature_set
         .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-    if invoke_context
-        .feature_set
-        .is_active(&nonce_must_be_writable::id())
-        && !account.is_writable()
-    {
+    if !account.is_writable() {
         ic_msg!(
             invoke_context,
             "Initialize nonce account: Account {} must be writeable",
@@ -242,11 +230,7 @@ pub fn authorize_nonce_account(
         .feature_set
         .is_active(&feature_set::merge_nonce_error_into_system_error::id());
 
-    if invoke_context
-        .feature_set
-        .is_active(&nonce_must_be_writable::id())
-        && !account.is_writable()
-    {
+    if !account.is_writable() {
         ic_msg!(
             invoke_context,
             "Authorize nonce account: Account {} must be writeable",
