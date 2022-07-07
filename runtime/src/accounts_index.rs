@@ -34,7 +34,7 @@ use {
         },
         path::PathBuf,
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering},
             Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
     },
@@ -67,7 +67,7 @@ pub const ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS: AccountsIndexConfig = AccountsIn
 pub type ScanResult<T> = Result<T, ScanError>;
 pub type SlotList<T> = Vec<(Slot, T)>;
 pub type SlotSlice<'s, T> = &'s [(Slot, T)];
-pub type RefCount = u64;
+pub type RefCount = u32;
 pub type AccountMap<V> = Arc<InMemAccountsIndex<V>>;
 
 #[derive(Debug, Default)]
@@ -238,7 +238,7 @@ impl AccountMapEntryMeta {
 pub struct AccountMapEntryInner<T> {
     /// number of alive slots that contain >= 1 instances of account data for this pubkey
     /// where alive represents a slot that has not yet been removed by clean via AccountsDB::clean_stored_dead_slots() for containing no up to date account information
-    ref_count: AtomicU64,
+    ref_count: AtomicU32,
     /// list of slots in which this pubkey was updated
     /// Note that 'clean' removes outdated entries (ie. older roots) from this slot_list
     /// purge_slot() also removes non-rooted slots from this list
@@ -251,7 +251,7 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     pub fn new(slot_list: SlotList<T>, ref_count: RefCount, meta: AccountMapEntryMeta) -> Self {
         Self {
             slot_list: RwLock::new(slot_list),
-            ref_count: AtomicU64::new(ref_count),
+            ref_count: AtomicU32::new(ref_count),
             meta,
         }
     }
