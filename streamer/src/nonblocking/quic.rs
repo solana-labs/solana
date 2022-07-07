@@ -31,6 +31,7 @@ use {
         task::JoinHandle,
         time::{sleep, timeout},
     },
+    x509_parser::prelude::*,
 };
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
@@ -132,6 +133,22 @@ fn prune_unstaked_connection_table(
     }
 }
 
+fn get_connection_stake(connection: &Connection, _staked_nodes: Arc<RwLock<StakedNodes>>) -> u64 {
+    if let Some(der_cert) = connection
+        .peer_identity()
+        .and_then(|der_cert_any| der_cert_any.downcast::<Vec<u8>>().ok())
+    {
+        let x509_cert = X509Certificate::from_der(&der_cert);
+        if let Ok((_, cert)) = x509_cert {
+            let pubkey_info = cert.public_key();
+            let pubkey = pubkey_info.parsed();
+            info!("Peer public key is {:?}", pubkey);
+        }
+    };
+
+    0
+}
+
 async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
@@ -159,6 +176,8 @@ async fn setup_connection(
             } = new_connection;
 
             let remote_addr = connection.remote_address();
+
+            let _stake = get_connection_stake(&connection, staked_nodes.clone());
 
             let table_and_stake = {
                 let staked_nodes = staked_nodes.read().unwrap();
@@ -624,7 +643,7 @@ impl ConnectionTable {
 pub mod test {
     use {
         super::*,
-        crate::quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        crate::quic::{new_cert, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, VarInt},
         solana_sdk::{
@@ -657,11 +676,23 @@ pub mod test {
         }
     }
 
-    pub fn get_client_config() -> ClientConfig {
-        let crypto = rustls::ClientConfig::builder()
+    pub fn get_client_config(client_cert_params: Option<(&Keypair, IpAddr)>) -> ClientConfig {
+        let config_builder = rustls::ClientConfig::builder()
             .with_safe_defaults()
-            .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
+            .with_custom_certificate_verifier(SkipServerVerification::new());
+
+        let mut crypto = if let Some((keypair, ipaddr)) = client_cert_params {
+            let (certs, key) =
+                new_cert(keypair, ipaddr).expect("Failed to generate client certificate");
+            config_builder
+                .with_single_cert(certs, key)
+                .expect("Failed to use client certificate")
+        } else {
+            config_builder.with_no_client_auth()
+        };
+
+        crypto.enable_early_data = true;
+
         let mut config = ClientConfig::new(Arc::new(crypto));
 
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
@@ -705,17 +736,22 @@ pub mod test {
         (t, exit, receiver, server_address, stats)
     }
 
-    pub async fn make_client_endpoint(addr: &SocketAddr) -> NewConnection {
+    pub async fn make_client_endpoint(
+        addr: &SocketAddr,
+        client_keypair: Option<&Keypair>,
+    ) -> NewConnection {
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
         let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, client_socket)
             .unwrap()
             .0;
-        endpoint.set_default_client_config(get_client_config());
+        let client_certificate_params =
+            client_keypair.map(|keypair| (keypair, IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))));
+        endpoint.set_default_client_config(get_client_config(client_certificate_params));
         endpoint.connect(*addr, "localhost").unwrap().await.unwrap()
     }
 
     pub async fn check_timeout(receiver: Receiver<PacketBatch>, server_address: SocketAddr) {
-        let conn1 = make_client_endpoint(&server_address).await;
+        let conn1 = make_client_endpoint(&server_address, None).await;
         let total = 30;
         for i in 0..total {
             let mut s1 = conn1.connection.open_uni().await.unwrap();
@@ -737,8 +773,8 @@ pub mod test {
     }
 
     pub async fn check_block_multiple_connections(server_address: SocketAddr) {
-        let conn1 = make_client_endpoint(&server_address).await;
-        let conn2 = make_client_endpoint(&server_address).await;
+        let conn1 = make_client_endpoint(&server_address, None).await;
+        let conn2 = make_client_endpoint(&server_address, None).await;
         let mut s1 = conn1.connection.open_uni().await.unwrap();
         let mut s2 = conn2.connection.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap();
@@ -759,8 +795,8 @@ pub mod test {
         receiver: Receiver<PacketBatch>,
         server_address: SocketAddr,
     ) {
-        let conn1 = Arc::new(make_client_endpoint(&server_address).await);
-        let conn2 = Arc::new(make_client_endpoint(&server_address).await);
+        let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
+        let conn2 = Arc::new(make_client_endpoint(&server_address, None).await);
         let mut num_expected_packets = 0;
         for i in 0..10 {
             info!("sending: {}", i);
@@ -799,7 +835,7 @@ pub mod test {
         receiver: Receiver<PacketBatch>,
         server_address: SocketAddr,
     ) {
-        let conn1 = Arc::new(make_client_endpoint(&server_address).await);
+        let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
@@ -831,7 +867,7 @@ pub mod test {
     }
 
     pub async fn check_unstaked_node_connect_failure(server_address: SocketAddr) {
-        let conn1 = Arc::new(make_client_endpoint(&server_address).await);
+        let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
 
         // Send a full size packet with single byte writes.
         if let Ok(mut s1) = conn1.connection.open_uni().await {
@@ -864,7 +900,9 @@ pub mod test {
         solana_logger::setup();
         let (t, exit, _receiver, server_address, stats) = setup_quic_server(None);
 
-        let conn1 = make_client_endpoint(&server_address).await;
+        let keypair = Keypair::new();
+
+        let conn1 = make_client_endpoint(&server_address, Some(&keypair)).await;
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
         assert_eq!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
 

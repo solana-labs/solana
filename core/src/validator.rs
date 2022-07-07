@@ -758,7 +758,11 @@ impl Validator {
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
         let connection_cache = match use_quic {
-            true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
+            true => Arc::new(ConnectionCache::new_with_client_certificate(
+                tpu_connection_pool_size,
+                &identity_keypair,
+                node.info.gossip.ip(),
+            )),
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
         };
 

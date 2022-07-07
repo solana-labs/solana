@@ -64,7 +64,7 @@ pub(crate) fn configure_server(
     Ok((server_config, cert_chain_pem))
 }
 
-fn new_cert(
+pub(crate) fn new_cert(
     identity_keypair: &Keypair,
     san: IpAddr,
 ) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {

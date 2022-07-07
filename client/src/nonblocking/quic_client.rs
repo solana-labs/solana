@@ -55,29 +55,46 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
+pub struct QuicClientCertificate {
+    pub certificates: Vec<rustls::Certificate>,
+    pub key: rustls::PrivateKey,
+}
+
 /// A lazy-initialized Quic Endpoint
 pub struct QuicLazyInitializedEndpoint {
     endpoint: RwLock<Option<Arc<Endpoint>>>,
+    client_certificate: Option<Arc<QuicClientCertificate>>,
 }
 
 impl QuicLazyInitializedEndpoint {
-    pub fn new() -> Self {
+    pub fn new(client_certificate: Option<Arc<QuicClientCertificate>>) -> Self {
         Self {
             endpoint: RwLock::new(None),
+            client_certificate,
         }
     }
 
-    fn create_endpoint() -> Endpoint {
+    fn create_endpoint(&self) -> Endpoint {
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
         )
         .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range");
 
-        let mut crypto = rustls::ClientConfig::builder()
+        let config_builder = rustls::ClientConfig::builder()
             .with_safe_defaults()
-            .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
+            .with_custom_certificate_verifier(SkipServerVerification::new());
+
+        let mut crypto = self
+            .client_certificate
+            .as_ref()
+            .and_then(|cert| {
+                config_builder
+                    .clone()
+                    .with_single_cert(cert.certificates.clone(), cert.key.clone())
+                    .ok()
+            })
+            .unwrap_or(config_builder.with_no_client_auth());
         crypto.enable_early_data = true;
 
         let mut endpoint =
@@ -108,7 +125,7 @@ impl QuicLazyInitializedEndpoint {
                 match endpoint {
                     Some(endpoint) => endpoint.clone(),
                     None => {
-                        let connection = Arc::new(Self::create_endpoint());
+                        let connection = Arc::new(self.create_endpoint());
                         *lock = Some(connection.clone());
                         connection
                     }
@@ -120,7 +137,7 @@ impl QuicLazyInitializedEndpoint {
 
 impl Default for QuicLazyInitializedEndpoint {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
