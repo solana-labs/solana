@@ -366,7 +366,7 @@ impl ServeRepair {
             ("total_requests", stats.total_requests, i64),
             ("dropped_requests", stats.dropped_requests, i64),
             ("total_response_packets", stats.total_response_packets, i64),
-            ("self-repair", stats.self_repair, i64),
+            ("self_repair", stats.self_repair, i64),
             ("window_index", stats.window_index, i64),
             (
                 "request-highest-window-index",
@@ -439,10 +439,7 @@ impl ServeRepair {
                 stats.processed += 1;
                 let from_addr = packet.meta.socket_addr();
                 let rsp = Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
-                stats.total_response_packets += rsp
-                    .as_ref()
-                    .map(|response_packets| response_packets.len())
-                    .unwrap_or(0);
+                stats.total_response_packets += rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
                 if let Some(rsp) = rsp {
                     let _ignore_disconnect = response_sender.send(rsp);
                 }
