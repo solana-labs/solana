@@ -1776,32 +1776,24 @@ pub fn process_show_stakes(
         if vote_account_pubkeys.len() == 1 {
             program_accounts_config.filters = Some(vec![
                 // Filter by `StakeState::Stake(_, _)`
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
-                    offset: 0,
-                    bytes: rpc_filter::MemcmpEncodedBytes::Base58(
-                        bs58::encode([2, 0, 0, 0]).into_string(),
-                    ),
-                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-                }),
+                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp::new_base58_encoded(
+                    0,
+                    &[2, 0, 0, 0],
+                )),
                 // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
-                    offset: 124,
-                    bytes: rpc_filter::MemcmpEncodedBytes::Base58(
-                        vote_account_pubkeys[0].to_string(),
-                    ),
-                    encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-                }),
+                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp::new_base58_encoded(
+                    124,
+                    vote_account_pubkeys[0].as_ref(),
+                )),
             ]);
         }
     }
 
     if let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey {
         // withdrawer filter
-        let withdrawer_filter = rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp {
-            offset: 44,
-            bytes: rpc_filter::MemcmpEncodedBytes::Base58(withdraw_authority_pubkey.to_string()),
-            encoding: Some(rpc_filter::MemcmpEncoding::Binary),
-        });
+        let withdrawer_filter = rpc_filter::RpcFilterType::Memcmp(
+            rpc_filter::Memcmp::new_base58_encoded(44, withdraw_authority_pubkey.as_ref()),
+        );
 
         let filters = program_accounts_config.filters.get_or_insert(vec![]);
         filters.push(withdrawer_filter);
