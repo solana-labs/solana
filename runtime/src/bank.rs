@@ -1866,7 +1866,11 @@ impl Bank {
             cost_tracker: RwLock::new(CostTracker::new_with_account_data_size_limit(
                 feature_set
                     .is_active(&feature_set::cap_accounts_data_len::id())
-                    .then(|| MAX_ACCOUNTS_DATA_LEN.saturating_sub(accounts_data_size_initial)),
+                    .then(|| {
+                        parent
+                            .accounts_data_size_limit()
+                            .saturating_sub(accounts_data_size_initial)
+                    }),
             )),
             sysvar_cache: RwLock::new(SysvarCache::default()),
             accounts_data_size_initial,
@@ -4279,7 +4283,8 @@ impl Bank {
             transaction_accounts,
             compute_budget.max_invoke_depth.saturating_add(1),
             tx.message().instructions().len(),
-            MAX_ACCOUNTS_DATA_LEN.saturating_sub(prev_accounts_data_len),
+            self.accounts_data_size_limit()
+                .saturating_sub(prev_accounts_data_len),
         );
 
         let pre_account_state_info =
@@ -4651,6 +4656,11 @@ impl Bank {
             signature_count,
             error_counters,
         }
+    }
+
+    /// The maximum allowed size, in bytes, of the accounts data
+    pub fn accounts_data_size_limit(&self) -> u64 {
+        MAX_ACCOUNTS_DATA_LEN
     }
 
     /// Load the accounts data size, in bytes
@@ -6383,7 +6393,8 @@ impl Bank {
             .is_active(&feature_set::cap_accounts_data_len::id())
         {
             self.cost_tracker = RwLock::new(CostTracker::new_with_account_data_size_limit(Some(
-                MAX_ACCOUNTS_DATA_LEN.saturating_sub(self.accounts_data_size_initial),
+                self.accounts_data_size_limit()
+                    .saturating_sub(self.accounts_data_size_initial),
             )));
         }
     }
@@ -7761,7 +7772,6 @@ pub(crate) mod tests {
         },
         crossbeam_channel::{bounded, unbounded},
         solana_program_runtime::{
-            accounts_data_meter::MAX_ACCOUNTS_DATA_LEN,
             compute_budget::MAX_COMPUTE_UNIT_LIMIT,
             invoke_context::InvokeContext,
             prioritization_fee::{PrioritizationFeeDetails, PrioritizationFeeType},
@@ -17731,15 +17741,13 @@ pub(crate) mod tests {
         const NUM_ACCOUNTS: u64 = 20;
         const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH / (NUM_ACCOUNTS + 1);
         const REMAINING_ACCOUNTS_DATA_SIZE: u64 = NUM_ACCOUNTS * ACCOUNT_SIZE;
-        const INITIAL_ACCOUNTS_DATA_SIZE: u64 =
-            MAX_ACCOUNTS_DATA_LEN - REMAINING_ACCOUNTS_DATA_SIZE;
 
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.activate_feature(&feature_set::cap_accounts_data_len::id());
-        bank.set_accounts_data_size_initial_for_tests(
-            INITIAL_ACCOUNTS_DATA_SIZE - bank.load_accounts_data_size_delta() as u64,
-        );
+        bank.accounts_data_size_initial = bank.accounts_data_size_limit()
+            - REMAINING_ACCOUNTS_DATA_SIZE
+            - bank.load_accounts_data_size_delta() as u64;
 
         let mut i = 0;
         let result = loop {
@@ -17757,7 +17765,7 @@ pub(crate) mod tests {
             let accounts_data_size_before = bank.load_accounts_data_size();
             let result = bank.process_transaction(&txn);
             let accounts_data_size_after = bank.load_accounts_data_size();
-            assert!(accounts_data_size_after <= MAX_ACCOUNTS_DATA_LEN);
+            assert!(accounts_data_size_after <= bank.accounts_data_size_limit());
             if result.is_err() {
                 assert_eq!(i, NUM_ACCOUNTS);
                 break result;
