@@ -2240,11 +2240,10 @@ impl AccountsDb {
                 while !pending_store_ids.is_empty() {
                     let id = pending_store_ids.iter().next().cloned().unwrap();
                     pending_store_ids.remove(&id);
-                    if already_counted.contains(&id) {
+                    if !already_counted.insert(id) {
                         continue;
                     }
                     store_counts.get_mut(&id).unwrap().0 += 1;
-                    already_counted.insert(id);
 
                     let affected_pubkeys = &store_counts.get(&id).unwrap().1;
                     for key in affected_pubkeys {
@@ -2422,9 +2421,9 @@ impl AccountsDb {
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
         for (_slot, store) in dirty_stores {
-            for account in store.accounts.accounts(0) {
+            AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
                 pubkeys.insert(account.meta.pubkey);
-            }
+            });
         }
         trace!(
             "dirty_stores.len: {} pubkeys.len: {}",
@@ -2519,7 +2518,6 @@ impl AccountsDb {
         let total_keys_count = pubkeys.len();
         let mut accounts_scan = Measure::start("accounts_scan");
         let uncleaned_roots = self.accounts_index.clone_uncleaned_roots();
-        let uncleaned_roots_len = self.accounts_index.uncleaned_roots_len();
         let found_not_zero_accum = AtomicU64::new(0);
         let not_found_on_fork_accum = AtomicU64::new(0);
         let missing_accum = AtomicU64::new(0);
@@ -2537,13 +2535,10 @@ impl AccountsDb {
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
                         let mut useful = 0;
-                        self.accounts_index.scan(
-                            pubkeys.iter(),
-                            |exists, slot_list, pubkey, ref_count| {
+                        self.accounts_index
+                            .scan(pubkeys.iter(), |pubkey, slots_refs| {
                                 let mut useless = true;
-                                if !exists {
-                                    missing += 1;
-                                } else {
+                                if let Some((slot_list, ref_count)) = slots_refs {
                                     let index_in_slot_list = self.accounts_index.latest_slot(
                                         None,
                                         slot_list,
@@ -2570,13 +2565,11 @@ impl AccountsDb {
                                             } else {
                                                 found_not_zero += 1;
                                             }
-                                            let slot = *slot;
-
-                                            if uncleaned_roots.contains(&slot) {
+                                            if uncleaned_roots.contains(slot) {
                                                 // Assertion enforced by `accounts_index.get()`, the latest slot
                                                 // will not be greater than the given `max_clean_root`
                                                 if let Some(max_clean_root) = max_clean_root {
-                                                    assert!(slot <= max_clean_root);
+                                                    assert!(slot <= &max_clean_root);
                                                 }
                                                 purges_old_accounts.push(*pubkey);
                                                 useless = false;
@@ -2594,6 +2587,8 @@ impl AccountsDb {
                                             purges_old_accounts.push(*pubkey);
                                         }
                                     }
+                                } else {
+                                    missing += 1;
                                 }
                                 if !useless {
                                     useful += 1;
@@ -2603,8 +2598,7 @@ impl AccountsDb {
                                 } else {
                                     AccountsIndexScanResult::KeepInMemory
                                 }
-                            },
-                        );
+                            });
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
                         missing_accum.fetch_add(missing, Ordering::Relaxed);
@@ -2777,7 +2771,7 @@ impl AccountsDb {
                 i64
             ),
             ("scan_missing", missing_accum.load(Ordering::Relaxed), i64),
-            ("uncleaned_roots_len", uncleaned_roots_len, i64),
+            ("uncleaned_roots_len", uncleaned_roots.len(), i64),
             (
                 "clean_old_root_us",
                 self.clean_accounts_stats
@@ -3039,9 +3033,9 @@ impl AccountsDb {
             accounts[..std::cmp::min(accounts.len(), count)]
                 .iter()
                 .map(|(key, _)| key),
-            |exists, slot_list, pubkey, _ref_count| {
+            |pubkey, slots_refs| {
                 let mut result = AccountsIndexScanResult::None;
-                if exists {
+                if let Some((slot_list, _ref_count)) = slots_refs {
                     let pair = &accounts[index];
                     let stored_account = &pair.1;
                     let is_alive = slot_list.iter().any(|(_slot, acct_info)| {
@@ -3385,7 +3379,7 @@ impl AccountsDb {
         if let Some(stores_lock) = self.storage.get_slot_stores(slot) {
             let stores: Vec<Arc<AccountStorageEntry>> =
                 stores_lock.read().unwrap().values().cloned().collect();
-            if !Self::is_shrinking_productive(slot, &stores) {
+            if !Self::is_shrinking_productive(slot, stores.iter()) {
                 return 0;
             }
             self.do_shrink_slot_stores(slot, stores.iter())
@@ -6237,7 +6231,8 @@ impl AccountsDb {
         )
     }
 
-    pub fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
+    #[cfg(test)]
+    fn update_accounts_hash_test(&self, slot: Slot, ancestors: &Ancestors) -> (Hash, u64) {
         self.update_accounts_hash_with_index_option(
             true,
             true,
@@ -6534,8 +6529,8 @@ impl AccountsDb {
             .collect()
     }
 
-    // storages are sorted by slot and have range info.
-    // if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
+    /// storages are sorted by slot and have range info.
+    /// if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
     fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Option<Slot>) {
         if let Some(slots_per_epoch) = slots_per_epoch {
             let max = storages.max_slot_inclusive();
@@ -6572,8 +6567,6 @@ impl AccountsDb {
                 min_root,
                 Some(slot),
             );
-
-            self.mark_old_slots_as_dirty(&storages, Some(config.epoch_schedule.slots_per_epoch));
             sort_time.stop();
 
             let mut timings = HashStats {
@@ -6760,6 +6753,8 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        self.mark_old_slots_as_dirty(storages, Some(config.epoch_schedule.slots_per_epoch));
+
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
         let use_bg_thread_pool = config.use_bg_thread_pool;
         let mut scan_and_hash = move || {
@@ -7140,13 +7135,18 @@ impl AccountsDb {
         aligned_bytes + PAGE_SIZE > total_bytes && num_stores == 1
     }
 
-    fn is_shrinking_productive(slot: Slot, stores: &[Arc<AccountStorageEntry>]) -> bool {
+    fn is_shrinking_productive<'a, I>(slot: Slot, stores: I) -> bool
+    where
+        I: IntoIterator<Item = &'a Arc<AccountStorageEntry>>,
+    {
         let mut alive_count = 0;
         let mut stored_count = 0;
         let mut alive_bytes = 0;
         let mut total_bytes = 0;
+        let mut count = 0;
 
         for store in stores {
+            count += 1;
             alive_count += store.count();
             stored_count += store.approx_stored_count();
             alive_bytes += store.alive_bytes();
@@ -7154,11 +7154,11 @@ impl AccountsDb {
         }
 
         let aligned_bytes = Self::page_align(alive_bytes as u64);
-        if Self::should_not_shrink(aligned_bytes, total_bytes, stores.len()) {
+        if Self::should_not_shrink(aligned_bytes, total_bytes, count) {
             trace!(
                 "shrink_slot_forced ({}, {}): not able to shrink at all: alive/stored: ({} / {}) ({}b / {}b) save: {}",
                 slot,
-                stores.len(),
+                count,
                 alive_count,
                 stored_count,
                 aligned_bytes,
@@ -7237,7 +7237,7 @@ impl AccountsDb {
                         .insert((*slot, store.append_vec_id()), store.clone());
                     dead_slots.insert(*slot);
                 } else if self.caching_enabled
-                    && Self::is_shrinking_productive(*slot, &[store.clone()])
+                    && Self::is_shrinking_productive(*slot, [&store].into_iter())
                     && self.is_candidate_for_shrink(&store, false)
                 {
                     // Checking that this single storage entry is ready for shrinking,
@@ -8141,7 +8141,6 @@ impl AccountsDb {
         limit_load_slot_count_from_snapshot: Option<usize>,
         verify: bool,
         genesis_config: &GenesisConfig,
-        accounts_db_skip_shrink: bool,
     ) -> IndexGenerationInfo {
         let mut slots = self.storage.all_slots();
         #[allow(clippy::stable_sort_primitive)]
@@ -8153,9 +8152,9 @@ impl AccountsDb {
         let schedule = genesis_config.epoch_schedule;
         let rent_collector = RentCollector::new(
             schedule.get_epoch(max_slot),
-            &schedule,
+            schedule,
             genesis_config.slots_per_year(),
-            &genesis_config.rent,
+            genesis_config.rent,
         );
         let accounts_data_len = AtomicU64::new(0);
 
@@ -8282,7 +8281,7 @@ impl AccountsDb {
                 m.stop();
                 index_flush_us = m.as_us();
 
-                // this has to happen before pubkeys_to_duplicate_accounts_data_len below
+                // this has to happen before get_duplicate_accounts_slots_and_data_len below
                 // get duplicate keys from acct idx. We have to wait until we've finished flushing.
                 for (slot, key) in self
                     .accounts_index
@@ -8301,6 +8300,7 @@ impl AccountsDb {
             // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
             let mut accounts_data_len_dedup_timer =
                 Measure::start("handle accounts data len duplicates");
+            let uncleaned_roots = Mutex::new(HashSet::<Slot>::default());
             if pass == 0 {
                 let mut unique_pubkeys = HashSet::<Pubkey>::default();
                 self.uncleaned_pubkeys.iter().for_each(|entry| {
@@ -8312,7 +8312,15 @@ impl AccountsDb {
                     .into_iter()
                     .collect::<Vec<_>>()
                     .par_chunks(4096)
-                    .map(|pubkeys| self.pubkeys_to_duplicate_accounts_data_len(pubkeys))
+                    .map(|pubkeys| {
+                        let (count, uncleaned_roots_this_group) =
+                            self.get_duplicate_accounts_slots_and_data_len(pubkeys);
+                        let mut uncleaned_roots = uncleaned_roots.lock().unwrap();
+                        uncleaned_roots_this_group.into_iter().for_each(|slot| {
+                            uncleaned_roots.insert(slot);
+                        });
+                        count
+                    })
                     .sum();
                 accounts_data_len.fetch_sub(accounts_data_len_from_duplicates, Ordering::Relaxed);
                 info!(
@@ -8342,14 +8350,14 @@ impl AccountsDb {
             };
 
             if pass == 0 {
+                let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
                 // Need to add these last, otherwise older updates will be cleaned
-                for slot in &slots {
-                    // passing 'false' to 'add_root' causes all slots to be added to 'uncleaned_slots'
-                    // passing 'true' to 'add_root' does NOT add all slots to 'uncleaned_slots'
-                    // if we are skipping shrink, this potentially massive amount of work is never processed at startup, when all threads can be used.
-                    // This causes failures such as oom during the first bg clean, which is expecting to work in 'normal' operating circumstances.
-                    // So, don't add all slots to 'uncleaned_slots' here since by requesting to skip clean and shrink, caller is expecting the starting snapshot to be reasonable.
-                    self.accounts_index.add_root(*slot, accounts_db_skip_shrink);
+                for root in &slots {
+                    // passing 'false' to 'add_root' causes 'root' to be added to 'accounts_index.roots_tracker.uncleaned_roots'
+                    // passing 'true' to 'add_root' does NOT add 'root' to 'accounts_index.roots_tracker.uncleaned_roots'
+                    // So, don't add all slots to 'uncleaned_roots' here since we know which slots contain duplicate pubkeys.
+                    let uncleaned_root = uncleaned_roots.contains(root);
+                    self.accounts_index.add_root(*root, !uncleaned_root);
                 }
 
                 self.set_storage_count_and_alive_bytes(storage_info, &mut timings);
@@ -8386,10 +8394,17 @@ impl AccountsDb {
         }
     }
 
-    /// Used during generate_index() to get the _duplicate_ accounts data len from the given pubkeys
+    /// Used during generate_index() to:
+    /// 1. get the _duplicate_ accounts data len from the given pubkeys
+    /// 2. get the slots that contained duplicate pubkeys
     /// Note this should only be used when ALL entries in the accounts index are roots.
-    fn pubkeys_to_duplicate_accounts_data_len(&self, pubkeys: &[Pubkey]) -> u64 {
+    /// returns (data len sum of all older duplicates, slots that contained duplicate pubkeys)
+    fn get_duplicate_accounts_slots_and_data_len(
+        &self,
+        pubkeys: &[Pubkey],
+    ) -> (u64, HashSet<Slot>) {
         let mut accounts_data_len_from_duplicates = 0;
+        let mut uncleaned_slots = HashSet::<Slot>::default();
         pubkeys.iter().for_each(|pubkey| {
             if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey) {
                 let slot_list = entry.slot_list();
@@ -8397,26 +8412,29 @@ impl AccountsDb {
                     return;
                 }
                 // Only the account data len in the highest slot should be used, and the rest are
-                // duplicates.  So sort the slot list in descending slot order, skip the first
-                // item, then sum up the remaining data len, which are the duplicates.
-                let mut slot_list = slot_list.clone();
-                slot_list
-                    .select_nth_unstable_by(0, |a, b| b.0.cmp(&a.0))
-                    .2
-                    .iter()
-                    .for_each(|(slot, account_info)| {
-                        let maybe_storage_entry = self
-                            .storage
-                            .get_account_storage_entry(*slot, account_info.store_id());
-                        let mut accessor = LoadedAccountAccessor::Stored(
-                            maybe_storage_entry.map(|entry| (entry, account_info.offset())),
-                        );
-                        let loaded_account = accessor.check_and_get_loaded_account();
-                        accounts_data_len_from_duplicates += loaded_account.data().len();
-                    });
+                // duplicates.  So find the max slot to keep.
+                // Then sum up the remaining data len, which are the duplicates.
+                // All of the slots need to go in the 'uncleaned_slots' list. For clean to work properly,
+                // the slot where duplicate accounts are found in the index need to be in 'uncleaned_slots' list, too.
+                let max = slot_list.iter().map(|(slot, _)| slot).max().unwrap();
+                slot_list.iter().for_each(|(slot, account_info)| {
+                    uncleaned_slots.insert(*slot);
+                    if slot == max {
+                        // the info in 'max' is the most recent, current info for this pubkey
+                        return;
+                    }
+                    let maybe_storage_entry = self
+                        .storage
+                        .get_account_storage_entry(*slot, account_info.store_id());
+                    let mut accessor = LoadedAccountAccessor::Stored(
+                        maybe_storage_entry.map(|entry| (entry, account_info.offset())),
+                    );
+                    let loaded_account = accessor.check_and_get_loaded_account();
+                    accounts_data_len_from_duplicates += loaded_account.data().len();
+                });
             }
         });
-        accounts_data_len_from_duplicates as u64
+        (accounts_data_len_from_duplicates as u64, uncleaned_slots)
     }
 
     fn update_storage_info(
@@ -10789,9 +10807,8 @@ pub mod tests {
 
     fn assert_not_load_account(accounts: &AccountsDb, slot: Slot, pubkey: Pubkey) {
         let ancestors = vec![(slot, 0)].into_iter().collect();
-        assert!(accounts
-            .load_without_fixed_root(&ancestors, &pubkey)
-            .is_none());
+        let load = accounts.load_without_fixed_root(&ancestors, &pubkey);
+        assert!(load.is_none(), "{:?}", load);
     }
 
     fn reconstruct_accounts_db_via_serialization(accounts: &AccountsDb, slot: Slot) -> AccountsDb {

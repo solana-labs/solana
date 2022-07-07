@@ -2,7 +2,7 @@
 use solana_sdk::keyed_account::{create_keyed_accounts_unified, KeyedAccount};
 use {
     crate::{
-        accounts_data_meter::AccountsDataMeter,
+        accounts_data_meter::{AccountsDataMeter, MAX_ACCOUNTS_DATA_LEN},
         compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
@@ -252,7 +252,7 @@ impl<'a> InvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
-        initial_accounts_data_len: u64,
+        prev_accounts_data_len: u64,
     ) -> Self {
         Self {
             transaction_context,
@@ -265,7 +265,7 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.compute_unit_limit),
-            accounts_data_meter: AccountsDataMeter::new(initial_accounts_data_len),
+            accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
             executors,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
@@ -1152,6 +1152,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
         preparation.transaction_accounts,
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
         1,
+        MAX_ACCOUNTS_DATA_LEN,
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
@@ -1182,6 +1183,7 @@ pub fn mock_process_instruction(
         preparation.transaction_accounts,
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
         1,
+        MAX_ACCOUNTS_DATA_LEN,
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     if let Some(sysvar_cache) = sysvar_cache_override {
@@ -1226,7 +1228,7 @@ mod tests {
             desired_result: Result<(), InstructionError>,
         },
         Resize {
-            new_len: usize,
+            new_len: u64,
         },
     }
 
@@ -1312,7 +1314,7 @@ mod tests {
                 }
                 MockInstruction::Resize { new_len } => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&vec![0; new_len])
+                    .set_data(&vec![0; new_len as usize])
                     .unwrap(),
             }
         } else {
@@ -1355,7 +1357,7 @@ mod tests {
             });
         }
         let mut transaction_context =
-            TransactionContext::new(accounts, ComputeBudget::default().max_invoke_depth, 1);
+            TransactionContext::new(accounts, ComputeBudget::default().max_invoke_depth, 1, 0);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         // Check call depth increases and has a limit
@@ -1463,7 +1465,7 @@ mod tests {
         let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
         let instruction_accounts = vec![];
         let program_indices = vec![0];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 1, 0);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(&instruction_accounts, &program_indices, &[])
@@ -1508,7 +1510,7 @@ mod tests {
                 is_writable: instruction_account_index < 2,
             })
             .collect::<Vec<_>>();
-        let mut transaction_context = TransactionContext::new(accounts, 2, 8);
+        let mut transaction_context = TransactionContext::new(accounts, 2, 8, 0);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
@@ -1640,7 +1642,7 @@ mod tests {
     fn test_invoke_context_compute_budget() {
         let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3, 0);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
@@ -1658,8 +1660,9 @@ mod tests {
         solana_logger::setup();
 
         let program_key = Pubkey::new_unique();
-        let user_account_data_len = 123;
-        let user_account = AccountSharedData::new(100, user_account_data_len, &program_key);
+        let user_account_data_len = 123u64;
+        let user_account =
+            AccountSharedData::new(100, user_account_data_len as usize, &program_key);
         let dummy_account = AccountSharedData::new(10, 0, &program_key);
         let mut program_account = AccountSharedData::new(500, 500, &native_loader::id());
         program_account.set_executable(true);
@@ -1674,7 +1677,8 @@ mod tests {
             process_instruction: mock_process_instruction,
         }];
 
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context =
+            TransactionContext::new(accounts, 1, 3, user_account_data_len * 2);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
 
@@ -1684,7 +1688,13 @@ mod tests {
         invoke_context
             .accounts_data_meter
             .set_maximum(user_account_data_len as u64 * 3);
-        let remaining_account_data_len = invoke_context.accounts_data_meter.remaining() as usize;
+        let remaining_account_data_len = invoke_context
+            .transaction_context
+            .get_total_resize_remaining();
+        assert_eq!(
+            remaining_account_data_len,
+            invoke_context.accounts_data_meter.remaining(),
+        );
 
         let instruction_accounts = [
             InstructionAccount {
@@ -1719,6 +1729,12 @@ mod tests {
 
             assert!(result.is_ok());
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .get_total_resize_remaining(),
+                0
+            );
         }
 
         // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
@@ -1737,6 +1753,12 @@ mod tests {
 
             assert!(result.is_ok());
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .get_total_resize_remaining(),
+                0
+            );
         }
 
         // Test 3: Resize the account to exceed the budget; this must fail
@@ -1759,6 +1781,12 @@ mod tests {
                 Err(solana_sdk::instruction::InstructionError::MaxAccountsDataSizeExceeded)
             ));
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .get_total_resize_remaining(),
+                0
+            );
         }
     }
 }

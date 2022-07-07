@@ -24,7 +24,7 @@ hyper-proxy = "0.9.1"
 log = "0.4.17"
 prost = "0.10.4"
 prost-types = "0.10.0"
-serde = "1.0.137"
+serde = "1.0.138"
 serde_derive = "1.0.103"
 smpl_jwt = "0.7.1"
 solana-metrics = { path = "../metrics", version = "=1.11.2" }

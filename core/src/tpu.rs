@@ -36,7 +36,7 @@ use {
     },
     std::{
         net::UdpSocket,
-        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
+        sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
     },
 };
@@ -73,7 +73,7 @@ impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         sockets: TpuSockets,
@@ -230,6 +230,7 @@ impl Tpu {
             replay_vote_sender,
             cost_model.clone(),
             connection_cache.clone(),
+            bank_forks.clone(),
         );
 
         let broadcast_stage = broadcast_type.new_broadcast_stage(

@@ -1312,14 +1312,14 @@ impl<T: IndexValue> AccountsIndex<T> {
     pub(crate) fn scan<'a, F, I>(&'a self, pubkeys: I, mut callback: F)
     where
         // params:
-        //  exists: false if not in index at all
-        //  index in slot list where best slot was found or None if nothing found by root criteria
         //  pubkey looked up
-        //  refcount of entry in index
-        F: FnMut(bool, &SlotList<T>, &'a Pubkey, RefCount) -> AccountsIndexScanResult,
+        //  slots_refs is Option<(slot_list, ref_count)>
+        //    None if 'pubkey' is not in accounts index.
+        //   slot_list: comes from accounts index for 'pubkey'
+        //   ref_count: refcount of entry in index
+        F: FnMut(&'a Pubkey, Option<(&SlotList<T>, RefCount)>) -> AccountsIndexScanResult,
         I: IntoIterator<Item = &'a Pubkey>,
     {
-        let empty_slot_list = vec![];
         let mut lock = None;
         let mut last_bin = self.bins(); // too big, won't match
         pubkeys.into_iter().for_each(|pubkey| {
@@ -1334,7 +1334,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                 match entry {
                     Some(locked_entry) => {
                         let slot_list = &locked_entry.slot_list.read().unwrap();
-                        let result = callback(true, slot_list, pubkey, locked_entry.ref_count());
+                        let result = callback(pubkey, Some((slot_list, locked_entry.ref_count())));
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
                                 locked_entry.add_un_ref(false);
@@ -1345,7 +1345,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                         };
                     }
                     None => {
-                        callback(false, &empty_slot_list, pubkey, RefCount::MAX);
+                        callback(pubkey, None);
                     }
                 }
                 (cache, ())

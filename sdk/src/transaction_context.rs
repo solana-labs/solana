@@ -48,6 +48,8 @@ pub struct TransactionContext {
     number_of_instructions_at_transaction_level: usize,
     instruction_trace: InstructionTrace,
     return_data: TransactionReturnData,
+    total_resize_limit: u64,
+    total_resize_delta: RefCell<i64>,
 }
 
 impl TransactionContext {
@@ -56,6 +58,7 @@ impl TransactionContext {
         transaction_accounts: Vec<TransactionAccount>,
         instruction_context_capacity: usize,
         number_of_instructions_at_transaction_level: usize,
+        total_resize_limit: u64,
     ) -> Self {
         let (account_keys, accounts): (Vec<Pubkey>, Vec<RefCell<AccountSharedData>>) =
             transaction_accounts
@@ -70,6 +73,8 @@ impl TransactionContext {
             number_of_instructions_at_transaction_level,
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: TransactionReturnData::default(),
+            total_resize_limit,
+            total_resize_delta: RefCell::new(0),
         }
     }
 
@@ -248,6 +253,18 @@ impl TransactionContext {
     /// Returns instruction trace
     pub fn get_instruction_trace(&self) -> &InstructionTrace {
         &self.instruction_trace
+    }
+
+    /// Returns (in bytes) how much data can still be allocated
+    pub fn get_total_resize_remaining(&self) -> u64 {
+        let total_resize_delta = *self.total_resize_delta.borrow();
+        if total_resize_delta >= 0 {
+            self.total_resize_limit
+                .saturating_sub(total_resize_delta as u64)
+        } else {
+            self.total_resize_limit
+                .saturating_add(total_resize_delta.saturating_neg() as u64)
+        }
     }
 }
 
@@ -586,6 +603,9 @@ impl<'a> BorrowedAccount<'a> {
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
+            let mut total_resize_delta = self.transaction_context.total_resize_delta.borrow_mut();
+            *total_resize_delta = total_resize_delta
+                .saturating_add((data.len() as i64).saturating_sub(self.get_data().len() as i64));
             self.account.set_data_from_slice(data);
         }
         Ok(())
@@ -594,8 +614,11 @@ impl<'a> BorrowedAccount<'a> {
     /// Resizes the account data (transaction wide)
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
-    pub fn set_data_length(&mut self, new_len: usize) -> Result<(), InstructionError> {
-        self.account.data_mut().resize(new_len, 0);
+    pub fn set_data_length(&mut self, new_length: usize) -> Result<(), InstructionError> {
+        let mut total_resize_delta = self.transaction_context.total_resize_delta.borrow_mut();
+        *total_resize_delta = total_resize_delta
+            .saturating_add((new_length as i64).saturating_sub(self.get_data().len() as i64));
+        self.account.data_mut().resize(new_length, 0);
         Ok(())
     }
 
@@ -666,7 +689,9 @@ pub struct ExecutionRecord {
     pub accounts: Vec<TransactionAccount>,
     pub instruction_trace: InstructionTrace,
     pub return_data: TransactionReturnData,
+    pub total_resize_delta: i64,
 }
+
 /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
@@ -681,6 +706,7 @@ impl From<TransactionContext> for ExecutionRecord {
                 .collect(),
             instruction_trace: context.instruction_trace,
             return_data: context.return_data,
+            total_resize_delta: RefCell::into_inner(context.total_resize_delta),
         }
     }
 }

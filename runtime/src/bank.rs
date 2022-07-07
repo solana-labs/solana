@@ -169,6 +169,14 @@ use {
     },
 };
 
+/// params to `verify_bank_hash`
+pub struct VerifyBankHash {
+    pub test_hash_calculation: bool,
+    pub can_cached_slot_be_unflushed: bool,
+    pub ignore_mismatch: bool,
+    pub require_rooted_bank: bool,
+}
+
 #[derive(Debug, Default)]
 struct RewardsMetrics {
     load_vote_and_stake_accounts_us: AtomicU64,
@@ -931,7 +939,7 @@ impl NonceInfo for NonceFull {
 // Sync fields with BankFieldsToSerialize! This is paired with it.
 // All members are made public to remain Bank's members private and to make versioned deserializer workable on this
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct BankFieldsToDeserialize {
+pub struct BankFieldsToDeserialize {
     pub(crate) blockhash_queue: BlockhashQueue,
     pub(crate) ancestors: AncestorsForSerialization,
     pub(crate) hash: Hash,
@@ -3528,9 +3536,9 @@ impl Bank {
 
         self.rent_collector = RentCollector::new(
             self.epoch,
-            self.epoch_schedule(),
+            *self.epoch_schedule(),
             self.slots_per_year,
-            &genesis_config.rent,
+            genesis_config.rent,
         );
 
         // Add additional builtin programs specified in the genesis config
@@ -3858,10 +3866,7 @@ impl Bank {
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
             .collect::<Vec<_>>();
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
+        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
@@ -3881,10 +3886,7 @@ impl Bank {
                 )
             })
             .collect::<Result<Vec<_>>>()?;
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
+        let lock_results = self.rc.accounts.lock_accounts(sanitized_txs.iter());
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -3897,10 +3899,7 @@ impl Bank {
         &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
-        let lock_results = self
-            .rc
-            .accounts
-            .lock_accounts(txs.iter(), &self.feature_set);
+        let lock_results = self.rc.accounts.lock_accounts(txs.iter());
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -3912,11 +3911,10 @@ impl Bank {
         transaction_results: impl Iterator<Item = &'b Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
-        let lock_results = self.rc.accounts.lock_accounts_with_results(
-            transactions.iter(),
-            transaction_results,
-            &self.feature_set,
-        );
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts_with_results(transactions.iter(), transaction_results);
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
 
@@ -3925,7 +3923,7 @@ impl Bank {
         &'a self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'a, '_> {
-        let lock_result = transaction.get_account_locks(&self.feature_set).map(|_| ());
+        let lock_result = transaction.get_account_locks().map(|_| ());
         let mut batch =
             TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
         batch.set_needs_unlock(false);
@@ -4053,11 +4051,6 @@ impl Bank {
         self.rc.accounts.accounts_db.set_shrink_paths(paths);
     }
 
-    pub fn separate_nonce_from_blockhash(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::separate_nonce_from_blockhash::id())
-    }
-
     fn check_age<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -4065,15 +4058,12 @@ impl Bank {
         max_age: usize,
         error_counters: &mut TransactionErrorMetrics,
     ) -> Vec<TransactionCheckResult> {
-        let separate_nonce_from_blockhash = self.separate_nonce_from_blockhash();
-        let enable_durable_nonce = separate_nonce_from_blockhash
-            && self
-                .feature_set
-                .is_active(&feature_set::enable_durable_nonce::id());
+        let enable_durable_nonce = self
+            .feature_set
+            .is_active(&feature_set::enable_durable_nonce::id());
         let hash_queue = self.blockhash_queue.read().unwrap();
         let last_blockhash = hash_queue.last_hash();
-        let next_durable_nonce =
-            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash);
+        let next_durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
 
         txs.zip(lock_results)
             .map(|(tx, lock_res)| match lock_res {
@@ -4147,22 +4137,14 @@ impl Bank {
         let nonce_address =
             message.get_durable_nonce(self.feature_set.is_active(&nonce_must_be_writable::id()))?;
         let nonce_account = self.get_account_with_fixed_root(nonce_address)?;
-        let nonce_data = nonce_account::verify_nonce_account(
-            &nonce_account,
-            message.recent_blockhash(),
-            self.separate_nonce_from_blockhash(),
-        )?;
+        let nonce_data =
+            nonce_account::verify_nonce_account(&nonce_account, message.recent_blockhash())?;
 
-        if self
-            .feature_set
-            .is_active(&feature_set::nonce_must_be_authorized::ID)
-        {
-            let nonce_is_authorized = message
-                .get_ix_signers(NONCED_TX_MARKER_IX_INDEX as usize)
-                .any(|signer| signer == &nonce_data.authority);
-            if !nonce_is_authorized {
-                return None;
-            }
+        let nonce_is_authorized = message
+            .get_ix_signers(NONCED_TX_MARKER_IX_INDEX as usize)
+            .any(|signer| signer == &nonce_data.authority);
+        if !nonce_is_authorized {
+            return None;
         }
 
         Some((*nonce_address, nonce_account))
@@ -4177,11 +4159,8 @@ impl Bank {
         let durable_nonces_enabled = enable_durable_nonce
             || self.slot() <= 135986379
             || self.cluster_type() != ClusterType::MainnetBeta;
-        let nonce_must_be_advanceable = self
-            .feature_set
-            .is_active(&feature_set::nonce_must_be_advanceable::ID);
         let nonce_is_advanceable = tx.message().recent_blockhash() != next_durable_nonce.as_hash();
-        (durable_nonces_enabled && (nonce_is_advanceable || !nonce_must_be_advanceable))
+        (durable_nonces_enabled && nonce_is_advanceable)
             .then(|| self.check_message_for_nonce(tx.message()))
             .flatten()
     }
@@ -4301,12 +4280,14 @@ impl Bank {
             get_executors_time.as_us()
         );
 
+        let prev_accounts_data_len = self.load_accounts_data_size();
         let mut transaction_accounts = Vec::new();
         std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
             compute_budget.max_invoke_depth.saturating_add(1),
             tx.message().instructions().len(),
+            MAX_ACCOUNTS_DATA_LEN.saturating_sub(prev_accounts_data_len),
         );
 
         let pre_account_state_info =
@@ -4337,7 +4318,7 @@ impl Bank {
             &*self.sysvar_cache.read().unwrap(),
             blockhash,
             lamports_per_signature,
-            self.load_accounts_data_size(),
+            prev_accounts_data_len,
             &mut executed_units,
         );
         process_message_time.stop();
@@ -4394,6 +4375,7 @@ impl Bank {
             accounts,
             instruction_trace,
             mut return_data,
+            ..
         } = transaction_context.into();
         loaded_transaction.accounts = accounts;
 
@@ -4567,6 +4549,7 @@ impl Bank {
         let transaction_log_collector_config =
             self.transaction_log_collector_config.read().unwrap();
 
+        let mut collect_logs_time = Measure::start("collect_logs_time");
         for (execution_result, tx) in execution_results.iter().zip(sanitized_txs) {
             if let Some(debug_keys) = &self.transaction_debug_keys {
                 for key in tx.message().account_keys().iter() {
@@ -4656,6 +4639,10 @@ impl Bank {
                 }
             }
         }
+        collect_logs_time.stop();
+        timings
+            .saturating_add_in_place(ExecuteTimingType::CollectLogsUs, collect_logs_time.as_us());
+
         if *err_count > 0 {
             debug!(
                 "{} errors of {} txs",
@@ -4933,12 +4920,7 @@ impl Bank {
         }
 
         let mut write_time = Measure::start("write_time");
-        let durable_nonce = {
-            let separate_nonce_from_blockhash = self.separate_nonce_from_blockhash();
-            let durable_nonce =
-                DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash);
-            (durable_nonce, separate_nonce_from_blockhash)
-        };
+        let durable_nonce = DurableNonce::from_blockhash(&last_blockhash);
         self.rc.accounts.store_cached(
             self.slot(),
             sanitized_txs,
@@ -4947,7 +4929,6 @@ impl Bank {
             &self.rent_collector,
             &durable_nonce,
             lamports_per_signature,
-            self.leave_nonce_on_success(),
         );
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
@@ -4995,9 +4976,15 @@ impl Bank {
             update_stakes_cache_time.as_us(),
         );
 
+        let mut update_transaction_statuses_time = Measure::start("update_transaction_statuses");
         self.update_transaction_statuses(sanitized_txs, &execution_results);
         let fee_collection_results =
             self.filter_program_errors_and_collect_fee(sanitized_txs, &execution_results);
+        update_transaction_statuses_time.stop();
+        timings.saturating_add_in_place(
+            ExecuteTimingType::UpdateTransactionStatuses,
+            update_transaction_statuses_time.as_us(),
+        );
 
         TransactionResults {
             fee_collection_results,
@@ -6699,21 +6686,34 @@ impl Bank {
     /// snapshot.
     /// Only called from startup or test code.
     #[must_use]
-    pub fn verify_bank_hash(
-        &self,
-        test_hash_calculation: bool,
-        can_cached_slot_be_unflushed: bool,
-        ignore_mismatch: bool,
-    ) -> bool {
+    pub fn verify_bank_hash(&self, config: VerifyBankHash) -> bool {
+        if config.require_rooted_bank
+            && !self
+                .rc
+                .accounts
+                .accounts_db
+                .accounts_index
+                .is_alive_root(self.slot())
+        {
+            if let Some(parent) = self.parent() {
+                info!("{} is not a root, so attempting to verify bank hash on parent bank at slot: {}", self.slot(), parent.slot());
+                return parent.verify_bank_hash(config);
+            } else {
+                // this will result in mismatch errors
+                // accounts hash calc doesn't include unrooted slots
+                panic!("cannot verify bank hash when bank is not a root");
+            }
+        }
+
         self.rc.accounts.verify_bank_hash_and_lamports(
             self.slot(),
             &self.ancestors,
             self.capitalization(),
-            test_hash_calculation,
+            config.test_hash_calculation,
             self.epoch_schedule(),
             &self.rent_collector,
-            can_cached_slot_be_unflushed,
-            ignore_mismatch,
+            config.can_cached_slot_be_unflushed,
+            config.ignore_mismatch,
         )
     }
 
@@ -6915,21 +6915,9 @@ impl Bank {
         last_full_snapshot_slot: Option<Slot>,
     ) -> bool {
         let mut clean_time = Measure::start("clean");
-        if !accounts_db_skip_shrink {
-            if self.slot() > 0 {
-                info!("cleaning..");
-                self.clean_accounts(true, true, last_full_snapshot_slot);
-            }
-        } else {
-            // if we are skipping shrink, there should be no uncleaned_roots deferred to later
-            assert_eq!(
-                self.rc
-                    .accounts
-                    .accounts_db
-                    .accounts_index
-                    .uncleaned_roots_len(),
-                0
-            );
+        if !accounts_db_skip_shrink && self.slot() > 0 {
+            info!("cleaning..");
+            self.clean_accounts(true, true, last_full_snapshot_slot);
         }
         clean_time.stop();
 
@@ -6943,7 +6931,12 @@ impl Bank {
         let (mut verify, verify_time_us) = if !self.rc.accounts.accounts_db.skip_initial_hash_calc {
             info!("verify_bank_hash..");
             let mut verify_time = Measure::start("verify_bank_hash");
-            let verify = self.verify_bank_hash(test_hash_calculation, false, false);
+            let verify = self.verify_bank_hash(VerifyBankHash {
+                test_hash_calculation,
+                can_cached_slot_be_unflushed: false,
+                ignore_mismatch: false,
+                require_rooted_bank: false,
+            });
             verify_time.stop();
             (verify, verify_time.as_us())
         } else {
@@ -7271,11 +7264,6 @@ impl Bank {
     pub fn credits_auto_rewind(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::credits_auto_rewind::id())
-    }
-
-    pub fn leave_nonce_on_success(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::leave_nonce_on_success::id())
     }
 
     pub fn send_to_tpu_vote_port_enabled(&self) -> bool {
@@ -7856,18 +7844,14 @@ pub(crate) mod tests {
         let from_address = from.pubkey();
         let to_address = Pubkey::new_unique();
 
-        let durable_nonce =
-            DurableNonce::from_blockhash(&Hash::new_unique(), /*separate_domains:*/ true);
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new_unique());
         let nonce_account = AccountSharedData::new_data(
             43,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(nonce::state::Data::new(
-                    Pubkey::default(),
-                    durable_nonce,
-                    lamports_per_signature,
-                )),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::new(
+                Pubkey::default(),
+                durable_nonce,
+                lamports_per_signature,
+            ))),
             &system_program::id(),
         )
         .unwrap();
@@ -10132,6 +10116,17 @@ pub(crate) mod tests {
         }
     }
 
+    impl VerifyBankHash {
+        fn default_for_test() -> Self {
+            Self {
+                test_hash_calculation: true,
+                can_cached_slot_be_unflushed: false,
+                ignore_mismatch: false,
+                require_rooted_bank: false,
+            }
+        }
+    }
+
     // Test that purging 0 lamports accounts works.
     #[test]
     fn test_purge_empty_accounts() {
@@ -10195,17 +10190,17 @@ pub(crate) mod tests {
         );
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
-        assert!(bank0.verify_bank_hash(true, false, false));
+        assert!(bank0.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         // Squash and then verify hash_internal value
         bank0.freeze();
         bank0.squash();
-        assert!(bank0.verify_bank_hash(true, false, false));
+        assert!(bank0.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         bank1.freeze();
         bank1.squash();
         bank1.update_accounts_hash();
-        assert!(bank1.verify_bank_hash(true, false, false));
+        assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         // keypair should have 0 tokens on both forks
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
@@ -10213,7 +10208,7 @@ pub(crate) mod tests {
         bank1.force_flush_accounts_cache();
         bank1.clean_accounts(false, false, None);
 
-        assert!(bank1.verify_bank_hash(true, false, false));
+        assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
 
     #[test]
@@ -10468,10 +10463,7 @@ pub(crate) mod tests {
         let nonce = Keypair::new();
         let nonce_account = AccountSharedData::new_data(
             min_balance + 42,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(nonce::state::Data::default()),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &system_program::id(),
         )
         .unwrap();
@@ -11320,7 +11312,7 @@ pub(crate) mod tests {
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false, false));
+        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
 
     #[test]
@@ -11345,19 +11337,19 @@ pub(crate) mod tests {
         // Checkpointing should never modify the checkpoint's state once frozen
         let bank0_state = bank0.hash_internal_state();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false, false));
+        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
         let bank3 = Bank::new_from_parent(&bank0, &solana_sdk::pubkey::new_rand(), 2);
         assert_eq!(bank0_state, bank0.hash_internal_state());
-        assert!(bank2.verify_bank_hash(true, false, false));
+        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
         bank3.update_accounts_hash();
-        assert!(bank3.verify_bank_hash(true, false, false));
+        assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
 
         let pubkey2 = solana_sdk::pubkey::new_rand();
         info!("transfer 2 {}", pubkey2);
         bank2.transfer(amount, &mint_keypair, &pubkey2).unwrap();
         bank2.update_accounts_hash();
-        assert!(bank2.verify_bank_hash(true, false, false));
-        assert!(bank3.verify_bank_hash(true, false, false));
+        assert!(bank2.verify_bank_hash(VerifyBankHash::default_for_test()));
+        assert!(bank3.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
 
     #[test]
@@ -12796,12 +12788,9 @@ pub(crate) mod tests {
 
     impl Bank {
         fn next_durable_nonce(&self) -> DurableNonce {
-            let separate_nonce_from_blockhash = self
-                .feature_set
-                .is_active(&feature_set::separate_nonce_from_blockhash::id());
             let hash_queue = self.blockhash_queue.read().unwrap();
             let last_blockhash = hash_queue.last_hash();
-            DurableNonce::from_blockhash(&last_blockhash, separate_nonce_from_blockhash)
+            DurableNonce::from_blockhash(&last_blockhash)
         }
     }
 
@@ -12981,10 +12970,7 @@ pub(crate) mod tests {
         let nonce = Keypair::new();
         let nonce_account = AccountSharedData::new_data(
             42_424_242,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(nonce::state::Data::default()),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::default())),
             &system_program::id(),
         )
         .unwrap();
@@ -13010,18 +12996,14 @@ pub(crate) mod tests {
         let bank = Arc::new(bank);
         let nonce_keypair = Keypair::new();
         let nonce_authority = nonce_keypair.pubkey();
-        let durable_nonce =
-            DurableNonce::from_blockhash(&bank.last_blockhash(), true /* separate domains */);
+        let durable_nonce = DurableNonce::from_blockhash(&bank.last_blockhash());
         let nonce_account = AccountSharedData::new_data(
             42_424_242,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(nonce::state::Data::new(
-                    nonce_authority,
-                    durable_nonce,
-                    5000,
-                )),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(nonce::state::Data::new(
+                nonce_authority,
+                durable_nonce,
+                5000,
+            ))),
             &system_program::id(),
         )
         .unwrap();
@@ -18586,6 +18568,7 @@ pub(crate) mod tests {
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             compute_budget.max_invoke_depth.saturating_add(1),
             number_of_instructions_at_transaction_level,
+            0,
         );
 
         assert_eq!(
