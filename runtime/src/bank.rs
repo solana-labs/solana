@@ -208,7 +208,7 @@ struct RentMetrics {
     collect_us: AtomicU64,
     hash_us: AtomicU64,
     store_us: AtomicU64,
-    count: AtomicU64,
+    count: AtomicUsize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -5377,6 +5377,7 @@ impl Bank {
             time_collecting_rent_us,
             time_hashing_skipped_rewrites_us,
             time_storing_accounts_us,
+            num_accounts: accounts.len(),
         }
     }
 
@@ -5482,6 +5483,7 @@ impl Bank {
             metrics
                 .store_us
                 .fetch_add(results.time_storing_accounts_us, Relaxed);
+            metrics.count.fetch_add(results.num_accounts, Relaxed);
         });
     }
 
@@ -7619,6 +7621,7 @@ struct CollectRentFromAccountsInfo {
     time_collecting_rent_us: u64,
     time_hashing_skipped_rewrites_us: u64,
     time_storing_accounts_us: u64,
+    num_accounts: usize,
 }
 
 /// Return the computed values—of each iteration in the parallel loop inside
@@ -7633,6 +7636,7 @@ struct CollectRentInPartitionInfo {
     time_collecting_rent_us: u64,
     time_hashing_skipped_rewrites_us: u64,
     time_storing_accounts_us: u64,
+    num_accounts: usize,
 }
 
 impl CollectRentInPartitionInfo {
@@ -7649,6 +7653,7 @@ impl CollectRentInPartitionInfo {
             time_collecting_rent_us: info.time_collecting_rent_us,
             time_hashing_skipped_rewrites_us: info.time_hashing_skipped_rewrites_us,
             time_storing_accounts_us: info.time_storing_accounts_us,
+            num_accounts: info.num_accounts,
         }
     }
 
@@ -7677,6 +7682,7 @@ impl CollectRentInPartitionInfo {
             time_storing_accounts_us: lhs
                 .time_storing_accounts_us
                 .saturating_add(rhs.time_storing_accounts_us),
+            num_accounts: lhs.num_accounts.saturating_add(rhs.num_accounts),
         }
     }
 }
