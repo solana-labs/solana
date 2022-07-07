@@ -748,9 +748,9 @@ where
             epoch_schedule: &genesis_config.epoch_schedule,
             rent_collector: &RentCollector::new(
                 genesis_config.epoch_schedule.get_epoch(snapshot_slot),
-                &genesis_config.epoch_schedule,
+                genesis_config.epoch_schedule,
                 slots_per_year,
-                &genesis_config.rent,
+                genesis_config.rent,
             ),
             debug_startup: true,
         },
