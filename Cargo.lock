@@ -2982,9 +2982,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
+checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api",
  "parking_lot_core 0.9.1",
@@ -4199,7 +4199,7 @@ dependencies = [
  "futures 0.3.21",
  "lazy_static",
  "log",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "serial_test_derive",
 ]
 
@@ -5644,7 +5644,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "rand 0.7.3",
  "rustc_version 0.4.0",
  "rustversion",
@@ -5687,7 +5687,7 @@ dependencies = [
  "memoffset",
  "num-derive",
  "num-traits",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "rand 0.7.3",
  "rustc_version 0.4.0",
  "rustversion",
@@ -5772,7 +5772,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "parking_lot 0.12.0",
+ "parking_lot 0.12.1",
  "qstring",
  "semver 1.0.10",
  "solana-sdk 1.11.3",
