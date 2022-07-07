@@ -977,7 +977,9 @@ pub fn process_vote_authorize(
             vote_authorize,        // vote or withdraw
         )
     };
-    let ixs = vec![vote_ix].with_memo(memo).with_compute_unit_price(*compute_unit_price);
+    let ixs = vec![vote_ix]
+        .with_memo(memo)
+        .with_compute_unit_price(*compute_unit_price);
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 

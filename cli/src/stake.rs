@@ -1529,7 +1529,9 @@ pub fn process_stake_authorize(
             ));
         }
     }
-    ixs = ixs.with_memo(memo).with_compute_unit_price(*compute_unit_price);
+    ixs = ixs
+        .with_memo(memo)
+        .with_compute_unit_price(*compute_unit_price);
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 

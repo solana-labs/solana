@@ -2071,6 +2071,7 @@ mod tests {
             nonce_authority: 0,
             memo: None,
             fee_payer: 0,
+            compute_unit_price: None,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         let result = process_command(&config);
@@ -2113,6 +2114,7 @@ mod tests {
             fee_payer: 0,
             authorized: 0,
             new_authorized: None,
+            compute_unit_price: None,
         };
         let result = process_command(&vote_config);
         assert!(result.is_ok());
@@ -2130,6 +2132,7 @@ mod tests {
             nonce_authority: 0,
             memo: None,
             fee_payer: 0,
+            compute_unit_price: None,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -2157,6 +2160,7 @@ mod tests {
             memo: None,
             fee_payer: 0,
             from: 0,
+            compute_unit_price: None,
         };
         config.signers = vec![&keypair, &bob_keypair];
         let result = process_command(&config);
@@ -2178,6 +2182,7 @@ mod tests {
             memo: None,
             seed: None,
             fee_payer: 0,
+            compute_unit_price: None,
         };
         config.signers = vec![&keypair];
         let result = process_command(&config);
@@ -2196,6 +2201,7 @@ mod tests {
             memo: None,
             seed: None,
             fee_payer: 0,
+            compute_unit_price: None,
         };
         let result = process_command(&config);
         assert!(result.is_ok());
@@ -2215,6 +2221,7 @@ mod tests {
             seed: None,
             lamports: 30,
             fee_payer: 0,
+            compute_unit_price: None,
         };
         config.signers = vec![&keypair, &split_stake_account];
         let result = process_command(&config);
@@ -2234,6 +2241,7 @@ mod tests {
             nonce_authority: 0,
             memo: None,
             fee_payer: 0,
+            compute_unit_price: None,
         };
         config.signers = vec![&keypair, &merge_stake_account];
         let result = process_command(&config);
@@ -2313,6 +2321,7 @@ mod tests {
             nonce_authority: 0,
             memo: None,
             fee_payer: 0,
+            compute_unit_price: None,
         };
         config.signers = vec![&keypair, &bob_keypair, &identity_keypair];
         assert!(process_command(&config).is_err());
@@ -2330,6 +2339,7 @@ mod tests {
             fee_payer: 0,
             authorized: 0,
             new_authorized: None,
+            compute_unit_price: None,
         };
         assert!(process_command(&config).is_err());
 
@@ -2344,6 +2354,7 @@ mod tests {
             nonce_authority: 0,
             memo: None,
             fee_payer: 0,
+            compute_unit_price: None,
         };
         assert!(process_command(&config).is_err());
 
@@ -2448,6 +2459,7 @@ mod tests {
                     fee_payer: 0,
                     derived_address_seed: None,
                     derived_address_program_id: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2475,6 +2487,7 @@ mod tests {
                     fee_payer: 0,
                     derived_address_seed: None,
                     derived_address_program_id: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2507,6 +2520,7 @@ mod tests {
                     fee_payer: 0,
                     derived_address_seed: None,
                     derived_address_program_id: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2542,6 +2556,7 @@ mod tests {
                     fee_payer: 0,
                     derived_address_seed: None,
                     derived_address_program_id: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2585,6 +2600,7 @@ mod tests {
                     fee_payer: 0,
                     derived_address_seed: None,
                     derived_address_program_id: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![Presigner::new(&from_pubkey, &from_sig).into()],
             }
@@ -2629,6 +2645,7 @@ mod tests {
                     fee_payer: 0,
                     derived_address_seed: None,
                     derived_address_program_id: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2668,6 +2685,7 @@ mod tests {
                     fee_payer: 0,
                     derived_address_seed: Some(derived_address_seed),
                     derived_address_program_id: Some(stake::program::id()),
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             }

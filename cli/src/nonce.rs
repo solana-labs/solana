@@ -717,7 +717,9 @@ pub(crate) fn process_upgrade_nonce_account(
     compute_unit_price: &Option<u64>,
 ) -> ProcessResult {
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
-    let ixs = vec![upgrade_nonce_account(nonce_account)].with_memo(memo).with_compute_unit_price(*compute_unit_price);
+    let ixs = vec![upgrade_nonce_account(nonce_account)]
+        .with_memo(memo)
+        .with_compute_unit_price(*compute_unit_price);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, latest_blockhash)?;
@@ -981,7 +983,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     destination_account_pubkey: nonce_account_pubkey,
-                    lamports: 42_000_000_000
+                    lamports: 42_000_000_000,
                     compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
@@ -1011,7 +1013,7 @@ mod tests {
                     nonce_authority: 1,
                     memo: None,
                     destination_account_pubkey: nonce_account_pubkey,
-                    lamports: 42_000_000_000
+                    lamports: 42_000_000_000,
                     compute_unit_price: None,
                 },
                 signers: vec![
