@@ -2278,7 +2278,7 @@ impl ReplayStage {
                     }
 
                     let parent_slot = bank.parent_slot();
-                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(&bank);
+                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(bank);
                     let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
                         let stats = progress_lock
                             .get(&parent_slot)
@@ -2292,7 +2292,7 @@ impl ReplayStage {
 
                     let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
                         ForkProgress::new_from_bank(
-                            &bank,
+                            bank,
                             &my_pubkey.read().unwrap(),
                             &vote_account.read().unwrap(),
                             prev_leader_slot,
@@ -2313,7 +2313,7 @@ impl ReplayStage {
                         let mut replay_blockstore_time =
                             Measure::start("replay_blockstore_into_bank");
                         let blockstore_result = Self::replay_blockstore_into_bank(
-                            &bank,
+                            bank,
                             &blockstore.read().unwrap(),
                             &replay_stats,
                             &replay_progress,
@@ -2330,10 +2330,8 @@ impl ReplayStage {
                         longest_replay_time_us
                             .fetch_max(replay_blockstore_time.as_us(), Ordering::Relaxed);
                         replay_result.replay_result = Some(blockstore_result);
-                        return replay_result;
-                    } else {
-                        return replay_result;
                     }
+                    replay_result
                 })
                 .collect()
         });
@@ -2354,7 +2352,7 @@ impl ReplayStage {
                         // Error means the slot needs to be marked as dead
                         Self::mark_dead_slot(
                             &blockstore.read().unwrap(),
-                            &bank,
+                            bank,
                             bank_forks_read_lock.root(),
                             &err,
                             rpc_subscriptions,
@@ -2396,7 +2394,7 @@ impl ReplayStage {
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
                 if let Some(transaction_status_sender) = *transaction_status_sender.read().unwrap()
                 {
-                    transaction_status_sender.send_transaction_status_freeze_message(&bank);
+                    transaction_status_sender.send_transaction_status_freeze_message(bank);
                 }
                 bank.freeze();
                 // report cost tracker stats
@@ -2442,7 +2440,7 @@ impl ReplayStage {
                         .send(BankNotification::Frozen(bank.clone()))
                         .unwrap_or_else(|err| warn!("bank_notification_sender failed: {:?}", err));
                 }
-                blockstore_processor::cache_block_meta(&bank, cache_block_meta_sender);
+                blockstore_processor::cache_block_meta(bank, cache_block_meta_sender);
 
                 let bank_hash = bank.hash();
                 if let Some(new_frozen_voters) =
@@ -2457,7 +2455,7 @@ impl ReplayStage {
                         );
                     }
                 }
-                Self::record_rewards(&bank, rewards_recorder_sender);
+                Self::record_rewards(bank, rewards_recorder_sender);
                 if let Some(ref block_metadata_notifier) = block_metadata_notifier {
                     let block_metadata_notifier = block_metadata_notifier.read().unwrap();
                     block_metadata_notifier.notify_block_metadata(
