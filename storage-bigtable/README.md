@@ -23,5 +23,6 @@ requested using the provided credentials.
 
 #### Forward proxy
 Export `BIGTABLE_PROXY` environment variable for the forward proxy as you would
-for `HTTP_PROXY`. This will establish a tunnel through the forward proxy for
-gRPC traffic (the tunneled traffic will still use TLS as normal).
+for `HTTP_PROXY` (requires to call `LedgerStorageConfig::with_proxy_connector`
+for creating custom connector). This will establish a tunnel through the
+forward proxy for gRPC traffic (the tunneled traffic will still use TLS as normal).

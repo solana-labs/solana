@@ -60,6 +60,9 @@ pub enum Error {
 
     #[error("tokio error")]
     TokioJoinError(JoinError),
+
+    #[error("Invalid URI {0}: {1}")]
+    InvalidUri(String, String),
 }
 
 impl std::convert::From<bigtable::Error> for Error {
@@ -397,6 +400,34 @@ impl Default for LedgerStorageConfig<HttpConnector> {
             app_profile_id: DEFAULT_APP_PROFILE_ID.to_string(),
             connector: None,
         }
+    }
+}
+
+impl LedgerStorageConfig<hyper_proxy::ProxyConnector<HttpConnector>> {
+    pub fn with_proxy_connector(&mut self, proxy_uri: Option<String>) -> Result<()> {
+        let proxy_uri = match (proxy_uri, std::env::var("BIGTABLE_PROXY")) {
+            (Some(proxy_uri), _) => proxy_uri,
+            (None, Ok(proxy_uri)) => proxy_uri,
+            (None, Err(err)) => return Err(Error::InvalidUri("".to_string(), err.to_string())),
+        };
+
+        let proxy = hyper_proxy::Proxy::new(
+            hyper_proxy::Intercept::All,
+            proxy_uri
+                .parse::<http::Uri>()
+                .map_err(|err| Error::InvalidUri(proxy_uri, err.to_string()))?,
+        );
+
+        let mut http = HttpConnector::new();
+        http.enforce_http(false);
+        http.set_nodelay(true);
+
+        let mut proxy_connector = hyper_proxy::ProxyConnector::from_proxy(http, proxy)?;
+        // tonic handles TLS as a separate layer
+        proxy_connector.set_tls(None);
+        self.connector = Some(proxy_connector);
+
+        Ok(())
     }
 }
 
