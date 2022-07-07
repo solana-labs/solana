@@ -188,9 +188,9 @@ impl<'a> TypeContext<'a> for Context {
     where
         Self: std::marker::Sized,
     {
-        // ONLY FOR THE BACKPORT, extra field is serialized on master
         let ancestors = HashMap::from(&serializable_bank.bank.ancestors);
         let fields = serializable_bank.bank.get_fields_to_serialize(&ancestors);
+        let lamports_per_signature = fields.fee_rate_governor.lamports_per_signature;
         (
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
@@ -199,6 +199,9 @@ impl<'a> TypeContext<'a> for Context {
                 account_storage_entries: serializable_bank.snapshot_storages,
                 phantom: std::marker::PhantomData::default(),
             },
+            // Field that isn't part SerializableVersionedBank, but that we want to
+            // be able to store / read back on restart
+            lamports_per_signature,
         )
             .serialize(serializer)
     }
@@ -262,7 +265,21 @@ impl<'a> TypeContext<'a> for Context {
             .clone();
 
         let mut serialize_account_storage_timer = Measure::start("serialize_account_storage_ms");
-        let result = (entries, version, slot, hash).serialize(serializer);
+
+        // Serialize historical_roots and historical_roots_with_hash default data; defaults are
+        // used for the sake of being able to backport serializing lamports_per_signature while
+        // keeping snapshots produced by v1.10 and master/v1.11 clients compatible
+        let historical_roots = Vec::<Slot>::default();
+        let historical_roots_with_hash = Vec::<(Slot, Hash)>::default();
+        let result = (
+            entries,
+            version,
+            slot,
+            hash,
+            historical_roots,
+            historical_roots_with_hash,
+        )
+            .serialize(serializer);
         serialize_account_storage_timer.stop();
         datapoint_info!(
             "serialize_account_storage_ms",
