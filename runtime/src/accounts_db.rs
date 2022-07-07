@@ -30,7 +30,7 @@ use {
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
             AccountsIndexRootsStats, AccountsIndexScanResult, IndexKey, IndexValue, IsCached,
-            RefCount, ScanConfig, ScanResult, SlotList, SlotSlice, ZeroLamport,
+            RefCount, ScanConfig, ScanResult, SlotList, SlotSlice, UpsertReclaim, ZeroLamport,
             ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
@@ -7107,7 +7107,7 @@ impl AccountsDb {
         &self,
         infos: Vec<AccountInfo>,
         accounts: impl StorableAccounts<'a, T>,
-        previous_slot_entry_was_cached: bool,
+        reclaim: UpsertReclaim,
     ) -> SlotList<AccountInfo> {
         let target_slot = accounts.target_slot();
         // using a thread pool here results in deadlock panics from bank_hashes.write()
@@ -7130,7 +7130,7 @@ impl AccountsDb {
                     &self.account_indexes,
                     info,
                     &mut reclaims,
-                    previous_slot_entry_was_cached,
+                    reclaim,
                 );
             });
             reclaims
@@ -7716,7 +7716,11 @@ impl AccountsDb {
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
-        let previous_slot_entry_was_cached = self.caching_enabled && is_cached_store;
+        let reclaim = if self.caching_enabled && is_cached_store {
+            UpsertReclaim::PreviousSlotEntryWasCached
+        } else {
+            UpsertReclaim::PopulateReclaims
+        };
 
         // if we are squashing a single slot, then we can expect a single dead slot
         let expected_single_dead_slot =
@@ -7726,7 +7730,7 @@ impl AccountsDb {
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
-        let mut reclaims = self.update_index(infos, accounts, previous_slot_entry_was_cached);
+        let mut reclaims = self.update_index(infos, accounts, reclaim);
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
@@ -12690,7 +12694,8 @@ pub mod tests {
         );
     }
 
-    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: bool = false;
+    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: UpsertReclaim =
+        UpsertReclaim::PopulateReclaims;
 
     #[test]
     fn test_delete_dependencies() {
