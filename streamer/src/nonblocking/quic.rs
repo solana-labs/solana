@@ -134,11 +134,12 @@ fn prune_unstaked_connection_table(
 }
 
 fn get_connection_stake(connection: &Connection, _staked_nodes: Arc<RwLock<StakedNodes>>) -> u64 {
-    if let Some(der_cert) = connection
+    if let Some(der_certs) = connection
         .peer_identity()
-        .and_then(|der_cert_any| der_cert_any.downcast::<Vec<u8>>().ok())
+        .and_then(|der_cert_any| der_cert_any.downcast::<Vec<rustls::Certificate>>().ok())
     {
-        let x509_cert = X509Certificate::from_der(&der_cert);
+        let der_cert = &der_certs[0];
+        let x509_cert = X509Certificate::from_der(der_cert.as_ref());
         if let Ok((_, cert)) = x509_cert {
             let pubkey_info = cert.public_key();
             let pubkey = pubkey_info.parsed();
@@ -908,6 +909,9 @@ pub mod test {
 
         // Send one byte to start the stream
         let mut s1 = conn1.connection.open_uni().await.unwrap();
+
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        get_connection_stake(&conn1.connection, staked_nodes);
         s1.write_all(&[0u8]).await.unwrap_or_default();
 
         // Wait long enough for the stream to timeout in receiving chunks
