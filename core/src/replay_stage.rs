@@ -196,7 +196,7 @@ pub struct ReplayTiming {
     generate_new_bank_forks_get_slots_since_us: u64,
     generate_new_bank_forks_loop_us: u64,
     generate_new_bank_forks_write_lock_us: u64,
-    replay_blockstore_us: u64,
+    replay_blockstore_us: u64, //< When processing forks concurrently, only captures the longest fork
 }
 impl ReplayTiming {
     #[allow(clippy::too_many_arguments)]
@@ -2233,13 +2233,12 @@ impl ReplayStage {
         transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
     ) -> bool {
-        // Writable
         let mut did_complete_bank = false;
         let mut tx_count = 0;
+
+        // Make shared structures thread safe.
         let progress = RwLock::new(progress);
         let longest_replay_time_us = AtomicU64::new(0);
-
-        // Read only
         let blockstore = RwLock::new(blockstore);
         let my_pubkey = RwLock::new(my_pubkey);
         let vote_account = RwLock::new(vote_account);
@@ -2249,7 +2248,9 @@ impl ReplayStage {
         let transaction_cost_metrics_sender = RwLock::new(transaction_cost_metrics_sender);
         let bank_forks_read_lock = bank_forks.read().unwrap();
         let active_banks = bank_forks_read_lock.active_banks();
+        trace!("{} active bank(s) to replay", active_banks.len());
 
+        // Allow for concurrent replaying of slots from different forks.
         let replay_result_vec: Vec<ReplaySlotFromBlockstore> = PAR_THREAD_POOL.install(|| {
             active_banks
                 .into_par_iter()
@@ -2259,11 +2260,11 @@ impl ReplayStage {
                         bank,
                         replay_result: None,
                     };
-                    let idx = PAR_THREAD_POOL.current_thread_index().unwrap();
                     let bank_slot = bank.slot();
-                    warn!(
-                        "REPLAY ACTIVE BANK START: SLOT {} THREAD IDX {}",
-                        bank_slot, idx
+                    trace!(
+                        "Replay active bank: slot {}, thread_idx {}",
+                        bank_slot,
+                        PAR_THREAD_POOL.current_thread_index().unwrap_or_default()
                     );
                     let mut progress_lock = progress.write().unwrap();
                     if progress_lock
@@ -2306,10 +2307,6 @@ impl ReplayStage {
                     drop(progress_lock);
 
                     if bank.collector_id() != *my_pubkey.read().unwrap() {
-                        warn!(
-                            "REPLAY ACTIVE BANK BLOCKSTORE START: SLOT {} THREAD IDX {}",
-                            bank_slot, idx
-                        );
                         let mut replay_blockstore_time =
                             Measure::start("replay_blockstore_into_bank");
                         let blockstore_result = Self::replay_blockstore_into_bank(
@@ -2323,20 +2320,19 @@ impl ReplayStage {
                             &verify_recyclers.read().unwrap(),
                         );
                         replay_blockstore_time.stop();
-                        warn!(
-                            "REPLAY ACTIVE BANK BLOCKSTORE END: SLOT {} THREAD IDX {}",
-                            bank_slot, idx
-                        );
+                        replay_result.replay_result = Some(blockstore_result);
                         longest_replay_time_us
                             .fetch_max(replay_blockstore_time.as_us(), Ordering::Relaxed);
-                        replay_result.replay_result = Some(blockstore_result);
                     }
                     replay_result
                 })
                 .collect()
         });
+        // Accumulating time across all slots could inflate this number and make it seem like an
+        // overly large amount of time is being spent on blockstore compared to other activities.
         replay_timing.replay_blockstore_us += longest_replay_time_us.load(Ordering::Relaxed);
 
+        // TODO: See if processing of blockstore replay results and bank completion can be made thread safe.
         let mut execute_timings = ExecuteTimings::default();
         for replay_result in replay_result_vec {
             if replay_result.slot_is_dead {
@@ -2373,13 +2369,11 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
-                warn!("REPLAY ACTIVE BANK COMPLETED SLOT {}", bank_slot);
                 let mut bank_complete_time = Measure::start("bank_complete_time");
-
                 let mut progress_lock = progress.write().unwrap();
                 let bank_progress = progress_lock
                     .get_mut(&bank.slot())
-                    .expect("Bank fork progress entry is missing");
+                    .expect("Bank fork progress entry missing for completed bank");
 
                 let replay_stats = bank_progress.replay_stats.clone();
                 let r_replay_stats = replay_stats.read().unwrap();
@@ -2414,7 +2408,6 @@ impl ReplayStage {
                 );
 
                 bank_progress.fork_stats.bank_hash = Some(bank.hash());
-                drop(progress_lock);
 
                 let bank_frozen_state = BankFrozenState::new_from_state(
                     bank.slot(),
@@ -2476,8 +2469,7 @@ impl ReplayStage {
                 );
                 execute_timings.accumulate(&r_replay_stats.execute_timings);
             } else {
-                warn!("REPLAY ACTIVE BANK NOT COMPLETED: SLOT {}", bank_slot);
-                warn!(
+                trace!(
                     "bank {} not completed tick_height: {}, max_tick_height: {}",
                     bank.slot(),
                     bank.tick_height(),
