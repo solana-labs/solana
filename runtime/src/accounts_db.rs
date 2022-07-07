@@ -3095,14 +3095,13 @@ impl AccountsDb {
         let mut original_bytes = 0;
         let mut num_stores = 0;
         for store in stores {
-            let mut start = 0;
             original_bytes += store.total_bytes();
             let store_id = store.append_vec_id();
-            while let Some((account, next)) = store.accounts.get_account(start) {
+            AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
                 let new_entry = FoundStoredAccount {
+                    account_size: account.stored_size,
                     account,
                     store_id,
-                    account_size: next - start,
                 };
                 match stored_accounts.entry(new_entry.account.meta.pubkey) {
                     Entry::Occupied(mut occupied_entry) => {
@@ -3116,8 +3115,7 @@ impl AccountsDb {
                         vacant_entry.insert(new_entry);
                     }
                 }
-                start = next;
-            }
+            });
             num_stores += 1;
         }
         (stored_accounts, num_stores, original_bytes)
