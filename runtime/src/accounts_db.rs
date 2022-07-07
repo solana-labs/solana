@@ -2192,7 +2192,7 @@ impl AccountsDb {
     }
 
     fn calc_delete_dependencies(
-        purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
+        purges: &HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
         store_counts: &mut HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
     ) {
         // Another pass to check if there are some filtered accounts which
@@ -2200,7 +2200,7 @@ impl AccountsDb {
         // then increment their storage count.
         let mut already_counted = HashSet::new();
         for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
-            let no_delete = if account_infos.len() as u64 != *ref_count_from_storage {
+            let no_delete = if account_infos.len() as RefCount != *ref_count_from_storage {
                 debug!(
                     "calc_delete_dependencies(),
                     pubkey: {},
