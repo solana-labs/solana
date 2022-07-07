@@ -250,8 +250,8 @@ impl SanitizedTransaction {
     }
 
     /// If the transaction uses a durable nonce, return the pubkey of the nonce account
-    pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
-        self.message.get_durable_nonce(nonce_must_be_writable)
+    pub fn get_durable_nonce(&self) -> Option<&Pubkey> {
+        self.message.get_durable_nonce()
     }
 
     /// Return the serialized message data to sign.
