@@ -45,7 +45,7 @@ use {
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
     solana_client::{
-        connection_cache::{ConnectionCache, UseQUIC, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
         rpc_client::RpcClient,
         tpu_connection::TpuConnection,
     },
@@ -423,8 +423,10 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     //let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
     //let udp_client = UdpTpuConnection::new(target, connection_cache_stats);
 
-    let tpu_use_quic = UseQUIC::new(tpu_use_quic).expect("Failed to initialize QUIC flags");
-    let connection_cache = ConnectionCache::new(tpu_use_quic, DEFAULT_TPU_CONNECTION_POOL_SIZE);
+    let connection_cache = match tpu_use_quic {
+        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+    };
     let connection = connection_cache.get_connection(&target);
 
     let mut count = 0;
@@ -622,14 +624,15 @@ fn main() {
             exit(1);
         });
 
-        let tpu_use_quic =
-            UseQUIC::new(cmd_params.tpu_use_quic).expect("Failed to initialize QUIC flags");
-        let connection_cache = Arc::new(ConnectionCache::new(
-            tpu_use_quic,
-            DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        ));
-        let (client, num_clients) =
-            get_multi_client(&validators, &SocketAddrSpace::Unspecified, connection_cache);
+        let connection_cache = match cmd_params.tpu_use_quic {
+            true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+            false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        };
+        let (client, num_clients) = get_multi_client(
+            &validators,
+            &SocketAddrSpace::Unspecified,
+            Arc::new(connection_cache),
+        );
         if validators.len() < num_clients {
             eprintln!(
                 "Error: Insufficient nodes discovered.  Expecting {} or more",

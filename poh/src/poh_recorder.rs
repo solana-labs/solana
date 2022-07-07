@@ -32,7 +32,7 @@ use {
         cmp,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
+            Arc, Mutex, RwLock,
         },
         time::{Duration, Instant},
     },
@@ -949,7 +949,7 @@ pub fn create_test_recorder(
     leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
 ) -> (
     Arc<AtomicBool>,
-    Arc<Mutex<PohRecorder>>,
+    Arc<RwLock<PohRecorder>>,
     PohService,
     Receiver<WorkingBankEntry>,
 ) {
@@ -973,7 +973,7 @@ pub fn create_test_recorder(
     );
     poh_recorder.set_bank(bank, false);
 
-    let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+    let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
         poh_recorder.clone(),
         &poh_config,

@@ -3,18 +3,23 @@ use {
     solana_perf::packet::{Packet, PacketBatch},
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
+        feature_set,
         hash::Hash,
         message::{Message, SanitizedVersionedMessage},
         sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
-        transaction::{SanitizedVersionedTransaction, Transaction, VersionedTransaction},
+        transaction::{
+            AddressLoader, SanitizedTransaction, SanitizedVersionedTransaction, Transaction,
+            VersionedTransaction,
+        },
     },
     std::{
         cmp::Ordering,
         collections::{hash_map::Entry, HashMap},
         mem::size_of,
         rc::Rc,
+        sync::Arc,
     },
     thiserror::Error,
 };
@@ -36,8 +41,8 @@ pub enum DeserializedPacketError {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct TransactionPriorityDetails {
-    priority: u64,
-    compute_unit_limit: u64,
+    pub priority: u64,
+    pub compute_unit_limit: u64,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -93,7 +98,7 @@ impl DeserializedPacket {
     }
 
     #[cfg(test)]
-    fn new_with_priority_details(
+    pub fn new_with_priority_details(
         packet: Packet,
         priority_details: TransactionPriorityDetails,
     ) -> Result<Self, DeserializedPacketError> {
@@ -254,12 +259,40 @@ impl UnprocessedPacketBatches {
         self.message_hash_to_transaction.iter_mut().map(|(_k, v)| v)
     }
 
+    /// Iterates DeserializedPackets in descending priority (max-first) order,
+    /// calls FnMut for each DeserializedPacket.
+    pub fn iter_desc<F>(&mut self, mut f: F)
+    where
+        F: FnMut(&mut DeserializedPacket) -> bool,
+    {
+        let mut packet_priority_queue_clone = self.packet_priority_queue.clone();
+
+        for immutable_packet in packet_priority_queue_clone.drain_desc() {
+            match self
+                .message_hash_to_transaction
+                .entry(*immutable_packet.message_hash())
+            {
+                Entry::Vacant(_vacant_entry) => {
+                    panic!(
+                        "entry {} must exist to be consistent with `packet_priority_queue`",
+                        immutable_packet.message_hash()
+                    );
+                }
+                Entry::Occupied(mut occupied_entry) => {
+                    if !f(occupied_entry.get_mut()) {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     pub fn retain<F>(&mut self, mut f: F)
     where
         F: FnMut(&mut DeserializedPacket) -> bool,
     {
         // TODO: optimize this only when number of packets
-        // with oudated blockhash is high
+        // with outdated blockhash is high
         let new_packet_priority_queue: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = self
             .packet_priority_queue
             .drain()
@@ -415,14 +448,45 @@ pub fn transactions_to_deserialized_packets(
         .collect()
 }
 
+// This function deserializes packets into transactions, computes the blake3 hash of transaction
+// messages, and verifies secp256k1 instructions. A list of sanitized transactions are returned
+// with their packet indexes.
+#[allow(clippy::needless_collect)]
+pub fn transaction_from_deserialized_packet(
+    deserialized_packet: &ImmutableDeserializedPacket,
+    feature_set: &Arc<feature_set::FeatureSet>,
+    votes_only: bool,
+    address_loader: impl AddressLoader,
+) -> Option<SanitizedTransaction> {
+    if votes_only && !deserialized_packet.is_simple_vote() {
+        return None;
+    }
+
+    let tx = SanitizedTransaction::try_new(
+        deserialized_packet.transaction().clone(),
+        *deserialized_packet.message_hash(),
+        deserialized_packet.is_simple_vote(),
+        address_loader,
+    )
+    .ok()?;
+    tx.verify_precompiles(feature_set).ok()?;
+    Some(tx)
+}
+
 #[cfg(test)]
 mod tests {
     use {
         super::*,
+        solana_perf::packet::PacketFlags,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, message::VersionedMessage, pubkey::Pubkey,
-            signature::Keypair, system_instruction, system_transaction,
+            compute_budget::ComputeBudgetInstruction,
+            message::VersionedMessage,
+            pubkey::Pubkey,
+            signature::{Keypair, Signer},
+            system_instruction, system_transaction,
+            transaction::{SimpleAddressLoader, Transaction},
         },
+        solana_vote_program::vote_transaction,
         std::net::IpAddr,
     };
 
@@ -621,5 +685,133 @@ mod tests {
                         as u64
             })
         );
+    }
+
+    #[cfg(test)]
+    fn make_test_packets(
+        transactions: Vec<Transaction>,
+        vote_indexes: Vec<usize>,
+    ) -> Vec<DeserializedPacket> {
+        let capacity = transactions.len();
+        let mut packet_vector = Vec::with_capacity(capacity);
+        for tx in transactions.iter() {
+            packet_vector.push(Packet::from_data(None, &tx).unwrap());
+        }
+        for index in vote_indexes.iter() {
+            packet_vector[*index].meta.flags |= PacketFlags::SIMPLE_VOTE_TX;
+        }
+
+        packet_vector
+            .into_iter()
+            .map(|p| DeserializedPacket::new(p).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn test_transaction_from_deserialized_packet() {
+        use solana_sdk::feature_set::FeatureSet;
+        let keypair = Keypair::new();
+        let transfer_tx =
+            system_transaction::transfer(&keypair, &keypair.pubkey(), 1, Hash::default());
+        let vote_tx = vote_transaction::new_vote_transaction(
+            vec![42],
+            Hash::default(),
+            Hash::default(),
+            &keypair,
+            &keypair,
+            &keypair,
+            None,
+        );
+
+        // packets with no votes
+        {
+            let vote_indexes = vec![];
+            let packet_vector =
+                make_test_packets(vec![transfer_tx.clone(), transfer_tx.clone()], vote_indexes);
+
+            let mut votes_only = false;
+            let txs = packet_vector.iter().filter_map(|tx| {
+                transaction_from_deserialized_packet(
+                    tx.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    votes_only,
+                    SimpleAddressLoader::Disabled,
+                )
+            });
+            assert_eq!(2, txs.count());
+
+            votes_only = true;
+            let txs = packet_vector.iter().filter_map(|tx| {
+                transaction_from_deserialized_packet(
+                    tx.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    votes_only,
+                    SimpleAddressLoader::Disabled,
+                )
+            });
+            assert_eq!(0, txs.count());
+        }
+
+        // packets with some votes
+        {
+            let vote_indexes = vec![0, 2];
+            let packet_vector = make_test_packets(
+                vec![vote_tx.clone(), transfer_tx, vote_tx.clone()],
+                vote_indexes,
+            );
+
+            let mut votes_only = false;
+            let txs = packet_vector.iter().filter_map(|tx| {
+                transaction_from_deserialized_packet(
+                    tx.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    votes_only,
+                    SimpleAddressLoader::Disabled,
+                )
+            });
+            assert_eq!(3, txs.count());
+
+            votes_only = true;
+            let txs = packet_vector.iter().filter_map(|tx| {
+                transaction_from_deserialized_packet(
+                    tx.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    votes_only,
+                    SimpleAddressLoader::Disabled,
+                )
+            });
+            assert_eq!(2, txs.count());
+        }
+
+        // packets with all votes
+        {
+            let vote_indexes = vec![0, 1, 2];
+            let packet_vector = make_test_packets(
+                vec![vote_tx.clone(), vote_tx.clone(), vote_tx],
+                vote_indexes,
+            );
+
+            let mut votes_only = false;
+            let txs = packet_vector.iter().filter_map(|tx| {
+                transaction_from_deserialized_packet(
+                    tx.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    votes_only,
+                    SimpleAddressLoader::Disabled,
+                )
+            });
+            assert_eq!(3, txs.count());
+
+            votes_only = true;
+            let txs = packet_vector.iter().filter_map(|tx| {
+                transaction_from_deserialized_packet(
+                    tx.immutable_section(),
+                    &Arc::new(FeatureSet::default()),
+                    votes_only,
+                    SimpleAddressLoader::Disabled,
+                )
+            });
+            assert_eq!(3, txs.count());
+        }
     }
 }

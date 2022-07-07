@@ -266,7 +266,7 @@ impl SlotInfoInEpoch {
 impl ExpectedRentCollection {
     /// 'account' is being loaded from 'storage_slot' in 'bank_slot'
     /// adjusts 'account.rent_epoch' if we skipped the last rewrite on this account
-    pub fn maybe_update_rent_epoch_on_load(
+    pub(crate) fn maybe_update_rent_epoch_on_load(
         account: &mut AccountSharedData,
         storage_slot: &SlotInfoInEpoch,
         bank_slot: &SlotInfoInEpoch,
@@ -302,14 +302,17 @@ impl ExpectedRentCollection {
         pubkey: &Pubkey,
         rewrites_skipped_this_slot: &Rewrites,
     ) -> Option<Epoch> {
-        if let RentResult::CollectRent((next_epoch, rent_due)) =
-            rent_collector.calculate_rent_result(pubkey, account, None)
+        let next_epoch = match rent_collector.calculate_rent_result(pubkey, account, None) {
+            RentResult::LeaveAloneNoRent => return None,
+            RentResult::CollectRent {
+                new_rent_epoch,
+                rent_due: 0,
+            } => new_rent_epoch,
+            // Rent is due on this account in this epoch,
+            // so we did not skip a rewrite.
+            RentResult::CollectRent { .. } => return None,
+        };
         {
-            if rent_due != 0 {
-                // rent is due on this account in this epoch, so we did not skip a rewrite
-                return None;
-            }
-
             // grab epoch infno for bank slot and storage slot
             let bank_info = bank_slot.get_epoch_info(epoch_schedule);
             let (current_epoch, partition_from_current_slot) =
@@ -533,7 +536,10 @@ impl ExpectedRentCollection {
             rent_collector.calculate_rent_result(pubkey, loaded_account, filler_account_suffix);
         let current_rent_epoch = loaded_account.rent_epoch();
         let new_rent_epoch = match rent_result {
-            RentResult::CollectRent((next_epoch, rent_due)) => {
+            RentResult::CollectRent {
+                new_rent_epoch: next_epoch,
+                rent_due,
+            } => {
                 if next_epoch > current_rent_epoch && rent_due != 0 {
                     // this is an account that would have had rent collected since this storage slot, so just use the hash we have since there must be a newer version of this account already in a newer slot
                     // It would be a waste of time to recalcluate a hash.
@@ -595,9 +601,9 @@ pub mod tests {
         let genesis_config = GenesisConfig::default();
         let mut rent_collector = RentCollector::new(
             epoch,
-            &epoch_schedule,
+            epoch_schedule,
             genesis_config.slots_per_year(),
-            &genesis_config.rent,
+            genesis_config.rent,
         );
         rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
         let find_unskipped_slot = Some;
@@ -976,9 +982,9 @@ pub mod tests {
         let genesis_config = GenesisConfig::default();
         let mut rent_collector = RentCollector::new(
             epoch,
-            &epoch_schedule,
+            epoch_schedule,
             genesis_config.slots_per_year(),
-            &genesis_config.rent,
+            genesis_config.rent,
         );
         rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
 
@@ -1169,9 +1175,9 @@ pub mod tests {
         let genesis_config = GenesisConfig::default();
         let mut rent_collector = RentCollector::new(
             epoch,
-            &epoch_schedule,
+            epoch_schedule,
             genesis_config.slots_per_year(),
-            &genesis_config.rent,
+            genesis_config.rent,
         );
         rent_collector.rent.lamports_per_byte_year = 0; // temporarily disable rent
 

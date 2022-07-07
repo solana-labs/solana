@@ -4278,12 +4278,13 @@ fn adjust_ulimit_nofile(enforce_ulimit_nofile: bool) -> Result<()> {
     }
 
     let mut nofile = get_nofile();
-    if nofile.rlim_cur < desired_nofile {
+    let current = nofile.rlim_cur;
+    if current < desired_nofile {
         nofile.rlim_cur = desired_nofile;
         if unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &nofile) } != 0 {
             error!(
-                "Unable to increase the maximum open file descriptor limit to {}",
-                desired_nofile
+                "Unable to increase the maximum open file descriptor limit to {} from {}",
+                nofile.rlim_cur, current,
             );
 
             if cfg!(target_os = "macos") {

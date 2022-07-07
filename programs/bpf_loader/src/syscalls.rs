@@ -3366,17 +3366,14 @@ mod tests {
          $program_key:ident,
          $loader_key:expr $(,)?) => {
             let $program_key = Pubkey::new_unique();
-            let mut $transaction_context = TransactionContext::new(
-                vec![
-                    (
-                        $loader_key,
-                        AccountSharedData::new(0, 0, &native_loader::id()),
-                    ),
-                    ($program_key, AccountSharedData::new(0, 0, &$loader_key)),
-                ],
-                1,
-                1,
-            );
+            let transaction_accounts = vec![
+                (
+                    $loader_key,
+                    AccountSharedData::new(0, 0, &native_loader::id()),
+                ),
+                ($program_key, AccountSharedData::new(0, 0, &$loader_key)),
+            ];
+            let mut $transaction_context = TransactionContext::new(transaction_accounts, 1, 1, 0);
             let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
             $invoke_context.push(&[], &[0, 1], &[]).unwrap();
         };
