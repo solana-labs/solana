@@ -387,7 +387,7 @@ impl RepairService {
                 info!("repair_stats: {:?}", slot_to_count);
                 if repair_total > 0 {
                     datapoint_info!(
-                        "serve_repair-repair",
+                        "repair_service-my_requests",
                         ("repair-total", repair_total, i64),
                         ("shred-count", repair_stats.shred.count, i64),
                         ("highest-shred-count", repair_stats.highest_shred.count, i64),
@@ -397,7 +397,7 @@ impl RepairService {
                     );
                 }
                 datapoint_info!(
-                    "serve_repair-repair-timing",
+                    "repair_service-repair_timing",
                     ("set-root-elapsed", repair_timing.set_root_elapsed, i64),
                     ("get-votes-elapsed", repair_timing.get_votes_elapsed, i64),
                     ("add-votes-elapsed", repair_timing.add_votes_elapsed, i64),
