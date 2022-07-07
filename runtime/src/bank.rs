@@ -17747,8 +17747,10 @@ pub(crate) mod tests {
 
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.set_accounts_data_size_initial_for_tests(INITIAL_ACCOUNTS_DATA_SIZE);
         bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+        bank.set_accounts_data_size_initial_for_tests(
+            INITIAL_ACCOUNTS_DATA_SIZE - bank.load_accounts_data_size_delta() as u64,
+        );
 
         let mut i = 0;
         let result = loop {
@@ -18585,10 +18587,13 @@ pub(crate) mod tests {
         // Test: Subtraction saturates at 0
         {
             let bank = Bank::new_for_tests(&genesis_config);
+            let initial_data_size = bank.load_accounts_data_size() as i64;
             let data_size = 567;
             bank.accounts_data_size_delta_on_chain
                 .store(data_size, Release);
-            bank.update_accounts_data_size_delta_on_chain(-(data_size + 1));
+            bank.update_accounts_data_size_delta_on_chain(
+                (initial_data_size + data_size + 1).saturating_neg(),
+            );
             assert_eq!(bank.load_accounts_data_size(), 0);
         }
 
@@ -19219,11 +19224,18 @@ pub(crate) mod tests {
         }
 
         // Collect rent for real
+        let accounts_data_size_delta_before_collecting_rent = bank.load_accounts_data_size_delta();
         bank.collect_rent_eagerly(false);
+        let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
+
+        let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent as i64
+            - accounts_data_size_delta_before_collecting_rent as i64;
+        assert!(accounts_data_size_delta_delta < 0);
+        let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
 
         // Ensure the account is reclaimed by rent collection
-        // NOTE: Use `<=` here (instead of `==`) since other accounts could
+        // NOTE: Use `>=` here (instead of `==`) since other accounts could
         // also be reclaimed by rent collection.
-        assert!(bank.load_accounts_data_size_delta() <= -(data_size as i64));
+        assert!(reclaimed_data_size >= data_size);
     }
 }
