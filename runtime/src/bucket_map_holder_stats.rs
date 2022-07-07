@@ -53,6 +53,8 @@ pub struct BucketMapHolderStats {
     bins: u64,
     pub estimate_mem: AtomicU64,
     pub flush_should_evict_us: AtomicU64,
+    pub lazy_disk_index_lookup_set_count: AtomicU64,
+    pub lazy_disk_index_lookup_clear_count: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -478,6 +480,18 @@ impl BucketMapHolderStats {
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
+                (
+                    "lazy_disk_index_lookup_set_count",
+                    self.lazy_disk_index_lookup_set_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "lazy_disk_index_lookup_clear_count",
+                    self.lazy_disk_index_lookup_clear_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                )
             );
         } else {
             datapoint_info!(

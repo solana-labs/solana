@@ -229,6 +229,8 @@ pub struct AccountMapEntryMeta {
     pub dirty: AtomicBool,
     /// 'age' at which this entry should be purged from the cache (implements lru)
     pub age: AtomicU8,
+    /// true if there might be on-disk idx that hasn't been loaded yet
+    pub lazy_disk_load: AtomicBool,
 }
 
 impl AccountMapEntryMeta {
@@ -236,12 +238,21 @@ impl AccountMapEntryMeta {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(true),
             age: AtomicU8::new(storage.future_age_to_flush()),
+            lazy_disk_load: AtomicBool::new(false),
+        }
+    }
+    pub fn new_dirty_lazy_disk_load<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
+        AccountMapEntryMeta {
+            dirty: AtomicBool::new(true),
+            age: AtomicU8::new(storage.future_age_to_flush()),
+            lazy_disk_load: AtomicBool::new(true),
         }
     }
     pub fn new_clean<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(false),
             age: AtomicU8::new(storage.future_age_to_flush()),
+            lazy_disk_load: AtomicBool::new(false),
         }
     }
 }
@@ -314,6 +325,17 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
             Ordering::AcqRel,
             Ordering::Relaxed,
         );
+    }
+
+    pub fn set_lazy_disk_load(&self) {
+        self.meta.lazy_disk_load.store(true, Ordering::Release);
+    }
+    pub fn clear_lazy_disk_load(&self) {
+        self.meta.lazy_disk_load.store(false, Ordering::Release);
+    }
+
+    pub fn lazy_disk_load(&self) -> bool {
+        self.meta.lazy_disk_load.load(Ordering::Acquire)
     }
 }
 
@@ -2064,6 +2086,7 @@ pub mod tests {
                     let meta = AccountMapEntryMeta {
                         dirty: AtomicBool::new(entry.dirty()),
                         age: AtomicU8::new(entry.age()),
+                        lazy_disk_load: AtomicBool::new(false),
                     };
                     PreAllocatedAccountMapEntry::Entry(Arc::new(AccountMapEntryInner::new(
                         vec![(slot, account_info)],
