@@ -265,9 +265,7 @@ async fn setup_connection(
                     .fetch_add(1, Ordering::Relaxed);
             }
         } else {
-            stats
-                .connection_setup_timeout
-                .fetch_add(1, Ordering::Relaxed);
+            stats.connection_setup_error.fetch_add(1, Ordering::Relaxed);
         }
     } else {
         stats
