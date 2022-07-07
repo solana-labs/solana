@@ -8775,19 +8775,14 @@ pub(crate) mod tests {
         genesis_config.rent = rent_with_exemption_threshold(1000.0);
 
         let root_bank = Arc::new(Bank::new_for_tests(&genesis_config));
-        let mut bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
+        let bank = create_child_bank_for_rent_test(&root_bank, &genesis_config);
 
         let account_pubkey = solana_sdk::pubkey::new_rand();
         let account_balance = 1;
-        let data_size = 12345_u64; // use non-zero data size to also test accounts_data_size
-        let mut account = AccountSharedData::new(
-            account_balance,
-            data_size as usize,
-            &solana_sdk::pubkey::new_rand(),
-        );
+        let mut account =
+            AccountSharedData::new(account_balance, 0, &solana_sdk::pubkey::new_rand());
         account.set_executable(true);
         bank.store_account(&account_pubkey, &account);
-        bank.accounts_data_size_initial = data_size;
 
         let transfer_lamports = 1;
         let tx = system_transaction::transfer(
@@ -8802,7 +8797,6 @@ pub(crate) mod tests {
             Err(TransactionError::InvalidWritableAccount)
         );
         assert_eq!(bank.get_balance(&account_pubkey), account_balance);
-        assert_eq!(bank.load_accounts_data_size(), data_size);
     }
 
     #[test]
