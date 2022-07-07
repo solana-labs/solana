@@ -6,6 +6,7 @@ use {
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
             RpcTransactionLogsFilter,
         },
+        rpc_filter::maybe_map_filters,
         rpc_response::{
             Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
             RpcSignatureResult, RpcVersionInfo, RpcVote, SlotInfo, SlotUpdate,
@@ -196,8 +197,22 @@ impl PubsubClient {
     pub async fn program_subscribe(
         &self,
         pubkey: &Pubkey,
-        config: Option<RpcProgramAccountsConfig>,
+        mut config: Option<RpcProgramAccountsConfig>,
     ) -> SubscribeResult<'_, RpcResponse<RpcKeyedAccount>> {
+        if let Some(ref mut config) = config {
+            if let Some(ref mut filters) = config.filters {
+                let node_version = self.get_node_version().await.ok();
+                // If node does not support the pubsub `getVersion` method, assume version is old
+                // and filters should be mapped (node_version.is_none()).
+                maybe_map_filters(node_version, filters).map_err(|e| {
+                    PubsubClientError::RequestFailed {
+                        reason: e,
+                        message: "maybe_map_filters".to_string(),
+                    }
+                })?;
+            }
+        }
+
         let params = json!([pubkey.to_string(), config]);
         self.subscribe("program", params).await
     }
