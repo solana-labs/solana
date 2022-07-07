@@ -2,7 +2,9 @@
 
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats},
+        accounts_db::{
+            AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats, StoreReclaims,
+        },
         bank::Bank,
         builtins, static_ids,
     },
@@ -372,6 +374,7 @@ impl<'a> SnapshotMinimizer<'a> {
                 Some(&hashes),
                 Some(&new_storage),
                 Some(Box::new(write_versions.into_iter())),
+                StoreReclaims::Default,
             );
 
             new_storage.flush().unwrap();
