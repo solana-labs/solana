@@ -34,7 +34,9 @@ use {
         },
         path::PathBuf,
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
+            atomic::{
+                AtomicBool, AtomicU16, AtomicU32, AtomicU64, AtomicU8, AtomicUsize, Ordering,
+            },
             Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
     },
@@ -275,6 +277,15 @@ pub struct AccountMapEntryInner2 {
 #[derive(Debug, Default)]
 pub struct AccountMapEntryInner3 {
     pub slot_list: RwLock<SlotList<u8>>,
+}
+
+#[derive(Debug, Default)]
+/// one entry in the in-mem accounts index
+/// Represents the value for an account key in the in-memory accounts index
+pub struct AccountMapEntryInner4<T> {
+    pub slot_list: RwLock<SlotList<T>>,
+    ref_count: AtomicU8,
+    pub meta: AccountMapEntryMeta,
 }
 
 impl<T: IndexValue> AccountMapEntryInner<T> {
@@ -3996,11 +4007,10 @@ pub mod tests {
 
     /// old: 56 bytes
     /// new: 56 bytes
-    /// w/o rwlock:
     #[test]
     fn test_padding() {
         use std::mem::size_of;
-        let s = size_of::<AccountMapEntryInner3>();
+        let s = size_of::<AccountMapEntryInner4<u8>>();
         assert_eq!(s, 0);
     }
 }
