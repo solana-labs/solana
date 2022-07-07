@@ -235,20 +235,44 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> RT {
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
+                if entry.lazy_disk_load() {
+                    // lazy_disk_load is marked, load from the disk and merge with in-mem entry
+                    // we found the pubkey
+                    // but, we haven't checked to see if there is more on disk
+                    // so, we have to load from disk first, then merge with in-mem
+                    // right now we have a read lock on the in-mem idx, fwiw
+                    let disk_entry = self.load_account_entry_from_disk(pubkey);
+                    if let Some(disk_entry) = disk_entry {
+                        Self::merge_slot_lists(entry, disk_entry);
+                    }
+                    entry.clear_lazy_disk_load();
+                    Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
+                }
                 entry.set_age(self.storage.future_age_to_flush());
                 callback(Some(entry)).1
             } else {
                 // not in cache, look on disk
                 let stats = &self.stats();
                 let disk_entry = self.load_account_entry_from_disk(pubkey);
+                // pubkey is not in memory and not on disk, immediately return None to shorten holding of the lock.
                 if disk_entry.is_none() {
                     return callback(None).1;
                 }
+
                 let disk_entry = disk_entry.unwrap();
                 let mut map = self.map_internal.write().unwrap();
                 let entry = map.entry(*pubkey);
                 match entry {
-                    Entry::Occupied(occupied) => callback(Some(occupied.get())).1,
+                    Entry::Occupied(occupied) => {
+                        let entry = occupied.get();
+                        if entry.lazy_disk_load() {
+                            Self::merge_slot_lists(entry, disk_entry);
+
+                            entry.clear_lazy_disk_load();
+                            Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
+                        }
+                        callback(Some(entry)).1
+                    }
                     Entry::Vacant(vacant) => {
                         let (add_to_cache, rt) = callback(Some(&disk_entry));
 
@@ -261,6 +285,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
             }
         })
+    }
+
+    /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
+    /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
+    fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: Arc<AccountMapEntryInner<T>>) {
+        let mut slot_list = in_mem.slot_list.write().unwrap();
+        let slot_list2 = disk.slot_list.write().unwrap();
+
+        for (slot, new_entry) in slot_list2.iter().copied() {
+            if !slot_list.iter().map(|x| x.0.to_owned()).any(|x| x == slot) {
+                slot_list.push((slot, new_entry));
+            }
+        }
     }
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
@@ -281,6 +318,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
         match entry {
             Entry::Occupied(occupied) => {
+                if occupied.get().lazy_disk_load() {
+                    // merge memory with disk
+                    let entry = occupied.get();
+                    let key = occupied.key();
+                    let disk_entry = self.load_account_entry_from_disk(key);
+                    if let Some(disk_entry) = disk_entry {
+                        Self::merge_slot_lists(entry, disk_entry);
+                    }
+                    entry.clear_lazy_disk_load();
+                    Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
+                }
+
                 let result =
                     self.remove_if_slot_list_empty_value(&occupied.get().slot_list.read().unwrap());
                 if result {
@@ -327,7 +376,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let found = matches!(entry, Entry::Occupied(_));
         let result = self.remove_if_slot_list_empty_entry(entry);
         drop(map);
-
         self.update_entry_stats(m, found);
         result
     }
@@ -403,6 +451,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         // desired to be this for filler accounts: self.storage.get_startup();
                         // but, this has proven to be far too slow at high account counts
                         let directly_to_disk = false;
+
+                        let enable_lazy_disk_load = true;
                         if directly_to_disk {
                             // We may like this to always run, but it is unclear.
                             // If disk bucket needs to resize, then this call can stall for a long time.
@@ -412,6 +462,15 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             if !already_existed {
                                 self.stats().inc_insert();
                             }
+                        } else if enable_lazy_disk_load && previous_slot_entry_was_cached {
+                            // skip checking the disk
+                            self.stats().inc_insert();
+                            let entry = new_value.into_account_map_entry(&self.storage);
+                            entry.set_lazy_disk_load();
+                            assert!(entry.dirty());
+                            vacant.insert(entry);
+                            self.stats().inc_mem_count(self.bin);
+                            Self::update_stat(&self.stats().lazy_disk_index_lookup_set_count, 1);
                         } else {
                             // go to in-mem cache first
                             let disk_entry = self.load_account_entry_from_disk(vacant.key());
@@ -1128,6 +1187,19 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         }
                         // if we are evicting it, then we need to update disk if we're dirty
                         if v.clear_dirty() {
+                            // check to see if needed to lazy disk index before flushing.
+                            if v.lazy_disk_load() {
+                                let disk_entry = self.load_account_entry_from_disk(k);
+                                if let Some(disk_entry) = disk_entry {
+                                    Self::merge_slot_lists(&v, disk_entry);
+                                }
+                                v.clear_lazy_disk_load();
+                                Self::update_stat(
+                                    &self.stats().lazy_disk_index_lookup_clear_count,
+                                    1,
+                                );
+                            }
+
                             // step 1: clear the dirty flag
                             // step 2: perform the update on disk based on the fields in the entry
                             // If a parallel operation dirties the item again - even while this flush is occurring,
