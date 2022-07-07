@@ -2837,6 +2837,18 @@ impl AccountsDb {
                 self.accounts_index.roots_removed.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
+            (
+                "active_scans",
+                self.accounts_index.active_scans.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "max_distance_to_min_scan_slot",
+                self.accounts_index
+                    .max_distance_to_min_scan_slot
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
