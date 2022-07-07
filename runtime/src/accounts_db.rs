@@ -210,7 +210,6 @@ pub struct AccountsDbConfig {
 pub struct FoundStoredAccount<'a> {
     pub account: StoredAccountMeta<'a>,
     pub store_id: AppendVecId,
-    pub account_size: usize,
 }
 
 #[cfg(not(test))]
@@ -3081,7 +3080,7 @@ impl AccountsDb {
                         dead += 1;
                     } else {
                         alive_accounts.push(pair);
-                        alive_total += stored_account.account_size;
+                        alive_total += stored_account.account.stored_size;
                         alive += 1;
                     }
                 }
@@ -3116,11 +3115,7 @@ impl AccountsDb {
             original_bytes += store.total_bytes();
             let store_id = store.append_vec_id();
             AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
-                let new_entry = FoundStoredAccount {
-                    account_size: account.stored_size,
-                    account,
-                    store_id,
-                };
+                let new_entry = FoundStoredAccount { account, store_id };
                 match stored_accounts.entry(new_entry.account.meta.pubkey) {
                     Entry::Occupied(mut occupied_entry) => {
                         if new_entry.account.meta.write_version
