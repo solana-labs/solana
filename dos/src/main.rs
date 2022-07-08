@@ -70,7 +70,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     std::{
-        cmp::min,
         net::{SocketAddr, UdpSocket},
         process::exit,
         sync::Arc,
@@ -79,9 +78,10 @@ use {
     },
 };
 
-const SAMPLE_PERIOD_MS: usize = 10_000;
+const PROGRESS_TIMEOUT_S: u64 = 120;
+const SAMPLE_PERIOD_MS: u64 = 10_000;
 fn compute_rate_per_second(count: usize) -> usize {
-    (count * 1000) / SAMPLE_PERIOD_MS
+    (count * 1000) / (SAMPLE_PERIOD_MS as usize)
 }
 
 fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
@@ -244,16 +244,21 @@ impl TransactionGenerator {
 // The most computationally expensive work is signing new transactions.
 // Here we generate them in `num_gen_threads` threads.
 //
-enum TransactionMsg {
-    Transaction(Vec<Vec<u8>>, u64),
-    Exit,
+struct TransactionBatchMsg {
+    batch: Vec<Vec<u8>>,
+    gen_time: u64,
 }
+
 /// number of transactions in one batch for sendmmsg
 const SEND_BATCH_MAX_SIZE: usize = 1 << 14;
 
+/// Creates thread which receives batches of transactions from tx_receiver
+/// and sends them to the target.
+/// If `iterations` is 0, it works indefenetely.
+/// Otherwise, it sends at least `iterations` number of transactions
 fn create_sender_thread(
-    tx_receiver: Receiver<TransactionMsg>,
-    mut n_alive_threads: usize,
+    tx_receiver: Receiver<TransactionBatchMsg>,
+    iterations: usize,
     target: &SocketAddr,
     tpu_use_quic: bool,
 ) -> thread::JoinHandle<()> {
@@ -264,72 +269,82 @@ fn create_sender_thread(
     };
     let connection = connection_cache.get_connection(&target);
 
-    let timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS as u64));
+    let stats_timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS));
+    let progress_timer_receiver = tick(Duration::from_secs(PROGRESS_TIMEOUT_S));
 
     let mut time_send_ns = 0;
     let mut time_generate_ns = 0;
 
+    // Sender signals to stop Generators by dropping receiver.
+    // It happens in 2 cases:
+    // * Sender has sent at least `iterations` number of transactions
+    // * Sender observes that there is no progress. Since there is no way to use recv_timeout with select,
+    // a timer is used.
     thread::Builder::new().name("Sender".to_string()).spawn(move || {
-        let mut count: usize = 0;
-        let mut error_count = 0;
+        let mut total_count: usize = 0;
+        let mut prev_total_count = 0; // to track progress
+
+        let mut stats_count: usize = 0;
+        let mut stats_error_count: usize = 0;
 
         loop {
             select! {
                 recv(tx_receiver) -> msg => {
                     match msg {
-                        Ok(TransactionMsg::Transaction(data, time)) => {
-                            let len = data.len();
+                        Ok(tx_batch) => {
+                            let len = tx_batch.batch.len();
                             let mut measure_send_txs = Measure::start("measure_send_txs");
-                            let res = connection.send_wire_transaction_batch_async(data);
+                            let res = connection.send_wire_transaction_batch_async(tx_batch.batch);
 
                             measure_send_txs.stop();
                             time_send_ns += measure_send_txs.as_ns();
-                            time_generate_ns += time;
+                            time_generate_ns += tx_batch.gen_time;
 
                             if res.is_err() {
-                                error_count += len;
+                                stats_error_count += len;
                             }
-                            count += len;
-                        }
-                        Ok(TransactionMsg::Exit) => {
-                            info!("Worker is done");
-                            n_alive_threads -= 1;
-                            if n_alive_threads == 0 {
+                            stats_count += len;
+                            total_count += len;
+                            if iterations != 0 && total_count >= iterations {
+                                info!("All transactions has been sent");
+                                // dropping receiver to signal generator threads to stop
+                                drop(tx_receiver);
                                 break;
                             }
                         }
                         _ => panic!("Sender panics"),
                     }
                 },
-                recv(timer_receiver) -> _ => {
+                recv(stats_timer_receiver) -> _ => {
                     info!("tx_receiver queue len: {}", tx_receiver.len());
                     info!("Count: {}, error count: {}, send mean time: {}, generate mean time: {}, rps: {}",
-                        count,
-                        error_count,
-                        time_send_ns.checked_div(count as u64).unwrap_or(0),
-                        time_generate_ns.checked_div(count as u64).unwrap_or(0),
-                        compute_rate_per_second(count),
+                        stats_count,
+                        stats_error_count,
+                        time_send_ns.checked_div(stats_count as u64).unwrap_or(0),
+                        time_generate_ns.checked_div(stats_count as u64).unwrap_or(0),
+                        compute_rate_per_second(stats_count),
                     );
-                    count = 0;
-                    error_count = 0;
+                    stats_count = 0;
+                    stats_error_count = 0;
                     time_send_ns = 0;
                     time_generate_ns = 0;
+                },
+                recv(progress_timer_receiver) -> _ => {
+                    if prev_total_count - total_count == 0 {
+                        info!("No progress, stop execution");
+                        // dropping receiver to signal generator threads to stop
+                        drop(tx_receiver);
+                        break;
+                    }
+                    prev_total_count = total_count;
                 }
             }
         }
     }).unwrap()
 }
 
-fn get_send_batch_size(max_iterations_per_thread: usize, total_count: usize) -> usize {
-    if max_iterations_per_thread == 0 {
-        return SEND_BATCH_MAX_SIZE;
-    }
-    min(max_iterations_per_thread - total_count, SEND_BATCH_MAX_SIZE)
-}
-
 fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
-    tx_sender: &Sender<TransactionMsg>,
-    max_iterations_per_thread: usize,
+    tx_sender: &Sender<TransactionBatchMsg>,
     transaction_generator: &mut TransactionGenerator,
     client: Option<Arc<T>>,
     payer: Option<Keypair>,
@@ -363,12 +378,10 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
             let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
             let mut it = indexes.iter().permutations(permutation_size);
 
-            let mut total_count = 0;
             loop {
-                let send_batch_size = get_send_batch_size(max_iterations_per_thread, total_count);
                 let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
                 let mut measure_generate_txs = Measure::start("measure_generate_txs");
-                for _ in 0..send_batch_size {
+                for _ in 0..SEND_BATCH_MAX_SIZE {
                     let chunk_keypairs = if generate_keypairs {
                         let mut permutation = it.next();
                         if permutation.is_none() {
@@ -391,14 +404,13 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
                 }
                 measure_generate_txs.stop();
 
-                let _ = tx_sender.send(TransactionMsg::Transaction(
-                    data,
-                    measure_generate_txs.as_ns(),
-                ));
-
-                total_count += send_batch_size;
-                if max_iterations_per_thread != 0 && total_count >= max_iterations_per_thread {
-                    let _ = tx_sender.send(TransactionMsg::Exit);
+                let result = tx_sender.send(TransactionBatchMsg {
+                    batch: data,
+                    gen_time: measure_generate_txs.as_ns(),
+                });
+                if result.is_err() {
+                    // means that receiver has been dropped by sender thread
+                    info!("Exit generator thread");
                     break;
                 }
             }
@@ -561,7 +573,6 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     tpu_use_quic: bool,
     num_gen_threads: usize,
 ) {
-    let max_iterations_per_thread = iterations / num_gen_threads;
     // Number of payers is the number of generating threads
     // Later, we will create a new payer for each thread since Keypair is not clonable
     let payers: Vec<Option<Keypair>> = create_payers(
@@ -573,21 +584,12 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
     let (tx_sender, tx_receiver) = unbounded();
 
-    let sender_thread = create_sender_thread(tx_receiver, num_gen_threads, &target, tpu_use_quic);
-    let mut thread_id = 0;
+    let sender_thread = create_sender_thread(tx_receiver, iterations, &target, tpu_use_quic);
     let tx_generator_threads: Vec<_> = payers
         .into_iter()
         .map(|payer| {
-            let mut num_iterations = max_iterations_per_thread;
-            // last thread will handle remaining iterations
-            if thread_id + 1 == num_gen_threads {
-                num_iterations += iterations % num_gen_threads;
-            }
-            thread_id += 1;
-
             create_generator_thread(
                 &tx_sender,
-                num_iterations,
                 &mut transaction_generator,
                 client.clone(),
                 payer,
