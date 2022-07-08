@@ -23,9 +23,9 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
-            curve25519_syscall_enabled, disable_fees_sysvar, executables_incur_cpi_data_cost,
-            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            prevent_calling_precompiles_as_programs, quick_bail_on_panic, syscall_saturated_math,
+            curve25519_syscall_enabled, disable_fees_sysvar, libsecp256k1_0_5_upgrade_enabled,
+            limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
+            quick_bail_on_panic, syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -2652,15 +2652,11 @@ where
             .map_err(SyscallError::InstructionError)?;
         if callee_account.is_executable() {
             // Use the known account
-            if invoke_context
-                .feature_set
-                .is_active(&executables_incur_cpi_data_cost::id())
-            {
-                invoke_context.get_compute_meter().consume(
-                    (callee_account.get_data().len() as u64)
-                        .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
-                )?;
-            }
+            invoke_context.get_compute_meter().consume(
+                (callee_account.get_data().len() as u64)
+                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
+            )?;
+
             accounts.push((instruction_account.index_in_caller, None));
         } else if let Some(caller_account_index) =
             account_info_keys.iter().position(|key| *key == account_key)
