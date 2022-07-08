@@ -149,10 +149,7 @@ fn get_connection_stake(connection: &Connection, staked_nodes: Arc<RwLock<Staked
                                 info!("Peer public key is {:?}", pubkey);
 
                                 let staked_nodes = staked_nodes.read().unwrap();
-                                staked_nodes
-                                    .pubkey_stake_map
-                                    .get(&pubkey)
-                                    .map(|stake| *stake)
+                                staked_nodes.pubkey_stake_map.get(&pubkey).copied()
                             }
                             _ => None,
                         })
