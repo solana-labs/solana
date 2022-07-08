@@ -51,7 +51,7 @@ pub struct TransactionContext {
     number_of_instructions_at_transaction_level: usize,
     instruction_trace: InstructionTrace,
     return_data: TransactionReturnData,
-    total_resize_delta: RefCell<i64>,
+    accounts_resize_delta: RefCell<i64>,
     rent: Option<Rent>,
 }
 
@@ -77,7 +77,7 @@ impl TransactionContext {
             number_of_instructions_at_transaction_level,
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: TransactionReturnData::default(),
-            total_resize_delta: RefCell::new(0),
+            accounts_resize_delta: RefCell::new(0),
             rent: None,
         }
     }
@@ -725,8 +725,12 @@ impl<'a> BorrowedAccount<'a> {
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
-            let mut total_resize_delta = self.transaction_context.total_resize_delta.borrow_mut();
-            *total_resize_delta = total_resize_delta
+            let mut accounts_resize_delta = self
+                .transaction_context
+                .accounts_resize_delta
+                .try_borrow_mut()
+                .map_err(|_| InstructionError::GenericError)?;
+            *accounts_resize_delta = accounts_resize_delta
                 .saturating_add((data.len() as i64).saturating_sub(self.get_data().len() as i64));
             self.account.set_data_from_slice(data);
         }
@@ -740,8 +744,12 @@ impl<'a> BorrowedAccount<'a> {
         self.can_data_be_resized(new_length)?;
         self.can_data_be_changed()?;
         self.touch()?;
-        let mut total_resize_delta = self.transaction_context.total_resize_delta.borrow_mut();
-        *total_resize_delta = total_resize_delta
+        let mut accounts_resize_delta = self
+            .transaction_context
+            .accounts_resize_delta
+            .try_borrow_mut()
+            .map_err(|_| InstructionError::GenericError)?;
+        *accounts_resize_delta = accounts_resize_delta
             .saturating_add((new_length as i64).saturating_sub(self.get_data().len() as i64));
         self.account.data_mut().resize(new_length, 0);
         Ok(())
@@ -899,12 +907,38 @@ pub struct ExecutionRecord {
     pub accounts: Vec<TransactionAccount>,
     pub instruction_trace: InstructionTrace,
     pub return_data: TransactionReturnData,
-    pub total_resize_delta: i64,
+    pub changed_account_count: u64,
+    pub total_size_of_all_accounts: u64,
+    pub total_size_of_touched_accounts: u64,
+    pub accounts_resize_delta: i64,
 }
 
 /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
+        let mut changed_account_count = 0u64;
+        let mut total_size_of_all_accounts = 0u64;
+        let mut total_size_of_touched_accounts = 0u64;
+        let account_touched_flags = context
+            .account_touched_flags
+            .try_borrow()
+            .expect("borrowing transaction_context.account_touched_flags failed");
+        for (index_in_transaction, was_touched) in account_touched_flags.iter().enumerate() {
+            let account_data_size = context
+                .get_account_at_index(index_in_transaction)
+                .expect("index_in_transaction out of bounds")
+                .try_borrow()
+                .expect("borrowing a transaction_context.account failed")
+                .data()
+                .len() as u64;
+            total_size_of_all_accounts =
+                total_size_of_all_accounts.saturating_add(account_data_size);
+            if *was_touched {
+                changed_account_count = changed_account_count.saturating_add(1);
+                total_size_of_touched_accounts =
+                    total_size_of_touched_accounts.saturating_add(account_data_size);
+            }
+        }
         Self {
             accounts: Vec::from(Pin::into_inner(context.account_keys))
                 .into_iter()
@@ -916,7 +950,10 @@ impl From<TransactionContext> for ExecutionRecord {
                 .collect(),
             instruction_trace: context.instruction_trace,
             return_data: context.return_data,
-            total_resize_delta: RefCell::into_inner(context.total_resize_delta),
+            changed_account_count,
+            total_size_of_all_accounts,
+            total_size_of_touched_accounts,
+            accounts_resize_delta: RefCell::into_inner(context.accounts_resize_delta),
         }
     }
 }
