@@ -22,7 +22,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
-    solana_client::connection_cache::{ConnectionCache, UseQUIC},
+    solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -671,8 +671,10 @@ impl Validator {
         );
         let poh_recorder = Arc::new(Mutex::new(poh_recorder));
 
-        let use_quic = UseQUIC::new(use_quic).expect("Failed to initialize QUIC flags");
-        let connection_cache = Arc::new(ConnectionCache::new(use_quic, tpu_connection_pool_size));
+        let connection_cache = match use_quic {
+            true => Arc::new(ConnectionCache::new(tpu_connection_pool_size)),
+            false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
+        };
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
