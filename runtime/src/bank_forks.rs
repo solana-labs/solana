@@ -107,14 +107,6 @@ impl BankForks {
             .collect()
     }
 
-    pub fn active_banks(&self) -> Vec<&Arc<Bank>> {
-        self.banks
-            .iter()
-            .filter(|(_, v)| !v.is_frozen())
-            .map(|(_k, v)| v)
-            .collect()
-    }
-
     pub fn active_bank_slots(&self) -> Vec<Slot> {
         self.banks
             .iter()

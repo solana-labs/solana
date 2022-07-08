@@ -129,10 +129,10 @@ impl Drop for Finalizer {
     }
 }
 
-struct ReplaySlotFromBlockstore<'a> {
+struct ReplaySlotFromBlockstore {
     slot_is_dead: bool,
-    bank: &'a Arc<Bank>,
-    replay_result: Option<Result<usize, BlockstoreProcessorError>>,
+    bank_slot: Slot,
+    replay_result: Option<Result<usize /* tx count */, BlockstoreProcessorError>>,
 }
 
 struct LastVoteRefreshTime {
@@ -2236,31 +2236,24 @@ impl ReplayStage {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
 
-        // Make shared structures thread safe.
+        // Make mutable shared structures thread safe.
         let progress = RwLock::new(progress);
         let longest_replay_time_us = AtomicU64::new(0);
-        let blockstore = RwLock::new(blockstore);
-        let my_pubkey = RwLock::new(my_pubkey);
-        let vote_account = RwLock::new(vote_account);
-        let transaction_status_sender = RwLock::new(transaction_status_sender);
-        let verify_recyclers = RwLock::new(verify_recyclers);
-        let replay_vote_sender = RwLock::new(replay_vote_sender);
-        let transaction_cost_metrics_sender = RwLock::new(transaction_cost_metrics_sender);
-        let bank_forks_read_lock = bank_forks.read().unwrap();
-        let active_banks = bank_forks_read_lock.active_banks();
-        trace!("{} active bank(s) to replay", active_banks.len());
+
+        let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
+        trace!("{} active bank(s) to replay", active_bank_slots.len());
 
         // Allow for concurrent replaying of slots from different forks.
         let replay_result_vec: Vec<ReplaySlotFromBlockstore> = PAR_THREAD_POOL.install(|| {
-            active_banks
+            active_bank_slots
                 .into_par_iter()
-                .map(|bank| {
+                .map(|bank_slot| {
                     let mut replay_result = ReplaySlotFromBlockstore {
                         slot_is_dead: false,
-                        bank,
+                        bank_slot,
                         replay_result: None,
                     };
-                    let bank_slot = bank.slot();
+                    let my_pubkey = &my_pubkey.clone();
                     trace!(
                         "Replay active bank: slot {}, thread_idx {}",
                         bank_slot,
@@ -2278,6 +2271,7 @@ impl ReplayStage {
                         return replay_result;
                     }
 
+                    let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
                     let parent_slot = bank.parent_slot();
                     let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(bank);
                     let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
@@ -2294,8 +2288,8 @@ impl ReplayStage {
                     let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
                         ForkProgress::new_from_bank(
                             bank,
-                            &my_pubkey.read().unwrap(),
-                            &vote_account.read().unwrap(),
+                            my_pubkey,
+                            &vote_account.clone(),
                             prev_leader_slot,
                             num_blocks_on_fork,
                             num_dropped_blocks_on_fork,
@@ -2306,18 +2300,18 @@ impl ReplayStage {
                     let replay_progress = bank_progress.replay_progress.clone();
                     drop(progress_lock);
 
-                    if bank.collector_id() != *my_pubkey.read().unwrap() {
+                    if bank.collector_id() != my_pubkey {
                         let mut replay_blockstore_time =
                             Measure::start("replay_blockstore_into_bank");
                         let blockstore_result = Self::replay_blockstore_into_bank(
                             bank,
-                            &blockstore.read().unwrap(),
+                            blockstore.clone(),
                             &replay_stats,
                             &replay_progress,
-                            *transaction_status_sender.read().unwrap(),
-                            &replay_vote_sender.read().unwrap(),
-                            *transaction_cost_metrics_sender.read().unwrap(),
-                            &verify_recyclers.read().unwrap(),
+                            transaction_status_sender.clone(),
+                            &replay_vote_sender.clone(),
+                            transaction_cost_metrics_sender.clone(),
+                            &verify_recyclers.clone(),
                         );
                         replay_blockstore_time.stop();
                         replay_result.replay_result = Some(blockstore_result);
@@ -2339,17 +2333,17 @@ impl ReplayStage {
                 continue;
             }
 
-            let bank = replay_result.bank;
-            let bank_slot = bank.slot();
+            let bank_slot = replay_result.bank_slot;
+            let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
             if let Some(replay_result) = replay_result.replay_result {
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
                         // Error means the slot needs to be marked as dead
                         Self::mark_dead_slot(
-                            &blockstore.read().unwrap(),
-                            bank,
-                            bank_forks_read_lock.root(),
+                            blockstore,
+                            &bank,
+                            bank_forks.read().unwrap().root(),
                             &err,
                             rpc_subscriptions,
                             duplicate_slots_tracker,
@@ -2386,8 +2380,7 @@ impl ReplayStage {
                 did_complete_bank = true;
                 info!("bank frozen: {}", bank.slot());
                 let _ = cluster_slots_update_sender.send(vec![bank_slot]);
-                if let Some(transaction_status_sender) = *transaction_status_sender.read().unwrap()
-                {
+                if let Some(transaction_status_sender) = transaction_status_sender {
                     transaction_status_sender.send_transaction_status_freeze_message(bank);
                 }
                 bank.freeze();
@@ -2419,8 +2412,8 @@ impl ReplayStage {
                 );
                 check_slot_agrees_with_cluster(
                     bank.slot(),
-                    bank_forks_read_lock.root(),
-                    &blockstore.read().unwrap(),
+                    bank_forks.read().unwrap().root(),
+                    blockstore,
                     duplicate_slots_tracker,
                     epoch_slots_frozen_slots,
                     heaviest_subtree_fork_choice,
