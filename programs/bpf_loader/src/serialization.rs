@@ -454,7 +454,7 @@ mod tests {
             &program_indices,
         );
         let mut transaction_context =
-            TransactionContext::new(preparation.transaction_accounts, 1, 1, 0);
+            TransactionContext::new(preparation.transaction_accounts, 1, 1);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(
