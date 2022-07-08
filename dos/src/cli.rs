@@ -64,6 +64,9 @@ pub struct DosClientParameters {
         help = "Submit transactions via QUIC"
     )]
     pub tpu_use_quic: bool,
+
+    #[clap(long, default_value = "16384", help = "Size of the transactions batch")]
+    pub send_batch_size: usize,
 }
 
 #[derive(Args, Clone, Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
@@ -227,6 +230,7 @@ mod tests {
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
                 num_gen_threads: 1,
+                send_batch_size: 16384,
             },
         );
     }
@@ -245,6 +249,8 @@ mod tests {
             "--num-signatures",
             "8",
             "--tpu-use-quic",
+            "--send-batch-size",
+            "1",
         ])
         .unwrap();
         assert_eq!(
@@ -267,6 +273,7 @@ mod tests {
                     num_instructions: None,
                 },
                 tpu_use_quic: true,
+                send_batch_size: 1,
             },
         );
     }
@@ -285,6 +292,8 @@ mod tests {
             "--transaction-type",
             "transfer",
             "--num-instructions",
+            "1",
+            "--send-batch-size",
             "1",
         ])
         .unwrap();
@@ -308,6 +317,7 @@ mod tests {
                     num_instructions: Some(1),
                 },
                 tpu_use_quic: false,
+                send_batch_size: 1,
             },
         );
 
@@ -342,6 +352,8 @@ mod tests {
             "transfer",
             "--num-instructions",
             "8",
+            "--send-batch-size",
+            "1",
         ])
         .unwrap();
         assert_eq!(
@@ -364,6 +376,7 @@ mod tests {
                     num_instructions: Some(8),
                 },
                 tpu_use_quic: false,
+                send_batch_size: 1,
             },
         );
     }
@@ -381,6 +394,8 @@ mod tests {
             "--valid-blockhash",
             "--transaction-type",
             "account-creation",
+            "--send-batch-size",
+            "1",
         ])
         .unwrap();
         assert_eq!(
@@ -403,6 +418,7 @@ mod tests {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                send_batch_size: 1,
             },
         );
     }

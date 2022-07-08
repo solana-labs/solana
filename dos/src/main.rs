@@ -249,9 +249,6 @@ struct TransactionBatchMsg {
     gen_time: u64,
 }
 
-/// number of transactions in one batch for sendmmsg
-const SEND_BATCH_MAX_SIZE: usize = 1 << 14;
-
 /// Creates thread which receives batches of transactions from tx_receiver
 /// and sends them to the target.
 /// If `iterations` is 0, it works indefenetely.
@@ -267,7 +264,7 @@ fn create_sender_thread(
         true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
         false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
     };
-    let connection = connection_cache.get_connection(&target);
+    let connection = connection_cache.get_connection(target);
 
     let stats_timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS));
     let progress_timer_receiver = tick(Duration::from_secs(PROGRESS_TIMEOUT_S));
@@ -345,6 +342,7 @@ fn create_sender_thread(
 
 fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
     tx_sender: &Sender<TransactionBatchMsg>,
+    send_batch_size: usize,
     transaction_generator: &mut TransactionGenerator,
     client: Option<Arc<T>>,
     payer: Option<Keypair>,
@@ -379,9 +377,9 @@ fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
             let mut it = indexes.iter().permutations(permutation_size);
 
             loop {
-                let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
+                let mut data = Vec::<Vec<u8>>::with_capacity(send_batch_size);
                 let mut measure_generate_txs = Measure::start("measure_generate_txs");
-                for _ in 0..SEND_BATCH_MAX_SIZE {
+                for _ in 0..send_batch_size {
                     let chunk_keypairs = if generate_keypairs {
                         let mut permutation = it.next();
                         if permutation.is_none() {
@@ -572,6 +570,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     transaction_params: TransactionParams,
     tpu_use_quic: bool,
     num_gen_threads: usize,
+    send_batch_size: usize,
 ) {
     // Number of payers is the number of generating threads
     // Later, we will create a new payer for each thread since Keypair is not clonable
@@ -590,6 +589,7 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
         .map(|payer| {
             create_generator_thread(
                 &tx_sender,
+                send_batch_size,
                 &mut transaction_generator,
                 client.clone(),
                 payer,
@@ -637,6 +637,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             params.transaction_params,
             params.tpu_use_quic,
             params.num_gen_threads,
+            params.send_batch_size,
         );
     } else {
         let target = target.expect("should have target");
@@ -795,6 +796,8 @@ pub mod test {
         solana_sdk::timing::timestamp,
     };
 
+    const TEST_SEND_BATCH_SIZE: usize = 1;
+
     // thin wrapper for the run_dos function
     // to avoid specifying everywhere generic parameters
     fn run_dos_no_client(nodes: &[ContactInfo], iterations: usize, params: DosClientParameters) {
@@ -823,6 +826,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -840,6 +844,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -857,6 +862,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -874,6 +880,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
@@ -906,6 +913,7 @@ pub mod test {
                 num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
@@ -951,6 +959,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -977,6 +986,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -1003,6 +1013,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
@@ -1081,6 +1092,7 @@ pub mod test {
                     num_instructions: Some(1),
                 },
                 tpu_use_quic,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -1109,6 +1121,7 @@ pub mod test {
                     num_instructions: Some(1),
                 },
                 tpu_use_quic,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
         // creates and sends unique transactions of type Transfer
@@ -1136,6 +1149,7 @@ pub mod test {
                     num_instructions: Some(8),
                 },
                 tpu_use_quic,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
         // creates and sends unique transactions of type CreateAccount
@@ -1163,6 +1177,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
