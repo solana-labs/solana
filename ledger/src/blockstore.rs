@@ -549,7 +549,16 @@ impl Blockstore {
 
     /// Determines if starting_slot and ending_slot are connected
     pub fn slots_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
-        let mut next_slots: VecDeque<_> = vec![starting_slot].into();
+        if starting_slot == ending_slot {
+            return true;
+        }
+
+        let mut next_slots =
+            self.meta(starting_slot)
+                .map_or(VecDeque::default(), |maybe_slot_meta| {
+                    maybe_slot_meta
+                        .map_or(VecDeque::default(), |slot_meta| slot_meta.next_slots.into())
+                });
         while let Some(slot) = next_slots.pop_front() {
             if let Ok(Some(slot_meta)) = self.meta(slot) {
                 if slot_meta.is_full() {
@@ -4355,6 +4364,16 @@ pub mod tests {
         entries
     }
 
+    fn make_and_insert_slot(blockstore: &Blockstore, slot: Slot, parent_slot: Slot) {
+        let (shreds, _) = make_slot_entries(slot, parent_slot, 100);
+        blockstore.insert_shreds(shreds, None, true).unwrap();
+
+        let meta = blockstore.meta(slot).unwrap().unwrap();
+        assert_eq!(slot, meta.slot);
+        assert!(meta.is_full());
+        assert!(meta.next_slots.is_empty());
+    }
+
     #[test]
     fn test_create_new_ledger() {
         solana_logger::setup();
@@ -5490,13 +5509,7 @@ pub mod tests {
 
         let num_slots = 3;
         for slot in 1..=num_slots {
-            let (shreds, _) = make_slot_entries(slot, slot.saturating_sub(1), 100);
-            blockstore.insert_shreds(shreds, None, true).unwrap();
-
-            let meta = blockstore.meta(slot).unwrap().unwrap();
-            assert_eq!(slot, meta.slot);
-            assert!(meta.is_full());
-            assert!(meta.next_slots.is_empty());
+            make_and_insert_slot(&blockstore, slot, slot.saturating_sub(1));
         }
 
         assert!(blockstore.slots_connected(1, 3));
@@ -5508,22 +5521,32 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        fn make_and_insert_slot(blockstore: &Blockstore, slot: Slot, parent_slot: Slot) {
-            let (shreds, _) = make_slot_entries(slot, parent_slot, 100);
-            blockstore.insert_shreds(shreds, None, true).unwrap();
-
-            let meta = blockstore.meta(slot).unwrap().unwrap();
-            assert_eq!(slot, meta.slot);
-            assert!(meta.is_full());
-            assert!(meta.next_slots.is_empty());
-        }
-
         make_and_insert_slot(&blockstore, 1, 0);
         make_and_insert_slot(&blockstore, 2, 1);
         make_and_insert_slot(&blockstore, 4, 2);
 
         assert!(!blockstore.slots_connected(1, 3)); // Slot 3 does not exit
         assert!(blockstore.slots_connected(1, 4));
+    }
+
+    #[test]
+    fn test_slots_connected_same_slot() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        assert!(blockstore.slots_connected(54, 54));
+    }
+
+    #[test]
+    fn test_slots_connected_starting_slot_not_full() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        make_and_insert_slot(&blockstore, 5, 4);
+        make_and_insert_slot(&blockstore, 6, 5);
+
+        assert!(!blockstore.meta(4).unwrap().unwrap().is_full());
+        assert!(blockstore.slots_connected(4, 6));
     }
 
     #[test]
