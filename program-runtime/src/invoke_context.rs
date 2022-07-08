@@ -1305,7 +1305,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invoke_context() {
+    fn test_instruction_stack_height() {
         const MAX_DEPTH: usize = 10;
         let mut invoke_stack = vec![];
         let mut accounts = vec![];
@@ -1353,107 +1353,6 @@ mod tests {
         }
         assert_ne!(depth_reached, 0);
         assert!(depth_reached < MAX_DEPTH);
-
-        // Mock each invocation
-        for owned_index in (1..depth_reached).rev() {
-            let not_owned_index = owned_index - 1;
-            let instruction_accounts = vec![
-                InstructionAccount {
-                    index_in_transaction: not_owned_index,
-                    index_in_caller: not_owned_index,
-                    index_in_callee: 0,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                InstructionAccount {
-                    index_in_transaction: owned_index,
-                    index_in_caller: owned_index,
-                    index_in_callee: 1,
-                    is_signer: false,
-                    is_writable: true,
-                },
-            ];
-
-            // modify account owned by the program
-            *invoke_context
-                .transaction_context
-                .get_account_at_index(owned_index)
-                .unwrap()
-                .borrow_mut()
-                .data_as_mut_slice()
-                .get_mut(0)
-                .unwrap() = (MAX_DEPTH + owned_index) as u8;
-            invoke_context
-                .verify_and_update(&instruction_accounts, false)
-                .unwrap();
-            assert_eq!(
-                *invoke_context
-                    .pre_accounts
-                    .get(owned_index)
-                    .unwrap()
-                    .data()
-                    .first()
-                    .unwrap(),
-                (MAX_DEPTH + owned_index) as u8
-            );
-
-            // modify account not owned by the program
-            let data = *invoke_context
-                .transaction_context
-                .get_account_at_index(not_owned_index)
-                .unwrap()
-                .borrow_mut()
-                .data()
-                .first()
-                .unwrap();
-            *invoke_context
-                .transaction_context
-                .get_account_at_index(not_owned_index)
-                .unwrap()
-                .borrow_mut()
-                .data_as_mut_slice()
-                .get_mut(0)
-                .unwrap() = (MAX_DEPTH + not_owned_index) as u8;
-            assert_eq!(
-                invoke_context.verify_and_update(&instruction_accounts, false),
-                Err(InstructionError::ExternalAccountDataModified)
-            );
-            assert_eq!(
-                *invoke_context
-                    .pre_accounts
-                    .get(not_owned_index)
-                    .unwrap()
-                    .data()
-                    .first()
-                    .unwrap(),
-                data
-            );
-            *invoke_context
-                .transaction_context
-                .get_account_at_index(not_owned_index)
-                .unwrap()
-                .borrow_mut()
-                .data_as_mut_slice()
-                .get_mut(0)
-                .unwrap() = data;
-
-            invoke_context.pop().unwrap();
-        }
-    }
-
-    #[test]
-    fn test_invoke_context_verify() {
-        let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
-        let instruction_accounts = vec![];
-        let program_indices = vec![0];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 1);
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context
-            .push(&instruction_accounts, &program_indices, &[])
-            .unwrap();
-        assert!(invoke_context
-            .verify(&instruction_accounts, &program_indices)
-            .is_ok());
     }
 
     #[test]
@@ -1495,65 +1394,7 @@ mod tests {
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
-        // External modification tests
-        {
-            invoke_context
-                .push(&instruction_accounts, &[4], &[])
-                .unwrap();
-            let inner_instruction = Instruction::new_with_bincode(
-                callee_program_id,
-                &MockInstruction::NoopSuccess,
-                metas.clone(),
-            );
-
-            // not owned account
-            *invoke_context
-                .transaction_context
-                .get_account_at_index(1)
-                .unwrap()
-                .borrow_mut()
-                .data_as_mut_slice()
-                .get_mut(0)
-                .unwrap() = 1;
-            assert_eq!(
-                invoke_context.native_invoke(inner_instruction.clone(), &[]),
-                Err(InstructionError::ExternalAccountDataModified)
-            );
-            *invoke_context
-                .transaction_context
-                .get_account_at_index(1)
-                .unwrap()
-                .borrow_mut()
-                .data_as_mut_slice()
-                .get_mut(0)
-                .unwrap() = 0;
-
-            // readonly account
-            *invoke_context
-                .transaction_context
-                .get_account_at_index(2)
-                .unwrap()
-                .borrow_mut()
-                .data_as_mut_slice()
-                .get_mut(0)
-                .unwrap() = 1;
-            assert_eq!(
-                invoke_context.native_invoke(inner_instruction, &[]),
-                Err(InstructionError::ReadonlyDataModified)
-            );
-            *invoke_context
-                .transaction_context
-                .get_account_at_index(2)
-                .unwrap()
-                .borrow_mut()
-                .data_as_mut_slice()
-                .get_mut(0)
-                .unwrap() = 0;
-
-            invoke_context.pop().unwrap();
-        }
-
-        // Internal modification tests
+        // Account modification tests
         let cases = vec![
             (MockInstruction::NoopSuccess, Ok(())),
             (
