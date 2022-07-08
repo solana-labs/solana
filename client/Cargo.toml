@@ -61,12 +61,8 @@ url = "2.2.2"
 [dev-dependencies]
 assert_matches = "1.5.0"
 jsonrpc-http-server = "18.0.0"
-<<<<<<< HEAD
 solana-logger = { path = "../logger", version = "=1.10.31" }
-=======
-solana-logger = { path = "../logger", version = "=1.11.2" }
-solana-perf = { path = "../perf", version = "=1.11.2" }
->>>>>>> 2436a2bea (client: Use async connection in async TPU client (#25969))
+solana-perf = { path = "../perf", version = "=1.10.31" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
