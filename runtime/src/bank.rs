@@ -3557,9 +3557,7 @@ impl Bank {
         account.set_lamports(0);
         account.data_as_mut_slice().fill(0);
         self.store_account(program_id, &account);
-
-        let data_size_delta = compute_data_size_delta(old_data_size, 0);
-        self.update_accounts_data_size_delta_off_chain(data_size_delta);
+        self.calculate_and_update_accounts_data_size_delta_off_chain(old_data_size, 0);
     }
 
     // NOTE: must hold idempotent for the same set of arguments
@@ -4734,6 +4732,16 @@ impl Bank {
             })
             // SAFETY: unwrap() is safe since our update fn always returns `Some`
             .unwrap();
+    }
+
+    /// Calculate the data size delta and update the off-chain accounts data size delta
+    fn calculate_and_update_accounts_data_size_delta_off_chain(
+        &self,
+        old_data_size: usize,
+        new_data_size: usize,
+    ) {
+        let data_size_delta = calculate_data_size_delta(old_data_size, new_data_size);
+        self.update_accounts_data_size_delta_off_chain(data_size_delta);
     }
 
     /// Set the initial accounts data size
@@ -6309,10 +6317,10 @@ impl Bank {
             };
 
         self.store_account(pubkey, new_account);
-
-        let data_size_delta =
-            compute_data_size_delta(old_account_data_size, new_account.data().len());
-        self.update_accounts_data_size_delta_off_chain(data_size_delta);
+        self.calculate_and_update_accounts_data_size_delta_off_chain(
+            old_account_data_size,
+            new_account.data().len(),
+        );
     }
 
     fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
@@ -7500,9 +7508,10 @@ impl Bank {
 
                 self.remove_executor(old_address);
 
-                let data_size_delta =
-                    compute_data_size_delta(old_account.data().len(), new_account.data().len());
-                self.update_accounts_data_size_delta_off_chain(data_size_delta);
+                self.calculate_and_update_accounts_data_size_delta_off_chain(
+                    old_account.data().len(),
+                    new_account.data().len(),
+                );
             }
         }
     }
@@ -7547,12 +7556,10 @@ impl Bank {
 
             if store {
                 self.store_account(&inline_spl_token::native_mint::id(), &native_mint_account);
-
-                let data_size_delta = compute_data_size_delta(
+                self.calculate_and_update_accounts_data_size_delta_off_chain(
                     old_account_data_size,
                     native_mint_account.data().len(),
                 );
-                self.update_accounts_data_size_delta_off_chain(data_size_delta);
             }
         }
     }
@@ -7633,7 +7640,7 @@ impl Bank {
 
 /// Compute how much an account has changed size.  This function is useful when the data size delta
 /// needs to be computed and passed to an `update_accounts_data_size_delta` function.
-fn compute_data_size_delta(old_data_size: usize, new_data_size: usize) -> i64 {
+fn calculate_data_size_delta(old_data_size: usize, new_data_size: usize) -> i64 {
     assert!(old_data_size <= i64::MAX as usize);
     assert!(new_data_size <= i64::MAX as usize);
     let old_data_size = old_data_size as i64;
