@@ -3656,6 +3656,7 @@ pub mod tests {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         );
         *bank.epoch_schedule()
     }

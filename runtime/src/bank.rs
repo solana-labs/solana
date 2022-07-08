@@ -1475,6 +1475,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             false,
+            None,
         )
     }
 
@@ -1556,6 +1557,7 @@ impl Bank {
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
         debug_do_not_add_builtins: bool,
+        accounts_db_config: Option<AccountsDbConfig>,
     ) -> Self {
         Self::new_with_paths(
             genesis_config,
@@ -1566,7 +1568,7 @@ impl Bank {
             accounts_db_caching_enabled,
             shrink_ratio,
             debug_do_not_add_builtins,
-            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
+            accounts_db_config.or(Some(ACCOUNTS_DB_CONFIG_FOR_TESTING)),
             None,
         )
     }
