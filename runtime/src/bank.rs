@@ -4283,8 +4283,6 @@ impl Bank {
             transaction_accounts,
             compute_budget.max_invoke_depth.saturating_add(1),
             tx.message().instructions().len(),
-            self.accounts_data_size_limit()
-                .saturating_sub(prev_accounts_data_len),
         );
 
         let pre_account_state_info =
@@ -18567,7 +18565,6 @@ pub(crate) mod tests {
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
             compute_budget.max_invoke_depth.saturating_add(1),
             number_of_instructions_at_transaction_level,
-            0,
         );
 
         assert_eq!(
