@@ -94,7 +94,7 @@ impl QuicLazyInitializedEndpoint {
                     .with_single_cert(cert.certificates.clone(), cert.key.clone())
                     .ok()
             })
-            .unwrap_or(config_builder.with_no_client_auth());
+            .unwrap_or_else(|| config_builder.with_no_client_auth());
         crypto.enable_early_data = true;
 
         let mut endpoint =

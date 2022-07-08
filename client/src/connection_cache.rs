@@ -338,7 +338,7 @@ impl ConnectionCache {
         Self {
             tpu_udp_socket: None,
             connection_pool_size,
-            client_certificate: new_cert(keypair, ipaddr).map(|x| Arc::new(x)).ok(),
+            client_certificate: new_cert(keypair, ipaddr).map(Arc::new).ok(),
             ..Self::default()
         }
     }
@@ -582,7 +582,9 @@ impl Default for ConnectionCache {
                         .expect("Unable to bind to UDP socket"),
                 )
             }),
-            client_certificate: None,
+            client_certificate: new_cert(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                .map(Arc::new)
+                .ok(),
         }
     }
 }
