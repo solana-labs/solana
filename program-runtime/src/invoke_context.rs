@@ -2,7 +2,7 @@
 use solana_sdk::keyed_account::{create_keyed_accounts_unified, KeyedAccount};
 use {
     crate::{
-        accounts_data_meter::AccountsDataMeter,
+        accounts_data_meter::{AccountsDataMeter, MAX_ACCOUNTS_DATA_LEN},
         compute_budget::ComputeBudget,
         ic_logger_msg, ic_msg,
         log_collector::LogCollector,
@@ -16,10 +16,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
-            cap_accounts_data_len, neon_evm_compute_budget,
-            record_instruction_in_transaction_context_push,
-            reject_empty_instruction_without_program, requestable_heap_size, tx_wide_compute_cap,
-            FeatureSet,
+            cap_accounts_data_len, record_instruction_in_transaction_context_push, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -255,7 +252,7 @@ impl<'a> InvokeContext<'a> {
         feature_set: Arc<FeatureSet>,
         blockhash: Hash,
         lamports_per_signature: u64,
-        initial_accounts_data_len: u64,
+        prev_accounts_data_len: u64,
     ) -> Self {
         Self {
             transaction_context,
@@ -268,7 +265,7 @@ impl<'a> InvokeContext<'a> {
             current_compute_budget: compute_budget,
             compute_budget,
             compute_meter: ComputeMeter::new_ref(compute_budget.compute_unit_limit),
-            accounts_data_meter: AccountsDataMeter::new(initial_accounts_data_len),
+            accounts_data_meter: AccountsDataMeter::new(prev_accounts_data_len),
             executors,
             feature_set,
             timings: ExecuteDetailsTimings::default(),
@@ -335,53 +332,24 @@ impl<'a> InvokeContext<'a> {
             return Err(InstructionError::CallDepth);
         }
 
-        let program_id = program_indices
-            .last()
-            .map(|account_index| {
-                self.transaction_context
-                    .get_key_of_account_at_index(*account_index)
-            })
-            .transpose()?;
-        if program_id.is_none()
-            && self
-                .feature_set
-                .is_active(&reject_empty_instruction_without_program::id())
-        {
-            return Err(InstructionError::UnsupportedProgramId);
-        }
+        let program_id = self.transaction_context.get_key_of_account_at_index(
+            *program_indices
+                .last()
+                .ok_or(InstructionError::UnsupportedProgramId)?,
+        )?;
         if self
             .transaction_context
             .get_instruction_context_stack_height()
             == 0
         {
-            let mut compute_budget = self.compute_budget;
-            if !self.feature_set.is_active(&tx_wide_compute_cap::id())
-                && self.feature_set.is_active(&neon_evm_compute_budget::id())
-                && program_id == Some(&crate::neon_evm_program::id())
-            {
-                // Bump the compute budget for neon_evm
-                compute_budget.compute_unit_limit = compute_budget.compute_unit_limit.max(500_000);
-            }
-            if !self.feature_set.is_active(&requestable_heap_size::id())
-                && self.feature_set.is_active(&neon_evm_compute_budget::id())
-                && program_id == Some(&crate::neon_evm_program::id())
-            {
-                // Bump the compute budget for neon_evm
-                compute_budget.heap_size = Some(256_usize.saturating_mul(1024));
-            }
-            self.current_compute_budget = compute_budget;
-
-            if !self.feature_set.is_active(&tx_wide_compute_cap::id()) {
-                self.compute_meter =
-                    ComputeMeter::new_ref(self.current_compute_budget.compute_unit_limit);
-            }
+            self.current_compute_budget = self.compute_budget;
 
             self.pre_accounts = Vec::with_capacity(instruction_accounts.len());
 
-            for (index_in_instruction, instruction_account) in
+            for (instruction_account_index, instruction_account) in
                 instruction_accounts.iter().enumerate()
             {
-                if index_in_instruction != instruction_account.index_in_callee {
+                if instruction_account_index != instruction_account.index_in_callee {
                     continue; // Skip duplicate account
                 }
                 if instruction_account.index_in_transaction
@@ -408,19 +376,20 @@ impl<'a> InvokeContext<'a> {
                     self.transaction_context
                         .get_instruction_context_at(level)
                         .and_then(|instruction_context| {
-                            instruction_context.try_borrow_program_account(self.transaction_context)
+                            instruction_context
+                                .try_borrow_last_program_account(self.transaction_context)
                         })
-                        .map(|program_account| Some(program_account.get_key()) == program_id)
-                        .unwrap_or_else(|_| program_id.is_none())
+                        .map(|program_account| program_account.get_key() == program_id)
+                        .unwrap_or(false)
                 });
             let is_last = self
                 .transaction_context
                 .get_current_instruction_context()
                 .and_then(|instruction_context| {
-                    instruction_context.try_borrow_program_account(self.transaction_context)
+                    instruction_context.try_borrow_last_program_account(self.transaction_context)
                 })
-                .map(|program_account| Some(program_account.get_key()) == program_id)
-                .unwrap_or_else(|_| program_id.is_none());
+                .map(|program_account| program_account.get_key() == program_id)
+                .unwrap_or(false);
             if contains && !is_last {
                 // Reentrancy not allowed unless caller is calling itself
                 return Err(InstructionError::ReentrancyNotAllowed);
@@ -500,7 +469,7 @@ impl<'a> InvokeContext<'a> {
             .get_current_instruction_context()
             .map_err(|_| InstructionError::CallDepth)?;
         let program_id = instruction_context
-            .get_program_key(self.transaction_context)
+            .get_last_program_key(self.transaction_context)
             .map_err(|_| InstructionError::CallDepth)?;
 
         // Verify all executable accounts have zero outstanding refs
@@ -514,8 +483,10 @@ impl<'a> InvokeContext<'a> {
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
         let mut pre_account_index = 0;
-        for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
-            if index_in_instruction != instruction_account.index_in_callee {
+        for (instruction_account_index, instruction_account) in
+            instruction_accounts.iter().enumerate()
+        {
+            if instruction_account_index != instruction_account.index_in_callee {
                 continue; // Skip duplicate account
             }
             {
@@ -591,13 +562,15 @@ impl<'a> InvokeContext<'a> {
         let transaction_context = &self.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = instruction_context
-            .get_program_key(transaction_context)
+            .get_last_program_key(transaction_context)
             .map_err(|_| InstructionError::CallDepth)?;
 
         // Verify the per-account instruction results
         let (mut pre_sum, mut post_sum) = (0_u128, 0_u128);
-        for (index_in_instruction, instruction_account) in instruction_accounts.iter().enumerate() {
-            if index_in_instruction != instruction_account.index_in_callee {
+        for (instruction_account_index, instruction_account) in
+            instruction_accounts.iter().enumerate()
+        {
+            if instruction_account_index != instruction_account.index_in_callee {
                 continue; // Skip duplicate account
             }
             if instruction_account.index_in_transaction
@@ -609,11 +582,7 @@ impl<'a> InvokeContext<'a> {
                     .get_account_at_index(instruction_account.index_in_transaction)?;
                 let is_writable = if before_instruction_context_push {
                     instruction_context
-                        .try_borrow_instruction_account(
-                            self.transaction_context,
-                            instruction_account.index_in_caller,
-                        )?
-                        .is_writable()
+                        .is_instruction_account_writable(instruction_account.index_in_caller)?
                 } else {
                     instruction_account.is_writable
                 };
@@ -723,7 +692,7 @@ impl<'a> InvokeContext<'a> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
         let mut deduplicated_instruction_accounts: Vec<InstructionAccount> = Vec::new();
         let mut duplicate_indicies = Vec::with_capacity(instruction.accounts.len());
-        for (index_in_instruction, account_meta) in instruction.accounts.iter().enumerate() {
+        for (instruction_account_index, account_meta) in instruction.accounts.iter().enumerate() {
             let index_in_transaction = self
                 .transaction_context
                 .find_index_of_account(&account_meta.pubkey)
@@ -750,10 +719,10 @@ impl<'a> InvokeContext<'a> {
                 instruction_account.is_writable |= account_meta.is_writable;
             } else {
                 let index_in_caller = instruction_context
-                    .find_index_of_account(self.transaction_context, &account_meta.pubkey)
-                    .map(|index| {
-                        index.saturating_sub(instruction_context.get_number_of_program_accounts())
-                    })
+                    .find_index_of_instruction_account(
+                        self.transaction_context,
+                        &account_meta.pubkey,
+                    )
                     .ok_or_else(|| {
                         ic_msg!(
                             self,
@@ -766,7 +735,7 @@ impl<'a> InvokeContext<'a> {
                 deduplicated_instruction_accounts.push(InstructionAccount {
                     index_in_transaction,
                     index_in_caller,
-                    index_in_callee: index_in_instruction,
+                    index_in_callee: instruction_account_index,
                     is_signer: account_meta.is_signer,
                     is_writable: account_meta.is_writable,
                 });
@@ -814,13 +783,13 @@ impl<'a> InvokeContext<'a> {
         // Find and validate executables / program accounts
         let callee_program_id = instruction.program_id;
         let program_account_index = instruction_context
-            .find_index_of_account(self.transaction_context, &callee_program_id)
+            .find_index_of_instruction_account(self.transaction_context, &callee_program_id)
             .ok_or_else(|| {
                 ic_msg!(self, "Unknown program {}", callee_program_id);
                 InstructionError::MissingAccount
             })?;
         let borrowed_program_account = instruction_context
-            .try_borrow_account(self.transaction_context, program_account_index)?;
+            .try_borrow_instruction_account(self.transaction_context, program_account_index)?;
         if !borrowed_program_account.is_executable() {
             ic_msg!(self, "Account {} is not executable", callee_program_id);
             return Err(InstructionError::AccountNotExecutable);
@@ -868,14 +837,6 @@ impl<'a> InvokeContext<'a> {
         timings: &mut ExecuteTimings,
     ) -> Result<(), InstructionError> {
         *compute_units_consumed = 0;
-        let program_id = program_indices
-            .last()
-            .map(|index| {
-                self.transaction_context
-                    .get_key_of_account_at_index(*index)
-                    .map(|pubkey| *pubkey)
-            })
-            .unwrap_or_else(|| Ok(native_loader::id()))?;
 
         let nesting_level = self
             .transaction_context
@@ -909,37 +870,17 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        let result = self
-            .push(instruction_accounts, program_indices, instruction_data)
+        self.push(instruction_accounts, program_indices, instruction_data)?;
+        self.process_executable_chain(compute_units_consumed, timings)
             .and_then(|_| {
-                let mut process_executable_chain_time =
-                    Measure::start("process_executable_chain_time");
-                self.transaction_context
-                    .set_return_data(program_id, Vec::new())?;
-                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
-                let execution_result = self.process_executable_chain();
-                let post_remaining_units = self.compute_meter.borrow().get_remaining();
-                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
-                process_executable_chain_time.stop();
-
                 // Verify the called program has not misbehaved
                 let mut verify_callee_time = Measure::start("verify_callee_time");
-                let result = execution_result.and_then(|_| {
-                    if is_top_level_instruction {
-                        self.verify(instruction_accounts, program_indices)
-                    } else {
-                        self.verify_and_update(instruction_accounts, false)
-                    }
-                });
+                let result = if is_top_level_instruction {
+                    self.verify(instruction_accounts, program_indices)
+                } else {
+                    self.verify_and_update(instruction_accounts, false)
+                };
                 verify_callee_time.stop();
-
-                saturating_add_assign!(
-                    timings
-                        .execute_accessories
-                        .process_instructions
-                        .process_executable_chain_us,
-                    process_executable_chain_time.as_us()
-                );
                 saturating_add_assign!(
                     timings
                         .execute_accessories
@@ -947,25 +888,28 @@ impl<'a> InvokeContext<'a> {
                         .verify_callee_us,
                     verify_callee_time.as_us()
                 );
-
                 result
-            });
-
-        // Pop the invoke_stack to restore previous state
-        let _ = self.pop();
-        result
+            })
+            // MUST pop if and only if `push` succeeded, independent of `result`.
+            // Thus, the `.and()` instead of an `.and_then()`.
+            .and(self.pop())
     }
 
     /// Calls the instruction's program entrypoint method
-    fn process_executable_chain(&mut self) -> Result<(), InstructionError> {
+    fn process_executable_chain(
+        &mut self,
+        compute_units_consumed: &mut u64,
+        timings: &mut ExecuteTimings,
+    ) -> Result<(), InstructionError> {
         let instruction_context = self.transaction_context.get_current_instruction_context()?;
+        let mut process_executable_chain_time = Measure::start("process_executable_chain_time");
 
         let (first_instruction_account, builtin_id) = {
             let borrowed_root_account = instruction_context
-                .try_borrow_account(self.transaction_context, 0)
+                .try_borrow_program_account(self.transaction_context, 0)
                 .map_err(|_| InstructionError::UnsupportedProgramId)?;
             let owner_id = borrowed_root_account.get_owner();
-            if solana_sdk::native_loader::check_id(owner_id) {
+            if native_loader::check_id(owner_id) {
                 (1, *borrowed_root_account.get_key())
             } else {
                 (0, *owner_id)
@@ -974,21 +918,38 @@ impl<'a> InvokeContext<'a> {
 
         for entry in self.builtin_programs {
             if entry.program_id == builtin_id {
-                let program_id = instruction_context.get_program_id(self.transaction_context);
-                if builtin_id == program_id {
+                let program_id =
+                    *instruction_context.get_last_program_key(self.transaction_context)?;
+                self.transaction_context
+                    .set_return_data(program_id, Vec::new())?;
+
+                let pre_remaining_units = self.compute_meter.borrow().get_remaining();
+                let result = if builtin_id == program_id {
                     let logger = self.get_log_collector();
                     stable_log::program_invoke(&logger, &program_id, self.get_stack_height());
-                    return (entry.process_instruction)(first_instruction_account, self)
+                    (entry.process_instruction)(first_instruction_account, self)
                         .map(|()| {
                             stable_log::program_success(&logger, &program_id);
                         })
                         .map_err(|err| {
                             stable_log::program_failure(&logger, &program_id, &err);
                             err
-                        });
+                        })
                 } else {
-                    return (entry.process_instruction)(first_instruction_account, self);
-                }
+                    (entry.process_instruction)(first_instruction_account, self)
+                };
+                let post_remaining_units = self.compute_meter.borrow().get_remaining();
+                *compute_units_consumed = pre_remaining_units.saturating_sub(post_remaining_units);
+
+                process_executable_chain_time.stop();
+                saturating_add_assign!(
+                    timings
+                        .execute_accessories
+                        .process_instructions
+                        .process_executable_chain_us,
+                    process_executable_chain_time.as_us()
+                );
+                return result;
             }
         }
 
@@ -1133,19 +1094,19 @@ pub fn prepare_mock_invoke_context(
 ) -> MockInvokeContextPreparation {
     let mut instruction_accounts: Vec<InstructionAccount> =
         Vec::with_capacity(instruction_account_metas.len());
-    for (index_in_instruction, account_meta) in instruction_account_metas.iter().enumerate() {
+    for (instruction_account_index, account_meta) in instruction_account_metas.iter().enumerate() {
         let index_in_transaction = transaction_accounts
             .iter()
             .position(|(key, _account)| *key == account_meta.pubkey)
             .unwrap_or(transaction_accounts.len());
         let index_in_callee = instruction_accounts
-            .get(0..index_in_instruction)
+            .get(0..instruction_account_index)
             .unwrap()
             .iter()
             .position(|instruction_account| {
                 instruction_account.index_in_transaction == index_in_transaction
             })
-            .unwrap_or(index_in_instruction);
+            .unwrap_or(instruction_account_index);
         instruction_accounts.push(InstructionAccount {
             index_in_transaction,
             index_in_caller: index_in_transaction,
@@ -1169,7 +1130,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     let transaction_accounts = vec![
         (
             loader_id,
-            AccountSharedData::new(0, 0, &solana_sdk::native_loader::id()),
+            AccountSharedData::new(0, 0, &native_loader::id()),
         ),
         (
             Pubkey::new_unique(),
@@ -1191,6 +1152,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
         preparation.transaction_accounts,
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
         1,
+        MAX_ACCOUNTS_DATA_LEN,
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
@@ -1213,7 +1175,7 @@ pub fn mock_process_instruction(
     program_indices.insert(0, transaction_accounts.len());
     let mut preparation =
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
-    let processor_account = AccountSharedData::new(0, 0, &solana_sdk::native_loader::id());
+    let processor_account = AccountSharedData::new(0, 0, &native_loader::id());
     preparation
         .transaction_accounts
         .push((*loader_id, processor_account));
@@ -1221,6 +1183,7 @@ pub fn mock_process_instruction(
         preparation.transaction_accounts,
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
         1,
+        MAX_ACCOUNTS_DATA_LEN,
     );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     if let Some(sysvar_cache) = sysvar_cache_override {
@@ -1235,7 +1198,8 @@ pub fn mock_process_instruction(
             &program_indices,
             instruction_data,
         )
-        .and_then(|_| process_instruction(1, &mut invoke_context));
+        .and_then(|_| process_instruction(1, &mut invoke_context))
+        .and_then(|_| invoke_context.verify(&preparation.instruction_accounts, &program_indices));
     invoke_context.pop().unwrap();
     assert_eq!(result, expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
@@ -1264,7 +1228,7 @@ mod tests {
             desired_result: Result<(), InstructionError>,
         },
         Resize {
-            new_len: usize,
+            new_len: u64,
         },
     }
 
@@ -1305,7 +1269,7 @@ mod tests {
         let transaction_context = &invoke_context.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
-        let program_id = instruction_context.get_program_key(transaction_context)?;
+        let program_id = instruction_context.get_last_program_key(transaction_context)?;
         assert_eq!(
             program_id,
             instruction_context
@@ -1350,7 +1314,7 @@ mod tests {
                 }
                 MockInstruction::Resize { new_len } => instruction_context
                     .try_borrow_instruction_account(transaction_context, 0)?
-                    .set_data(&vec![0; new_len])
+                    .set_data(&vec![0; new_len as usize])
                     .unwrap(),
             }
         } else {
@@ -1393,7 +1357,7 @@ mod tests {
             });
         }
         let mut transaction_context =
-            TransactionContext::new(accounts, ComputeBudget::default().max_invoke_depth, 1);
+            TransactionContext::new(accounts, ComputeBudget::default().max_invoke_depth, 1, 0);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         // Check call depth increases and has a limit
@@ -1447,7 +1411,7 @@ mod tests {
                     .get(owned_index)
                     .unwrap()
                     .data()
-                    .get(0)
+                    .first()
                     .unwrap(),
                 (MAX_DEPTH + owned_index) as u8
             );
@@ -1459,7 +1423,7 @@ mod tests {
                 .unwrap()
                 .borrow_mut()
                 .data()
-                .get(0)
+                .first()
                 .unwrap();
             *invoke_context
                 .transaction_context
@@ -1479,7 +1443,7 @@ mod tests {
                     .get(not_owned_index)
                     .unwrap()
                     .data()
-                    .get(0)
+                    .first()
                     .unwrap(),
                 data
             );
@@ -1501,7 +1465,7 @@ mod tests {
         let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
         let instruction_accounts = vec![];
         let program_indices = vec![0];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 1);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 1, 0);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(&instruction_accounts, &program_indices, &[])
@@ -1538,15 +1502,15 @@ mod tests {
             AccountMeta::new_readonly(accounts.get(2).unwrap().0, false),
         ];
         let instruction_accounts = (0..4)
-            .map(|index_in_instruction| InstructionAccount {
-                index_in_transaction: index_in_instruction,
-                index_in_caller: index_in_instruction,
-                index_in_callee: index_in_instruction,
+            .map(|instruction_account_index| InstructionAccount {
+                index_in_transaction: instruction_account_index,
+                index_in_caller: instruction_account_index,
+                index_in_callee: instruction_account_index,
                 is_signer: false,
-                is_writable: index_in_instruction < 2,
+                is_writable: instruction_account_index < 2,
             })
             .collect::<Vec<_>>();
-        let mut transaction_context = TransactionContext::new(accounts, 2, 8);
+        let mut transaction_context = TransactionContext::new(accounts, 2, 8, 0);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
@@ -1676,38 +1640,12 @@ mod tests {
 
     #[test]
     fn test_invoke_context_compute_budget() {
-        let accounts = vec![
-            (solana_sdk::pubkey::new_rand(), AccountSharedData::default()),
-            (crate::neon_evm_program::id(), AccountSharedData::default()),
-        ];
+        let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
-        let mut feature_set = FeatureSet::all_enabled();
-        feature_set.deactivate(&tx_wide_compute_cap::id());
-        feature_set.deactivate(&requestable_heap_size::id());
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3, 0);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context.feature_set = Arc::new(feature_set);
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
-
-        invoke_context.push(&[], &[0], &[]).unwrap();
-        assert_eq!(
-            *invoke_context.get_compute_budget(),
-            ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
-        );
-        invoke_context.pop().unwrap();
-
-        invoke_context.push(&[], &[1], &[]).unwrap();
-        let expected_compute_budget = ComputeBudget {
-            compute_unit_limit: 500_000,
-            heap_size: Some(256_usize.saturating_mul(1024)),
-            ..ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
-        };
-        assert_eq!(
-            *invoke_context.get_compute_budget(),
-            expected_compute_budget
-        );
-        invoke_context.pop().unwrap();
 
         invoke_context.push(&[], &[0], &[]).unwrap();
         assert_eq!(
@@ -1722,8 +1660,9 @@ mod tests {
         solana_logger::setup();
 
         let program_key = Pubkey::new_unique();
-        let user_account_data_len = 123;
-        let user_account = AccountSharedData::new(100, user_account_data_len, &program_key);
+        let user_account_data_len = 123u64;
+        let user_account =
+            AccountSharedData::new(100, user_account_data_len as usize, &program_key);
         let dummy_account = AccountSharedData::new(10, 0, &program_key);
         let mut program_account = AccountSharedData::new(500, 500, &native_loader::id());
         program_account.set_executable(true);
@@ -1738,7 +1677,8 @@ mod tests {
             process_instruction: mock_process_instruction,
         }];
 
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context =
+            TransactionContext::new(accounts, 1, 3, user_account_data_len * 2);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
 
@@ -1748,7 +1688,13 @@ mod tests {
         invoke_context
             .accounts_data_meter
             .set_maximum(user_account_data_len as u64 * 3);
-        let remaining_account_data_len = invoke_context.accounts_data_meter.remaining() as usize;
+        let remaining_account_data_len = invoke_context
+            .transaction_context
+            .get_total_resize_remaining();
+        assert_eq!(
+            remaining_account_data_len,
+            invoke_context.accounts_data_meter.remaining(),
+        );
 
         let instruction_accounts = [
             InstructionAccount {
@@ -1783,6 +1729,12 @@ mod tests {
 
             assert!(result.is_ok());
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .get_total_resize_remaining(),
+                0
+            );
         }
 
         // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
@@ -1801,6 +1753,12 @@ mod tests {
 
             assert!(result.is_ok());
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .get_total_resize_remaining(),
+                0
+            );
         }
 
         // Test 3: Resize the account to exceed the budget; this must fail
@@ -1823,6 +1781,12 @@ mod tests {
                 Err(solana_sdk::instruction::InstructionError::MaxAccountsDataSizeExceeded)
             ));
             assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .get_total_resize_remaining(),
+                0
+            );
         }
     }
 }

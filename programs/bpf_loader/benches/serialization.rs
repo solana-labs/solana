@@ -92,16 +92,16 @@ fn create_inputs() -> TransactionContext {
         .into_iter()
         .enumerate()
         .map(
-            |(index_in_instruction, index_in_transaction)| InstructionAccount {
-                index_in_caller: index_in_instruction,
+            |(instruction_account_index, index_in_transaction)| InstructionAccount {
+                index_in_caller: instruction_account_index,
                 index_in_transaction,
-                index_in_callee: index_in_instruction,
+                index_in_callee: instruction_account_index,
                 is_signer: false,
-                is_writable: index_in_instruction >= 4,
+                is_writable: instruction_account_index >= 4,
             },
         )
         .collect::<Vec<_>>();
-    let mut transaction_context = TransactionContext::new(transaction_accounts, 1, 1);
+    let mut transaction_context = TransactionContext::new(transaction_accounts, 1, 1, 0);
     let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     transaction_context
         .push(&[0], &instruction_accounts, &instruction_data, true)

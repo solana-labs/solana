@@ -21,7 +21,7 @@ use {
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount, WritableAccount},
+        account::{Account, AccountSharedData, ReadableAccount},
         account_info::AccountInfo,
         clock::Slot,
         entrypoint::{ProgramResult, SUCCESS},
@@ -101,11 +101,10 @@ pub fn builtin_process_instruction(
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
     let instruction_data = instruction_context.get_instruction_data();
-    let indices_in_instruction = instruction_context.get_number_of_program_accounts()
-        ..instruction_context.get_number_of_accounts();
+    let instruction_account_indices = 0..instruction_context.get_number_of_instruction_accounts();
 
     let log_collector = invoke_context.get_log_collector();
-    let program_id = instruction_context.get_program_key(transaction_context)?;
+    let program_id = instruction_context.get_last_program_key(transaction_context)?;
     stable_log::program_invoke(
         &log_collector,
         program_id,
@@ -113,14 +112,14 @@ pub fn builtin_process_instruction(
     );
 
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
-    let deduplicated_indices: HashSet<usize> = indices_in_instruction.clone().collect();
+    let deduplicated_indices: HashSet<usize> = instruction_account_indices.clone().collect();
 
     // Create copies of the accounts
     let mut account_copies = deduplicated_indices
         .iter()
-        .map(|index_in_instruction| {
+        .map(|instruction_account_index| {
             let borrowed_account = instruction_context
-                .try_borrow_account(transaction_context, *index_in_instruction)?;
+                .try_borrow_instruction_account(transaction_context, *instruction_account_index)?;
             Ok((
                 *borrowed_account.get_key(),
                 *borrowed_account.get_owner(),
@@ -144,15 +143,15 @@ pub fn builtin_process_instruction(
         .collect();
 
     // Create AccountInfos
-    let account_infos = indices_in_instruction
-        .map(|index_in_instruction| {
+    let account_infos = instruction_account_indices
+        .map(|instruction_account_index| {
             let account_copy_index = deduplicated_indices
                 .iter()
-                .position(|index| *index == index_in_instruction)
+                .position(|index| *index == instruction_account_index)
                 .unwrap();
             let (key, owner, lamports, data) = &account_refs[account_copy_index];
             let borrowed_account = instruction_context
-                .try_borrow_account(transaction_context, index_in_instruction)?;
+                .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
             Ok(AccountInfo {
                 key,
                 is_signer: borrowed_account.is_signer(),
@@ -175,15 +174,20 @@ pub fn builtin_process_instruction(
     stable_log::program_success(&log_collector, program_id);
 
     // Commit AccountInfo changes back into KeyedAccounts
-    for (index_in_instruction, (_key, _owner, lamports, data)) in deduplicated_indices
+    for (instruction_account_index, (_key, owner, lamports, data)) in deduplicated_indices
         .into_iter()
         .zip(account_copies.into_iter())
     {
-        let mut borrowed_account =
-            instruction_context.try_borrow_account(transaction_context, index_in_instruction)?;
-        if borrowed_account.is_writable() {
+        let mut borrowed_account = instruction_context
+            .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
+        if borrowed_account.get_lamports() != lamports {
             borrowed_account.set_lamports(lamports)?;
+        }
+        if borrowed_account.get_data() != data {
             borrowed_account.set_data(&data)?;
+        }
+        if borrowed_account.get_owner() != &owner {
+            borrowed_account.set_owner(owner.as_ref())?;
         }
     }
 
@@ -253,7 +257,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .get_current_instruction_context()
             .unwrap();
         let caller = instruction_context
-            .get_program_key(transaction_context)
+            .get_last_program_key(transaction_context)
             .unwrap();
 
         stable_log::program_invoke(
@@ -271,10 +275,13 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .unwrap();
 
         // Copy caller's account_info modifications into invoke_context accounts
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .unwrap();
         let mut account_indices = Vec::with_capacity(instruction_accounts.len());
         for instruction_account in instruction_accounts.iter() {
-            let account_key = invoke_context
-                .transaction_context
+            let account_key = transaction_context
                 .get_key_of_account_at_index(instruction_account.index_in_transaction)
                 .unwrap();
             let account_info_index = account_infos
@@ -283,19 +290,39 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .ok_or(InstructionError::MissingAccount)
                 .unwrap();
             let account_info = &account_infos[account_info_index];
-            let mut account = invoke_context
-                .transaction_context
+            let mut borrowed_account = instruction_context
+                .try_borrow_instruction_account(
+                    transaction_context,
+                    instruction_account.index_in_caller,
+                )
+                .unwrap();
+            if borrowed_account.get_lamports() != account_info.lamports() {
+                borrowed_account
+                    .set_lamports(account_info.lamports())
+                    .unwrap();
+            }
+            let account_info_data = account_info.try_borrow_data().unwrap();
+            if borrowed_account.get_data() != *account_info_data {
+                borrowed_account.set_data(&account_info_data).unwrap();
+            }
+            if borrowed_account.is_executable() != account_info.executable {
+                borrowed_account
+                    .set_executable(account_info.executable)
+                    .unwrap();
+            }
+            if borrowed_account.get_owner() != account_info.owner {
+                borrowed_account
+                    .set_owner(account_info.owner.as_ref())
+                    .unwrap();
+            }
+            drop(borrowed_account);
+            let account = transaction_context
                 .get_account_at_index(instruction_account.index_in_transaction)
                 .unwrap()
-                .borrow_mut();
-            account.copy_into_owner_from_slice(account_info.owner.as_ref());
-            account.set_data_from_slice(&account_info.try_borrow_data().unwrap());
-            account.set_lamports(account_info.lamports());
-            account.set_executable(account_info.executable);
-            account.set_rent_epoch(account_info.rent_epoch);
+                .borrow();
+            assert_eq!(account.rent_epoch(), account_info.rent_epoch);
             if instruction_account.is_writable {
-                account_indices
-                    .push((instruction_account.index_in_transaction, account_info_index));
+                account_indices.push((instruction_account.index_in_caller, account_info_index));
             }
         }
 
@@ -311,23 +338,25 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .map_err(|err| ProgramError::try_from(err).unwrap_or_else(|err| panic!("{}", err)))?;
 
         // Copy invoke_context accounts modifications into caller's account_info
-        for (index_in_transaction, account_info_index) in account_indices.into_iter() {
-            let account = invoke_context
-                .transaction_context
-                .get_account_at_index(index_in_transaction)
-                .unwrap()
-                .borrow_mut();
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context
+            .get_current_instruction_context()
+            .unwrap();
+        for (index_in_caller, account_info_index) in account_indices.into_iter() {
+            let borrowed_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, index_in_caller)
+                .unwrap();
             let account_info = &account_infos[account_info_index];
-            **account_info.try_borrow_mut_lamports().unwrap() = account.lamports();
+            **account_info.try_borrow_mut_lamports().unwrap() = borrowed_account.get_lamports();
             let mut data = account_info.try_borrow_mut_data()?;
-            let new_data = account.data();
-            if account_info.owner != account.owner() {
+            let new_data = borrowed_account.get_data();
+            if account_info.owner != borrowed_account.get_owner() {
                 // TODO Figure out a better way to allow the System Program to set the account owner
                 #[allow(clippy::transmute_ptr_to_ptr)]
                 #[allow(mutable_transmutes)]
                 let account_info_mut =
                     unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
-                *account_info_mut = *account.owner();
+                *account_info_mut = *borrowed_account.get_owner();
             }
             // TODO: Figure out how to allow the System Program to resize the account data
             assert!(
@@ -379,7 +408,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .get_current_instruction_context()
             .unwrap();
         let caller = *instruction_context
-            .get_program_key(transaction_context)
+            .get_last_program_key(transaction_context)
             .unwrap();
         transaction_context
             .set_return_data(caller, data.to_vec())

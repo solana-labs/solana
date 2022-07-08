@@ -81,10 +81,10 @@ fn create_accounts() -> (
         (authority_pubkey, AccountSharedData::default()),
     ];
     let mut instruction_accounts = (0..4)
-        .map(|index_in_instruction| InstructionAccount {
-            index_in_transaction: 1usize.saturating_add(index_in_instruction),
-            index_in_caller: index_in_instruction,
-            index_in_callee: index_in_instruction,
+        .map(|index_in_callee| InstructionAccount {
+            index_in_transaction: 1usize.saturating_add(index_in_callee),
+            index_in_caller: index_in_callee,
+            index_in_callee,
             is_signer: false,
             is_writable: false,
         })
@@ -107,7 +107,8 @@ fn bench_process_vote_instruction(
     instruction_data: Vec<u8>,
 ) {
     bencher.iter(|| {
-        let mut transaction_context = TransactionContext::new(transaction_accounts.clone(), 1, 1);
+        let mut transaction_context =
+            TransactionContext::new(transaction_accounts.clone(), 1, 1, 0);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(&instruction_accounts, &[0], &instruction_data)

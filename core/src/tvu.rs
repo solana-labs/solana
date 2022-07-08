@@ -10,22 +10,24 @@ use {
             VerifiedVoteReceiver, VoteTracker,
         },
         cluster_slots::ClusterSlots,
+        cluster_slots_service::ClusterSlotsService,
         completed_data_sets_service::CompletedDataSetsSender,
-        consensus::Tower,
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
+        repair_service::RepairInfo,
         replay_stage::{ReplayStage, ReplayStageConfig},
         retransmit_stage::RetransmitStage,
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
-        sigverify_shreds::ShredSigVerifier,
-        sigverify_stage::SigVerifyStage,
+        sigverify_shreds,
         tower_storage::TowerStorage,
+        validator::ProcessBlockStore,
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
+        window_service::WindowService,
     },
-    crossbeam_channel::{bounded, unbounded, Receiver, RecvTimeoutError},
+    crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
@@ -52,19 +54,17 @@ use {
     std::{
         collections::HashSet,
         net::UdpSocket,
-        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
-        thread,
-        time::Duration,
+        sync::{atomic::AtomicBool, Arc, RwLock},
+        thread::{self, JoinHandle},
     },
 };
 
-/// Timeout interval when joining threads during TVU close
-const TVU_THREADS_JOIN_TIMEOUT_SECONDS: u64 = 10;
-
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
-    sigverify_stage: SigVerifyStage,
+    shred_sigverify: JoinHandle<()>,
     retransmit_stage: RetransmitStage,
+    window_service: WindowService,
+    cluster_slots_service: ClusterSlotsService,
     replay_stage: ReplayStage,
     ledger_cleanup_service: Option<LedgerCleanupService>,
     cost_update_service: CostUpdateService,
@@ -100,7 +100,7 @@ impl Tvu {
     /// * `sockets` - fetch, repair, and retransmit sockets
     /// * `blockstore` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new<T: Into<Tower> + Sized>(
+    pub fn new(
         vote_account: &Pubkey,
         authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -109,13 +109,13 @@ impl Tvu {
         blockstore: Arc<Blockstore>,
         ledger_signal_receiver: Receiver<bool>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
-        tower: T,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
+        maybe_process_block_store: Option<ProcessBlockStore>,
         tower_storage: Arc<dyn TowerStorage>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
         exit: &Arc<AtomicBool>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
-        turbine_disabled: Option<Arc<AtomicBool>>,
+        turbine_disabled: Arc<AtomicBool>,
         transaction_status_sender: Option<TransactionStatusSender>,
         rewards_recorder_sender: Option<RewardsRecorderSender>,
         cache_block_meta_sender: Option<CacheBlockMetaSender>,
@@ -155,51 +155,73 @@ impl Tvu {
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
-            &fetch_sender,
-            Some(bank_forks.clone()),
+            fetch_sender,
+            tvu_config.shred_version,
+            bank_forks.clone(),
             exit,
         );
 
         let (verified_sender, verified_receiver) = unbounded();
-        let sigverify_stage = SigVerifyStage::new(
+        let (retransmit_sender, retransmit_receiver) = unbounded();
+        let shred_sigverify = sigverify_shreds::spawn_shred_sigverify(
+            cluster_info.id(),
+            bank_forks.clone(),
+            leader_schedule_cache.clone(),
             fetch_receiver,
-            ShredSigVerifier::new(
-                bank_forks.clone(),
-                leader_schedule_cache.clone(),
-                verified_sender,
-            ),
-            "shred-verifier",
+            retransmit_sender.clone(),
+            verified_sender,
+            turbine_disabled,
+        );
+
+        let retransmit_stage = RetransmitStage::new(
+            bank_forks.clone(),
+            leader_schedule_cache.clone(),
+            cluster_info.clone(),
+            Arc::new(retransmit_sockets),
+            retransmit_receiver,
+            max_slots.clone(),
+            Some(rpc_subscriptions.clone()),
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
-        let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
-        let retransmit_stage = RetransmitStage::new(
-            bank_forks.clone(),
-            leader_schedule_cache.clone(),
+        let window_service = {
+            let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
+            let repair_info = RepairInfo {
+                bank_forks: bank_forks.clone(),
+                epoch_schedule,
+                duplicate_slots_reset_sender,
+                repair_validators: tvu_config.repair_validators,
+                cluster_info: cluster_info.clone(),
+                cluster_slots: cluster_slots.clone(),
+            };
+            WindowService::new(
+                blockstore.clone(),
+                verified_receiver,
+                retransmit_sender,
+                repair_socket,
+                ancestor_hashes_socket,
+                exit.clone(),
+                repair_info,
+                leader_schedule_cache.clone(),
+                verified_vote_receiver,
+                completed_data_sets_sender,
+                duplicate_slots_sender,
+                ancestor_hashes_replay_update_receiver,
+            )
+        };
+
+        let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
+        let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
-            cluster_info.clone(),
-            Arc::new(retransmit_sockets),
-            repair_socket,
-            ancestor_hashes_socket,
-            verified_receiver,
-            exit.clone(),
-            cluster_slots_update_receiver,
-            *bank_forks.read().unwrap().working_bank().epoch_schedule(),
-            turbine_disabled,
-            tvu_config.shred_version,
             cluster_slots.clone(),
-            duplicate_slots_reset_sender,
-            verified_vote_receiver,
-            tvu_config.repair_validators,
-            completed_data_sets_sender,
-            max_slots.clone(),
-            Some(rpc_subscriptions.clone()),
-            duplicate_slots_sender,
-            ancestor_hashes_replay_update_receiver,
+            bank_forks.clone(),
+            cluster_info.clone(),
+            cluster_slots_update_receiver,
+            exit.clone(),
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();
@@ -231,7 +253,7 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service = if connection_cache.get_use_quic() {
+        let warm_quic_cache_service = if connection_cache.use_quic() {
             Some(WarmQuicCacheService::new(
                 connection_cache.clone(),
                 cluster_info.clone(),
@@ -265,7 +287,7 @@ impl Tvu {
             ledger_signal_receiver,
             duplicate_slots_receiver,
             poh_recorder.clone(),
-            tower,
+            maybe_process_block_store,
             vote_tracker,
             cluster_slots,
             retransmit_slots_sender,
@@ -295,8 +317,10 @@ impl Tvu {
 
         Tvu {
             fetch_stage,
-            sigverify_stage,
+            shred_sigverify,
             retransmit_stage,
+            window_service,
+            cluster_slots_service,
             replay_stage,
             ledger_cleanup_service,
             cost_update_service,
@@ -308,25 +332,11 @@ impl Tvu {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        // spawn a new thread to wait for tvu close
-        let (sender, receiver) = bounded(0);
-        let _ = thread::spawn(move || {
-            let _ = self.do_join();
-            sender.send(()).unwrap();
-        });
-
-        // exit can deadlock. put an upper-bound on how long we wait for it
-        let timeout = Duration::from_secs(TVU_THREADS_JOIN_TIMEOUT_SECONDS);
-        if let Err(RecvTimeoutError::Timeout) = receiver.recv_timeout(timeout) {
-            error!("timeout for closing tvu");
-        }
-        Ok(())
-    }
-
-    fn do_join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
+        self.window_service.join()?;
+        self.cluster_slots_service.join()?;
         self.fetch_stage.join()?;
-        self.sigverify_stage.join()?;
+        self.shred_sigverify.join()?;
         if self.ledger_cleanup_service.is_some() {
             self.ledger_cleanup_service.unwrap().join()?;
         }
@@ -406,7 +416,6 @@ pub mod tests {
         let (completed_data_sets_sender, _completed_data_sets_receiver) = unbounded();
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
-        let tower = Tower::default();
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
@@ -432,12 +441,12 @@ pub mod tests {
                 OptimisticallyConfirmedBank::locked_from_bank_forks_root(&bank_forks),
             )),
             &poh_recorder,
-            tower,
+            None,
             Arc::new(crate::tower_storage::FileTowerStorage::default()),
             &leader_schedule_cache,
             &exit,
             block_commitment_cache,
-            None,
+            Arc::<AtomicBool>::default(),
             None,
             None,
             None,

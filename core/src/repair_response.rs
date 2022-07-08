@@ -40,9 +40,13 @@ pub fn repair_response_packet_from_bytes(
     Some(packet)
 }
 
-pub fn nonce(packet: &Packet) -> Option<Nonce> {
-    let nonce_start = packet.meta.size.checked_sub(SIZE_OF_NONCE)?;
-    packet.deserialize_slice(nonce_start..).ok()
+pub(crate) fn nonce(packet: &Packet) -> Option<Nonce> {
+    // Nonces are attached to both repair and ancestor hashes responses.
+    let data = packet.data(..)?;
+    let offset = data.len().checked_sub(SIZE_OF_NONCE)?;
+    <[u8; SIZE_OF_NONCE]>::try_from(&data[offset..])
+        .map(Nonce::from_le_bytes)
+        .ok()
 }
 
 #[cfg(test)]

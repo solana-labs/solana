@@ -31,7 +31,7 @@ use {
         blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
     },
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_runtime::{
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
@@ -44,6 +44,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
+        snapshot_minimizer::SnapshotMinimizer,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -920,6 +921,25 @@ fn open_genesis_config_by(ledger_path: &Path, matches: &ArgMatches<'_>) -> Genes
     open_genesis_config(ledger_path, max_genesis_archive_unpacked_size)
 }
 
+/// Finds the accounts needed to replay slots `snapshot_slot` to `ending_slot`.
+/// Removes all other accounts from accounts_db, and updates the accounts hash
+/// and capitalization. This is used by the --minimize option in create-snapshot
+fn minimize_bank_for_snapshot(
+    blockstore: &Blockstore,
+    bank: &Bank,
+    snapshot_slot: Slot,
+    ending_slot: Slot,
+) {
+    let (transaction_account_set, transaction_accounts_measure) = measure!(
+        blockstore.get_accounts_used_in_range(snapshot_slot, ending_slot),
+        "get transaction accounts"
+    );
+    let total_accounts_len = transaction_account_set.len();
+    info!("Added {total_accounts_len} accounts from transactions. {transaction_accounts_measure}");
+
+    SnapshotMinimizer::minimize(bank, snapshot_slot, ending_slot, transaction_account_set);
+}
+
 fn assert_capitalization(bank: &Bank) {
     let debug_verify = true;
     assert!(bank.calculate_and_verify_capitalization(debug_verify));
@@ -982,10 +1002,10 @@ fn main() {
         .value_name("MEGABYTES")
         .validator(is_parsable::<usize>)
         .takes_value(true)
-        .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory.");
+        .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk.");
     let disable_disk_index = Arg::with_name("disable_accounts_disk_index")
         .long("disable-accounts-disk-index")
-        .help("Disable the disk-based accounts index if it is enabled by default.")
+        .help("Disable the disk-based accounts index. It is enabled by default. The entire accounts index will be kept in memory.")
         .conflicts_with("accounts_index_memory_limit_mb");
     let accountsdb_skip_shrink = Arg::with_name("accounts_db_skip_shrink")
         .long("accounts-db-skip-shrink")
@@ -1136,6 +1156,7 @@ fn main() {
         .max(rent.minimum_balance(StakeState::size_of()))
         .to_string();
 
+    let mut measure_total_execution_time = Measure::start("ledger tool");
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -1446,6 +1467,9 @@ fn main() {
             .about("Create a new ledger snapshot")
             .arg(&no_snapshot_arg)
             .arg(&account_paths_arg)
+            .arg(&skip_rewrites_arg)
+            .arg(&accounts_db_skip_initial_hash_calc_arg)
+            .arg(&ancient_append_vecs)
             .arg(&hard_forks_arg)
             .arg(&max_genesis_archive_unpacked_size_arg)
             .arg(&snapshot_version_arg)
@@ -1590,6 +1614,23 @@ fn main() {
                     .conflicts_with("no_snapshot")
             )
             .arg(
+                Arg::with_name("minimized")
+                    .long("minimized")
+                    .takes_value(false)
+                    .help("Create a minimized snapshot instead of a full snapshot. This snapshot \
+                          will only include information needed to replay the ledger from the \
+                          snapshot slot to the ending slot.")
+                    .conflicts_with("incremental")
+                    .requires("ending_slot")
+            )
+            .arg(
+                Arg::with_name("ending_slot")
+                    .long("ending-slot")
+                    .takes_value(true)
+                    .value_name("ENDING_SLOT")
+                    .help("Ending slot for minimized snapshot creation")
+            )
+            .arg(
                 Arg::with_name("snapshot_archive_format")
                     .long("snapshot-archive-format")
                     .possible_values(SUPPORTED_ARCHIVE_COMPRESSION)
@@ -1597,8 +1638,9 @@ fn main() {
                     .value_name("ARCHIVE_TYPE")
                     .takes_value(true)
                     .help("Snapshot archive format to use.")
+                    .conflicts_with("no_snapshot")
             )
-    ).subcommand(
+        ).subcommand(
             SubCommand::with_name("accounts")
             .about("Print account stats and contents after processing the ledger")
             .arg(&no_snapshot_arg)
@@ -1771,14 +1813,14 @@ fn main() {
                         .long("before")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("First good root after the range to repair")
+                        .help("Recent root after the range to repair")
                 )
                 .arg(
                     Arg::with_name("end_root")
                         .long("until")
                         .value_name("NUM")
                         .takes_value(true)
-                        .help("Last slot to check for root repair")
+                        .help("Earliest slot to check for root repair")
                 )
                 .arg(
                     Arg::with_name("max_slots")
@@ -2331,6 +2373,7 @@ fn main() {
             }
             ("create-snapshot", Some(arg_matches)) => {
                 let is_incremental = arg_matches.is_present("incremental");
+                let is_minimized = arg_matches.is_present("minimized");
                 let output_directory = value_t!(arg_matches, "output_directory", PathBuf)
                     .unwrap_or_else(|_| {
                         match (
@@ -2417,12 +2460,43 @@ fn main() {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
 
+                let ending_slot = if is_minimized {
+                    let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+                    if ending_slot <= snapshot_slot {
+                        eprintln!(
+                            "ending_slot ({}) must be greater than snapshot_slot ({})",
+                            ending_slot, snapshot_slot
+                        );
+                        exit(1);
+                    }
+
+                    Some(ending_slot)
+                } else {
+                    None
+                };
+
+                let snapshot_type_str = if is_incremental {
+                    "incremental "
+                } else if is_minimized {
+                    "minimized "
+                } else {
+                    ""
+                };
+
                 info!(
                     "Creating {}snapshot of slot {} in {}",
-                    if is_incremental { "incremental " } else { "" },
+                    snapshot_type_str,
                     snapshot_slot,
                     output_directory.display()
                 );
+
+                let accounts_db_config = Some(AccountsDbConfig {
+                    skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
+                    ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    skip_initial_hash_calc: arg_matches
+                        .is_present("accounts_db_skip_initial_hash_calculation"),
+                    ..AccountsDbConfig::default()
+                });
 
                 match load_bank_forks(
                     arg_matches,
@@ -2432,6 +2506,7 @@ fn main() {
                         new_hard_forks,
                         halt_at_slot: Some(snapshot_slot),
                         poh_verify: false,
+                        accounts_db_config,
                         ..ProcessOptions::default()
                     },
                     snapshot_archive_path,
@@ -2642,10 +2717,19 @@ fn main() {
                             bank
                         };
 
+                        if is_minimized {
+                            minimize_bank_for_snapshot(
+                                &blockstore,
+                                &bank,
+                                snapshot_slot,
+                                ending_slot.unwrap(),
+                            );
+                        }
+
                         println!(
                             "Creating a version {} {}snapshot of slot {}",
                             snapshot_version,
-                            if is_incremental { "incremental " } else { "" },
+                            snapshot_type_str,
                             bank.slot(),
                         );
 
@@ -2711,6 +2795,16 @@ fn main() {
                                 bank.hash(),
                                 full_snapshot_archive_info.path().display(),
                             );
+
+                            if is_minimized {
+                                let starting_epoch = bank.epoch_schedule().get_epoch(snapshot_slot);
+                                let ending_epoch =
+                                    bank.epoch_schedule().get_epoch(ending_slot.unwrap());
+                                if starting_epoch != ending_epoch {
+                                    warn!("Minimized snapshot range crosses epoch boundary ({} to {}). Bank hashes after {} will not match replays from a full snapshot",
+                                        starting_epoch, ending_epoch, bank.epoch_schedule().get_last_slot_in_epoch(starting_epoch));
+                                }
+                            }
                         }
 
                         println!(
@@ -3622,5 +3716,7 @@ fn main() {
             }
             _ => unreachable!(),
         };
+        measure_total_execution_time.stop();
+        info!("{}", measure_total_execution_time);
     }
 }

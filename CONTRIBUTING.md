@@ -167,13 +167,6 @@ qualified as "automerge".
 self-contained with moderate scope, you might want to consider attaching
 "good first issue" to it as it might be a good practice for newcomers.
 
-* "rust": this pull request updates Rust code.
-
-* "javascript": this pull request updates Javascript code.
-
-* "ledger-store": this pull request is related to ledger-store.  In most cases,
-it modifies code files under `/ledger/src` directory.
-
 ### When will my PR be reviewed?
 
 PRs are typically reviewed and merged in under 7 days. If your PR has been open

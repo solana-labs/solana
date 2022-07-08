@@ -44,6 +44,10 @@ impl<T> StakeAccount<T> {
     pub(crate) fn stake_state(&self) -> &StakeState {
         &self.stake_state
     }
+
+    pub(crate) fn account(&self) -> &AccountSharedData {
+        &self.account
+    }
 }
 
 impl StakeAccount<Delegation> {

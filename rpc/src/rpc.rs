@@ -61,7 +61,7 @@ use {
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
         exit::Exit,
-        feature_set::{self, nonce_must_be_writable},
+        feature_set,
         fee_calculator::FeeCalculator,
         hash::Hash,
         message::{Message, SanitizedMessage},
@@ -174,15 +174,18 @@ impl JsonRpcConfig {
 pub struct RpcBigtableConfig {
     pub enable_bigtable_ledger_upload: bool,
     pub bigtable_instance_name: String,
+    pub bigtable_app_profile_id: String,
     pub timeout: Option<Duration>,
 }
 
 impl Default for RpcBigtableConfig {
     fn default() -> Self {
         let bigtable_instance_name = solana_storage_bigtable::DEFAULT_INSTANCE_NAME.to_string();
+        let bigtable_app_profile_id = solana_storage_bigtable::DEFAULT_APP_PROFILE_ID.to_string();
         Self {
             enable_bigtable_ledger_upload: false,
             bigtable_instance_name,
+            bigtable_app_profile_id,
             timeout: None,
         }
     }
@@ -378,7 +381,13 @@ impl JsonRpcRequestProcessor {
             ))),
             blockstore,
             validator_exit: create_validator_exit(&exit),
-            health: Arc::new(RpcHealth::new(cluster_info.clone(), None, 0, exit.clone())),
+            health: Arc::new(RpcHealth::new(
+                cluster_info.clone(),
+                None,
+                0,
+                exit.clone(),
+                Arc::clone(bank.get_startup_verification_complete()),
+            )),
             cluster_info,
             genesis_hash,
             transaction_sender: Arc::new(Mutex::new(sender)),
@@ -537,7 +546,7 @@ impl JsonRpcRequestProcessor {
         let first_confirmed_block_in_epoch = *self
             .get_blocks_with_limit(first_slot_in_epoch, 1, config.commitment)
             .await?
-            .get(0)
+            .first()
             .ok_or(RpcCustomError::BlockNotAvailable {
                 slot: first_slot_in_epoch,
             })?;
@@ -1428,12 +1437,12 @@ impl JsonRpcRequestProcessor {
         bank: &Arc<Bank>,
     ) -> Option<TransactionStatus> {
         let (slot, status) = bank.get_signature_status_slot(&signature)?;
-        let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
 
         let optimistically_confirmed_bank = self.bank(Some(CommitmentConfig::confirmed()));
         let optimistically_confirmed =
             optimistically_confirmed_bank.get_signature_status_slot(&signature);
 
+        let r_block_commitment_cache = self.block_commitment_cache.read().unwrap();
         let confirmations = if r_block_commitment_cache.root() >= slot
             && is_finalized(&r_block_commitment_cache, bank, &self.blockstore, slot)
         {
@@ -1890,11 +1899,10 @@ impl JsonRpcRequestProcessor {
         let mut filters = vec![];
         if let Some(mint) = mint {
             // Optional filter on Mint address
-            filters.push(RpcFilterType::Memcmp(Memcmp {
-                offset: 0,
-                bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().into()),
-                encoding: None,
-            }));
+            filters.push(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+                0,
+                mint.to_bytes().into(),
+            )));
         }
 
         let keyed_accounts = self.get_filtered_spl_token_accounts_by_owner(
@@ -1941,17 +1949,12 @@ impl JsonRpcRequestProcessor {
 
         let mut filters = vec![
             // Filter on Delegate is_some()
-            RpcFilterType::Memcmp(Memcmp {
-                offset: 72,
-                bytes: MemcmpEncodedBytes::Bytes(bincode::serialize(&1u32).unwrap()),
-                encoding: None,
-            }),
+            RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+                72,
+                bincode::serialize(&1u32).unwrap(),
+            )),
             // Filter on Delegate address
-            RpcFilterType::Memcmp(Memcmp {
-                offset: 76,
-                bytes: MemcmpEncodedBytes::Bytes(delegate.to_bytes().into()),
-                encoding: None,
-            }),
+            RpcFilterType::Memcmp(Memcmp::new_raw_bytes(76, delegate.to_bytes().into())),
         ];
         // Optional filter on Mint address, uses mint account index for scan
         let keyed_accounts = if let Some(mint) = mint {
@@ -2043,11 +2046,10 @@ impl JsonRpcRequestProcessor {
         // Filter on Token Account state
         filters.push(RpcFilterType::TokenAccountState);
         // Filter on Owner address
-        filters.push(RpcFilterType::Memcmp(Memcmp {
-            offset: SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
-            bytes: MemcmpEncodedBytes::Bytes(owner_key.to_bytes().into()),
-            encoding: None,
-        }));
+        filters.push(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+            SPL_TOKEN_ACCOUNT_OWNER_OFFSET,
+            owner_key.to_bytes().into(),
+        )));
 
         if self
             .config
@@ -2095,11 +2097,10 @@ impl JsonRpcRequestProcessor {
         // Filter on Token Account state
         filters.push(RpcFilterType::TokenAccountState);
         // Filter on Mint address
-        filters.push(RpcFilterType::Memcmp(Memcmp {
-            offset: SPL_TOKEN_ACCOUNT_MINT_OFFSET,
-            bytes: MemcmpEncodedBytes::Bytes(mint_key.to_bytes().into()),
-            encoding: None,
-        }));
+        filters.push(RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+            SPL_TOKEN_ACCOUNT_MINT_OFFSET,
+            mint_key.to_bytes().into(),
+        )));
         if self
             .config
             .account_indexes
@@ -3613,11 +3614,7 @@ pub mod rpc_full {
                 .unwrap_or(0);
 
             let durable_nonce_info = transaction
-                .get_durable_nonce(
-                    preflight_bank
-                        .feature_set
-                        .is_active(&nonce_must_be_writable::id()),
-                )
+                .get_durable_nonce()
                 .map(|&pubkey| (pubkey, *transaction.message().recent_blockhash()));
             if durable_nonce_info.is_some() {
                 // While it uses a defined constant, this last_valid_block_height value is chosen arbitrarily.
@@ -5573,10 +5570,11 @@ pub mod tests {
                 let authority = Pubkey::new_unique();
                 let account = AccountSharedData::new_data(
                     42,
-                    &nonce::state::Versions::new(
-                        nonce::State::new_initialized(&authority, DurableNonce::default(), 1000),
-                        true, // separate_domains
-                    ),
+                    &nonce::state::Versions::new(nonce::State::new_initialized(
+                        &authority,
+                        DurableNonce::default(),
+                        1000,
+                    )),
                     &system_program::id(),
                 )
                 .unwrap();
@@ -6392,6 +6390,7 @@ pub mod tests {
 
     #[test]
     fn test_rpc_verify_filter() {
+        #[allow(deprecated)]
         let filter = RpcFilterType::Memcmp(Memcmp {
             offset: 0,
             bytes: MemcmpEncodedBytes::Base58(
@@ -6401,6 +6400,7 @@ pub mod tests {
         });
         assert_eq!(verify_filter(&filter), Ok(()));
         // Invalid base-58
+        #[allow(deprecated)]
         let filter = RpcFilterType::Memcmp(Memcmp {
             offset: 0,
             bytes: MemcmpEncodedBytes::Base58("III".to_string()),
@@ -7957,11 +7957,7 @@ pub mod tests {
             get_spl_token_owner_filter(
                 &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
                 &[
-                    RpcFilterType::Memcmp(Memcmp {
-                        offset: 32,
-                        bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
-                        encoding: None
-                    }),
+                    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(32, owner.to_bytes().to_vec())),
                     RpcFilterType::DataSize(165)
                 ],
             )
@@ -7974,16 +7970,8 @@ pub mod tests {
             get_spl_token_owner_filter(
                 &Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap(),
                 &[
-                    RpcFilterType::Memcmp(Memcmp {
-                        offset: 32,
-                        bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
-                        encoding: None
-                    }),
-                    RpcFilterType::Memcmp(Memcmp {
-                        offset: 165,
-                        bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
-                        encoding: None
-                    })
+                    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(32, owner.to_bytes().to_vec())),
+                    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(165, vec![ACCOUNTTYPE_ACCOUNT])),
                 ],
             )
             .unwrap(),
@@ -7995,11 +7983,7 @@ pub mod tests {
             get_spl_token_owner_filter(
                 &Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap(),
                 &[
-                    RpcFilterType::Memcmp(Memcmp {
-                        offset: 32,
-                        bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
-                        encoding: None
-                    }),
+                    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(32, owner.to_bytes().to_vec())),
                     RpcFilterType::TokenAccountState,
                 ],
             )
@@ -8011,16 +7995,8 @@ pub mod tests {
         assert!(get_spl_token_owner_filter(
             &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
             &[
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 32,
-                    bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
-                    encoding: None
-                }),
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 165,
-                    bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
-                    encoding: None
-                })
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(32, owner.to_bytes().to_vec())),
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(165, vec![ACCOUNTTYPE_ACCOUNT])),
             ],
         )
         .is_none());
@@ -8029,11 +8005,7 @@ pub mod tests {
         assert!(get_spl_token_owner_filter(
             &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
             &[
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 0,
-                    bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
-                    encoding: None
-                }),
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, owner.to_bytes().to_vec())),
                 RpcFilterType::DataSize(165)
             ],
         )
@@ -8043,11 +8015,7 @@ pub mod tests {
         assert!(get_spl_token_owner_filter(
             &Pubkey::new_unique(),
             &[
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 32,
-                    bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
-                    encoding: None
-                }),
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(32, owner.to_bytes().to_vec())),
                 RpcFilterType::DataSize(165)
             ],
         )
@@ -8055,16 +8023,8 @@ pub mod tests {
         assert!(get_spl_token_owner_filter(
             &Pubkey::new_unique(),
             &[
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 32,
-                    bytes: MemcmpEncodedBytes::Bytes(owner.to_bytes().to_vec()),
-                    encoding: None
-                }),
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 165,
-                    bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
-                    encoding: None
-                })
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(32, owner.to_bytes().to_vec())),
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(165, vec![ACCOUNTTYPE_ACCOUNT])),
             ],
         )
         .is_none());
@@ -8078,11 +8038,7 @@ pub mod tests {
             get_spl_token_mint_filter(
                 &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
                 &[
-                    RpcFilterType::Memcmp(Memcmp {
-                        offset: 0,
-                        bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
-                        encoding: None
-                    }),
+                    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, mint.to_bytes().to_vec())),
                     RpcFilterType::DataSize(165)
                 ],
             )
@@ -8095,16 +8051,8 @@ pub mod tests {
             get_spl_token_mint_filter(
                 &Pubkey::from_str("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb").unwrap(),
                 &[
-                    RpcFilterType::Memcmp(Memcmp {
-                        offset: 0,
-                        bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
-                        encoding: None
-                    }),
-                    RpcFilterType::Memcmp(Memcmp {
-                        offset: 165,
-                        bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
-                        encoding: None
-                    })
+                    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, mint.to_bytes().to_vec())),
+                    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(165, vec![ACCOUNTTYPE_ACCOUNT])),
                 ],
             )
             .unwrap(),
@@ -8116,11 +8064,7 @@ pub mod tests {
             get_spl_token_mint_filter(
                 &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
                 &[
-                    RpcFilterType::Memcmp(Memcmp {
-                        offset: 0,
-                        bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
-                        encoding: None
-                    }),
+                    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, mint.to_bytes().to_vec())),
                     RpcFilterType::TokenAccountState,
                 ],
             )
@@ -8132,16 +8076,8 @@ pub mod tests {
         assert!(get_spl_token_mint_filter(
             &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
             &[
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 0,
-                    bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
-                    encoding: None
-                }),
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 165,
-                    bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
-                    encoding: None
-                })
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, mint.to_bytes().to_vec())),
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(165, vec![ACCOUNTTYPE_ACCOUNT])),
             ],
         )
         .is_none());
@@ -8150,11 +8086,7 @@ pub mod tests {
         assert!(get_spl_token_mint_filter(
             &Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap(),
             &[
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 32,
-                    bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
-                    encoding: None
-                }),
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(32, mint.to_bytes().to_vec())),
                 RpcFilterType::DataSize(165)
             ],
         )
@@ -8164,11 +8096,7 @@ pub mod tests {
         assert!(get_spl_token_mint_filter(
             &Pubkey::new_unique(),
             &[
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 0,
-                    bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
-                    encoding: None
-                }),
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, mint.to_bytes().to_vec())),
                 RpcFilterType::DataSize(165)
             ],
         )
@@ -8176,16 +8104,8 @@ pub mod tests {
         assert!(get_spl_token_mint_filter(
             &Pubkey::new_unique(),
             &[
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 0,
-                    bytes: MemcmpEncodedBytes::Bytes(mint.to_bytes().to_vec()),
-                    encoding: None
-                }),
-                RpcFilterType::Memcmp(Memcmp {
-                    offset: 165,
-                    bytes: MemcmpEncodedBytes::Bytes(vec![ACCOUNTTYPE_ACCOUNT]),
-                    encoding: None
-                })
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, mint.to_bytes().to_vec())),
+                RpcFilterType::Memcmp(Memcmp::new_raw_bytes(165, vec![ACCOUNTTYPE_ACCOUNT])),
             ],
         )
         .is_none());

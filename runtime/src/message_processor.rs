@@ -120,16 +120,16 @@ impl MessageProcessor {
             }
 
             let mut instruction_accounts = Vec::with_capacity(instruction.accounts.len());
-            for (index_in_instruction, index_in_transaction) in
+            for (instruction_account_index, index_in_transaction) in
                 instruction.accounts.iter().enumerate()
             {
                 let index_in_callee = instruction
                     .accounts
-                    .get(0..index_in_instruction)
+                    .get(0..instruction_account_index)
                     .ok_or(TransactionError::InvalidAccountIndex)?
                     .iter()
                     .position(|account_index| account_index == index_in_transaction)
-                    .unwrap_or(index_in_instruction);
+                    .unwrap_or(instruction_account_index);
                 let index_in_transaction = *index_in_transaction as usize;
                 instruction_accounts.push(InstructionAccount {
                     index_in_transaction,
@@ -282,7 +282,7 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3, 0);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_keys = transaction_context.get_keys_of_accounts().to_vec();
@@ -502,7 +502,7 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 3, 0);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
@@ -661,7 +661,7 @@ mod tests {
             (secp256k1_program::id(), secp256k1_account),
             (mock_program_id, mock_program_account),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 2);
+        let mut transaction_context = TransactionContext::new(accounts, 1, 2, 0);
 
         let message = SanitizedMessage::Legacy(Message::new(
             &[

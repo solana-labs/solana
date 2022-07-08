@@ -62,6 +62,7 @@ fn main() {
             "alloc",
             "call_depth",
             "caller_access",
+            "curve25519",
             "custom_heap",
             "dep_crate",
             "deprecated_loader",
@@ -100,7 +101,6 @@ fn main() {
             "spoof1_system",
             "upgradeable",
             "upgraded",
-            "zk_token_elgamal",
         ];
         for program in rust_programs.iter() {
             println!(

@@ -52,6 +52,36 @@ pub fn parse_vote(
                 }),
             })
         }
+        VoteInstruction::AuthorizeWithSeed(args) => {
+            check_num_vote_accounts(&instruction.accounts, 3)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "authorizeWithSeed".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "clockSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "authorityBaseKey": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "authorityOwner": args.current_authority_derived_key_owner.to_string(),
+                    "authoritySeed": args.current_authority_derived_key_seed,
+                    "newAuthority": args.new_authority.to_string(),
+                    "authorityType": args.authorization_type,
+                }),
+            })
+        }
+        VoteInstruction::AuthorizeCheckedWithSeed(args) => {
+            check_num_vote_accounts(&instruction.accounts, 4)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "authorizeCheckedWithSeed".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "clockSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "authorityBaseKey": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "authorityOwner": args.current_authority_derived_key_owner.to_string(),
+                    "authoritySeed": args.current_authority_derived_key_seed,
+                    "newAuthority": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "authorityType": args.authorization_type,
+                }),
+            })
+        }
         VoteInstruction::Vote(vote) => {
             check_num_vote_accounts(&instruction.accounts, 4)?;
             let vote = json!({
@@ -215,7 +245,7 @@ mod test {
             &vote_init,
             lamports,
         );
-        let message = Message::new(&instructions, None);
+        let mut message = Message::new(&instructions, None);
         assert_eq!(
             parse_vote(
                 &message.instructions[1],
@@ -240,6 +270,9 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
     }
 
     #[test]
@@ -254,7 +287,7 @@ mod test {
             &new_authorized_pubkey,
             authority_type,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
@@ -277,6 +310,95 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
+    }
+
+    #[test]
+    fn test_parse_vote_authorize_with_seed_ix() {
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_base_key = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
+        let authority_type = VoteAuthorize::Voter;
+        let current_authority_owner = Pubkey::new_unique();
+        let current_authority_seed = "AUTHORITY_SEED";
+        let instruction = vote_instruction::authorize_with_seed(
+            &vote_pubkey,
+            &authorized_base_key,
+            &current_authority_owner,
+            current_authority_seed,
+            &new_authorized_pubkey,
+            authority_type,
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_vote(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeWithSeed".to_string(),
+                info: json!({
+                    "voteAccount": vote_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "authorityBaseKey": authorized_base_key.to_string(),
+                    "authorityOwner": current_authority_owner.to_string(),
+                    "authoritySeed": current_authority_seed,
+                    "newAuthority": new_authorized_pubkey.to_string(),
+                    "authorityType": authority_type,
+                }),
+            }
+        );
+        assert!(parse_vote(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..2], None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_vote_authorize_with_seed_checked_ix() {
+        let vote_pubkey = Pubkey::new_unique();
+        let authorized_base_key = Pubkey::new_unique();
+        let new_authorized_pubkey = Pubkey::new_unique();
+        let authority_type = VoteAuthorize::Voter;
+        let current_authority_owner = Pubkey::new_unique();
+        let current_authority_seed = "AUTHORITY_SEED";
+        let instruction = vote_instruction::authorize_checked_with_seed(
+            &vote_pubkey,
+            &authorized_base_key,
+            &current_authority_owner,
+            current_authority_seed,
+            &new_authorized_pubkey,
+            authority_type,
+        );
+        let message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_vote(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "authorizeCheckedWithSeed".to_string(),
+                info: json!({
+                    "voteAccount": vote_pubkey.to_string(),
+                    "clockSysvar": sysvar::clock::ID.to_string(),
+                    "authorityBaseKey": authorized_base_key.to_string(),
+                    "authorityOwner": current_authority_owner.to_string(),
+                    "authoritySeed": current_authority_seed,
+                    "newAuthority": new_authorized_pubkey.to_string(),
+                    "authorityType": authority_type,
+                }),
+            }
+        );
+        assert!(parse_vote(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..3], None)
+        )
+        .is_err());
     }
 
     #[test]
@@ -291,7 +413,7 @@ mod test {
         let vote_pubkey = Pubkey::new_unique();
         let authorized_voter_pubkey = Pubkey::new_unique();
         let instruction = vote_instruction::vote(&vote_pubkey, &authorized_voter_pubkey, vote);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
@@ -318,6 +440,9 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
     }
 
     #[test]
@@ -332,7 +457,7 @@ mod test {
             lamports,
             &to_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
@@ -354,6 +479,9 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
     }
 
     #[test]
@@ -366,7 +494,7 @@ mod test {
             &authorized_withdrawer_pubkey,
             &node_pubkey,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
@@ -387,6 +515,9 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..2], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
     }
 
     #[test]
@@ -399,7 +530,7 @@ mod test {
             &authorized_withdrawer_pubkey,
             commission,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
@@ -420,6 +551,9 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..1], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
     }
 
     #[test]
@@ -436,7 +570,7 @@ mod test {
         let proof_hash = Hash::new_from_array([2; 32]);
         let instruction =
             vote_instruction::vote_switch(&vote_pubkey, &authorized_voter_pubkey, vote, proof_hash);
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
@@ -464,6 +598,9 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
     }
 
     #[test]
@@ -478,7 +615,7 @@ mod test {
             &new_authorized_pubkey,
             authority_type,
         );
-        let message = Message::new(&[instruction], None);
+        let mut message = Message::new(&[instruction], None);
         assert_eq!(
             parse_vote(
                 &message.instructions[0],
@@ -501,5 +638,8 @@ mod test {
             &AccountKeys::new(&message.account_keys[0..3], None)
         )
         .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_vote(&message.instructions[0], &AccountKeys::new(&keys, None)).is_err());
     }
 }

@@ -439,8 +439,16 @@ pub fn bind_in_range(ip_addr: IpAddr, range: PortRange) -> io::Result<(u16, UdpS
     ))
 }
 
-pub fn bind_in_validator_port_range(ip_addr: IpAddr) -> io::Result<UdpSocket> {
-    bind_in_range(ip_addr, VALIDATOR_PORT_RANGE).map(|(_, socket)| socket)
+pub fn bind_with_any_port(ip_addr: IpAddr) -> io::Result<UdpSocket> {
+    let sock = udp_socket(false)?;
+    let addr = SocketAddr::new(ip_addr, 0);
+    match sock.bind(&SockAddr::from(addr)) {
+        Ok(_) => Result::Ok(sock.into()),
+        Err(err) => Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("No available UDP port: {}", err),
+        )),
+    }
 }
 
 // binds many sockets to the same port in a range
@@ -678,6 +686,17 @@ mod tests {
         for sock in &v {
             assert_eq!(port, sock.local_addr().unwrap().port());
         }
+    }
+
+    #[test]
+    fn test_bind_with_any_port() {
+        let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let x = bind_with_any_port(ip_addr).unwrap();
+        let y = bind_with_any_port(ip_addr).unwrap();
+        assert_ne!(
+            x.local_addr().unwrap().port(),
+            y.local_addr().unwrap().port()
+        );
     }
 
     #[test]

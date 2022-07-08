@@ -2,13 +2,14 @@
 
 use {
     crate::{
-        clock::Epoch, debug_account_data::*, program_error::ProgramError,
-        program_memory::sol_memset, pubkey::Pubkey,
+        clock::Epoch, debug_account_data::*, entrypoint::MAX_PERMITTED_DATA_INCREASE,
+        program_error::ProgramError, program_memory::sol_memset, pubkey::Pubkey,
     },
     std::{
         cell::{Ref, RefCell, RefMut},
         fmt,
         rc::Rc,
+        slice::from_raw_parts_mut,
     },
 };
 
@@ -72,6 +73,19 @@ impl<'a> AccountInfo<'a> {
         Ok(**self.try_borrow_lamports()?)
     }
 
+    /// Return the account's original data length when it was serialized for the
+    /// current program invocation.
+    ///
+    /// # Safety
+    ///
+    /// This method assumes that the original data length was serialized as a u32
+    /// integer in the 4 bytes immediately preceding the serialized account key.
+    pub unsafe fn original_data_len(&self) -> usize {
+        let key_ptr = self.key as *const _ as *const u8;
+        let original_data_len_ptr = key_ptr.offset(-4) as *const u32;
+        *original_data_len_ptr as usize
+    }
+
     pub fn data_len(&self) -> usize {
         self.data.borrow().len()
     }
@@ -123,27 +137,45 @@ impl<'a> AccountInfo<'a> {
     /// call a program reallocs from larger to smaller and back to larger again
     /// the new space could contain stale data.  Pass `true` for `zero_init` in
     /// this case, otherwise compute units will be wasted re-zero-initializing.
+    ///
+    /// # Safety
+    ///
+    /// This method makes assumptions about the layout and location of memory
+    /// referenced by `AccountInfo` fields. It should only be called for
+    /// instances of `AccountInfo` that were created by the runtime and received
+    /// in the `process_instruction` entrypoint of a program.
     pub fn realloc(&self, new_len: usize, zero_init: bool) -> Result<(), ProgramError> {
-        let orig_len = self.data_len();
+        let mut data = self.try_borrow_mut_data()?;
+        let old_len = data.len();
+
+        // Return early if length hasn't changed
+        if new_len == old_len {
+            return Ok(());
+        }
+
+        // Return early if the length increase from the original serialized data
+        // length is too large and would result in an out of bounds allocation.
+        let original_data_len = unsafe { self.original_data_len() };
+        if new_len.saturating_sub(original_data_len) > MAX_PERMITTED_DATA_INCREASE {
+            return Err(ProgramError::InvalidRealloc);
+        }
 
         // realloc
         unsafe {
-            // First set new length in the serialized data
-            let ptr = self.try_borrow_mut_data()?.as_mut_ptr().offset(-8) as *mut u64;
-            *ptr = new_len as u64;
+            let data_ptr = data.as_mut_ptr();
 
-            // Then set the new length in the local slice
-            let ptr = &mut *(((self.data.as_ptr() as *const u64).offset(1) as u64) as *mut u64);
-            *ptr = new_len as u64;
+            // First set new length in the serialized data
+            *(data_ptr.offset(-8) as *mut u64) = new_len as u64;
+
+            // Then recreate the local slice with the new length
+            *data = from_raw_parts_mut(data_ptr, new_len)
         }
 
-        // zero-init if requested
-        if zero_init && new_len > orig_len {
-            sol_memset(
-                &mut self.try_borrow_mut_data()?[orig_len..],
-                0,
-                new_len.saturating_sub(orig_len),
-            );
+        if zero_init {
+            let len_increase = new_len.saturating_sub(old_len);
+            if len_increase > 0 {
+                sol_memset(&mut data[old_len..], 0, len_increase);
+            }
         }
 
         Ok(())

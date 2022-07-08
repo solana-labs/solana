@@ -45,37 +45,40 @@ The policy is as follows:
 
 ## Compute Budget
 
-To prevent a program from abusing computation resources, each instruction in a
-transaction is given a compute budget. The budget consists of computation units
-that are consumed as the program performs various operations and bounds that the
-program may not exceed. When the program consumes its entire budget or exceeds
-a bound, the runtime halts the program and returns an error.
-
-Note: The compute budget currently applies per-instruction, but is moving toward
-a per-transaction model. For more information see [Transaction-wide Compute
-Budget](#transaction-wide-compute-budget).
+To prevent abuse of computational resources, each transaction is allocated a
+compute budget. The budget specifies a maximum number of compute units that a
+transaction can consume, the costs associated with different types of operations
+the transaction may perform, and operational bounds the transaction must adhere
+to.  As the transaction is processed compute units are consumed by its
+instruction's programs performing operations such as executing BPF instructions,
+calling syscalls, etc... When the transaction consumes its entire budget, or
+exceeds a bound such as attempting a call stack that is too deep, the runtime
+halts the transaction processing and returns an error.
 
 The following operations incur a compute cost:
 
 - Executing BPF instructions
+- Passing data between programs
 - Calling system calls
   - logging
   - creating program addresses
   - cross-program invocations
   - ...
 
-For cross-program invocations, the programs invoked inherit the budget of their
-parent. If an invoked program consumes the budget or exceeds a bound, the entire
-invocation chain and the parent are halted.
+For cross-program invocations, the instructions invoked inherit the budget of
+their parent. If an invoked instruction consumes the transactions remaining
+budget, or exceeds a bound, the entire invocation chain and the top level
+transaction processing are halted.
 
 The current [compute
-budget](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/program-runtime/src/compute_budget.rs)
+budget](https://github.com/solana-labs/solana/blob/090e11210aa7222d8295610a6ccac4acda711bb9/program-runtime/src/compute_budget.rs#L26-L87)
+
 can be found in the Solana Program Runtime.
 
 For example, if the current budget is:
 
 ```rust
-max_units: 200,000,
+max_units: 1,400,000,
 log_u64_units: 100,
 create_program address units: 1500,
 invoke_units: 1000,
@@ -86,15 +89,15 @@ log_pubkey_units: 100,
 ...
 ```
 
-Then the program
+Then the transaction
 
-- Could execute 200,000 BPF instructions, if it does nothing else.
+- Could execute 1,400,000 BPF instructions, if it did nothing else.
 - Cannot exceed 4k of stack usage.
 - Cannot exceed a BPF call depth of 64.
 - Cannot exceed 4 levels of cross-program invocations.
 
-Since the compute budget is consumed incrementally as the program executes, the
-total budget consumption will be a combination of the various costs of the
+Since the compute budget is consumed incrementally as the transaction executes,
+the total budget consumption will be a combination of the various costs of the
 operations it performs.
 
 At runtime a program may log how much of the compute budget remains. See
@@ -102,56 +105,49 @@ At runtime a program may log how much of the compute budget remains. See
 for more information.
 
 A transaction may set the maximum number of compute units it is allowed to
-consume by including a "request units"
-[`ComputeBudgetInstruction`](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L39).
-Note that a transaction's prioritization fee is calculated from multiplying the
-number of compute units requested by the compute unit price (measured in
-micro-lamports) set by the transaction.  So transactions should request the
-minimum amount of compute units required for execution to minimize fees. Also
-note that fees are not adjusted when the number of requested compute units
-exceeds the number of compute units consumed by an executed transaction.
+consume and the compute unit price by including a `SetComputeUnitLimit` and a
+`SetComputeUnitPrice`
+[Compute budget instructions](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L22)
+respectively.
+
+If no `SetComputeUnitLimit` is provided the limit will be calculated as the
+product of the number of instructions in the transaction (excluding the [Compute
+budget
+instructions](https://github.com/solana-labs/solana/blob/db32549c00a1b5370fcaf128981ad3323bbd9570/sdk/src/compute_budget.rs#L22))
+and the default per-instruction units, which is currently 200k.
+
+Note that a transaction's prioritization fee is calculated by multiplying the
+number of compute units by the compute unit price (measured in micro-lamports)
+set by the transaction via compute budget instructions.  So transactions should
+request the minimum amount of compute units required for execution to minimize
+fees. Also note that fees are not adjusted when the number of requested compute
+units exceeds the number of compute units actually consumed by an executed
+transaction.
 
 Compute Budget instructions don't require any accounts and don't consume any
 compute units to process.  Transactions can only contain one of each type of
 compute budget instruction, duplicate types will result in an error.
 
-The `ComputeBudgetInstruction::set_compute_unit_limit` function can be used to create
-these instructions:
+The `ComputeBudgetInstruction::set_compute_unit_limit` and
+`ComputeBudgetInstruction::set_compute_unit_price` functions can be used to
+create these instructions:
 
 ```rust
 let instruction = ComputeBudgetInstruction::set_compute_unit_limit(300_000);
 ```
 
-## Transaction-wide Compute Budget
-
-Transactions are processed as a single entity and are the primary unit of block
-scheduling. In order to facilitate better block scheduling and account for the
-computational cost of each transaction, the compute budget is moving to a
-transaction-wide budget rather than per-instruction.
-
-For information on what the compute budget is and how it is applied see [Compute
-Budget](#compute-budget).
-
-The transaction-wide compute budget applies the `max_units` cap to the entire
-transaction rather than to each instruction within the transaction. The default
-transaction-wide `max_units` will be calculated as the product of the number of
-instructions in the transaction (excluding [Compute Budget](#compute-budget)
-instructions) by the default per-instruction units, which is currently 200k.
-During processing, the sum of the compute units used by each instruction in the
-transaction must not exceed that value. This default value attempts to retain
-existing behavior to avoid breaking clients. Transactions can request a specific
-number of `max_units` via [Compute Budget](#compute-budget) instructions.
-Clients should request only what they need; requesting the minimum amount of
-units required to process the transaction will reduce overall transaction cost,
-which may include a prioritization-fee charged for every compute unit.
+```rust
+let instruction = ComputeBudgetInstruction::set_compute_unit_price(1);
+```
 
 ## New Features
 
 As Solana evolves, new features or patches may be introduced that changes the
 behavior of the cluster and how programs run. Changes in behavior must be
-coordinated between the various nodes of the cluster. If nodes do not coordinate,
-then these changes can result in a break-down of consensus. Solana supports a
-mechanism called runtime features to facilitate the smooth adoption of changes.
+coordinated between the various nodes of the cluster. If nodes do not
+coordinate, then these changes can result in a break-down of consensus. Solana
+supports a mechanism called runtime features to facilitate the smooth adoption
+of changes.
 
 Runtime features are epoch coordinated events where one or more behavior changes
 to the cluster will occur. New changes to Solana that will change behavior are

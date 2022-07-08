@@ -145,10 +145,7 @@ mod test {
         assert_eq!(parsed.program, "vote".to_string());
         assert_eq!(parsed.space, VoteState::size_of() as u64);
 
-        let nonce_data = Versions::new(
-            State::Initialized(Data::default()),
-            true, // separate_domains
-        );
+        let nonce_data = Versions::new(State::Initialized(Data::default()));
         let nonce_account_data = bincode::serialize(&nonce_data).unwrap();
         let parsed = parse_account_data(
             &account_pubkey,

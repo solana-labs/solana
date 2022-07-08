@@ -1,7 +1,7 @@
 use {
     super::*,
     crate::cluster_nodes::ClusterNodesCache,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
     std::{thread::sleep, time::Duration},
 };
@@ -40,7 +40,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
         keypair: &Keypair,
-        blockstore: &Arc<Blockstore>,
+        blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
@@ -92,6 +92,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
             self.next_code_index,
+            &mut ProcessShredsStats::default(),
         );
 
         self.next_shred_index += data_shreds.len() as u32;
@@ -105,6 +106,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
                 true,
                 self.next_shred_index,
                 self.next_code_index,
+                &mut ProcessShredsStats::default(),
             );
             // Don't mark the last shred as last so that validators won't know
             // that they've gotten all the shreds, and will continue trying to
@@ -115,6 +117,7 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
                 false,
                 self.next_shred_index,
                 self.next_code_index,
+                &mut ProcessShredsStats::default(),
             );
             self.next_shred_index += 1;
             (good_last_data_shred, bad_last_data_shred)
@@ -148,28 +151,24 @@ impl BroadcastRun for FailEntryVerificationBroadcastRun {
     }
     fn transmit(
         &mut self,
-        receiver: &Arc<Mutex<TransmitReceiver>>,
+        receiver: &Mutex<TransmitReceiver>,
         cluster_info: &ClusterInfo,
         sock: &UdpSocket,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks: &RwLock<BankForks>,
     ) -> Result<()> {
         let (shreds, _) = receiver.lock().unwrap().recv()?;
         broadcast_shreds(
             sock,
             &shreds,
             &self.cluster_nodes_cache,
-            &Arc::new(AtomicInterval::default()),
+            &AtomicInterval::default(),
             &mut TransmitShredsStats::default(),
             cluster_info,
             bank_forks,
             cluster_info.socket_addr_space(),
         )
     }
-    fn record(
-        &mut self,
-        receiver: &Arc<Mutex<RecordReceiver>>,
-        blockstore: &Arc<Blockstore>,
-    ) -> Result<()> {
+    fn record(&mut self, receiver: &Mutex<RecordReceiver>, blockstore: &Blockstore) -> Result<()> {
         let (all_shreds, _) = receiver.lock().unwrap().recv()?;
         blockstore
             .insert_shreds(all_shreds.to_vec(), None, true)
