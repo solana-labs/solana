@@ -259,6 +259,30 @@ impl From<RpcMemcmp> for Memcmp {
     }
 }
 
+pub(crate) fn maybe_map_filters(
+    node_version: Option<semver::Version>,
+    filters: &mut [RpcFilterType],
+) -> Result<(), String> {
+    if node_version.is_none() || node_version.unwrap() < semver::Version::new(1, 11, 2) {
+        for filter in filters.iter_mut() {
+            if let RpcFilterType::Memcmp(memcmp) = filter {
+                match &memcmp.bytes {
+                    MemcmpEncodedBytes::Base58(string) => {
+                        memcmp.bytes = MemcmpEncodedBytes::Binary(string.clone());
+                    }
+                    MemcmpEncodedBytes::Base64(_) => {
+                        return Err("RPC node on old version does not support base64 \
+                            encoding for memcmp filters"
+                            .to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
