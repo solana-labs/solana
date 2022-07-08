@@ -2305,12 +2305,12 @@ impl ReplayStage {
                             Measure::start("replay_blockstore_into_bank");
                         let blockstore_result = Self::replay_blockstore_into_bank(
                             bank,
-                            blockstore.clone(),
+                            blockstore,
                             &replay_stats,
                             &replay_progress,
-                            transaction_status_sender.clone(),
+                            transaction_status_sender,
                             &replay_vote_sender.clone(),
-                            transaction_cost_metrics_sender.clone(),
+                            transaction_cost_metrics_sender,
                             &verify_recyclers.clone(),
                         );
                         replay_blockstore_time.stop();
@@ -2342,7 +2342,7 @@ impl ReplayStage {
                         // Error means the slot needs to be marked as dead
                         Self::mark_dead_slot(
                             blockstore,
-                            &bank,
+                            bank,
                             bank_forks.read().unwrap().root(),
                             &err,
                             rpc_subscriptions,
@@ -2399,9 +2399,7 @@ impl ReplayStage {
                     (bank.slot(), bank.hash()),
                     Some((bank.parent_slot(), bank.parent_hash())),
                 );
-
                 bank_progress.fork_stats.bank_hash = Some(bank.hash());
-
                 let bank_frozen_state = BankFrozenState::new_from_state(
                     bank.slot(),
                     bank.hash(),
@@ -2468,7 +2466,7 @@ impl ReplayStage {
                     bank.tick_height(),
                     bank.max_tick_height()
                 );
-            };
+            }
         }
 
         // Send accumulated execute-timings to cost_update_service.
