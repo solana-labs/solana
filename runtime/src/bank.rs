@@ -4929,6 +4929,7 @@ impl Bank {
             &self.rent_collector,
             &durable_nonce,
             lamports_per_signature,
+            self.preserve_rent_epoch_for_rent_exempt_accounts(),
         );
         let rent_debits = self.collect_rent(&execution_results, loaded_txs);
 
@@ -5336,6 +5337,7 @@ impl Bank {
                     pubkey,
                     account,
                     self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
+                    self.preserve_rent_epoch_for_rent_exempt_accounts(),
                 ));
             time_collecting_rent_us += measure.as_us();
 
@@ -7274,6 +7276,11 @@ impl Bank {
             .is_active(&feature_set::send_to_tpu_vote_port::id())
     }
 
+    fn preserve_rent_epoch_for_rent_exempt_accounts(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id())
+    }
+
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
         self.cost_tracker.read()
     }
@@ -8202,6 +8209,7 @@ pub(crate) mod tests {
                 &keypairs[4].pubkey(),
                 &mut account_copy,
                 None,
+                true, // preserve_rent_epoch_for_rent_exempt_accounts
             );
             assert_eq!(expected_rent.rent_amount, too_few_lamports);
             assert_eq!(account_copy.lamports(), 0);
@@ -9720,21 +9728,19 @@ pub(crate) mod tests {
         bank.collect_rent_in_partition((0, 0, 1), true, &RentMetrics::default());
         {
             let rewrites_skipped = bank.rewrites_skipped_this_slot.read().unwrap();
-            // `rewrites_skipped.len()` is the number of non-rent paying accounts in the slot. This
-            // is always at least the number of features in the Bank, due to
-            // `activate_all_features`. These accounts will stop being written to the append vec
-            // when we start skipping rewrites.
+            // `rewrites_skipped.len()` is the number of non-rent paying accounts in the slot.
             // 'collect_rent_in_partition' fills 'rewrites_skipped_this_slot' with rewrites that
             // were skipped during rent collection but should still be considered in the slot's
             // bank hash. If the slot is also written in the append vec, then the bank hash calc
             // code ignores the contents of this list. This assert is confirming that the expected #
             // of accounts were included in 'rewrites_skipped' by the call to
             // 'collect_rent_in_partition(..., true)' above.
-            let num_features = bank.feature_set.inactive.len() + bank.feature_set.active.len();
-            assert!(rewrites_skipped.len() >= num_features);
-            // should have skipped 'rent_exempt_pubkey'
-            assert!(rewrites_skipped.contains_key(&rent_exempt_pubkey));
-            // should NOT have skipped 'rent_exempt_pubkey'
+            assert_eq!(rewrites_skipped.len(), 1);
+            // should not have skipped 'rent_exempt_pubkey'
+            // Once preserve_rent_epoch_for_rent_exempt_accounts is activated,
+            // rewrite-skip is irrelevant to rent-exempt accounts.
+            assert!(!rewrites_skipped.contains_key(&rent_exempt_pubkey));
+            // should NOT have skipped 'rent_due_pubkey'
             assert!(!rewrites_skipped.contains_key(&rent_due_pubkey));
         }
 
@@ -9754,9 +9760,11 @@ pub(crate) mod tests {
             bank.get_account(&rent_exempt_pubkey).unwrap().lamports(),
             large_lamports
         );
+        // Once preserve_rent_epoch_for_rent_exempt_accounts is activated,
+        // rent_epoch of rent-exempt accounts will no longer advance.
         assert_eq!(
             bank.get_account(&rent_exempt_pubkey).unwrap().rent_epoch(),
-            current_epoch
+            0
         );
         assert_eq!(
             bank.slots_by_pubkey(&rent_due_pubkey, &ancestors),
@@ -19213,6 +19221,7 @@ pub(crate) mod tests {
                 &keypair.pubkey(),
                 &mut account,
                 None,
+                true, // preserve_rent_epoch_for_rent_exempt_accounts
             );
             assert_eq!(info.account_data_len_reclaimed, data_size as u64);
         }
