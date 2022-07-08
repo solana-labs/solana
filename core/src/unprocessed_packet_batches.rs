@@ -553,7 +553,7 @@ mod tests {
     fn test_unprocessed_packet_batches_pop_max_n() {
         let num_packets = 10;
         let packets_iter =
-            std::iter::repeat_with(|| simmple_deserialized_packet()).take(num_packets);
+            std::iter::repeat_with(simmple_deserialized_packet).take(num_packets);
         let mut unprocessed_packet_batches =
             UnprocessedPacketBatches::from_iter(packets_iter.clone(), num_packets);
 
