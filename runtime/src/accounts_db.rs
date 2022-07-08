@@ -3268,7 +3268,12 @@ impl AccountsDb {
             // Purge old, overwritten storage entries
             let mut start = Measure::start("write_storage_elapsed");
             self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
-                !store_ids.contains(&store.append_vec_id())
+                let retain = !store_ids.contains(&store.append_vec_id());
+                if !retain {
+                    // are there any conditions where we are retaining append vecs we just shrunk?
+                    assert_eq!(store.count(), 0);
+                }
+                retain
             });
             start.stop();
             write_storage_elapsed = start.as_us();
