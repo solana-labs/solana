@@ -664,9 +664,9 @@ impl CompiledInstruction {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ProcessedSiblingInstruction {
     /// Length of the instruction data
-    pub data_len: usize,
+    pub data_len: u64,
     /// Number of AccountMeta structures
-    pub accounts_len: usize,
+    pub accounts_len: u64,
 }
 
 /// Returns a sibling instruction from the processed sibling instruction list.
@@ -698,8 +698,8 @@ pub fn get_processed_sibling_instruction(index: usize) -> Option<Instruction> {
         } {
             let mut data = Vec::new();
             let mut accounts = Vec::new();
-            data.resize_with(meta.data_len, u8::default);
-            accounts.resize_with(meta.accounts_len, AccountMeta::default);
+            data.resize_with(meta.data_len as usize, u8::default);
+            accounts.resize_with(meta.accounts_len as usize, AccountMeta::default);
 
             let _ = unsafe {
                 crate::syscalls::sol_get_processed_sibling_instruction(

@@ -1750,8 +1750,9 @@ declare_syscall!(
                 result
             );
 
-            if *data_len == instruction_context.get_instruction_data().len()
-                && *accounts_len == instruction_context.get_number_of_instruction_accounts()
+            if *data_len == (instruction_context.get_instruction_data().len() as u64)
+                && *accounts_len
+                    == (instruction_context.get_number_of_instruction_accounts() as u64)
             {
                 let program_id = question_mark!(
                     translate_type_mut::<Pubkey>(
@@ -1809,8 +1810,8 @@ declare_syscall!(
                 );
                 accounts.clone_from_slice(account_metas.as_slice());
             }
-            *data_len = instruction_context.get_instruction_data().len();
-            *accounts_len = instruction_context.get_number_of_instruction_accounts();
+            *data_len = instruction_context.get_instruction_data().len() as u64;
+            *accounts_len = instruction_context.get_number_of_instruction_accounts() as u64;
             *result = Ok(true as u64);
             return;
         }
