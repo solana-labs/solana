@@ -512,16 +512,6 @@ mod tests {
             );
         }
 
-        for index_in_transaction in 1..original_accounts.len() {
-            let mut account = invoke_context
-                .transaction_context
-                .get_account_at_index(index_in_transaction)
-                .unwrap()
-                .borrow_mut();
-            account.set_lamports(0);
-            account.set_data(vec![0; 0]);
-            account.set_owner(Pubkey::default());
-        }
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
@@ -545,13 +535,12 @@ mod tests {
             .unwrap()
             .1
             .set_owner(bpf_loader_deprecated::id());
-        let _ = invoke_context
+        invoke_context
             .transaction_context
-            .get_current_instruction_context()
+            .get_account_at_index(0)
             .unwrap()
-            .try_borrow_program_account(invoke_context.transaction_context, 0)
-            .unwrap()
-            .set_owner(bpf_loader_deprecated::id().as_ref());
+            .borrow_mut()
+            .set_owner(bpf_loader_deprecated::id());
 
         let (mut serialized, account_lengths) =
             serialize_parameters(invoke_context.transaction_context, instruction_context).unwrap();
@@ -578,15 +567,6 @@ mod tests {
             assert_eq!(account.rent_epoch(), account_info.rent_epoch);
         }
 
-        for index_in_transaction in 1..original_accounts.len() {
-            let mut account = invoke_context
-                .transaction_context
-                .get_account_at_index(index_in_transaction)
-                .unwrap()
-                .borrow_mut();
-            account.set_lamports(0);
-            account.set_data(vec![0; 0]);
-        }
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
