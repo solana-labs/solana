@@ -25,7 +25,7 @@ use {
             blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
             curve25519_syscall_enabled, disable_fees_sysvar, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
-            quick_bail_on_panic, syscall_saturated_math,
+            syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -550,12 +550,7 @@ declare_syscall!(
                 .map_err(|_| SyscallError::InvokeContextBorrowFailed),
             result
         );
-        if invoke_context
-            .feature_set
-            .is_active(&quick_bail_on_panic::id())
-        {
-            question_mark!(invoke_context.get_compute_meter().consume(len), result);
-        }
+        question_mark!(invoke_context.get_compute_meter().consume(len), result);
 
         *result = translate_string_and_do(
             memory_mapping,
