@@ -42,7 +42,7 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
-#[frozen_abi(digest = "4wEwRyY8SURVKiFoZVHvyFsZeWeBcCigZMwvL4Y9cetr")]
+#[frozen_abi(digest = "EYPXjH9Zn2vLzxyjHejkRkoTh4Tg4sirvb4FX9ye25qF")]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
 pub enum VoteTransaction {
     Vote(Vote),
@@ -289,11 +289,11 @@ impl VoteStateUpdate {
 /// In a full `CompactVoteStateUpdate` the lockouts take up
 /// 64 + (32 + 8) * 16 + (16 + 8) * 8 + (8 + 8) * 6 = 992 bits
 /// allowing us to greatly reduce block size.
-#[frozen_abi(digest = "5CvxccKqGjUX9h92XHuPtx5zmYNaxWUEU1wTD9KVuFJ4")]
+#[frozen_abi(digest = "C8ZrdXqqF3VxgsoCxnqNaYJggV6rr9PC3rtmVudJFmqG")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct CompactVoteStateUpdate {
-    /// The proposed root
-    pub root: Option<Slot>,
+    /// The proposed root, u64::MAX if there is no root
+    pub root: Slot,
     /// The offset from the root (or 0 if no root) to the first vote
     pub root_to_first_vote_offset: u64,
     /// Part of the proposed tower, votes with confirmation_count > 15
@@ -382,7 +382,7 @@ impl CompactVoteStateUpdate {
         // Last vote should be at the top of tower, so we don't have to explicitly store it
         assert!(cur_confirmation_count == 1);
         Self {
-            root,
+            root: root.unwrap_or(u64::MAX),
             root_to_first_vote_offset: offset,
             lockouts_32,
             lockouts_16,
@@ -392,12 +392,20 @@ impl CompactVoteStateUpdate {
         }
     }
 
+    pub fn root(&self) -> Option<Slot> {
+        if self.root == u64::MAX {
+            None
+        } else {
+            Some(self.root)
+        }
+    }
+
     pub fn slots(&self) -> Vec<Slot> {
         std::iter::once(self.root_to_first_vote_offset)
             .chain(self.lockouts_32.iter().map(|lockout| lockout.offset.into()))
             .chain(self.lockouts_16.iter().map(|lockout| lockout.offset.into()))
             .chain(self.lockouts_8.iter().map(|lockout| lockout.offset.into()))
-            .scan(self.root.unwrap_or(0), |prev_slot, offset| {
+            .scan(self.root().unwrap_or(0), |prev_slot, offset| {
                 let slot = *prev_slot + offset;
                 *prev_slot = slot;
                 Some(slot)
@@ -429,7 +437,7 @@ impl From<CompactVoteStateUpdate> for VoteStateUpdate {
                 std::iter::once((0, 1)),
             )
             .scan(
-                vote_state_update.root.unwrap_or(0) + vote_state_update.root_to_first_vote_offset,
+                vote_state_update.root().unwrap_or(0) + vote_state_update.root_to_first_vote_offset,
                 |slot, (offset, confirmation_count): (u64, u8)| {
                     let cur_slot = *slot;
                     *slot += offset;
@@ -442,7 +450,7 @@ impl From<CompactVoteStateUpdate> for VoteStateUpdate {
             .collect();
         Self {
             lockouts,
-            root: vote_state_update.root,
+            root: vote_state_update.root(),
             hash: vote_state_update.hash,
             timestamp: vote_state_update.timestamp,
         }
@@ -3801,7 +3809,7 @@ mod tests {
 
         assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
         assert_eq!(vote_state_update.hash, compact_vote_state_update.hash);
-        assert_eq!(vote_state_update.root, compact_vote_state_update.root);
+        assert_eq!(vote_state_update.root, compact_vote_state_update.root());
 
         let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
         assert_eq!(vote_state_update, vote_state_update_new);
