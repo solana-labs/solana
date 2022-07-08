@@ -980,9 +980,9 @@ pub mod test {
         sleep(Duration::from_millis(100)).await;
         assert_eq!(
             stats
-                .connection_added_from_staked_peer
+                .connection_added_from_unstaked_peer
                 .load(Ordering::Relaxed),
-            1
+            0
         );
         assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
         assert_eq!(stats.connection_remove_failed.load(Ordering::Relaxed), 0);
@@ -1007,9 +1007,9 @@ pub mod test {
         sleep(Duration::from_millis(100)).await;
         assert_eq!(
             stats
-                .connection_added_from_unstaked_peer
+                .connection_added_from_staked_peer
                 .load(Ordering::Relaxed),
-            1
+            0
         );
         assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
         assert_eq!(stats.connection_remove_failed.load(Ordering::Relaxed), 0);
@@ -1025,9 +1025,9 @@ pub mod test {
         sleep(Duration::from_millis(100)).await;
         assert_eq!(
             stats
-                .connection_added_from_unstaked_peer
+                .connection_added_from_staked_peer
                 .load(Ordering::Relaxed),
-            1
+            0
         );
         assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
         assert_eq!(stats.connection_remove_failed.load(Ordering::Relaxed), 0);
