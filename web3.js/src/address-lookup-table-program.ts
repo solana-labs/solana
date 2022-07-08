@@ -14,7 +14,7 @@ export type CreateLookupTableParams = {
   /** Account that will fund the new address lookup table. */
   payer: PublicKey;
   /** A recent slot must be used in the derivation path for each initialized table. */
-  recentSlot: bigint;
+  recentSlot: bigint | number;
 };
 
 export type FreezeLookupTableParams = {
@@ -25,25 +25,26 @@ export type FreezeLookupTableParams = {
 };
 
 export type ExtendLookupTableParams = {
-  /** Address lookup table account to freeze. */
+  /** Address lookup table account to extend. */
   lookupTable: PublicKey;
   /** Account which is the current authority. */
   authority: PublicKey;
-  /** Account that will fund the table reallocation. */
+  /** Account that will fund the table reallocation.
+   * Not required if the reallocation has already been funded. */
   payer?: PublicKey;
   /** List of Public Keys to be added to the lookup table. */
   addresses: Array<PublicKey>;
 };
 
 export type DeactivateLookupTableParams = {
-  /** Address lookup table account to freeze. */
+  /** Address lookup table account to deactivate. */
   lookupTable: PublicKey;
   /** Account which is the current authority. */
   authority: PublicKey;
 };
 
 export type CloseLookupTableParams = {
-  /** Address lookup table account to freeze. */
+  /** Address lookup table account to close. */
   lookupTable: PublicKey;
   /** Account which is the current authority. */
   authority: PublicKey;
@@ -75,7 +76,7 @@ export type LookupTableInstructionInputData = {
 };
 
 export const LOOKUP_TABLE_INSTRUCTION_LAYOUTS = Object.freeze({
-  Create: {
+  CreateLookupTable: {
     index: 0,
     layout: BufferLayout.struct<
       LookupTableInstructionInputData['CreateLookupTable']
@@ -85,13 +86,13 @@ export const LOOKUP_TABLE_INSTRUCTION_LAYOUTS = Object.freeze({
       BufferLayout.u8('bumpSeed'),
     ]),
   },
-  Freeze: {
+  FreezeLookupTable: {
     index: 1,
     layout: BufferLayout.struct<
       LookupTableInstructionInputData['FreezeLookupTable']
     >([BufferLayout.u32('instruction')]),
   },
-  Extend: (numberOfAddresses: number) => {
+  ExtendLookupTable: (numberOfAddresses: number) => {
     return {
       index: 2,
       layout: BufferLayout.struct<
@@ -103,13 +104,13 @@ export const LOOKUP_TABLE_INSTRUCTION_LAYOUTS = Object.freeze({
       ]),
     };
   },
-  Deactivate: {
+  DeactivateLookupTable: {
     index: 3,
     layout: BufferLayout.struct<
       LookupTableInstructionInputData['DeactivateLookupTable']
     >([BufferLayout.u32('instruction')]),
   },
-  Close: {
+  CloseLookupTable: {
     index: 4,
     layout: BufferLayout.struct<
       LookupTableInstructionInputData['CloseLookupTable']
@@ -129,11 +130,11 @@ export class AddressLookupTableProgram {
 
   static createLookupTable(params: CreateLookupTableParams) {
     const [lookupTableAddress, bumpSeed] = PublicKey.findProgramAddressSync(
-      [params.authority.toBuffer(), toBufferLE(params.recentSlot, 8)],
+      [params.authority.toBuffer(), toBufferLE(BigInt(params.recentSlot), 8)],
       this.programId,
     );
 
-    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.Create;
+    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.CreateLookupTable;
     const data = encodeData(type, {
       recentSlot: params.recentSlot,
       bumpSeed: bumpSeed,
@@ -173,7 +174,7 @@ export class AddressLookupTableProgram {
   }
 
   static freezeLookupTable(params: FreezeLookupTableParams) {
-    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.Freeze;
+    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.FreezeLookupTable;
     const data = encodeData(type);
 
     const keys = [
@@ -197,7 +198,7 @@ export class AddressLookupTableProgram {
   }
 
   static extendLookupTable(params: ExtendLookupTableParams) {
-    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.Extend(
+    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.ExtendLookupTable(
       params.addresses.length,
     );
     const data = encodeData(type, {
@@ -241,7 +242,7 @@ export class AddressLookupTableProgram {
   }
 
   static deactivateLookupTable(params: DeactivateLookupTableParams) {
-    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.Deactivate;
+    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.DeactivateLookupTable;
     const data = encodeData(type);
 
     const keys = [
@@ -265,7 +266,7 @@ export class AddressLookupTableProgram {
   }
 
   static closeLookupTable(params: CloseLookupTableParams) {
-    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.Close;
+    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.CloseLookupTable;
     const data = encodeData(type);
 
     const keys = [
