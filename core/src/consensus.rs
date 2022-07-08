@@ -87,6 +87,11 @@ impl SwitchForkDecision {
                 v,
                 *switch_proof_hash,
             )),
+            (SwitchForkDecision::SameFork, VoteTransaction::CompactVoteStateUpdate(_v)) => None,
+            (
+                SwitchForkDecision::SwitchProof(_switch_proof_hash),
+                VoteTransaction::CompactVoteStateUpdate(_v),
+            ) => None,
         }
     }
 
@@ -154,7 +159,7 @@ impl TowerVersions {
     }
 }
 
-#[frozen_abi(digest = "BfeSJNsfQeX6JU7dmezv1s1aSvR5SoyxKRRZ4ubTh2mt")]
+#[frozen_abi(digest = "8Y9r3XAwXwmrVGMCyTuy4Kbdotnt1V6N8J6NEniBFD9x")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct Tower {
     pub node_pubkey: Pubkey,
