@@ -4267,6 +4267,7 @@ pub mod tests {
             None,
             None,
             &VerifyRecyclers::default(),
+            None,
         )
         .unwrap();
         assert_eq!(progress.num_txs, 2);
@@ -4312,6 +4313,7 @@ pub mod tests {
             None,
             None,
             &VerifyRecyclers::default(),
+            None,
         )
         .unwrap();
         assert_eq!(progress.num_txs, 5);
