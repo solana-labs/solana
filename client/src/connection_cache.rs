@@ -227,7 +227,7 @@ pub struct ConnectionCache {
     last_stats: AtomicInterval,
     connection_pool_size: usize,
     tpu_udp_socket: Option<Arc<UdpSocket>>,
-    client_certificate: Option<Arc<QuicClientCertificate>>,
+    client_certificate: Arc<QuicClientCertificate>,
 }
 
 /// Models the pool of connections
@@ -255,11 +255,11 @@ impl ConnectionPool {
     }
 }
 
-fn new_cert(
+pub(crate) fn new_cert(
     identity_keypair: &Keypair,
     san: IpAddr,
 ) -> Result<QuicClientCertificate, Box<dyn Error>> {
-    // Generate a self-signed cert from validator identity key
+    // Generate a self-signed cert from client's identity key
     let cert_params = new_cert_params(identity_keypair, san);
     let cert = rcgen::Certificate::from_params(cert_params)?;
     let cert_der = cert.serialize_der().unwrap();
@@ -328,19 +328,14 @@ impl ConnectionCache {
         }
     }
 
-    pub fn new_with_client_certificate(
-        connection_pool_size: usize,
+    pub fn update_client_certificate(
+        &mut self,
         keypair: &Keypair,
         ipaddr: IpAddr,
-    ) -> Self {
-        // The minimum pool size is 1.
-        let connection_pool_size = 1.max(connection_pool_size);
-        Self {
-            tpu_udp_socket: None,
-            connection_pool_size,
-            client_certificate: new_cert(keypair, ipaddr).map(Arc::new).ok(),
-            ..Self::default()
-        }
+    ) -> Result<(), Box<dyn Error>> {
+        let cert = new_cert(keypair, ipaddr)?;
+        self.client_certificate = Arc::new(cert);
+        Ok(())
     }
 
     pub fn with_udp(connection_pool_size: usize) -> Self {
@@ -584,7 +579,7 @@ impl Default for ConnectionCache {
             }),
             client_certificate: new_cert(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
                 .map(Arc::new)
-                .ok(),
+                .expect("Failed to initialize QUIC client certificates"),
         }
     }
 }

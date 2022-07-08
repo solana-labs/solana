@@ -3,8 +3,10 @@
 //! server's flow control.
 use {
     crate::{
-        client_error::ClientErrorKind, connection_cache::ConnectionCacheStats,
-        nonblocking::tpu_connection::TpuConnection, tpu_connection::ClientStats,
+        client_error::ClientErrorKind,
+        connection_cache::{new_cert, ConnectionCacheStats},
+        nonblocking::tpu_connection::TpuConnection,
+        tpu_connection::ClientStats,
     },
     async_mutex::Mutex,
     async_trait::async_trait,
@@ -22,6 +24,7 @@ use {
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS,
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
         },
+        signature::Keypair,
         transport::Result as TransportResult,
     },
     std::{
@@ -63,11 +66,11 @@ pub struct QuicClientCertificate {
 /// A lazy-initialized Quic Endpoint
 pub struct QuicLazyInitializedEndpoint {
     endpoint: RwLock<Option<Arc<Endpoint>>>,
-    client_certificate: Option<Arc<QuicClientCertificate>>,
+    client_certificate: Arc<QuicClientCertificate>,
 }
 
 impl QuicLazyInitializedEndpoint {
-    pub fn new(client_certificate: Option<Arc<QuicClientCertificate>>) -> Self {
+    pub fn new(client_certificate: Arc<QuicClientCertificate>) -> Self {
         Self {
             endpoint: RwLock::new(None),
             client_certificate,
@@ -81,20 +84,14 @@ impl QuicLazyInitializedEndpoint {
         )
         .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range");
 
-        let config_builder = rustls::ClientConfig::builder()
+        let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
-            .with_custom_certificate_verifier(SkipServerVerification::new());
-
-        let mut crypto = self
-            .client_certificate
-            .as_ref()
-            .and_then(|cert| {
-                config_builder
-                    .clone()
-                    .with_single_cert(cert.certificates.clone(), cert.key.clone())
-                    .ok()
-            })
-            .unwrap_or_else(|| config_builder.with_no_client_auth());
+            .with_custom_certificate_verifier(SkipServerVerification::new())
+            .with_single_cert(
+                self.client_certificate.certificates.clone(),
+                self.client_certificate.key.clone(),
+            )
+            .expect("Failed to set QUIC client certificates");
         crypto.enable_early_data = true;
 
         let mut endpoint =
@@ -137,7 +134,9 @@ impl QuicLazyInitializedEndpoint {
 
 impl Default for QuicLazyInitializedEndpoint {
     fn default() -> Self {
-        Self::new(None)
+        let certificate = new_cert(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+            .expect("Failed to create QUIC client certificate");
+        Self::new(Arc::new(certificate))
     }
 }
 

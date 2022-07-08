@@ -187,30 +187,30 @@ async fn setup_connection(
 
             let remote_addr = connection.remote_address();
 
-        let table_and_stake = {
-            let stake = get_connection_stake(&connection, staked_nodes.clone());
-            if stake > 0 {
-                let mut connection_table_l = staked_connection_table.lock().unwrap();
-                if connection_table_l.total_size >= max_staked_connections {
-                    let num_pruned = connection_table_l.prune_random(stake);
-                    if num_pruned == 0 {
-                        if max_unstaked_connections > 0 {
-                            // If we couldn't prune a connection in the staked connection table, let's
-                            // put this connection in the unstaked connection table. If needed, prune a
-                            // connection from the unstaked connection table.
-                            connection_table_l = unstaked_connection_table.lock().unwrap();
-                            prune_unstaked_connection_table(
-                                &mut connection_table_l,
-                                max_unstaked_connections,
-                                stats.clone(),
-                            );
-                            Some((connection_table_l, stake))
-                        } else {
-                            stats
-                                .connection_add_failed_on_pruning
-                                .fetch_add(1, Ordering::Relaxed);
-                            None
-                        }
+            let table_and_stake = {
+                let stake = get_connection_stake(&connection, staked_nodes.clone());
+                if stake > 0 {
+                    let mut connection_table_l = staked_connection_table.lock().unwrap();
+                    if connection_table_l.total_size >= max_staked_connections {
+                        let num_pruned = connection_table_l.prune_random(stake);
+                        if num_pruned == 0 {
+                            if max_unstaked_connections > 0 {
+                                // If we couldn't prune a connection in the staked connection table, let's
+                                // put this connection in the unstaked connection table. If needed, prune a
+                                // connection from the unstaked connection table.
+                                connection_table_l = unstaked_connection_table.lock().unwrap();
+                                prune_unstaked_connection_table(
+                                    &mut connection_table_l,
+                                    max_unstaked_connections,
+                                    stats.clone(),
+                                );
+                                Some((connection_table_l, stake))
+                            } else {
+                                stats
+                                    .connection_add_failed_on_pruning
+                                    .fetch_add(1, Ordering::Relaxed);
+                                None
+                            }
                         } else {
                             stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
                             Some((connection_table_l, stake))
