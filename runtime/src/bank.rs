@@ -3550,14 +3550,16 @@ impl Bank {
     }
 
     fn burn_and_purge_account(&self, program_id: &Pubkey, mut account: AccountSharedData) {
-        let data_size = account.data().len() as i64;
+        let old_data_size = account.data().len();
         self.capitalization.fetch_sub(account.lamports(), Relaxed);
         // Both resetting account balance to 0 and zeroing the account data
         // is needed to really purge from AccountsDb and flush the Stakes cache
         account.set_lamports(0);
         account.data_as_mut_slice().fill(0);
         self.store_account(program_id, &account);
-        self.update_accounts_data_size_delta_off_chain(data_size.saturating_neg());
+
+        let data_size_delta = compute_data_size_delta(old_data_size, 0);
+        self.update_accounts_data_size_delta_off_chain(data_size_delta);
     }
 
     // NOTE: must hold idempotent for the same set of arguments
@@ -6308,9 +6310,9 @@ impl Bank {
 
         self.store_account(pubkey, new_account);
 
-        let size_delta =
-            (new_account.data().len() as i64).saturating_sub(old_account_data_size as i64);
-        self.update_accounts_data_size_delta_off_chain(size_delta);
+        let data_size_delta =
+            compute_data_size_delta(old_account_data_size, new_account.data().len());
+        self.update_accounts_data_size_delta_off_chain(data_size_delta);
     }
 
     fn withdraw(&self, pubkey: &Pubkey, lamports: u64) -> Result<()> {
@@ -7498,8 +7500,8 @@ impl Bank {
 
                 self.remove_executor(old_address);
 
-                let data_size_delta = (new_account.data().len() as i64)
-                    .saturating_sub(old_account.data().len() as i64);
+                let data_size_delta =
+                    compute_data_size_delta(old_account.data().len(), new_account.data().len());
                 self.update_accounts_data_size_delta_off_chain(data_size_delta);
             }
         }
@@ -7545,8 +7547,11 @@ impl Bank {
 
             if store {
                 self.store_account(&inline_spl_token::native_mint::id(), &native_mint_account);
-                let data_size_delta = (native_mint_account.data().len() as i64)
-                    .saturating_sub(old_account_data_size as i64);
+
+                let data_size_delta = compute_data_size_delta(
+                    old_account_data_size,
+                    native_mint_account.data().len(),
+                );
                 self.update_accounts_data_size_delta_off_chain(data_size_delta);
             }
         }
@@ -7624,6 +7629,17 @@ impl Bank {
 
         total_accounts_stats
     }
+}
+
+/// Compute how much an account has changed size.  This function is useful when the data size delta
+/// needs to be computed and passed to an `update_accounts_data_size_delta` function.
+fn compute_data_size_delta(old_data_size: usize, new_data_size: usize) -> i64 {
+    assert!(old_data_size <= i64::MAX as usize);
+    assert!(new_data_size <= i64::MAX as usize);
+    let old_data_size = old_data_size as i64;
+    let new_data_size = new_data_size as i64;
+
+    new_data_size.saturating_sub(old_data_size)
 }
 
 /// Since `apply_feature_activations()` has different behavior depending on its caller, enumerate
