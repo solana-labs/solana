@@ -61,7 +61,7 @@ use {
 
 #[derive(Clone)]
 pub struct AccountInfo<'a> {
-    pub address: Pubkey,
+    pub address: Option<Pubkey>,
     pub filename: &'a str,
 }
 
@@ -319,7 +319,10 @@ impl TestValidatorGenesis {
                 }
                 Ok(deserialized) => deserialized,
             };
-            let address = Pubkey::from_str(account_info.keyed_account.pubkey.as_str()).unwrap();
+
+            let address = account.address.unwrap_or_else(|| {
+                Pubkey::from_str(account_info.keyed_account.pubkey.as_str()).unwrap()
+            });
             let account = account_info
                 .keyed_account
                 .account
