@@ -145,7 +145,7 @@ impl RequestResponse for AncestorHashesRepairType {
 #[derive(Default)]
 pub struct ServeRepairStats {
     pub total_requests: usize,
-    pub total_dropped_requests: usize,
+    pub dropped_requests: usize,
     pub total_dropped_response_packets: usize,
     pub total_response_packets: usize,
     pub total_response_bytes: usize,
@@ -335,14 +335,17 @@ impl ServeRepair {
         const MAX_REQUESTS_PER_ITERATION: usize = 1024;
         let mut total_requests = reqs_v[0].len();
 
+        let mut dropped_requests = 0;
         while let Ok(more) = requests_receiver.try_recv() {
             total_requests += more.len();
-            reqs_v.push(more);
             if total_requests > MAX_REQUESTS_PER_ITERATION {
-                break;
+                dropped_requests += more.len();
+            } else {
+                reqs_v.push(more);
             }
         }
 
+        stats.dropped_requests += dropped_requests;
         stats.total_requests += total_requests;
 
         for reqs in reqs_v {
@@ -372,7 +375,7 @@ impl ServeRepair {
         datapoint_info!(
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
-            ("dropped_requests", stats.total_dropped_requests, i64),
+            ("dropped_requests", stats.dropped_requests, i64),
             (
                 "total_dropped_response_packets",
                 stats.total_dropped_response_packets,
@@ -405,6 +408,10 @@ impl ServeRepair {
         response_sender: PacketBatchSender,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
+        const INTERVAL_MS: u64 = 1000;
+        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
+        const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
+
         let exit = exit.clone();
         let recycler = PacketBatchRecycler::default();
         Builder::new()
@@ -434,20 +441,7 @@ impl ServeRepair {
                         Self::report_reset_stats(&me, &mut stats);
                         last_print = Instant::now();
                     }
-                    const INTERVAL_MS: u64 = 1000;
-                    const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
-                    const MAX_BYTES_PER_INTERVAL: usize =
-                        MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
-                    const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
-                    data_budget.update(INTERVAL_MS, |bytes| {
-                        std::cmp::min(
-                            // If there are some leftover bytes from the previous interval, they will
-                            // be added to the `MAX_BYTES_PER_INTERVAL` for the next interval, up to a
-                            // maximum of `MAX_BYTES_BUDGET`.
-                            bytes.saturating_add(MAX_BYTES_PER_INTERVAL),
-                            MAX_BYTES_BUDGET,
-                        )
-                    });
+                    data_budget.update(INTERVAL_MS, |_bytes| MAX_BYTES_PER_INTERVAL);
                 }
             })
             .unwrap()
@@ -463,25 +457,28 @@ impl ServeRepair {
         data_budget: &DataBudget,
     ) {
         // iter over the packets
-        packet_batch.iter().for_each(|packet| {
+        for (i, packet) in packet_batch.iter().enumerate() {
             if let Ok(request) = packet.deserialize_slice(..) {
                 stats.processed += 1;
                 let from_addr = packet.meta.socket_addr();
-                let rsp = Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
-                let num_response_packets = rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
-                if let Some(rsp) = rsp {
-                    let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
-                    if data_budget.take(num_response_bytes) {
-                        stats.total_response_bytes += num_response_bytes;
-                        stats.total_response_packets += num_response_packets;
-                        let _ignore_disconnect = response_sender.send(rsp);
-                    } else {
-                        stats.total_dropped_requests += 1;
-                        stats.total_dropped_response_packets += num_response_packets;
-                    }
+                let rsp =
+                    match Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats)
+                    {
+                        None => continue,
+                        Some(rsp) => rsp,
+                    };
+                let num_response_packets = rsp.len();
+                let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
+                if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
+                    stats.total_response_bytes += num_response_bytes;
+                    stats.total_response_packets += num_response_packets;
+                } else {
+                    stats.dropped_requests += packet_batch.len() - i;
+                    stats.total_dropped_response_packets += num_response_packets;
+                    break;
                 }
             }
-        });
+        }
     }
 
     fn window_index_request_bytes(
