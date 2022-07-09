@@ -302,7 +302,12 @@ impl ExpectedRentCollection {
         pubkey: &Pubkey,
         rewrites_skipped_this_slot: &Rewrites,
     ) -> Option<Epoch> {
-        let next_epoch = match rent_collector.calculate_rent_result(pubkey, account, None) {
+        let next_epoch = match rent_collector.calculate_rent_result(
+            pubkey, account, None, // filler_account_suffix
+            // Skipping rewrites is not compatible with the below feature.
+            // We will not skip rewrites until the feature is activated.
+            false, // preserve_rent_epoch_for_rent_exempt_accounts
+        ) {
             RentResult::LeaveAloneNoRent => return None,
             RentResult::CollectRent {
                 new_rent_epoch,
@@ -532,8 +537,14 @@ impl ExpectedRentCollection {
 
         // ask the rent collector what rent should be collected.
         // Rent collector knows the current epoch.
-        let rent_result =
-            rent_collector.calculate_rent_result(pubkey, loaded_account, filler_account_suffix);
+        let rent_result = rent_collector.calculate_rent_result(
+            pubkey,
+            loaded_account,
+            filler_account_suffix,
+            // Skipping rewrites is not compatible with the below feature.
+            // We will not skip rewrites until the feature is activated.
+            false, // preserve_rent_epoch_for_rent_exempt_accounts
+        );
         let current_rent_epoch = loaded_account.rent_epoch();
         let new_rent_epoch = match rent_result {
             RentResult::CollectRent {

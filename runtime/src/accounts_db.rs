@@ -30,7 +30,7 @@ use {
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
             AccountsIndexRootsStats, AccountsIndexScanResult, IndexKey, IndexValue, IsCached,
-            RefCount, ScanConfig, ScanResult, SlotList, SlotSlice, ZeroLamport,
+            RefCount, ScanConfig, ScanResult, SlotList, SlotSlice, UpsertReclaim, ZeroLamport,
             ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
@@ -163,6 +163,12 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
+pub struct GetUniqueAccountsResult<'a> {
+    pub stored_accounts: HashMap<Pubkey, FoundStoredAccount<'a>>,
+    pub num_stores: usize,
+    pub original_bytes: u64,
+}
+
 pub struct AccountsAddRootTiming {
     pub index_us: u64,
     pub cache_us: u64,
@@ -204,7 +210,6 @@ pub struct AccountsDbConfig {
 pub struct FoundStoredAccount<'a> {
     pub account: StoredAccountMeta<'a>,
     pub store_id: AppendVecId,
-    pub account_size: usize,
 }
 
 #[cfg(not(test))]
@@ -251,8 +256,9 @@ pub struct IndexGenerationInfo {
 struct SlotIndexGenerationInfo {
     insert_time_us: u64,
     num_accounts: u64,
-    num_accounts_rent_exempt: u64,
+    num_accounts_rent_paying: usize,
     accounts_data_len: u64,
+    amount_to_top_off_rent: u64,
 }
 
 #[derive(Default, Debug)]
@@ -267,7 +273,8 @@ struct GenerateIndexTimings {
     pub storage_size_storages_us: u64,
     pub storage_size_accounts_map_flatten_us: u64,
     pub index_flush_us: u64,
-    pub rent_exempt: u64,
+    pub rent_paying: AtomicUsize,
+    pub amount_to_top_off_rent: AtomicU64,
     pub total_duplicates: u64,
     pub accounts_data_len_dedup_time_us: u64,
 }
@@ -306,8 +313,13 @@ impl GenerateIndexTimings {
             ),
             ("index_flush_us", self.index_flush_us as i64, i64),
             (
-                "total_rent_paying_with_duplicates",
-                self.total_duplicates.saturating_sub(self.rent_exempt) as i64,
+                "total_rent_paying",
+                self.rent_paying.load(Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "amount_to_top_off_rent",
+                self.amount_to_top_off_rent.load(Ordering::Relaxed) as i64,
                 i64
             ),
             (
@@ -2192,7 +2204,7 @@ impl AccountsDb {
     }
 
     fn calc_delete_dependencies(
-        purges: &HashMap<Pubkey, (SlotList<AccountInfo>, u64)>,
+        purges: &HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
         store_counts: &mut HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
     ) {
         // Another pass to check if there are some filtered accounts which
@@ -2200,7 +2212,7 @@ impl AccountsDb {
         // then increment their storage count.
         let mut already_counted = HashSet::new();
         for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
-            let no_delete = if account_infos.len() as u64 != *ref_count_from_storage {
+            let no_delete = if account_infos.len() as RefCount != *ref_count_from_storage {
                 debug!(
                     "calc_delete_dependencies(),
                     pubkey: {},
@@ -2824,6 +2836,18 @@ impl AccountsDb {
                 self.accounts_index.roots_removed.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
+            (
+                "active_scans",
+                self.accounts_index.active_scans.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "max_distance_to_min_scan_slot",
+                self.accounts_index
+                    .max_distance_to_min_scan_slot
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
@@ -3056,7 +3080,7 @@ impl AccountsDb {
                         dead += 1;
                     } else {
                         alive_accounts.push(pair);
-                        alive_total += stored_account.account_size;
+                        alive_total += stored_account.account.stored_size;
                         alive += 1;
                     }
                 }
@@ -3080,7 +3104,7 @@ impl AccountsDb {
     pub(crate) fn get_unique_accounts_from_storages<'a, I>(
         &'a self,
         stores: I,
-    ) -> (HashMap<Pubkey, FoundStoredAccount>, usize, u64)
+    ) -> GetUniqueAccountsResult<'a>
     where
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
@@ -3088,15 +3112,10 @@ impl AccountsDb {
         let mut original_bytes = 0;
         let mut num_stores = 0;
         for store in stores {
-            let mut start = 0;
             original_bytes += store.total_bytes();
             let store_id = store.append_vec_id();
-            while let Some((account, next)) = store.accounts.get_account(start) {
-                let new_entry = FoundStoredAccount {
-                    account,
-                    store_id,
-                    account_size: next - start,
-                };
+            AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
+                let new_entry = FoundStoredAccount { account, store_id };
                 match stored_accounts.entry(new_entry.account.meta.pubkey) {
                     Entry::Occupied(mut occupied_entry) => {
                         if new_entry.account.meta.write_version
@@ -3109,11 +3128,14 @@ impl AccountsDb {
                         vacant_entry.insert(new_entry);
                     }
                 }
-                start = next;
-            }
+            });
             num_stores += 1;
         }
-        (stored_accounts, num_stores, original_bytes)
+        GetUniqueAccountsResult {
+            stored_accounts,
+            num_stores,
+            original_bytes,
+        }
     }
 
     fn do_shrink_slot_stores<'a, I>(&'a self, slot: Slot, stores: I) -> usize
@@ -3121,8 +3143,11 @@ impl AccountsDb {
         I: Iterator<Item = &'a Arc<AccountStorageEntry>>,
     {
         debug!("do_shrink_slot_stores: slot: {}", slot);
-        let (stored_accounts, num_stores, original_bytes) =
-            self.get_unique_accounts_from_storages(stores);
+        let GetUniqueAccountsResult {
+            stored_accounts,
+            num_stores,
+            original_bytes,
+        } = self.get_unique_accounts_from_storages(stores);
 
         // sort by pubkey to keep account index lookups close
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
@@ -3678,8 +3703,11 @@ impl AccountsDb {
             }
 
             // this code is copied from shrink. I would like to combine it into a helper function, but the borrow checker has defeated my efforts so far.
-            let (stored_accounts, _num_stores, original_bytes) =
-                self.get_unique_accounts_from_storages(old_storages.iter());
+            let GetUniqueAccountsResult {
+                stored_accounts,
+                num_stores: _num_stores,
+                original_bytes,
+            } = self.get_unique_accounts_from_storages(old_storages.iter());
 
             // sort by pubkey to keep account index lookups close
             let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
@@ -7086,7 +7114,7 @@ impl AccountsDb {
         &self,
         infos: Vec<AccountInfo>,
         accounts: impl StorableAccounts<'a, T>,
-        previous_slot_entry_was_cached: bool,
+        reclaim: UpsertReclaim,
     ) -> SlotList<AccountInfo> {
         let target_slot = accounts.target_slot();
         // using a thread pool here results in deadlock panics from bank_hashes.write()
@@ -7109,7 +7137,7 @@ impl AccountsDb {
                     &self.account_indexes,
                     info,
                     &mut reclaims,
-                    previous_slot_entry_was_cached,
+                    reclaim,
                 );
             });
             reclaims
@@ -7337,15 +7365,19 @@ impl AccountsDb {
         let mut measure = Measure::start("unref_from_storage");
         if let Some(purged_stored_account_slots) = purged_stored_account_slots {
             let len = purged_stored_account_slots.len();
-            // we could build a higher level function in accounts_index to group by bin
             const BATCH_SIZE: usize = 10_000;
             let batches = 1 + (len / BATCH_SIZE);
             self.thread_pool_clean.install(|| {
                 (0..batches).into_par_iter().for_each(|batch| {
                     let skip = batch * BATCH_SIZE;
-                    for (_slot, pubkey) in purged_slot_pubkeys.iter().skip(skip).take(BATCH_SIZE) {
-                        self.accounts_index.unref_from_storage(pubkey);
-                    }
+                    self.accounts_index.scan(
+                        purged_slot_pubkeys
+                            .iter()
+                            .skip(skip)
+                            .take(BATCH_SIZE)
+                            .map(|(_slot, pubkey)| pubkey),
+                        |_pubkey, _slots_refs| AccountsIndexScanResult::Unref,
+                    )
                 })
             });
             for (slot, pubkey) in purged_slot_pubkeys {
@@ -7695,7 +7727,11 @@ impl AccountsDb {
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
-        let previous_slot_entry_was_cached = self.caching_enabled && is_cached_store;
+        let reclaim = if self.caching_enabled && is_cached_store {
+            UpsertReclaim::PreviousSlotEntryWasCached
+        } else {
+            UpsertReclaim::PopulateReclaims
+        };
 
         // if we are squashing a single slot, then we can expect a single dead slot
         let expected_single_dead_slot =
@@ -7705,7 +7741,7 @@ impl AccountsDb {
         // after the account are stored by the above `store_accounts_to`
         // call and all the accounts are stored, all reads after this point
         // will know to not check the cache anymore
-        let mut reclaims = self.update_index(infos, accounts, previous_slot_entry_was_cached);
+        let mut reclaims = self.update_index(infos, accounts, reclaim);
 
         // For each updated account, `reclaims` should only have at most one
         // item (if the account was previously updated in this slot).
@@ -7894,6 +7930,21 @@ impl AccountsDb {
         accounts_map
     }
 
+    /// return Some(lamports_to_top_off) if 'account' would collect rent
+    fn stats_for_rent_payers<T: ReadableAccount>(
+        pubkey: &Pubkey,
+        account: &T,
+        rent_collector: &RentCollector,
+    ) -> Option<u64> {
+        (rent_collector.should_collect_rent(pubkey, account)
+            && !rent_collector.get_rent_due(account).is_exempt())
+        .then(|| {
+            let min_balance = rent_collector.rent.minimum_balance(account.data().len());
+            // return lamports required to top off this account to make it rent exempt
+            min_balance.saturating_sub(account.lamports())
+        })
+    }
+
     fn generate_index_for_slot<'a>(
         &self,
         accounts_map: GenerateIndexAccountsMap<'a>,
@@ -7907,8 +7958,9 @@ impl AccountsDb {
         let secondary = !self.account_indexes.is_empty();
 
         let mut accounts_data_len = 0;
-        let mut num_accounts_rent_exempt = 0;
+        let mut num_accounts_rent_paying = 0;
         let num_accounts = accounts_map.len();
+        let mut amount_to_top_off_rent = 0;
         let items = accounts_map.into_iter().map(
             |(
                 pubkey,
@@ -7929,10 +7981,11 @@ impl AccountsDb {
                     accounts_data_len += stored_account.data().len() as u64;
                 }
 
-                if !rent_collector.should_collect_rent(&pubkey, &stored_account)
-                    || rent_collector.get_rent_due(&stored_account).is_exempt()
+                if let Some(amount_to_top_off_rent_this_account) =
+                    Self::stats_for_rent_payers(&pubkey, &stored_account, rent_collector)
                 {
-                    num_accounts_rent_exempt += 1;
+                    amount_to_top_off_rent += amount_to_top_off_rent_this_account;
+                    num_accounts_rent_paying += 1;
                 }
 
                 (
@@ -7959,8 +8012,9 @@ impl AccountsDb {
         SlotIndexGenerationInfo {
             insert_time_us,
             num_accounts: num_accounts as u64,
-            num_accounts_rent_exempt,
+            num_accounts_rent_paying,
             accounts_data_len,
+            amount_to_top_off_rent,
         }
     }
 
@@ -8180,7 +8234,8 @@ impl AccountsDb {
             let chunk_size = (outer_slots_len / (std::cmp::max(1, threads.saturating_sub(1)))) + 1; // approximately 400k slots in a snapshot
             let mut index_time = Measure::start("index");
             let insertion_time_us = AtomicU64::new(0);
-            let rent_exempt = AtomicU64::new(0);
+            let rent_paying = AtomicUsize::new(0);
+            let amount_to_top_off_rent = AtomicU64::new(0);
             let total_duplicates = AtomicU64::new(0);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
             let scan_time: u64 = slots
@@ -8214,10 +8269,13 @@ impl AccountsDb {
                             let SlotIndexGenerationInfo {
                                 insert_time_us: insert_us,
                                 num_accounts: total_this_slot,
-                                num_accounts_rent_exempt: rent_exempt_this_slot,
+                                num_accounts_rent_paying: rent_paying_this_slot,
                                 accounts_data_len: accounts_data_len_this_slot,
+                                amount_to_top_off_rent: amount_to_top_off_rent_this_slot,
                             } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
-                            rent_exempt.fetch_add(rent_exempt_this_slot, Ordering::Relaxed);
+                            rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
+                            amount_to_top_off_rent
+                                .fetch_add(amount_to_top_off_rent_this_slot, Ordering::Relaxed);
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
                             accounts_data_len
                                 .fetch_add(accounts_data_len_this_slot, Ordering::Relaxed);
@@ -8281,7 +8339,7 @@ impl AccountsDb {
                 m.stop();
                 index_flush_us = m.as_us();
 
-                // this has to happen before get_duplicate_accounts_slots_and_data_len below
+                // this has to happen before visit_duplicate_pubkeys_during_startup below
                 // get duplicate keys from acct idx. We have to wait until we've finished flushing.
                 for (slot, key) in self
                     .accounts_index
@@ -8297,6 +8355,25 @@ impl AccountsDb {
                     }
                 }
             }
+
+            let storage_info_timings = storage_info_timings.into_inner().unwrap();
+            let mut timings = GenerateIndexTimings {
+                index_flush_us,
+                scan_time,
+                index_time: index_time.as_us(),
+                insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
+                min_bin_size,
+                max_bin_size,
+                total_items,
+                rent_paying,
+                amount_to_top_off_rent,
+                total_duplicates: total_duplicates.load(Ordering::Relaxed),
+                storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
+                storage_size_accounts_map_flatten_us: storage_info_timings
+                    .storage_size_accounts_map_flatten_us,
+                ..GenerateIndexTimings::default()
+            };
+
             // subtract data.len() from accounts_data_len for all old accounts that are in the index twice
             let mut accounts_data_len_dedup_timer =
                 Measure::start("handle accounts data len duplicates");
@@ -8313,8 +8390,12 @@ impl AccountsDb {
                     .collect::<Vec<_>>()
                     .par_chunks(4096)
                     .map(|pubkeys| {
-                        let (count, uncleaned_roots_this_group) =
-                            self.get_duplicate_accounts_slots_and_data_len(pubkeys);
+                        let (count, uncleaned_roots_this_group) = self
+                            .visit_duplicate_pubkeys_during_startup(
+                                pubkeys,
+                                &rent_collector,
+                                &timings,
+                            );
                         let mut uncleaned_roots = uncleaned_roots.lock().unwrap();
                         uncleaned_roots_this_group.into_iter().for_each(|slot| {
                             uncleaned_roots.insert(slot);
@@ -8329,25 +8410,7 @@ impl AccountsDb {
                 );
             }
             accounts_data_len_dedup_timer.stop();
-
-            let storage_info_timings = storage_info_timings.into_inner().unwrap();
-
-            let mut timings = GenerateIndexTimings {
-                index_flush_us,
-                scan_time,
-                index_time: index_time.as_us(),
-                insertion_time_us: insertion_time_us.load(Ordering::Relaxed),
-                min_bin_size,
-                max_bin_size,
-                total_items,
-                rent_exempt: rent_exempt.load(Ordering::Relaxed),
-                total_duplicates: total_duplicates.load(Ordering::Relaxed),
-                storage_size_accounts_map_us: storage_info_timings.storage_size_accounts_map_us,
-                storage_size_accounts_map_flatten_us: storage_info_timings
-                    .storage_size_accounts_map_flatten_us,
-                accounts_data_len_dedup_time_us: accounts_data_len_dedup_timer.as_us(),
-                ..GenerateIndexTimings::default()
-            };
+            timings.accounts_data_len_dedup_time_us = accounts_data_len_dedup_timer.as_us();
 
             if pass == 0 {
                 let uncleaned_roots = uncleaned_roots.into_inner().unwrap();
@@ -8397,14 +8460,19 @@ impl AccountsDb {
     /// Used during generate_index() to:
     /// 1. get the _duplicate_ accounts data len from the given pubkeys
     /// 2. get the slots that contained duplicate pubkeys
+    /// 3. update rent stats
     /// Note this should only be used when ALL entries in the accounts index are roots.
     /// returns (data len sum of all older duplicates, slots that contained duplicate pubkeys)
-    fn get_duplicate_accounts_slots_and_data_len(
+    fn visit_duplicate_pubkeys_during_startup(
         &self,
         pubkeys: &[Pubkey],
+        rent_collector: &RentCollector,
+        timings: &GenerateIndexTimings,
     ) -> (u64, HashSet<Slot>) {
         let mut accounts_data_len_from_duplicates = 0;
         let mut uncleaned_slots = HashSet::<Slot>::default();
+        let mut removed_rent_paying = 0;
+        let mut removed_top_off = 0;
         pubkeys.iter().for_each(|pubkey| {
             if let Some(entry) = self.accounts_index.get_account_read_entry(pubkey) {
                 let slot_list = entry.slot_list();
@@ -8431,9 +8499,21 @@ impl AccountsDb {
                     );
                     let loaded_account = accessor.check_and_get_loaded_account();
                     accounts_data_len_from_duplicates += loaded_account.data().len();
+                    if let Some(lamports_to_top_off) =
+                        Self::stats_for_rent_payers(pubkey, &loaded_account, rent_collector)
+                    {
+                        removed_rent_paying += 1;
+                        removed_top_off += lamports_to_top_off;
+                    }
                 });
             }
         });
+        timings
+            .rent_paying
+            .fetch_sub(removed_rent_paying, Ordering::Relaxed);
+        timings
+            .amount_to_top_off_rent
+            .fetch_sub(removed_top_off, Ordering::Relaxed);
         (accounts_data_len_from_duplicates as u64, uncleaned_slots)
     }
 
@@ -12625,7 +12705,8 @@ pub mod tests {
         );
     }
 
-    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: bool = false;
+    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: UpsertReclaim =
+        UpsertReclaim::PopulateReclaims;
 
     #[test]
     fn test_delete_dependencies() {

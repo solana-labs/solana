@@ -5,6 +5,7 @@ use {
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
             RpcTransactionLogsFilter,
         },
+        rpc_filter,
         rpc_response::{
             Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
             RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
@@ -48,6 +49,9 @@ pub enum PubsubClientError {
 
     #[error("unexpected message format: {0}")]
     UnexpectedMessageError(String),
+
+    #[error("request error: {0}")]
+    RequestError(String),
 }
 
 pub struct PubsubClientSubscription<T>
@@ -121,6 +125,43 @@ where
                 .to_string(),
             ))
             .map_err(|err| err.into())
+    }
+
+    fn get_version(
+        writable_socket: &Arc<RwLock<WebSocket<MaybeTlsStream<TcpStream>>>>,
+    ) -> Result<semver::Version, PubsubClientError> {
+        writable_socket
+            .write()
+            .unwrap()
+            .write_message(Message::Text(
+                json!({
+                    "jsonrpc":"2.0","id":1,"method":"getVersion",
+                })
+                .to_string(),
+            ))?;
+        let message = writable_socket.write().unwrap().read_message()?;
+        let message_text = &message.into_text()?;
+        let json_msg: Map<String, Value> = serde_json::from_str(message_text)?;
+
+        if let Some(Object(version_map)) = json_msg.get("result") {
+            if let Some(node_version) = version_map.get("solana-core") {
+                let node_version = semver::Version::parse(
+                    node_version.as_str().unwrap_or_default(),
+                )
+                .map_err(|e| {
+                    PubsubClientError::RequestError(format!(
+                        "failed to parse cluster version: {}",
+                        e
+                    ))
+                })?;
+                return Ok(node_version);
+            }
+        }
+        // TODO: Add proper JSON RPC response/error handling...
+        Err(PubsubClientError::UnexpectedMessageError(format!(
+            "{:?}",
+            json_msg
+        )))
     }
 
     fn read_message(
@@ -357,7 +398,7 @@ impl PubsubClient {
     pub fn program_subscribe(
         url: &str,
         pubkey: &Pubkey,
-        config: Option<RpcProgramAccountsConfig>,
+        mut config: Option<RpcProgramAccountsConfig>,
     ) -> Result<ProgramSubscription, PubsubClientError> {
         let url = Url::parse(url)?;
         let socket = connect_with_retry(url)?;
@@ -367,6 +408,17 @@ impl PubsubClient {
         let socket_clone = socket.clone();
         let exit = Arc::new(AtomicBool::new(false));
         let exit_clone = exit.clone();
+
+        if let Some(ref mut config) = config {
+            if let Some(ref mut filters) = config.filters {
+                let node_version = PubsubProgramClientSubscription::get_version(&socket_clone).ok();
+                // If node does not support the pubsub `getVersion` method, assume version is old
+                // and filters should be mapped (node_version.is_none()).
+                rpc_filter::maybe_map_filters(node_version, filters)
+                    .map_err(PubsubClientError::RequestError)?;
+            }
+        }
+
         let body = json!({
             "jsonrpc":"2.0",
             "id":1,

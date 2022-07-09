@@ -240,7 +240,7 @@ impl<T: Clone + Copy> Bucket<T> {
         &mut self,
         key: &Pubkey,
         data: &[T],
-        ref_count: u64,
+        ref_count: RefCount,
     ) -> Result<(), BucketMapError> {
         let best_fit_bucket = IndexEntry::data_bucket_from_num_slots(data.len() as u64);
         if self.data.get(best_fit_bucket as usize).is_none() {

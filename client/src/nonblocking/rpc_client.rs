@@ -19,6 +19,7 @@ use {
         mock_sender::MockSender,
         rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClientConfig},
         rpc_config::{RpcAccountInfoConfig, *},
+        rpc_filter::{self, RpcFilterType},
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
         rpc_sender::*,
@@ -578,6 +579,17 @@ impl RpcClient {
             };
         }
         Ok(request)
+    }
+
+    #[allow(deprecated)]
+    async fn maybe_map_filters(
+        &self,
+        mut filters: Vec<RpcFilterType>,
+    ) -> Result<Vec<RpcFilterType>, RpcError> {
+        let node_version = self.get_node_version().await?;
+        rpc_filter::maybe_map_filters(Some(node_version), &mut filters)
+            .map_err(RpcError::RpcRequestError)?;
+        Ok(filters)
     }
 
     /// Submit a transaction and wait for confirmation.
@@ -4490,21 +4502,17 @@ impl RpcClient {
     pub async fn get_program_accounts_with_config(
         &self,
         pubkey: &Pubkey,
-        config: RpcProgramAccountsConfig,
+        mut config: RpcProgramAccountsConfig,
     ) -> ClientResult<Vec<(Pubkey, Account)>> {
         let commitment = config
             .account_config
             .commitment
             .unwrap_or_else(|| self.commitment());
         let commitment = self.maybe_map_commitment(commitment).await?;
-        let account_config = RpcAccountInfoConfig {
-            commitment: Some(commitment),
-            ..config.account_config
-        };
-        let config = RpcProgramAccountsConfig {
-            account_config,
-            ..config
-        };
+        config.account_config.commitment = Some(commitment);
+        if let Some(filters) = config.filters {
+            config.filters = Some(self.maybe_map_filters(filters).await?);
+        }
         let accounts: Vec<RpcKeyedAccount> = self
             .send(
                 RpcRequest::GetProgramAccounts,

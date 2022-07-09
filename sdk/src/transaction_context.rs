@@ -48,7 +48,6 @@ pub struct TransactionContext {
     number_of_instructions_at_transaction_level: usize,
     instruction_trace: InstructionTrace,
     return_data: TransactionReturnData,
-    total_resize_limit: u64,
     total_resize_delta: RefCell<i64>,
 }
 
@@ -58,7 +57,6 @@ impl TransactionContext {
         transaction_accounts: Vec<TransactionAccount>,
         instruction_context_capacity: usize,
         number_of_instructions_at_transaction_level: usize,
-        total_resize_limit: u64,
     ) -> Self {
         let (account_keys, accounts): (Vec<Pubkey>, Vec<RefCell<AccountSharedData>>) =
             transaction_accounts
@@ -73,7 +71,6 @@ impl TransactionContext {
             number_of_instructions_at_transaction_level,
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: TransactionReturnData::default(),
-            total_resize_limit,
             total_resize_delta: RefCell::new(0),
         }
     }
@@ -253,18 +250,6 @@ impl TransactionContext {
     /// Returns instruction trace
     pub fn get_instruction_trace(&self) -> &InstructionTrace {
         &self.instruction_trace
-    }
-
-    /// Returns (in bytes) how much data can still be allocated
-    pub fn get_total_resize_remaining(&self) -> u64 {
-        let total_resize_delta = *self.total_resize_delta.borrow();
-        if total_resize_delta >= 0 {
-            self.total_resize_limit
-                .saturating_sub(total_resize_delta as u64)
-        } else {
-            self.total_resize_limit
-                .saturating_add(total_resize_delta.saturating_neg() as u64)
-        }
     }
 }
 

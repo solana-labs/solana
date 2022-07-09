@@ -3,9 +3,10 @@ use {
     clap::value_t,
     log::*,
     solana_bench_tps::{
-        bench::{do_bench_tps, generate_keypairs},
+        bench::do_bench_tps,
         cli::{self, ExternalClientType},
         keypairs::get_keypairs,
+        send_batch::generate_keypairs,
     },
     solana_client::{
         connection_cache::ConnectionCache,

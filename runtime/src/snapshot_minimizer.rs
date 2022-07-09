@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, AccountsDb, PurgeStats},
+        accounts_db::{AccountStorageEntry, AccountsDb, GetUniqueAccountsResult, PurgeStats},
         bank::Bank,
         builtins, static_ids,
     },
@@ -302,7 +302,9 @@ impl<'a> SnapshotMinimizer<'a> {
         dead_storages: &Mutex<Vec<Arc<AccountStorageEntry>>>,
     ) {
         let slot = storages.first().unwrap().slot();
-        let (stored_accounts, _, _) = self
+        let GetUniqueAccountsResult {
+            stored_accounts, ..
+        } = self
             .accounts_db()
             .get_unique_accounts_from_storages(storages.iter());
         let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
@@ -318,7 +320,7 @@ impl<'a> SnapshotMinimizer<'a> {
             let mut purge_pubkeys = Vec::with_capacity(CHUNK_SIZE);
             chunk.iter().for_each(|(pubkey, account)| {
                 if self.minimized_account_set.contains(pubkey) {
-                    chunk_bytes += account.account_size;
+                    chunk_bytes += account.account.stored_size;
                     keep_accounts.push((pubkey, account));
                 } else if self
                     .accounts_db()
