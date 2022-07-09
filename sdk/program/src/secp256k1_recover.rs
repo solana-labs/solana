@@ -235,7 +235,7 @@ impl Secp256k1Pubkey {
 /// `hash` and `signature`. It will assume they are the the correct lengths and
 /// pass their pointers to the runtime, which will interpret them as 32-byte and
 /// 64-byte buffers. If the provided slices are too short, the runtime will read
-/// invalid data and attempt to interpet it, most likely returning an error,
+/// invalid data and attempt to interpret it, most likely returning an error,
 /// though in some scenarios it may be possible to incorrectly return
 /// successfully, or the transaction will abort if the syscall reads data
 /// outside of the program's memory space. If the provided slices are too long
