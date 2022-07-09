@@ -25,7 +25,7 @@ use {
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
-        blockstore::{create_new_ledger, Blockstore, PurgeType},
+        blockstore::{create_new_ledger, Blockstore, BlockstoreError, PurgeType},
         blockstore_db::{self, Database},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
@@ -805,17 +805,56 @@ fn analyze_storage(database: &Database) {
     analyze_column::<OptimisticSlots>(database, "OptimisticSlots");
 }
 
+/// Open blockstore with temporary primary access to allow necessary,
+/// persistent changes to be made to the blockstore (such as creation of new
+/// column family(s)). Then, continue opening with `original_access_type`
+fn open_blockstore_with_temporary_primary_access(
+    ledger_path: &Path,
+    original_access_type: AccessType,
+    wal_recovery_mode: Option<BlockstoreRecoveryMode>,
+) -> Result<Blockstore, BlockstoreError> {
+    // Open with Primary will allow any configuration that automatically
+    // updates to take effect
+    info!("Attempting to temporarily open blockstore with Primary access in order to update");
+    {
+        let _ = Blockstore::open_with_options(
+            ledger_path,
+            BlockstoreOptions {
+                access_type: AccessType::PrimaryForMaintenance,
+                recovery_mode: wal_recovery_mode.clone(),
+                enforce_ulimit_nofile: true,
+                ..BlockstoreOptions::default()
+            },
+        )?;
+    }
+    // Now, attempt to open the blockstore with original AccessType
+    info!(
+        "Blockstore forced open succeeded, retrying with original access: {:?}",
+        original_access_type
+    );
+    Blockstore::open_with_options(
+        ledger_path,
+        BlockstoreOptions {
+            access_type: original_access_type,
+            recovery_mode: wal_recovery_mode,
+            enforce_ulimit_nofile: true,
+            ..BlockstoreOptions::default()
+        },
+    )
+}
+
 fn open_blockstore(
     ledger_path: &Path,
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
     shred_storage_type: &ShredStorageType,
+    force_update_to_open: bool,
 ) -> Blockstore {
     match Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
-            access_type,
-            recovery_mode: wal_recovery_mode,
+            access_type: access_type.clone(),
+            recovery_mode: wal_recovery_mode.clone(),
             enforce_ulimit_nofile: true,
             column_options: LedgerColumnOptions {
                 shred_storage_type: shred_storage_type.clone(),
@@ -824,8 +863,37 @@ fn open_blockstore(
         },
     ) {
         Ok(blockstore) => blockstore,
+        Err(BlockstoreError::RocksDb(err))
+            if (err
+                .to_string()
+                // Missing column family
+                .starts_with("Invalid argument: Column family not found:")
+                || err
+                    .to_string()
+                    // Missing essential file, indicative of blockstore not existing
+                    .starts_with("IO error: No such file or directory:"))
+                && access_type == AccessType::Secondary =>
+        {
+            error!("Blockstore is incompatible with current software and requires updates");
+            if !force_update_to_open {
+                error!("Use --force-update-to-open to allow blockstore to update");
+                exit(1);
+            }
+            open_blockstore_with_temporary_primary_access(
+                ledger_path,
+                access_type,
+                wal_recovery_mode,
+            )
+            .unwrap_or_else(|err| {
+                error!(
+                    "Failed to open blockstore (with --force-update-to-open) at {:?}: {:?}",
+                    ledger_path, err
+                );
+                exit(1);
+            })
+        }
         Err(err) => {
-            eprintln!("Failed to open ledger at {:?}: {:?}", ledger_path, err);
+            eprintln!("Failed to open blockstore at {:?}: {:?}", ledger_path, err);
             exit(1);
         }
     }
@@ -1344,6 +1412,14 @@ fn main() {
                 .help(
                     "Mode to recovery the ledger db write ahead log"
                 ),
+        )
+        .arg(
+            Arg::with_name("force_update_to_open")
+                .long("force-update-to-open")
+                .takes_value(false)
+                .global(true)
+                .help("Allow commands that would otherwise not alter the \
+                       blockstore to make necessary updates in order to open it"),
         )
         .arg(
             Arg::with_name("snapshot_archive_path")
@@ -2039,6 +2115,7 @@ fn main() {
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
+    let force_update_to_open = matches.is_present("force_update_to_open");
     let verbose_level = matches.occurrences_of("verbose");
 
     // TODO: the following shred_storage_type inference must be updated once the
@@ -2074,6 +2151,7 @@ fn main() {
                         AccessType::Secondary,
                         wal_recovery_mode,
                         &shred_storage_type,
+                        force_update_to_open,
                     ),
                     starting_slot,
                     ending_slot,
@@ -2093,9 +2171,16 @@ fn main() {
                     AccessType::Secondary,
                     None,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
-                let target =
-                    open_blockstore(&target_db, AccessType::Primary, None, &shred_storage_type);
+                let target = open_blockstore(
+                    &target_db,
+                    AccessType::Primary,
+                    None,
+                    &shred_storage_type,
+                    force_update_to_open,
+                );
+
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -2173,6 +2258,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 match load_bank_forks(
                     arg_matches,
@@ -2225,6 +2311,7 @@ fn main() {
                     AccessType::Secondary,
                     None,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 for (slot, _meta) in ledger
                     .slot_meta_iterator(starting_slot)
@@ -2264,6 +2351,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 match load_bank_forks(
                     arg_matches,
@@ -2290,6 +2378,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 for slot in slots {
                     println!("Slot {}", slot);
@@ -2314,6 +2403,7 @@ fn main() {
                         AccessType::Secondary,
                         wal_recovery_mode,
                         &shred_storage_type,
+                        force_update_to_open,
                     ),
                     starting_slot,
                     Slot::MAX,
@@ -2330,6 +2420,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
@@ -2342,6 +2433,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
@@ -2355,6 +2447,7 @@ fn main() {
                     AccessType::Primary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
@@ -2370,6 +2463,7 @@ fn main() {
                     AccessType::Primary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
@@ -2388,6 +2482,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 let mut ancestors = BTreeSet::new();
                 assert!(
@@ -2549,6 +2644,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
@@ -2593,6 +2689,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 match load_bank_forks(
                     arg_matches,
@@ -2707,6 +2804,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
@@ -3095,6 +3193,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
@@ -3159,6 +3258,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 match load_bank_forks(
                     arg_matches,
@@ -3694,6 +3794,7 @@ fn main() {
                     access_type,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
 
                 let end_slot = match end_slot {
@@ -3770,6 +3871,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                     usize::from_str(height).expect("Maximum height must be a number")
@@ -3837,6 +3939,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
                 let slots = blockstore
@@ -3861,6 +3964,7 @@ fn main() {
                     AccessType::Primary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 let start_root = if let Some(root) = arg_matches.value_of("start_root") {
                     Slot::from_str(root).expect("Before root must be a number")
@@ -3914,6 +4018,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
                 match blockstore.slot_meta_iterator(0) {
                     Ok(metas) => {
@@ -3980,6 +4085,7 @@ fn main() {
                         AccessType::Secondary,
                         wal_recovery_mode,
                         &shred_storage_type,
+                        force_update_to_open,
                     )
                     .db(),
                 );
@@ -3991,6 +4097,7 @@ fn main() {
                     AccessType::Secondary,
                     wal_recovery_mode,
                     &shred_storage_type,
+                    force_update_to_open,
                 );
 
                 let mut slots: Vec<u64> = vec![];
