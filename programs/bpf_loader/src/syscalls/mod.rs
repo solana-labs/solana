@@ -29,7 +29,6 @@ use {
     },
     solana_sdk::{
         account::{ReadableAccount, WritableAccount},
-        account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
@@ -70,6 +69,7 @@ use {
 mod cpi;
 mod logging;
 mod mem_ops;
+pub(crate) mod sbf_rust;
 mod sysvar;
 
 /// Maximum signers
@@ -99,7 +99,7 @@ pub enum SyscallError {
     #[error("Too many signers")]
     TooManySigners,
     #[error("Instruction passed to inner instruction is too large ({0} > {1})")]
-    InstructionTooLarge(usize, usize),
+    InstructionTooLarge(u64, u64),
     #[error("Too many accounts passed to inner instruction")]
     TooManyAccounts,
     #[error("Overlapping copy")]

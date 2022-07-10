@@ -84,42 +84,29 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<Instruction, EbpfError<BpfError>> {
-        let ix = translate_type::<Instruction>(
-            memory_mapping,
-            addr,
-            invoke_context.get_check_aligned(),
-        )?;
+        let ix: &sbf_rust::Instruction =
+            sbf_rust::Ptr::new(addr).translate(memory_mapping, invoke_context)?;
 
-        check_instruction_size(ix.accounts.len(), ix.data.len(), invoke_context)?;
+        check_instruction_size(ix.accounts.raw_len, ix.data.raw_len, invoke_context)?;
 
-        let accounts = translate_slice::<AccountMeta>(
-            memory_mapping,
-            ix.accounts.as_ptr() as u64,
-            ix.accounts.len() as u64,
-            invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
-        )?
-        .to_vec();
+        let accounts = ix
+            .accounts
+            .translate(memory_mapping, invoke_context)?
+            .iter()
+            .map(AccountMeta::from)
+            .collect::<Vec<_>>();
 
-        let ix_data_len = ix.data.len() as u64;
         if invoke_context
             .feature_set
             .is_active(&feature_set::loosen_cpi_size_restriction::id())
         {
             invoke_context.get_compute_meter().consume(
-                (ix_data_len)
+                (ix.data.raw_len)
                     .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
             )?;
         }
 
-        let data = translate_slice::<u8>(
-            memory_mapping,
-            ix.data.as_ptr() as u64,
-            ix_data_len,
-            invoke_context.get_check_aligned(),
-            invoke_context.get_check_size(),
-        )?
-        .to_vec();
+        let data = ix.data.translate(memory_mapping, invoke_context)?.to_vec();
         Ok(Instruction {
             program_id: ix.program_id,
             accounts,
@@ -136,7 +123,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<TranslatedAccounts<'c>, EbpfError<BpfError>> {
-        let account_infos = translate_slice::<AccountInfo>(
+        let account_infos = translate_slice::<sbf_rust::AccountInfo>(
             memory_mapping,
             account_infos_addr,
             account_infos_len,
@@ -146,64 +133,44 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
         check_account_infos(account_infos.len(), invoke_context)?;
         let account_info_keys = account_infos
             .iter()
-            .map(|account_info| {
-                translate_type::<Pubkey>(
-                    memory_mapping,
-                    account_info.key as *const _ as u64,
-                    invoke_context.get_check_aligned(),
-                )
-            })
+            .map(|account_info| account_info.key.translate(memory_mapping, invoke_context))
             .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
 
-        let translate = |account_info: &AccountInfo, invoke_context: &InvokeContext| {
+        let translate = |account_info: &sbf_rust::AccountInfo, invoke_context: &InvokeContext| {
             // Translate the account from user space
 
-            let lamports = {
-                // Double translate lamports out of RefCell
-                let ptr = translate_type::<u64>(
-                    memory_mapping,
-                    account_info.lamports.as_ptr() as u64,
-                    invoke_context.get_check_aligned(),
-                )?;
-                translate_type_mut::<u64>(memory_mapping, *ptr, invoke_context.get_check_aligned())?
-            };
-            let owner = translate_type_mut::<Pubkey>(
-                memory_mapping,
-                account_info.owner as *const _ as u64,
-                invoke_context.get_check_aligned(),
-            )?;
+            let lamports = account_info
+                .lamports
+                .translate(memory_mapping, invoke_context)?
+                .value
+                .value
+                .translate_mut(memory_mapping, invoke_context)?;
+            let owner = account_info
+                .owner
+                .translate_mut(memory_mapping, invoke_context)?;
 
             let (data, vm_data_addr, ref_to_len_in_vm) = {
-                // Double translate data out of RefCell
-                let data = *translate_type::<&[u8]>(
-                    memory_mapping,
-                    account_info.data.as_ptr() as *const _ as u64,
-                    invoke_context.get_check_aligned(),
-                )?;
+                // Translate the account from user space
+                let data = &account_info
+                    .data
+                    .translate(memory_mapping, invoke_context)?
+                    .value
+                    .value;
 
                 invoke_context.get_compute_meter().consume(
-                    (data.len() as u64)
+                    data.len
                         .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
                 )?;
 
-                let translated = translate(
-                    memory_mapping,
-                    AccessType::Store,
-                    (account_info.data.as_ptr() as *const u64 as u64)
-                        .saturating_add(size_of::<u64>() as u64),
-                    8,
-                )? as *mut u64;
-                let ref_to_len_in_vm = unsafe { &mut *translated };
-                let vm_data_addr = data.as_ptr() as u64;
+                let data_vm_slice = &mut account_info
+                    .data
+                    .translate_mut(memory_mapping, invoke_context)?
+                    .value
+                    .value;
+                let ref_to_len_in_vm = &mut data_vm_slice.len;
                 (
-                    translate_slice_mut::<u8>(
-                        memory_mapping,
-                        vm_data_addr,
-                        data.len() as u64,
-                        invoke_context.get_check_aligned(),
-                        invoke_context.get_check_size(),
-                    )?,
-                    vm_data_addr,
+                    data.translate_mut(memory_mapping, invoke_context)?,
+                    data.ptr,
                     ref_to_len_in_vm,
                 )
             };
@@ -240,7 +207,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
     ) -> Result<Vec<Pubkey>, EbpfError<BpfError>> {
         let mut signers = Vec::new();
         if signers_seeds_len > 0 {
-            let signers_seeds = translate_slice::<&[&[u8]]>(
+            let signers_seeds = translate_slice::<sbf_rust::Slice<sbf_rust::Slice<u8>>>(
                 memory_mapping,
                 signers_seeds_addr,
                 signers_seeds_len,
@@ -251,13 +218,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 return Err(SyscallError::TooManySigners.into());
             }
             for signer_seeds in signers_seeds.iter() {
-                let untranslated_seeds = translate_slice::<&[u8]>(
-                    memory_mapping,
-                    signer_seeds.as_ptr() as *const _ as u64,
-                    signer_seeds.len() as u64,
-                    invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
-                )?;
+                let untranslated_seeds = signer_seeds.translate(memory_mapping, invoke_context)?;
                 if untranslated_seeds.len() > MAX_SEEDS {
                     return Err(SyscallError::InstructionError(
                         InstructionError::MaxSeedLengthExceeded,
@@ -267,13 +228,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
                 let seeds = untranslated_seeds
                     .iter()
                     .map(|untranslated_seed| {
-                        translate_slice::<u8>(
-                            memory_mapping,
-                            untranslated_seed.as_ptr() as *const _ as u64,
-                            untranslated_seed.len() as u64,
-                            invoke_context.get_check_aligned(),
-                            invoke_context.get_check_size(),
-                        )
+                        untranslated_seed.translate(memory_mapping, invoke_context)
                     })
                     .collect::<Result<Vec<_>, EbpfError<BpfError>>>()?;
                 let signer = Pubkey::create_program_address(&seeds, program_id)
@@ -384,11 +339,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             invoke_context.get_check_aligned(),
         )?;
 
-        check_instruction_size(
-            ix_c.accounts_len as usize,
-            ix_c.data_len as usize,
-            invoke_context,
-        )?;
+        check_instruction_size(ix_c.accounts_len, ix_c.data_len, invoke_context)?;
         let program_id = translate_type::<Pubkey>(
             memory_mapping,
             ix_c.program_id_addr,
@@ -401,22 +352,10 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?;
-
-        let ix_data_len = ix_c.data_len as u64;
-        if invoke_context
-            .feature_set
-            .is_active(&feature_set::loosen_cpi_size_restriction::id())
-        {
-            invoke_context.get_compute_meter().consume(
-                (ix_data_len)
-                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
-            )?;
-        }
-
         let data = translate_slice::<u8>(
             memory_mapping,
             ix_c.data_addr,
-            ix_data_len,
+            ix_c.data_len as u64,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?
@@ -745,15 +684,14 @@ where
 }
 
 fn check_instruction_size(
-    num_accounts: usize,
-    data_len: usize,
+    num_accounts: u64,
+    data_len: u64,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
     if invoke_context
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
     {
-        let data_len = data_len as u64;
         let max_data_len = MAX_CPI_INSTRUCTION_DATA_LEN;
         if data_len > max_data_len {
             return Err(SyscallError::MaxInstructionDataLenExceeded {
@@ -763,7 +701,6 @@ fn check_instruction_size(
             .into());
         }
 
-        let num_accounts = num_accounts as u64;
         let max_accounts = MAX_CPI_INSTRUCTION_ACCOUNTS as u64;
         if num_accounts > max_accounts {
             return Err(SyscallError::MaxInstructionAccountsExceeded {
@@ -773,9 +710,9 @@ fn check_instruction_size(
             .into());
         }
     } else {
-        let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size;
+        let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size as u64;
         let size = num_accounts
-            .saturating_mul(size_of::<AccountMeta>())
+            .saturating_mul(size_of::<AccountMeta>() as u64)
             .saturating_add(data_len);
         if size > max_size {
             return Err(SyscallError::InstructionTooLarge(size, max_size).into());
