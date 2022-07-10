@@ -3224,11 +3224,7 @@ impl Bank {
 
         self.rent_collector = RentCollector::new(
             self.epoch,
-<<<<<<< HEAD
-            &self.epoch_schedule,
-=======
             *self.epoch_schedule(),
->>>>>>> d7201a8d1 (names fields in RentResullt::CollectRent enum variant (#26449))
             self.slots_per_year,
             genesis_config.rent,
         );

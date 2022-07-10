@@ -173,18 +173,6 @@ impl RentCollector {
                 rent_due,
             },
         }
-<<<<<<< HEAD
-
-        let epoch_increment = match rent_due {
-            // Rent isn't collected for the next epoch
-            // Make sure to check exempt status again later in current epoch
-            RentDue::Exempt => 0,
-            // Rent is collected for next epoch
-            RentDue::Paying(_) => 1,
-        };
-        RentResult::CollectRent((self.epoch + epoch_increment, rent_due.lamports()))
-=======
->>>>>>> d7201a8d1 (names fields in RentResullt::CollectRent enum variant (#26449))
     }
 
     #[must_use = "add to Bank::collected_rent"]
