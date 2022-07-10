@@ -218,16 +218,16 @@ impl Signable for PruneData {
 
     fn signable_data(&self) -> Cow<[u8]> {
         #[derive(Serialize)]
-        struct SignData {
-            pubkey: Pubkey,
-            prunes: Vec<Pubkey>,
-            destination: Pubkey,
+        struct SignData<'a> {
+            pubkey: &'a Pubkey,
+            prunes: &'a [Pubkey],
+            destination: &'a Pubkey,
             wallclock: u64,
         }
         let data = SignData {
-            pubkey: self.pubkey,
-            prunes: self.prunes.clone(),
-            destination: self.destination,
+            pubkey: &self.pubkey,
+            prunes: &self.prunes,
+            destination: &self.destination,
             wallclock: self.wallclock,
         };
         Cow::Owned(serialize(&data).expect("serialize PruneData"))
