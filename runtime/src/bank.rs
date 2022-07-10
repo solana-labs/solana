@@ -1445,35 +1445,21 @@ impl Bank {
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths_for_tests(
+        Self::new_with_config_for_tests(
             genesis_config,
-            Vec::new(),
-            None,
-            None,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
-            false,
         )
     }
 
     pub fn new_no_wallclock_throttle_for_tests(genesis_config: &GenesisConfig) -> Self {
-        let mut bank = Self::new_with_paths_for_tests(
-            genesis_config,
-            Vec::new(),
-            None,
-            None,
-            AccountSecondaryIndexes::default(),
-            false,
-            AccountShrinkThreshold::default(),
-            false,
-        );
+        let mut bank = Self::new_for_tests(genesis_config);
 
         bank.ns_per_slot = std::u128::MAX;
         bank
     }
 
-    #[cfg(test)]
     pub(crate) fn new_with_config_for_tests(
         genesis_config: &GenesisConfig,
         account_indexes: AccountSecondaryIndexes,
