@@ -5344,6 +5344,8 @@ impl Bank {
         let mut time_hashing_skipped_rewrites_us = 0;
         let mut time_storing_accounts_us = 0;
         let can_skip_rewrites = self.rc.accounts.accounts_db.skip_rewrites || just_rewrites;
+        let preserve_rent_epoch_for_rent_exempt_accounts =
+            self.preserve_rent_epoch_for_rent_exempt_accounts();
         for (pubkey, account, loaded_slot) in accounts.iter_mut() {
             let old_rent_epoch = account.rent_epoch();
             let (rent_collected_info, measure) =
@@ -5351,7 +5353,7 @@ impl Bank {
                     pubkey,
                     account,
                     self.rc.accounts.accounts_db.filler_account_suffix.as_ref(),
-                    self.preserve_rent_epoch_for_rent_exempt_accounts(),
+                    preserve_rent_epoch_for_rent_exempt_accounts,
                 ));
             time_collecting_rent_us += measure.as_us();
 
