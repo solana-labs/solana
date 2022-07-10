@@ -3039,18 +3039,15 @@ impl ReplayStage {
         }
         progress.handle_new_root(&r_bank_forks);
         heaviest_subtree_fork_choice.set_root((new_root, r_bank_forks.root_bank().hash()));
-        let mut slots_ge_root = duplicate_slots_tracker.split_off(&new_root);
+        *duplicate_slots_tracker = duplicate_slots_tracker.split_off(&new_root);
         // duplicate_slots_tracker now only contains entries >= `new_root`
-        std::mem::swap(duplicate_slots_tracker, &mut slots_ge_root);
 
-        let mut slots_ge_root = gossip_duplicate_confirmed_slots.split_off(&new_root);
+        *gossip_duplicate_confirmed_slots = gossip_duplicate_confirmed_slots.split_off(&new_root);
         // gossip_confirmed_slots now only contains entries >= `new_root`
-        std::mem::swap(gossip_duplicate_confirmed_slots, &mut slots_ge_root);
 
         unfrozen_gossip_verified_vote_hashes.set_root(new_root);
-        let mut slots_ge_root = epoch_slots_frozen_slots.split_off(&new_root);
+        *epoch_slots_frozen_slots = epoch_slots_frozen_slots.split_off(&new_root);
         // epoch_slots_frozen_slots now only contains entries >= `new_root`
-        std::mem::swap(epoch_slots_frozen_slots, &mut slots_ge_root);
     }
 
     fn generate_new_bank_forks(

@@ -1703,8 +1703,7 @@ impl Blockstore {
                 current_slot += 1;
                 parent_slot = current_slot - 1;
                 remaining_ticks_in_slot = ticks_per_slot;
-                let mut current_entries = vec![];
-                std::mem::swap(&mut slot_entries, &mut current_entries);
+                let current_entries = std::mem::take(&mut slot_entries);
                 let start_index = {
                     if all_shreds.is_empty() {
                         start_index

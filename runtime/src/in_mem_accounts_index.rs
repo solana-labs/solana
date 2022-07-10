@@ -534,9 +534,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let reclaim_item = if !(found_slot || found_other_slot) {
                         // first time we found an entry in 'slot' or 'other_slot', so replace it in-place.
                         // this may be the only instance we find
-                        let mut new_item = (slot, account_info);
-                        std::mem::swap(&mut new_item, &mut slot_list[slot_list_index]);
-                        new_item
+                        std::mem::replace(&mut slot_list[slot_list_index], (slot, account_info))
                     } else {
                         // already replaced one entry, so this one has to be removed
                         slot_list.remove(slot_list_index)
@@ -1003,11 +1001,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     fn write_startup_info_to_disk(&self) {
-        let mut insert = vec![];
-        {
-            let mut lock = self.startup_info.lock().unwrap();
-            std::mem::swap(&mut insert, &mut lock.insert);
-        }
+        let insert = std::mem::take(&mut self.startup_info.lock().unwrap().insert);
         if insert.is_empty() {
             // nothing to insert for this bin
             return;
@@ -1067,10 +1061,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
         assert!(write.insert.is_empty());
 
-        let write = &mut write.duplicates;
-        let mut duplicates = vec![];
-        std::mem::swap(&mut duplicates, write);
-        duplicates
+        std::mem::take(&mut write.duplicates)
     }
 
     /// synchronize the in-mem index with the disk index
