@@ -4269,8 +4269,7 @@ impl Bank {
         );
 
         let prev_accounts_data_len = self.load_accounts_data_size();
-        let mut transaction_accounts = Vec::new();
-        std::mem::swap(&mut loaded_transaction.accounts, &mut transaction_accounts);
+        let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
             compute_budget.max_invoke_depth.saturating_add(1),

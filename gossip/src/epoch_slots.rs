@@ -216,8 +216,7 @@ impl CompressedSlots {
             CompressedSlots::Uncompressed(vals) => {
                 let unc = vals.clone();
                 let compressed = Flate2::deflate(unc)?;
-                let mut new = CompressedSlots::Flate2(compressed);
-                std::mem::swap(self, &mut new);
+                *self = CompressedSlots::Flate2(compressed);
                 Ok(())
             }
             CompressedSlots::Flate2(_) => Ok(()),

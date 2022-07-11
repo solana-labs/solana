@@ -651,14 +651,14 @@ impl BankingStage {
         let buffered_packets_len = buffered_packet_batches.len();
         let mut proc_start = Measure::start("consume_buffered_process");
         let mut reached_end_of_slot = false;
-
-        let mut retryable_packets = MinMaxHeap::with_capacity(buffered_packet_batches.capacity());
-        std::mem::swap(
-            &mut buffered_packet_batches.packet_priority_queue,
-            &mut retryable_packets,
-        );
-
-        let mut retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
+        let mut retryable_packets = {
+            let capacity = buffered_packet_batches.capacity();
+            std::mem::replace(
+                &mut buffered_packet_batches.packet_priority_queue,
+                MinMaxHeap::with_capacity(capacity),
+            )
+        };
+        let retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> = retryable_packets
             .drain_desc()
             .chunks(num_packets_to_process_per_iteration)
             .into_iter()
@@ -789,10 +789,7 @@ impl BankingStage {
             })
             .collect();
 
-        std::mem::swap(
-            &mut retryable_packets,
-            &mut buffered_packet_batches.packet_priority_queue,
-        );
+        buffered_packet_batches.packet_priority_queue = retryable_packets;
 
         if reached_end_of_slot {
             slot_metrics_tracker

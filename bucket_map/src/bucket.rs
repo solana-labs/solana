@@ -458,8 +458,7 @@ impl<T: Clone + Copy> Bucket<T> {
     pub fn handle_delayed_grows(&mut self) {
         if self.reallocated.get_reallocated() {
             // swap out the bucket that was resized previously with a read lock
-            let mut items = ReallocatedItems::default();
-            std::mem::swap(&mut items, &mut self.reallocated.items.lock().unwrap());
+            let mut items = std::mem::take(&mut *self.reallocated.items.lock().unwrap());
 
             if let Some((random, bucket)) = items.index.take() {
                 self.apply_grow_index(random, bucket);
