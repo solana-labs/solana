@@ -547,7 +547,8 @@ impl Blockstore {
         self.prepare_rooted_slot_iterator(slot, IteratorDirection::Reverse)
     }
 
-    /// Determines if starting_slot and ending_slot are connected
+    /// Determines if `starting_slot` and `ending_slot` are connected by full slots
+    /// `starting_slot` is excluded from the `is_full()` check
     pub fn slots_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
         if starting_slot == ending_slot {
             return true;
