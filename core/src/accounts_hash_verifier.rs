@@ -193,6 +193,18 @@ impl AccountsHashVerifier {
         accounts_hash
     }
 
+    /// For testing
+    fn generate_fault_hash(slot: &Slot, original_hash: &Hash) -> Hash {
+        // For testing, publish an invalid hash to gossip.
+        use {
+            rand::{thread_rng, Rng},
+            solana_sdk::hash::extend_and_hash,
+        };
+        warn!("inserting fault at slot: {}", slot);
+        let rand = thread_rng().gen_range(0, 10);
+        extend_and_hash(original_hash, &[rand])
+    }
+
     fn push_accounts_hashes_to_cluster(
         accounts_package: &AccountsPackage,
         cluster_info: &ClusterInfo,
