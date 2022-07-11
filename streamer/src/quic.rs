@@ -162,6 +162,7 @@ pub struct StreamStats {
     pub(crate) connection_add_failed_unstaked_node: AtomicUsize,
     pub(crate) connection_add_failed_on_pruning: AtomicUsize,
     pub(crate) connection_setup_timeout: AtomicUsize,
+    pub(crate) connection_setup_error: AtomicUsize,
     pub(crate) connection_removed: AtomicUsize,
     pub(crate) connection_remove_failed: AtomicUsize,
 }
@@ -231,6 +232,11 @@ impl StreamStats {
             (
                 "connection_setup_timeout",
                 self.connection_setup_timeout.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_setup_error",
+                self.connection_setup_error.swap(0, Ordering::Relaxed),
                 i64
             ),
             (
