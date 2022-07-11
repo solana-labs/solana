@@ -553,9 +553,9 @@ impl Blockstore {
             return true;
         }
 
-        let mut next_slots = match self.meta(starting_slot) {
+        let mut next_slots: VecDeque<_> = match self.meta(starting_slot) {
             Ok(Some(starting_slot_meta)) => starting_slot_meta.next_slots.into(),
-            _ => VecDeque::default(),
+            _ => return false,
         };
         while let Some(slot) = next_slots.pop_front() {
             if let Ok(Some(slot_meta)) = self.meta(slot) {
