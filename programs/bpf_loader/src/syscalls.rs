@@ -17,13 +17,14 @@ use {
         vm::{EbpfVm, SyscallObject, SyscallRegistry},
     },
     solana_sdk::{
-        account::WritableAccount,
+        account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
-            curve25519_syscall_enabled, disable_fees_sysvar, libsecp256k1_0_5_upgrade_enabled,
+            curve25519_syscall_enabled, disable_fees_sysvar,
+            enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
             syscall_saturated_math,
         },
@@ -2699,9 +2700,20 @@ where
                     .transaction_context
                     .get_account_at_index(instruction_account.index_in_transaction)
                     .map_err(SyscallError::InstructionError)?;
-                callee_account
-                    .borrow_mut()
-                    .set_rent_epoch(caller_account.rent_epoch);
+                if callee_account.borrow().rent_epoch() != caller_account.rent_epoch {
+                    if invoke_context
+                        .feature_set
+                        .is_active(&enable_early_verification_of_account_modifications::id())
+                    {
+                        Err(SyscallError::InstructionError(
+                            InstructionError::RentEpochModified,
+                        ))?;
+                    } else {
+                        callee_account
+                            .borrow_mut()
+                            .set_rent_epoch(caller_account.rent_epoch);
+                    }
+                }
             }
             let caller_account = if instruction_account.is_writable {
                 let orig_data_lens = invoke_context

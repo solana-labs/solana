@@ -109,7 +109,7 @@ use {
         feature,
         feature_set::{
             self, add_set_compute_unit_price_ix, default_units_per_instruction,
-            disable_fee_calculator, FeatureSet,
+            disable_fee_calculator, enable_early_verification_of_account_modifications, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -4352,7 +4352,7 @@ impl Bank {
                 }
                 err
             });
-        let accounts_data_len_delta = status
+        let mut accounts_data_len_delta = status
             .as_ref()
             .map_or(0, |info| info.accounts_data_len_delta);
         let status = status.map(|_| ());
@@ -4368,9 +4368,31 @@ impl Bank {
             accounts,
             instruction_trace,
             mut return_data,
-            ..
+            changed_account_count,
+            total_size_of_all_accounts,
+            total_size_of_touched_accounts,
+            accounts_resize_delta,
         } = transaction_context.into();
         loaded_transaction.accounts = accounts;
+        if self
+            .feature_set
+            .is_active(&enable_early_verification_of_account_modifications::id())
+        {
+            saturating_add_assign!(
+                timings.details.total_account_count,
+                loaded_transaction.accounts.len() as u64
+            );
+            saturating_add_assign!(timings.details.changed_account_count, changed_account_count);
+            saturating_add_assign!(
+                timings.details.total_data_size,
+                total_size_of_all_accounts as usize
+            );
+            saturating_add_assign!(
+                timings.details.data_size_changed,
+                total_size_of_touched_accounts as usize
+            );
+            accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
+        }
 
         let inner_instructions = if enable_cpi_recording {
             Some(inner_instructions_list_from_instruction_trace(
@@ -17849,6 +17871,9 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+        bank.activate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         bank.accounts_data_size_initial = bank.accounts_data_size_limit()
             - REMAINING_ACCOUNTS_DATA_SIZE
             - bank.load_accounts_data_size_delta() as u64;
@@ -17902,6 +17927,9 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000.));
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+        bank.activate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         let transaction = system_transaction::create_account(
             &mint_keypair,
             &Keypair::new(),
@@ -17943,6 +17971,9 @@ pub(crate) mod tests {
         const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
         let mut bank = create_simple_test_bank(1_000_000_000_000);
         bank.activate_feature(&feature_set::cap_accounts_data_len::id());
+        bank.activate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         let transaction = system_transaction::create_account(
             &Keypair::new(),
             &Keypair::new(),
