@@ -3963,6 +3963,7 @@ impl Bank {
             true,
             &mut timings,
             Some(&account_overrides),
+            None,
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -4259,6 +4260,7 @@ impl Bank {
         enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
         error_counters: &mut TransactionErrorMetrics,
+        log_messages_bytes_limit: Option<usize>,
     ) -> TransactionExecutionResult {
         let mut get_executors_time = Measure::start("get_executors_time");
         let executors = self.get_executors(&loaded_transaction.accounts);
@@ -4280,7 +4282,12 @@ impl Bank {
             self.get_transaction_account_state_info(&transaction_context, tx.message());
 
         let log_collector = if enable_log_recording {
-            Some(LogCollector::new_ref())
+            match log_messages_bytes_limit {
+                None => Some(LogCollector::new_ref()),
+                Some(log_messages_bytes_limit) => Some(LogCollector::new_ref_with_limit(Some(
+                    log_messages_bytes_limit,
+                ))),
+            }
         } else {
             None
         };
@@ -4410,6 +4417,7 @@ impl Bank {
         enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
+        log_messages_bytes_limit: Option<usize>,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -4510,6 +4518,7 @@ impl Bank {
                         enable_return_data_recording,
                         timings,
                         &mut error_counters,
+                        log_messages_bytes_limit,
                     )
                 }
             })
@@ -6035,6 +6044,7 @@ impl Bank {
         enable_log_recording: bool,
         enable_return_data_recording: bool,
         timings: &mut ExecuteTimings,
+        log_messages_bytes_limit: Option<usize>,
     ) -> (TransactionResults, TransactionBalancesSet) {
         let pre_balances = if collect_balances {
             self.collect_balances(batch)
@@ -6057,6 +6067,7 @@ impl Bank {
             enable_return_data_recording,
             timings,
             None,
+            log_messages_bytes_limit,
         );
 
         let (last_blockhash, lamports_per_signature) =
@@ -6109,6 +6120,7 @@ impl Bank {
             true,
             false,
             &mut ExecuteTimings::default(),
+            None,
         );
         tx.signatures
             .get(0)
@@ -6170,6 +6182,7 @@ impl Bank {
             false,
             false,
             &mut ExecuteTimings::default(),
+            None,
         )
         .0
         .fee_collection_results
@@ -11106,6 +11119,7 @@ pub(crate) mod tests {
                 false,
                 false,
                 &mut ExecuteTimings::default(),
+                None,
             )
             .0
             .fee_collection_results;
@@ -13785,6 +13799,7 @@ pub(crate) mod tests {
                 false,
                 false,
                 &mut ExecuteTimings::default(),
+                None,
             );
 
         assert_eq!(transaction_balances_set.pre_balances.len(), 3);
@@ -16809,6 +16824,7 @@ pub(crate) mod tests {
                 true,
                 false,
                 &mut ExecuteTimings::default(),
+                None,
             )
             .0
             .execution_results;
@@ -16917,6 +16933,7 @@ pub(crate) mod tests {
                     false,
                     true,
                     &mut ExecuteTimings::default(),
+                    None,
                 )
                 .0
                 .execution_results[0]

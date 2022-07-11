@@ -133,6 +133,7 @@ impl Tvu {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
+        log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
     ) -> Self {
         let TvuSockets {
@@ -300,6 +301,7 @@ impl Tvu {
             drop_bank_sender,
             block_metadata_notifier,
             transaction_cost_metrics_sender,
+            log_messages_bytes_limit,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -462,6 +464,7 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
+            None,
             &Arc::new(ConnectionCache::default()),
         );
         exit.store(true, Ordering::Relaxed);

@@ -396,6 +396,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
+        log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
@@ -409,6 +410,7 @@ impl BankingStage {
             transaction_status_sender,
             gossip_vote_sender,
             cost_model,
+            log_messages_bytes_limit,
             connection_cache,
             bank_forks,
         )
@@ -425,6 +427,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: ReplayVoteSender,
         cost_model: Arc<RwLock<CostModel>>,
+        log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
@@ -475,6 +478,7 @@ impl BankingStage {
                             gossip_vote_sender,
                             &data_budget,
                             cost_model,
+                            log_messages_bytes_limit,
                             connection_cache,
                             &bank_forks,
                         );
@@ -645,6 +649,7 @@ impl BankingStage {
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         num_packets_to_process_per_iteration: usize,
+        log_messages_bytes_limit: Option<usize>,
     ) {
         let mut rebuffered_packet_count = 0;
         let mut consumed_buffered_packets_count = 0;
@@ -692,6 +697,7 @@ impl BankingStage {
                                     banking_stage_stats,
                                     qos_service,
                                     slot_metrics_tracker,
+                                    log_messages_bytes_limit
                                 ),
                             "process_packets_transactions",
                         );
@@ -873,6 +879,7 @@ impl BankingStage {
         data_budget: &DataBudget,
         qos_service: &QosService,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
+        log_messages_bytes_limit: Option<usize>,
         connection_cache: &ConnectionCache,
         tracer_packet_stats: &mut TracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -935,6 +942,7 @@ impl BankingStage {
                         qos_service,
                         slot_metrics_tracker,
                         UNPROCESSED_BUFFER_STEP_SIZE,
+                        log_messages_bytes_limit
                     ),
                     "consume_buffered_packets",
                 );
@@ -1091,6 +1099,7 @@ impl BankingStage {
         gossip_vote_sender: ReplayVoteSender,
         data_budget: &DataBudget,
         cost_model: Arc<RwLock<CostModel>>,
+        log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
@@ -1124,6 +1133,7 @@ impl BankingStage {
                         data_budget,
                         &qos_service,
                         &mut slot_metrics_tracker,
+                        log_messages_bytes_limit,
                         &connection_cache,
                         &mut tracer_packet_stats,
                         bank_forks,
@@ -1235,6 +1245,7 @@ impl BankingStage {
         batch: &TransactionBatch,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
+        log_messages_bytes_limit: Option<usize>,
     ) -> ExecuteAndCommitTransactionsOutput {
         let mut execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
         let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
@@ -1272,6 +1283,7 @@ impl BankingStage {
                 transaction_status_sender.is_some(),
                 &mut execute_and_commit_timings.execute_timings,
                 None, // account_overrides
+                log_messages_bytes_limit
             ),
             "load_execute",
         );
@@ -1476,6 +1488,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
+        log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionBatchOutput {
         let mut cost_model_time = Measure::start("cost_model");
 
@@ -1511,6 +1524,7 @@ impl BankingStage {
                 &batch,
                 transaction_status_sender,
                 gossip_vote_sender,
+                log_messages_bytes_limit,
             );
 
         let mut unlock_time = Measure::start("unlock_time");
@@ -1667,6 +1681,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
+        log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionsSummary {
         let mut chunk_start = 0;
         let mut all_retryable_tx_indexes = vec![];
@@ -1698,6 +1713,7 @@ impl BankingStage {
                 transaction_status_sender.clone(),
                 gossip_vote_sender,
                 qos_service,
+                log_messages_bytes_limit,
             );
 
             let ProcessTransactionBatchOutput {
@@ -1883,6 +1899,7 @@ impl BankingStage {
         banking_stage_stats: &'a BankingStageStats,
         qos_service: &'a QosService,
         slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
+        log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionsSummary {
         // Convert packets to transactions
         let ((transactions, transaction_to_packet_indexes), packet_conversion_time): (
@@ -1921,6 +1938,7 @@ impl BankingStage {
                 transaction_status_sender,
                 gossip_vote_sender,
                 qos_service,
+                log_messages_bytes_limit,
             ),
             "process_transaction_time",
         );
@@ -2272,6 +2290,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
             );
@@ -2325,6 +2344,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
             );
@@ -2403,6 +2423,7 @@ mod tests {
                 None,
                 gossip_vote_sender,
                 Arc::new(RwLock::new(CostModel::default())),
+                None,
                 Arc::new(ConnectionCache::default()),
                 bank_forks,
             );
@@ -2558,6 +2579,7 @@ mod tests {
                     None,
                     gossip_vote_sender,
                     Arc::new(RwLock::new(CostModel::default())),
+                    None,
                     Arc::new(ConnectionCache::default()),
                     bank_forks,
                 );
@@ -2867,6 +2889,7 @@ mod tests {
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                None,
             );
 
             let ExecuteAndCommitTransactionsOutput {
@@ -2919,6 +2942,7 @@ mod tests {
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                None,
             );
 
             let ExecuteAndCommitTransactionsOutput {
@@ -3002,6 +3026,7 @@ mod tests {
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                None,
             );
 
             let ExecuteAndCommitTransactionsOutput {
@@ -3093,6 +3118,7 @@ mod tests {
                 None,
                 &gossip_vote_sender,
                 &qos_service,
+                None,
             );
 
             let ExecuteAndCommitTransactionsOutput {
@@ -3132,6 +3158,7 @@ mod tests {
                 None,
                 &gossip_vote_sender,
                 &qos_service,
+                None,
             );
 
             let ExecuteAndCommitTransactionsOutput {
@@ -3228,6 +3255,7 @@ mod tests {
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                None,
             );
 
             poh_recorder
@@ -3393,6 +3421,7 @@ mod tests {
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                None,
             );
 
             let ProcessTransactionsSummary {
@@ -3459,6 +3488,7 @@ mod tests {
             None,
             &gossip_vote_sender,
             &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+            None,
         );
 
         poh_recorder
@@ -3681,6 +3711,7 @@ mod tests {
                 }),
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                None,
             );
 
             transaction_status_service.join().unwrap();
@@ -3842,6 +3873,7 @@ mod tests {
                 }),
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
+                None,
             );
 
             transaction_status_service.join().unwrap();
@@ -3964,6 +3996,7 @@ mod tests {
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 &mut LeaderSlotMetricsTracker::new(0),
                 num_conflicting_transactions,
+                None,
             );
             assert_eq!(buffered_packet_batches.len(), num_conflicting_transactions);
             // When the poh recorder has a bank, should process all non conflicting buffered packets.
@@ -3984,6 +4017,7 @@ mod tests {
                     &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                     &mut LeaderSlotMetricsTracker::new(0),
                     num_packets_to_process_per_iteration,
+                    None,
                 );
                 if num_expected_unprocessed == 0 {
                     assert!(buffered_packet_batches.is_empty())
@@ -4057,6 +4091,7 @@ mod tests {
                         &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                         &mut LeaderSlotMetricsTracker::new(0),
                         num_packets_to_process_per_iteration,
+                        None,
                     );
 
                     // Check everything is correct. All indexes after `interrupted_iteration`
