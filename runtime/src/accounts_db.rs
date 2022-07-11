@@ -76,6 +76,7 @@ use {
         rent::Rent,
         signature::Signature,
         timing::AtomicInterval,
+        rent::{RentDue},
     },
     std::{
         borrow::{Borrow, Cow},
@@ -252,13 +253,14 @@ pub struct IndexGenerationInfo {
     pub accounts_data_len: u64,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default)]
 struct SlotIndexGenerationInfo {
     insert_time_us: u64,
     num_accounts: u64,
     num_accounts_rent_paying: usize,
     accounts_data_len: u64,
     amount_to_top_off_rent: u64,
+    rent_paying_epochs_remaining: Vec<u16>,
 }
 
 #[derive(Default, Debug)]
@@ -7926,22 +7928,34 @@ impl AccountsDb {
         accounts_map
     }
 
-    /// return Some(lamports_to_top_off) if 'account' would collect rent
+    /// return Some((lamports_to_top_off, rent_due)) if 'account' would collect rent
     fn stats_for_rent_payers<T: ReadableAccount>(
         pubkey: &Pubkey,
         account: &T,
         rent_collector: &RentCollector,
-    ) -> Option<u64> {
+    ) -> Option<(u64, u64)> {
         if account.lamports() == 0 {
             return None;
         }
-        (rent_collector.should_collect_rent(pubkey, account)
-            && !rent_collector.get_rent_due(account).is_exempt())
-        .then(|| {
-            let min_balance = rent_collector.rent.minimum_balance(account.data().len());
-            // return lamports required to top off this account to make it rent exempt
-            min_balance.saturating_sub(account.lamports())
-        })
+        rent_collector.should_collect_rent(pubkey, account).then(|| {
+            match 
+            rent_collector.get_rent_due(account) {
+                RentDue::Exempt => None,
+                RentDue::Paying(mut rent_due) => {
+                    if rent_due == 0 {
+                        let inner_rent_collector = RentCollector::new(rent_collector.epoch + 1, rent_collector.epoch_schedule, rent_collector.slots_per_year, rent_collector.rent);
+                        if let RentDue::Paying(inner_rent_due) = inner_rent_collector.get_rent_due(account) {
+                            rent_due = inner_rent_due;
+                        }
+                    }
+                    let min_balance = rent_collector.rent.minimum_balance(account.data().len());
+                    // return lamports required to top off this account to make cargo it rent exempt
+                    Some((min_balance.saturating_sub(account.lamports()), rent_due))
+                }
+
+            }
+
+        }).flatten()
     }
 
     fn generate_index_for_slot<'a>(
@@ -7955,6 +7969,8 @@ impl AccountsDb {
         }
 
         let secondary = !self.account_indexes.is_empty();
+
+        let mut rent_paying_epochs_remaining = vec![];
 
         let mut accounts_data_len = 0;
         let mut num_accounts_rent_paying = 0;
@@ -7980,11 +7996,12 @@ impl AccountsDb {
                     accounts_data_len += stored_account.data().len() as u64;
                 }
 
-                if let Some(amount_to_top_off_rent_this_account) =
+                if let Some((amount_to_top_off_rent_this_account, rent_due)) =
                     Self::stats_for_rent_payers(&pubkey, &stored_account, rent_collector)
                 {
                     amount_to_top_off_rent += amount_to_top_off_rent_this_account;
                     num_accounts_rent_paying += 1;
+                    rent_paying_epochs_remaining.push((stored_account.lamports() / rent_due) as u16);
                 }
 
                 (
@@ -8014,6 +8031,7 @@ impl AccountsDb {
             num_accounts_rent_paying,
             accounts_data_len,
             amount_to_top_off_rent,
+            rent_paying_epochs_remaining
         }
     }
 
@@ -8236,6 +8254,7 @@ impl AccountsDb {
             let rent_paying = AtomicUsize::new(0);
             let amount_to_top_off_rent = AtomicU64::new(0);
             let total_duplicates = AtomicU64::new(0);
+            let rent_paying_epochs_remaining = Mutex::new(vec![]);
             let storage_info_timings = Mutex::new(GenerateIndexTimings::default());
             let scan_time: u64 = slots
                 .par_chunks(chunk_size)
@@ -8271,6 +8290,7 @@ impl AccountsDb {
                                 num_accounts_rent_paying: rent_paying_this_slot,
                                 accounts_data_len: accounts_data_len_this_slot,
                                 amount_to_top_off_rent: amount_to_top_off_rent_this_slot,
+                                rent_paying_epochs_remaining: mut rent_paying_epochs_remaining_this_slot,
                             } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
                             rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
                             amount_to_top_off_rent
@@ -8278,6 +8298,7 @@ impl AccountsDb {
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
                             accounts_data_len
                                 .fetch_add(accounts_data_len_this_slot, Ordering::Relaxed);
+                            rent_paying_epochs_remaining.lock().unwrap().append(&mut rent_paying_epochs_remaining_this_slot);
                             insert_us
                         } else {
                             // verify index matches expected and measure the time to get all items
@@ -8314,6 +8335,12 @@ impl AccountsDb {
                 })
                 .sum();
             index_time.stop();
+
+            let rent_paying_epochs_remaining = rent_paying_epochs_remaining.into_inner().unwrap();
+            let mut bins = vec![0; (*rent_paying_epochs_remaining.iter().max().unwrap()) as usize + 1];
+            rent_paying_epochs_remaining.iter().for_each(|r| {bins[*r as usize] += 1;});
+
+            error!("rent paying epochs remaining: {:?}", bins.iter().enumerate().collect::<Vec<_>>());
 
             info!("rent_collector: {:?}", rent_collector);
             let mut min_bin_size = usize::MAX;
@@ -8498,7 +8525,7 @@ impl AccountsDb {
                     );
                     let loaded_account = accessor.check_and_get_loaded_account();
                     accounts_data_len_from_duplicates += loaded_account.data().len();
-                    if let Some(lamports_to_top_off) =
+                    if let Some((lamports_to_top_off, _rent_due)) =
                         Self::stats_for_rent_payers(pubkey, &loaded_account, rent_collector)
                     {
                         removed_rent_paying += 1;
