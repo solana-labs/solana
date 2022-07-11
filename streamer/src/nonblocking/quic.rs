@@ -646,7 +646,10 @@ impl ConnectionTable {
 pub mod test {
     use {
         super::*,
-        crate::quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        crate::{
+            quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+            tls_certificates::new_self_signed_tls_certificate_chain,
+        },
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, VarInt},
         solana_sdk::{
