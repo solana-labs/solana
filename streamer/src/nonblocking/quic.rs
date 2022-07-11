@@ -15,7 +15,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
-        quic::QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
+        quic::{QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
         timing,
     },
@@ -133,7 +133,7 @@ fn prune_unstaked_connection_table(
 }
 
 async fn setup_connection(
-    connection: Connecting,
+    connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
     staked_connection_table: Arc<Mutex<ConnectionTable>>,
     packet_sender: Sender<PacketBatch>,
@@ -143,119 +143,129 @@ async fn setup_connection(
     max_unstaked_connections: usize,
     stats: Arc<StreamStats>,
 ) {
-    if let Ok(new_connection) = connection.await {
-        stats.total_connections.fetch_add(1, Ordering::Relaxed);
-        stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
-        let NewConnection {
-            connection,
-            uni_streams,
-            ..
-        } = new_connection;
+    if let Ok(connecting_result) = timeout(
+        Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
+        connecting,
+    )
+    .await
+    {
+        if let Ok(new_connection) = connecting_result {
+            stats.total_connections.fetch_add(1, Ordering::Relaxed);
+            stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
+            let NewConnection {
+                connection,
+                uni_streams,
+                ..
+            } = new_connection;
 
-        let remote_addr = connection.remote_address();
+            let remote_addr = connection.remote_address();
 
-        let table_and_stake = {
-            let staked_nodes = staked_nodes.read().unwrap();
-            if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
-                let stake = *stake;
-                drop(staked_nodes);
+            let table_and_stake = {
+                let staked_nodes = staked_nodes.read().unwrap();
+                if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
+                    let stake = *stake;
+                    drop(staked_nodes);
 
-                let mut connection_table_l = staked_connection_table.lock().unwrap();
-                if connection_table_l.total_size >= max_staked_connections {
-                    let num_pruned = connection_table_l.prune_random(stake);
-                    if num_pruned == 0 {
-                        if max_unstaked_connections > 0 {
-                            // If we couldn't prune a connection in the staked connection table, let's
-                            // put this connection in the unstaked connection table. If needed, prune a
-                            // connection from the unstaked connection table.
-                            connection_table_l = unstaked_connection_table.lock().unwrap();
-                            prune_unstaked_connection_table(
-                                &mut connection_table_l,
-                                max_unstaked_connections,
-                                stats.clone(),
-                            );
-                            Some((connection_table_l, stake))
+                    let mut connection_table_l = staked_connection_table.lock().unwrap();
+                    if connection_table_l.total_size >= max_staked_connections {
+                        let num_pruned = connection_table_l.prune_random(stake);
+                        if num_pruned == 0 {
+                            if max_unstaked_connections > 0 {
+                                // If we couldn't prune a connection in the staked connection table, let's
+                                // put this connection in the unstaked connection table. If needed, prune a
+                                // connection from the unstaked connection table.
+                                connection_table_l = unstaked_connection_table.lock().unwrap();
+                                prune_unstaked_connection_table(
+                                    &mut connection_table_l,
+                                    max_unstaked_connections,
+                                    stats.clone(),
+                                );
+                                Some((connection_table_l, stake))
+                            } else {
+                                stats
+                                    .connection_add_failed_on_pruning
+                                    .fetch_add(1, Ordering::Relaxed);
+                                None
+                            }
                         } else {
-                            stats
-                                .connection_add_failed_on_pruning
-                                .fetch_add(1, Ordering::Relaxed);
-                            None
+                            stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
+                            Some((connection_table_l, stake))
                         }
                     } else {
-                        stats.num_evictions.fetch_add(num_pruned, Ordering::Relaxed);
                         Some((connection_table_l, stake))
                     }
+                } else if max_unstaked_connections > 0 {
+                    drop(staked_nodes);
+                    let mut connection_table_l = unstaked_connection_table.lock().unwrap();
+                    prune_unstaked_connection_table(
+                        &mut connection_table_l,
+                        max_unstaked_connections,
+                        stats.clone(),
+                    );
+                    Some((connection_table_l, 0))
                 } else {
-                    Some((connection_table_l, stake))
-                }
-            } else if max_unstaked_connections > 0 {
-                drop(staked_nodes);
-                let mut connection_table_l = unstaked_connection_table.lock().unwrap();
-                prune_unstaked_connection_table(
-                    &mut connection_table_l,
-                    max_unstaked_connections,
-                    stats.clone(),
-                );
-                Some((connection_table_l, 0))
-            } else {
-                None
-            }
-        };
-
-        if let Some((mut connection_table_l, stake)) = table_and_stake {
-            let table_type = connection_table_l.peer_type;
-            let max_uni_streams = match table_type {
-                ConnectionPeerType::Unstaked => {
-                    VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64)
-                }
-                ConnectionPeerType::Staked => {
-                    let staked_nodes = staked_nodes.read().unwrap();
-                    VarInt::from_u64(
-                        ((stake as f64 / staked_nodes.total_stake as f64)
-                            * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS) as u64,
-                    )
+                    None
                 }
             };
 
-            if let Ok(max_uni_streams) = max_uni_streams {
-                connection.set_max_concurrent_uni_streams(max_uni_streams);
+            if let Some((mut connection_table_l, stake)) = table_and_stake {
+                let table_type = connection_table_l.peer_type;
+                let max_uni_streams = match table_type {
+                    ConnectionPeerType::Unstaked => {
+                        VarInt::from_u64(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS as u64)
+                    }
+                    ConnectionPeerType::Staked => {
+                        let staked_nodes = staked_nodes.read().unwrap();
+                        VarInt::from_u64(
+                            ((stake as f64 / staked_nodes.total_stake as f64)
+                                * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS)
+                                as u64,
+                        )
+                    }
+                };
 
-                if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
-                    &remote_addr,
-                    Some(connection),
-                    stake,
-                    timing::timestamp(),
-                    max_connections_per_ip,
-                ) {
-                    drop(connection_table_l);
-                    let stats = stats.clone();
-                    let connection_table = match table_type {
-                        ConnectionPeerType::Unstaked => unstaked_connection_table.clone(),
-                        ConnectionPeerType::Staked => staked_connection_table.clone(),
-                    };
-                    tokio::spawn(handle_connection(
-                        uni_streams,
-                        packet_sender,
-                        remote_addr,
-                        last_update,
-                        connection_table,
-                        stream_exit,
-                        stats,
+                if let Ok(max_uni_streams) = max_uni_streams {
+                    connection.set_max_concurrent_uni_streams(max_uni_streams);
+
+                    if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
+                        &remote_addr,
+                        Some(connection),
                         stake,
-                    ));
+                        timing::timestamp(),
+                        max_connections_per_ip,
+                    ) {
+                        drop(connection_table_l);
+                        let stats = stats.clone();
+                        let connection_table = match table_type {
+                            ConnectionPeerType::Unstaked => unstaked_connection_table.clone(),
+                            ConnectionPeerType::Staked => staked_connection_table.clone(),
+                        };
+                        tokio::spawn(handle_connection(
+                            uni_streams,
+                            packet_sender,
+                            remote_addr,
+                            last_update,
+                            connection_table,
+                            stream_exit,
+                            stats,
+                            stake,
+                        ));
+                    } else {
+                        stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                    }
                 } else {
-                    stats.connection_add_failed.fetch_add(1, Ordering::Relaxed);
+                    stats
+                        .connection_add_failed_invalid_stream_count
+                        .fetch_add(1, Ordering::Relaxed);
                 }
             } else {
+                connection.close(0u32.into(), &[0u8]);
                 stats
-                    .connection_add_failed_invalid_stream_count
+                    .connection_add_failed_unstaked_node
                     .fetch_add(1, Ordering::Relaxed);
             }
         } else {
-            connection.close(0u32.into(), &[0u8]);
-            stats
-                .connection_add_failed_unstaked_node
-                .fetch_add(1, Ordering::Relaxed);
+            stats.connection_setup_error.fetch_add(1, Ordering::Relaxed);
         }
     } else {
         stats
