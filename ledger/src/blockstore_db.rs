@@ -4,7 +4,7 @@ use {
         blockstore_meta,
         blockstore_metrics::{
             maybe_enable_rocksdb_perf, report_rocksdb_read_perf, report_rocksdb_write_perf,
-            BlockstoreRocksDbColumnFamilyMetrics, PerfSamplingStatus,
+            BlockstoreRocksDbColumnFamilyMetrics, PerfSamplingStatus, PERF_METRIC_OP_NAME_GET,
         },
         blockstore_options::{
             AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
@@ -1136,7 +1136,12 @@ where
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_read_perf(C::NAME, &op_start_instant.elapsed(), &self.column_options);
+            report_rocksdb_read_perf(
+                C::NAME,
+                PERF_METRIC_OP_NAME_GET,
+                &op_start_instant.elapsed(),
+                &self.column_options,
+            );
         }
         result
     }
@@ -1251,7 +1256,12 @@ where
         }
 
         if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_read_perf(C::NAME, &op_start_instant.elapsed(), &self.column_options);
+            report_rocksdb_read_perf(
+                C::NAME,
+                PERF_METRIC_OP_NAME_GET,
+                &op_start_instant.elapsed(),
+                &self.column_options,
+            );
         }
         result
     }
@@ -1310,7 +1320,12 @@ where
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_read_perf(C::NAME, &op_start_instant.elapsed(), &self.column_options);
+            report_rocksdb_read_perf(
+                C::NAME,
+                PERF_METRIC_OP_NAME_GET,
+                &op_start_instant.elapsed(),
+                &self.column_options,
+            );
         }
 
         if let Some(serialized_value) = result? {
@@ -1331,7 +1346,12 @@ where
         );
         let result = self.backend.get_cf(self.handle(), &C::key(key));
         if let Some(op_start_instant) = is_perf_enabled {
-            report_rocksdb_read_perf(C::NAME, &op_start_instant.elapsed(), &self.column_options);
+            report_rocksdb_read_perf(
+                C::NAME,
+                PERF_METRIC_OP_NAME_GET,
+                &op_start_instant.elapsed(),
+                &self.column_options,
+            );
         }
 
         if let Some(serialized_value) = result? {
