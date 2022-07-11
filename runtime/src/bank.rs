@@ -18819,15 +18819,15 @@ pub(crate) mod tests {
     fn test_inner_instructions_list_from_instruction_trace() {
         let instruction_trace = vec![
             vec![
-                InstructionContext::new(0, &[], &[], &[1]),
-                InstructionContext::new(1, &[], &[], &[2]),
+                InstructionContext::new(0, 0, &[], &[], &[1]),
+                InstructionContext::new(1, 0, &[], &[], &[2]),
             ],
             vec![],
             vec![
-                InstructionContext::new(0, &[], &[], &[3]),
-                InstructionContext::new(1, &[], &[], &[4]),
-                InstructionContext::new(2, &[], &[], &[5]),
-                InstructionContext::new(1, &[], &[], &[6]),
+                InstructionContext::new(0, 0, &[], &[], &[3]),
+                InstructionContext::new(1, 0, &[], &[], &[4]),
+                InstructionContext::new(2, 0, &[], &[], &[5]),
+                InstructionContext::new(1, 0, &[], &[], &[6]),
             ],
         ];
 

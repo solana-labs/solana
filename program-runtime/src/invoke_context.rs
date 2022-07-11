@@ -848,9 +848,13 @@ impl<'a> InvokeContext<'a> {
                 .feature_set
                 .is_active(&record_instruction_in_transaction_context_push::id())
             {
+                let instruction_accounts_lamport_sum = self
+                    .transaction_context
+                    .instruction_accounts_lamport_sum(instruction_accounts)?;
                 self.transaction_context
                     .record_instruction(InstructionContext::new(
                         nesting_level,
+                        instruction_accounts_lamport_sum,
                         program_indices,
                         instruction_accounts,
                         instruction_data,
@@ -1186,8 +1190,8 @@ pub fn mock_process_instruction(
         )
         .and_then(|_| process_instruction(1, &mut invoke_context))
         .and_then(|_| invoke_context.verify(&preparation.instruction_accounts, &program_indices));
-    invoke_context.pop().unwrap();
-    assert_eq!(result, expected_result);
+    let pop_result = invoke_context.pop();
+    assert_eq!(result.and(pop_result), expected_result);
     let mut transaction_accounts = transaction_context.deconstruct_without_keys().unwrap();
     transaction_accounts.pop();
     transaction_accounts
