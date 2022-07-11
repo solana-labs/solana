@@ -147,7 +147,7 @@ dependencies = [
  "num-traits",
  "rusticata-macros",
  "thiserror",
- "time 0.3.9",
+ "time 0.3.7",
 ]
 
 [[package]]
@@ -156,9 +156,9 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "726535892e8eae7e70657b4c8ea93d26b8553afb1ce617caee529ef96d7dee6c"
 dependencies = [
- "proc-macro2 1.0.38",
- "quote 1.0.18",
- "syn 1.0.93",
+ "proc-macro2 1.0.36",
+ "quote 1.0.6",
+ "syn 1.0.91",
  "synstructure",
 ]
 
@@ -168,9 +168,9 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2777730b2039ac0f95f093556e61b6d26cebed5393ca6f152717777cec3a42ed"
 dependencies = [
- "proc-macro2 1.0.38",
- "quote 1.0.18",
- "syn 1.0.93",
+ "proc-macro2 1.0.36",
+ "quote 1.0.6",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -961,7 +961,7 @@ dependencies = [
  "asn1-rs",
  "displaydoc",
  "nom",
- "num-bigint 0.4.3",
+ "num-bigint 0.4.2",
  "num-traits",
  "rusticata-macros",
 ]
@@ -1053,6 +1053,23 @@ dependencies = [
  "libc",
  "redox_users",
  "winapi 0.3.9",
+]
+
+[[package]]
+name = "discard"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "212d0f5754cb6769937f4501cc0e67f4f4483c8d2c3e1e922ee9edbe4ab4c7c0"
+
+[[package]]
+name = "displaydoc"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf95dc3f046b9da4f2d51833c0d3547d8564ef6910f5c1ed130306a75b92886"
+dependencies = [
+ "proc-macro2 1.0.36",
+ "quote 1.0.6",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -6241,7 +6258,7 @@ dependencies = [
  "libc",
  "standback",
  "stdweb",
- "time-macros",
+ "time-macros 0.1.1",
  "version_check",
  "winapi 0.3.9",
 ]
@@ -6255,7 +6272,36 @@ dependencies = [
  "itoa",
  "libc",
  "num_threads",
- "time-macros",
+ "time-macros 0.2.3",
+]
+
+[[package]]
+name = "time-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "957e9c6e26f12cb6d0dd7fc776bb67a706312e7299aed74c8dd5b17ebb27e2f1"
+dependencies = [
+ "proc-macro-hack",
+ "time-macros-impl",
+]
+
+[[package]]
+name = "time-macros"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25eb0ca3468fc0acc11828786797f6ef9aa1555e4a211a60d64cc8e4d1be47d6"
+
+[[package]]
+name = "time-macros-impl"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3c141a1b43194f3f56a1411225df8646c55781d5f26db825b3d98507eb482f"
+dependencies = [
+ "proc-macro-hack",
+ "proc-macro2 1.0.36",
+ "quote 1.0.6",
+ "standback",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -7161,7 +7207,7 @@ dependencies = [
  "oid-registry",
  "rusticata-macros",
  "thiserror",
- "time 0.3.9",
+ "time 0.3.7",
 ]
 
 [[package]]
