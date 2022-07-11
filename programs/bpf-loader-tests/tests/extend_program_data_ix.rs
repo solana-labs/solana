@@ -37,7 +37,7 @@ async fn test_extend_program_data() {
     let client = &mut context.banks_client;
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
-    const ADDITIONAL_BYTES: usize = 42;
+    const ADDITIONAL_BYTES: u32 = 42;
     let transaction = Transaction::new_signed_with_payer(
         &[extend_program_data(
             &program_data_address,
@@ -57,7 +57,7 @@ async fn test_extend_program_data() {
         .unwrap();
     assert_eq!(
         updated_program_data_account.data().len(),
-        program_data_len + ADDITIONAL_BYTES
+        program_data_len + ADDITIONAL_BYTES as usize
     );
 }
 
@@ -260,9 +260,9 @@ async fn test_extend_program_data_without_payer() {
     let payer = &context.payer;
     let recent_blockhash = context.last_blockhash;
 
-    const ADDITIONAL_BYTES: usize = 42;
+    const ADDITIONAL_BYTES: u32 = 42;
     let min_balance_increase_for_extend = rent
-        .minimum_balance(ADDITIONAL_BYTES)
+        .minimum_balance(ADDITIONAL_BYTES as usize)
         .saturating_sub(rent.minimum_balance(0));
 
     let transaction = Transaction::new_signed_with_payer(
@@ -287,7 +287,7 @@ async fn test_extend_program_data_without_payer() {
         .unwrap();
     assert_eq!(
         updated_program_data_account.data().len(),
-        program_data_len + ADDITIONAL_BYTES
+        program_data_len + ADDITIONAL_BYTES as usize
     );
 }
 

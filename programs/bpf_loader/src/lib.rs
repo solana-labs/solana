@@ -1092,7 +1092,7 @@ fn process_loader_upgradeable_instruction(
             }
 
             let old_len = programdata_account.get_data().len();
-            let new_len = old_len.saturating_add(additional_bytes);
+            let new_len = old_len.saturating_add(additional_bytes as usize);
             if new_len > MAX_PERMITTED_DATA_LENGTH as usize {
                 ic_logger_msg!(
                     log_collector,

@@ -304,7 +304,7 @@ pub fn close_any(
 pub fn extend_program_data(
     program_data_address: &Pubkey,
     payer_address: Option<&Pubkey>,
-    additional_bytes: usize,
+    additional_bytes: u32,
 ) -> Instruction {
     let mut metas = vec![AccountMeta::new(*program_data_address, false)];
     if let Some(payer_address) = payer_address {

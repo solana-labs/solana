@@ -144,6 +144,6 @@ pub enum UpgradeableLoaderInstruction {
     ///      for the increased storage size.
     ExtendProgramData {
         /// Number of bytes to extend the program data.
-        additional_bytes: usize,
+        additional_bytes: u32,
     },
 }
