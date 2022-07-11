@@ -292,6 +292,46 @@ async fn test_extend_program_data_without_payer() {
 }
 
 #[tokio::test]
+async fn test_extend_program_data_with_invalid_system_program() {
+    let mut context = setup_test_context().await;
+
+    let program_data_address = Pubkey::new_unique();
+    let program_data_len = 100;
+    add_upgradeable_loader_account(
+        &mut context,
+        &program_data_address,
+        &UpgradeableLoaderState::ProgramData {
+            slot: 0,
+            upgrade_authority_address: Some(Pubkey::new_unique()),
+        },
+        program_data_len,
+    )
+    .await;
+
+    let payer_address = context.payer.pubkey();
+    let mut ix = extend_program_data(&program_data_address, Some(&payer_address), 1);
+
+    // Change system program to an invalid key
+    {
+        let system_program_meta = ix
+            .accounts
+            .iter_mut()
+            .find(|meta| meta.pubkey == crate::system_program::ID)
+            .expect("expected to find system program account meta");
+        system_program_meta.pubkey = Pubkey::new_unique();
+    }
+
+    assert_ix_error(
+        &mut context,
+        ix,
+        None,
+        InstructionError::MissingAccount,
+        "should fail because the system program is missing",
+    )
+    .await;
+}
+
+#[tokio::test]
 async fn test_extend_program_data_with_invalid_program_data() {
     let mut context = setup_test_context().await;
     let rent = context.banks_client.get_rent().await.unwrap();

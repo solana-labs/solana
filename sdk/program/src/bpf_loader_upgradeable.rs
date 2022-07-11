@@ -306,11 +306,12 @@ pub fn extend_program_data(
     payer_address: Option<&Pubkey>,
     additional_bytes: usize,
 ) -> Instruction {
-    let mut metas = vec![
-        AccountMeta::new(*program_data_address, false),
-        AccountMeta::new_readonly(crate::system_program::id(), false),
-    ];
+    let mut metas = vec![AccountMeta::new(*program_data_address, false)];
     if let Some(payer_address) = payer_address {
+        metas.push(AccountMeta::new_readonly(
+            crate::system_program::id(),
+            false,
+        ));
         metas.push(AccountMeta::new(*payer_address, true));
     }
     Instruction::new_with_bincode(

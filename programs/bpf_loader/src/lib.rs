@@ -1074,7 +1074,8 @@ fn process_loader_upgradeable_instruction(
 
             const PROGRAM_DATA_ACCOUNT_INDEX: usize = 0;
             #[allow(dead_code)]
-            const SYSTEM_PROGRAM_ACCOUNT_INDEX: usize = 1;
+            // System program is only required when a CPI is performed
+            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: usize = 1;
             const OPTIONAL_PAYER_ACCOUNT_INDEX: usize = 2;
 
             let programdata_account = instruction_context
