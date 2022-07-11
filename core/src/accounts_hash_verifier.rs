@@ -251,7 +251,6 @@ impl AccountsHashVerifier {
 
         let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
         let pending_snapshot_package = pending_snapshot_package.unwrap();
-        let _snapshot_config = snapshot_config.unwrap();
 
         // If the snapshot package is an Incremental Snapshot, do not submit it if there's already
         // a pending Full Snapshot.
