@@ -1,10 +1,8 @@
 use {
-    crate::streamer::StakedNodes,
+    crate::{streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate_chain},
     crossbeam_channel::Sender,
     pem::Pem,
-    pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
     quinn::{IdleTimeout, ServerConfig, VarInt},
-    rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
     rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
@@ -13,7 +11,6 @@ use {
         signature::Keypair,
     },
     std::{
-        error::Error,
         net::{IpAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -59,7 +56,8 @@ pub(crate) fn configure_server(
     gossip_host: IpAddr,
 ) -> Result<(ServerConfig, String), QuicServerError> {
     let (cert_chain, priv_key) =
-        new_cert(identity_keypair, gossip_host).map_err(|_e| QuicServerError::ConfigureFailed)?;
+        new_self_signed_tls_certificate_chain(identity_keypair, gossip_host)
+            .map_err(|_e| QuicServerError::ConfigureFailed)?;
     let cert_chain_pem_parts: Vec<Pem> = cert_chain
         .iter()
         .map(|cert| Pem {
@@ -92,66 +90,6 @@ pub(crate) fn configure_server(
     config.datagram_receive_buffer_size(None);
 
     Ok((server_config, cert_chain_pem))
-}
-
-pub(crate) fn new_cert(
-    identity_keypair: &Keypair,
-    san: IpAddr,
-) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {
-    // Generate a self-signed cert from validator identity key
-    let cert_params = new_cert_params(identity_keypair, san);
-    let cert = rcgen::Certificate::from_params(cert_params)?;
-    let cert_der = cert.serialize_der().unwrap();
-    let priv_key = cert.serialize_private_key_der();
-    let priv_key = rustls::PrivateKey(priv_key);
-    let cert_chain = vec![rustls::Certificate(cert_der)];
-    Ok((cert_chain, priv_key))
-}
-
-fn convert_to_rcgen_keypair(identity_keypair: &Keypair) -> rcgen::KeyPair {
-    // from https://datatracker.ietf.org/doc/html/rfc8410#section-3
-    const ED25519_IDENTIFIER: [u32; 4] = [1, 3, 101, 112];
-    let mut private_key = Vec::<u8>::with_capacity(34);
-    private_key.extend_from_slice(&[0x04, 0x20]); // ASN.1 OCTET STRING
-    private_key.extend_from_slice(identity_keypair.secret().as_bytes());
-    let key_pkcs8 = pkcs8::PrivateKeyInfo {
-        algorithm: AlgorithmIdentifier {
-            oid: ObjectIdentifier::from_arcs(&ED25519_IDENTIFIER).unwrap(),
-            parameters: None,
-        },
-        private_key: &private_key,
-        public_key: None,
-    };
-    let key_pkcs8_der = key_pkcs8
-        .to_der()
-        .expect("Failed to convert keypair to DER")
-        .to_der();
-
-    // Parse private key into rcgen::KeyPair struct.
-    rcgen::KeyPair::from_der(&key_pkcs8_der).expect("Failed to parse keypair from DER")
-}
-
-fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams {
-    // TODO(terorie): Is it safe to sign the TLS cert with the identity private key?
-
-    // Unfortunately, rcgen does not accept a "raw" Ed25519 key.
-    // We have to convert it to DER and pass it to the library.
-
-    // Convert private key into PKCS#8 v1 object.
-    // RFC 8410, Section 7: Private Key Format
-    // https://datatracker.ietf.org/doc/html/rfc8410#section-
-
-    let keypair = convert_to_rcgen_keypair(identity_keypair);
-
-    let mut cert_params = CertificateParams::default();
-    cert_params.subject_alt_names = vec![SanType::IpAddress(san)];
-    cert_params.alg = &rcgen::PKCS_ED25519;
-    cert_params.key_pair = Some(keypair);
-    cert_params.distinguished_name = DistinguishedName::new();
-    cert_params
-        .distinguished_name
-        .push(DnType::CommonName, "Solana node");
-    cert_params
 }
 
 fn rt() -> Runtime {

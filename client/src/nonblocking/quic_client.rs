@@ -3,10 +3,8 @@
 //! server's flow control.
 use {
     crate::{
-        client_error::ClientErrorKind,
-        connection_cache::{new_cert, ConnectionCacheStats},
-        nonblocking::tpu_connection::TpuConnection,
-        tpu_connection::ClientStats,
+        client_error::ClientErrorKind, connection_cache::ConnectionCacheStats,
+        nonblocking::tpu_connection::TpuConnection, tpu_connection::ClientStats,
     },
     async_mutex::Mutex,
     async_trait::async_trait,
@@ -27,6 +25,7 @@ use {
         signature::Keypair,
         transport::Result as TransportResult,
     },
+    solana_streamer::tls_certificates::new_self_signed_tls_certificate_chain,
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
@@ -134,9 +133,15 @@ impl QuicLazyInitializedEndpoint {
 
 impl Default for QuicLazyInitializedEndpoint {
     fn default() -> Self {
-        let certificate = new_cert(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-            .expect("Failed to create QUIC client certificate");
-        Self::new(Arc::new(certificate))
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+            &Keypair::new(),
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        )
+        .expect("Failed to create QUIC client certificate");
+        Self::new(Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        }))
     }
 }
 
