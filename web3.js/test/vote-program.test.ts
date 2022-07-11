@@ -165,9 +165,25 @@ describe('VoteProgram', () => {
         minimumAmount + 10 * LAMPORTS_PER_SOL,
       );
 
-      // Withdraw from Vote account
+      // Withdraw from Vote account with invalid amount (clear all funds)
       let recipient = Keypair.generate();
       let withdraw = VoteProgram.withdraw({
+        votePubkey: newVoteAccount.publicKey,
+        authorizedWithdrawerPubkey: authorized.publicKey,
+        lamports: minimumAmount + 10 * LAMPORTS_PER_SOL,
+        toPubkey: recipient.publicKey,
+      });
+      await expect(
+        sendAndConfirmTransaction(connection, withdraw, [authorized], {
+          preflightCommitment: 'confirmed',
+        }),
+      ).to.be.rejectedWith(
+        Error,
+        `Withdraw transaction failed, vote account balance after withdrawal will be smaller than minimum balance required for rent.`,
+      );
+
+      // Withdraw from Vote account
+      withdraw = VoteProgram.withdraw({
         votePubkey: newVoteAccount.publicKey,
         authorizedWithdrawerPubkey: authorized.publicKey,
         lamports: LAMPORTS_PER_SOL,

@@ -3,6 +3,7 @@ import {Transaction} from '../transaction';
 import type {ConfirmOptions} from '../connection';
 import type {Signer} from '../keypair';
 import type {TransactionSignature} from '../transaction';
+import {VoteInstruction, VoteProgram} from '../vote-program';
 
 /**
  * Sign, send and confirm a transaction.
@@ -21,6 +22,26 @@ export async function sendAndConfirmTransaction(
   signers: Array<Signer>,
   options?: ConfirmOptions,
 ): Promise<TransactionSignature> {
+  const withdrawInstruction = transaction.instructions.find(i => {
+    try {
+      const instructionType = VoteInstruction.decodeInstructionType(i);
+      return instructionType === 'Withdraw';
+    } catch {
+      return false;
+    }
+  });
+  if (withdrawInstruction) {
+    const withdrawParams = VoteInstruction.decodeWithdraw(withdrawInstruction);
+    const minimumAmount = await connection.getMinimumBalanceForRentExemption(
+      VoteProgram.space,
+    );
+    const voteBalance = await connection.getBalance(withdrawParams.votePubkey);
+    if (voteBalance - withdrawParams.lamports < minimumAmount) {
+      throw new Error(
+        `Withdraw transaction failed, vote account balance after withdrawal will be smaller than minimum balance required for rent.`,
+      );
+    }
+  }
   const sendOptions = options && {
     skipPreflight: options.skipPreflight,
     preflightCommitment: options.preflightCommitment || options.commitment,
