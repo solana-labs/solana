@@ -17879,9 +17879,6 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.activate_feature(&feature_set::cap_accounts_data_len::id());
-        bank.activate_feature(
-            &feature_set::enable_early_verification_of_account_modifications::id(),
-        );
         bank.accounts_data_size_initial = bank.accounts_data_size_limit()
             - REMAINING_ACCOUNTS_DATA_SIZE
             - bank.load_accounts_data_size_delta() as u64;
@@ -17935,9 +17932,6 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000.));
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.activate_feature(&feature_set::cap_accounts_data_len::id());
-        bank.activate_feature(
-            &feature_set::enable_early_verification_of_account_modifications::id(),
-        );
         let transaction = system_transaction::create_account(
             &mint_keypair,
             &Keypair::new(),
@@ -17979,9 +17973,6 @@ pub(crate) mod tests {
         const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH;
         let mut bank = create_simple_test_bank(1_000_000_000_000);
         bank.activate_feature(&feature_set::cap_accounts_data_len::id());
-        bank.activate_feature(
-            &feature_set::enable_early_verification_of_account_modifications::id(),
-        );
         let transaction = system_transaction::create_account(
             &Keypair::new(),
             &Keypair::new(),

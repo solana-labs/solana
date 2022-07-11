@@ -1573,7 +1573,13 @@ mod tests {
             );
 
             assert!(result.is_ok());
-            assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .accounts_resize_delta()
+                    .unwrap(),
+                user_account_data_len as i64 * 2
+            );
         }
 
         // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
@@ -1591,10 +1597,16 @@ mod tests {
             );
 
             assert!(result.is_ok());
-            assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .accounts_resize_delta()
+                    .unwrap(),
+                user_account_data_len as i64 * 2
+            );
         }
 
-        // Test 3: Resize the account to exceed the budget; this must fail
+        // Test 3: Resize the account to exceed the budget; this must succeed
         {
             let new_len = user_account_data_len + remaining_account_data_len + 1;
             let instruction_data =
@@ -1608,12 +1620,14 @@ mod tests {
                 &mut ExecuteTimings::default(),
             );
 
-            assert!(result.is_err());
-            assert!(matches!(
-                result,
-                Err(solana_sdk::instruction::InstructionError::MaxAccountsDataSizeExceeded)
-            ));
-            assert_eq!(invoke_context.accounts_data_meter.remaining(), 0);
+            assert!(result.is_ok());
+            assert_eq!(
+                invoke_context
+                    .transaction_context
+                    .accounts_resize_delta()
+                    .unwrap(),
+                user_account_data_len as i64 * 2 + 1
+            );
         }
     }
 }

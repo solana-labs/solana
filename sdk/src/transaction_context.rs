@@ -336,6 +336,14 @@ impl TransactionContext {
         }
         Ok(instruction_accounts_lamport_sum)
     }
+
+    /// Returns the accounts resize delta
+    pub fn accounts_resize_delta(&self) -> Result<i64, InstructionError> {
+        self.accounts_resize_delta
+            .try_borrow()
+            .map_err(|_| InstructionError::GenericError)
+            .map(|value_ref| *value_ref)
+    }
 }
 
 /// Return data at the end of a transaction
