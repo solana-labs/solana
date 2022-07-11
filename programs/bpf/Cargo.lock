@@ -1056,24 +1056,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "discard"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "212d0f5754cb6769937f4501cc0e67f4f4483c8d2c3e1e922ee9edbe4ab4c7c0"
-=======
-name = "displaydoc"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bf95dc3f046b9da4f2d51833c0d3547d8564ef6910f5c1ed130306a75b92886"
-dependencies = [
- "proc-macro2 1.0.38",
- "quote 1.0.18",
- "syn 1.0.93",
-]
->>>>>>> ea7448c56 (Use client certs in QUIC to get peer's stake (#26477))
-
-[[package]]
 name = "dlopen"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4624,11 +4606,8 @@ dependencies = [
  "jsonrpc-core",
  "lazy_static",
  "log",
-<<<<<<< HEAD
  "lru",
-=======
  "pkcs8",
->>>>>>> ea7448c56 (Use client certs in QUIC to get peer's stake (#26477))
  "quinn",
  "quinn-proto",
  "rand 0.7.3",
@@ -6278,35 +6257,6 @@ dependencies = [
  "num_threads",
  "time-macros",
 ]
-
-[[package]]
-name = "time-macros"
-<<<<<<< HEAD
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957e9c6e26f12cb6d0dd7fc776bb67a706312e7299aed74c8dd5b17ebb27e2f1"
-dependencies = [
- "proc-macro-hack",
- "time-macros-impl",
-]
-
-[[package]]
-name = "time-macros-impl"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd3c141a1b43194f3f56a1411225df8646c55781d5f26db825b3d98507eb482f"
-dependencies = [
- "proc-macro-hack",
- "proc-macro2 1.0.36",
- "quote 1.0.6",
- "standback",
- "syn 1.0.91",
-]
-=======
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
->>>>>>> ea7448c56 (Use client certs in QUIC to get peer's stake (#26477))
 
 [[package]]
 name = "tiny-bip39"
