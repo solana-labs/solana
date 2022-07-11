@@ -219,20 +219,16 @@ impl AccountsHashVerifier {
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
-            use {
-                rand::{thread_rng, Rng},
-                solana_sdk::hash::extend_and_hash,
-            };
-            warn!("inserting fault at slot: {}", accounts_package.slot);
-            let rand = thread_rng().gen_range(0, 10);
-            let hash = extend_and_hash(&accounts_hash, &[rand]);
-            hashes.push((accounts_package.slot, hash));
+            let fault_hash = Self::generate_fault_hash(&accounts_package.slot, &accounts_hash);
+            hashes.push((accounts_package.slot, fault_hash));
         } else {
             hashes.push((accounts_package.slot, accounts_hash));
         }
 
-        while hashes.len() > MAX_SNAPSHOT_HASHES {
-            hashes.remove(0);
+        if hashes.len() > MAX_SNAPSHOT_HASHES {
+            let to_truncate = hashes.len() - MAX_SNAPSHOT_HASHES;
+            hashes.rotate_left(to_truncate);
+            hashes.truncate(MAX_SNAPSHOT_HASHES);
         }
 
         if halt_on_known_validator_accounts_hash_mismatch {
