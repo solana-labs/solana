@@ -63,10 +63,6 @@ impl ImmutableDeserializedPacket {
         &self.transaction
     }
 
-    pub fn sender_stake(&self) -> u64 {
-        self.original_packet.meta.sender_stake
-    }
-
     pub fn message_hash(&self) -> &Hash {
         &self.message_hash
     }
@@ -145,17 +141,9 @@ impl PartialOrd for DeserializedPacket {
 
 impl Ord for DeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self
-            .immutable_section()
+        self.immutable_section()
             .priority()
             .cmp(&other.immutable_section().priority())
-        {
-            Ordering::Equal => self
-                .immutable_section()
-                .sender_stake()
-                .cmp(&other.immutable_section().sender_stake()),
-            ordering => ordering,
-        }
     }
 }
 
@@ -167,10 +155,7 @@ impl PartialOrd for ImmutableDeserializedPacket {
 
 impl Ord for ImmutableDeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.priority().cmp(&other.priority()) {
-            Ordering::Equal => self.sender_stake().cmp(&other.sender_stake()),
-            ordering => ordering,
-        }
+        self.priority().cmp(&other.priority())
     }
 }
 
@@ -208,8 +193,8 @@ impl UnprocessedPacketBatches {
     }
 
     /// Insert new `deserialized_packet_batch` into inner `MinMaxHeap<DeserializedPacket>`,
-    /// weighted first by the tx priority, then the stake of the sender.
-    /// If buffer is at the max limit, the lowest weighted packet is dropped
+    /// ordered by the tx priority.
+    /// If buffer is at the max limit, the lowest priority packet is dropped
     ///
     /// Returns tuple of number of packets dropped
     pub fn insert_batch(
@@ -487,21 +472,16 @@ mod tests {
             transaction::{SimpleAddressLoader, Transaction},
         },
         solana_vote_program::vote_transaction,
-        std::net::IpAddr,
     };
 
-    fn packet_with_sender_stake(sender_stake: u64, ip: Option<IpAddr>) -> DeserializedPacket {
+    fn simmple_deserialized_packet() -> DeserializedPacket {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
             1,
             Hash::new_unique(),
         );
-        let mut packet = Packet::from_data(None, &tx).unwrap();
-        packet.meta.sender_stake = sender_stake;
-        if let Some(ip) = ip {
-            packet.meta.addr = ip;
-        }
+        let packet = Packet::from_data(None, &tx).unwrap();
         DeserializedPacket::new(packet).unwrap()
     }
 
@@ -525,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_unprocessed_packet_batches_insert_pop_same_packet() {
-        let packet = packet_with_sender_stake(1, None);
+        let packet = simmple_deserialized_packet();
         let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);
         unprocessed_packet_batches.push(packet.clone());
         unprocessed_packet_batches.push(packet.clone());
@@ -571,8 +551,7 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_pop_max_n() {
         let num_packets = 10;
-        let packets_iter =
-            std::iter::repeat_with(|| packet_with_sender_stake(1, None)).take(num_packets);
+        let packets_iter = std::iter::repeat_with(simmple_deserialized_packet).take(num_packets);
         let mut unprocessed_packet_batches =
             UnprocessedPacketBatches::from_iter(packets_iter.clone(), num_packets);
 
