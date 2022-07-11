@@ -4650,13 +4650,13 @@ dependencies = [
 
 [[package]]
 name = "solana-bpf-loader-program-tests"
-version = "1.11.2"
+version = "1.11.3"
 dependencies = [
  "assert_matches",
  "bincode",
  "solana-bpf-loader-program",
  "solana-program-test",
- "solana-sdk 1.11.2",
+ "solana-sdk 1.11.3",
 ]
 
 [[package]]
