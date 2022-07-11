@@ -119,6 +119,7 @@ pub struct TestValidatorGenesis {
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
+    pub log_messages_bytes_limit: Option<usize>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -147,6 +148,7 @@ impl Default for TestValidatorGenesis {
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
+            log_messages_bytes_limit: Option::<usize>::default(),
         }
     }
 }
@@ -702,6 +704,7 @@ impl TestValidator {
                     compute_unit_limit,
                     ..ComputeBudget::default()
                 }),
+            log_messages_bytes_limit: config.log_messages_bytes_limit,
         };
 
         let mut validator_config = ValidatorConfig {

@@ -49,9 +49,8 @@ impl UnfrozenGossipVerifiedVoteHashes {
 
     // Cleanup `votes_per_slot` based on new roots
     pub fn set_root(&mut self, new_root: Slot) {
-        let mut slots_ge_root = self.votes_per_slot.split_off(&new_root);
+        self.votes_per_slot = self.votes_per_slot.split_off(&new_root);
         // `self.votes_per_slot` now only contains entries >= `new_root`
-        std::mem::swap(&mut self.votes_per_slot, &mut slots_ge_root);
     }
 
     pub fn remove_slot_hash(&mut self, slot: Slot, hash: &Hash) -> Option<Vec<Pubkey>> {

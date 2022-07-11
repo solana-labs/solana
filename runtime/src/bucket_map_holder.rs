@@ -469,8 +469,9 @@ pub mod tests {
         test.bucket_flushed_at_current_age(true); // done with age 0
         (0..threads).into_par_iter().for_each(|_| {
             // This test used to be more strict with time, but in a parallel, multi test environment,
-            // sometimes threads starve and this test intermittently fails. So, give it 10x the necesary time it should require.
-            while now.elapsed().as_millis() < (time as u128) * 10 {
+            // sometimes threads starve and this test intermittently fails. So, give it more time than it should require.
+            // This may be aggrevated by the strategy of only allowing thread 0 to advance the age.
+            while now.elapsed().as_millis() < (time as u128) * 100 {
                 if test.maybe_advance_age() {
                     test.bucket_flushed_at_current_age(true);
                 }

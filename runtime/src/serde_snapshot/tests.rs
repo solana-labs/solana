@@ -268,7 +268,7 @@ fn test_bank_serialize_style(
             // This make serialized bytes not deterministic.
             // But, we can guarantee that the buffer is different if we change the hash!
             assert_ne!(buf, buf_reserialized);
-            std::mem::swap(&mut buf, &mut buf_reserialized);
+            buf = buf_reserialized;
         }
     }
 

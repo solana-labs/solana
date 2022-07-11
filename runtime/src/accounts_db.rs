@@ -1857,12 +1857,10 @@ impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for Sc
         result
     }
     fn get_accum(&mut self) -> BinnedHashData {
-        let mut def = BinnedHashData::default();
-        std::mem::swap(&mut def, &mut self.accum);
-        def
+        std::mem::take(&mut self.accum)
     }
-    fn set_accum(&mut self, mut accum: BinnedHashData) {
-        std::mem::swap(&mut self.accum, &mut accum);
+    fn set_accum(&mut self, accum: BinnedHashData) {
+        self.accum = accum;
     }
 }
 
@@ -6320,9 +6318,7 @@ impl AccountsDb {
                         .map(|stored_account| stored_account.meta.pubkey)
                         .unwrap(), // will always be 'Some'
                 ) {
-                    let mut account: (StoredMetaWriteVersion, Option<StoredAccountMeta<'_>>) =
-                        (0, None);
-                    std::mem::swap(&mut account, found_account);
+                    let account = std::mem::take(found_account);
                     scanner.found_account(&LoadedAccount::Stored(account.1.unwrap()));
                 }
                 let next = progress[min_index].next().map(|stored_account| {
@@ -9369,12 +9365,10 @@ pub mod tests {
         }
         fn init_accum(&mut self, _count: usize) {}
         fn get_accum(&mut self) -> BinnedHashData {
-            let mut def = BinnedHashData::default();
-            std::mem::swap(&mut def, &mut self.accum);
-            def
+            std::mem::take(&mut self.accum)
         }
-        fn set_accum(&mut self, mut accum: BinnedHashData) {
-            std::mem::swap(&mut self.accum, &mut accum);
+        fn set_accum(&mut self, accum: BinnedHashData) {
+            self.accum = accum;
         }
         fn found_account(&mut self, loaded_account: &LoadedAccount) {
             self.calls.fetch_add(1, Ordering::Relaxed);
@@ -9633,12 +9627,10 @@ pub mod tests {
             self.accum
         }
         fn get_accum(&mut self) -> BinnedHashData {
-            let mut def = BinnedHashData::default();
-            std::mem::swap(&mut def, &mut self.accum);
-            def
+            std::mem::take(&mut self.accum)
         }
-        fn set_accum(&mut self, mut accum: BinnedHashData) {
-            std::mem::swap(&mut self.accum, &mut accum);
+        fn set_accum(&mut self, accum: BinnedHashData) {
+            self.accum = accum;
         }
     }
 

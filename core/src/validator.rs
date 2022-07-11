@@ -982,6 +982,7 @@ impl Validator {
             block_metadata_notifier,
             config.wait_to_vote_slot,
             accounts_background_request_sender,
+            config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
         );
 
@@ -1028,6 +1029,7 @@ impl Validator {
             &cost_model,
             &connection_cache,
             &identity_keypair,
+            config.runtime_config.log_messages_bytes_limit,
             enable_quic_servers,
         );
 

@@ -95,6 +95,7 @@ impl Tpu {
         cost_model: &Arc<RwLock<CostModel>>,
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
+        log_messages_bytes_limit: Option<usize>,
         enable_quic_servers: bool,
     ) -> Self {
         let TpuSockets {
@@ -229,6 +230,7 @@ impl Tpu {
             transaction_status_sender,
             replay_vote_sender,
             cost_model.clone(),
+            log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
         );
