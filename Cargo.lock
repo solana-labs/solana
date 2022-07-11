@@ -1007,8 +1007,7 @@ dependencies = [
 [[package]]
 name = "crossbeam-epoch"
 version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ec02e091aa634e2c3ada4a392989e7c3116673ef0ac5b72232439094d73b7fd"
+source = "git+https://github.com/solana-labs/crossbeam?rev=fd279d707025f0e60951e429bf778b4813d1b6bf#fd279d707025f0e60951e429bf778b4813d1b6bf"
 dependencies = [
  "cfg-if 1.0.0",
  "crossbeam-utils",
