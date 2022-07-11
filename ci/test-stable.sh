@@ -69,7 +69,13 @@ test-stable-bpf)
       "$cargo_test_bpf" --bpf-sdk ../../../../sdk/bpf
       popd
     fi
-  done
+  done |& tee cargo.log
+  solana_program_count=$(grep -c 'solana-program v' cargo.log)
+  rm -f cargo.log
+  if ((solana_program_count > 4)); then
+      echo "Regression of build redundancy. Review dependency features that trigger redundant rebuilds of solana-program."
+      exit 1
+  fi
 
   # bpf-tools version
   "$cargo_build_bpf" -V
