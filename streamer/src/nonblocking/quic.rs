@@ -146,7 +146,7 @@ fn get_connection_stake(connection: &Connection, staked_nodes: Arc<RwLock<Staked
                         cert.public_key().parsed().ok().and_then(|key| match key {
                             PublicKey::Unknown(inner_key) => {
                                 let pubkey = Pubkey::new(inner_key);
-                                info!("Peer public key is {:?}", pubkey);
+                                debug!("Peer public key is {:?}", pubkey);
 
                                 let staked_nodes = staked_nodes.read().unwrap();
                                 staked_nodes.pubkey_stake_map.get(&pubkey).copied()
