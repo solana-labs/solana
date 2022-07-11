@@ -166,9 +166,16 @@ impl SnapshotGossipManager {
         self.full_snapshot_hashes
             .hashes
             .push(full_snapshot_hash.hash);
-        while self.full_snapshot_hashes.hashes.len() > self.max_full_snapshot_hashes {
-            self.full_snapshot_hashes.hashes.remove(0);
+
+        if self.full_snapshot_hashes.hashes.len() > self.max_full_snapshot_hashes {
+            let to_truncate =
+                self.full_snapshot_hashes.hashes.len() - self.max_full_snapshot_hashes;
+            self.full_snapshot_hashes.hashes.rotate_left(to_truncate);
+            self.full_snapshot_hashes
+                .hashes
+                .truncate(self.max_full_snapshot_hashes);
         }
+
         self.cluster_info
             .push_snapshot_hashes(self.full_snapshot_hashes.hashes.clone());
     }
