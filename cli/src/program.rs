@@ -11,11 +11,23 @@ use {
     log::*,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_bpf_loader_program::{syscalls::register_syscalls, BpfError, ThisInstructionMeter},
-    solana_clap_utils::{self, input_parsers::*, input_validators::*, keypair::*},
+    solana_clap_utils::{
+        self, input_parsers::*, input_validators::*, keypair::*,
+        offline::{DUMP_TRANSACTION_MESSAGE, OfflineArgs, SIGN_ONLY_ARG}
+    },
     solana_cli_output::{
         CliProgram, CliProgramAccountType, CliProgramAuthority, CliProgramBuffer, CliProgramId,
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
         CliUpgradeableProgramClosed, CliUpgradeablePrograms,
+    },
+    solana_client::{
+        blockhash_query::BlockhashQuery,
+        client_error::ClientErrorKind,
+        connection_cache::ConnectionCache,
+        rpc_client::RpcClient,
+        rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
+        rpc_filter::{Memcmp, RpcFilterType},
+        tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::invoke_context::InvokeContext,
     solana_rbpf::{
@@ -76,6 +88,9 @@ pub enum ProgramCliCommand {
         buffer_signer_index: Option<SignerIndex>,
         buffer_pubkey: Option<Pubkey>,
         upgrade_authority_signer_index: SignerIndex,
+        sign_only: bool,
+        dump_transaction_message: bool,
+        blockhash_query: BlockhashQuery,
         is_final: bool,
         max_len: Option<usize>,
         allow_excessive_balance: bool,
@@ -190,7 +205,8 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("allow-excessive-deploy-account-balance")
                                 .takes_value(false)
                                 .help("Use the designated program id even if the account already holds a large balance of SOL")
-                        ),
+                        )
+                        .offline_args(),
                 )
                 .subcommand(
                     SubCommand::with_name("write-buffer")
@@ -468,6 +484,12 @@ pub fn parse_program_subcommand(
                 .value_of("program_location")
                 .map(|location| location.to_string());
 
+            let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
+
+            let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
+
+            let blockhash_query = BlockhashQuery::new_from_matches(matches);
+
             let buffer_pubkey = if let Ok((buffer_signer, Some(buffer_pubkey))) =
                 signer_of(matches, "buffer", wallet_manager)
             {
@@ -516,6 +538,9 @@ pub fn parse_program_subcommand(
                         .index_of(upgrade_authority_pubkey)
                         .unwrap(),
                     is_final: matches.is_present("final"),
+                    sign_only,
+                    dump_transaction_message,
+                    blockhash_query,
                     max_len,
                     allow_excessive_balance: matches.is_present("allow_excessive_balance"),
                     skip_fee_check,
@@ -711,6 +736,9 @@ pub fn process_program_subcommand(
             buffer_signer_index,
             buffer_pubkey,
             upgrade_authority_signer_index,
+            sign_only,
+            dump_transaction_message,
+            blockhash_query,
             is_final,
             max_len,
             allow_excessive_balance,
@@ -724,6 +752,9 @@ pub fn process_program_subcommand(
             *buffer_signer_index,
             *buffer_pubkey,
             *upgrade_authority_signer_index,
+            *sign_only,
+            *dump_transaction_message,
+            blockhash_query,
             *is_final,
             *max_len,
             *allow_excessive_balance,
@@ -841,6 +872,9 @@ fn process_program_deploy(
     buffer_signer_index: Option<SignerIndex>,
     buffer_pubkey: Option<Pubkey>,
     upgrade_authority_signer_index: SignerIndex,
+    sign_only: bool,
+    dump_transaction_message: bool,
+    blockhash_query: &BlockhashQuery,
     is_final: bool,
     max_len: Option<usize>,
     allow_excessive_balance: bool,
