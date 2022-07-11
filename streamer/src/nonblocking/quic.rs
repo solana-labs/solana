@@ -15,6 +15,7 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
+        pubkey::Pubkey,
         quic::{QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
         timing,
@@ -31,6 +32,7 @@ use {
         task::JoinHandle,
         time::{sleep, timeout},
     },
+    x509_parser::{prelude::*, public_key::PublicKey},
 };
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
@@ -132,6 +134,31 @@ fn prune_unstaked_connection_table(
     }
 }
 
+fn get_connection_stake(connection: &Connection, staked_nodes: Arc<RwLock<StakedNodes>>) -> u64 {
+    connection
+        .peer_identity()
+        .and_then(|der_cert_any| der_cert_any.downcast::<Vec<rustls::Certificate>>().ok())
+        .and_then(|der_certs| {
+            der_certs.first().and_then(|der_cert| {
+                X509Certificate::from_der(der_cert.as_ref())
+                    .ok()
+                    .and_then(|(_, cert)| {
+                        cert.public_key().parsed().ok().and_then(|key| match key {
+                            PublicKey::Unknown(inner_key) => {
+                                let pubkey = Pubkey::new(inner_key);
+                                debug!("Peer public key is {:?}", pubkey);
+
+                                let staked_nodes = staked_nodes.read().unwrap();
+                                staked_nodes.pubkey_stake_map.get(&pubkey).copied()
+                            }
+                            _ => None,
+                        })
+                    })
+            })
+        })
+        .unwrap_or(0)
+}
+
 async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
@@ -161,11 +188,8 @@ async fn setup_connection(
             let remote_addr = connection.remote_address();
 
             let table_and_stake = {
-                let staked_nodes = staked_nodes.read().unwrap();
-                if let Some(stake) = staked_nodes.stake_map.get(&remote_addr.ip()) {
-                    let stake = *stake;
-                    drop(staked_nodes);
-
+                let stake = get_connection_stake(&connection, staked_nodes.clone());
+                if stake > 0 {
                     let mut connection_table_l = staked_connection_table.lock().unwrap();
                     if connection_table_l.total_size >= max_staked_connections {
                         let num_pruned = connection_table_l.prune_random(stake);
@@ -195,7 +219,6 @@ async fn setup_connection(
                         Some((connection_table_l, stake))
                     }
                 } else if max_unstaked_connections > 0 {
-                    drop(staked_nodes);
                     let mut connection_table_l = unstaked_connection_table.lock().unwrap();
                     prune_unstaked_connection_table(
                         &mut connection_table_l,
@@ -237,8 +260,18 @@ async fn setup_connection(
                         drop(connection_table_l);
                         let stats = stats.clone();
                         let connection_table = match table_type {
-                            ConnectionPeerType::Unstaked => unstaked_connection_table.clone(),
-                            ConnectionPeerType::Staked => staked_connection_table.clone(),
+                            ConnectionPeerType::Unstaked => {
+                                stats
+                                    .connection_added_from_unstaked_peer
+                                    .fetch_add(1, Ordering::Relaxed);
+                                unstaked_connection_table.clone()
+                            }
+                            ConnectionPeerType::Staked => {
+                                stats
+                                    .connection_added_from_staked_peer
+                                    .fetch_add(1, Ordering::Relaxed);
+                                staked_connection_table.clone()
+                            }
                         };
                         tokio::spawn(handle_connection(
                             uni_streams,
@@ -624,12 +657,13 @@ impl ConnectionTable {
 pub mod test {
     use {
         super::*,
-        crate::quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        crate::quic::{new_cert, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, VarInt},
         solana_sdk::{
             quic::{QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS},
             signature::Keypair,
+            signer::Signer,
         },
         std::net::Ipv4Addr,
         tokio::time::sleep,
@@ -657,11 +691,19 @@ pub mod test {
         }
     }
 
-    pub fn get_client_config() -> ClientConfig {
-        let crypto = rustls::ClientConfig::builder()
+    pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
+        let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+        let (certs, key) =
+            new_cert(keypair, ipaddr).expect("Failed to generate client certificate");
+
+        let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
+            .with_single_cert(certs, key)
+            .expect("Failed to use client certificate");
+
+        crypto.enable_early_data = true;
+
         let mut config = ClientConfig::new(Arc::new(crypto));
 
         let transport_config = Arc::get_mut(&mut config.transport).unwrap();
@@ -705,17 +747,27 @@ pub mod test {
         (t, exit, receiver, server_address, stats)
     }
 
-    pub async fn make_client_endpoint(addr: &SocketAddr) -> NewConnection {
+    pub async fn make_client_endpoint(
+        addr: &SocketAddr,
+        client_keypair: Option<&Keypair>,
+    ) -> NewConnection {
         let client_socket = UdpSocket::bind("127.0.0.1:0").unwrap();
         let mut endpoint = quinn::Endpoint::new(EndpointConfig::default(), None, client_socket)
             .unwrap()
             .0;
-        endpoint.set_default_client_config(get_client_config());
-        endpoint.connect(*addr, "localhost").unwrap().await.unwrap()
+        let default_keypair = Keypair::new();
+        endpoint.set_default_client_config(get_client_config(
+            client_keypair.unwrap_or(&default_keypair),
+        ));
+        endpoint
+            .connect(*addr, "localhost")
+            .expect("Failed in connecting")
+            .await
+            .expect("Failed in waiting")
     }
 
     pub async fn check_timeout(receiver: Receiver<PacketBatch>, server_address: SocketAddr) {
-        let conn1 = make_client_endpoint(&server_address).await;
+        let conn1 = make_client_endpoint(&server_address, None).await;
         let total = 30;
         for i in 0..total {
             let mut s1 = conn1.connection.open_uni().await.unwrap();
@@ -737,8 +789,8 @@ pub mod test {
     }
 
     pub async fn check_block_multiple_connections(server_address: SocketAddr) {
-        let conn1 = make_client_endpoint(&server_address).await;
-        let conn2 = make_client_endpoint(&server_address).await;
+        let conn1 = make_client_endpoint(&server_address, None).await;
+        let conn2 = make_client_endpoint(&server_address, None).await;
         let mut s1 = conn1.connection.open_uni().await.unwrap();
         let mut s2 = conn2.connection.open_uni().await.unwrap();
         s1.write_all(&[0u8]).await.unwrap();
@@ -759,8 +811,8 @@ pub mod test {
         receiver: Receiver<PacketBatch>,
         server_address: SocketAddr,
     ) {
-        let conn1 = Arc::new(make_client_endpoint(&server_address).await);
-        let conn2 = Arc::new(make_client_endpoint(&server_address).await);
+        let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
+        let conn2 = Arc::new(make_client_endpoint(&server_address, None).await);
         let mut num_expected_packets = 0;
         for i in 0..10 {
             info!("sending: {}", i);
@@ -798,8 +850,9 @@ pub mod test {
     pub async fn check_multiple_writes(
         receiver: Receiver<PacketBatch>,
         server_address: SocketAddr,
+        client_keypair: Option<&Keypair>,
     ) {
-        let conn1 = Arc::new(make_client_endpoint(&server_address).await);
+        let conn1 = Arc::new(make_client_endpoint(&server_address, client_keypair).await);
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
@@ -831,7 +884,7 @@ pub mod test {
     }
 
     pub async fn check_unstaked_node_connect_failure(server_address: SocketAddr) {
-        let conn1 = Arc::new(make_client_endpoint(&server_address).await);
+        let conn1 = Arc::new(make_client_endpoint(&server_address, None).await);
 
         // Send a full size packet with single byte writes.
         if let Ok(mut s1) = conn1.connection.open_uni().await {
@@ -864,7 +917,7 @@ pub mod test {
         solana_logger::setup();
         let (t, exit, _receiver, server_address, stats) = setup_quic_server(None);
 
-        let conn1 = make_client_endpoint(&server_address).await;
+        let conn1 = make_client_endpoint(&server_address, None).await;
         assert_eq!(stats.total_streams.load(Ordering::Relaxed), 0);
         assert_eq!(stats.total_stream_read_timeouts.load(Ordering::Relaxed), 0);
 
@@ -904,7 +957,7 @@ pub mod test {
     async fn test_quic_server_multiple_writes() {
         solana_logger::setup();
         let (t, exit, receiver, server_address, _stats) = setup_quic_server(None);
-        check_multiple_writes(receiver, server_address).await;
+        check_multiple_writes(receiver, server_address, None).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
     }
@@ -913,16 +966,51 @@ pub mod test {
     async fn test_quic_server_staked_connection_removal() {
         solana_logger::setup();
 
+        let client_keypair = Keypair::new();
         let mut staked_nodes = StakedNodes::default();
         staked_nodes
-            .stake_map
-            .insert(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 100000);
+            .pubkey_stake_map
+            .insert(client_keypair.pubkey(), 100000);
         staked_nodes.total_stake = 100000;
 
         let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes));
-        check_multiple_writes(receiver, server_address).await;
+        check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(
+            stats
+                .connection_added_from_unstaked_peer
+                .load(Ordering::Relaxed),
+            0
+        );
+        assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
+        assert_eq!(stats.connection_remove_failed.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn test_quic_server_zero_staked_connection_removal() {
+        // In this test, the client has a pubkey, but is not in stake table.
+        solana_logger::setup();
+
+        let client_keypair = Keypair::new();
+        let mut staked_nodes = StakedNodes::default();
+        staked_nodes
+            .pubkey_stake_map
+            .insert(client_keypair.pubkey(), 0);
+        staked_nodes.total_stake = 0;
+
+        let (t, exit, receiver, server_address, stats) = setup_quic_server(Some(staked_nodes));
+        check_multiple_writes(receiver, server_address, Some(&client_keypair)).await;
+        exit.store(true, Ordering::Relaxed);
+        t.await.unwrap();
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(
+            stats
+                .connection_added_from_staked_peer
+                .load(Ordering::Relaxed),
+            0
+        );
         assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
         assert_eq!(stats.connection_remove_failed.load(Ordering::Relaxed), 0);
     }
@@ -931,9 +1019,16 @@ pub mod test {
     async fn test_quic_server_unstaked_connection_removal() {
         solana_logger::setup();
         let (t, exit, receiver, server_address, stats) = setup_quic_server(None);
-        check_multiple_writes(receiver, server_address).await;
+        check_multiple_writes(receiver, server_address, None).await;
         exit.store(true, Ordering::Relaxed);
         t.await.unwrap();
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(
+            stats
+                .connection_added_from_staked_peer
+                .load(Ordering::Relaxed),
+            0
+        );
         assert_eq!(stats.connection_removed.load(Ordering::Relaxed), 1);
         assert_eq!(stats.connection_remove_failed.load(Ordering::Relaxed), 0);
     }

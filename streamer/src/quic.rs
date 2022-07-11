@@ -5,6 +5,7 @@ use {
     pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
     quinn::{IdleTimeout, ServerConfig, VarInt},
     rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
+    rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
@@ -19,6 +20,7 @@ use {
             Arc, RwLock,
         },
         thread,
+        time::SystemTime,
     },
     tokio::runtime::{Builder, Runtime},
 };
@@ -26,6 +28,29 @@ use {
 pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
 const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 4;
+
+struct SkipClientVerification;
+
+impl SkipClientVerification {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+impl rustls::server::ClientCertVerifier for SkipClientVerification {
+    fn client_auth_root_subjects(&self) -> Option<DistinguishedNames> {
+        Some(DistinguishedNames::new())
+    }
+
+    fn verify_client_cert(
+        &self,
+        _end_entity: &Certificate,
+        _intermediates: &[Certificate],
+        _now: SystemTime,
+    ) -> Result<ClientCertVerified, rustls::Error> {
+        Ok(rustls::server::ClientCertVerified::assertion())
+    }
+}
 
 /// Returns default server configuration along with its PEM certificate chain.
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
@@ -44,8 +69,13 @@ pub(crate) fn configure_server(
         .collect();
     let cert_chain_pem = pem::encode_many(&cert_chain_pem_parts);
 
-    let mut server_config = ServerConfig::with_single_cert(cert_chain, priv_key)
+    let server_tls_config = rustls::ServerConfig::builder()
+        .with_safe_defaults()
+        .with_client_cert_verifier(SkipClientVerification::new())
+        .with_single_cert(cert_chain, priv_key)
         .map_err(|_e| QuicServerError::ConfigureFailed)?;
+
+    let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
     // QUIC_MAX_CONCURRENT_STREAMS doubled, which was found to improve reliability
@@ -64,7 +94,7 @@ pub(crate) fn configure_server(
     Ok((server_config, cert_chain_pem))
 }
 
-fn new_cert(
+pub(crate) fn new_cert(
     identity_keypair: &Keypair,
     san: IpAddr,
 ) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {
@@ -157,6 +187,8 @@ pub struct StreamStats {
     pub(crate) total_stream_read_errors: AtomicUsize,
     pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
+    pub(crate) connection_added_from_staked_peer: AtomicUsize,
+    pub(crate) connection_added_from_unstaked_peer: AtomicUsize,
     pub(crate) connection_add_failed: AtomicUsize,
     pub(crate) connection_add_failed_invalid_stream_count: AtomicUsize,
     pub(crate) connection_add_failed_unstaked_node: AtomicUsize,
@@ -194,6 +226,18 @@ impl StreamStats {
             (
                 "evictions",
                 self.num_evictions.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_added_from_staked_peer",
+                self.connection_added_from_staked_peer
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_added_from_unstaked_peer",
+                self.connection_added_from_unstaked_peer
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -427,7 +471,7 @@ mod test {
         let (t, exit, receiver, server_address) = setup_quic_server();
 
         let runtime = rt();
-        runtime.block_on(check_multiple_writes(receiver, server_address));
+        runtime.block_on(check_multiple_writes(receiver, server_address, None));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
     }
