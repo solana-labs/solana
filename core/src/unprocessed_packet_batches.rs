@@ -141,8 +141,7 @@ impl PartialOrd for DeserializedPacket {
 
 impl Ord for DeserializedPacket {
     fn cmp(&self, other: &Self) -> Ordering {
-        self
-            .immutable_section()
+        self.immutable_section()
             .priority()
             .cmp(&other.immutable_section().priority())
     }
@@ -194,7 +193,7 @@ impl UnprocessedPacketBatches {
     }
 
     /// Insert new `deserialized_packet_batch` into inner `MinMaxHeap<DeserializedPacket>`,
-    /// ordered by the tx priorityr.
+    /// ordered by the tx priority.
     /// If buffer is at the max limit, the lowest priority packet is dropped
     ///
     /// Returns tuple of number of packets dropped
@@ -552,8 +551,7 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_pop_max_n() {
         let num_packets = 10;
-        let packets_iter =
-            std::iter::repeat_with(simmple_deserialized_packet).take(num_packets);
+        let packets_iter = std::iter::repeat_with(simmple_deserialized_packet).take(num_packets);
         let mut unprocessed_packet_batches =
             UnprocessedPacketBatches::from_iter(packets_iter.clone(), num_packets);
 
