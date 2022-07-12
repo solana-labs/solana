@@ -1,5 +1,8 @@
 use {
-    crate::{streamer::StakedNodes, tls_certificates::new_self_signed_tls_certificate_chain},
+    crate::{
+        nonblocking::quic::ALPN_TPU_PROTOCOL_ID, streamer::StakedNodes,
+        tls_certificates::new_self_signed_tls_certificate_chain,
+    },
     crossbeam_channel::Sender,
     pem::Pem,
     quinn::{IdleTimeout, ServerConfig, VarInt},
@@ -67,11 +70,12 @@ pub(crate) fn configure_server(
         .collect();
     let cert_chain_pem = pem::encode_many(&cert_chain_pem_parts);
 
-    let server_tls_config = rustls::ServerConfig::builder()
+    let mut server_tls_config = rustls::ServerConfig::builder()
         .with_safe_defaults()
         .with_client_cert_verifier(SkipClientVerification::new())
         .with_single_cert(cert_chain, priv_key)
         .map_err(|_e| QuicServerError::ConfigureFailed)?;
+    server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
