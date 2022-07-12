@@ -7,11 +7,10 @@ use {
         tpu_connection::{BlockingConnection, ClientStats},
     },
     indexmap::map::{Entry, IndexMap},
-    pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
     rand::{thread_rng, Rng},
-    rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
     solana_measure::measure::Measure,
     solana_sdk::{quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval},
+    solana_streamer::tls_certificates::new_self_signed_tls_certificate_chain,
     std::{
         error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -255,68 +254,6 @@ impl ConnectionPool {
     }
 }
 
-pub(crate) fn new_cert(
-    identity_keypair: &Keypair,
-    san: IpAddr,
-) -> Result<QuicClientCertificate, Box<dyn Error>> {
-    // Generate a self-signed cert from client's identity key
-    let cert_params = new_cert_params(identity_keypair, san);
-    let cert = rcgen::Certificate::from_params(cert_params)?;
-    let cert_der = cert.serialize_der().unwrap();
-    let priv_key = cert.serialize_private_key_der();
-    let priv_key = rustls::PrivateKey(priv_key);
-    Ok(QuicClientCertificate {
-        certificates: vec![rustls::Certificate(cert_der)],
-        key: priv_key,
-    })
-}
-
-fn convert_to_rcgen_keypair(identity_keypair: &Keypair) -> rcgen::KeyPair {
-    // from https://datatracker.ietf.org/doc/html/rfc8410#section-3
-    const ED25519_IDENTIFIER: [u32; 4] = [1, 3, 101, 112];
-    let mut private_key = Vec::<u8>::with_capacity(34);
-    private_key.extend_from_slice(&[0x04, 0x20]); // ASN.1 OCTET STRING
-    private_key.extend_from_slice(identity_keypair.secret().as_bytes());
-    let key_pkcs8 = pkcs8::PrivateKeyInfo {
-        algorithm: AlgorithmIdentifier {
-            oid: ObjectIdentifier::from_arcs(&ED25519_IDENTIFIER).unwrap(),
-            parameters: None,
-        },
-        private_key: &private_key,
-        public_key: None,
-    };
-    let key_pkcs8_der = key_pkcs8
-        .to_der()
-        .expect("Failed to convert keypair to DER")
-        .to_der();
-
-    // Parse private key into rcgen::KeyPair struct.
-    rcgen::KeyPair::from_der(&key_pkcs8_der).expect("Failed to parse keypair from DER")
-}
-
-fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams {
-    // TODO(terorie): Is it safe to sign the TLS cert with the identity private key?
-
-    // Unfortunately, rcgen does not accept a "raw" Ed25519 key.
-    // We have to convert it to DER and pass it to the library.
-
-    // Convert private key into PKCS#8 v1 object.
-    // RFC 8410, Section 7: Private Key Format
-    // https://datatracker.ietf.org/doc/html/rfc8410#section-
-
-    let keypair = convert_to_rcgen_keypair(identity_keypair);
-
-    let mut cert_params = CertificateParams::default();
-    cert_params.subject_alt_names = vec![SanType::IpAddress(san)];
-    cert_params.alg = &rcgen::PKCS_ED25519;
-    cert_params.key_pair = Some(keypair);
-    cert_params.distinguished_name = DistinguishedName::new();
-    cert_params
-        .distinguished_name
-        .push(DnType::CommonName, "Solana node");
-    cert_params
-}
-
 impl ConnectionCache {
     pub fn new(connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
@@ -333,8 +270,11 @@ impl ConnectionCache {
         keypair: &Keypair,
         ipaddr: IpAddr,
     ) -> Result<(), Box<dyn Error>> {
-        let cert = new_cert(keypair, ipaddr)?;
-        self.client_certificate = Arc::new(cert);
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)?;
+        self.client_certificate = Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        });
         Ok(())
     }
 
@@ -566,6 +506,11 @@ impl ConnectionCache {
 
 impl Default for ConnectionCache {
     fn default() -> Self {
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+            &Keypair::new(),
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        )
+        .expect("Failed to initialize QUIC client certificates");
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
@@ -577,9 +522,10 @@ impl Default for ConnectionCache {
                         .expect("Unable to bind to UDP socket"),
                 )
             }),
-            client_certificate: new_cert(&Keypair::new(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-                .map(Arc::new)
-                .expect("Failed to initialize QUIC client certificates"),
+            client_certificate: Arc::new(QuicClientCertificate {
+                certificates: certs,
+                key: priv_key,
+            }),
         }
     }
 }
