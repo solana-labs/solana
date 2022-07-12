@@ -311,6 +311,9 @@ thread_local! {static PER_THREAD_ROCKS_PERF_CONTEXT: RefCell<PerfContext> = RefC
 const PERF_SAMPLING_MIN_DURATION: Duration = Duration::from_secs(1);
 pub(crate) const PERF_METRIC_OP_NAME_GET: &str = "get";
 
+pub(crate) const PERF_METRIC_OP_NAME_PUT: &str = "put";
+pub(crate) const PERF_METRIC_OP_NAME_WRITE_BATCH: &str = "write_batch";
+
 /// The function enables RocksDB PerfContext once for every `sample_interval`.
 ///
 /// PerfContext is a thread-local struct defined in RocksDB for collecting
