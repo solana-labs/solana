@@ -209,3 +209,12 @@ impl SnapshotType {
         matches!(self, SnapshotType::IncrementalSnapshot(_))
     }
 }
+
+/// Helper function to retain only max n of element in a vector
+pub fn retain_max_n_elements<T>(v: &mut Vec<T>, n: usize) {
+    if v.len() > n {
+        let to_truncate = v.len() - n;
+        v.rotate_left(to_truncate);
+        v.truncate(n);
+    }
+}

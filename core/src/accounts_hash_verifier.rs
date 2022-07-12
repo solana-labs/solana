@@ -11,8 +11,8 @@ use {
         accounts_hash::{CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
-            SnapshotType,
+            retain_max_n_elements, AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage,
+            SnapshotPackage, SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -194,13 +194,13 @@ impl AccountsHashVerifier {
     }
 
     /// For testing
-    fn generate_fault_hash(slot: &Slot, original_hash: &Hash) -> Hash {
+    fn generate_fault_hash(original_hash: &Hash) -> Hash {
         // For testing, publish an invalid hash to gossip.
         use {
             rand::{thread_rng, Rng},
             solana_sdk::hash::extend_and_hash,
         };
-        warn!("inserting fault at slot: {}", slot);
+
         let rand = thread_rng().gen_range(0, 10);
         extend_and_hash(original_hash, &[rand])
     }
@@ -219,17 +219,14 @@ impl AccountsHashVerifier {
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
-            let fault_hash = Self::generate_fault_hash(&accounts_package.slot, &accounts_hash);
+            let fault_hash = Self::generate_fault_hash(&accounts_hash);
+            warn!("inserting fault at slot: {}", accounts_package.slot);
             hashes.push((accounts_package.slot, fault_hash));
         } else {
             hashes.push((accounts_package.slot, accounts_hash));
         }
 
-        if hashes.len() > MAX_SNAPSHOT_HASHES {
-            let to_truncate = hashes.len() - MAX_SNAPSHOT_HASHES;
-            hashes.rotate_left(to_truncate);
-            hashes.truncate(MAX_SNAPSHOT_HASHES);
-        }
+        retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
 
         if halt_on_known_validator_accounts_hash_mismatch {
             let mut slot_to_hash = HashMap::new();
