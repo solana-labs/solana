@@ -254,13 +254,14 @@ pub struct IndexGenerationInfo {
     pub rent_paying_accounts_by_partition: RentPayingAccountsByPartition,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default)]
 struct SlotIndexGenerationInfo {
     insert_time_us: u64,
     num_accounts: u64,
     num_accounts_rent_paying: usize,
     accounts_data_len: u64,
     amount_to_top_off_rent: u64,
+    rent_paying_accounts_by_partition: Vec<Pubkey>,
 }
 
 #[derive(Default, Debug)]
@@ -7956,7 +7957,6 @@ impl AccountsDb {
         accounts_map: GenerateIndexAccountsMap<'a>,
         slot: &Slot,
         rent_collector: &RentCollector,
-        rent_paying_accounts_by_partition: &Mutex<RentPayingAccountsByPartition>,
     ) -> SlotIndexGenerationInfo {
         if accounts_map.is_empty() {
             return SlotIndexGenerationInfo::default();
@@ -7964,6 +7964,7 @@ impl AccountsDb {
 
         let secondary = !self.account_indexes.is_empty();
 
+        let mut rent_paying_accounts_by_partition = Vec::default();
         let mut accounts_data_len = 0;
         let mut num_accounts_rent_paying = 0;
         let num_accounts = accounts_map.len();
@@ -7994,10 +7995,7 @@ impl AccountsDb {
                     amount_to_top_off_rent += amount_to_top_off_rent_this_account;
                     num_accounts_rent_paying += 1;
                     // remember this rent-paying account pubkey
-                    rent_paying_accounts_by_partition
-                        .lock()
-                        .unwrap()
-                        .add_account(&pubkey);
+                    rent_paying_accounts_by_partition.push(pubkey);
                 }
 
                 (
@@ -8027,6 +8025,7 @@ impl AccountsDb {
             num_accounts_rent_paying,
             accounts_data_len,
             amount_to_top_off_rent,
+            rent_paying_accounts_by_partition,
         }
     }
 
@@ -8287,18 +8286,23 @@ impl AccountsDb {
                                 num_accounts_rent_paying: rent_paying_this_slot,
                                 accounts_data_len: accounts_data_len_this_slot,
                                 amount_to_top_off_rent: amount_to_top_off_rent_this_slot,
-                            } = self.generate_index_for_slot(
-                                accounts_map,
-                                slot,
-                                &rent_collector,
-                                &rent_paying_accounts_by_partition,
-                            );
+                                rent_paying_accounts_by_partition:
+                                    rent_paying_accounts_by_partition_this_slot,
+                            } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
                             rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
                             amount_to_top_off_rent
                                 .fetch_add(amount_to_top_off_rent_this_slot, Ordering::Relaxed);
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
                             accounts_data_len
                                 .fetch_add(accounts_data_len_this_slot, Ordering::Relaxed);
+                            let mut rent_paying_accounts_by_partition =
+                                rent_paying_accounts_by_partition.lock().unwrap();
+                            rent_paying_accounts_by_partition_this_slot
+                                .iter()
+                                .for_each(|k| {
+                                    rent_paying_accounts_by_partition.add_account(k);
+                                });
+
                             insert_us
                         } else {
                             // verify index matches expected and measure the time to get all items
