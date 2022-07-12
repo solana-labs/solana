@@ -4274,6 +4274,14 @@ impl Bank {
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
+            if self
+                .feature_set
+                .is_active(&enable_early_verification_of_account_modifications::id())
+            {
+                Some(self.rent_collector.rent)
+            } else {
+                None
+            },
             compute_budget.max_invoke_depth.saturating_add(1),
             tx.message().instructions().len(),
         );
@@ -18699,6 +18707,7 @@ pub(crate) mod tests {
         });
         let transaction_context = TransactionContext::new(
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
+            Some(Rent::default()),
             compute_budget.max_invoke_depth.saturating_add(1),
             number_of_instructions_at_transaction_level,
         );

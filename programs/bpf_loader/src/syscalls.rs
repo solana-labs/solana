@@ -3395,7 +3395,8 @@ mod tests {
                 ),
                 ($program_key, AccountSharedData::new(0, 0, &$loader_key)),
             ];
-            let mut $transaction_context = TransactionContext::new(transaction_accounts, 1, 1);
+            let mut $transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
             $invoke_context.push(&[], &[0, 1], &[]).unwrap();
         };

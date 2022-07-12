@@ -328,7 +328,8 @@ mod test {
                     is_writable: true,
                 },
             ];
-            let mut transaction_context = TransactionContext::new(accounts, 1, 2);
+            let mut transaction_context =
+                TransactionContext::new(accounts, Some(Rent::default()), 1, 2);
             let mut $invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         };
     }

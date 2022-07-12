@@ -59,6 +59,7 @@ impl TransactionContext {
     /// Constructs a new TransactionContext
     pub fn new(
         transaction_accounts: Vec<TransactionAccount>,
+        rent: Option<Rent>,
         instruction_context_capacity: usize,
         number_of_instructions_at_transaction_level: usize,
     ) -> Self {
@@ -78,7 +79,7 @@ impl TransactionContext {
             instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
             return_data: TransactionReturnData::default(),
             accounts_resize_delta: RefCell::new(0),
-            rent: None,
+            rent,
         }
     }
 
@@ -91,11 +92,6 @@ impl TransactionContext {
             .into_iter()
             .map(|account| account.into_inner())
             .collect())
-    }
-
-    /// Call this if `enable_early_verification_of_account_modifications` is active
-    pub fn enable_early_verification_of_account_modifications(&mut self, rent: &Rent) {
-        self.rent = Some(*rent);
     }
 
     /// Returns true if `enable_early_verification_of_account_modifications` is active

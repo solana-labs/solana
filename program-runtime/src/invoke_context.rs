@@ -255,9 +255,6 @@ impl<'a> InvokeContext<'a> {
         lamports_per_signature: u64,
         prev_accounts_data_len: u64,
     ) -> Self {
-        if feature_set.is_active(&enable_early_verification_of_account_modifications::id()) {
-            transaction_context.enable_early_verification_of_account_modifications(&rent);
-        }
         Self {
             transaction_context,
             invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
@@ -1163,6 +1160,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
+        Some(Rent::default()),
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
         1,
     );
@@ -1193,6 +1191,7 @@ pub fn mock_process_instruction(
         .push((*loader_id, processor_account));
     let mut transaction_context = TransactionContext::new(
         preparation.transaction_accounts,
+        Some(Rent::default()),
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
         1,
     );
@@ -1361,8 +1360,12 @@ mod tests {
                 is_writable: false,
             });
         }
-        let mut transaction_context =
-            TransactionContext::new(accounts, ComputeBudget::default().max_invoke_depth, 1);
+        let mut transaction_context = TransactionContext::new(
+            accounts,
+            Some(Rent::default()),
+            ComputeBudget::default().max_invoke_depth,
+            1,
+        );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
         // Check call depth increases and has a limit
@@ -1414,7 +1417,8 @@ mod tests {
                 is_writable: instruction_account_index < 2,
             })
             .collect::<Vec<_>>();
-        let mut transaction_context = TransactionContext::new(accounts, 2, 8);
+        let mut transaction_context =
+            TransactionContext::new(accounts, Some(Rent::default()), 2, 8);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
@@ -1488,7 +1492,8 @@ mod tests {
     fn test_invoke_context_compute_budget() {
         let accounts = vec![(solana_sdk::pubkey::new_rand(), AccountSharedData::default())];
 
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context =
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
@@ -1523,7 +1528,8 @@ mod tests {
             process_instruction: mock_process_instruction,
         }];
 
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context =
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
 
