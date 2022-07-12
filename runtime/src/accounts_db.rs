@@ -7937,6 +7937,9 @@ impl AccountsDb {
         account: &T,
         rent_collector: &RentCollector,
     ) -> Option<u64> {
+        if account.lamports() == 0 {
+            return None;
+        }
         (rent_collector.should_collect_rent(pubkey, account)
             && !rent_collector.get_rent_due(account).is_exempt())
         .then(|| {
