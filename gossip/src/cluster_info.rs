@@ -1088,8 +1088,7 @@ impl ClusterInfo {
         // We don't write to an arbitrary index, because it may replace one of this validator's
         // existing votes on the network.
         if let Some(vote_index) = vote_index {
-            self.push_vote_at_index(vote, vote_index)
-                .unwrap_or_default();
+            let _ignored = self.push_vote_at_index(vote, vote_index);
         }
     }
 
@@ -3714,9 +3713,7 @@ RPC Enabled Nodes: 1"#;
             &[unrefresh_ix], // instructions
             None,            // payer
         );
-        cluster_info
-            .push_vote(&unrefresh_tower, unrefresh_tx.clone())
-            .unwrap_or_default();
+        let _ignored = cluster_info.push_vote(&unrefresh_tower, unrefresh_tx.clone());
         let mut cursor = Cursor::default();
         let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![unrefresh_tx.clone()]);
@@ -3745,9 +3742,7 @@ RPC Enabled Nodes: 1"#;
         assert!(votes.contains(&unrefresh_tx));
 
         // Push the new vote for `refresh_slot`
-        cluster_info
-            .push_vote(&refresh_tower, refresh_tx.clone())
-            .unwrap_or_default();
+        let _ignored = cluster_info.push_vote(&refresh_tower, refresh_tx.clone());
 
         // Should be two votes in gossip
         let votes = cluster_info.get_votes(&mut Cursor::default());
@@ -3816,9 +3811,7 @@ RPC Enabled Nodes: 1"#;
             None,  // payer
         );
         let tower = vec![7]; // Last slot in the vote.
-        cluster_info
-            .push_vote(&tower, tx.clone())
-            .unwrap_or_default();
+        let _ignored = cluster_info.push_vote(&tower, tx.clone());
 
         let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
         assert_eq!(votes, vec![tx]);
@@ -3877,7 +3870,7 @@ RPC Enabled Nodes: 1"#;
             let slot = k as Slot;
             tower.push(slot);
             let vote = new_vote_transaction(&mut rng, vec![slot]);
-            assert!(Ok(()) == cluster_info.push_vote(&tower, vote));
+            assert_eq!(Ok(()), cluster_info.push_vote(&tower, vote));
         }
         let vote_slots = get_vote_slots(&cluster_info);
         assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
