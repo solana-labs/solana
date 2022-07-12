@@ -2758,6 +2758,101 @@ pub mod tests {
         );
         assert_eq!(num, 0);
     }
+    #[test]
+    fn test_insert_ignore_reclaims() {
+        {
+            // non-cached
+            let key = Keypair::new();
+            let index = AccountsIndex::<u64>::default_for_tests();
+            let mut reclaims = Vec::new();
+            let slot = 0;
+            let value = 1;
+            assert!(!value.is_cached());
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                UpsertReclaim::PopulateReclaims,
+            );
+            assert!(reclaims.is_empty());
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                UpsertReclaim::PopulateReclaims,
+            );
+            // reclaimed
+            assert!(!reclaims.is_empty());
+            reclaims.clear();
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                // since IgnoreReclaims, we should expect reclaims to be empty
+                UpsertReclaim::IgnoreReclaims,
+            );
+            // reclaims is ignored
+            assert!(reclaims.is_empty());
+        }
+        {
+            // cached
+            let key = Keypair::new();
+            let index = AccountsIndex::<AccountInfoTest>::default_for_tests();
+            let mut reclaims = Vec::new();
+            let slot = 0;
+            let value = 1.0;
+            assert!(value.is_cached());
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                UpsertReclaim::PopulateReclaims,
+            );
+            assert!(reclaims.is_empty());
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                UpsertReclaim::PopulateReclaims,
+            );
+            // reclaimed
+            assert!(!reclaims.is_empty());
+            reclaims.clear();
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                // since IgnoreReclaims, we should expect reclaims to be empty
+                UpsertReclaim::IgnoreReclaims,
+            );
+            // reclaims is ignored
+            assert!(reclaims.is_empty());
+        }
+    }
 
     #[test]
     fn test_insert_with_ancestors() {
