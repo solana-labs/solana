@@ -6,9 +6,16 @@ assignees: ''
 ---
 
 #### Problem
-<!-- Technical support topics such as operating a validator should be asked on the Solana Discord channel at https://discord.com/invite/solana, not here -->
+<!--
+  The GitHub issue tracker exists to track issues 
+  that affect the development of Solana itself.
+
+  If you need technical support using Solana, building
+  an app, or running a validator, don't open an issue here.
+
+  Instead, post your question to the Solana Stack Exchange:
+  https://solana.stackexchange.com/questions/ask
+-->
 <!-- If reporting a crash, degraded performance, etc, please include the software version(s) you are using. -->
-
-
 
 #### Proposed Solution
