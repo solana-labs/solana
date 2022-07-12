@@ -50,6 +50,7 @@ mod nonce_keyed_account;
 mod pubkey_bins;
 mod read_only_accounts_cache;
 pub mod rent_collector;
+mod rent_paying_accounts_by_partition;
 mod rolling_bit_field;
 pub mod runtime_config;
 pub mod secondary_index;
