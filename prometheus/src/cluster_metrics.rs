@@ -14,6 +14,7 @@ struct ValidatorVoteInfo {
     balance: Lamports,
     last_vote: Slot,
     vote_credits: u64,
+    identity: Pubkey,
 }
 
 fn get_vote_state(bank: &Bank, vote_pubkey: &Pubkey) -> Option<ValidatorVoteInfo> {
@@ -30,6 +31,7 @@ fn get_vote_state(bank: &Bank, vote_pubkey: &Pubkey) -> Option<ValidatorVoteInfo
         balance,
         last_vote,
         vote_credits,
+        identity: vote_state.node_pubkey,
     })
 }
 
@@ -94,7 +96,7 @@ pub fn write_cluster_metrics<W: io::Write>(
                     let vote_info = get_vote_state(bank, vote_account)?;
                     Some(
                         Metric::new(vote_info.last_vote)
-                            .with_label("identity_account", identity_pubkey.to_string())
+                            .with_label("identity_account", vote_info.identity.to_string())
                             .with_label("vote_account", vote_account.to_string()),
                     )
                 }),
@@ -111,7 +113,7 @@ pub fn write_cluster_metrics<W: io::Write>(
                     let vote_info = get_vote_state(bank, vote_account)?;
                     Some(
                         Metric::new_sol(vote_info.balance)
-                            .with_label("identity_account", identity_pubkey.to_string())
+                            .with_label("identity_account", vote_info.identity.to_string())
                             .with_label("vote_account", vote_account.to_string()),
                     )
                 }),
@@ -128,7 +130,7 @@ pub fn write_cluster_metrics<W: io::Write>(
                     let vote_info = get_vote_state(bank, vote_account)?;
                     Some(
                         Metric::new(vote_info.vote_credits)
-                            .with_label("identity_account", identity_pubkey.to_string())
+                            .with_label("identity_account", vote_info.identity.to_string())
                             .with_label("vote_account", vote_account.to_string()),
                     )
                 }),
