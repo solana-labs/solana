@@ -655,17 +655,6 @@ impl<'a> InvokeContext<'a> {
     ) -> Result<(), InstructionError> {
         let (instruction_accounts, program_indices) =
             self.prepare_instruction(&instruction, signers)?;
-        let mut prev_account_sizes = Vec::with_capacity(instruction_accounts.len());
-        for instruction_account in instruction_accounts.iter() {
-            let account_length = self
-                .transaction_context
-                .get_account_at_index(instruction_account.index_in_transaction)?
-                .borrow()
-                .data()
-                .len();
-            prev_account_sizes.push((instruction_account.index_in_transaction, account_length));
-        }
-
         let mut compute_units_consumed = 0;
         self.process_instruction(
             &instruction.data,
@@ -674,7 +663,6 @@ impl<'a> InvokeContext<'a> {
             &mut compute_units_consumed,
             &mut ExecuteTimings::default(),
         )?;
-
         Ok(())
     }
 
