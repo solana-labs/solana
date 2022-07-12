@@ -51,6 +51,7 @@ use {
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
         rent_collector::RentCollector,
+        rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
     },
@@ -254,18 +255,20 @@ pub enum ScanStorageResult<R, B> {
     Stored(B),
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default)]
 pub struct IndexGenerationInfo {
     pub accounts_data_len: u64,
+    pub rent_paying_accounts_by_partition: RentPayingAccountsByPartition,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default)]
 struct SlotIndexGenerationInfo {
     insert_time_us: u64,
     num_accounts: u64,
     num_accounts_rent_paying: usize,
     accounts_data_len: u64,
     amount_to_top_off_rent: u64,
+    rent_paying_accounts_by_partition: Vec<Pubkey>,
 }
 
 #[derive(Default, Debug)]
@@ -2016,11 +2019,11 @@ impl AccountsDb {
         account_indexes: AccountSecondaryIndexes,
         caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        accounts_db_config: Option<AccountsDbConfig>,
+        mut accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
     ) -> Self {
         let accounts_index =
-            AccountsIndex::new(accounts_db_config.as_ref().and_then(|x| x.index.clone()));
+            AccountsIndex::new(accounts_db_config.as_mut().and_then(|x| x.index.take()));
         let accounts_hash_cache_path = accounts_db_config
             .as_ref()
             .and_then(|x| x.accounts_hash_cache_path.clone());
@@ -7990,6 +7993,7 @@ impl AccountsDb {
 
         let secondary = !self.account_indexes.is_empty();
 
+        let mut rent_paying_accounts_by_partition = Vec::default();
         let mut accounts_data_len = 0;
         let mut num_accounts_rent_paying = 0;
         let num_accounts = accounts_map.len();
@@ -8019,6 +8023,8 @@ impl AccountsDb {
                 {
                     amount_to_top_off_rent += amount_to_top_off_rent_this_account;
                     num_accounts_rent_paying += 1;
+                    // remember this rent-paying account pubkey
+                    rent_paying_accounts_by_partition.push(pubkey);
                 }
 
                 (
@@ -8048,6 +8054,7 @@ impl AccountsDb {
             num_accounts_rent_paying,
             accounts_data_len,
             amount_to_top_off_rent,
+            rent_paying_accounts_by_partition,
         }
     }
 
@@ -8251,6 +8258,9 @@ impl AccountsDb {
         );
         let accounts_data_len = AtomicU64::new(0);
 
+        let rent_paying_accounts_by_partition =
+            Mutex::new(RentPayingAccountsByPartition::new(&schedule));
+
         // pass == 0 always runs and generates the index
         // pass == 1 only runs if verify == true.
         // verify checks that all the expected items are in the accounts index and measures how long it takes to look them all up
@@ -8311,6 +8321,8 @@ impl AccountsDb {
                                 num_accounts_rent_paying: rent_paying_this_slot,
                                 accounts_data_len: accounts_data_len_this_slot,
                                 amount_to_top_off_rent: amount_to_top_off_rent_this_slot,
+                                rent_paying_accounts_by_partition:
+                                    rent_paying_accounts_by_partition_this_slot,
                             } = self.generate_index_for_slot(accounts_map, slot, &rent_collector);
                             rent_paying.fetch_add(rent_paying_this_slot, Ordering::Relaxed);
                             amount_to_top_off_rent
@@ -8318,6 +8330,14 @@ impl AccountsDb {
                             total_duplicates.fetch_add(total_this_slot, Ordering::Relaxed);
                             accounts_data_len
                                 .fetch_add(accounts_data_len_this_slot, Ordering::Relaxed);
+                            let mut rent_paying_accounts_by_partition =
+                                rent_paying_accounts_by_partition.lock().unwrap();
+                            rent_paying_accounts_by_partition_this_slot
+                                .iter()
+                                .for_each(|k| {
+                                    rent_paying_accounts_by_partition.add_account(k);
+                                });
+
                             insert_us
                         } else {
                             // verify index matches expected and measure the time to get all items
@@ -8471,6 +8491,9 @@ impl AccountsDb {
 
         IndexGenerationInfo {
             accounts_data_len: accounts_data_len.load(Ordering::Relaxed),
+            rent_paying_accounts_by_partition: rent_paying_accounts_by_partition
+                .into_inner()
+                .unwrap(),
         }
     }
 

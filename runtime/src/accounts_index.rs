@@ -8,6 +8,7 @@ use {
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
+        rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         rolling_bit_field::RollingBitField,
         secondary_index::*,
     },
@@ -694,6 +695,9 @@ pub struct AccountsIndex<T: IndexValue> {
     pub active_scans: AtomicUsize,
     /// # of slots between latest max and latest scan
     pub max_distance_to_min_scan_slot: AtomicU64,
+
+    /// populated at generate_index time - accounts that could possibly be rent paying
+    pub rent_paying_accounts_by_partition: RwLock<RentPayingAccountsByPartition>,
 }
 
 impl<T: IndexValue> AccountsIndex<T> {
@@ -727,6 +731,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             roots_removed: AtomicUsize::default(),
             active_scans: AtomicUsize::default(),
             max_distance_to_min_scan_slot: AtomicU64::default(),
+            rent_paying_accounts_by_partition: RwLock::default(),
         }
     }
 

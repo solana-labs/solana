@@ -268,7 +268,7 @@ pub type BankSlotDelta = SlotDelta<Result<()>>;
 // Each cycle is composed of <partition_count> number of tiny pubkey subranges
 // to scan, which is always multiple of the number of slots in epoch.
 pub(crate) type PartitionIndex = u64;
-type PartitionsPerCycle = u64;
+pub type PartitionsPerCycle = u64;
 type Partition = (PartitionIndex, PartitionIndex, PartitionsPerCycle);
 type RentCollectionCycleParams = (
     Epoch,
@@ -5217,6 +5217,28 @@ impl Bank {
             });
     }
 
+    /// return all end partition indexes for the given partition
+    /// partition could be (0, 1, N). In this case we only return [1]
+    ///  the single 'end_index' that covers this partition.
+    /// partition could be (0, 2, N). In this case, we return [1, 2], which are all
+    /// the 'end_index' values contained in that range.
+    /// (0, 0, N) returns [0] as a special case.
+    /// There is a relationship between
+    /// 1. 'pubkey_range_from_partition'
+    /// 2. 'partition_from_pubkey'
+    /// 3. this function
+    fn get_partition_end_indexes(partition: &Partition) -> Vec<PartitionIndex> {
+        if partition.0 == partition.1 && partition.0 == 0 {
+            // special case for start=end=0. ie. (0, 0, N). This returns [0]
+            vec![0]
+        } else {
+            // normal case of (start, end, N)
+            // so, we want [start+1, start+2, ..=end]
+            // if start == end, then return []
+            (partition.0..partition.1).map(|index| index + 1).collect()
+        }
+    }
+
     fn collect_rent_eagerly(&self, just_rewrites: bool) {
         if self.lazy_rent_collection.load(Relaxed) {
             return;
@@ -5231,7 +5253,7 @@ impl Bank {
         if parallel {
             let ranges = partitions
                 .iter()
-                .map(|partition| Self::pubkey_range_from_partition(*partition))
+                .map(|partition| (*partition, Self::pubkey_range_from_partition(*partition)))
                 .collect::<Vec<_>>();
             // test every range to make sure ranges are not overlapping
             // some tests collect rent from overlapping ranges
@@ -5243,8 +5265,8 @@ impl Bank {
                         continue;
                     }
 
-                    let i = &ranges[i];
-                    let j = &ranges[j];
+                    let i = &ranges[i].1;
+                    let j = &ranges[j].1;
                     // make sure i doesn't contain j
                     if i.contains(j.start()) || i.contains(j.end()) {
                         parallel = false;
@@ -5257,7 +5279,7 @@ impl Bank {
                 let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
                 thread_pool.install(|| {
                     ranges.into_par_iter().for_each(|range| {
-                        self.collect_rent_in_range(range, just_rewrites, &rent_metrics)
+                        self.collect_rent_in_range(range.0, range.1, just_rewrites, &rent_metrics)
                     });
                 });
             }
@@ -5329,6 +5351,8 @@ impl Bank {
         &self,
         mut accounts: Vec<(Pubkey, AccountSharedData, Slot)>,
         just_rewrites: bool,
+        rent_paying_pubkeys: Option<&HashSet<Pubkey>>,
+        partition_index: PartitionIndex,
     ) -> CollectRentFromAccountsInfo {
         let mut rent_debits = RentDebits::default();
         let mut total_rent_collected_info = CollectedInfo::default();
@@ -5379,6 +5403,22 @@ impl Bank {
                 rewrites_skipped.push((*pubkey, hash));
                 assert_eq!(rent_collected_info, CollectedInfo::default());
             } else if !just_rewrites {
+                if rent_collected_info.rent_amount > 0 {
+                    if let Some(rent_paying_pubkeys) = rent_paying_pubkeys {
+                        if !rent_paying_pubkeys.contains(pubkey) {
+                            // inc counter instead of assert while we verify this is correct
+                            inc_new_counter_info!("unexpected-rent-paying-pubkey", 1);
+                            warn!(
+                                "Collecting rent from unexpected pubkey: {}, slot: {}, parent_slot: {:?}, partition_index: {}, partition_from_pubkey: {}",
+                                pubkey,
+                                self.slot(),
+                                self.parent().map(|bank| bank.slot()),
+                                partition_index,
+                                Bank::partition_from_pubkey(pubkey, self.epoch_schedule.slots_per_epoch),
+                            );
+                        }
+                    }
+                }
                 total_rent_collected_info += rent_collected_info;
                 accounts_to_store.push((pubkey, account));
             }
@@ -5411,7 +5451,28 @@ impl Bank {
         metrics: &RentMetrics,
     ) {
         let subrange_full = Self::pubkey_range_from_partition(partition);
-        self.collect_rent_in_range(subrange_full, just_rewrites, metrics)
+        self.collect_rent_in_range(partition, subrange_full, just_rewrites, metrics)
+    }
+
+    /// get all pubkeys that we expect to be rent-paying or None, if this was not initialized at load time (that should only exist in test cases)
+    fn get_rent_paying_pubkeys(&self, partition: &Partition) -> Option<HashSet<Pubkey>> {
+        let rent_paying_accounts = &self
+            .rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .rent_paying_accounts_by_partition
+            .read()
+            .unwrap();
+        rent_paying_accounts.is_initialized().then(|| {
+            Self::get_partition_end_indexes(partition)
+                .into_iter()
+                .flat_map(|end_index| {
+                    rent_paying_accounts.get_pubkeys_in_partition_index(end_index)
+                })
+                .cloned()
+                .collect::<HashSet<_>>()
+        })
     }
 
     /// load accounts with pubkeys in 'subrange_full'
@@ -5422,6 +5483,7 @@ impl Bank {
     ///  This flag is used when restoring from a snapshot to calculate and verify the initial bank's delta hash.
     fn collect_rent_in_range(
         &self,
+        partition: Partition,
         subrange_full: RangeInclusive<Pubkey>,
         just_rewrites: bool,
         metrics: &RentMetrics,
@@ -5434,6 +5496,9 @@ impl Bank {
                 .hold_range_in_memory(&subrange_full, true, thread_pool);
             hold_range.stop();
             metrics.hold_range_us.fetch_add(hold_range.as_us(), Relaxed);
+
+            let rent_paying_pubkeys_ = self.get_rent_paying_pubkeys(&partition);
+            let rent_paying_pubkeys = rent_paying_pubkeys_.as_ref();
 
             // divide the range into num_threads smaller ranges and process in parallel
             // Note that 'pubkey_range_from_partition' cannot easily be re-used here to break the range smaller.
@@ -5469,7 +5534,12 @@ impl Bank {
                             .load_to_collect_rent_eagerly(&self.ancestors, subrange)
                     });
                     CollectRentInPartitionInfo::new(
-                        self.collect_rent_from_accounts(accounts, just_rewrites),
+                        self.collect_rent_from_accounts(
+                            accounts,
+                            just_rewrites,
+                            rent_paying_pubkeys,
+                            partition.1,
+                        ),
                         Duration::from_nanos(measure_load_accounts.as_ns()),
                     )
                 })
@@ -5477,6 +5547,9 @@ impl Bank {
                     CollectRentInPartitionInfo::default,
                     CollectRentInPartitionInfo::reduce,
                 );
+
+            // We cannot assert here that we collected from all expected keys.
+            // Some accounts may have been topped off or may have had all funds removed and gone to 0 lamports.
 
             self.rc
                 .accounts
@@ -7819,6 +7892,7 @@ pub(crate) mod tests {
                 genesis_sysvar_and_builtin_program_lamports, GenesisConfigInfo,
                 ValidatorVoteKeypairs,
             },
+            rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
             status_cache::MAX_CACHE_ENTRIES,
         },
         crossbeam_channel::{bounded, unbounded},
@@ -9863,12 +9937,16 @@ pub(crate) mod tests {
         let result = later_bank.collect_rent_from_accounts(
             vec![(zero_lamport_pubkey, account.clone(), later_slot)],
             just_rewrites,
+            None,
+            PartitionIndex::default(),
         );
         assert!(result.rewrites_skipped.is_empty());
         // loaded from previous slot, so we skip rent collection on it
         let result = later_bank.collect_rent_from_accounts(
             vec![(zero_lamport_pubkey, account, later_slot - 1)],
             just_rewrites,
+            None,
+            PartitionIndex::default(),
         );
         assert!(result.rewrites_skipped[0].0 == zero_lamport_pubkey);
     }
@@ -19207,6 +19285,76 @@ pub(crate) mod tests {
                 accounts_data_size_before.saturating_sub(account_shrink_size as u64),
             );
         }
+    }
+
+    #[test]
+    fn test_get_partition_end_indexes() {
+        for n in 5..7 {
+            assert_eq!(vec![0], Bank::get_partition_end_indexes(&(0, 0, n)));
+            assert!(Bank::get_partition_end_indexes(&(1, 1, n)).is_empty());
+            assert_eq!(vec![1], Bank::get_partition_end_indexes(&(0, 1, n)));
+            assert_eq!(vec![1, 2], Bank::get_partition_end_indexes(&(0, 2, n)));
+            assert_eq!(vec![3, 4], Bank::get_partition_end_indexes(&(2, 4, n)));
+        }
+    }
+
+    #[test]
+    fn test_get_rent_paying_pubkeys() {
+        let lamports = 1;
+        let bank = create_simple_test_bank(lamports);
+
+        let n = 432_000;
+        assert!(bank.get_rent_paying_pubkeys(&(0, 1, n)).is_none());
+        assert!(bank.get_rent_paying_pubkeys(&(0, 2, n)).is_none());
+        assert!(bank.get_rent_paying_pubkeys(&(0, 0, n)).is_none());
+
+        let pk1 = Pubkey::new(&[2; 32]);
+        let pk2 = Pubkey::new(&[3; 32]);
+        let index1 = Bank::partition_from_pubkey(&pk1, n);
+        let index2 = Bank::partition_from_pubkey(&pk2, n);
+        assert!(index1 > 0, "{}", index1);
+        assert!(index2 > index1, "{}, {}", index2, index1);
+
+        let epoch_schedule = EpochSchedule::custom(n, 0, false);
+
+        let mut rent_paying_accounts_by_partition =
+            RentPayingAccountsByPartition::new(&epoch_schedule);
+        rent_paying_accounts_by_partition.add_account(&pk1);
+        rent_paying_accounts_by_partition.add_account(&pk2);
+
+        *bank
+            .rc
+            .accounts
+            .accounts_db
+            .accounts_index
+            .rent_paying_accounts_by_partition
+            .write()
+            .unwrap() = rent_paying_accounts_by_partition;
+
+        assert_eq!(
+            bank.get_rent_paying_pubkeys(&(0, 1, n)),
+            Some(HashSet::default())
+        );
+        assert_eq!(
+            bank.get_rent_paying_pubkeys(&(0, 2, n)),
+            Some(HashSet::default())
+        );
+        assert_eq!(
+            bank.get_rent_paying_pubkeys(&(index1.saturating_sub(1), index1, n)),
+            Some(HashSet::from([pk1]))
+        );
+        assert_eq!(
+            bank.get_rent_paying_pubkeys(&(index2.saturating_sub(1), index2, n)),
+            Some(HashSet::from([pk2]))
+        );
+        assert_eq!(
+            bank.get_rent_paying_pubkeys(&(index1.saturating_sub(1), index2, n)),
+            Some(HashSet::from([pk2, pk1]))
+        );
+        assert_eq!(
+            bank.get_rent_paying_pubkeys(&(0, 0, n)),
+            Some(HashSet::default())
+        );
     }
 
     /// Ensure that accounts data size is updated correctly by rent collection
