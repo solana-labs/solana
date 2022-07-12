@@ -193,9 +193,7 @@ impl AccountsHashVerifier {
         accounts_hash
     }
 
-    /// For testing
     fn generate_fault_hash(original_hash: &Hash) -> Hash {
-        // For testing, publish an invalid hash to gossip.
         use {
             rand::{thread_rng, Rng},
             solana_sdk::hash::extend_and_hash,
