@@ -5223,7 +5223,7 @@ impl Bank {
         }
 
         let mut measure = Measure::start("collect_rent_eagerly-ms");
-        let partitions = dbg!(self.rent_collection_partitions());
+        let partitions = self.rent_collection_partitions();
         let count = partitions.len();
         let rent_metrics = RentMetrics::default();
         // partitions will usually be 1, but could be more if we skip slots
@@ -5426,7 +5426,6 @@ impl Bank {
         just_rewrites: bool,
         metrics: &RentMetrics,
     ) {
-        let _ = dbg!(&subrange_full);
         let mut hold_range = Measure::start("hold_range");
         let thread_pool = &self.rc.accounts.accounts_db.thread_pool;
         thread_pool.install(|| {
@@ -5441,8 +5440,8 @@ impl Bank {
             // It has special handling of 0..0 and partition_count changes affect all ranges unevenly.
             let num_threads = crate::accounts_db::quarter_thread_count() as u64;
             let sz = std::mem::size_of::<u64>();
-            let start_prefix = dbg!(Self::prefix_from_pubkey(subrange_full.start()));
-            let end_prefix_inclusive = dbg!(Self::prefix_from_pubkey(subrange_full.end()));
+            let start_prefix = Self::prefix_from_pubkey(subrange_full.start());
+            let end_prefix_inclusive = Self::prefix_from_pubkey(subrange_full.end());
             let range = end_prefix_inclusive - start_prefix;
             let increment = range / num_threads;
             let mut results = (0..num_threads)
@@ -19252,18 +19251,8 @@ pub(crate) mod tests {
             bank.slot() + bank.slot_count_per_normal_epoch(),
         ));
 
-        /*
-         * let slot = dbg!(years_as_slots(
-         *     genesis_config.rent.exemption_threshold,
-         *     &genesis_config.poh_config.target_tick_duration,
-         *     genesis_config.ticks_per_slot,
-         * )) as u64;
-         * // bprumo TODO: maybe just to bank.slot() =+ 432,000
-         * // or slot_count_per_normal_epoch()
-         * let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
-         */
-        let _ = dbg!(bank.slot_count_per_normal_epoch());
-        let _ = dbg!(bank.slot_count_in_two_day());
+        // make another bank so that any reclaimed accounts from the previous bank do not impact
+        // this test
         let bank = Arc::new(Bank::new_from_parent(
             &bank,
             &Pubkey::default(),
@@ -19274,15 +19263,7 @@ pub(crate) mod tests {
         let data_size = 123;
         let mut account = AccountSharedData::new(1, data_size, &Pubkey::default());
         let keypair = Keypair::new();
-        //let keypair = Keypair::from_base58_string("5Cz5QpV3wtpeXRXMt7tdZRDvMSpgdAtpj4bFzidkKDW8pYUtxoJrxqGnL7LHHTXYZNb6KbxAhjL8pXY6k7HPSpow");
         bank.store_account(&keypair.pubkey(), &account);
-        let _ = dbg!(keypair.pubkey());
-        let _ = dbg!(keypair.to_base58_string());
-        // failing keypairs
-        // "5Cz5QpV3wtpeXRXMt7tdZRDvMSpgdAtpj4bFzidkKDW8pYUtxoJrxqGnL7LHHTXYZNb6KbxAhjL8pXY6k7HPSpow"
-        // "3LfbBjEgCas49pyeRAeRjJ6KKnvNyw3QjDKb39dRYcsLuSTYBjuDmQW8HaH4SZnrV2ADq58r9DpNUpxA2wfBXGeQ"
-        // "5Wje7qsgrT2SDSBJAihZYX4eCCj7FFLD5AUU1WRJErjJXF7CYFeiUZVMYqp55xE7Bsj2HpLMTSCVi7JfTvVgkmmr"
-        // "2gAAmQ6AshLo22QhcLzwee7FGnh4fi9GEJvMANYkuE1SeYhZzE3GEqAMPuPBNcj4f7eeMRCsoRfGT2J7HhP9DDzZ"
 
         // Ensure if we collect rent from the account that it will be reclaimed
         {
@@ -19300,23 +19281,13 @@ pub(crate) mod tests {
         bank.collect_rent_eagerly(false);
         let accounts_data_size_delta_after_collecting_rent = bank.load_accounts_data_size_delta();
 
-        let accounts_data_size_delta_delta = dbg!(accounts_data_size_delta_after_collecting_rent)
-            as i64
-            - dbg!(accounts_data_size_delta_before_collecting_rent) as i64;
+        let accounts_data_size_delta_delta = accounts_data_size_delta_after_collecting_rent as i64
+            - accounts_data_size_delta_before_collecting_rent as i64;
         assert!(accounts_data_size_delta_delta < 0);
         let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
 
         // Ensure the account is reclaimed by rent collection
-        assert_eq!(
-            reclaimed_data_size, data_size,
-            "reclaimed data size: {}, data size: {}, bank accounts data size: {}, delta: {}, on chain: {}, off chain: {}",
-            reclaimed_data_size,
-            data_size,
-            bank.load_accounts_data_size(),
-            bank.load_accounts_data_size_delta(),
-            bank.load_accounts_data_size_delta_on_chain(),
-            bank.load_accounts_data_size_delta_off_chain(),
-        );
+        assert_eq!(reclaimed_data_size, data_size,);
     }
 
     #[test]
