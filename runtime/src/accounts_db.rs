@@ -3656,6 +3656,10 @@ impl AccountsDb {
         }
 
         if is_ancient(accounts) {
+            if current_ancient.is_some() {
+                info!("ancient_append_vec: shrinking full ancient: {}", slot);
+            }
+
             // this slot is ancient and can become the 'current' ancient for other slots to be squashed into
             *current_ancient = Some((slot, Arc::clone(storage)));
             return false; // we're done with this slot - this slot IS the ancient append vec
@@ -3789,10 +3793,11 @@ impl AccountsDb {
                 current_ancient = result.0;
                 let (ancient_slot, ancient_store) =
                     current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
-                let available_bytes = ancient_store.accounts.remaining_bytes();
-
-                // we could sort alive_accounts
-                let to_store = AccountsToStore::new(available_bytes, &alive_accounts, slot);
+                info!(
+                    "ancient_append_vec: combine_ancient_slots {}, overflow: {} accounts",
+                    slot,
+                    to_store.get(StorageSelector::Overflow).0.len()
+                );
 
                 ids.push(ancient_store.append_vec_id());
                 // if this slot is not the ancient slot we're writing to, then this root will be dropped
