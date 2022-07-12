@@ -13,6 +13,7 @@ use {
         secondary_index::*,
     },
     log::*,
+    once_cell::sync::OnceCell,
     ouroboros::self_referencing,
     rand::{thread_rng, Rng},
     rayon::{
@@ -697,7 +698,7 @@ pub struct AccountsIndex<T: IndexValue> {
     pub max_distance_to_min_scan_slot: AtomicU64,
 
     /// populated at generate_index time - accounts that could possibly be rent paying
-    pub rent_paying_accounts_by_partition: RwLock<RentPayingAccountsByPartition>,
+    pub rent_paying_accounts_by_partition: OnceCell<RentPayingAccountsByPartition>,
 }
 
 impl<T: IndexValue> AccountsIndex<T> {
@@ -731,7 +732,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             roots_removed: AtomicUsize::default(),
             active_scans: AtomicUsize::default(),
             max_distance_to_min_scan_slot: AtomicU64::default(),
-            rent_paying_accounts_by_partition: RwLock::default(),
+            rent_paying_accounts_by_partition: OnceCell::default(),
         }
     }
 
