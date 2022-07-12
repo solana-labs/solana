@@ -41,9 +41,7 @@ use {
             get_ancient_append_vec_capacity, is_ancient, is_full_ancient, AccountsToStore,
             StorageSelector,
         },
-        append_vec::{
-            AppendVec, AppendVecAccountsIter, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion,
-        },
+        append_vec::{AppendVec, StoredAccountMeta, StoredMeta, StoredMetaWriteVersion},
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
@@ -2431,9 +2429,9 @@ impl AccountsDb {
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
         for (_slot, store) in dirty_stores {
-            AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
+            store.accounts.account_iter().for_each(|account| {
                 pubkeys.insert(account.meta.pubkey);
-            });
+            })
         }
         trace!(
             "dirty_stores.len: {} pubkeys.len: {}",
@@ -3112,7 +3110,7 @@ impl AccountsDb {
         for store in stores {
             original_bytes += store.total_bytes();
             let store_id = store.append_vec_id();
-            AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
+            store.accounts.account_iter().for_each(|account| {
                 let new_entry = FoundStoredAccount { account, store_id };
                 match stored_accounts.entry(new_entry.account.meta.pubkey) {
                     Entry::Occupied(mut occupied_entry) => {
@@ -4184,7 +4182,7 @@ impl AccountsDb {
                 .unwrap_or_default();
             self.thread_pool.install(|| {
                 storage_maps.par_iter().for_each(|storage| {
-                    AppendVecAccountsIter::new(&storage.accounts).for_each(|account| {
+                    storage.accounts.account_iter().for_each(|account| {
                         storage_scan_func(&retval, LoadedAccount::Stored(account))
                     })
                 });
@@ -6281,7 +6279,7 @@ impl AccountsDb {
         let mut len = storages.len();
         if len == 1 {
             // only 1 storage, so no need to interleave between multiple storages based on write_version
-            AppendVecAccountsIter::new(&storages[0].accounts).for_each(|account| {
+            storages[0].accounts.account_iter().for_each(|account| {
                 if scanner.filter(&account.meta.pubkey) {
                     scanner.found_account(&LoadedAccount::Stored(account))
                 }
@@ -6292,7 +6290,7 @@ impl AccountsDb {
             let mut current =
                 Vec::<(StoredMetaWriteVersion, Option<StoredAccountMeta<'_>>)>::with_capacity(len);
             for storage in storages {
-                let mut iterator = AppendVecAccountsIter::new(&storage.accounts);
+                let mut iterator = storage.accounts.account_iter();
                 if let Some(item) = iterator
                     .next()
                     .map(|stored_account| (stored_account.meta.write_version, Some(stored_account)))
@@ -7896,7 +7894,7 @@ impl AccountsDb {
             .sum();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
         storage_maps.iter().for_each(|storage| {
-            AppendVecAccountsIter::new(&storage.accounts).for_each(|stored_account| {
+            storage.accounts.account_iter().for_each(|stored_account| {
                 let this_version = stored_account.meta.write_version;
                 let pubkey = stored_account.meta.pubkey;
                 assert!(!self.is_filler_account(&pubkey));

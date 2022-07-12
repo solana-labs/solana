@@ -482,7 +482,12 @@ impl AppendVec {
         self.path.clone()
     }
 
-    /// Return account metadata for each account, starting from `offset`.
+    /// Return iterator for account metadata
+    pub fn account_iter(&self) -> AppendVecAccountsIter {
+        AppendVecAccountsIter::new(self)
+    }
+
+    /// Return a vector of account metadata for each account, starting from `offset`.
     pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(offset) {
