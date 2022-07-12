@@ -558,7 +558,9 @@ fn test_duplicate_shreds_broadcast_leader() {
                             );
                             gossip_vote_index += 1;
                             gossip_vote_index %= MAX_LOCKOUT_HISTORY;
-                            cluster_info.push_vote_at_index(vote_tx, gossip_vote_index as u8)
+                            cluster_info
+                                .push_vote_at_index(vote_tx, gossip_vote_index as u8)
+                                .unwrap_or_default()
                         }
                     }
                     // Give vote some time to propagate
