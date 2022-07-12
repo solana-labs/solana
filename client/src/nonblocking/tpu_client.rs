@@ -255,7 +255,10 @@ impl TpuClient {
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
-    pub async fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+    pub async fn try_send_wire_transaction(
+        &self,
+        wire_transaction: Vec<u8>,
+    ) -> TransportResult<()> {
         let leaders = self
             .leader_tpu_service
             .leader_tpu_sockets(self.fanout_slots);
