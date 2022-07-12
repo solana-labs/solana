@@ -711,13 +711,20 @@ export type SimulatedTransactionAccountInfo = {
   rentEpoch?: number;
 };
 
+export type TransactionReturnDataEncoding = 'base64';
+
+export type TransactionReturnData = {
+  programId: string;
+  data: [string, TransactionReturnDataEncoding];
+};
+
 export type SimulatedTransactionResponse = {
   err: TransactionError | string | null;
   logs: Array<string> | null;
   accounts?: (SimulatedTransactionAccountInfo | null)[] | null;
   unitsConsumed?: number;
+  returnData?: TransactionReturnData | null;
 };
-
 const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
   pick({
     err: nullable(union([pick({}), string()])),
@@ -738,6 +745,14 @@ const SimulatedTransactionResponseStruct = jsonRpcResultAndContext(
       ),
     ),
     unitsConsumed: optional(number()),
+    returnData: optional(
+      nullable(
+        pick({
+          programId: string(),
+          data: tuple([string(), literal('base64')]),
+        }),
+      ),
+    ),
   }),
 );
 

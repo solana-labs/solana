@@ -133,6 +133,13 @@ const CACHE_VIRTUAL_WRITE_VERSION: StoredMetaWriteVersion = 0;
 pub(crate) const CACHE_VIRTUAL_OFFSET: Offset = 0;
 const CACHE_VIRTUAL_STORED_SIZE: StoredSize = 0;
 
+pub enum StoreReclaims {
+    /// normal reclaim mode
+    Default,
+    /// do not return reclaims from accounts index upsert
+    Ignore,
+}
+
 // the current best way to add filler accounts is gradually.
 // In other scenarios, such as monitoring catchup with large # of accounts, it may be useful to be able to
 // add filler accounts at the beginning, so that code path remains but won't execute at the moment.
@@ -163,8 +170,8 @@ pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
 pub struct GetUniqueAccountsResult<'a> {
     pub stored_accounts: HashMap<Pubkey, FoundStoredAccount<'a>>,
-    pub num_stores: usize,
     pub original_bytes: u64,
+    store_ids: Vec<AppendVecId>,
 }
 
 pub struct AccountsAddRootTiming {
@@ -3106,31 +3113,33 @@ impl AccountsDb {
     {
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
-        let mut num_stores = 0;
-        for store in stores {
-            original_bytes += store.total_bytes();
-            let store_id = store.append_vec_id();
-            store.accounts.account_iter().for_each(|account| {
-                let new_entry = FoundStoredAccount { account, store_id };
-                match stored_accounts.entry(new_entry.account.meta.pubkey) {
-                    Entry::Occupied(mut occupied_entry) => {
-                        if new_entry.account.meta.write_version
-                            > occupied_entry.get().account.meta.write_version
-                        {
-                            occupied_entry.insert(new_entry);
+        let store_ids = stores
+            .into_iter()
+            .map(|store| {
+                original_bytes += store.total_bytes();
+                let store_id = store.append_vec_id();
+                store.accounts.account_iter().for_each(|account| {
+                    let new_entry = FoundStoredAccount { account, store_id };
+                    match stored_accounts.entry(new_entry.account.meta.pubkey) {
+                        Entry::Occupied(mut occupied_entry) => {
+                            if new_entry.account.meta.write_version
+                                > occupied_entry.get().account.meta.write_version
+                            {
+                                occupied_entry.insert(new_entry);
+                            }
+                        }
+                        Entry::Vacant(vacant_entry) => {
+                            vacant_entry.insert(new_entry);
                         }
                     }
-                    Entry::Vacant(vacant_entry) => {
-                        vacant_entry.insert(new_entry);
-                    }
-                }
-            });
-            num_stores += 1;
-        }
+                });
+                store.append_vec_id()
+            })
+            .collect();
         GetUniqueAccountsResult {
             stored_accounts,
-            num_stores,
             original_bytes,
+            store_ids,
         }
     }
 
@@ -3141,8 +3150,8 @@ impl AccountsDb {
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let GetUniqueAccountsResult {
             stored_accounts,
-            num_stores,
             original_bytes,
+            store_ids,
         } = self.get_unique_accounts_from_storages(stores);
 
         // sort by pubkey to keep account index lookups close
@@ -3195,7 +3204,7 @@ impl AccountsDb {
         let aligned_total: u64 = Self::page_align(alive_total as u64);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
-        if Self::should_not_shrink(aligned_total, original_bytes, num_stores) {
+        if Self::should_not_shrink(aligned_total, original_bytes, store_ids.len()) {
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
@@ -3250,6 +3259,7 @@ impl AccountsDb {
                 Some(&hashes),
                 Some(&shrunken_store),
                 Some(Box::new(write_versions.into_iter())),
+                StoreReclaims::Ignore,
             );
 
             // `store_accounts_frozen()` above may have purged accounts from some
@@ -3261,7 +3271,9 @@ impl AccountsDb {
 
             // Purge old, overwritten storage entries
             let mut start = Measure::start("write_storage_elapsed");
-            self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| store.count() > 0);
+            self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
+                !store_ids.contains(&store.append_vec_id())
+            });
             start.stop();
             write_storage_elapsed = start.as_us();
         }
@@ -3607,6 +3619,7 @@ impl AccountsDb {
             Some(hashes),
             Some(ancient_store),
             None,
+            StoreReclaims::Ignore,
         )
     }
 
@@ -3654,6 +3667,10 @@ impl AccountsDb {
         }
 
         if is_ancient(accounts) {
+            if current_ancient.is_some() {
+                info!("ancient_append_vec: shrinking full ancient: {}", slot);
+            }
+
             // this slot is ancient and can become the 'current' ancient for other slots to be squashed into
             *current_ancient = Some((slot, Arc::clone(storage)));
             return false; // we're done with this slot - this slot IS the ancient append vec
@@ -3701,8 +3718,8 @@ impl AccountsDb {
             // this code is copied from shrink. I would like to combine it into a helper function, but the borrow checker has defeated my efforts so far.
             let GetUniqueAccountsResult {
                 stored_accounts,
-                num_stores: _num_stores,
                 original_bytes,
+                store_ids: _,
             } = self.get_unique_accounts_from_storages(old_storages.iter());
 
             // sort by pubkey to keep account index lookups close
@@ -3787,10 +3804,11 @@ impl AccountsDb {
                 current_ancient = result.0;
                 let (ancient_slot, ancient_store) =
                     current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
-                let available_bytes = ancient_store.accounts.remaining_bytes();
-
-                // we could sort alive_accounts
-                let to_store = AccountsToStore::new(available_bytes, &alive_accounts, slot);
+                info!(
+                    "ancient_append_vec: combine_ancient_slots {}, overflow: {} accounts",
+                    slot,
+                    to_store.get(StorageSelector::Overflow).0.len()
+                );
 
                 ids.push(ancient_store.append_vec_id());
                 // if this slot is not the ancient slot we're writing to, then this root will be dropped
@@ -5743,6 +5761,7 @@ impl AccountsDb {
                 Some(&hashes),
                 Some(&flushed_store),
                 None,
+                StoreReclaims::Default,
             );
 
             if filler_accounts > 0 {
@@ -5760,6 +5779,7 @@ impl AccountsDb {
                     Some(&hashes),
                     Some(&flushed_store),
                     None,
+                    StoreReclaims::Ignore,
                 );
             }
 
@@ -7463,13 +7483,18 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a, T>,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
     ) {
-        self.store(accounts, self.caching_enabled, txn_signatures);
+        self.store(
+            accounts,
+            self.caching_enabled,
+            txn_signatures,
+            StoreReclaims::Default,
+        );
     }
 
     /// Store the account update.
     /// only called by tests
     pub fn store_uncached(&self, slot: Slot, accounts: &[(&Pubkey, &AccountSharedData)]) {
-        self.store((slot, accounts), false, None);
+        self.store((slot, accounts), false, None, StoreReclaims::Default);
     }
 
     fn store<'a, T: ReadableAccount + Sync + ZeroLamport>(
@@ -7477,6 +7502,7 @@ impl AccountsDb {
         accounts: impl StorableAccounts<'a, T>,
         is_cached_store: bool,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
+        reclaim: StoreReclaims,
     ) {
         // If all transactions in a batch are errored,
         // it's possible to get a store with no accounts.
@@ -7506,7 +7532,7 @@ impl AccountsDb {
         }
 
         // we use default hashes for now since the same account may be stored to the cache multiple times
-        self.store_accounts_unfrozen(accounts, None, is_cached_store, txn_signatures);
+        self.store_accounts_unfrozen(accounts, None, is_cached_store, txn_signatures, reclaim);
         self.report_store_timings();
     }
 
@@ -7634,6 +7660,7 @@ impl AccountsDb {
         hashes: Option<&[&Hash]>,
         is_cached_store: bool,
         txn_signatures: Option<&'a [Option<&'a Signature>]>,
+        reclaim: StoreReclaims,
     ) {
         // This path comes from a store to a non-frozen slot.
         // If a store is dead here, then a newer update for
@@ -7651,6 +7678,7 @@ impl AccountsDb {
             is_cached_store,
             reset_accounts,
             txn_signatures,
+            reclaim,
         );
     }
 
@@ -7660,6 +7688,7 @@ impl AccountsDb {
         hashes: Option<&[impl Borrow<Hash>]>,
         storage: Option<&'a Arc<AccountStorageEntry>>,
         write_version_producer: Option<Box<dyn Iterator<Item = StoredMetaWriteVersion>>>,
+        reclaim: StoreReclaims,
     ) -> StoreAccountsTiming {
         // stores on a frozen slot should not reset
         // the append vec so that hashing could happen on the store
@@ -7674,6 +7703,7 @@ impl AccountsDb {
             is_cached_store,
             reset_accounts,
             None,
+            reclaim,
         )
     }
 
@@ -7686,6 +7716,7 @@ impl AccountsDb {
         is_cached_store: bool,
         reset_accounts: bool,
         txn_signatures: Option<&'b [Option<&'b Signature>]>,
+        reclaim: StoreReclaims,
     ) -> StoreAccountsTiming {
         let storage_finder = Box::new(move |slot, size| {
             storage
@@ -7721,7 +7752,10 @@ impl AccountsDb {
             .fetch_add(store_accounts_time.as_us(), Ordering::Relaxed);
         let mut update_index_time = Measure::start("update_index");
 
-        let reclaim = if self.caching_enabled && is_cached_store {
+        let reclaim = if matches!(reclaim, StoreReclaims::Ignore) {
+            // would like this to be: UpsertReclaim::IgnoreReclaims
+            UpsertReclaim::PopulateReclaims
+        } else if self.caching_enabled && is_cached_store {
             UpsertReclaim::PreviousSlotEntryWasCached
         } else {
             UpsertReclaim::PopulateReclaims
@@ -7930,6 +7964,9 @@ impl AccountsDb {
         account: &T,
         rent_collector: &RentCollector,
     ) -> Option<u64> {
+        if account.lamports() == 0 {
+            return None;
+        }
         (rent_collector.should_collect_rent(pubkey, account)
             && !rent_collector.get_rent_due(account).is_exempt())
         .then(|| {
@@ -8176,7 +8213,13 @@ impl AccountsDb {
                     .collect::<Vec<_>>();
                 let hashes = (0..filler_entries).map(|_| hash).collect::<Vec<_>>();
                 self.maybe_throttle_index_generation();
-                self.store_accounts_frozen((*slot, &add[..]), Some(&hashes[..]), None, None);
+                self.store_accounts_frozen(
+                    (*slot, &add[..]),
+                    Some(&hashes[..]),
+                    None,
+                    None,
+                    StoreReclaims::Ignore,
+                );
             });
             self.accounts_index.set_startup(Startup::Normal);
         }
@@ -11459,6 +11502,7 @@ pub mod tests {
             Some(&[&Hash::default()]),
             false,
             None,
+            StoreReclaims::Default,
         );
         db.add_root(some_slot);
         let check_hash = true;
@@ -11697,7 +11741,13 @@ pub mod tests {
         }
         // provide bogus account hashes
         let some_hash = Hash::new(&[0xca; HASH_BYTES]);
-        db.store_accounts_unfrozen((some_slot, accounts), Some(&[&some_hash]), false, None);
+        db.store_accounts_unfrozen(
+            (some_slot, accounts),
+            Some(&[&some_hash]),
+            false,
+            None,
+            StoreReclaims::Default,
+        );
         db.add_root(some_slot);
         assert_matches!(
             db.verify_bank_hash_and_lamports(

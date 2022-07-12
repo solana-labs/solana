@@ -78,6 +78,8 @@ pub enum UpsertReclaim {
     /// previous entry for this slot in the index may need to be reclaimed, so return it.
     /// reclaims is the only output of upsert, requiring a synchronous execution
     PopulateReclaims,
+    /// overwrite existing data in the same slot and do not return in 'relaims'
+    IgnoreReclaims,
 }
 
 #[derive(Debug, Default)]

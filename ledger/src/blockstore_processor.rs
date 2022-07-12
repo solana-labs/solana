@@ -770,7 +770,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     bank0.set_compute_budget(opts.runtime_config.compute_budget);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
-    info!("processing ledger for slot 0...");
+    info!("Processing ledger for slot 0...");
     process_bank_0(
         &bank_forks.read().unwrap().root_bank(),
         blockstore,
@@ -798,7 +798,7 @@ pub fn process_blockstore_from_root(
     assert!(bank.parent().is_none());
 
     let start_slot = bank.slot();
-    info!("processing ledger from slot {}...", start_slot);
+    info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
     // ensure start_slot is rooted for correct replay
@@ -842,9 +842,15 @@ pub fn process_blockstore_from_root(
             accounts_background_request_sender,
         )?;
     } else {
-        // If there's no meta for the input `start_slot`, then we started from a snapshot
-        // and there's no point in processing the rest of blockstore and implies blockstore
-        // should be empty past this point.
+        // If there's no meta in the blockstore for the input `start_slot`,
+        // then we started from a snapshot and are unable to process anything.
+        //
+        // If the ledger has any data at all, the snapshot was likely taken at
+        // a slot that is not within the range of ledger min/max slot(s).
+        warn!(
+            "Starting slot {} is not in Blockstore, unable to process",
+            start_slot
+        );
     };
 
     let processing_time = now.elapsed();

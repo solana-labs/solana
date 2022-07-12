@@ -1,7 +1,7 @@
 use {
     crate::{
         nonblocking::{
-            quic_client::{QuicClient, QuicLazyInitializedEndpoint},
+            quic_client::{QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint},
             tpu_connection::NonblockingConnection,
         },
         tpu_connection::{BlockingConnection, ClientStats},
@@ -9,8 +9,10 @@ use {
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::{quic::QUIC_PORT_OFFSET, timing::AtomicInterval},
+    solana_sdk::{quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval},
+    solana_streamer::tls_certificates::new_self_signed_tls_certificate_chain,
     std::{
+        error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -224,6 +226,7 @@ pub struct ConnectionCache {
     last_stats: AtomicInterval,
     connection_pool_size: usize,
     tpu_udp_socket: Option<Arc<UdpSocket>>,
+    client_certificate: Arc<QuicClientCertificate>,
 }
 
 /// Models the pool of connections
@@ -262,6 +265,19 @@ impl ConnectionCache {
         }
     }
 
+    pub fn update_client_certificate(
+        &mut self,
+        keypair: &Keypair,
+        ipaddr: IpAddr,
+    ) -> Result<(), Box<dyn Error>> {
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)?;
+        self.client_certificate = Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        });
+        Ok(())
+    }
+
     pub fn with_udp(connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
@@ -277,7 +293,9 @@ impl ConnectionCache {
 
     fn create_endpoint(&self) -> Option<Arc<QuicLazyInitializedEndpoint>> {
         if self.use_quic() {
-            Some(Arc::new(QuicLazyInitializedEndpoint::new()))
+            Some(Arc::new(QuicLazyInitializedEndpoint::new(
+                self.client_certificate.clone(),
+            )))
         } else {
             None
         }
@@ -488,6 +506,11 @@ impl ConnectionCache {
 
 impl Default for ConnectionCache {
     fn default() -> Self {
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+            &Keypair::new(),
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        )
+        .expect("Failed to initialize QUIC client certificates");
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
@@ -498,6 +521,10 @@ impl Default for ConnectionCache {
                     solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
                         .expect("Unable to bind to UDP socket"),
                 )
+            }),
+            client_certificate: Arc::new(QuicClientCertificate {
+                certificates: certs,
+                key: priv_key,
             }),
         }
     }
