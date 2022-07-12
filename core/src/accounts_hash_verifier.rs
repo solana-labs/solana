@@ -11,8 +11,8 @@ use {
         accounts_hash::{CalcAccountsHashConfig, HashStats},
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
-            SnapshotType,
+            retain_max_n_elements, AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage,
+            SnapshotPackage, SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -193,6 +193,16 @@ impl AccountsHashVerifier {
         accounts_hash
     }
 
+    fn generate_fault_hash(original_hash: &Hash) -> Hash {
+        use {
+            rand::{thread_rng, Rng},
+            solana_sdk::hash::extend_and_hash,
+        };
+
+        let rand = thread_rng().gen_range(0, 10);
+        extend_and_hash(original_hash, &[rand])
+    }
+
     fn push_accounts_hashes_to_cluster(
         accounts_package: &AccountsPackage,
         cluster_info: &ClusterInfo,
@@ -207,21 +217,14 @@ impl AccountsHashVerifier {
             && accounts_package.slot % fault_injection_rate_slots == 0
         {
             // For testing, publish an invalid hash to gossip.
-            use {
-                rand::{thread_rng, Rng},
-                solana_sdk::hash::extend_and_hash,
-            };
+            let fault_hash = Self::generate_fault_hash(&accounts_hash);
             warn!("inserting fault at slot: {}", accounts_package.slot);
-            let rand = thread_rng().gen_range(0, 10);
-            let hash = extend_and_hash(&accounts_hash, &[rand]);
-            hashes.push((accounts_package.slot, hash));
+            hashes.push((accounts_package.slot, fault_hash));
         } else {
             hashes.push((accounts_package.slot, accounts_hash));
         }
 
-        while hashes.len() > MAX_SNAPSHOT_HASHES {
-            hashes.remove(0);
-        }
+        retain_max_n_elements(hashes, MAX_SNAPSHOT_HASHES);
 
         if halt_on_known_validator_accounts_hash_mismatch {
             let mut slot_to_hash = HashMap::new();
@@ -251,7 +254,6 @@ impl AccountsHashVerifier {
 
         let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
         let pending_snapshot_package = pending_snapshot_package.unwrap();
-        let _snapshot_config = snapshot_config.unwrap();
 
         // If the snapshot package is an Incremental Snapshot, do not submit it if there's already
         // a pending Full Snapshot.
