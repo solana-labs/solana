@@ -175,14 +175,7 @@ pub fn process_instruction(
         }
         VoteInstruction::Withdraw(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let rent_sysvar = if invoke_context
-                .feature_set
-                .is_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
-            {
-                Some(invoke_context.get_sysvar_cache().get_rent()?)
-            } else {
-                None
-            };
+            let rent_sysvar = invoke_context.get_sysvar_cache().get_rent()?;
 
             let clock_if_feature_active = if invoke_context
                 .feature_set
@@ -201,7 +194,7 @@ pub fn process_instruction(
                 lamports,
                 1,
                 &signers,
-                rent_sysvar.as_deref(),
+                &rent_sysvar,
                 clock_if_feature_active.as_deref(),
             )
         }
@@ -1181,27 +1174,8 @@ mod tests {
             Err(VoteError::ActiveVoteAccountClose.into()),
         );
 
-        // Both features disabled:
-        // reject_non_rent_exempt_vote_withdraws
+        // Following features disabled:
         // reject_vote_account_close_unless_zero_credit_epoch
-
-        // non rent exempt withdraw, with 0 credit epoch
-        instruction_accounts[0].pubkey = vote_pubkey_1;
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::Withdraw(lamports - minimum_balance + 1)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-
-        // non rent exempt withdraw, without 0 credit epoch
-        instruction_accounts[0].pubkey = vote_pubkey_2;
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::Withdraw(lamports - minimum_balance + 1)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
 
         // full withdraw, with 0 credit epoch
         instruction_accounts[0].pubkey = vote_pubkey_1;
