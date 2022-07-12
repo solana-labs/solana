@@ -453,6 +453,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         let directly_to_disk = false;
 
                         let enable_lazy_disk_load = true;
+
+                        let previous_slot_entry_was_cached =
+                            reclaim == UpsertReclaim::PreviousSlotEntryWasCached;
+
                         if directly_to_disk {
                             // We may like this to always run, but it is unclear.
                             // If disk bucket needs to resize, then this call can stall for a long time.
