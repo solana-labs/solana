@@ -105,7 +105,7 @@ pub fn write_cluster_metrics<W: io::Write>(
             out,
             &MetricFamily {
                 name: "solana_node_vote_balance_sol",
-                help: "The current node's vote account balance",
+                help: "The balance of the vote account at the given address",
                 type_: "gauge",
                 metrics: banks_with_commitments.for_each_commitment(|bank| {
                     let vote_info = get_vote_state(bank, vote_account)?;
@@ -122,7 +122,7 @@ pub fn write_cluster_metrics<W: io::Write>(
             out,
             &MetricFamily {
                 name: "solana_node_vote_credits",
-                help: "The current node's vote vote credits for current epoch",
+                help: "The total number of vote credits credited to this vote account",
                 type_: "gauge",
                 metrics: banks_with_commitments.for_each_commitment(|bank| {
                     let vote_info = get_vote_state(bank, vote_account)?;
