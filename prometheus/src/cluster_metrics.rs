@@ -86,7 +86,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         write_metric(
             out,
             &MetricFamily {
-                name: "solana_node_last_vote_slot",
+                name: "solana_validator_last_vote_slot",
                 help:
                     "The voted-on slot of the validator's last vote that got included in the chain",
                 type_: "gauge",
@@ -104,7 +104,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         write_metric(
             out,
             &MetricFamily {
-                name: "solana_node_vote_balance_sol",
+                name: "solana_validator_vote_balance_sol",
                 help: "The balance of the vote account at the given address",
                 type_: "gauge",
                 metrics: banks_with_commitments.for_each_commitment(|bank| {
@@ -121,7 +121,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         write_metric(
             out,
             &MetricFamily {
-                name: "solana_node_vote_credits",
+                name: "solana_validator_vote_credits",
                 help: "The total number of vote credits credited to this vote account",
                 type_: "gauge",
                 metrics: banks_with_commitments.for_each_commitment(|bank| {
