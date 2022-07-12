@@ -172,8 +172,8 @@ pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
 
 pub struct GetUniqueAccountsResult<'a> {
     pub stored_accounts: HashMap<Pubkey, FoundStoredAccount<'a>>,
-    pub num_stores: usize,
     pub original_bytes: u64,
+    store_ids: Vec<AppendVecId>,
 }
 
 pub struct AccountsAddRootTiming {
@@ -3115,31 +3115,33 @@ impl AccountsDb {
     {
         let mut stored_accounts: HashMap<Pubkey, FoundStoredAccount> = HashMap::new();
         let mut original_bytes = 0;
-        let mut num_stores = 0;
-        for store in stores {
-            original_bytes += store.total_bytes();
-            let store_id = store.append_vec_id();
-            AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
-                let new_entry = FoundStoredAccount { account, store_id };
-                match stored_accounts.entry(new_entry.account.meta.pubkey) {
-                    Entry::Occupied(mut occupied_entry) => {
-                        if new_entry.account.meta.write_version
-                            > occupied_entry.get().account.meta.write_version
-                        {
-                            occupied_entry.insert(new_entry);
+        let store_ids = stores
+            .into_iter()
+            .map(|store| {
+                original_bytes += store.total_bytes();
+                let store_id = store.append_vec_id();
+                AppendVecAccountsIter::new(&store.accounts).for_each(|account| {
+                    let new_entry = FoundStoredAccount { account, store_id };
+                    match stored_accounts.entry(new_entry.account.meta.pubkey) {
+                        Entry::Occupied(mut occupied_entry) => {
+                            if new_entry.account.meta.write_version
+                                > occupied_entry.get().account.meta.write_version
+                            {
+                                occupied_entry.insert(new_entry);
+                            }
+                        }
+                        Entry::Vacant(vacant_entry) => {
+                            vacant_entry.insert(new_entry);
                         }
                     }
-                    Entry::Vacant(vacant_entry) => {
-                        vacant_entry.insert(new_entry);
-                    }
-                }
-            });
-            num_stores += 1;
-        }
+                });
+                store.append_vec_id()
+            })
+            .collect();
         GetUniqueAccountsResult {
             stored_accounts,
-            num_stores,
             original_bytes,
+            store_ids,
         }
     }
 
@@ -3150,8 +3152,8 @@ impl AccountsDb {
         debug!("do_shrink_slot_stores: slot: {}", slot);
         let GetUniqueAccountsResult {
             stored_accounts,
-            num_stores,
             original_bytes,
+            store_ids,
         } = self.get_unique_accounts_from_storages(stores);
 
         // sort by pubkey to keep account index lookups close
@@ -3204,7 +3206,7 @@ impl AccountsDb {
         let aligned_total: u64 = Self::page_align(alive_total as u64);
 
         // This shouldn't happen if alive_bytes/approx_stored_count are accurate
-        if Self::should_not_shrink(aligned_total, original_bytes, num_stores) {
+        if Self::should_not_shrink(aligned_total, original_bytes, store_ids.len()) {
             self.shrink_stats
                 .skipped_shrink
                 .fetch_add(1, Ordering::Relaxed);
@@ -3271,7 +3273,9 @@ impl AccountsDb {
 
             // Purge old, overwritten storage entries
             let mut start = Measure::start("write_storage_elapsed");
-            self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| store.count() > 0);
+            self.mark_dirty_dead_stores(slot, &mut dead_storages, |store| {
+                !store_ids.contains(&store.append_vec_id())
+            });
             start.stop();
             write_storage_elapsed = start.as_us();
         }
@@ -3716,8 +3720,8 @@ impl AccountsDb {
             // this code is copied from shrink. I would like to combine it into a helper function, but the borrow checker has defeated my efforts so far.
             let GetUniqueAccountsResult {
                 stored_accounts,
-                num_stores: _num_stores,
                 original_bytes,
+                store_ids: _,
             } = self.get_unique_accounts_from_storages(old_storages.iter());
 
             // sort by pubkey to keep account index lookups close
