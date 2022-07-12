@@ -2438,7 +2438,7 @@ impl AccountsDb {
         for (_slot, store) in dirty_stores {
             store.accounts.account_iter().for_each(|account| {
                 pubkeys.insert(account.meta.pubkey);
-            })
+            });
         }
         trace!(
             "dirty_stores.len: {} pubkeys.len: {}",
