@@ -72,8 +72,9 @@ test-stable-bpf)
   done |& tee cargo.log
   solana_program_count=$(grep -c 'solana-program v' cargo.log)
   rm -f cargo.log
-  if ((solana_program_count > 4)); then
-      echo "Regression of build redundancy. Review dependency features that trigger redundant rebuilds of solana-program."
+  if ((solana_program_count > 10)); then
+      echo "Regression of build redundancy ${solana_program_count}."
+      echo "Review dependency features that trigger redundant rebuilds of solana-program."
       exit 1
   fi
 
