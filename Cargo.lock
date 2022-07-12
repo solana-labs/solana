@@ -4960,11 +4960,7 @@ dependencies = [
  "jsonrpc-http-server",
  "lazy_static",
  "log",
-<<<<<<< HEAD
  "lru",
- "pkcs8",
-=======
->>>>>>> 14ee87d79 (Move QUIC TLS certificate code in its own file (#26569))
  "quinn",
  "quinn-proto",
  "rand 0.7.3",
