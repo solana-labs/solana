@@ -19218,13 +19218,19 @@ pub(crate) mod tests {
         genesis_config.rent = Rent::default();
         activate_all_features(&mut genesis_config);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+        let bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            bank.slot() + bank.slot_count_per_normal_epoch(),
+        ));
 
-        let slot = years_as_slots(
-            genesis_config.rent.exemption_threshold,
-            &genesis_config.poh_config.target_tick_duration,
-            genesis_config.ticks_per_slot,
-        ) as u64;
-        let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::default(), slot));
+        // make another bank so that any reclaimed accounts from the previous bank do not impact
+        // this test
+        let bank = Arc::new(Bank::new_from_parent(
+            &bank,
+            &Pubkey::default(),
+            bank.slot() + bank.slot_count_per_normal_epoch(),
+        ));
 
         // Store an account into the bank that is rent-paying and has data
         let data_size = 123;
@@ -19254,9 +19260,7 @@ pub(crate) mod tests {
         let reclaimed_data_size = accounts_data_size_delta_delta.saturating_neg() as usize;
 
         // Ensure the account is reclaimed by rent collection
-        // NOTE: Use `>=` here (instead of `==`) since other accounts could
-        // also be reclaimed by rent collection.
-        assert!(reclaimed_data_size >= data_size);
+        assert_eq!(reclaimed_data_size, data_size,);
     }
 
     #[test]
