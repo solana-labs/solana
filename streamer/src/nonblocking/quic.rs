@@ -149,7 +149,7 @@ fn get_connection_stake(
                 staked_nodes
                     .pubkey_stake_map
                     .get(&pubkey)
-                    .and_then(|stake| Some((pubkey, *stake)))
+                    .map(|stake| (pubkey, *stake))
             })
         })
 }
@@ -1185,7 +1185,7 @@ pub mod test {
         for (i, pubkey) in pubkeys.iter().enumerate() {
             table
                 .try_add_connection(
-                    ConnectionTableKey::Pubkey(pubkey.clone()),
+                    ConnectionTableKey::Pubkey(*pubkey),
                     0,
                     None,
                     0,
@@ -1201,7 +1201,7 @@ pub mod test {
         assert_eq!(table.table.len(), new_size);
         assert_eq!(table.total_size, new_size);
         for pubkey in pubkeys.iter().take(num_entries as usize).skip(new_size - 1) {
-            table.remove_connection(ConnectionTableKey::Pubkey(pubkey.clone()), 0);
+            table.remove_connection(ConnectionTableKey::Pubkey(*pubkey), 0);
         }
         assert_eq!(table.total_size, 0);
     }
@@ -1216,7 +1216,7 @@ pub mod test {
         (0..max_connections_per_peer).for_each(|i| {
             table
                 .try_add_connection(
-                    ConnectionTableKey::Pubkey(pubkey.clone()),
+                    ConnectionTableKey::Pubkey(pubkey),
                     0,
                     None,
                     0,
@@ -1230,7 +1230,7 @@ pub mod test {
         // using the same peer pubkey.
         assert!(table
             .try_add_connection(
-                ConnectionTableKey::Pubkey(pubkey.clone()),
+                ConnectionTableKey::Pubkey(pubkey),
                 0,
                 None,
                 0,
@@ -1244,7 +1244,7 @@ pub mod test {
         let pubkey2 = Pubkey::new_unique();
         assert!(table
             .try_add_connection(
-                ConnectionTableKey::Pubkey(pubkey2.clone()),
+                ConnectionTableKey::Pubkey(pubkey2),
                 0,
                 None,
                 0,
@@ -1261,7 +1261,7 @@ pub mod test {
         assert!(table.table.len() <= new_max_size);
         assert!(table.total_size <= new_max_size);
 
-        table.remove_connection(ConnectionTableKey::Pubkey(pubkey2.clone()), 0);
+        table.remove_connection(ConnectionTableKey::Pubkey(pubkey2), 0);
         assert_eq!(table.total_size, 0);
     }
 
