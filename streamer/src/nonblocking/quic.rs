@@ -2,6 +2,7 @@ use {
     crate::{
         quic::{configure_server, QuicServerError, StreamStats},
         streamer::StakedNodes,
+        tls_certificates::get_pubkey_from_tls_certificate,
     },
     crossbeam_channel::Sender,
     futures_util::stream::StreamExt,
@@ -15,7 +16,6 @@ use {
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::{Packet, PACKET_DATA_SIZE},
-        pubkey::Pubkey,
         quic::{QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS},
         signature::Keypair,
         timing,
@@ -32,7 +32,6 @@ use {
         task::JoinHandle,
         time::{sleep, timeout},
     },
-    x509_parser::{prelude::*, public_key::PublicKey},
 };
 
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
@@ -139,21 +138,11 @@ fn get_connection_stake(connection: &Connection, staked_nodes: Arc<RwLock<Staked
         .peer_identity()
         .and_then(|der_cert_any| der_cert_any.downcast::<Vec<rustls::Certificate>>().ok())
         .and_then(|der_certs| {
-            der_certs.first().and_then(|der_cert| {
-                X509Certificate::from_der(der_cert.as_ref())
-                    .ok()
-                    .and_then(|(_, cert)| {
-                        cert.public_key().parsed().ok().and_then(|key| match key {
-                            PublicKey::Unknown(inner_key) => {
-                                let pubkey = Pubkey::new(inner_key);
-                                debug!("Peer public key is {:?}", pubkey);
+            get_pubkey_from_tls_certificate(&der_certs).and_then(|pubkey| {
+                debug!("Peer public key is {:?}", pubkey);
 
-                                let staked_nodes = staked_nodes.read().unwrap();
-                                staked_nodes.pubkey_stake_map.get(&pubkey).copied()
-                            }
-                            _ => None,
-                        })
-                    })
+                let staked_nodes = staked_nodes.read().unwrap();
+                staked_nodes.pubkey_stake_map.get(&pubkey).copied()
             })
         })
         .unwrap_or(0)
@@ -657,7 +646,10 @@ impl ConnectionTable {
 pub mod test {
     use {
         super::*,
-        crate::quic::{new_cert, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+        crate::{
+            quic::{MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
+            tls_certificates::new_self_signed_tls_certificate_chain,
+        },
         crossbeam_channel::{unbounded, Receiver},
         quinn::{ClientConfig, IdleTimeout, VarInt},
         solana_sdk::{
@@ -693,8 +685,8 @@ pub mod test {
 
     pub fn get_client_config(keypair: &Keypair) -> ClientConfig {
         let ipaddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
-        let (certs, key) =
-            new_cert(keypair, ipaddr).expect("Failed to generate client certificate");
+        let (certs, key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)
+            .expect("Failed to generate client certificate");
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
