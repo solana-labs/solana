@@ -18,6 +18,7 @@ use {
     tar::Archive,
 };
 
+#[derive(Debug)]
 struct Config<'a> {
     cargo_args: Option<Vec<&'a str>>,
     sbf_out_dir: Option<PathBuf>,
@@ -524,8 +525,19 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         env::set_var("RUSTFLAGS", &rustflags);
     }
     if config.verbose {
-        debug!("RUSTFLAGS={}", &rustflags);
-    };
+        debug!(
+            "RUSTFLAGS=\"{}\"",
+            env::var("RUSTFLAGS").ok().unwrap_or_default()
+        );
+    }
+
+    // RUSTC variable overrides cargo +<toolchain> mechanism of
+    // selecting the rust compiler and makes cargo run a rust compiler
+    // other than the one linked in BPF toolchain. We have to prevent
+    // this by removing RUSTC from the child process environment.
+    if env::var("RUSTC").is_ok() {
+        env::remove_var("RUSTC")
+    }
 
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
@@ -856,5 +868,9 @@ fn main() {
         jobs: matches.value_of_t("jobs").ok(),
     };
     let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
+    if config.verbose {
+        debug!("{:?}", config);
+        debug!("manifest_path: {:?}", manifest_path);
+    }
     build_sbf(config, manifest_path);
 }
