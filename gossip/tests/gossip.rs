@@ -362,7 +362,7 @@ pub fn cluster_info_scale() {
             None,  // payer
         );
         let tower = vec![num_votes + 5];
-        nodes[0].0.push_vote(&tower, tx.clone());
+        nodes[0].0.push_vote(&tower, tx.clone()).unwrap_or_default();
         let mut success = false;
         for _ in 0..(30 * 5) {
             let mut not_done = 0;

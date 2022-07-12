@@ -145,6 +145,7 @@ pub enum ClusterInfoError {
     BadContactInfo,
     BadGossipAddress,
     TooManyIncrementalSnapshotHashes,
+    CrdsVotePushFailed, // CRDS vote insert failed, due to wallclock
 }
 
 pub struct ClusterInfo {
@@ -980,7 +981,11 @@ impl ClusterInfo {
         Ok(())
     }
 
-    pub fn push_vote_at_index(&self, vote: Transaction, vote_index: u8) {
+    pub fn push_vote_at_index(
+        &self,
+        vote: Transaction,
+        vote_index: u8,
+    ) -> Result<(), ClusterInfoError> {
         assert!((vote_index as usize) < MAX_LOCKOUT_HISTORY);
         let self_pubkey = self.id();
         let now = timestamp();
@@ -990,10 +995,13 @@ impl ClusterInfo {
         let mut gossip_crds = self.gossip.crds.write().unwrap();
         if let Err(err) = gossip_crds.insert(vote, now, GossipRoute::LocalMessage) {
             error!("push_vote failed: {:?}", err);
+            Err(ClusterInfoError::CrdsVotePushFailed)
+        } else {
+            Ok(())
         }
     }
 
-    pub fn push_vote(&self, tower: &[Slot], vote: Transaction) {
+    pub fn push_vote(&self, tower: &[Slot], vote: Transaction) -> Result<(), ClusterInfoError> {
         debug_assert!(tower.iter().tuple_windows().all(|(a, b)| a < b));
         // Find a crds vote which is evicted from the tower, and recycle its
         // vote-index. This can be either an old vote which is popped off the
@@ -1047,7 +1055,7 @@ impl ClusterInfo {
                 tower
             );
         }
-        self.push_vote_at_index(vote, vote_index);
+        self.push_vote_at_index(vote, vote_index)
     }
 
     pub fn refresh_vote(&self, vote: Transaction, vote_slot: Slot) {
@@ -1080,7 +1088,8 @@ impl ClusterInfo {
         // We don't write to an arbitrary index, because it may replace one of this validator's
         // existing votes on the network.
         if let Some(vote_index) = vote_index {
-            self.push_vote_at_index(vote, vote_index);
+            self.push_vote_at_index(vote, vote_index)
+                .unwrap_or_default();
         }
     }
 
@@ -3705,7 +3714,9 @@ RPC Enabled Nodes: 1"#;
             &[unrefresh_ix], // instructions
             None,            // payer
         );
-        cluster_info.push_vote(&unrefresh_tower, unrefresh_tx.clone());
+        cluster_info
+            .push_vote(&unrefresh_tower, unrefresh_tx.clone())
+            .unwrap_or_default();
         let mut cursor = Cursor::default();
         let votes = cluster_info.get_votes(&mut cursor);
         assert_eq!(votes, vec![unrefresh_tx.clone()]);
@@ -3734,7 +3745,9 @@ RPC Enabled Nodes: 1"#;
         assert!(votes.contains(&unrefresh_tx));
 
         // Push the new vote for `refresh_slot`
-        cluster_info.push_vote(&refresh_tower, refresh_tx.clone());
+        cluster_info
+            .push_vote(&refresh_tower, refresh_tx.clone())
+            .unwrap_or_default();
 
         // Should be two votes in gossip
         let votes = cluster_info.get_votes(&mut Cursor::default());
@@ -3803,7 +3816,9 @@ RPC Enabled Nodes: 1"#;
             None,  // payer
         );
         let tower = vec![7]; // Last slot in the vote.
-        cluster_info.push_vote(&tower, tx.clone());
+        cluster_info
+            .push_vote(&tower, tx.clone())
+            .unwrap_or_default();
 
         let (labels, votes) = cluster_info.get_votes_with_labels(&mut cursor);
         assert_eq!(votes, vec![tx]);
@@ -3862,7 +3877,7 @@ RPC Enabled Nodes: 1"#;
             let slot = k as Slot;
             tower.push(slot);
             let vote = new_vote_transaction(&mut rng, vec![slot]);
-            cluster_info.push_vote(&tower, vote);
+            assert!(Ok(()) == cluster_info.push_vote(&tower, vote));
         }
         let vote_slots = get_vote_slots(&cluster_info);
         assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
@@ -3874,15 +3889,29 @@ RPC Enabled Nodes: 1"#;
         tower.push(slot);
         tower.remove(23);
         let vote = new_vote_transaction(&mut rng, vec![slot]);
-        // New versioned-crds-value should have wallclock later than existing
-        // entries, otherwise might not get inserted into the table.
-        sleep(Duration::from_millis(5));
-        cluster_info.push_vote(&tower, vote);
+        let mut slot_not_existing: Slot = 23;
+        let mut push_vote_failed = false;
+        if let Err(_err) = cluster_info.push_vote(&tower, vote.clone()) {
+            slot_not_existing = MAX_LOCKOUT_HISTORY as Slot;
+            push_vote_failed = true;
+        }
         let vote_slots = get_vote_slots(&cluster_info);
         assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
         for vote_slot in vote_slots {
             assert!(vote_slot <= slot);
-            assert!(vote_slot != 23);
+            assert!(vote_slot != slot_not_existing);
+        }
+        if push_vote_failed {
+            // The failure must be due to equal wallclock.  After waiting for
+            // 1 ms, the next run must succeed.
+            sleep(Duration::from_millis(1));
+            assert!(Ok(()) == cluster_info.push_vote(&tower, vote));
+            let vote_slots = get_vote_slots(&cluster_info);
+            assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
+            for vote_slot in vote_slots {
+                assert!(vote_slot <= slot);
+                assert!(vote_slot != 23);
+            }
         }
         // Push a new vote evicting two.
         // Older one should be evicted from the crds table.
@@ -3891,7 +3920,14 @@ RPC Enabled Nodes: 1"#;
         tower.remove(17);
         tower.remove(5);
         let vote = new_vote_transaction(&mut rng, vec![slot]);
-        cluster_info.push_vote(&tower, vote);
+        cluster_info
+            .push_vote(&tower, vote.clone())
+            .unwrap_or_else(|_| {
+                // The failure must be due to equal wallclock.  After waiting for
+                // 1 ms, the next run must succeed.
+                sleep(Duration::from_millis(1));
+                assert!(Ok(()) == cluster_info.push_vote(&tower, vote));
+            });
         let vote_slots = get_vote_slots(&cluster_info);
         assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);
         for vote_slot in vote_slots {
