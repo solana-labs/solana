@@ -5405,15 +5405,18 @@ impl Bank {
             } else if !just_rewrites {
                 if rent_collected_info.rent_amount > 0 {
                     if let Some(rent_paying_pubkeys) = rent_paying_pubkeys {
-                        assert!(
-                            rent_paying_pubkeys.contains(pubkey),
-                            "Collecting rent from unexpected pubkey: {}, slot: {}, parent_slot: {:?}, partition_index: {}, partition_from_pubkey: {}",
-                            pubkey,
-                            self.slot(),
-                            self.parent().map(|bank| bank.slot()),
-                            partition_index,
-                            Bank::partition_from_pubkey(pubkey, self.epoch_schedule.slots_per_epoch),
-                        );
+                        if !rent_paying_pubkeys.contains(pubkey) {
+                            // inc counter instead of assert while we verify this is correct
+                            inc_new_counter_info!("unexpected-rent-paying-pubkey", 1);
+                            warn!(
+                                "Collecting rent from unexpected pubkey: {}, slot: {}, parent_slot: {:?}, partition_index: {}, partition_from_pubkey: {}",
+                                pubkey,
+                                self.slot(),
+                                self.parent().map(|bank| bank.slot()),
+                                partition_index,
+                                Bank::partition_from_pubkey(pubkey, self.epoch_schedule.slots_per_epoch),
+                            );
+                        }
                     }
                 }
                 total_rent_collected_info += rent_collected_info;
