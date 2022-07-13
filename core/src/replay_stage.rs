@@ -52,7 +52,6 @@ use {
         bank::{Bank, NewBankOptions},
         bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
         commitment::BlockCommitmentCache,
-        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -374,7 +373,6 @@ impl ReplayStage {
         voting_sender: Sender<VoteOp>,
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
-        transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
         log_messages_bytes_limit: Option<usize>,
     ) -> Self {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
@@ -506,7 +504,6 @@ impl ReplayStage {
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
                         block_metadata_notifier.clone(),
-                        transaction_cost_metrics_sender.as_ref(),
                         &mut replay_timing,
                         log_messages_bytes_limit
                     );
@@ -1690,7 +1687,6 @@ impl ReplayStage {
         bank_progress: &mut ForkProgress,
         transaction_status_sender: Option<&TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
-        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         verify_recyclers: &VerifyRecyclers,
         log_messages_bytes_limit: Option<usize>,
     ) -> result::Result<usize, BlockstoreProcessorError> {
@@ -1706,7 +1702,6 @@ impl ReplayStage {
             false,
             transaction_status_sender,
             Some(replay_vote_sender),
-            transaction_cost_metrics_sender,
             None,
             verify_recyclers,
             false,
@@ -2209,7 +2204,6 @@ impl ReplayStage {
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
-        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
     ) -> bool {
@@ -2262,7 +2256,6 @@ impl ReplayStage {
                     bank_progress,
                     transaction_status_sender,
                     replay_vote_sender,
-                    transaction_cost_metrics_sender,
                     verify_recyclers,
                     log_messages_bytes_limit,
                 );
@@ -3883,7 +3876,6 @@ pub(crate) mod tests {
                 bank1_progress,
                 None,
                 &replay_vote_sender,
-                None,
                 &VerifyRecyclers::default(),
                 None,
             );

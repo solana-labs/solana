@@ -32,7 +32,6 @@ use {
         cost_model::CostModel,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
-        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_account::VoteAccountsHashMap,
         vote_sender_types::ReplayVoteSender,
     },
@@ -524,7 +523,6 @@ pub fn process_entries_for_tests(
         None,
         transaction_status_sender,
         replay_vote_sender,
-        None,
         &mut confirmation_timing,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
         None,
@@ -543,7 +541,6 @@ fn process_entries_with_callback(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     log_messages_bytes_limit: Option<usize>,
@@ -585,11 +582,6 @@ fn process_entries_with_callback(
                 }
             }
             EntryType::Transactions(transactions) => {
-                if let Some(transaction_cost_metrics_sender) = transaction_cost_metrics_sender {
-                    transaction_cost_metrics_sender
-                        .send_cost_details(bank.clone(), transactions.iter());
-                }
-
                 let starting_index = *starting_index;
                 let transaction_indexes = if randomize {
                     let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
@@ -973,7 +965,6 @@ fn confirm_full_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        None,
         opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
@@ -1100,7 +1091,6 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
@@ -1130,7 +1120,6 @@ pub fn confirm_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        transaction_cost_metrics_sender,
         entry_callback,
         recyclers,
         log_messages_bytes_limit,
@@ -1146,7 +1135,6 @@ fn confirm_slot_entries(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
@@ -1248,7 +1236,6 @@ fn confirm_slot_entries(
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
-                transaction_cost_metrics_sender,
                 timing,
                 cost_capacity_meter,
                 log_messages_bytes_limit,
@@ -4128,7 +4115,6 @@ pub mod tests {
             None,
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
         )
@@ -4272,7 +4258,6 @@ pub mod tests {
             Some(&transaction_status_sender),
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
         )
@@ -4316,7 +4301,6 @@ pub mod tests {
             &mut progress,
             false,
             Some(&transaction_status_sender),
-            None,
             None,
             None,
             &VerifyRecyclers::default(),
