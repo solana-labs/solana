@@ -245,6 +245,23 @@ impl VerifiedVotePackets {
                             }
                         }
                         _ => {
+                            if let Some(FullTowerVote(gossip_vote)) =
+                                self.0.get_mut(&vote_account_key)
+                            {
+                                warn!(
+                                    "Originally {} submitted full tower votes, but now has reverted to incremental votes. Converting back to old format.",
+                                    vote_account_key
+                                );
+                                let mut votes = BTreeMap::new();
+                                let GossipVote {
+                                    slot,
+                                    hash,
+                                    packet_batch,
+                                    signature,
+                                } = std::mem::take(gossip_vote);
+                                votes.insert((slot, hash), (packet_batch, signature));
+                                self.0.insert(vote_account_key, IncrementalVotes(votes));
+                            };
                             let validator_votes: &mut BTreeMap<
                                 (Slot, Hash),
                                 (PacketBatch, Signature),
@@ -254,13 +271,7 @@ impl VerifiedVotePackets {
                                 .or_insert(IncrementalVotes(BTreeMap::new()))
                             {
                                 IncrementalVotes(votes) => votes,
-                                _ => {
-                                    error!(
-                                        "Originally {} submitted full tower votes, but now has reverted to incremental votes",
-                                        vote_account_key
-                                    );
-                                    continue;
-                                }
+                                FullTowerVote(_) => continue, // Should never happen
                             };
                             validator_votes.insert((slot, hash), (packet_batch, signature));
                             if validator_votes.len() > MAX_VOTES_PER_VALIDATOR {
@@ -769,6 +780,7 @@ mod tests {
         let mut verified_vote_packets = VerifiedVotePackets(HashMap::new());
 
         let vote = VoteTransaction::from(VoteStateUpdate::from(vec![(42, 1)]));
+        let hash_42 = vote.hash();
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
@@ -794,6 +806,7 @@ mod tests {
 
         // Now try to send an incremental vote
         let vote = VoteTransaction::from(Vote::new(vec![43], Hash::new_unique()));
+        let hash_43 = vote.hash();
         s.send(vec![VerifiedVoteMetadata {
             vote_account_key,
             vote,
@@ -802,18 +815,17 @@ mod tests {
         }])
         .unwrap();
 
-        // Try to receive but vote gets ignored
+        // Try to receive and vote lands as well as the conversion back to incremental votes
         let feature_set = FeatureSet::default();
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
             .unwrap();
-        assert_eq!(
-            42,
-            verified_vote_packets
-                .0
-                .get(&vote_account_key)
-                .unwrap()
-                .get_latest_gossip_slot()
-        );
+        if let IncrementalVotes(votes) = verified_vote_packets.0.get(&vote_account_key).unwrap() {
+            assert!(votes.contains_key(&(42, hash_42)));
+            assert!(votes.contains_key(&(43, hash_43)));
+            assert_eq!(2, votes.len());
+        } else {
+            panic!("Conversion back to incremental votes failed");
+        }
     }
 }

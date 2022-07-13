@@ -392,7 +392,7 @@ impl ClusterInfoVoteListener {
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
             let feature_set = poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .bank()
                 .map(|bank| bank.feature_set.clone());
