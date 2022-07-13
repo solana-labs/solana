@@ -536,6 +536,9 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     // other than the one linked in BPF toolchain. We have to prevent
     // this by removing RUSTC from the child process environment.
     if env::var("RUSTC").is_ok() {
+        warn!(
+            "Removed RUSTC from cargo environment, because it overrides +sbf cargo command line option."
+        );
         env::remove_var("RUSTC")
     }
 
