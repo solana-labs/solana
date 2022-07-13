@@ -1,5 +1,5 @@
 #[cfg(target_os = "linux")]
-use std::{fs::File, io::BufReader, path::Path};
+use std::{fs::File, io::BufReader};
 use {
     solana_sdk::timing::AtomicInterval,
     std::{
@@ -102,7 +102,7 @@ fn read_net_stats() -> Result<NetStats, String> {
     let file_dev = File::open(file_path_dev).map_err(|e| e.to_string())?;
     let mut reader_dev = BufReader::new(file_dev);
 
-    parse_net_stats(&mut reader_snmp, &mut read_dev)
+    parse_net_stats(&mut reader_snmp, &mut reader_dev)
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -293,7 +293,7 @@ impl SystemMonitorService {
                 if let Some(old_stats) = net_stats {
                     Self::report_net_stats(old_stats, &new_stats);
                 }
-                *udp_stats = Some(new_stats);
+                *net_stats = Some(new_stats);
             }
             Err(e) => warn!("read_net_stats: {}", e),
         }
