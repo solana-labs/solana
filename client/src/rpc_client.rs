@@ -187,7 +187,7 @@ impl RpcClient {
         }
     }
 
-    pub fn get_nonblocking_client(&self) -> Arc<nonblocking::rpc_client::RpcClient> {
+    pub(crate) fn get_nonblocking_client(&self) -> Arc<nonblocking::rpc_client::RpcClient> {
         self.rpc_client.clone()
     }
 
