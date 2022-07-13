@@ -25,7 +25,10 @@ use {
         signature::Keypair,
         transport::Result as TransportResult,
     },
-    solana_streamer::tls_certificates::new_self_signed_tls_certificate_chain,
+    solana_streamer::{
+        nonblocking::quic::ALPN_TPU_PROTOCOL_ID,
+        tls_certificates::new_self_signed_tls_certificate_chain,
+    },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{atomic::Ordering, Arc},
@@ -92,6 +95,7 @@ impl QuicLazyInitializedEndpoint {
             )
             .expect("Failed to set QUIC client certificates");
         crypto.enable_early_data = true;
+        crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
         let mut endpoint =
             QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket);
