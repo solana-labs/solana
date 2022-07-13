@@ -57,7 +57,6 @@ fn test_secp256k1_recover_malleability() {
     ];
     let recovery_id: u8 = 0;
 
-    let pubkey = libsecp256k1::PublicKey::parse_slice(&pubkey_bytes, None).unwrap();
     let signature = libsecp256k1::Signature::parse_standard_slice(&signature_bytes).unwrap();
 
     // Flip the S value in the signature to make a different but valid signature.
