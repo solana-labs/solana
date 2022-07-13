@@ -6,7 +6,9 @@ import {PublicKey} from './publickey';
 import * as bigintLayout from './util/bigint';
 import {SystemProgram} from './system-program';
 import {TransactionInstruction} from './transaction';
-import {encodeData, IInstructionInputData} from './instruction';
+import {decodeData,encodeData, IInstructionInputData} from './instruction';
+
+
 
 export type CreateLookupTableParams = {
   /** Account used to derive and control the new address lookup table. */
@@ -118,6 +120,126 @@ export const LOOKUP_TABLE_INSTRUCTION_LAYOUTS = Object.freeze({
   },
 });
 
+export class AddressLookupTableInstruction {
+  /**
+  * @internal
+  */
+  constructor() {}
+  
+  static decodeInstructionType(
+    instruction: TransactionInstruction
+  ): LookupTableInstructionType {
+    this.checkProgramId(instruction.programId);
+
+    const instructionTypeLayout = BufferLayout.u32('instruction');
+    const index = instructionTypeLayout.decode(instruction.data);
+
+    let type: LookupTableInstructionType | undefined;
+    for(const [layoutType, layout] of Object.entries(LOOKUP_TABLE_INSTRUCTION_LAYOUTS)){
+      if(layout.index == index){
+       type = layoutType as LookupTableInstructionType;
+       break; 
+      }
+    }
+    if(!type){
+      throw new Error('Invalid Instruction. Should be a LookupTable Instruction');
+    }
+    return type;
+  }
+
+  static decodeCreateLookupTable(
+    instruction: TransactionInstruction
+  ): CreateLookupTableParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeysLength(instruction.keys,4);
+
+    const {recentSlot} = decodeData(LOOKUP_TABLE_INSTRUCTION_LAYOUTS.CreateLookupTable,instruction.data);
+    
+    return {
+      authority: instruction.keys[1].pubkey,
+      payer: instruction.keys[2].pubkey,
+      recentSlot: Number(recentSlot),
+    };
+  }
+
+  static decodeExtendLookupTable(
+    instruction: TransactionInstruction,
+    numberOfAddresses: number
+  ): ExtendLookupTableParams {
+    this.checkProgramId(instruction.programId);
+    if (instruction.keys.length < 2 || instruction.keys.length > 4) {
+      throw new Error(
+        `invalid instruction; found ${instruction.keys.length} keys, expected at least 2`,
+      );
+    }
+
+    const {addresses} = decodeData(LOOKUP_TABLE_INSTRUCTION_LAYOUTS.ExtendLookupTable(numberOfAddresses),instruction.data);
+    return {
+      lookupTable: instruction.keys[0].pubkey,
+      authority: instruction.keys[1].pubkey,
+      payer: instruction.keys.length > 2 ? instruction.keys[2].pubkey : undefined,
+      addresses,
+    }
+  }
+  
+  static decodeCloseLookupTable(
+    instruction: TransactionInstruction
+  ): CloseLookupTableParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeysLength(instruction.keys,3);
+
+    return {
+      lookupTable: instruction.keys[0].pubkey,
+      authority: instruction.keys[1].pubkey,
+      recipient: instruction.keys[2].pubkey,
+    }
+  }
+
+  static decodeFreezeLookupTable(
+    instruction: TransactionInstruction
+  ): FreezeLookupTableParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeysLength(instruction.keys,2);
+
+    return {
+      lookupTable: instruction.keys[0].pubkey,
+      authority: instruction.keys[1].pubkey,
+    }
+  }
+
+  static decodeDeactivateLookupTable(
+    instruction: TransactionInstruction
+  ): DeactivateLookupTableParams {
+
+    this.checkProgramId(instruction.programId);
+    this.checkKeysLength(instruction.keys,2);
+
+    return {
+      lookupTable: instruction.keys[0].pubkey,
+      authority: instruction.keys[1].pubkey,
+    }
+  }
+
+  /**
+   * @internal
+   */
+  static checkProgramId(programId: PublicKey) {
+    if (!programId.equals(AddressLookupTableProgram.programId)) {
+      throw new Error('invalid instruction; programId is not AddressLookupTable Program');
+    }
+  }
+  /**
+   * @internal
+   */
+   static checkKeysLength(keys: Array<any>, expectedLength: number) {
+    if (keys.length < expectedLength) {
+      throw new Error(
+        `invalid instruction; found ${keys.length} keys, expected at least ${expectedLength}`,
+      );
+    }
+  }
+}
+
 export class AddressLookupTableProgram {
   /**
    * @internal
@@ -136,7 +258,7 @@ export class AddressLookupTableProgram {
 
     const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.CreateLookupTable;
     const data = encodeData(type, {
-      recentSlot: params.recentSlot,
+      recentSlot: BigInt(params.recentSlot),
       bumpSeed: bumpSeed,
     });
 
