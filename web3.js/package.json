@@ -68,7 +68,7 @@
     "fast-stable-stringify": "^1.0.0",
     "jayson": "^3.4.4",
     "js-sha3": "^0.8.0",
-    "node-fetch": "2",
+    "node-fetch": "3",
     "react-native-url-polyfill": "^1.3.0",
     "rpc-websockets": "^7.5.0",
     "secp256k1": "^4.0.2",
