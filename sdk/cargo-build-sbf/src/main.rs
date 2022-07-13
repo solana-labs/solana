@@ -316,7 +316,11 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
     let readelf = config
         .sbf_sdk
         .join("dependencies")
-        .join("sbf-tools")
+        .join(if config.arch == "bpf" {
+            "bpf-tools"
+        } else {
+            "sbf-tools"
+        })
         .join("llvm")
         .join("bin")
         .join("llvm-readelf");
@@ -355,7 +359,11 @@ fn link_sbf_toolchain(config: &Config) {
     let toolchain_path = config
         .sbf_sdk
         .join("dependencies")
-        .join("sbf-tools")
+        .join(if config.arch == "bpf" {
+            "bpf-tools"
+        } else {
+            "sbf-tools"
+        })
         .join("rust");
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
@@ -369,12 +377,16 @@ fn link_sbf_toolchain(config: &Config) {
     }
     let mut do_link = true;
     for line in rustup_output.lines() {
-        if line.starts_with("sbf") {
+        if line.starts_with(if config.arch == "bpf" { "bpf" } else { "sbf" }) {
             let mut it = line.split_whitespace();
             let _ = it.next();
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
-                let rustup_args = vec!["toolchain", "uninstall", "sbf"];
+                let rustup_args = vec![
+                    "toolchain",
+                    "uninstall",
+                    if config.arch == "bpf" { "bpf" } else { "sbf" },
+                ];
                 let output = spawn(
                     &rustup,
                     &rustup_args,
@@ -390,7 +402,12 @@ fn link_sbf_toolchain(config: &Config) {
         }
     }
     if do_link {
-        let rustup_args = vec!["toolchain", "link", "sbf", toolchain_path.to_str().unwrap()];
+        let rustup_args = vec![
+            "toolchain",
+            "link",
+            if config.arch == "bpf" { "bpf" } else { "sbf" },
+            toolchain_path.to_str().unwrap(),
+        ];
         let output = spawn(
             &rustup,
             &rustup_args,
@@ -447,7 +464,13 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         .cloned()
         .unwrap_or_else(|| target_directory.join("deploy"));
 
-    let target_build_directory = target_directory.join("sbf-solana-solana").join("release");
+    let target_build_directory = target_directory
+        .join(if config.arch == "bpf" {
+            "bpfel-unknown-unknown"
+        } else {
+            "sbf-solana-solana"
+        })
+        .join("release");
 
     env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
         error!(
@@ -468,9 +491,19 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         info!("Legacy program feature detected");
     }
     let sbf_tools_download_file_name = if cfg!(target_os = "windows") {
-        "solana-sbf-tools-windows.tar.bz2"
+        if config.arch == "bpf" {
+            "solana-bpf-tools-windows.tar.bz2"
+        } else {
+            "solana-sbf-tools-windows.tar.bz2"
+        }
     } else if cfg!(target_os = "macos") {
-        "solana-sbf-tools-osx.tar.bz2"
+        if config.arch == "bpf" {
+            "solana-bpf-tools-osx.tar.bz2"
+        } else {
+            "solana-sbf-tools-osx.tar.bz2"
+        }
+    } else if config.arch == "bpf" {
+        "solana-bpf-tools-linux.tar.bz2"
     } else {
         "solana-sbf-tools-linux.tar.bz2"
     };
@@ -479,7 +512,11 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         error!("Can't get home directory path: {}", err);
         exit(1);
     }));
-    let package = "sbf-tools";
+    let package = if config.arch == "bpf" {
+        "bpf-tools"
+    } else {
+        "sbf-tools"
+    };
     let target_path = home_dir
         .join(".cache")
         .join("solana")
@@ -512,7 +549,11 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     let llvm_bin = config
         .sbf_sdk
         .join("dependencies")
-        .join("sbf-tools")
+        .join(if config.arch == "bpf" {
+            "bpf-tools"
+        } else {
+            "sbf-tools"
+        })
         .join("llvm")
         .join("bin");
     env::set_var("CC", llvm_bin.join("clang"));
@@ -557,11 +598,15 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
 
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
-        "+sbf",
+        if config.arch == "bpf" { "+bpf" } else { "+sbf" },
         "build",
-        "--target",
-        "sbf-solana-solana",
         "--release",
+        "--target",
+        if config.arch == "bpf" {
+            "bpfel-unknown-unknown"
+        } else {
+            "sbf-solana-solana"
+        },
     ];
     if config.arch == "sbfv2" {
         cargo_build_args.push("-Zbuild-std=std,panic_abort");
@@ -852,7 +897,7 @@ fn main() {
         .arg(
             Arg::new("arch")
                 .long("arch")
-                .possible_values(&["sbf", "sbfv2"])
+                .possible_values(&["bpf", "sbf", "sbfv2"])
                 .default_value("sbf")
                 .help("Build for the given SBF version"),
         )
