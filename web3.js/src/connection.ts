@@ -24,6 +24,7 @@ import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
 
+import {URL} from './util/url-impl';
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
@@ -41,7 +42,7 @@ import {
   TransactionExpiredBlockheightExceededError,
   TransactionExpiredTimeoutError,
 } from './util/tx-expiry-custom-errors';
-import {makeWebsocketUrl} from './util/url';
+import {makeWebsocketUrl} from './util/makeWebsocketUrl';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
