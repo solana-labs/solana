@@ -85,9 +85,11 @@ ARGS+=(
 
 # sccache
 ARGS+=(
-  --env "RUSTC_WRAPPER=/home/.cargo//bin/sccache"
-  --env "SCCACHE_DIR=/home/.cache/sccache"
-  --env SCCACHE_CACHE_SIZE
+  --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
+  --env AWS_ACCESS_KEY_ID
+  --env AWS_SECRET_ACCESS_KEY
+  --env SCCACHE_BUCKET
+  --env SCCACHE_REGION
 )
 
 # Also propagate environment variables needed for codecov
