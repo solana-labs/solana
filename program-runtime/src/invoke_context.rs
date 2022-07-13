@@ -1232,6 +1232,8 @@ mod tests {
         ModifyOwned,
         ModifyNotOwned,
         ModifyReadonly,
+        UnbalancedPush,
+        UnbalancedPop,
         ConsumeComputeUnits {
             compute_units_to_consume: u64,
             desired_result: Result<(), InstructionError>,
@@ -1279,6 +1281,15 @@ mod tests {
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let instruction_data = instruction_context.get_instruction_data();
         let program_id = instruction_context.get_last_program_key(transaction_context)?;
+        let instruction_accounts = (0..4)
+            .map(|instruction_account_index| InstructionAccount {
+                index_in_transaction: instruction_account_index,
+                index_in_caller: instruction_account_index,
+                index_in_callee: instruction_account_index,
+                is_signer: false,
+                is_writable: false,
+            })
+            .collect::<Vec<_>>();
         assert_eq!(
             program_id,
             instruction_context
@@ -1307,6 +1318,36 @@ mod tests {
                 MockInstruction::ModifyReadonly => instruction_context
                     .try_borrow_instruction_account(transaction_context, 2)?
                     .set_data(&[1])?,
+                MockInstruction::UnbalancedPush => {
+                    instruction_context
+                        .try_borrow_instruction_account(transaction_context, 0)?
+                        .checked_add_lamports(1)?;
+                    let program_id = *transaction_context.get_key_of_account_at_index(3)?;
+                    let metas = vec![
+                        AccountMeta::new_readonly(
+                            *transaction_context.get_key_of_account_at_index(0)?,
+                            false,
+                        ),
+                        AccountMeta::new_readonly(
+                            *transaction_context.get_key_of_account_at_index(1)?,
+                            false,
+                        ),
+                    ];
+                    let inner_instruction = Instruction::new_with_bincode(
+                        program_id,
+                        &MockInstruction::NoopSuccess,
+                        metas,
+                    );
+                    let result = invoke_context.push(&instruction_accounts, &[3], &[]);
+                    assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
+                    result?;
+                    invoke_context
+                        .native_invoke(inner_instruction, &[])
+                        .and(invoke_context.pop())?;
+                }
+                MockInstruction::UnbalancedPop => instruction_context
+                    .try_borrow_instruction_account(transaction_context, 0)?
+                    .checked_add_lamports(1)?,
                 MockInstruction::ConsumeComputeUnits {
                     compute_units_to_consume,
                     desired_result,
@@ -1418,7 +1459,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let mut transaction_context =
-            TransactionContext::new(accounts, Some(Rent::default()), 2, 8);
+            TransactionContext::new(accounts, Some(Rent::default()), 2, 9);
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, builtin_programs);
 
@@ -1438,6 +1479,14 @@ mod tests {
                 MockInstruction::ModifyReadonly,
                 Err(InstructionError::ReadonlyDataModified),
             ),
+            (
+                MockInstruction::UnbalancedPush,
+                Err(InstructionError::UnbalancedInstruction),
+            ),
+            (
+                MockInstruction::UnbalancedPop,
+                Err(InstructionError::UnbalancedInstruction),
+            ),
         ];
         for case in cases {
             invoke_context
@@ -1445,8 +1494,10 @@ mod tests {
                 .unwrap();
             let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
-            assert_eq!(invoke_context.native_invoke(inner_instruction, &[]), case.1);
-            invoke_context.pop().unwrap();
+            let result = invoke_context
+                .native_invoke(inner_instruction, &[])
+                .and(invoke_context.pop());
+            assert_eq!(result, case.1);
         }
 
         // Compute unit consumption tests
