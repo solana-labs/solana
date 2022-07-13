@@ -5,7 +5,7 @@ use {
     bincode::deserialize,
     serde_json::json,
     solana_sdk::{instruction::CompiledInstruction, message::AccountKeys},
-    solana_vote_program::vote_instruction::VoteInstruction,
+    solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteStateUpdate},
 };
 
 pub fn parse_vote(
@@ -120,6 +120,47 @@ pub fn parse_vote(
             })
         }
         VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash) => {
+            check_num_vote_accounts(&instruction.accounts, 4)?;
+            let vote_state_update = json!({
+                "lockouts": vote_state_update.lockouts,
+                "root": vote_state_update.root,
+                "hash": vote_state_update.hash.to_string(),
+                "timestamp": vote_state_update.timestamp,
+            });
+            Ok(ParsedInstructionEnum {
+                instruction_type: "updatevotestateswitch".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "slotHashesSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "clockSysvar": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "voteAuthority": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "voteStateUpdate": vote_state_update,
+                    "hash": hash.to_string(),
+                }),
+            })
+        }
+        VoteInstruction::CompactUpdateVoteState(compact_vote_state_update) => {
+            let vote_state_update = VoteStateUpdate::from(compact_vote_state_update);
+            check_num_vote_accounts(&instruction.accounts, 4)?;
+            let vote_state_update = json!({
+                "lockouts": vote_state_update.lockouts,
+                "root": vote_state_update.root,
+                "hash": vote_state_update.hash.to_string(),
+                "timestamp": vote_state_update.timestamp,
+            });
+            Ok(ParsedInstructionEnum {
+                instruction_type: "updatevotestate".to_string(),
+                info: json!({
+                    "voteAccount": account_keys[instruction.accounts[0] as usize].to_string(),
+                    "slotHashesSysvar": account_keys[instruction.accounts[1] as usize].to_string(),
+                    "clockSysvar": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "voteAuthority": account_keys[instruction.accounts[3] as usize].to_string(),
+                    "voteStateUpdate": vote_state_update,
+                }),
+            })
+        }
+        VoteInstruction::CompactUpdateVoteStateSwitch(compact_vote_state_update, hash) => {
+            let vote_state_update = VoteStateUpdate::from(compact_vote_state_update);
             check_num_vote_accounts(&instruction.accounts, 4)?;
             let vote_state_update = json!({
                 "lockouts": vote_state_update.lockouts,
