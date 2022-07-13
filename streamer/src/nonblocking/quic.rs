@@ -38,6 +38,8 @@ use {
 const QUIC_TOTAL_STAKED_CONCURRENT_STREAMS: f64 = 100_000f64;
 const WAIT_FOR_STREAM_TIMEOUT_MS: u64 = 100;
 
+pub const ALPN_TPU_PROTOCOL_ID: &[u8] = b"solana-tpu";
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_server(
     sock: UdpSocket,
@@ -721,6 +723,7 @@ pub mod test {
             .expect("Failed to use client certificate");
 
         crypto.enable_early_data = true;
+        crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
         let mut config = ClientConfig::new(Arc::new(crypto));
 
