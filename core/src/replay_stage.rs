@@ -2330,7 +2330,7 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
         bank_slot: Slot,
-    ) -> Vec<ReplaySlotFromBlockstore> {
+    ) -> ReplaySlotFromBlockstore {
         let mut replay_result = ReplaySlotFromBlockstore {
             slot_is_dead: false,
             bank_slot,
@@ -2386,8 +2386,7 @@ impl ReplayStage {
                 replay_timing.replay_blockstore_us += replay_blockstore_time.as_us();
             }
         }
-
-        vec![replay_result]
+        replay_result
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2606,22 +2605,50 @@ impl ReplayStage {
         );
         if num_active_banks > 0 {
             let replay_result_vec = if num_active_banks > 1 {
-                Self::replay_active_banks_concurrently(
-                    blockstore,
-                    bank_forks,
-                    my_pubkey,
-                    vote_account,
-                    progress,
-                    transaction_status_sender,
-                    verify_recyclers,
-                    replay_vote_sender,
-                    transaction_cost_metrics_sender,
-                    replay_timing,
-                    log_messages_bytes_limit,
-                    &active_bank_slots,
-                )
+                if bank_forks
+                    .read()
+                    .unwrap()
+                    .get(active_bank_slots[0])
+                    .unwrap()
+                    .concurrent_replay_of_forks()
+                {
+                    Self::replay_active_banks_concurrently(
+                        blockstore,
+                        bank_forks,
+                        my_pubkey,
+                        vote_account,
+                        progress,
+                        transaction_status_sender,
+                        verify_recyclers,
+                        replay_vote_sender,
+                        transaction_cost_metrics_sender,
+                        replay_timing,
+                        log_messages_bytes_limit,
+                        &active_bank_slots,
+                    )
+                } else {
+                    active_bank_slots
+                        .iter()
+                        .map(|bank_slot| {
+                            Self::replay_active_bank(
+                                blockstore,
+                                bank_forks,
+                                my_pubkey,
+                                vote_account,
+                                progress,
+                                transaction_status_sender,
+                                verify_recyclers,
+                                replay_vote_sender,
+                                transaction_cost_metrics_sender,
+                                replay_timing,
+                                log_messages_bytes_limit,
+                                *bank_slot,
+                            )
+                        })
+                        .collect()
+                }
             } else {
-                Self::replay_active_bank(
+                vec![Self::replay_active_bank(
                     blockstore,
                     bank_forks,
                     my_pubkey,
@@ -2634,7 +2661,7 @@ impl ReplayStage {
                     replay_timing,
                     log_messages_bytes_limit,
                     active_bank_slots[0],
-                )
+                )]
             };
 
             Self::process_replay_results(
