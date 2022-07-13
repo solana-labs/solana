@@ -45,6 +45,7 @@ pub struct InstructionAccount {
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
+    account_touched_flags: RefCell<Pin<Box<[bool]>>>,
     instruction_context_capacity: usize,
     instruction_stack: Vec<usize>,
     number_of_instructions_at_transaction_level: usize,
@@ -66,9 +67,11 @@ impl TransactionContext {
                 .into_iter()
                 .map(|(key, account)| (key, RefCell::new(account)))
                 .unzip();
+        let account_touched_flags = vec![false; accounts.len()];
         Self {
             account_keys: Pin::new(account_keys.into_boxed_slice()),
             accounts: Pin::new(accounts.into_boxed_slice()),
+            account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
             instruction_context_capacity,
             instruction_stack: Vec::with_capacity(instruction_context_capacity),
             number_of_instructions_at_transaction_level,
@@ -574,6 +577,7 @@ impl<'a> BorrowedAccount<'a> {
             if !is_zeroed(self.get_data()) {
                 return Err(InstructionError::ModifiedProgramId);
             }
+            self.touch()?;
         }
         self.account.copy_into_owner_from_slice(pubkey);
         Ok(())
@@ -602,6 +606,7 @@ impl<'a> BorrowedAccount<'a> {
             if self.is_executable() {
                 return Err(InstructionError::ExecutableLamportChange);
             }
+            self.touch()?;
         }
         self.account.set_lamports(lamports);
         Ok(())
@@ -633,6 +638,7 @@ impl<'a> BorrowedAccount<'a> {
     /// Returns a writable slice of the account data (transaction wide)
     pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
         self.can_data_be_changed()?;
+        self.touch()?;
         Ok(self.account.data_as_mut_slice())
     }
 
@@ -640,6 +646,7 @@ impl<'a> BorrowedAccount<'a> {
     pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
+        self.touch()?;
         if data.len() == self.account.data().len() {
             self.account.data_as_mut_slice().copy_from_slice(data);
         } else {
@@ -657,6 +664,7 @@ impl<'a> BorrowedAccount<'a> {
     pub fn set_data_length(&mut self, new_length: usize) -> Result<(), InstructionError> {
         self.can_data_be_resized(new_length)?;
         self.can_data_be_changed()?;
+        self.touch()?;
         let mut total_resize_delta = self.transaction_context.total_resize_delta.borrow_mut();
         *total_resize_delta = total_resize_delta
             .saturating_add((new_length as i64).saturating_sub(self.get_data().len() as i64));
@@ -707,6 +715,7 @@ impl<'a> BorrowedAccount<'a> {
             if self.is_executable() {
                 return Err(InstructionError::ExecutableModified);
             }
+            self.touch()?;
         }
         self.account.set_executable(is_executable);
         Ok(())
@@ -789,6 +798,22 @@ impl<'a> BorrowedAccount<'a> {
         // The new length can not exceed the maximum permitted length
         if new_length > MAX_PERMITTED_DATA_LENGTH as usize {
             return Err(InstructionError::InvalidRealloc);
+        }
+        Ok(())
+    }
+
+    fn touch(&self) -> Result<(), InstructionError> {
+        if self
+            .transaction_context
+            .is_early_verification_of_account_modifications_enabled()
+        {
+            *self
+                .transaction_context
+                .account_touched_flags
+                .try_borrow_mut()
+                .map_err(|_| InstructionError::GenericError)?
+                .get_mut(self.index_in_transaction)
+                .ok_or(InstructionError::NotEnoughAccountKeys)? = true;
         }
         Ok(())
     }
