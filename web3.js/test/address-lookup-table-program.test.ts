@@ -65,10 +65,7 @@ describe('AddressLookupTableProgram', () => {
     };
     expect(transaction.instructions).to.have.length(1);
     expect(extendLutParams).to.eql(
-      AddressLookupTableInstruction.decodeExtendLookupTable(
-        instruction,
-        addressesToAdd.length,
-      ),
+      AddressLookupTableInstruction.decodeExtendLookupTable(instruction),
     );
   });
 
@@ -97,10 +94,7 @@ describe('AddressLookupTableProgram', () => {
     };
     expect(transaction.instructions).to.have.length(1);
     expect(extendLutParams).to.eql(
-      AddressLookupTableInstruction.decodeExtendLookupTable(
-        instruction,
-        addressesToAdd.length,
-      ),
+      AddressLookupTableInstruction.decodeExtendLookupTable(instruction),
     );
   });
 

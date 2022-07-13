@@ -92,17 +92,19 @@ export const LOOKUP_TABLE_INSTRUCTION_LAYOUTS = Object.freeze({
       LookupTableInstructionInputData['FreezeLookupTable']
     >([BufferLayout.u32('instruction')]),
   },
-  ExtendLookupTable: (numberOfAddresses: number) => {
-    return {
-      index: 2,
-      layout: BufferLayout.struct<
-        LookupTableInstructionInputData['ExtendLookupTable']
-      >([
-        BufferLayout.u32('instruction'),
-        bigintLayout.u64('numberOfAddresses'),
-        BufferLayout.seq(Layout.publicKey(), numberOfAddresses, 'addresses'),
-      ]),
-    };
+  ExtendLookupTable: {
+    index: 2,
+    layout: BufferLayout.struct<
+      LookupTableInstructionInputData['ExtendLookupTable']
+    >([
+      BufferLayout.u32('instruction'),
+      bigintLayout.u64(),
+      BufferLayout.seq(
+        Layout.publicKey(),
+        BufferLayout.offset(BufferLayout.u32(), -8),
+        'addresses',
+      ),
+    ]),
   },
   DeactivateLookupTable: {
     index: 3,
@@ -169,17 +171,16 @@ export class AddressLookupTableInstruction {
 
   static decodeExtendLookupTable(
     instruction: TransactionInstruction,
-    numberOfAddresses: number,
   ): ExtendLookupTableParams {
     this.checkProgramId(instruction.programId);
-    if (instruction.keys.length < 2 || instruction.keys.length > 4) {
+    if (instruction.keys.length < 2) {
       throw new Error(
         `invalid instruction; found ${instruction.keys.length} keys, expected at least 2`,
       );
     }
 
     const {addresses} = decodeData(
-      LOOKUP_TABLE_INSTRUCTION_LAYOUTS.ExtendLookupTable(numberOfAddresses),
+      LOOKUP_TABLE_INSTRUCTION_LAYOUTS.ExtendLookupTable,
       instruction.data,
     );
     return {
@@ -330,12 +331,9 @@ export class AddressLookupTableProgram {
   }
 
   static extendLookupTable(params: ExtendLookupTableParams) {
-    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.ExtendLookupTable(
-      params.addresses.length,
-    );
+    const type = LOOKUP_TABLE_INSTRUCTION_LAYOUTS.ExtendLookupTable;
     const data = encodeData(type, {
-      numberOfAddresses: BigInt(params.addresses.length),
-      addresses: params.addresses.map(addr => addr.toBuffer()),
+      addresses: params.addresses.map(addr => addr.toBytes()),
     });
 
     const keys = [
