@@ -52,6 +52,9 @@ export type CloseLookupTableParams = {
   recipient: PublicKey;
 };
 
+/**
+ * An enumeration of valid LookupTableInstructionType's
+ */
 export type LookupTableInstructionType =
   | 'CreateLookupTable'
   | 'ExtendLookupTable'
@@ -59,7 +62,7 @@ export type LookupTableInstructionType =
   | 'FreezeLookupTable'
   | 'DeactivateLookupTable';
 
-export type LookupTableInstructionInputData = {
+type LookupTableInstructionInputData = {
   CreateLookupTable: IInstructionInputData &
     Readonly<{
       recentSlot: bigint;
@@ -75,6 +78,10 @@ export type LookupTableInstructionInputData = {
   CloseLookupTable: IInstructionInputData;
 };
 
+/**
+ * An enumeration of valid address lookup table InstructionType's
+ * @internal
+ */
 export const LOOKUP_TABLE_INSTRUCTION_LAYOUTS = Object.freeze({
   CreateLookupTable: {
     index: 0,
