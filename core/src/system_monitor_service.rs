@@ -376,14 +376,70 @@ impl SystemMonitorService {
             ("in_errors", new_stats.in_errors, i64),
             ("rcvbuf_errors", new_stats.rcvbuf_errors, i64),
             ("sndbuf_errors", new_stats.sndbuf_errors, i64),
-            ("rx_bytes", new_stats.rx_bytes, i64),
-            ("rx_packets", new_stats.rx_packets, i64),
-            ("rx_errs", new_stats.rx_errs, i64),
-            ("rx_drops", new_stats.rx_drops, i64),
-            ("tx_bytes", new_stats.tx_bytes, i64),
-            ("tx_packets", new_stats.tx_packets, i64),
-            ("tx_errs", new_stats.tx_errs, i64),
-            ("tx_drops", new_stats.tx_drops, i64),
+            (
+                "rx_bytes_delta",
+                new_stats.rx_bytes - old_stats.rx_bytes,
+                i64
+            ),
+            (
+                "rx_packets_delta",
+                new_stats.rx_packets - old_stats.rx_packets,
+                i64
+            ),
+            ("rx_errs_delta", new_stats.rx_errs - old_stats.rx_errs, i64),
+            (
+                "rx_drops_delta",
+                new_stats.rx_drops - old_stats.rx_drops,
+                i64
+            ),
+            ("rx_fifo_delta", new_stats.rx_fifo - old_stats.rx_fifo, i64),
+            (
+                "rx_frame_delta",
+                new_stats.rx_frame - old_stats.rx_frame,
+                i64
+            ),
+            (
+                "rx_compressed_delta",
+                new_stats.rx_compressed - old_stats.rx_compressed,
+                i64
+            ),
+            (
+                "rx_multicast_delta",
+                new_stats.rx_multicast - old_stats.rx_multicast,
+                i64
+            ),
+            (
+                "tx_bytes_delta",
+                new_stats.tx_bytes - old_stats.tx_bytes,
+                i64
+            ),
+            (
+                "tx_packets_delta",
+                new_stats.tx_packets - old_stats.tx_packets,
+                i64
+            ),
+            ("tx_errs_delta", new_stats.tx_errs - old_stats.tx_errs, i64),
+            (
+                "tx_drops_delta",
+                new_stats.tx_drops - old_stats.tx_drops,
+                i64
+            ),
+            ("tx_fifo_delta", new_stats.tx_fifo - old_stats.tx_fifo, i64),
+            (
+                "tx_colls_delta",
+                new_stats.tx_colls - old_stats.tx_colls,
+                i64
+            ),
+            (
+                "tx_carrier_delta",
+                new_stats.tx_carrier - old_stats.tx_carrier,
+                i64
+            ),
+            (
+                "tx_compressed_delta",
+                new_stats.tx_compressed - old_stats.tx_compressed,
+                i64
+            ),
         );
     }
 
