@@ -275,7 +275,7 @@ async fn setup_connection(
                             uni_streams,
                             packet_sender,
                             remote_addr,
-                            None,
+                            remote_pubkey,
                             last_update,
                             connection_table,
                             stream_exit,
