@@ -136,7 +136,7 @@ export class AddressLookupTableInstruction {
     for (const [layoutType, layout] of Object.entries(
       LOOKUP_TABLE_INSTRUCTION_LAYOUTS,
     )) {
-      if (layout.index == index) {
+      if ((layout as any).index == index) {
         type = layoutType as LookupTableInstructionType;
         break;
       }
@@ -187,7 +187,7 @@ export class AddressLookupTableInstruction {
       authority: instruction.keys[1].pubkey,
       payer:
         instruction.keys.length > 2 ? instruction.keys[2].pubkey : undefined,
-      addresses,
+      addresses: addresses.map(buffer => new PublicKey(buffer)),
     };
   }
 
