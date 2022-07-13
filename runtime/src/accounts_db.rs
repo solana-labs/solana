@@ -12119,7 +12119,7 @@ pub mod tests {
 
         // Setup 3 scenarios which try to differentiate between pubkey1 being in an
         // Available slot or a Full slot which would cause a different reset behavior
-        // when pubkey1 is cleaned and therefor cause the ref count to be incorrect
+        // when pubkey1 is cleaned and therefore cause the ref count to be incorrect
         // preventing a removal of that key.
         //
         // do stores with a 4mb size so only 1 store is created per slot
