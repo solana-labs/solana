@@ -141,7 +141,13 @@ fn verify_funding_transfer<T: BenchTpsClient>(
     false
 }
 
+/// Helper trait to encapsulate common logic for sending transactions batch
+///
 trait SendBatchTransactions<'a, T: Sliceable + Send + Sync> {
+    fn send_transactions<C, F>(&mut self, client: &Arc<C>, to_lamports: u64, log_progress: F)
+    where
+        C: 'static + BenchTpsClient + Send + Sync,
+        F: Fn(usize, usize);
     fn sign(&mut self, blockhash: Hash);
     fn send<C: BenchTpsClient>(&self, client: &Arc<C>);
     fn verify<C: 'static + BenchTpsClient + Send + Sync>(
@@ -164,6 +170,33 @@ impl<'a, T: Sliceable + Send + Sync> SendBatchTransactions<'a, T> for Vec<(T, Tr
 where
     <T as Sliceable>::Slice: Signers,
 {
+    fn send_transactions<C, F>(&mut self, client: &Arc<C>, to_lamports: u64, log_progress: F)
+    where
+        C: 'static + BenchTpsClient + Send + Sync,
+        F: Fn(usize, usize),
+    {
+        let mut tries: usize = 0;
+        while !self.is_empty() {
+            log_progress(tries, self.len());
+            let blockhash = get_latest_blockhash(client.as_ref());
+
+            // re-sign retained to_fund_txes with updated blockhash
+            self.sign(blockhash);
+            self.send(client);
+
+            // Sleep a few slots to allow transactions to process
+            sleep(Duration::from_secs(1));
+
+            self.verify(client, to_lamports);
+
+            // retry anything that seems to have dropped through cracks
+            //  again since these txs are all or nothing, they're fine to
+            //  retry
+            tries += 1;
+        }
+        info!("transferred in {} tries", tries);
+    }
+
     fn sign(&mut self, blockhash: Hash) {
         let mut sign_txs = Measure::start("sign_txs");
         self.par_iter_mut().for_each(|(k, tx)| {
@@ -291,8 +324,7 @@ impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
     ) {
         self.make(to_fund);
 
-        let mut tries = 0;
-        while !self.is_empty() {
+        let log_progress = |tries: usize, batch_len: usize| {
             info!(
                 "{} {} each to {} accounts in {} txs",
                 if tries == 0 {
@@ -301,27 +333,11 @@ impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
                     " retrying"
                 },
                 to_lamports,
-                self.len() * MAX_SPENDS_PER_TX as usize,
-                self.len(),
+                batch_len * MAX_SPENDS_PER_TX as usize,
+                batch_len,
             );
-
-            let blockhash = get_latest_blockhash(client.as_ref());
-
-            // re-sign retained to_fund_txes with updated blockhash
-            self.sign(blockhash);
-            self.send(client);
-
-            // Sleep a few slots to allow transactions to process
-            sleep(Duration::from_secs(1));
-
-            self.verify(client, to_lamports);
-
-            // retry anything that seems to have dropped through cracks
-            //  again since these txs are all or nothing, they're fine to
-            //  retry
-            tries += 1;
-        }
-        info!("transferred");
+        };
+        self.send_transactions(client, to_lamports, log_progress);
     }
 
     fn make(&mut self, to_fund: &FundingChunk<'a>) {
@@ -377,31 +393,14 @@ impl<'a> CreateNonceTransactions<'a> for NonceContainer<'a> {
     ) {
         self.make(nonce_rent, to_fund);
 
-        let mut tries = 0;
-        while !self.is_empty() {
+        let log_progress = |tries: usize, batch_len: usize| {
             info!(
                 "@ {} {} accounts",
                 if tries == 0 { "creating" } else { " retrying" },
-                self.len(),
+                batch_len,
             );
-
-            let blockhash = get_latest_blockhash(client.as_ref());
-
-            // re-sign retained to_fund_txes with updated blockhash
-            self.sign(blockhash);
-            self.send(client);
-
-            // Sleep a few slots to allow transactions to process
-            sleep(Duration::from_secs(1));
-
-            self.verify(client, 1);
-
-            // retry anything that seems to have dropped through cracks
-            //  again since these txs are all or nothing, they're fine to
-            //  retry
-            tries += 1;
-        }
-        info!("transferred in {} tries", tries);
+        };
+        self.send_transactions(client, nonce_rent, log_progress);
     }
 
     fn make(&mut self, nonce_rent: u64, to_fund: &'a NonceChunk<'a>) {
