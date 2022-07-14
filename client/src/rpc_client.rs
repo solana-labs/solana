@@ -152,12 +152,16 @@ pub struct GetConfirmedSignaturesForAddress2Config {
 /// [`ClientErrorKind::Reqwest`]: crate::client_error::ClientErrorKind::Reqwest
 pub struct RpcClient {
     rpc_client: Arc<nonblocking::rpc_client::RpcClient>,
-    runtime: Option<tokio::runtime::Runtime>,
+    runtime: Arc<tokio::runtime::Runtime>,
+}
+
+pub struct RuntimeWrapper {
+    runtime: Arc<tokio::runtime::Runtime>,
 }
 
 impl Drop for RpcClient {
     fn drop(&mut self) {
-        self.runtime.take().expect("runtime").shutdown_background();
+        self.runtime.shutdown_background();
     }
 }
 
@@ -176,7 +180,7 @@ impl RpcClient {
             rpc_client: Arc::new(nonblocking::rpc_client::RpcClient::new_sender(
                 sender, config,
             )),
-            runtime: Some(
+            runtime: Arc::new(
                 tokio::runtime::Builder::new_current_thread()
                     .thread_name("rpc-client")
                     .enable_io()
@@ -189,6 +193,10 @@ impl RpcClient {
 
     pub(crate) fn get_nonblocking_client(&self) -> Arc<nonblocking::rpc_client::RpcClient> {
         self.rpc_client.clone()
+    }
+
+    pub(crate) fn get_runtime(&self) -> Arc<tokio::runtime::Runtime> {
+        self.runtime.clone()
     }
 
     /// Create an HTTP `RpcClient`.
@@ -4047,7 +4055,7 @@ impl RpcClient {
         // `block_on()` panics if called within an asynchronous execution context. Whereas
         // `block_in_place()` only panics if called from a current_thread runtime, which is the
         // lesser evil.
-        tokio::task::block_in_place(move || self.runtime.as_ref().expect("runtime").block_on(f))
+        tokio::task::block_in_place(move || self.runtime.as_ref().block_on(f))
     }
 }
 
