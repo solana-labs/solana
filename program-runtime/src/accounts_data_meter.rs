@@ -26,13 +26,11 @@ impl AccountsDataMeter {
     /// Make a new AccountsDataMeter
     #[must_use]
     pub fn new(initial_accounts_data_len: u64) -> Self {
-        let accounts_data_meter = Self {
+        Self {
             maximum: MAX_ACCOUNTS_DATA_LEN,
             initial: initial_accounts_data_len,
             delta: 0,
-        };
-        debug_assert!(accounts_data_meter.initial <= accounts_data_meter.maximum);
-        accounts_data_meter
+        }
     }
 
     /// Return the maximum amount of accounts data space that can be used (in bytes)
@@ -118,12 +116,6 @@ mod tests {
     #[test]
     fn test_new_can_use_max_len() {
         let _ = AccountsDataMeter::new(MAX_ACCOUNTS_DATA_LEN);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_new_panics_if_initial_len_too_big() {
-        let _ = AccountsDataMeter::new(MAX_ACCOUNTS_DATA_LEN + 1);
     }
 
     #[test]

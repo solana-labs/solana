@@ -15,9 +15,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        feature_set::{
-            cap_accounts_data_len, enable_early_verification_of_account_modifications, FeatureSet,
-        },
+        feature_set::{enable_early_verification_of_account_modifications, FeatureSet},
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
         native_loader,
@@ -448,7 +446,6 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
-        let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let instruction_context = self
             .transaction_context
             .get_current_instruction_context()
@@ -519,12 +516,8 @@ impl<'a> InvokeContext<'a> {
             let pre_data_len = pre_account.data().len() as i64;
             let post_data_len = account.data().len() as i64;
             let data_len_delta = post_data_len.saturating_sub(pre_data_len);
-            if cap_accounts_data_len {
-                self.accounts_data_meter.adjust_delta(data_len_delta)?;
-            } else {
-                self.accounts_data_meter
-                    .adjust_delta_unchecked(data_len_delta);
-            }
+            self.accounts_data_meter
+                .adjust_delta_unchecked(data_len_delta);
         }
 
         // Verify that the total sum of all the lamports did not change
@@ -543,7 +536,6 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         before_instruction_context_push: bool,
     ) -> Result<(), InstructionError> {
-        let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let transaction_context = &self.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = instruction_context
@@ -612,12 +604,8 @@ impl<'a> InvokeContext<'a> {
                         let pre_data_len = pre_account.data().len() as i64;
                         let post_data_len = account.data().len() as i64;
                         let data_len_delta = post_data_len.saturating_sub(pre_data_len);
-                        if cap_accounts_data_len {
-                            self.accounts_data_meter.adjust_delta(data_len_delta)?;
-                        } else {
-                            self.accounts_data_meter
-                                .adjust_delta_unchecked(data_len_delta);
-                        }
+                        self.accounts_data_meter
+                            .adjust_delta_unchecked(data_len_delta);
 
                         break;
                     }
