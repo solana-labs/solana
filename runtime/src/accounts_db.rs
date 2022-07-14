@@ -2844,7 +2844,7 @@ impl AccountsDb {
             ),
             (
                 "active_scans",
-                self.accounts_index.active_scans.swap(0, Ordering::Relaxed) as i64,
+                self.accounts_index.active_scans.load(Ordering::Relaxed) as i64,
                 i64
             ),
             (
