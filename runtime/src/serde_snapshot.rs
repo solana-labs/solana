@@ -722,11 +722,11 @@ where
         verify_index,
         genesis_config,
     );
-    *accounts_db
+    accounts_db
         .accounts_index
         .rent_paying_accounts_by_partition
-        .write()
-        .unwrap() = rent_paying_accounts_by_partition;
+        .set(rent_paying_accounts_by_partition)
+        .unwrap();
 
     accounts_db.maybe_add_filler_accounts(
         &genesis_config.epoch_schedule,

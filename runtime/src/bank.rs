@@ -5456,23 +5456,23 @@ impl Bank {
 
     /// get all pubkeys that we expect to be rent-paying or None, if this was not initialized at load time (that should only exist in test cases)
     fn get_rent_paying_pubkeys(&self, partition: &Partition) -> Option<HashSet<Pubkey>> {
-        let rent_paying_accounts = &self
-            .rc
+        self.rc
             .accounts
             .accounts_db
             .accounts_index
             .rent_paying_accounts_by_partition
-            .read()
-            .unwrap();
-        rent_paying_accounts.is_initialized().then(|| {
-            Self::get_partition_end_indexes(partition)
-                .into_iter()
-                .flat_map(|end_index| {
-                    rent_paying_accounts.get_pubkeys_in_partition_index(end_index)
+            .get()
+            .and_then(|rent_paying_accounts| {
+                rent_paying_accounts.is_initialized().then(|| {
+                    Self::get_partition_end_indexes(partition)
+                        .into_iter()
+                        .flat_map(|end_index| {
+                            rent_paying_accounts.get_pubkeys_in_partition_index(end_index)
+                        })
+                        .cloned()
+                        .collect::<HashSet<_>>()
                 })
-                .cloned()
-                .collect::<HashSet<_>>()
-        })
+            })
     }
 
     /// load accounts with pubkeys in 'subrange_full'
@@ -19322,14 +19322,13 @@ pub(crate) mod tests {
         rent_paying_accounts_by_partition.add_account(&pk1);
         rent_paying_accounts_by_partition.add_account(&pk2);
 
-        *bank
-            .rc
+        bank.rc
             .accounts
             .accounts_db
             .accounts_index
             .rent_paying_accounts_by_partition
-            .write()
-            .unwrap() = rent_paying_accounts_by_partition;
+            .set(rent_paying_accounts_by_partition)
+            .unwrap();
 
         assert_eq!(
             bank.get_rent_paying_pubkeys(&(0, 1, n)),
