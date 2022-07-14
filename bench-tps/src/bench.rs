@@ -37,6 +37,20 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
+/// Split input vector of keypairs into two sets of chunks of given size
+fn split_into_source_destination(
+    keypairs: &[Keypair],
+    chunk_size: usize,
+) -> (Vec<Vec<&Keypair>>, Vec<VecDeque<&Keypair>>) {
+    let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
+    let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
+    for chunk in keypairs.chunks_exact(2 * chunk_size) {
+        source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
+        dest_keypair_chunks.push(chunk[chunk_size..].iter().collect());
+    }
+    (source_keypair_chunks, dest_keypair_chunks)
+}
+
 fn wait_for_target_slots_per_epoch<T>(target_slots_per_epoch: u64, client: &Arc<T>)
 where
     T: 'static + BenchTpsClient + Send + Sync,
@@ -201,13 +215,9 @@ where
         ..
     } = config;
 
-    let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
-    let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
     assert!(gen_keypairs.len() >= 2 * tx_count);
-    for chunk in gen_keypairs.chunks_exact(2 * tx_count) {
-        source_keypair_chunks.push(chunk[..tx_count].iter().collect());
-        dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
-    }
+    let (source_keypair_chunks, mut dest_keypair_chunks) =
+        split_into_source_destination(&gen_keypairs, tx_count);
 
     let first_tx_count = loop {
         match client.get_transaction_count() {
