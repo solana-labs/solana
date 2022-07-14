@@ -142,7 +142,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         write_metric(
             out,
             &MetricFamily {
-                name: "solana_validator_activated_stake_sol",
+                name: "solana_validator_active_stake_sol",
                 help: "The total amount of Sol actively staked to this validator",
                 type_: "gauge",
                 metrics: banks_with_commitments.for_each_commitment(|bank| {
