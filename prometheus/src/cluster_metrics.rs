@@ -106,7 +106,7 @@ pub fn write_cluster_metrics<W: io::Write>(
         write_metric(
             out,
             &MetricFamily {
-                name: "solana_validator_vote_balance_sol",
+                name: "solana_validator_vote_account_balance_sol",
                 help: "The balance of the vote account at the given address",
                 type_: "gauge",
                 metrics: banks_with_commitments.for_each_commitment(|bank| {
