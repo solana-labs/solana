@@ -656,6 +656,10 @@ impl<'a> BorrowedAccount<'a> {
             if !is_zeroed(self.get_data()) {
                 return Err(InstructionError::ModifiedProgramId);
             }
+            // don't touch the account if the owner does not change
+            if self.get_owner().to_bytes() == pubkey {
+                return Ok(());
+            }
             self.touch()?;
         }
         self.account.copy_into_owner_from_slice(pubkey);
@@ -684,6 +688,10 @@ impl<'a> BorrowedAccount<'a> {
             // The balance of executable accounts may not change
             if self.is_executable() {
                 return Err(InstructionError::ExecutableLamportChange);
+            }
+            // don't touch the account if the lamports do not change
+            if self.get_lamports() == lamports {
+                return Ok(());
             }
             self.touch()?;
         }
@@ -747,6 +755,10 @@ impl<'a> BorrowedAccount<'a> {
     pub fn set_data_length(&mut self, new_length: usize) -> Result<(), InstructionError> {
         self.can_data_be_resized(new_length)?;
         self.can_data_be_changed()?;
+        // don't touch the account if the length does not change
+        if self.get_data().len() == new_length {
+            return Ok(());
+        }
         self.touch()?;
         let mut accounts_resize_delta = self
             .transaction_context
@@ -798,9 +810,13 @@ impl<'a> BorrowedAccount<'a> {
             if !self.is_writable() {
                 return Err(InstructionError::ExecutableModified);
             }
-            // and only if the account is not executable (one can not clear the executable flag)
-            if self.is_executable() {
+            // one can not clear the executable flag
+            if self.is_executable() && !is_executable {
                 return Err(InstructionError::ExecutableModified);
+            }
+            // don't touch the account if the executable flag does not change
+            if self.is_executable() == is_executable {
+                return Ok(());
             }
             self.touch()?;
         }
