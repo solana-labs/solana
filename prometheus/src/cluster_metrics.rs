@@ -15,12 +15,13 @@ struct ValidatorVoteInfo {
     last_vote: Slot,
     vote_credits: u64,
     identity: Pubkey,
+    activated_stake: Lamports,
 }
 
 fn get_vote_state(bank: &Bank, vote_pubkey: &Pubkey) -> Option<ValidatorVoteInfo> {
     let default_vote_state = VoteState::default();
     let vote_accounts = bank.vote_accounts();
-    let (_activated_stake, vote_account) = vote_accounts.get(vote_pubkey)?;
+    let (activated_stake, vote_account) = vote_accounts.get(vote_pubkey)?;
     let vote_state = vote_account.vote_state();
     let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
 
@@ -32,6 +33,7 @@ fn get_vote_state(bank: &Bank, vote_pubkey: &Pubkey) -> Option<ValidatorVoteInfo
         last_vote,
         vote_credits,
         identity: vote_state.node_pubkey,
+        activated_stake: Lamports(*activated_stake),
     })
 }
 
@@ -130,6 +132,23 @@ pub fn write_cluster_metrics<W: io::Write>(
                     let vote_info = get_vote_state(bank, vote_account)?;
                     Some(
                         Metric::new(vote_info.vote_credits)
+                            .with_label("identity_account", vote_info.identity.to_string())
+                            .with_label("vote_account", vote_account.to_string()),
+                    )
+                }),
+            },
+        )?;
+
+        write_metric(
+            out,
+            &MetricFamily {
+                name: "solana_validator_activated_stake_sol",
+                help: "The total amount of Sol actively staked to this validator",
+                type_: "gauge",
+                metrics: banks_with_commitments.for_each_commitment(|bank| {
+                    let vote_info = get_vote_state(bank, vote_account)?;
+                    Some(
+                        Metric::new_sol(vote_info.activated_stake)
                             .with_label("identity_account", vote_info.identity.to_string())
                             .with_label("vote_account", vote_account.to_string()),
                     )
