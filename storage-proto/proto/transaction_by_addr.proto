@@ -121,7 +121,7 @@ enum InstructionErrorType {
     UNSUPPORTED_SYSVAR = 48;
     ILLEGAL_OWNER = 49;
     MAX_ACCOUNTS_DATA_SIZE_EXCEEDED = 50;
-    ACTIVE_VOTE_ACCOUNT_CLOSE = 51;
+    MAX_ACCOUNTS_EXCEEDED = 51;
 }
 
 message UnixTimestamp {

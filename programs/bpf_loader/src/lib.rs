@@ -41,9 +41,10 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
-            disable_bpf_unresolved_symbols_at_runtime, disable_deploy_of_alloc_free_syscall,
-            disable_deprecated_loader, enable_bpf_loader_extend_program_data_ix,
+            cap_accounts_data_len, cap_bpf_program_instruction_accounts,
+            disable_bpf_deprecated_load_instructions, disable_bpf_unresolved_symbols_at_runtime,
+            disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
+            enable_bpf_loader_extend_program_data_ix,
             error_on_syscall_bpf_function_hash_collisions, reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
@@ -1285,8 +1286,13 @@ impl Executor for BpfExecutor {
         let program_id = *instruction_context.get_last_program_key(transaction_context)?;
 
         let mut serialize_time = Measure::start("serialize");
-        let (mut parameter_bytes, account_lengths) =
-            serialize_parameters(invoke_context.transaction_context, instruction_context)?;
+        let (mut parameter_bytes, account_lengths) = serialize_parameters(
+            invoke_context.transaction_context,
+            instruction_context,
+            invoke_context
+                .feature_set
+                .is_active(&cap_bpf_program_instruction_accounts::ID),
+        )?;
         serialize_time.stop();
 
         let mut create_vm_time = Measure::start("create_vm");
