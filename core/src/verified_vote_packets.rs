@@ -248,19 +248,23 @@ impl VerifiedVotePackets {
                             if let Some(FullTowerVote(gossip_vote)) =
                                 self.0.get_mut(&vote_account_key)
                             {
-                                warn!(
-                                    "Originally {} submitted full tower votes, but now has reverted to incremental votes. Converting back to old format.",
-                                    vote_account_key
-                                );
-                                let mut votes = BTreeMap::new();
-                                let GossipVote {
-                                    slot,
-                                    hash,
-                                    packet_batch,
-                                    signature,
-                                } = std::mem::take(gossip_vote);
-                                votes.insert((slot, hash), (packet_batch, signature));
-                                self.0.insert(vote_account_key, IncrementalVotes(votes));
+                                if slot > gossip_vote.slot && is_full_tower_vote_enabled {
+                                    warn!(
+                                        "Originally {} submitted full tower votes, but now has reverted to incremental votes. Converting back to old format.",
+                                        vote_account_key
+                                    );
+                                    let mut votes = BTreeMap::new();
+                                    let GossipVote {
+                                        slot,
+                                        hash,
+                                        packet_batch,
+                                        signature,
+                                    } = std::mem::take(gossip_vote);
+                                    votes.insert((slot, hash), (packet_batch, signature));
+                                    self.0.insert(vote_account_key, IncrementalVotes(votes));
+                                } else {
+                                    continue;
+                                }
                             };
                             let validator_votes: &mut BTreeMap<
                                 (Slot, Hash),
