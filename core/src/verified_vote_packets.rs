@@ -808,6 +808,28 @@ mod tests {
                 .get_latest_gossip_slot()
         );
 
+        // Try to send an old ibncremental vote from pre feature activation
+        let vote = VoteTransaction::from(Vote::new(vec![34], Hash::new_unique()));
+        s.send(vec![VerifiedVoteMetadata {
+            vote_account_key,
+            vote,
+            packet_batch: PacketBatch::default(),
+            signature: Signature::new(&[1u8; 64]),
+        }])
+        .unwrap();
+
+        // Try to receive nothing should happen
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&allow_votes_to_directly_update_vote_state::id(), 0);
+        verified_vote_packets
+            .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
+            .unwrap();
+        if let FullTowerVote(vote) = verified_vote_packets.0.get(&vote_account_key).unwrap() {
+            assert_eq!(42, vote.slot);
+        } else {
+            panic!("Old vote triggered a downgrade conversion");
+        }
+
         // Now try to send an incremental vote
         let vote = VoteTransaction::from(Vote::new(vec![43], Hash::new_unique()));
         let hash_43 = vote.hash();
@@ -820,7 +842,8 @@ mod tests {
         .unwrap();
 
         // Try to receive and vote lands as well as the conversion back to incremental votes
-        let feature_set = FeatureSet::default();
+        let mut feature_set = FeatureSet::default();
+        feature_set.activate(&allow_votes_to_directly_update_vote_state::id(), 0);
         verified_vote_packets
             .receive_and_process_vote_packets(&r, true, Some(Arc::new(feature_set)))
             .unwrap();
