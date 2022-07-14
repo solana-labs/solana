@@ -1,34 +1,32 @@
 use {
     crate::bench_tps_client::*,
     log::*,
+    rayon::prelude::*,
+    solana_core::gen_keys::GenKeys,
     solana_measure::measure::Measure,
     solana_sdk::{
-        clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
         commitment_config::CommitmentConfig,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         message::Message,
-        native_token::Sol,
         nonce::State,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         signer::signers::Signers,
-        system_instruction, system_transaction,
+        system_instruction, 
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
         transaction::Transaction,
     },
     std::{
+        collections::HashSet,
+        marker::Send,
         sync::{
             atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, Mutex,
         },
-        thread,
-        thread::{sleep, Builder, JoinHandle},
+        thread::sleep,
         time::{Duration, Instant},
-        collections::{HashSet, VecDeque},
-        marker::Send
     },
-    rayon::prelude::*,
 };
 
 pub fn get_latest_blockhash<T: BenchTpsClient>(client: &T) -> Hash {
@@ -43,7 +41,96 @@ pub fn get_latest_blockhash<T: BenchTpsClient>(client: &T) -> Hash {
     }
 }
 
-pub fn verify_funding_transfer<T: BenchTpsClient>(
+pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
+    let mut rnd = GenKeys::new(seed);
+
+    let mut total_keys = 0;
+    let mut extra = 0; // This variable tracks the number of keypairs needing extra transaction fees funded
+    let mut delta = 1;
+    while total_keys < count {
+        extra += delta;
+        delta *= MAX_SPENDS_PER_TX;
+        total_keys += delta;
+    }
+    (rnd.gen_n_keypairs(total_keys), extra)
+}
+
+/// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
+/// on every iteration.  This allows us to replay the transfers because the source is either empty,
+/// or full
+pub fn fund_keys<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    source: &Keypair,
+    dests: &[Keypair],
+    total: u64,
+    max_fee: u64,
+    lamports_per_account: u64,
+) {
+    let mut funded: Vec<&Keypair> = vec![source];
+    let mut funded_funds = total;
+    let mut not_funded: Vec<&Keypair> = dests.iter().collect();
+    while !not_funded.is_empty() {
+        // Build to fund list and prepare funding sources for next iteration
+        let mut new_funded: Vec<&Keypair> = vec![];
+        let mut to_fund: Vec<(&Keypair, Vec<(Pubkey, u64)>)> = vec![];
+        let to_lamports = (funded_funds - lamports_per_account - max_fee) / MAX_SPENDS_PER_TX;
+        for f in funded {
+            let start = not_funded.len() - MAX_SPENDS_PER_TX as usize;
+            let dests: Vec<_> = not_funded.drain(start..).collect();
+            let spends: Vec<_> = dests.iter().map(|k| (k.pubkey(), to_lamports)).collect();
+            to_fund.push((f, spends));
+            new_funded.extend(dests.into_iter());
+        }
+
+        to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
+            Vec::<(&Keypair, Transaction)>::with_capacity(chunk.len()).fund(
+                &client,
+                chunk,
+                to_lamports,
+            );
+        });
+
+        info!("funded: {} left: {}", new_funded.len(), not_funded.len());
+        funded = new_funded;
+        funded_funds = to_lamports;
+    }
+}
+
+pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    authority_keypairs: &Vec<Keypair>,
+) -> Result<Vec<Keypair>> {
+    let nonce_rent = client
+        .get_minimum_balance_for_rent_exemption(State::size())
+        .unwrap();
+
+    let seed_keypair = &authority_keypairs[0];
+    let count = authority_keypairs.len();
+    let (mut nonce_keypairs, _extra) = generate_keypairs(&seed_keypair, count as u64);
+    nonce_keypairs.truncate(count);
+
+    let to_fund: Vec<(&Keypair, &Keypair)> = authority_keypairs
+        .iter()
+        .zip(nonce_keypairs.iter())
+        .map(|pair| pair)
+        .collect();
+
+    to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
+        NonceContainer::with_capacity(chunk.len()).create_accounts(&client, chunk, nonce_rent);
+    });
+    Ok(nonce_keypairs)
+}
+
+const MAX_SPENDS_PER_TX: u64 = 4;
+
+// Size of the chunk of transactions
+// try to transfer a "few" at a time with recent blockhash
+// assume 4MB network buffers, and 512 byte packets
+const FUND_CHUNK_LEN: usize = 4 * 1024 * 1024 / 512;
+
+fn verify_funding_transfer<T: BenchTpsClient>(
     client: &Arc<T>,
     tx: &Transaction,
     amount: u64,
@@ -57,8 +144,7 @@ pub fn verify_funding_transfer<T: BenchTpsClient>(
     false
 }
 
-
-pub trait SendBatchTransactions<'a, T: Sliceable + Send + Sync> {
+trait SendBatchTransactions<'a, T: Sliceable + Send + Sync> {
     fn sign(&mut self, blockhash: Hash);
     fn send<C: BenchTpsClient>(&self, client: &Arc<C>);
     fn verify<C: 'static + BenchTpsClient + Send + Sync>(
@@ -67,7 +153,7 @@ pub trait SendBatchTransactions<'a, T: Sliceable + Send + Sync> {
         to_lamports: u64,
     );
 }
-pub trait Sliceable {
+trait Sliceable {
     type Slice;
     fn as_slice(&self) -> Self::Slice;
     fn get_pubkey(&self) -> Pubkey;
@@ -83,8 +169,9 @@ impl<'a> Sliceable for (&'a Keypair, &'a Keypair) {
     }
 }
 
-impl<'a, T: Sliceable + Send + Sync> SendBatchTransactions<'a, T> for Vec<(T, Transaction)> 
-where <T as Sliceable>::Slice: Signers 
+impl<'a, T: Sliceable + Send + Sync> SendBatchTransactions<'a, T> for Vec<(T, Transaction)>
+where
+    <T as Sliceable>::Slice: Signers,
 {
     fn sign(&mut self, blockhash: Hash) {
         let mut sign_txs = Measure::start("sign_txs");
@@ -94,7 +181,7 @@ where <T as Sliceable>::Slice: Signers
         sign_txs.stop();
         debug!("sign {} txs: {}us", self.len(), sign_txs.as_us());
     }
-    
+
     fn send<C: BenchTpsClient>(&self, client: &Arc<C>) {
         let mut send_txs = Measure::start("send_and_clone_txs");
         let batch: Vec<_> = self.iter().map(|(_keypair, tx)| tx.clone()).collect();
@@ -180,11 +267,12 @@ where <T as Sliceable>::Slice: Signers
     }
 }
 
+// TODO(klykov) move inside the trait?
 type NonceSigners<'a> = (&'a Keypair, &'a Keypair);
 type NonceChunk<'a> = [NonceSigners<'a>];
-pub type NonceContainer<'a> = Vec<(NonceSigners<'a>, Transaction)>;
+type NonceContainer<'a> = Vec<(NonceSigners<'a>, Transaction)>;
 
-pub trait CreateNonceTransactions<'a> : SendBatchTransactions<'a, (&'a Keypair, &'a Keypair)> {
+trait CreateNonceTransactions<'a>: SendBatchTransactions<'a, (&'a Keypair, &'a Keypair)> {
     fn create_accounts<T: 'static + BenchTpsClient + Send + Sync>(
         &mut self,
         client: &Arc<T>,
@@ -193,7 +281,6 @@ pub trait CreateNonceTransactions<'a> : SendBatchTransactions<'a, (&'a Keypair, 
     );
     fn make(&mut self, nonce_rent: u64, to_fund: &'a NonceChunk<'a>);
 }
-
 
 impl<'a> CreateNonceTransactions<'a> for NonceContainer<'a> {
     fn create_accounts<T: 'static + BenchTpsClient + Send + Sync>(
@@ -208,11 +295,7 @@ impl<'a> CreateNonceTransactions<'a> for NonceContainer<'a> {
         while !self.is_empty() {
             info!(
                 "@ {} {} accounts",
-                if tries == 0 {
-                    "creating"
-                } else {
-                    " retrying"
-                },
+                if tries == 0 { "creating" } else { " retrying" },
                 self.len(),
             );
 
@@ -250,6 +333,88 @@ impl<'a> CreateNonceTransactions<'a> for NonceContainer<'a> {
                     (*authority, *nonce),
                     Transaction::new_with_payer(&instructions, Some(&authority.pubkey())),
                 )
+            })
+            .collect();
+        make_txs.stop();
+        debug!(
+            "make {} unsigned txs: {}us",
+            to_fund_txs.len(),
+            make_txs.as_us()
+        );
+        self.extend(to_fund_txs);
+    }
+}
+
+impl<'a> Sliceable for &'a Keypair {
+    type Slice = [&'a Keypair; 1];
+    fn as_slice(&self) -> Self::Slice {
+        [self]
+    }
+    fn get_pubkey(&self) -> Pubkey {
+        return self.pubkey();
+    }
+}
+
+trait FundingTransactions<'a>: SendBatchTransactions<'a, &'a Keypair> {
+    fn fund<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)],
+        to_lamports: u64,
+    );
+    fn make(&mut self, to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)]);
+}
+
+impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
+    fn fund<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)],
+        to_lamports: u64,
+    ) {
+        self.make(to_fund);
+
+        let mut tries = 0;
+        while !self.is_empty() {
+            info!(
+                "{} {} each to {} accounts in {} txs",
+                if tries == 0 {
+                    "transferring"
+                } else {
+                    " retrying"
+                },
+                to_lamports,
+                self.len() * MAX_SPENDS_PER_TX as usize,
+                self.len(),
+            );
+
+            let blockhash = get_latest_blockhash(client.as_ref());
+
+            // re-sign retained to_fund_txes with updated blockhash
+            self.sign(blockhash);
+            self.send(client);
+
+            // Sleep a few slots to allow transactions to process
+            sleep(Duration::from_secs(1));
+
+            self.verify(client, to_lamports);
+
+            // retry anything that seems to have dropped through cracks
+            //  again since these txs are all or nothing, they're fine to
+            //  retry
+            tries += 1;
+        }
+        info!("transferred");
+    }
+
+    fn make(&mut self, to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)]) {
+        let mut make_txs = Measure::start("make_txs");
+        let to_fund_txs: Vec<(&Keypair, Transaction)> = to_fund
+            .par_iter()
+            .map(|(k, t)| {
+                let instructions = system_instruction::transfer_many(&k.pubkey(), t);
+                let message = Message::new(&instructions, Some(&k.pubkey()));
+                (*k, Transaction::new_unsigned(message))
             })
             .collect();
         make_txs.stop();
