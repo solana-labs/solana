@@ -1417,11 +1417,11 @@ pub mod test {
         staked_nodes.write().unwrap().total_stake = 10000;
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1000, staked_nodes.clone()),
-            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (10 as f64)) as usize
+            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (10_f64)) as usize
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 100, staked_nodes.clone()),
-            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (100 as f64)) as usize
+            (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (100_f64)) as usize
         );
         assert_eq!(
             compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, staked_nodes.clone()),
@@ -1448,7 +1448,7 @@ pub mod test {
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 0, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 0, staked_nodes),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
     }
