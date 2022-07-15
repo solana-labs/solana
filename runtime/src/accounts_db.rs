@@ -2305,7 +2305,7 @@ impl AccountsDb {
     pub(crate) fn purge_keys_exact<'a, C: 'a>(
         &'a self,
         pubkey_to_slot_set: impl Iterator<Item = &'a (Pubkey, C)>,
-    ) -> Vec<(u64, AccountInfo)>
+    ) -> Vec<(Slot, AccountInfo)>
     where
         C: Contains<'a, Slot>,
     {
