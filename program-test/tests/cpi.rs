@@ -13,6 +13,7 @@ use {
 };
 
 // Process instruction to invoke into another program
+// We pass this specific number of accounts in order to test for a reported error.
 fn invoker_process_instruction(
     _program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -23,8 +24,23 @@ fn invoker_process_instruction(
     let account_info_iter = &mut accounts.iter();
     let invoked_program_info = next_account_info(account_info_iter)?;
     invoke(
-        &Instruction::new_with_bincode(*invoked_program_info.key, &[0], vec![]),
-        &[invoked_program_info.clone()],
+        &Instruction::new_with_bincode(
+            *invoked_program_info.key,
+            &[0],
+            vec![
+                AccountMeta::new_readonly(*invoked_program_info.key, false),
+                AccountMeta::new_readonly(*invoked_program_info.key, false),
+                AccountMeta::new_readonly(*invoked_program_info.key, false),
+                AccountMeta::new_readonly(*invoked_program_info.key, false),
+            ],
+        ),
+        &[
+            invoked_program_info.clone(),
+            invoked_program_info.clone(),
+            invoked_program_info.clone(),
+            invoked_program_info.clone(),
+            invoked_program_info.clone(),
+        ],
     )?;
     msg!("Processing invoker instruction after CPI");
     Ok(())
@@ -61,7 +77,12 @@ async fn cpi() {
     let instructions = vec![Instruction::new_with_bincode(
         invoker_program_id,
         &[0],
-        vec![AccountMeta::new_readonly(invoked_program_id, false)],
+        vec![
+            AccountMeta::new_readonly(invoked_program_id, false),
+            AccountMeta::new_readonly(invoked_program_id, false),
+            AccountMeta::new_readonly(invoked_program_id, false),
+            AccountMeta::new_readonly(invoked_program_id, false),
+        ],
     )];
 
     let transaction = Transaction::new_signed_with_payer(
