@@ -2462,6 +2462,8 @@ None
 
 #### Results:
 
+The result will be an RpcResponse JSON object with `value` equal to:
+
 - `<u64>` - The stake minimum delegation, in lamports
 
 #### Example:
@@ -2477,7 +2479,16 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 
 ```json
-{ "jsonrpc": "2.0", "result": 1000000000, "id": 1 }
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 501
+    },
+    "value": 1000000000
+  },
+  "id": 1
+}
 ```
 
 ### getSupply
