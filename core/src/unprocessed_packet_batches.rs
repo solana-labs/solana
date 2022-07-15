@@ -1,11 +1,13 @@
 use {
+    crate::transaction_priority_details::{
+        GetTransactionPriorityDetails, TransactionPriorityDetails,
+    },
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
-    solana_program_runtime::compute_budget::ComputeBudget,
     solana_sdk::{
         feature_set,
         hash::Hash,
-        message::{Message, SanitizedVersionedMessage},
+        message::Message,
         sanitize::SanitizeError,
         short_vec::decode_shortu16_len,
         signature::Signature,
@@ -37,12 +39,6 @@ pub enum DeserializedPacketError {
     SanitizeError(#[from] SanitizeError),
     #[error("transaction failed prioritization")]
     PrioritizationFailure,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct TransactionPriorityDetails {
-    pub priority: u64,
-    pub compute_unit_limit: u64,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -113,7 +109,7 @@ impl DeserializedPacket {
 
         // drop transaction if prioritization fails.
         let priority_details = priority_details
-            .or_else(|| get_priority_details(sanitized_transaction.get_message()))
+            .or_else(|| sanitized_transaction.get_transaction_priority_details())
             .ok_or(DeserializedPacketError::PrioritizationFailure)?;
 
         Ok(Self {
@@ -406,21 +402,6 @@ pub fn packet_message(packet: &Packet) -> Result<&[u8], DeserializedPacketError>
         .ok_or(DeserializedPacketError::SignatureOverflowed(sig_size))
 }
 
-fn get_priority_details(message: &SanitizedVersionedMessage) -> Option<TransactionPriorityDetails> {
-    let mut compute_budget = ComputeBudget::default();
-    let prioritization_fee_details = compute_budget
-        .process_instructions(
-            message.program_instructions_iter(),
-            true, // use default units per instruction
-            true, // don't reject txs that use set compute unit price ix
-        )
-        .ok()?;
-    Some(TransactionPriorityDetails {
-        priority: prioritization_fee_details.get_priority(),
-        compute_unit_limit: compute_budget.compute_unit_limit,
-    })
-}
-
 pub fn transactions_to_deserialized_packets(
     transactions: &[Transaction],
 ) -> Result<Vec<DeserializedPacket>, DeserializedPacketError> {
@@ -464,11 +445,8 @@ mod tests {
         super::*,
         solana_perf::packet::PacketFlags,
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction,
-            message::VersionedMessage,
-            pubkey::Pubkey,
             signature::{Keypair, Signer},
-            system_instruction, system_transaction,
+            system_transaction,
             transaction::{SimpleAddressLoader, Transaction},
         },
         solana_vote_program::vote_transaction,
@@ -598,72 +576,6 @@ mod tests {
         );
         assert!(unprocessed_packet_batches.is_empty());
         assert!(unprocessed_packet_batches.pop_max_n(0).is_none());
-    }
-
-    #[test]
-    fn test_get_priority_with_valid_request_heap_frame_tx() {
-        let payer = Pubkey::new_unique();
-        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
-            &[
-                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
-                ComputeBudgetInstruction::request_heap_frame(32 * 1024),
-            ],
-            Some(&payer),
-        )))
-        .unwrap();
-        assert_eq!(
-            get_priority_details(&message),
-            Some(TransactionPriorityDetails {
-                priority: 0,
-                compute_unit_limit:
-                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
-                        as u64
-            })
-        );
-    }
-
-    #[test]
-    fn test_get_priority_with_valid_set_compute_units_limit() {
-        let requested_cu = 101u32;
-        let payer = Pubkey::new_unique();
-        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
-            &[
-                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
-                ComputeBudgetInstruction::set_compute_unit_limit(requested_cu),
-            ],
-            Some(&payer),
-        )))
-        .unwrap();
-        assert_eq!(
-            get_priority_details(&message),
-            Some(TransactionPriorityDetails {
-                priority: 0,
-                compute_unit_limit: requested_cu as u64,
-            })
-        );
-    }
-
-    #[test]
-    fn test_get_priority_with_valid_set_compute_unit_price() {
-        let requested_price = 1_000;
-        let payer = Pubkey::new_unique();
-        let message = SanitizedVersionedMessage::try_from(VersionedMessage::Legacy(Message::new(
-            &[
-                system_instruction::transfer(&Pubkey::new_unique(), &Pubkey::new_unique(), 1),
-                ComputeBudgetInstruction::set_compute_unit_price(requested_price),
-            ],
-            Some(&payer),
-        )))
-        .unwrap();
-        assert_eq!(
-            get_priority_details(&message),
-            Some(TransactionPriorityDetails {
-                priority: requested_price,
-                compute_unit_limit:
-                    solana_program_runtime::compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT
-                        as u64
-            })
-        );
     }
 
     #[cfg(test)]
