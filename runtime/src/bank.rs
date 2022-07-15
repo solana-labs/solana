@@ -109,7 +109,7 @@ use {
         feature,
         feature_set::{
             self, add_set_compute_unit_price_ix, default_units_per_instruction,
-            disable_fee_calculator, FeatureSet,
+            disable_fee_calculator, enable_early_verification_of_account_modifications, FeatureSet,
         },
         fee::FeeStructure,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
@@ -4274,6 +4274,14 @@ impl Bank {
         let transaction_accounts = std::mem::take(&mut loaded_transaction.accounts);
         let mut transaction_context = TransactionContext::new(
             transaction_accounts,
+            if self
+                .feature_set
+                .is_active(&enable_early_verification_of_account_modifications::id())
+            {
+                Some(self.rent_collector.rent)
+            } else {
+                None
+            },
             compute_budget.max_invoke_depth.saturating_add(1),
             tx.message().instructions().len(),
         );
@@ -4352,7 +4360,7 @@ impl Bank {
                 }
                 err
             });
-        let accounts_data_len_delta = status
+        let mut accounts_data_len_delta = status
             .as_ref()
             .map_or(0, |info| info.accounts_data_len_delta);
         let status = status.map(|_| ());
@@ -4368,9 +4376,31 @@ impl Bank {
             accounts,
             instruction_trace,
             mut return_data,
-            ..
+            changed_account_count,
+            total_size_of_all_accounts,
+            total_size_of_touched_accounts,
+            accounts_resize_delta,
         } = transaction_context.into();
         loaded_transaction.accounts = accounts;
+        if self
+            .feature_set
+            .is_active(&enable_early_verification_of_account_modifications::id())
+        {
+            saturating_add_assign!(
+                timings.details.total_account_count,
+                loaded_transaction.accounts.len() as u64
+            );
+            saturating_add_assign!(timings.details.changed_account_count, changed_account_count);
+            saturating_add_assign!(
+                timings.details.total_data_size,
+                total_size_of_all_accounts as usize
+            );
+            saturating_add_assign!(
+                timings.details.data_size_changed,
+                total_size_of_touched_accounts as usize
+            );
+            accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
+        }
 
         let inner_instructions = if enable_cpi_recording {
             Some(inner_instructions_list_from_instruction_trace(
@@ -18668,6 +18698,7 @@ pub(crate) mod tests {
         });
         let transaction_context = TransactionContext::new(
             loaded_txs[0].0.as_ref().unwrap().accounts.clone(),
+            Some(Rent::default()),
             compute_budget.max_invoke_depth.saturating_add(1),
             number_of_instructions_at_transaction_level,
         );
@@ -18819,15 +18850,15 @@ pub(crate) mod tests {
     fn test_inner_instructions_list_from_instruction_trace() {
         let instruction_trace = vec![
             vec![
-                InstructionContext::new(0, &[], &[], &[1]),
-                InstructionContext::new(1, &[], &[], &[2]),
+                InstructionContext::new(0, 0, &[], &[], &[1]),
+                InstructionContext::new(1, 0, &[], &[], &[2]),
             ],
             vec![],
             vec![
-                InstructionContext::new(0, &[], &[], &[3]),
-                InstructionContext::new(1, &[], &[], &[4]),
-                InstructionContext::new(2, &[], &[], &[5]),
-                InstructionContext::new(1, &[], &[], &[6]),
+                InstructionContext::new(0, 0, &[], &[], &[3]),
+                InstructionContext::new(1, 0, &[], &[], &[4]),
+                InstructionContext::new(2, 0, &[], &[], &[5]),
+                InstructionContext::new(1, 0, &[], &[], &[6]),
             ],
         ];
 

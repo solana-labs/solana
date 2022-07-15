@@ -4516,7 +4516,10 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config((1_000_000 + NUM_ACCOUNTS + 1) * LAMPORTS_PER_SOL);
-        let bank = Bank::new_for_tests(&genesis_config);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.deactivate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         let bank = Arc::new(bank);
         assert!(bank
             .feature_set
@@ -4579,6 +4582,9 @@ pub mod tests {
             mock_realloc::process_instruction,
         );
         bank.set_accounts_data_size_initial_for_tests(INITIAL_ACCOUNTS_DATA_SIZE);
+        bank.deactivate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         let bank = Arc::new(bank);
         let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
         assert!(bank

@@ -183,8 +183,14 @@ pub fn builtin_process_instruction(
         if borrowed_account.get_lamports() != lamports {
             borrowed_account.set_lamports(lamports)?;
         }
-        if borrowed_account.get_data() != data {
-            borrowed_account.set_data(&data)?;
+        // The redundant check helps to avoid the expensive data comparison if we can
+        match borrowed_account
+            .can_data_be_resized(data.len())
+            .and_then(|_| borrowed_account.can_data_be_changed())
+        {
+            Ok(()) => borrowed_account.set_data(&data)?,
+            Err(err) if borrowed_account.get_data() != data => return Err(err),
+            _ => {}
         }
         if borrowed_account.get_owner() != &owner {
             borrowed_account.set_owner(owner.as_ref())?;
@@ -302,14 +308,23 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                     .unwrap();
             }
             let account_info_data = account_info.try_borrow_data().unwrap();
-            if borrowed_account.get_data() != *account_info_data {
-                borrowed_account.set_data(&account_info_data).unwrap();
+            // The redundant check helps to avoid the expensive data comparison if we can
+            match borrowed_account
+                .can_data_be_resized(account_info_data.len())
+                .and_then(|_| borrowed_account.can_data_be_changed())
+            {
+                Ok(()) => borrowed_account.set_data(&account_info_data).unwrap(),
+                Err(err) if borrowed_account.get_data() != *account_info_data => {
+                    panic!("{:?}", err);
+                }
+                _ => {}
             }
             if borrowed_account.is_executable() != account_info.executable {
                 borrowed_account
                     .set_executable(account_info.executable)
                     .unwrap();
             }
+            // Change the owner at the end so that we are allowed to change the lamports and data before
             if borrowed_account.get_owner() != account_info.owner {
                 borrowed_account
                     .set_owner(account_info.owner.as_ref())
