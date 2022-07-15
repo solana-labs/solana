@@ -29,6 +29,8 @@ use {
         bank_forks::BankForks,
         bank_utils,
         block_cost_limits::*,
+        block_min_prioritization_fee_cache::BlockMinPrioritizationFeeCache,
+        block_min_prioritization_fee_cache_update::BlockMinPrioritizationFeeCacheUpdate,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         runtime_config::RuntimeConfig,
@@ -516,6 +518,8 @@ pub fn process_entries_for_tests(
             })
             .collect();
 
+    let _ignored_block_min_prioritization_fee_cache =
+        RwLock::new(BlockMinPrioritizationFeeCache::new(0usize));
     let result = process_entries_with_callback(
         bank,
         &mut replay_entries,
@@ -526,6 +530,7 @@ pub fn process_entries_for_tests(
         &mut confirmation_timing,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
         None,
+        &_ignored_block_min_prioritization_fee_cache,
     );
 
     debug!("process_entries: {:?}", confirmation_timing);
@@ -544,6 +549,7 @@ fn process_entries_with_callback(
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     log_messages_bytes_limit: Option<usize>,
+    block_min_prioritization_fee_cache: &RwLock<BlockMinPrioritizationFeeCache>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -582,6 +588,11 @@ fn process_entries_with_callback(
                 }
             }
             EntryType::Transactions(transactions) => {
+                block_min_prioritization_fee_cache
+                    .write()
+                    .unwrap()
+                    .update_transactions(bank.slot(), transactions.iter());
+
                 let starting_index = *starting_index;
                 let transaction_indexes = if randomize {
                     let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
@@ -958,6 +969,9 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
+    let _ignored_block_min_prioritization_fee_cache =
+        RwLock::new(BlockMinPrioritizationFeeCache::new(0usize));
+
     confirm_slot(
         blockstore,
         bank,
@@ -970,6 +984,7 @@ fn confirm_full_slot(
         recyclers,
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
+        &_ignored_block_min_prioritization_fee_cache,
     )?;
 
     timing.accumulate(&confirmation_timing.execute_timings);
@@ -1096,6 +1111,7 @@ pub fn confirm_slot(
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
+    block_min_prioritization_fee_cache: &RwLock<BlockMinPrioritizationFeeCache>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -1124,6 +1140,7 @@ pub fn confirm_slot(
         entry_callback,
         recyclers,
         log_messages_bytes_limit,
+        block_min_prioritization_fee_cache,
     )
 }
 
@@ -1139,6 +1156,7 @@ fn confirm_slot_entries(
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
+    block_min_prioritization_fee_cache: &RwLock<BlockMinPrioritizationFeeCache>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
@@ -1240,6 +1258,7 @@ fn confirm_slot_entries(
                 timing,
                 cost_capacity_meter,
                 log_messages_bytes_limit,
+                block_min_prioritization_fee_cache,
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
@@ -4065,6 +4084,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
+            &RwLock::new(BlockMinPrioritizationFeeCache::new(0usize)),
         )
     }
 
@@ -4208,6 +4228,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
+            &RwLock::new(BlockMinPrioritizationFeeCache::new(0usize)),
         )
         .unwrap();
         assert_eq!(progress.num_txs, 2);
@@ -4253,6 +4274,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
+            &RwLock::new(BlockMinPrioritizationFeeCache::new(0usize)),
         )
         .unwrap();
         assert_eq!(progress.num_txs, 5);

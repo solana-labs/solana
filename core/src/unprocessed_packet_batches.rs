@@ -5,6 +5,9 @@ use {
     },
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
+    solana_runtime::transaction_priority_details::{
+        GetTransactionPriorityDetails, TransactionPriorityDetails,
+    },
     solana_sdk::{
         feature_set,
         hash::Hash,
