@@ -94,7 +94,6 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
     _first_instruction_account: usize,
-    // _input: &[u8],
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
@@ -113,7 +112,7 @@ pub fn builtin_process_instruction(
     );
 
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
-    let deduplicated_indices: HashSet<usize> = instruction_account_indices.clone().collect();
+    let deduplicated_indices: HashSet<usize> = instruction_account_indices.collect();
 
     // Serialize entrypoint parameters with BPF ABI
     let (mut parameter_bytes, _account_lengths) = serialize_parameters(
@@ -124,7 +123,7 @@ pub fn builtin_process_instruction(
     )?;
 
     // Deserialize data back into instruction params
-    let (program_id, account_infos, input) =
+    let (program_id, account_infos, _input) =
         unsafe { deserialize(&mut parameter_bytes.as_slice_mut()[0] as *mut u8) };
 
     // Execute the program
@@ -138,6 +137,12 @@ pub fn builtin_process_instruction(
     // Lookup table for AccountInfo
     let account_info_map: HashMap<_, _> = account_infos.into_iter().map(|a| (a.key, a)).collect();
 
+    // Re-fetch the instruction context. The previous reference may have been
+    // invalidated due to the `set_invoke_context` in a CPI.
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+
+    // Commit AccountInfo changes back into KeyedAccounts
     for i in deduplicated_indices.into_iter() {
         let mut borrowed_account =
             instruction_context.try_borrow_instruction_account(transaction_context, i)?;
