@@ -19,6 +19,8 @@ pub(crate) struct VerifyAccountsHashInBackground {
     complete: Arc<WaitableCondvar>,
     /// thread doing verification
     thread: Mutex<Option<JoinHandle<bool>>>,
+    /// set when background thread has completed
+    background_completed: Arc<AtomicBool>,
 }
 
 impl Default for VerifyAccountsHashInBackground {
@@ -30,6 +32,7 @@ impl Default for VerifyAccountsHashInBackground {
             verified: Arc::new(AtomicBool::new(false)),
             // no thread to start with
             thread: Mutex::new(None::<JoinHandle<bool>>),
+            background_completed: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -45,6 +48,7 @@ impl VerifyAccountsHashInBackground {
     /// notify that the bg process has completed
     pub(crate) fn background_finished(&self) {
         self.complete.notify_all();
+        self.background_completed.store(true, Ordering::Release);
     }
 
     /// notify that verification was completed successfully
@@ -77,7 +81,9 @@ impl VerifyAccountsHashInBackground {
             // already completed
             return true;
         }
-        if self.complete.wait_timeout(Duration::default()) {
+        if self.complete.wait_timeout(Duration::default())
+            && !self.background_completed.load(Ordering::Acquire)
+        {
             // timed out, so not complete
             false
         } else {
