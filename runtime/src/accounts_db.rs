@@ -7754,8 +7754,7 @@ impl AccountsDb {
         let mut update_index_time = Measure::start("update_index");
 
         let reclaim = if matches!(reclaim, StoreReclaims::Ignore) {
-            // would like this to be: UpsertReclaim::IgnoreReclaims
-            UpsertReclaim::PopulateReclaims
+            UpsertReclaim::IgnoreReclaims
         } else if self.caching_enabled && is_cached_store {
             UpsertReclaim::PreviousSlotEntryWasCached
         } else {
