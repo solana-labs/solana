@@ -5218,7 +5218,7 @@ impl Bank {
     }
 
     fn collect_rent_eagerly(&self, just_rewrites: bool) {
-        if !just_rewrites {
+        if !just_rewrites || self.slot() > 99273 {
             // skip rent collection for all but the first bank for kin
             return;
         }
