@@ -44,8 +44,7 @@ use {
             cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
             disable_bpf_unresolved_symbols_at_runtime, disable_deploy_of_alloc_free_syscall,
             disable_deprecated_loader, enable_bpf_loader_extend_program_data_ix,
-            error_on_syscall_bpf_function_hash_collisions, reduce_required_deploy_balance,
-            reject_callx_r10,
+            error_on_syscall_bpf_function_hash_collisions, reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -621,11 +620,8 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
 
-            let predrain_buffer = invoke_context
-                .feature_set
-                .is_active(&reduce_required_deploy_balance::id());
-            if predrain_buffer {
-                // Drain the Buffer account to payer before paying for programdata account
+            // Drain the Buffer account to payer before paying for programdata account
+            {
                 let mut payer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
                 payer.checked_add_lamports(buffer_lamports)?;
@@ -706,17 +702,6 @@ fn process_loader_upgradeable_instruction(
             })?;
             program.set_executable(true)?;
             drop(program);
-
-            if !predrain_buffer {
-                // Drain the Buffer account back to the payer
-                let mut payer =
-                    instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-                payer.checked_add_lamports(buffer_lamports)?;
-                drop(payer);
-                let mut buffer =
-                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                buffer.set_lamports(0)?;
-            }
 
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
         }
