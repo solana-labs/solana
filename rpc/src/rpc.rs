@@ -80,6 +80,7 @@ use {
         send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
+    solana_stake_program,
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
@@ -2169,6 +2170,13 @@ impl JsonRpcRequestProcessor {
         let fee = bank.get_fee_for_message(message);
         Ok(new_response(&bank, fee))
     }
+
+    fn get_stake_minimum_delegation(&self, config: RpcContextConfig) -> Result<RpcResponse<u64>> {
+        let bank = self.get_bank_with_config(config)?;
+        let stake_minimum_delegation =
+            solana_stake_program::get_minimum_delegation(&bank.feature_set);
+        Ok(new_response(&bank, stake_minimum_delegation))
+    }
 }
 
 fn optimize_filters(filters: &mut [RpcFilterType]) {
@@ -3401,6 +3409,13 @@ pub mod rpc_full {
             data: String,
             config: Option<RpcContextConfig>,
         ) -> Result<RpcResponse<Option<u64>>>;
+
+        #[rpc(meta, name = "getStakeMinimumDelegation")]
+        fn get_stake_minimum_delegation(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<u64>>;
     }
 
     pub struct FullImpl;
@@ -3969,6 +3984,15 @@ pub mod rpc_full {
                 Error::invalid_params(format!("invalid transaction message: {}", err))
             })?;
             meta.get_fee_for_message(&sanitized_message, config.unwrap_or_default())
+        }
+
+        fn get_stake_minimum_delegation(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<u64>> {
+            debug!("get_stake_minimum_delegation rpc request received");
+            meta.get_stake_minimum_delegation(config.unwrap_or_default())
         }
     }
 }
@@ -8357,5 +8381,30 @@ pub mod tests {
                 "invalid transaction: Transaction loads an address table account that doesn't exist".to_string(),
             )
         );
+    }
+
+    #[test]
+    fn test_rpc_get_stake_minimum_delegation() {
+        let rpc = RpcHandler::start();
+        let bank = rpc.working_bank();
+        let stake_minimum_delegation =
+            solana_stake_program::get_minimum_delegation(&bank.feature_set);
+        let RpcHandler { meta, io, .. } = rpc;
+
+        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getStakeMinimumDelegation"}"#;
+        let res = io.handle_request_sync(req, meta);
+        let expected = json!({
+            "jsonrpc": "2.0",
+            "result": {
+                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
+                "value": stake_minimum_delegation,
+            },
+            "id": 1
+        });
+        let expected: Response =
+            serde_json::from_value(expected).expect("expected response deserialization");
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        assert_eq!(result, expected);
     }
 }

@@ -288,6 +288,7 @@ impl RpcSender for MockSender {
                 active: 123,
                 inactive: 12,
             }),
+            "getStakeMinimumDelegation" => Value::Number(Number::from(123_456_789)),
             "getSupply" => json!(Response {
                 context: RpcResponseContext { slot: 1, api_version: None },
                 value: RpcSupply {

@@ -43,6 +43,7 @@ solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.4" 
 solana-runtime = { path = "../runtime", version = "=1.11.4" }
 solana-sdk = { path = "../sdk", version = "=1.11.4" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.11.4" }
+solana-stake-program = { path = "../programs/stake", version = "=1.11.4" }
 solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.4" }
 solana-streamer = { path = "../streamer", version = "=1.11.4" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.4" }

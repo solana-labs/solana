@@ -111,6 +111,7 @@ pub enum RpcRequest {
     SendTransaction,
     SimulateTransaction,
     SignVote,
+    GetStakeMinimumDelegation,
 }
 
 #[allow(deprecated)]
@@ -184,6 +185,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SimulateTransaction => "simulateTransaction",
             RpcRequest::SignVote => "signVote",
+            RpcRequest::GetStakeMinimumDelegation => "getStakeMinimumDelegation",
         };
 
         write!(f, "{}", method)
