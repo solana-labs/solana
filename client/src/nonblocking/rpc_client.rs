@@ -4544,8 +4544,10 @@ impl RpcClient {
     /// # Ok::<(), ClientError>(())
     /// ```
     pub async fn get_stake_minimum_delegation(&self) -> ClientResult<u64> {
-        self.send(RpcRequest::GetStakeMinimumDelegation, Value::Null)
-            .await
+        Ok(self
+            .send::<Response<u64>>(RpcRequest::GetStakeMinimumDelegation, Value::Null)
+            .await?
+            .value)
     }
 
     /// Request the transaction count.
