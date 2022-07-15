@@ -305,7 +305,7 @@ fn run_program(name: &str) -> u64 {
                     tracer = Some(vm.get_tracer().clone());
                 }
             }
-            deserialize_parameters(
+            assert!(match deserialize_parameters(
                 invoke_context.transaction_context,
                 invoke_context
                     .transaction_context
@@ -313,8 +313,21 @@ fn run_program(name: &str) -> u64 {
                     .unwrap(),
                 parameter_bytes.as_slice(),
                 &account_lengths,
-            )
-            .unwrap();
+            ) {
+                Ok(()) => true,
+                Err(InstructionError::ModifiedProgramId) => true,
+                Err(InstructionError::ExternalAccountLamportSpend) => true,
+                Err(InstructionError::ReadonlyLamportChange) => true,
+                Err(InstructionError::ExecutableLamportChange) => true,
+                Err(InstructionError::ExecutableAccountNotRentExempt) => true,
+                Err(InstructionError::ExecutableModified) => true,
+                Err(InstructionError::AccountDataSizeChanged) => true,
+                Err(InstructionError::InvalidRealloc) => true,
+                Err(InstructionError::ExecutableDataModified) => true,
+                Err(InstructionError::ReadonlyDataModified) => true,
+                Err(InstructionError::ExternalAccountDataModified) => true,
+                _ => false,
+            });
         }
         instruction_count
     })

@@ -164,18 +164,28 @@ pub fn deserialize_parameters_unaligned(
             start += size_of::<u8>(); // is_signer
             start += size_of::<u8>(); // is_writable
             start += size_of::<Pubkey>(); // key
-            let _ = borrowed_account.set_lamports(LittleEndian::read_u64(
+            let lamports = LittleEndian::read_u64(
                 buffer
                     .get(start..)
                     .ok_or(InstructionError::InvalidArgument)?,
-            ));
+            );
+            if borrowed_account.get_lamports() != lamports {
+                borrowed_account.set_lamports(lamports)?;
+            }
             start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
-            let _ = borrowed_account.set_data(
-                buffer
-                    .get(start..start + pre_len)
-                    .ok_or(InstructionError::InvalidArgument)?,
-            );
+            let data = buffer
+                .get(start..start + pre_len)
+                .ok_or(InstructionError::InvalidArgument)?;
+            // The redundant check helps to avoid the expensive data comparison if we can
+            match borrowed_account
+                .can_data_be_resized(data.len())
+                .and_then(|_| borrowed_account.can_data_be_changed())
+            {
+                Ok(()) => borrowed_account.set_data(data)?,
+                Err(err) if borrowed_account.get_data() != data => return Err(err),
+                _ => {}
+            }
             start += pre_len // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
@@ -302,17 +312,18 @@ pub fn deserialize_parameters_aligned(
                 + size_of::<u8>() // executable
                 + size_of::<u32>() // original_data_len
                 + size_of::<Pubkey>(); // key
-            let _ = borrowed_account.set_owner(
-                buffer
-                    .get(start..start + size_of::<Pubkey>())
-                    .ok_or(InstructionError::InvalidArgument)?,
-            );
+            let owner = buffer
+                .get(start..start + size_of::<Pubkey>())
+                .ok_or(InstructionError::InvalidArgument)?;
             start += size_of::<Pubkey>(); // owner
-            let _ = borrowed_account.set_lamports(LittleEndian::read_u64(
+            let lamports = LittleEndian::read_u64(
                 buffer
                     .get(start..)
                     .ok_or(InstructionError::InvalidArgument)?,
-            ));
+            );
+            if borrowed_account.get_lamports() != lamports {
+                borrowed_account.set_lamports(lamports)?;
+            }
             start += size_of::<u64>(); // lamports
             let post_len = LittleEndian::read_u64(
                 buffer
@@ -320,21 +331,31 @@ pub fn deserialize_parameters_aligned(
                     .ok_or(InstructionError::InvalidArgument)?,
             ) as usize;
             start += size_of::<u64>(); // data length
-
             if post_len.saturating_sub(*pre_len) > MAX_PERMITTED_DATA_INCREASE
                 || post_len > MAX_PERMITTED_DATA_LENGTH as usize
             {
                 return Err(InstructionError::InvalidRealloc);
             }
             let data_end = start + post_len;
-            let _ = borrowed_account.set_data(
-                buffer
-                    .get(start..data_end)
-                    .ok_or(InstructionError::InvalidArgument)?,
-            );
+            let data = buffer
+                .get(start..data_end)
+                .ok_or(InstructionError::InvalidArgument)?;
+            // The redundant check helps to avoid the expensive data comparison if we can
+            match borrowed_account
+                .can_data_be_resized(data.len())
+                .and_then(|_| borrowed_account.can_data_be_changed())
+            {
+                Ok(()) => borrowed_account.set_data(data)?,
+                Err(err) if borrowed_account.get_data() != data => return Err(err),
+                _ => {}
+            }
             start += *pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(BPF_ALIGN_OF_U128);
             start += size_of::<u64>(); // rent_epoch
+            if borrowed_account.get_owner().to_bytes() != owner {
+                // Change the owner at the end so that we are allowed to change the lamports and data before
+                borrowed_account.set_owner(owner)?;
+            }
         }
     }
     Ok(())
@@ -351,6 +372,7 @@ mod tests {
             bpf_loader,
             entrypoint::deserialize,
             instruction::AccountMeta,
+            sysvar::rent::Rent,
         },
         std::{
             cell::RefCell,
@@ -453,8 +475,12 @@ mod tests {
             instruction_accounts,
             &program_indices,
         );
-        let mut transaction_context =
-            TransactionContext::new(preparation.transaction_accounts, 1, 1);
+        let mut transaction_context = TransactionContext::new(
+            preparation.transaction_accounts,
+            Some(Rent::default()),
+            1,
+            1,
+        );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(
@@ -512,16 +538,6 @@ mod tests {
             );
         }
 
-        for index_in_transaction in 1..original_accounts.len() {
-            let mut account = invoke_context
-                .transaction_context
-                .get_account_at_index(index_in_transaction)
-                .unwrap()
-                .borrow_mut();
-            account.set_lamports(0);
-            account.set_data(vec![0; 0]);
-            account.set_owner(Pubkey::default());
-        }
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
@@ -545,13 +561,12 @@ mod tests {
             .unwrap()
             .1
             .set_owner(bpf_loader_deprecated::id());
-        let _ = invoke_context
+        invoke_context
             .transaction_context
-            .get_current_instruction_context()
+            .get_account_at_index(0)
             .unwrap()
-            .try_borrow_program_account(invoke_context.transaction_context, 0)
-            .unwrap()
-            .set_owner(bpf_loader_deprecated::id().as_ref());
+            .borrow_mut()
+            .set_owner(bpf_loader_deprecated::id());
 
         let (mut serialized, account_lengths) =
             serialize_parameters(invoke_context.transaction_context, instruction_context).unwrap();
@@ -578,15 +593,6 @@ mod tests {
             assert_eq!(account.rent_epoch(), account_info.rent_epoch);
         }
 
-        for index_in_transaction in 1..original_accounts.len() {
-            let mut account = invoke_context
-                .transaction_context
-                .get_account_at_index(index_in_transaction)
-                .unwrap()
-                .borrow_mut();
-            account.set_lamports(0);
-            account.set_data(vec![0; 0]);
-        }
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,

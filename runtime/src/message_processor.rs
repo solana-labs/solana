@@ -282,7 +282,8 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context =
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_keys = transaction_context.get_keys_of_accounts().to_vec();
@@ -502,7 +503,8 @@ mod tests {
                 create_loadable_account_for_test("mock_system_program"),
             ),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 3);
+        let mut transaction_context =
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
         let account_metas = vec![
@@ -661,7 +663,8 @@ mod tests {
             (secp256k1_program::id(), secp256k1_account),
             (mock_program_id, mock_program_account),
         ];
-        let mut transaction_context = TransactionContext::new(accounts, 1, 2);
+        let mut transaction_context =
+            TransactionContext::new(accounts, Some(Rent::default()), 1, 2);
 
         let message = SanitizedMessage::Legacy(Message::new(
             &[

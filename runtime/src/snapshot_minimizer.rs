@@ -408,8 +408,7 @@ impl<'a> SnapshotMinimizer<'a> {
 mod tests {
     use {
         crate::{
-            append_vec::AppendVecAccountsIter, bank::Bank,
-            genesis_utils::create_genesis_config_with_leader,
+            bank::Bank, genesis_utils::create_genesis_config_with_leader,
             snapshot_minimizer::SnapshotMinimizer,
         },
         dashmap::DashSet,
@@ -681,7 +680,7 @@ mod tests {
         let mut account_count = 0;
         snapshot_storages.into_iter().for_each(|storages| {
             storages.into_iter().for_each(|storage| {
-                account_count += AppendVecAccountsIter::new(&storage.accounts).count();
+                account_count += storage.accounts.account_iter().count();
             });
         });
 
