@@ -8387,24 +8387,16 @@ pub mod tests {
     fn test_rpc_get_stake_minimum_delegation() {
         let rpc = RpcHandler::start();
         let bank = rpc.working_bank();
-        let stake_minimum_delegation =
+        let expected_stake_minimum_delegation =
             solana_stake_program::get_minimum_delegation(&bank.feature_set);
-        let RpcHandler { meta, io, .. } = rpc;
 
-        let req = r#"{"jsonrpc":"2.0","id":1,"method":"getStakeMinimumDelegation"}"#;
-        let res = io.handle_request_sync(req, meta);
-        let expected = json!({
-            "jsonrpc": "2.0",
-            "result": {
-                "context": {"slot": 0, "apiVersion": RpcApiVersion::default()},
-                "value": stake_minimum_delegation,
-            },
-            "id": 1
-        });
-        let expected: Response =
-            serde_json::from_value(expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(result, expected);
+        let request = create_test_request("getStakeMinimumDelegation", None);
+        let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
+        let actual_stake_minimum_delegation = response.value;
+
+        assert_eq!(
+            actual_stake_minimum_delegation,
+            expected_stake_minimum_delegation
+        );
     }
 }
