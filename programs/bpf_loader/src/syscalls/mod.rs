@@ -507,7 +507,7 @@ macro_rules! declare_syscall {
     ($(#[$attr:meta])* $name:ident, $call:item) => {
         $(#[$attr])*
         pub struct $name<'a, 'b> {
-            invoke_context: SyscallContext<'a, 'b>,
+            pub(crate) invoke_context: SyscallContext<'a, 'b>,
         }
         impl<'a, 'b> $name<'a, 'b> {
             pub fn init(
