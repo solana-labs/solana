@@ -1248,8 +1248,7 @@ mod tests {
     #[test]
     fn test_process_token_allocations() {
         let alice = Keypair::new();
-        let test_validator =
-            TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+        let test_validator = simple_test_validator_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
@@ -1259,19 +1258,24 @@ mod tests {
     #[test]
     fn test_process_transfer_amount_allocations() {
         let alice = Keypair::new();
-        let test_validator =
-            TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+        let test_validator = simple_test_validator_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
         test_process_distribute_tokens_with_client(&client, alice, Some(sol_to_lamports(1.5)));
     }
 
+    fn simple_test_validator_no_fees(pubkey: Pubkey) -> TestValidator {
+        let test_validator =
+            TestValidator::with_no_fees(pubkey, None, SocketAddrSpace::Unspecified);
+        test_validator.set_startup_verification_complete();
+        test_validator
+    }
+
     #[test]
     fn test_create_stake_allocations() {
         let alice = Keypair::new();
-        let test_validator =
-            TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+        let test_validator = simple_test_validator_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
@@ -1281,8 +1285,7 @@ mod tests {
     #[test]
     fn test_process_stake_allocations() {
         let alice = Keypair::new();
-        let test_validator =
-            TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+        let test_validator = simple_test_validator_no_fees(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
@@ -1599,12 +1602,7 @@ mod tests {
     #[test]
     fn test_check_payer_balances_distribute_tokens_single_payer() {
         let alice = Keypair::new();
-        let test_validator = TestValidator::with_custom_fees(
-            alice.pubkey(),
-            10_000,
-            None,
-            SocketAddrSpace::Unspecified,
-        );
+        let test_validator = simple_test_validator(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
@@ -1693,13 +1691,9 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_tokens_separate_payers() {
+        solana_logger::setup();
         let alice = Keypair::new();
-        let test_validator = TestValidator::with_custom_fees(
-            alice.pubkey(),
-            10_000,
-            None,
-            SocketAddrSpace::Unspecified,
-        );
+        let test_validator = simple_test_validator(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
@@ -1818,15 +1812,17 @@ mod tests {
         }
     }
 
+    fn simple_test_validator(alice: Pubkey) -> TestValidator {
+        let test_validator =
+            TestValidator::with_custom_fees(alice, 10_000, None, SocketAddrSpace::Unspecified);
+        test_validator.set_startup_verification_complete();
+        test_validator
+    }
+
     #[test]
     fn test_check_payer_balances_distribute_stakes_single_payer() {
         let alice = Keypair::new();
-        let test_validator = TestValidator::with_custom_fees(
-            alice.pubkey(),
-            10_000,
-            None,
-            SocketAddrSpace::Unspecified,
-        );
+        let test_validator = simple_test_validator(alice.pubkey());
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
 
@@ -1946,13 +1942,9 @@ mod tests {
 
     #[test]
     fn test_check_payer_balances_distribute_stakes_separate_payers() {
+        solana_logger::setup();
         let alice = Keypair::new();
-        let test_validator = TestValidator::with_custom_fees(
-            alice.pubkey(),
-            10_000,
-            None,
-            SocketAddrSpace::Unspecified,
-        );
+        let test_validator = simple_test_validator(alice.pubkey());
         let url = test_validator.rpc_url();
 
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
@@ -2276,11 +2268,7 @@ mod tests {
     #[test]
     fn test_distribute_allocations_dump_db() {
         let sender_keypair = Keypair::new();
-        let test_validator = TestValidator::with_no_fees(
-            sender_keypair.pubkey(),
-            None,
-            SocketAddrSpace::Unspecified,
-        );
+        let test_validator = simple_test_validator_no_fees(sender_keypair.pubkey());
         let url = test_validator.rpc_url();
         let client = RpcClient::new_with_commitment(url, CommitmentConfig::processed());
 

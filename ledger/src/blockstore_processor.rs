@@ -1539,6 +1539,7 @@ fn load_frozen_forks(
                     can_cached_slot_be_unflushed,
                     ignore_mismatch: true,
                     require_rooted_bank: false,
+                    run_in_background: false,
                 });
                 break;
             }

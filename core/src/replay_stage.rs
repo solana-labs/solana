@@ -5928,6 +5928,8 @@ pub(crate) mod tests {
         let my_vote_pubkey = my_vote_keypair[0].pubkey();
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
 
+        bank0.set_initial_accounts_hash_verification_completed();
+
         let (voting_sender, voting_receiver) = unbounded();
 
         // Simulate landing a vote for slot 0 landing in slot 1

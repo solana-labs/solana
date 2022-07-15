@@ -165,6 +165,7 @@ use {
             },
             Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
+        thread::Builder,
         time::{Duration, Instant},
     },
 };
@@ -175,6 +176,7 @@ pub struct VerifyBankHash {
     pub can_cached_slot_be_unflushed: bool,
     pub ignore_mismatch: bool,
     pub require_rooted_bank: bool,
+    pub run_in_background: bool,
 }
 
 #[derive(Debug, Default)]
@@ -3710,11 +3712,30 @@ impl Bank {
     }
 
     pub fn get_startup_verification_complete(&self) -> &Arc<AtomicBool> {
-        &self.rc.accounts.accounts_db.startup_verification_complete
+        &self
+            .rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .verified
     }
 
     pub fn is_startup_verification_complete(&self) -> bool {
-        self.get_startup_verification_complete().load(Relaxed)
+        self.rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .check_complete()
+    }
+
+    /// This can occur because it completed in the background
+    /// or if the verification was run in the foreground.
+    pub fn set_startup_verification_complete(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .verification_complete()
     }
 
     pub fn get_fee_for_message_with_lamports_per_signature(
@@ -6815,13 +6836,20 @@ impl Bank {
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
     /// snapshot.
+    /// return true if all is good
     /// Only called from startup or test code.
     #[must_use]
     pub fn verify_bank_hash(&self, config: VerifyBankHash) -> bool {
+        let accounts = &self.rc.accounts;
+        // Wait until initial hash calc is complete before starting a new hash calc.
+        // This should only occur when we halt at a slot in ledger-tool.
+        accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .wait_for_complete();
+
         if config.require_rooted_bank
-            && !self
-                .rc
-                .accounts
+            && !accounts
                 .accounts_db
                 .accounts_index
                 .is_alive_root(self.slot())
@@ -6835,26 +6863,79 @@ impl Bank {
                 panic!("cannot verify bank hash when bank is not a root");
             }
         }
+        let slot = self.slot();
+        let ancestors = &self.ancestors;
+        let cap = self.capitalization();
+        let epoch_schedule = self.epoch_schedule();
+        let rent_collector = self.rent_collector();
+        if config.run_in_background {
+            let ancestors = ancestors.clone();
+            let accounts = Arc::clone(accounts);
+            let epoch_schedule = *epoch_schedule;
+            let rent_collector = rent_collector.clone();
+            let accounts_ = Arc::clone(&accounts);
+            accounts.accounts_db.verify_accounts_hash_in_bg.start(|| {
+                Builder::new()
+                    .name("solana-bg-hash-verifier".to_string())
+                    .spawn(move || {
+                        info!(
+                            "running initial verification accounts hash calculation in background"
+                        );
+                        let result = accounts_.verify_bank_hash_and_lamports(
+                            slot,
+                            &ancestors,
+                            cap,
+                            config.test_hash_calculation,
+                            &epoch_schedule,
+                            &rent_collector,
+                            config.can_cached_slot_be_unflushed,
+                            config.ignore_mismatch,
+                        );
+                        accounts_
+                            .accounts_db
+                            .verify_accounts_hash_in_bg
+                            .background_finished();
+                        result
+                    })
+                    .unwrap()
+            });
+            true // initial result is true. We haven't failed yet. If verification fails, we'll panic from bg thread.
+        } else {
+            let result = accounts.verify_bank_hash_and_lamports(
+                slot,
+                &self.ancestors,
+                cap,
+                config.test_hash_calculation,
+                epoch_schedule,
+                rent_collector,
+                config.can_cached_slot_be_unflushed,
+                config.ignore_mismatch,
+            );
+            self.set_initial_accounts_hash_verification_completed();
+            result
+        }
+    }
 
-        self.rc.accounts.verify_bank_hash_and_lamports(
-            self.slot(),
-            &self.ancestors,
-            self.capitalization(),
-            config.test_hash_calculation,
-            self.epoch_schedule(),
-            &self.rent_collector,
-            config.can_cached_slot_be_unflushed,
-            config.ignore_mismatch,
-        )
+    /// Specify that initial verification has completed.
+    /// Called internally when verification runs in the foreground thread.
+    /// Also has to be called by some tests which don't do verification on startup.
+    pub fn set_initial_accounts_hash_verification_completed(&self) {
+        self.rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .verification_complete();
     }
 
     /// return true if bg hash verification is complete
     /// return false if bg hash verification has not completed yet
     /// if hash verification failed, a panic will occur
     pub fn has_initial_accounts_hash_verification_completed(&self) -> bool {
-        // this will be live shortly
-        // for now, this check occurs at startup, so it must always be true
-        true
+        self.rc
+            .accounts
+            .accounts_db
+            .verify_accounts_hash_in_bg
+            .check_complete()
     }
 
     pub fn get_snapshot_storages(&self, base_slot: Option<Slot>) -> SnapshotStorages {
@@ -7067,10 +7148,16 @@ impl Bank {
                 can_cached_slot_be_unflushed: false,
                 ignore_mismatch: false,
                 require_rooted_bank: false,
+                run_in_background: true,
             });
             verify_time.stop();
             (verify, verify_time.as_us())
         } else {
+            self.rc
+                .accounts
+                .accounts_db
+                .verify_accounts_hash_in_bg
+                .verification_complete();
             (true, 0)
         };
 
@@ -10287,6 +10374,7 @@ pub(crate) mod tests {
                 can_cached_slot_be_unflushed: false,
                 ignore_mismatch: false,
                 require_rooted_bank: false,
+                run_in_background: false,
             }
         }
     }

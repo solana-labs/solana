@@ -52,6 +52,7 @@ use {
         rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         sorted_storages::SortedStorages,
         storable_accounts::StorableAccounts,
+        verify_accounts_hash_in_background::VerifyAccountsHashInBackground,
     },
     blake3::traits::digest::Digest,
     crossbeam_channel::{unbounded, Receiver, Sender},
@@ -1135,8 +1136,6 @@ pub struct AccountsDb {
     /// true if drop_callback is attached to the bank.
     is_bank_drop_callback_enabled: AtomicBool,
 
-    pub startup_verification_complete: Arc<AtomicBool>,
-
     /// Set of slots currently being flushed by `flush_slot_cache()` or removed
     /// by `remove_unrooted_slot()`. Used to ensure `remove_unrooted_slots(slots)`
     /// can safely clear the set of unrooted slots `slots`.
@@ -1166,6 +1165,8 @@ pub struct AccountsDb {
 
     /// number of slots remaining where filler accounts should be added
     pub filler_account_slots_remaining: AtomicU64,
+
+    pub(crate) verify_accounts_hash_in_bg: VerifyAccountsHashInBackground,
 
     // # of passes should be a function of the total # of accounts that are active.
     // higher passes = slower total time, lower dynamic memory usage
@@ -1922,12 +1923,8 @@ impl AccountsDb {
         // rayon needs a lot of stack
         const ACCOUNTS_STACK_SIZE: usize = 8 * 1024 * 1024;
 
-        // this will be live shortly
-        // for now, this check occurs at startup, so it must always be true
-        let startup_verification_complete = Arc::new(AtomicBool::new(true));
-
         AccountsDb {
-            startup_verification_complete,
+            verify_accounts_hash_in_bg: VerifyAccountsHashInBackground::default(),
             filler_accounts_per_slot: AtomicU64::default(),
             filler_account_slots_remaining: AtomicU64::default(),
             active_stats: ActiveStats::default(),
@@ -6927,6 +6924,7 @@ impl AccountsDb {
 
         let use_index = false;
         let check_hash = false; // this will not be supported anymore
+                                // interesting to consider this
         let is_startup = true;
         let (calculated_hash, calculated_lamports) = self
             .calculate_accounts_hash_helper_with_verify(
