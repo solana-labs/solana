@@ -230,7 +230,7 @@ fn main() {
                             if path.exists() && path.is_dir() {
                                 Ok(())
                             } else {
-                                Err(format!("wrong directory '{}'", value))
+                                Err(format!("path does not exist or is not a directory: {}", value))
                             }
                         })
                 })
