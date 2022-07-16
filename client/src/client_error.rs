@@ -28,6 +28,8 @@ pub enum ClientErrorKind {
     FaucetError(#[from] FaucetError),
     #[error("Custom: {0}")]
     Custom(String),
+    #[error(transparent)]
+    QuinnError(#[from] QuinnError),
 }
 
 impl ClientErrorKind {
@@ -69,19 +71,28 @@ impl From<ClientErrorKind> for TransportError {
             ClientErrorKind::SigningError(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::FaucetError(err) => Self::Custom(format!("{:?}", err)),
             ClientErrorKind::Custom(err) => Self::Custom(format!("{:?}", err)),
+            ClientErrorKind::QuinnError(err) => Self::Custom(format!("{:?}", err)),
         }
     }
 }
 
+#[derive(Error, Debug)]
+pub enum QuinnError {
+    #[error(transparent)]
+    WriteError(#[from] WriteError),
+    #[error(transparent)]
+    ConnectError(#[from] ConnectError),
+}
+
 impl From<WriteError> for ClientErrorKind {
     fn from(write_error: WriteError) -> Self {
-        Self::Custom(format!("{:?}", write_error))
+        write_error.into()
     }
 }
 
 impl From<ConnectError> for ClientErrorKind {
     fn from(connect_error: ConnectError) -> Self {
-        Self::Custom(format!("{:?}", connect_error))
+        connect_error.into()
     }
 }
 

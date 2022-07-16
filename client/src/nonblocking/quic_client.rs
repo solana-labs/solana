@@ -1,6 +1,7 @@
 //! Simple nonblocking client that connects to a given UDP port with the QUIC protocol
 //! and provides an interface for sending transactions which is restricted by the
 //! server's flow control.
+
 use {
     crate::{
         client_error::ClientErrorKind, connection_cache::ConnectionCacheStats,
