@@ -416,7 +416,11 @@ fn handle_chunk(
                     stats.total_invalid_chunks.fetch_add(1, Ordering::Relaxed);
                     return true;
                 }
-                if chunk.offset + chunk_len > PACKET_DATA_SIZE as u64 {
+                let end_of_chunk = match chunk.offset.checked_add(chunk_len) {
+                    Some(end) => end,
+                    None => return true,
+                };
+                if end_of_chunk > PACKET_DATA_SIZE as u64 {
                     stats
                         .total_invalid_chunk_size
                         .fetch_add(1, Ordering::Relaxed);
@@ -437,9 +441,14 @@ fn handle_chunk(
                 }
 
                 if let Some(batch) = maybe_batch.as_mut() {
-                    let end = chunk.offset as usize + chunk.bytes.len();
-                    batch[0].buffer_mut()[chunk.offset as usize..end].copy_from_slice(&chunk.bytes);
-                    batch[0].meta.size = std::cmp::max(batch[0].meta.size, end);
+                    let end_of_chunk = match (chunk.offset as usize).checked_add(chunk.bytes.len())
+                    {
+                        Some(end) => end,
+                        None => return true,
+                    };
+                    batch[0].buffer_mut()[chunk.offset as usize..end_of_chunk]
+                        .copy_from_slice(&chunk.bytes);
+                    batch[0].meta.size = std::cmp::max(batch[0].meta.size, end_of_chunk);
                     stats.total_chunks_received.fetch_add(1, Ordering::Relaxed);
                 }
             } else {
