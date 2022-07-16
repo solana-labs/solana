@@ -584,7 +584,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_net_stats() {
+    fn test_parse_udp_stats() {
         const MOCK_SNMP: &[u8] =
 b"Ip: Forwarding DefaultTTL InReceives InHdrErrors InAddrErrors ForwDatagrams InUnknownProtos InDiscards InDelivers OutRequests OutDiscards OutNoRoutes ReasmTimeout ReasmReqds ReasmOKs ReasmFails FragOKs FragFails FragCreates
 Ip: 1 64 357 0 2 0 0 0 355 315 0 6 0 0 0 0 0 0 0
@@ -598,20 +598,29 @@ Udp: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors InCsumE
 Udp: 27 7 0 30 0 0 0 0
 UdpLite: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors InCsumErrors IgnoredMulti
 UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
+        const UNEXPECTED_DATA: &[u8] = b"unexpected data" as &[u8];
 
+        let mut mock_snmp = MOCK_SNMP;
+        let stats = parse_udp_stats(&mut mock_snmp).unwrap();
+        assert_eq!(stats.out_datagrams, 30);
+        assert_eq!(stats.no_ports, 7);
+
+        mock_snmp = UNEXPECTED_DATA;
+        let stats = parse_udp_stats(&mut mock_snmp);
+        assert!(stats.is_err());
+    }
+
+    #[test]
+    fn test_parse_net_dev_stats() {
         const MOCK_DEV: &[u8] =
 b"Inter-|   Receive                                                |  Transmit
 face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
 lo: 100     1    0    0    0     0          0         0 200 3    2    0    0     0       0          0
 ens4: 400     4    0    1    0     0          0         0 250 5    0    0    0     0       0          0" as &[u8];
-
         const UNEXPECTED_DATA: &[u8] = b"unexpected data" as &[u8];
-        let mut mock_snmp = MOCK_SNMP;
-        let mut mock_dev = MOCK_DEV;
 
-        let stats = parse_net_stats(&mut mock_snmp, &mut mock_dev).unwrap();
-        assert_eq!(stats.out_datagrams, 30);
-        assert_eq!(stats.no_ports, 7);
+        let mut mock_dev = MOCK_DEV;
+        let stats = parse_net_dev_stats(&mut mock_dev).unwrap();
         assert_eq!(stats.rx_bytes, 500);
         assert_eq!(stats.rx_packets, 5);
         assert_eq!(stats.rx_errs, 0);
@@ -621,14 +630,8 @@ ens4: 400     4    0    1    0     0          0         0 250 5    0    0    0  
         assert_eq!(stats.tx_errs, 2);
         assert_eq!(stats.tx_drops, 0);
 
-        let mut mock_snmp = UNEXPECTED_DATA;
-        let mut mock_dev = MOCK_DEV;
-        let stats = parse_net_stats(&mut mock_snmp, &mut mock_dev);
-        assert!(stats.is_err());
-
-        let mut mock_snmp = MOCK_SNMP;
         let mut mock_dev = UNEXPECTED_DATA;
-        let stats = parse_net_stats(&mut mock_snmp, &mut mock_dev);
+        let stats = parse_net_dev_stats(&mut mock_dev);
         assert!(stats.is_err());
     }
 
@@ -638,4 +641,6 @@ ens4: 400     4    0    1    0     0          0         0 250 5    0    0    0  
         let one_tb_as_kb = (1u64 << 40) >> 10;
         assert!(SystemMonitorService::calc_percent(one_tb_as_kb - 1, one_tb_as_kb) < 100.0);
     }
+
+
 }
