@@ -2584,7 +2584,6 @@ impl ReplayStage {
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
-        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
     ) -> bool {
