@@ -546,6 +546,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         UpsertReclaim::PreviousSlotEntryWasCached => {
                             assert!(is_cur_account_cached);
                         }
+                        UpsertReclaim::IgnoreReclaims => {
+                            // do nothing. nothing to assert. nothing to return in reclaims
+                        }
                     }
 
                     if matched_slot {

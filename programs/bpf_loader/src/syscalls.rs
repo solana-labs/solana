@@ -17,13 +17,14 @@ use {
         vm::{EbpfVm, SyscallObject, SyscallRegistry},
     },
     solana_sdk::{
-        account::WritableAccount,
+        account::{ReadableAccount, WritableAccount},
         account_info::AccountInfo,
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
-            curve25519_syscall_enabled, disable_fees_sysvar, libsecp256k1_0_5_upgrade_enabled,
+            curve25519_syscall_enabled, disable_fees_sysvar,
+            enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
             syscall_saturated_math,
         },
@@ -2663,26 +2664,56 @@ where
                 invoke_context,
             )?;
             {
-                callee_account
-                    .set_lamports(*caller_account.lamports)
-                    .map_err(SyscallError::InstructionError)?;
-                callee_account
-                    .set_data(caller_account.data)
-                    .map_err(SyscallError::InstructionError)?;
-                callee_account
-                    .set_executable(caller_account.executable)
-                    .map_err(SyscallError::InstructionError)?;
-                callee_account
-                    .set_owner(caller_account.owner.as_ref())
-                    .map_err(SyscallError::InstructionError)?;
+                if callee_account.get_lamports() != *caller_account.lamports {
+                    callee_account
+                        .set_lamports(*caller_account.lamports)
+                        .map_err(SyscallError::InstructionError)?;
+                }
+                // The redundant check helps to avoid the expensive data comparison if we can
+                match callee_account
+                    .can_data_be_resized(caller_account.data.len())
+                    .and_then(|_| callee_account.can_data_be_changed())
+                {
+                    Ok(()) => callee_account
+                        .set_data(caller_account.data)
+                        .map_err(SyscallError::InstructionError)?,
+                    Err(err) if callee_account.get_data() != caller_account.data => {
+                        return Err(EbpfError::UserError(BpfError::SyscallError(
+                            SyscallError::InstructionError(err),
+                        )));
+                    }
+                    _ => {}
+                }
+                if callee_account.is_executable() != caller_account.executable {
+                    callee_account
+                        .set_executable(caller_account.executable)
+                        .map_err(SyscallError::InstructionError)?;
+                }
+                // Change the owner at the end so that we are allowed to change the lamports and data before
+                if callee_account.get_owner() != caller_account.owner {
+                    callee_account
+                        .set_owner(caller_account.owner.as_ref())
+                        .map_err(SyscallError::InstructionError)?;
+                }
                 drop(callee_account);
                 let callee_account = invoke_context
                     .transaction_context
                     .get_account_at_index(instruction_account.index_in_transaction)
                     .map_err(SyscallError::InstructionError)?;
-                callee_account
-                    .borrow_mut()
-                    .set_rent_epoch(caller_account.rent_epoch);
+                if callee_account.borrow().rent_epoch() != caller_account.rent_epoch {
+                    if invoke_context
+                        .feature_set
+                        .is_active(&enable_early_verification_of_account_modifications::id())
+                    {
+                        Err(SyscallError::InstructionError(
+                            InstructionError::RentEpochModified,
+                        ))?;
+                    } else {
+                        callee_account
+                            .borrow_mut()
+                            .set_rent_epoch(caller_account.rent_epoch);
+                    }
+                }
             }
             let caller_account = if instruction_account.is_writable {
                 let orig_data_lens = invoke_context
@@ -3364,7 +3395,8 @@ mod tests {
                 ),
                 ($program_key, AccountSharedData::new(0, 0, &$loader_key)),
             ];
-            let mut $transaction_context = TransactionContext::new(transaction_accounts, 1, 1);
+            let mut $transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
             $invoke_context.push(&[], &[0, 1], &[]).unwrap();
         };

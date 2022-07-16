@@ -1,10 +1,12 @@
 use {
-    crate::streamer::StakedNodes,
+    crate::{
+        nonblocking::quic::ALPN_TPU_PROTOCOL_ID, streamer::StakedNodes,
+        tls_certificates::new_self_signed_tls_certificate_chain,
+    },
     crossbeam_channel::Sender,
     pem::Pem,
-    pkcs8::{der::Document, AlgorithmIdentifier, ObjectIdentifier},
     quinn::{IdleTimeout, ServerConfig, VarInt},
-    rcgen::{CertificateParams, DistinguishedName, DnType, SanType},
+    rustls::{server::ClientCertVerified, Certificate, DistinguishedNames},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
         packet::PACKET_DATA_SIZE,
@@ -12,13 +14,13 @@ use {
         signature::Keypair,
     },
     std::{
-        error::Error,
         net::{IpAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, RwLock,
         },
         thread,
+        time::SystemTime,
     },
     tokio::runtime::{Builder, Runtime},
 };
@@ -27,6 +29,29 @@ pub const MAX_STAKED_CONNECTIONS: usize = 2000;
 pub const MAX_UNSTAKED_CONNECTIONS: usize = 500;
 const NUM_QUIC_STREAMER_WORKER_THREADS: usize = 4;
 
+struct SkipClientVerification;
+
+impl SkipClientVerification {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+impl rustls::server::ClientCertVerifier for SkipClientVerification {
+    fn client_auth_root_subjects(&self) -> Option<DistinguishedNames> {
+        Some(DistinguishedNames::new())
+    }
+
+    fn verify_client_cert(
+        &self,
+        _end_entity: &Certificate,
+        _intermediates: &[Certificate],
+        _now: SystemTime,
+    ) -> Result<ClientCertVerified, rustls::Error> {
+        Ok(rustls::server::ClientCertVerified::assertion())
+    }
+}
+
 /// Returns default server configuration along with its PEM certificate chain.
 #[allow(clippy::field_reassign_with_default)] // https://github.com/rust-lang/rust-clippy/issues/6527
 pub(crate) fn configure_server(
@@ -34,7 +59,8 @@ pub(crate) fn configure_server(
     gossip_host: IpAddr,
 ) -> Result<(ServerConfig, String), QuicServerError> {
     let (cert_chain, priv_key) =
-        new_cert(identity_keypair, gossip_host).map_err(|_e| QuicServerError::ConfigureFailed)?;
+        new_self_signed_tls_certificate_chain(identity_keypair, gossip_host)
+            .map_err(|_e| QuicServerError::ConfigureFailed)?;
     let cert_chain_pem_parts: Vec<Pem> = cert_chain
         .iter()
         .map(|cert| Pem {
@@ -44,8 +70,14 @@ pub(crate) fn configure_server(
         .collect();
     let cert_chain_pem = pem::encode_many(&cert_chain_pem_parts);
 
-    let mut server_config = ServerConfig::with_single_cert(cert_chain, priv_key)
+    let mut server_tls_config = rustls::ServerConfig::builder()
+        .with_safe_defaults()
+        .with_client_cert_verifier(SkipClientVerification::new())
+        .with_single_cert(cert_chain, priv_key)
         .map_err(|_e| QuicServerError::ConfigureFailed)?;
+    server_tls_config.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
+
+    let mut server_config = ServerConfig::with_crypto(Arc::new(server_tls_config));
     let config = Arc::get_mut(&mut server_config.transport).unwrap();
 
     // QUIC_MAX_CONCURRENT_STREAMS doubled, which was found to improve reliability
@@ -62,66 +94,6 @@ pub(crate) fn configure_server(
     config.datagram_receive_buffer_size(None);
 
     Ok((server_config, cert_chain_pem))
-}
-
-fn new_cert(
-    identity_keypair: &Keypair,
-    san: IpAddr,
-) -> Result<(Vec<rustls::Certificate>, rustls::PrivateKey), Box<dyn Error>> {
-    // Generate a self-signed cert from validator identity key
-    let cert_params = new_cert_params(identity_keypair, san);
-    let cert = rcgen::Certificate::from_params(cert_params)?;
-    let cert_der = cert.serialize_der().unwrap();
-    let priv_key = cert.serialize_private_key_der();
-    let priv_key = rustls::PrivateKey(priv_key);
-    let cert_chain = vec![rustls::Certificate(cert_der)];
-    Ok((cert_chain, priv_key))
-}
-
-fn convert_to_rcgen_keypair(identity_keypair: &Keypair) -> rcgen::KeyPair {
-    // from https://datatracker.ietf.org/doc/html/rfc8410#section-3
-    const ED25519_IDENTIFIER: [u32; 4] = [1, 3, 101, 112];
-    let mut private_key = Vec::<u8>::with_capacity(34);
-    private_key.extend_from_slice(&[0x04, 0x20]); // ASN.1 OCTET STRING
-    private_key.extend_from_slice(identity_keypair.secret().as_bytes());
-    let key_pkcs8 = pkcs8::PrivateKeyInfo {
-        algorithm: AlgorithmIdentifier {
-            oid: ObjectIdentifier::from_arcs(&ED25519_IDENTIFIER).unwrap(),
-            parameters: None,
-        },
-        private_key: &private_key,
-        public_key: None,
-    };
-    let key_pkcs8_der = key_pkcs8
-        .to_der()
-        .expect("Failed to convert keypair to DER")
-        .to_der();
-
-    // Parse private key into rcgen::KeyPair struct.
-    rcgen::KeyPair::from_der(&key_pkcs8_der).expect("Failed to parse keypair from DER")
-}
-
-fn new_cert_params(identity_keypair: &Keypair, san: IpAddr) -> CertificateParams {
-    // TODO(terorie): Is it safe to sign the TLS cert with the identity private key?
-
-    // Unfortunately, rcgen does not accept a "raw" Ed25519 key.
-    // We have to convert it to DER and pass it to the library.
-
-    // Convert private key into PKCS#8 v1 object.
-    // RFC 8410, Section 7: Private Key Format
-    // https://datatracker.ietf.org/doc/html/rfc8410#section-
-
-    let keypair = convert_to_rcgen_keypair(identity_keypair);
-
-    let mut cert_params = CertificateParams::default();
-    cert_params.subject_alt_names = vec![SanType::IpAddress(san)];
-    cert_params.alg = &rcgen::PKCS_ED25519;
-    cert_params.key_pair = Some(keypair);
-    cert_params.distinguished_name = DistinguishedName::new();
-    cert_params
-        .distinguished_name
-        .push(DnType::CommonName, "Solana node");
-    cert_params
 }
 
 fn rt() -> Runtime {
@@ -157,6 +129,8 @@ pub struct StreamStats {
     pub(crate) total_stream_read_errors: AtomicUsize,
     pub(crate) total_stream_read_timeouts: AtomicUsize,
     pub(crate) num_evictions: AtomicUsize,
+    pub(crate) connection_added_from_staked_peer: AtomicUsize,
+    pub(crate) connection_added_from_unstaked_peer: AtomicUsize,
     pub(crate) connection_add_failed: AtomicUsize,
     pub(crate) connection_add_failed_invalid_stream_count: AtomicUsize,
     pub(crate) connection_add_failed_unstaked_node: AtomicUsize,
@@ -194,6 +168,18 @@ impl StreamStats {
             (
                 "evictions",
                 self.num_evictions.swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_added_from_staked_peer",
+                self.connection_added_from_staked_peer
+                    .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "connection_added_from_unstaked_peer",
+                self.connection_added_from_unstaked_peer
+                    .swap(0, Ordering::Relaxed),
                 i64
             ),
             (
@@ -295,7 +281,7 @@ pub fn spawn_server(
     gossip_host: IpAddr,
     packet_sender: Sender<PacketBatch>,
     exit: Arc<AtomicBool>,
-    max_connections_per_ip: usize,
+    max_connections_per_peer: usize,
     staked_nodes: Arc<RwLock<StakedNodes>>,
     max_staked_connections: usize,
     max_unstaked_connections: usize,
@@ -310,7 +296,7 @@ pub fn spawn_server(
             gossip_host,
             packet_sender,
             exit,
-            max_connections_per_ip,
+            max_connections_per_peer,
             staked_nodes,
             max_staked_connections,
             max_unstaked_connections,
@@ -427,7 +413,7 @@ mod test {
         let (t, exit, receiver, server_address) = setup_quic_server();
 
         let runtime = rt();
-        runtime.block_on(check_multiple_writes(receiver, server_address));
+        runtime.block_on(check_multiple_writes(receiver, server_address, None));
         exit.store(true, Ordering::Relaxed);
         t.join().unwrap();
     }

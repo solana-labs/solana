@@ -57,7 +57,6 @@ use {
         bank::{Bank, NewBankOptions},
         bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
         commitment::BlockCommitmentCache,
-        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -396,7 +395,6 @@ impl ReplayStage {
         voting_sender: Sender<VoteOp>,
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
-        transaction_cost_metrics_sender: Option<TransactionCostMetricsSender>,
         log_messages_bytes_limit: Option<usize>,
     ) -> Self {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
@@ -528,7 +526,6 @@ impl ReplayStage {
                         &mut duplicate_slots_to_repair,
                         &ancestor_hashes_replay_update_sender,
                         block_metadata_notifier.clone(),
-                        transaction_cost_metrics_sender.as_ref(),
                         &mut replay_timing,
                         log_messages_bytes_limit
                     );
@@ -1713,7 +1710,6 @@ impl ReplayStage {
         replay_progress: &RwLock<ConfirmationProgress>,
         transaction_status_sender: Option<&TransactionStatusSender>,
         replay_vote_sender: &ReplayVoteSender,
-        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         verify_recyclers: &VerifyRecyclers,
         log_messages_bytes_limit: Option<usize>,
     ) -> result::Result<usize, BlockstoreProcessorError> {
@@ -1731,7 +1727,6 @@ impl ReplayStage {
             false,
             transaction_status_sender,
             Some(replay_vote_sender),
-            transaction_cost_metrics_sender,
             None,
             verify_recyclers,
             false,
@@ -2219,7 +2214,6 @@ impl ReplayStage {
         transaction_status_sender: Option<&TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
         replay_vote_sender: &ReplayVoteSender,
-        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
         active_bank_slots: &[Slot],
@@ -2296,7 +2290,6 @@ impl ReplayStage {
                             &replay_progress,
                             transaction_status_sender,
                             &replay_vote_sender.clone(),
-                            transaction_cost_metrics_sender,
                             &verify_recyclers.clone(),
                             log_messages_bytes_limit,
                         );
@@ -2326,7 +2319,6 @@ impl ReplayStage {
         transaction_status_sender: Option<&TransactionStatusSender>,
         verify_recyclers: &VerifyRecyclers,
         replay_vote_sender: &ReplayVoteSender,
-        transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
         bank_slot: Slot,
@@ -2377,7 +2369,6 @@ impl ReplayStage {
                     &bank_progress.replay_progress,
                     transaction_status_sender,
                     &replay_vote_sender.clone(),
-                    transaction_cost_metrics_sender,
                     &verify_recyclers.clone(),
                     log_messages_bytes_limit,
                 );
@@ -2621,7 +2612,6 @@ impl ReplayStage {
                         transaction_status_sender,
                         verify_recyclers,
                         replay_vote_sender,
-                        transaction_cost_metrics_sender,
                         replay_timing,
                         log_messages_bytes_limit,
                         &active_bank_slots,
@@ -2639,7 +2629,6 @@ impl ReplayStage {
                                 transaction_status_sender,
                                 verify_recyclers,
                                 replay_vote_sender,
-                                transaction_cost_metrics_sender,
                                 replay_timing,
                                 log_messages_bytes_limit,
                                 *bank_slot,
@@ -2657,7 +2646,6 @@ impl ReplayStage {
                     transaction_status_sender,
                     verify_recyclers,
                     replay_vote_sender,
-                    transaction_cost_metrics_sender,
                     replay_timing,
                     log_messages_bytes_limit,
                     active_bank_slots[0],
@@ -4175,7 +4163,6 @@ pub(crate) mod tests {
                 &bank1_progress.replay_progress,
                 None,
                 &replay_vote_sender,
-                None,
                 &VerifyRecyclers::default(),
                 None,
             );
@@ -6227,6 +6214,8 @@ pub(crate) mod tests {
         )];
         let my_vote_pubkey = my_vote_keypair[0].pubkey();
         let bank0 = bank_forks.read().unwrap().get(0).unwrap();
+
+        bank0.set_initial_accounts_hash_verification_completed();
 
         let (voting_sender, voting_receiver) = unbounded();
 

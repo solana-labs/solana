@@ -54,7 +54,7 @@ impl RpcHealth {
             }
         }
 
-        if !self.startup_verification_complete.load(Ordering::Relaxed) {
+        if !self.startup_verification_complete.load(Ordering::Acquire) {
             return RpcHealthStatus::Unknown;
         }
 

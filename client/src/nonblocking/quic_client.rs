@@ -22,7 +22,12 @@ use {
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS,
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
         },
+        signature::Keypair,
         transport::Result as TransportResult,
+    },
+    solana_streamer::{
+        nonblocking::quic::ALPN_TPU_PROTOCOL_ID,
+        tls_certificates::new_self_signed_tls_certificate_chain,
     },
     std::{
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -55,19 +60,26 @@ impl rustls::client::ServerCertVerifier for SkipServerVerification {
     }
 }
 
+pub struct QuicClientCertificate {
+    pub certificates: Vec<rustls::Certificate>,
+    pub key: rustls::PrivateKey,
+}
+
 /// A lazy-initialized Quic Endpoint
 pub struct QuicLazyInitializedEndpoint {
     endpoint: RwLock<Option<Arc<Endpoint>>>,
+    client_certificate: Arc<QuicClientCertificate>,
 }
 
 impl QuicLazyInitializedEndpoint {
-    pub fn new() -> Self {
+    pub fn new(client_certificate: Arc<QuicClientCertificate>) -> Self {
         Self {
             endpoint: RwLock::new(None),
+            client_certificate,
         }
     }
 
-    fn create_endpoint() -> Endpoint {
+    fn create_endpoint(&self) -> Endpoint {
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
@@ -77,8 +89,13 @@ impl QuicLazyInitializedEndpoint {
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
             .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
+            .with_single_cert(
+                self.client_certificate.certificates.clone(),
+                self.client_certificate.key.clone(),
+            )
+            .expect("Failed to set QUIC client certificates");
         crypto.enable_early_data = true;
+        crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
         let mut endpoint =
             QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket);
@@ -108,7 +125,7 @@ impl QuicLazyInitializedEndpoint {
                 match endpoint {
                     Some(endpoint) => endpoint.clone(),
                     None => {
-                        let connection = Arc::new(Self::create_endpoint());
+                        let connection = Arc::new(self.create_endpoint());
                         *lock = Some(connection.clone());
                         connection
                     }
@@ -120,7 +137,15 @@ impl QuicLazyInitializedEndpoint {
 
 impl Default for QuicLazyInitializedEndpoint {
     fn default() -> Self {
-        Self::new()
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+            &Keypair::new(),
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        )
+        .expect("Failed to create QUIC client certificate");
+        Self::new(Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        }))
     }
 }
 
