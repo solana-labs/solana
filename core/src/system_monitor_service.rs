@@ -34,7 +34,7 @@ pub struct SystemMonitorService {
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-struct NetStats {
+struct UdpStats {
     in_datagrams: usize,
     no_ports: usize,
     in_errors: usize,
@@ -43,6 +43,11 @@ struct NetStats {
     sndbuf_errors: usize,
     in_csum_errors: usize,
     ignored_multi: usize,
+}
+
+#[derive(Default)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+struct NetDevStats {
     rx_bytes: usize,
     rx_packets: usize,
     rx_errs: usize,
@@ -61,6 +66,12 @@ struct NetStats {
     tx_compressed: usize,
 }
 
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+struct NetStats {
+    udp_stats: UdpStats,
+    net_dev_stats: NetDevStats,
+}
+
 struct CpuInfo {
     cpu_num: u32,
     cpu_freq_mhz: u64,
@@ -68,7 +79,7 @@ struct CpuInfo {
     num_threads: u64,
 }
 
-impl NetStats {
+impl UdpStats {
     fn from_map(udp_stats: &HashMap<String, usize>) -> Self {
         Self {
             in_datagrams: *udp_stats.get("InDatagrams").unwrap_or(&0),
@@ -79,22 +90,6 @@ impl NetStats {
             sndbuf_errors: *udp_stats.get("SndbufErrors").unwrap_or(&0),
             in_csum_errors: *udp_stats.get("InCsumErrors").unwrap_or(&0),
             ignored_multi: *udp_stats.get("IgnoredMulti").unwrap_or(&0),
-            rx_bytes: 0,
-            rx_packets: 0,
-            rx_errs: 0,
-            rx_drops: 0,
-            rx_fifo: 0,
-            rx_frame: 0,
-            rx_compressed: 0,
-            rx_multicast: 0,
-            tx_bytes: 0,
-            tx_packets: 0,
-            tx_errs: 0,
-            tx_drops: 0,
-            tx_fifo: 0,
-            tx_colls: 0,
-            tx_carrier: 0,
-            tx_compressed: 0,
         }
     }
 }
@@ -118,14 +113,16 @@ fn read_net_stats() -> Result<NetStats, String> {
     let file_dev = File::open(file_path_dev).map_err(|e| e.to_string())?;
     let mut reader_dev = BufReader::new(file_dev);
 
-    parse_net_stats(&mut reader_snmp, &mut reader_dev)
+    udp_stats = parse_udp_stats(&mut reader_snmp, &mut reader_dev)?;
+    net_dev_stats = parse_net_dev_stats(&mut reader_dev)?;
+    Ok(NetStats {
+        udp_stats,
+        net_dev_stats,
+    })
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn parse_net_stats(
-    reader_snmp: &mut impl BufRead,
-    reader_dev: &mut impl BufRead,
-) -> Result<NetStats, String> {
+fn parse_udp_stats(reader_snmp: &mut impl BufRead) -> Result<UdpStats, String> {
     let mut udp_lines = Vec::default();
     for line in reader_snmp.lines() {
         let line = line.map_err(|e| e.to_string())?;
@@ -152,7 +149,13 @@ fn parse_net_stats(
         .map(|(label, val)| (label.to_string(), val.parse::<usize>().unwrap()))
         .collect();
 
-    let mut stats = NetStats::from_map(&udp_stats);
+    let stats = UdpStats::from_map(&udp_stats);
+    Ok(stats)
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_net_dev_stats(reader_dev: &mut impl BufRead) -> Result<NetDevStats, String> {
+    let mut stats = NetDevStats::default();
     let mut found_one_line = false;
     for (line_number, line) in reader_dev.lines().enumerate() {
         if line_number < 2 {
@@ -335,109 +338,125 @@ impl SystemMonitorService {
             "net-stats-validator",
             (
                 "in_datagrams_delta",
-                new_stats.in_datagrams - old_stats.in_datagrams,
+                new_stats.udp_stats.in_datagrams - old_stats.udp_stats.in_datagrams,
                 i64
             ),
             (
                 "no_ports_delta",
-                new_stats.no_ports - old_stats.no_ports,
+                new_stats.udp_stats.no_ports - old_stats.udp_stats.no_ports,
                 i64
             ),
             (
                 "in_errors_delta",
-                new_stats.in_errors - old_stats.in_errors,
+                new_stats.udp_stats.in_errors - old_stats.udp_stats.in_errors,
                 i64
             ),
             (
                 "out_datagrams_delta",
-                new_stats.out_datagrams - old_stats.out_datagrams,
+                new_stats.udp_stats.out_datagrams - old_stats.udp_stats.out_datagrams,
                 i64
             ),
             (
                 "rcvbuf_errors_delta",
-                new_stats.rcvbuf_errors - old_stats.rcvbuf_errors,
+                new_stats.udp_stats.rcvbuf_errors - old_stats.udp_stats.rcvbuf_errors,
                 i64
             ),
             (
                 "sndbuf_errors_delta",
-                new_stats.sndbuf_errors - old_stats.sndbuf_errors,
+                new_stats.udp_stats.sndbuf_errors - old_stats.udp_stats.sndbuf_errors,
                 i64
             ),
             (
                 "in_csum_errors_delta",
-                new_stats.in_csum_errors - old_stats.in_csum_errors,
+                new_stats.udp_stats.in_csum_errors - old_stats.udp_stats.in_csum_errors,
                 i64
             ),
             (
                 "ignored_multi_delta",
-                new_stats.ignored_multi - old_stats.ignored_multi,
+                new_stats.udp_stats.ignored_multi - old_stats.udp_stats.ignored_multi,
                 i64
             ),
-            ("in_errors", new_stats.in_errors, i64),
-            ("rcvbuf_errors", new_stats.rcvbuf_errors, i64),
-            ("sndbuf_errors", new_stats.sndbuf_errors, i64),
+            ("in_errors", new_stats.udp_stats.in_errors, i64),
+            ("rcvbuf_errors", new_stats.udp_stats.rcvbuf_errors, i64),
+            ("sndbuf_errors", new_stats.udp_stats.sndbuf_errors, i64),
             (
                 "rx_bytes_delta",
-                new_stats.rx_bytes - old_stats.rx_bytes,
+                new_stats.net_dev_stats.rx_bytes - old_stats.net_dev_stats.rx_bytes,
                 i64
             ),
             (
                 "rx_packets_delta",
-                new_stats.rx_packets - old_stats.rx_packets,
+                new_stats.net_dev_stats.rx_packets - old_stats.net_dev_stats.rx_packets,
                 i64
             ),
-            ("rx_errs_delta", new_stats.rx_errs - old_stats.rx_errs, i64),
+            (
+                "rx_errs_delta",
+                new_stats.net_dev_stats.rx_errs - old_stats.net_dev_stats.rx_errs,
+                i64
+            ),
             (
                 "rx_drops_delta",
-                new_stats.rx_drops - old_stats.rx_drops,
+                new_stats.net_dev_stats.rx_drops - old_stats.net_dev_stats.rx_drops,
                 i64
             ),
-            ("rx_fifo_delta", new_stats.rx_fifo - old_stats.rx_fifo, i64),
+            (
+                "rx_fifo_delta",
+                new_stats.net_dev_stats.rx_fifo - old_stats.net_dev_stats.rx_fifo,
+                i64
+            ),
             (
                 "rx_frame_delta",
-                new_stats.rx_frame - old_stats.rx_frame,
+                new_stats.net_dev_stats.rx_frame - old_stats.net_dev_stats.rx_frame,
                 i64
             ),
             (
                 "rx_compressed_delta",
-                new_stats.rx_compressed - old_stats.rx_compressed,
+                new_stats.net_dev_stats.rx_compressed - old_stats.net_dev_stats.rx_compressed,
                 i64
             ),
             (
                 "rx_multicast_delta",
-                new_stats.rx_multicast - old_stats.rx_multicast,
+                new_stats.net_dev_stats.rx_multicast - old_stats.net_dev_stats.rx_multicast,
                 i64
             ),
             (
                 "tx_bytes_delta",
-                new_stats.tx_bytes - old_stats.tx_bytes,
+                new_stats.net_dev_stats.tx_bytes - old_stats.net_dev_stats.tx_bytes,
                 i64
             ),
             (
                 "tx_packets_delta",
-                new_stats.tx_packets - old_stats.tx_packets,
+                new_stats.net_dev_stats.tx_packets - old_stats.net_dev_stats.tx_packets,
                 i64
             ),
-            ("tx_errs_delta", new_stats.tx_errs - old_stats.tx_errs, i64),
+            (
+                "tx_errs_delta",
+                new_stats.net_dev_stats.tx_errs - old_stats.net_dev_stats.tx_errs,
+                i64
+            ),
             (
                 "tx_drops_delta",
-                new_stats.tx_drops - old_stats.tx_drops,
+                new_stats.net_dev_stats.tx_drops - old_stats.net_dev_stats.tx_drops,
                 i64
             ),
-            ("tx_fifo_delta", new_stats.tx_fifo - old_stats.tx_fifo, i64),
+            (
+                "tx_fifo_delta",
+                new_stats.net_dev_stats.tx_fifo - old_stats.net_dev_stats.tx_fifo,
+                i64
+            ),
             (
                 "tx_colls_delta",
-                new_stats.tx_colls - old_stats.tx_colls,
+                new_stats.net_dev_stats.tx_colls - old_stats.net_dev_stats.tx_colls,
                 i64
             ),
             (
                 "tx_carrier_delta",
-                new_stats.tx_carrier - old_stats.tx_carrier,
+                new_stats.net_dev_stats.tx_carrier - old_stats.net_dev_stats.tx_carrier,
                 i64
             ),
             (
                 "tx_compressed_delta",
-                new_stats.tx_compressed - old_stats.tx_compressed,
+                new_stats.net_dev_stats.tx_compressed - old_stats.net_dev_stats.tx_compressed,
                 i64
             ),
         );
