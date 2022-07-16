@@ -219,8 +219,8 @@ fn main() {
                 ),
         )
         .arg(
-            Arg::with_name("accounts_from_dir")
-                .long("accounts-from-dir")
+            Arg::with_name("account_dir")
+                .long("account-dir")
                 .value_name("DIRECTORY")
                 .validator(|value| {
                     value
@@ -592,7 +592,7 @@ fn main() {
     }
 
     let accounts_from_dirs: HashSet<_> = matches
-        .values_of("accounts_from_dir")
+        .values_of("account_dir")
         .unwrap_or_default()
         .collect();
 
