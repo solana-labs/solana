@@ -113,8 +113,8 @@ fn read_net_stats() -> Result<NetStats, String> {
     let file_dev = File::open(file_path_dev).map_err(|e| e.to_string())?;
     let mut reader_dev = BufReader::new(file_dev);
 
-    udp_stats = parse_udp_stats(&mut reader_snmp, &mut reader_dev)?;
-    net_dev_stats = parse_net_dev_stats(&mut reader_dev)?;
+    let udp_stats = parse_udp_stats(&mut reader_snmp)?;
+    let net_dev_stats = parse_net_dev_stats(&mut reader_dev)?;
     Ok(NetStats {
         udp_stats,
         net_dev_stats,
