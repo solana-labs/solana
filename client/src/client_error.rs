@@ -1,7 +1,7 @@
 pub use reqwest;
 use {
     crate::{rpc_request, rpc_response},
-    quinn::{ConnectError, WriteError},
+    quinn::{ConnectError, ConnectionError, WriteError},
     solana_faucet::faucet::FaucetError,
     solana_sdk::{
         signature::SignerError, transaction::TransactionError, transport::TransportError,
@@ -93,6 +93,12 @@ impl From<WriteError> for ClientErrorKind {
 impl From<ConnectError> for ClientErrorKind {
     fn from(connect_error: ConnectError) -> Self {
         connect_error.into()
+    }
+}
+
+impl From<ConnectionError> for ClientErrorKind {
+    fn from(connection_error: ConnectionError) -> Self {
+        connection_error.into()
     }
 }
 

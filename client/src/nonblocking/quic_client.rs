@@ -80,12 +80,11 @@ impl QuicLazyInitializedEndpoint {
         }
     }
 
-    fn create_endpoint(&self) -> Endpoint {
+    fn create_endpoint(&self) -> Result<Endpoint, ClientErrorKind> {
         let (_, client_socket) = solana_net_utils::bind_in_range(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             VALIDATOR_PORT_RANGE,
-        )
-        .expect("QuicLazyInitializedEndpoint::create_endpoint bind_in_range");
+        )?;
 
         let mut crypto = rustls::ClientConfig::builder()
             .with_safe_defaults()
@@ -99,24 +98,24 @@ impl QuicLazyInitializedEndpoint {
         crypto.alpn_protocols = vec![ALPN_TPU_PROTOCOL_ID.to_vec()];
 
         let mut endpoint =
-            QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket);
+            QuicNewConnection::create_endpoint(EndpointConfig::default(), client_socket)?;
 
         let mut config = ClientConfig::new(Arc::new(crypto));
         let transport_config = Arc::get_mut(&mut config.transport)
-            .expect("QuicLazyInitializedEndpoint::create_endpoint Arc::get_mut");
+            .ok_or_else(|| ClientErrorKind::Custom("failed to get transport config".to_owned()))?;
         let timeout = IdleTimeout::from(VarInt::from_u32(QUIC_MAX_TIMEOUT_MS));
         transport_config.max_idle_timeout(Some(timeout));
         transport_config.keep_alive_interval(Some(Duration::from_millis(QUIC_KEEP_ALIVE_MS)));
 
         endpoint.set_default_client_config(config);
-        endpoint
+        Ok(endpoint)
     }
 
-    async fn get_endpoint(&self) -> Arc<Endpoint> {
+    async fn get_endpoint(&self) -> Result<Arc<Endpoint>, ClientErrorKind> {
         let lock = self.endpoint.read().await;
         let endpoint = lock.as_ref();
 
-        match endpoint {
+        Ok(match endpoint {
             Some(endpoint) => endpoint.clone(),
             None => {
                 drop(lock);
@@ -126,13 +125,13 @@ impl QuicLazyInitializedEndpoint {
                 match endpoint {
                     Some(endpoint) => endpoint.clone(),
                     None => {
-                        let connection = Arc::new(self.create_endpoint());
+                        let connection = Arc::new(self.create_endpoint()?);
                         *lock = Some(connection.clone());
                         connection
                     }
                 }
             }
-        }
+        })
     }
 }
 
@@ -164,13 +163,11 @@ impl QuicNewConnection {
         endpoint: Arc<QuicLazyInitializedEndpoint>,
         addr: SocketAddr,
         stats: &ClientStats,
-    ) -> Result<Self, WriteError> {
+    ) -> Result<Self, ClientErrorKind> {
         let mut make_connection_measure = Measure::start("make_connection_measure");
-        let endpoint = endpoint.get_endpoint().await;
+        let endpoint = endpoint.get_endpoint().await?;
 
-        let connecting = endpoint
-            .connect(addr, "connect")
-            .expect("QuicNewConnection::make_connection endpoint.connect");
+        let connecting = endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         if let Ok(connecting_result) = timeout(
             Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
@@ -197,10 +194,11 @@ impl QuicNewConnection {
         }
     }
 
-    fn create_endpoint(config: EndpointConfig, client_socket: UdpSocket) -> Endpoint {
-        quinn::Endpoint::new(config, None, client_socket)
-            .expect("QuicNewConnection::create_endpoint quinn::Endpoint::new")
-            .0
+    fn create_endpoint(
+        config: EndpointConfig,
+        client_socket: UdpSocket,
+    ) -> Result<Endpoint, ClientErrorKind> {
+        Ok(quinn::Endpoint::new(config, None, client_socket)?.0)
     }
 
     // Attempts to make a faster connection by taking advantage of pre-existing key material.
@@ -209,11 +207,8 @@ impl QuicNewConnection {
         &mut self,
         addr: SocketAddr,
         stats: &ClientStats,
-    ) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self
-            .endpoint
-            .connect(addr, "connect")
-            .expect("QuicNewConnection::make_connection_0rtt endpoint.connect");
+    ) -> Result<Arc<NewConnection>, ClientErrorKind> {
+        let connecting = self.endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
@@ -288,7 +283,7 @@ impl QuicClient {
         data: &[u8],
         stats: &ClientStats,
         connection_stats: Arc<ConnectionCacheStats>,
-    ) -> Result<Arc<NewConnection>, WriteError> {
+    ) -> Result<Arc<NewConnection>, ClientErrorKind> {
         let mut connection_try_count = 0;
         let mut last_connection_id = 0;
         let mut last_error = None;
@@ -402,7 +397,7 @@ impl QuicClient {
                             err,
                             thread::current().id(),
                         );
-                        return Err(err);
+                        return Err(err.into());
                     }
                 },
             }
@@ -415,7 +410,9 @@ impl QuicClient {
         );
         // If we get here but last_error is None, then we have a logic error
         // in this function, so panic here with an expect to help debugging
-        Err(last_error.expect("QuicClient::_send_buffer last_error.expect"))
+        Err(last_error
+            .expect("QuicClient::_send_buffer last_error.expect")
+            .into())
     }
 
     pub async fn send_buffer<T>(
