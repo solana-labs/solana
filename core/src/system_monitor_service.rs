@@ -641,6 +641,4 @@ ens4: 400     4    0    1    0     0          0         0 250 5    0    0    0  
         let one_tb_as_kb = (1u64 << 40) >> 10;
         assert!(SystemMonitorService::calc_percent(one_tb_as_kb - 1, one_tb_as_kb) < 100.0);
     }
-
-
 }
