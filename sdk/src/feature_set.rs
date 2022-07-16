@@ -468,6 +468,10 @@ pub mod cap_bpf_program_instruction_accounts {
     solana_sdk::declare_id!("9k5ijzTbYPtjzu8wj2ErH9v45xecHzQ1x4PMYMMxFgdM");
 }
 
+pub mod loosen_cpi_size_restriction {
+    solana_sdk::declare_id!("GDH5TVdbTPUpRnXaRyQqiKUa7uZAbZ28Q2N9bhbKoMLm");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -579,6 +583,7 @@ lazy_static! {
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
+        (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

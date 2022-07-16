@@ -733,41 +733,104 @@ where
     Ok(accounts)
 }
 
+#[cfg(test)]
+static_assertions::const_assert_eq!(ACCOUNT_META_SIZE, 34);
+const ACCOUNT_META_SIZE: usize = size_of::<AccountMeta>();
+
+/// Maximum CPI instruction data size. 10 KiB was chosen to ensure that CPI
+/// instructions are not more limited than transaction instructions if the size
+/// of transactions is doubled in the future.
+const MAX_CPI_INSTRUCTION_DATA_LEN: u64 = 10 * 1024;
+
+/// Maximum CPI instruction accounts. 255 was chosen to ensure that instruction
+/// accounts are always within the maximum instruction account limit for BPF
+/// program instructions.
+const MAX_CPI_INSTRUCTION_ACCOUNTS: u8 = u8::MAX;
+
 fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    let size = num_accounts
-        .saturating_mul(size_of::<AccountMeta>())
-        .saturating_add(data_len);
-    let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size;
-    if size > max_size {
-        return Err(SyscallError::InstructionTooLarge(size, max_size).into());
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::loosen_cpi_size_restriction::ID)
+    {
+        let data_len = u64::try_from(data_len).unwrap();
+        let max_data_len = MAX_CPI_INSTRUCTION_DATA_LEN;
+        if data_len > max_data_len {
+            return Err(SyscallError::MaxInstructionDataLenExceeded {
+                data_len,
+                max_data_len,
+            }
+            .into());
+        }
+
+        let num_accounts = u64::try_from(num_accounts).unwrap();
+        let max_accounts = u64::from(MAX_CPI_INSTRUCTION_ACCOUNTS);
+        if num_accounts > max_accounts {
+            return Err(SyscallError::MaxInstructionAccountsExceeded {
+                num_accounts,
+                max_accounts,
+            }
+            .into());
+        }
+
+        invoke_context.get_compute_meter().consume(
+            (data_len).saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
+        )?;
+    } else {
+        let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size;
+        let size = num_accounts
+            .saturating_mul(ACCOUNT_META_SIZE)
+            .saturating_add(data_len);
+        if size > max_size {
+            return Err(SyscallError::InstructionTooLarge(size, max_size).into());
+        }
     }
     Ok(())
 }
 
+/// Maximum number of account info structs that can be used in a single CPI
+/// invocation. A limit on account info structs is effectively the same as
+/// limiting the number of unique accounts.
+const MAX_CPI_ACCOUNT_INFOS: usize = MAX_TX_ACCOUNT_LOCKS;
+
 fn check_account_infos(
-    len: usize,
+    num_account_infos: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    let adjusted_len = if invoke_context
+    if invoke_context
         .feature_set
-        .is_active(&syscall_saturated_math::id())
+        .is_active(&feature_set::loosen_cpi_size_restriction::ID)
     {
-        len.saturating_mul(size_of::<Pubkey>())
-    } else {
-        #[allow(clippy::integer_arithmetic)]
-        {
-            len * size_of::<Pubkey>()
+        let num_account_infos = u64::try_from(num_account_infos).unwrap();
+        let max_account_infos = u64::try_from(MAX_CPI_ACCOUNT_INFOS).unwrap();
+        if num_account_infos > max_account_infos {
+            return Err(SyscallError::MaxInstructionAccountInfosExceeded {
+                num_account_infos,
+                max_account_infos,
+            }
+            .into());
         }
-    };
-    if adjusted_len > invoke_context.get_compute_budget().max_cpi_instruction_size {
-        // Cap the number of account_infos a caller can pass to approximate
-        // maximum that accounts that could be passed in an instruction
-        return Err(SyscallError::TooManyAccounts.into());
-    };
+    } else {
+        let adjusted_len = if invoke_context
+            .feature_set
+            .is_active(&syscall_saturated_math::id())
+        {
+            num_account_infos.saturating_mul(size_of::<Pubkey>())
+        } else {
+            #[allow(clippy::integer_arithmetic)]
+            {
+                num_account_infos * size_of::<Pubkey>()
+            }
+        };
+        if adjusted_len > invoke_context.get_compute_budget().max_cpi_instruction_size {
+            // Cap the number of account_infos a caller can pass to approximate
+            // maximum that accounts that could be passed in an instruction
+            return Err(SyscallError::TooManyAccounts.into());
+        };
+    }
     Ok(())
 }
 

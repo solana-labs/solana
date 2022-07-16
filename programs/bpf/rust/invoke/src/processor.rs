@@ -554,20 +554,26 @@ fn process_instruction(
                 &[&[b"You pass butter", &[bump_seed1]]],
             )?;
         }
-        TEST_INSTRUCTION_DATA_TOO_LARGE => {
-            msg!("Test instruction data too large");
+        TEST_MAX_INSTRUCTION_DATA_LEN_EXCEEDED => {
+            msg!("Test max instruction data len exceeded");
+            let data_len = 10usize.saturating_mul(1024).saturating_add(1);
             let instruction =
-                create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![0; 1500]);
+                create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![0; data_len]);
             invoke_signed(&instruction, &[], &[])?;
         }
-        TEST_INSTRUCTION_META_TOO_LARGE => {
-            msg!("Test instruction metas too large");
-            let instruction = create_instruction(
-                *accounts[INVOKED_PROGRAM_INDEX].key,
-                &[(&Pubkey::default(), false, false); 40],
-                vec![],
-            );
+        TEST_MAX_INSTRUCTION_ACCOUNTS_EXCEEDED => {
+            msg!("Test max instruction accounts exceeded");
+            let default_key = Pubkey::default();
+            let account_metas = vec![(&default_key, false, false); 256];
+            let instruction =
+                create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &account_metas, vec![]);
             invoke_signed(&instruction, &[], &[])?;
+        }
+        TEST_MAX_ACCOUNT_INFOS_EXCEEDED => {
+            msg!("Test max account infos exceeded");
+            let instruction = create_instruction(*accounts[INVOKED_PROGRAM_INDEX].key, &[], vec![]);
+            let account_infos = vec![accounts[0].clone(); 65];
+            invoke_signed(&instruction, &account_infos, &[])?;
         }
         TEST_RETURN_ERROR => {
             msg!("Test return error");
