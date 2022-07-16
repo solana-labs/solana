@@ -193,20 +193,20 @@ fn main() {
         .arg(
             Arg::with_name("bpf_program")
                 .long("bpf-program")
-                .value_name("ADDRESS_OR_PATH BPF_PROGRAM.SO")
+                .value_names(&["ADDRESS_OR_KEYPAIR", "BPF_PROGRAM.SO"])
                 .takes_value(true)
                 .number_of_values(2)
                 .multiple(true)
                 .help(
                     "Add a BPF program to the genesis configuration. \
                        If the ledger already exists then this parameter is silently ignored. \
-                       First argument can be a public key or path to file that can be parsed as a keypair",
+                       First argument can be a pubkey string or path to a keypair",
                 ),
         )
         .arg(
             Arg::with_name("account")
                 .long("account")
-                .value_name("ADDRESS FILENAME.JSON")
+                .value_names(&["ADDRESS", "DUMP.JSON"])
                 .takes_value(true)
                 .number_of_values(2)
                 .allow_hyphen_values(true)
