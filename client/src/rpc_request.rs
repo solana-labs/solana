@@ -94,6 +94,7 @@ pub enum RpcRequest {
     GetStorageTurnRate,
     GetSlotsPerSegment,
     GetStakeActivation,
+    GetStakeMinimumDelegation,
     GetStoragePubkeysForSlot,
     GetSupply,
     GetTokenAccountBalance,
@@ -111,7 +112,6 @@ pub enum RpcRequest {
     SendTransaction,
     SimulateTransaction,
     SignVote,
-    GetStakeMinimumDelegation,
 }
 
 #[allow(deprecated)]
@@ -165,6 +165,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetSlotLeader => "getSlotLeader",
             RpcRequest::GetSlotLeaders => "getSlotLeaders",
             RpcRequest::GetStakeActivation => "getStakeActivation",
+            RpcRequest::GetStakeMinimumDelegation => "getStakeMinimumDelegation",
             RpcRequest::GetStorageTurn => "getStorageTurn",
             RpcRequest::GetStorageTurnRate => "getStorageTurnRate",
             RpcRequest::GetSlotsPerSegment => "getSlotsPerSegment",
@@ -185,7 +186,6 @@ impl fmt::Display for RpcRequest {
             RpcRequest::SendTransaction => "sendTransaction",
             RpcRequest::SimulateTransaction => "simulateTransaction",
             RpcRequest::SignVote => "signVote",
-            RpcRequest::GetStakeMinimumDelegation => "getStakeMinimumDelegation",
         };
 
         write!(f, "{}", method)
