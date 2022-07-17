@@ -54,6 +54,7 @@ gives a convenient interface for the RPC methods.
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getSlotLeaders](jsonrpc-api.md#getslotleaders)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
+- [getStakeMinimumDelegation](jsonrpc-api.md#getstakeminimumdelegation)
 - [getSupply](jsonrpc-api.md#getsupply)
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
 - [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
@@ -2446,6 +2447,45 @@ Result:
     "active": 124429280,
     "inactive": 73287840,
     "state": "activating"
+  },
+  "id": 1
+}
+```
+
+### getStakeMinimumDelegation
+
+Returns the stake minimum delegation, in lamports.
+
+#### Parameters:
+
+None
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to:
+
+- `<u64>` - The stake minimum delegation, in lamports
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1,"method":"getStakeMinimumDelegation"}
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 501
+    },
+    "value": 1000000000
   },
   "id": 1
 }
