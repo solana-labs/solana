@@ -4434,7 +4434,6 @@ impl Bank {
         let return_data = if enable_return_data_recording {
             if let Some(end_index) = return_data.data.iter().rposition(|&x| x != 0) {
                 let end_index = end_index.saturating_add(1);
-                error!("end index {}", end_index);
                 return_data.data.truncate(end_index);
                 Some(return_data)
             } else {
