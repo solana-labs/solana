@@ -74,10 +74,10 @@ export interface AnchorBuild {
  * last verified build.
  */
 export async function getAnchorVerifiableBuild(
-  programId: PublicKey,
-  limit: number = 5
+  programId: PublicKey
 ): Promise<VerifiableBuild> {
-  const url = `https://anchor.projectserum.com/api/v0/program/${programId.toString()}/latest?limit=${limit}`;
+  const programIdBase58 = programId.toBase58();
+  const url = `https://api.apr.dev/api/v0/program/${programIdBase58}/latest?limit=5`;
   const latestBuildsResp = await fetch(url);
 
   // Filter out all non successful builds.
@@ -96,7 +96,7 @@ export async function getAnchorVerifiableBuild(
     ...defaultAnchorBuild,
     verified_slot,
     id,
-    url: `https://anchor.projectserum.com/build/${id}`,
+    url: `https://apr.dev/program/${programIdBase58}/build/${id}`,
   };
 }
 
