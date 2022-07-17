@@ -230,17 +230,27 @@ fn run_program(name: &str) -> u64 {
         )
         .unwrap();
 
+        #[allow(unused_mut)]
         let mut verified_executable = VerifiedExecutable::<
             RequisiteVerifier,
             BpfError,
             ThisInstructionMeter,
         >::from_executable(executable)
         .unwrap();
-        verified_executable.jit_compile().unwrap();
+
+        let run_program_iterations = {
+            #[cfg(target_arch = "x86_64")]
+            {
+                verified_executable.jit_compile().unwrap();
+                2
+            }
+            #[cfg(not(target_arch = "x86_64"))]
+            1
+        };
 
         let mut instruction_count = 0;
         let mut tracer = None;
-        for i in 0..2 {
+        for i in 0..run_program_iterations {
             let transaction_context = &mut invoke_context.transaction_context;
             let instruction_context = transaction_context
                 .get_current_instruction_context()
