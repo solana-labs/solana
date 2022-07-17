@@ -690,9 +690,10 @@ where
                         .feature_set
                         .is_active(&enable_early_verification_of_account_modifications::id())
                     {
-                        Err(SyscallError::InstructionError(
+                        return Err(SyscallError::InstructionError(
                             InstructionError::RentEpochModified,
-                        ))?;
+                        )
+                        .into());
                     } else {
                         callee_account
                             .borrow_mut()
