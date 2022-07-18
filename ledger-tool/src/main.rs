@@ -399,8 +399,12 @@ fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result
     Ok(())
 }
 
+struct GraphConfig {
+    include_all_votes: bool,
+}
+
 #[allow(clippy::cognitive_complexity)]
-fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
+fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
     let frozen_banks = bank_forks.frozen_banks();
     let mut fork_slots: HashSet<_> = frozen_banks.keys().cloned().collect();
     for (_, bank) in frozen_banks {
@@ -594,7 +598,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
     }
 
     // Add for vote information from all banks.
-    if include_all_votes {
+    if config.include_all_votes {
         for (node_pubkey, validator_votes) in &all_votes {
             for (vote_slot, vote_state) in validator_votes {
                 dot.push(format!(
@@ -2409,6 +2413,9 @@ fn main() {
             }
             ("graph", Some(arg_matches)) => {
                 let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
+                let graph_config = GraphConfig {
+                    include_all_votes: arg_matches.is_present("include_all_votes"),
+                };
 
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -2432,10 +2439,7 @@ fn main() {
                     incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
-                        let dot = graph_forks(
-                            &bank_forks.read().unwrap(),
-                            arg_matches.is_present("include_all_votes"),
-                        );
+                        let dot = graph_forks(&bank_forks.read().unwrap(), &graph_config);
 
                         let extension = Path::new(&output_file).extension();
                         let result = if extension == Some(OsStr::new("pdf")) {
