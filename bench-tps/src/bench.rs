@@ -710,7 +710,7 @@ mod tests {
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
             commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor,
-            genesis_config::create_genesis_config, native_token::sol_to_lamports,
+            genesis_config::create_genesis_config, native_token::sol_to_lamports, nonce::State,
         },
     };
 
@@ -772,6 +772,32 @@ mod tests {
 
         for kp in &keypairs {
             assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports + rent);
+        }
+    }
+
+    #[test]
+    fn test_bench_tps_create_durable_nonce() {
+        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
+        let bank = Bank::new_for_tests(&genesis_config);
+        let client = Arc::new(BankClient::new(bank));
+        let keypair_count = 10;
+        let lamports = 10_000_000;
+
+        let authority_keypairs =
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
+
+        let nonce_keypairs = generate_durable_nonce_accounts(client.clone(), &authority_keypairs);
+
+        let rent = client
+            .get_minimum_balance_for_rent_exemption(State::size())
+            .unwrap();
+        for kp in &nonce_keypairs {
+            assert_eq!(
+                client
+                    .get_balance_with_commitment(&kp.pubkey(), CommitmentConfig::processed())
+                    .unwrap(),
+                rent
+            );
         }
     }
 }

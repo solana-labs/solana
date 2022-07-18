@@ -8,6 +8,7 @@ use {
         commitment_config::CommitmentConfig,
         hash::Hash,
         message::Message,
+        nonce::State,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         signer::signers::Signers,
@@ -95,6 +96,30 @@ pub fn fund_keys<T: 'static + BenchTpsClient + Send + Sync>(
     }
 }
 
+pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    authority_keypairs: &[Keypair],
+) -> Vec<Keypair> {
+    let nonce_rent = client
+        .get_minimum_balance_for_rent_exemption(State::size())
+        .unwrap();
+
+    let seed_keypair = &authority_keypairs[0];
+    let count = authority_keypairs.len();
+    let (mut nonce_keypairs, _extra) = generate_keypairs(seed_keypair, count as u64);
+    nonce_keypairs.truncate(count);
+
+    let to_fund: Vec<(&Keypair, &Keypair)> = authority_keypairs
+        .iter()
+        .zip(nonce_keypairs.iter())
+        .collect();
+
+    to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
+        NonceContainer::with_capacity(chunk.len()).create_accounts(&client, chunk, nonce_rent);
+    });
+    nonce_keypairs
+}
+
 const MAX_SPENDS_PER_TX: u64 = 4;
 
 // Size of the chunk of transactions
@@ -116,7 +141,13 @@ fn verify_funding_transfer<T: BenchTpsClient>(
     false
 }
 
+/// Helper trait to encapsulate common logic for sending transactions batch
+///
 trait SendBatchTransactions<'a, T: Sliceable + Send + Sync> {
+    fn send_transactions<C, F>(&mut self, client: &Arc<C>, to_lamports: u64, log_progress: F)
+    where
+        C: 'static + BenchTpsClient + Send + Sync,
+        F: Fn(usize, usize);
     fn sign(&mut self, blockhash: Hash);
     fn send<C: BenchTpsClient>(&self, client: &Arc<C>);
     fn verify<C: 'static + BenchTpsClient + Send + Sync>(
@@ -139,6 +170,33 @@ impl<'a, T: Sliceable + Send + Sync> SendBatchTransactions<'a, T> for Vec<(T, Tr
 where
     <T as Sliceable>::Slice: Signers,
 {
+    fn send_transactions<C, F>(&mut self, client: &Arc<C>, to_lamports: u64, log_progress: F)
+    where
+        C: 'static + BenchTpsClient + Send + Sync,
+        F: Fn(usize, usize),
+    {
+        let mut tries: usize = 0;
+        while !self.is_empty() {
+            log_progress(tries, self.len());
+            let blockhash = get_latest_blockhash(client.as_ref());
+
+            // re-sign retained to_fund_txes with updated blockhash
+            self.sign(blockhash);
+            self.send(client);
+
+            // Sleep a few slots to allow transactions to process
+            sleep(Duration::from_secs(1));
+
+            self.verify(client, to_lamports);
+
+            // retry anything that seems to have dropped through cracks
+            //  again since these txs are all or nothing, they're fine to
+            //  retry
+            tries += 1;
+        }
+        info!("transactions sent in {} tries", tries);
+    }
+
     fn sign(&mut self, blockhash: Hash) {
         let mut sign_txs = Measure::start("sign_txs");
         self.par_iter_mut().for_each(|(k, tx)| {
@@ -266,8 +324,7 @@ impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
     ) {
         self.make(to_fund);
 
-        let mut tries = 0;
-        while !self.is_empty() {
+        let log_progress = |tries: usize, batch_len: usize| {
             info!(
                 "{} {} each to {} accounts in {} txs",
                 if tries == 0 {
@@ -276,27 +333,11 @@ impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
                     " retrying"
                 },
                 to_lamports,
-                self.len() * MAX_SPENDS_PER_TX as usize,
-                self.len(),
+                batch_len * MAX_SPENDS_PER_TX as usize,
+                batch_len,
             );
-
-            let blockhash = get_latest_blockhash(client.as_ref());
-
-            // re-sign retained to_fund_txes with updated blockhash
-            self.sign(blockhash);
-            self.send(client);
-
-            // Sleep a few slots to allow transactions to process
-            sleep(Duration::from_secs(1));
-
-            self.verify(client, to_lamports);
-
-            // retry anything that seems to have dropped through cracks
-            //  again since these txs are all or nothing, they're fine to
-            //  retry
-            tries += 1;
-        }
-        info!("transferred");
+        };
+        self.send_transactions(client, to_lamports, log_progress);
     }
 
     fn make(&mut self, to_fund: &FundingChunk<'a>) {
@@ -307,6 +348,76 @@ impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
                 let instructions = system_instruction::transfer_many(&k.pubkey(), t);
                 let message = Message::new(&instructions, Some(&k.pubkey()));
                 (*k, Transaction::new_unsigned(message))
+            })
+            .collect();
+        make_txs.stop();
+        debug!(
+            "make {} unsigned txs: {}us",
+            to_fund_txs.len(),
+            make_txs.as_us()
+        );
+        self.extend(to_fund_txs);
+    }
+}
+
+impl<'a> Sliceable for (&'a Keypair, &'a Keypair) {
+    type Slice = [&'a Keypair; 2];
+    fn as_slice(&self) -> Self::Slice {
+        [self.0, self.1]
+    }
+    fn get_pubkey(&self) -> Pubkey {
+        self.0.pubkey()
+    }
+}
+
+type NonceSigners<'a> = (&'a Keypair, &'a Keypair);
+type NonceChunk<'a> = [NonceSigners<'a>];
+type NonceContainer<'a> = Vec<(NonceSigners<'a>, Transaction)>;
+
+trait CreateNonceTransactions<'a>: SendBatchTransactions<'a, (&'a Keypair, &'a Keypair)> {
+    fn create_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_fund: &'a NonceChunk<'a>,
+        nonce_rent: u64,
+    );
+    fn make(&mut self, nonce_rent: u64, to_fund: &'a NonceChunk<'a>);
+}
+
+impl<'a> CreateNonceTransactions<'a> for NonceContainer<'a> {
+    fn create_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_fund: &'a NonceChunk<'a>,
+        nonce_rent: u64,
+    ) {
+        self.make(nonce_rent, to_fund);
+
+        let log_progress = |tries: usize, batch_len: usize| {
+            info!(
+                "@ {} {} accounts",
+                if tries == 0 { "creating" } else { " retrying" },
+                batch_len,
+            );
+        };
+        self.send_transactions(client, nonce_rent, log_progress);
+    }
+
+    fn make(&mut self, nonce_rent: u64, to_fund: &'a NonceChunk<'a>) {
+        let mut make_txs = Measure::start("make_txs");
+        let to_fund_txs: NonceContainer = to_fund
+            .par_iter()
+            .map(|(authority, nonce)| {
+                let instructions = system_instruction::create_nonce_account(
+                    &authority.pubkey(),
+                    &nonce.pubkey(),
+                    &authority.pubkey(),
+                    nonce_rent,
+                );
+                (
+                    (*authority, *nonce),
+                    Transaction::new_with_payer(&instructions, Some(&authority.pubkey())),
+                )
             })
             .collect();
         make_txs.stop();
