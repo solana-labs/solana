@@ -4011,6 +4011,22 @@ macro_rules! create_new_tmp_ledger {
 }
 
 #[macro_export]
+macro_rules! create_new_tmp_ledger_fifo {
+    ($genesis_config:expr) => {
+        $crate::blockstore::create_new_ledger_from_name(
+            $crate::tmp_ledger_name!(),
+            $genesis_config,
+            $crate::blockstore_options::LedgerColumnOptions {
+                shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
+                    $crate::blockstore_options::BlockstoreRocksFifoOptions::default(),
+                ),
+                ..$crate::blockstore_options::LedgerColumnOptions::default()
+            },
+        )
+    };
+}
+
+#[macro_export]
 macro_rules! create_new_tmp_ledger_auto_delete {
     ($genesis_config:expr) => {
         $crate::blockstore::create_new_ledger_from_name_auto_delete(
