@@ -521,7 +521,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
                         "1"
                     };
                     let link_label = if slot_distance > 1 {
-                        format!("label=\"{} slots\",color=red", slot_distance)
+                        format!("label=\"{} slots\",color=red", slot_distance - 1)
                     } else {
                         "color=blue".to_string()
                     };
