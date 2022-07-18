@@ -6598,7 +6598,6 @@ impl AccountsDb {
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         if !use_index {
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
@@ -6797,6 +6796,8 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
+
         self.mark_old_slots_as_dirty(storages, Some(config.epoch_schedule.slots_per_epoch));
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
