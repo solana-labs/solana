@@ -1,4 +1,10 @@
-use {super::*, crate::declare_syscall};
+use {
+    super::*,
+    crate::declare_syscall,
+    solana_sdk::syscalls::{
+        MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
+    },
+};
 
 struct CallerAccount<'a> {
     lamports: &'a mut u64,
@@ -737,16 +743,6 @@ where
 static_assertions::const_assert_eq!(ACCOUNT_META_SIZE, 34);
 const ACCOUNT_META_SIZE: usize = size_of::<AccountMeta>();
 
-/// Maximum CPI instruction data size. 10 KiB was chosen to ensure that CPI
-/// instructions are not more limited than transaction instructions if the size
-/// of transactions is doubled in the future.
-const MAX_CPI_INSTRUCTION_DATA_LEN: u64 = 10 * 1024;
-
-/// Maximum CPI instruction accounts. 255 was chosen to ensure that instruction
-/// accounts are always within the maximum instruction account limit for BPF
-/// program instructions.
-const MAX_CPI_INSTRUCTION_ACCOUNTS: u8 = u8::MAX;
-
 fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
@@ -791,11 +787,6 @@ fn check_instruction_size(
     Ok(())
 }
 
-/// Maximum number of account info structs that can be used in a single CPI
-/// invocation. A limit on account info structs is effectively the same as
-/// limiting the number of unique accounts.
-const MAX_CPI_ACCOUNT_INFOS: usize = MAX_TX_ACCOUNT_LOCKS;
-
 fn check_account_infos(
     num_account_infos: usize,
     invoke_context: &mut InvokeContext,
@@ -804,8 +795,8 @@ fn check_account_infos(
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::ID)
     {
-        let num_account_infos = u64::try_from(num_account_infos).unwrap();
-        let max_account_infos = u64::try_from(MAX_CPI_ACCOUNT_INFOS).unwrap();
+        let num_account_infos = num_account_infos as u64;
+        let max_account_infos = MAX_CPI_ACCOUNT_INFOS as u64;
         if num_account_infos > max_account_infos {
             return Err(SyscallError::MaxInstructionAccountInfosExceeded {
                 num_account_infos,

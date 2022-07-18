@@ -484,7 +484,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   case TEST_MAX_INSTRUCTION_DATA_LEN_EXCEEDED: {
     sol_log("Test max instruction data len exceeded");
     SolAccountMeta arguments[] = {};
-    uint64_t data_len = 10 * 1024 + 1;
+    uint64_t data_len = MAX_CPI_INSTRUCTION_DATA_LEN + 1;
     uint8_t *data = sol_calloc(data_len, 1);
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
@@ -498,7 +498,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   }
   case TEST_MAX_INSTRUCTION_ACCOUNTS_EXCEEDED: {
     sol_log("Test max instruction accounts exceeded");
-    uint64_t accounts_len = 256;
+    uint64_t accounts_len = MAX_CPI_INSTRUCTION_ACCOUNTS + 1;
     SolAccountMeta *arguments = sol_calloc(accounts_len, sizeof(SolAccountMeta));
     sol_assert(0 != arguments);
     uint8_t data[] = {};
@@ -515,7 +515,7 @@ extern uint64_t entrypoint(const uint8_t *input) {
   case TEST_MAX_ACCOUNT_INFOS_EXCEEDED: {
     sol_log("Test max account infos exceeded");
     SolAccountMeta arguments[] = {};
-    uint64_t account_infos_len = 65;
+    uint64_t account_infos_len = MAX_CPI_ACCOUNT_INFOS + 1;
     SolAccountInfo *account_infos = sol_calloc(account_infos_len, sizeof(SolAccountInfo));
     sol_assert(0 != account_infos);
     uint8_t data[] = {};

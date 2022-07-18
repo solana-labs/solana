@@ -53,7 +53,6 @@ use {
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
         sysvar::{Sysvar, SysvarId},
-        transaction::MAX_TX_ACCOUNT_LOCKS,
         transaction_context::InstructionAccount,
     },
     std::{
