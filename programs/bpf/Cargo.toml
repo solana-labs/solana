@@ -51,6 +51,7 @@ members = [
     "rust/call_depth",
     "rust/caller_access",
     "rust/curve25519",
+    "rust/keccak_permutation",
     "rust/custom_heap",
     "rust/dep_crate",
     "rust/deprecated_loader",

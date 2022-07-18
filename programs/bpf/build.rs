@@ -63,6 +63,7 @@ fn main() {
             "call_depth",
             "caller_access",
             "curve25519",
+            "keccak_permutation",
             "custom_heap",
             "dep_crate",
             "deprecated_loader",

@@ -32,7 +32,7 @@ use {
             AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
         },
-        keccak, native_loader,
+        keccak, native_loader, keccak_permutation::{keccak_permutation, KECCAK_F1600_STATE_WIDTH},
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
@@ -53,6 +53,7 @@ use {
         sync::Arc,
     },
     thiserror::Error as ThisError,
+    arrayref::array_mut_ref,
 };
 
 /// Maximum signers
@@ -191,6 +192,12 @@ pub fn register_syscalls(
         b"sol_keccak256",
         SyscallKeccak256::init,
         SyscallKeccak256::call,
+    )?;
+
+    syscall_registry.register_syscall_by_name(
+        b"sol_keccak_permutation",
+        SyscallKeccakPermutation::init,
+        SyscallKeccakPermutation::call,
     )?;
 
     // Secp256k1 Recover
@@ -1241,6 +1248,50 @@ declare_syscall!(
             }
         }
         hash_result.copy_from_slice(&hasher.result().to_bytes());
+        *result = Ok(0);
+    }
+);
+
+declare_syscall!(
+    // keccak permutation
+    SyscallKeccakPermutation,
+    fn call(
+        &mut self,
+        state_addr: u64,
+        _arg2: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let compute_budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(compute_budget.keccak_permutation_cost),
+            result
+        );
+
+        let state = question_mark!(
+            translate_slice_mut::<u64>(
+                memory_mapping,
+                state_addr,
+                KECCAK_F1600_STATE_WIDTH as u64,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+
+        let state = array_mut_ref![state, 0, KECCAK_F1600_STATE_WIDTH];
+        keccak_permutation(state);
         *result = Ok(0);
     }
 );

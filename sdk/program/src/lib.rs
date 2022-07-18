@@ -578,6 +578,7 @@ pub mod hash;
 pub mod incinerator;
 pub mod instruction;
 pub mod keccak;
+pub mod keccak_permutation;
 pub mod lamports;
 pub mod loader_instruction;
 pub mod loader_upgradeable_instruction;

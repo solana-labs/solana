@@ -31,6 +31,7 @@ serde_derive = "1.0"
 serde_json = "1.0"
 sha2 = "0.10.0"
 sha3 = "0.10.0"
+keccak = "0.1.2"
 solana-frozen-abi = { path = "../../frozen-abi", version = "=1.11.3" }
 solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.11.3" }
 solana-sdk-macro = { path = "../macro", version = "=1.11.3" }
