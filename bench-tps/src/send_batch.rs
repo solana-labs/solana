@@ -99,7 +99,7 @@ pub fn fund_keys<T: 'static + BenchTpsClient + Send + Sync>(
 pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
     client: Arc<T>,
     authority_keypairs: &[Keypair],
-) -> Result<Vec<Keypair>> {
+) -> Vec<Keypair> {
     let nonce_rent = client
         .get_minimum_balance_for_rent_exemption(State::size())
         .unwrap();
@@ -117,7 +117,7 @@ pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync
     to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
         NonceContainer::with_capacity(chunk.len()).create_accounts(&client, chunk, nonce_rent);
     });
-    Ok(nonce_keypairs)
+    nonce_keypairs
 }
 
 const MAX_SPENDS_PER_TX: u64 = 4;
@@ -194,7 +194,7 @@ where
             //  retry
             tries += 1;
         }
-        info!("transferred in {} tries", tries);
+        info!("transactions sent in {} tries", tries);
     }
 
     fn sign(&mut self, blockhash: Hash) {

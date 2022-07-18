@@ -776,8 +776,7 @@ mod tests {
         let authority_keypairs =
             generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
 
-        let nonce_keypairs =
-            generate_durable_nonce_accounts(client.clone(), &authority_keypairs).unwrap();
+        let nonce_keypairs = generate_durable_nonce_accounts(client.clone(), &authority_keypairs);
 
         let rent = client
             .get_minimum_balance_for_rent_exemption(State::size())
