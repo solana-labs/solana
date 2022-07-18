@@ -146,7 +146,9 @@ export type TransactionCtorFields_DEPRECATED = {
 export type TransactionCtorFields = TransactionCtorFields_DEPRECATED;
 
 /**
- * Use these options to construct a transaction that incoporates a recent blockhash.
+ * Blockhash-based transactions have a lifetime that are defined by
+ * the blockhash they include. Any transaction whose blockhash is
+ * too old will be rejected.
  */
 export type TransactionBlockhashCtor = {
   /** The transaction fee payer */

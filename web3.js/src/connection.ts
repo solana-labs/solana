@@ -340,12 +340,23 @@ function extractCommitmentFromConfig<TConfig>(
 }
 
 /**
- * A strategy for confirming transactions that depend on the
- * existence of a durable nonce.
+ * A strategy for confirming durable nonce transactions.
  */
-export type NonceBasedTransactionConfirmationStrategy = {
+export type DurableNonceTransactionConfirmationStrategy = {
+  /**
+   * The lowest slot at which to fetch the nonce value from the
+   * nonce account. This should be no lower than the slot at
+   * which the last-known value of the nonce was fetched.
+   */
   minContextSlot: number;
+  /**
+   * The account where the current value of the nonce is stored.
+   */
   nonceAccountPubkey: PublicKey;
+  /**
+   * The nonce value that was used to sign the transaction
+   * for which confirmation is being sought.
+   */
   nonceValue: DurableNonce;
   signature: TransactionSignature;
 };
@@ -3382,7 +3393,7 @@ export class Connection {
   confirmTransaction(
     strategy:
       | BlockheightBasedTransactionConfirmationStrategy
-      | NonceBasedTransactionConfirmationStrategy,
+      | DurableNonceTransactionConfirmationStrategy,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>>;
 
@@ -3397,7 +3408,7 @@ export class Connection {
   async confirmTransaction(
     strategy:
       | BlockheightBasedTransactionConfirmationStrategy
-      | NonceBasedTransactionConfirmationStrategy
+      | DurableNonceTransactionConfirmationStrategy
       | TransactionSignature,
     commitment?: Commitment,
   ): Promise<RpcResponseAndContext<SignatureResult>> {
@@ -3408,7 +3419,7 @@ export class Connection {
     } else {
       const config = strategy as
         | BlockheightBasedTransactionConfirmationStrategy
-        | NonceBasedTransactionConfirmationStrategy;
+        | DurableNonceTransactionConfirmationStrategy;
       rawSignature = config.signature;
     }
 
@@ -3425,16 +3436,14 @@ export class Connection {
     if (
       Object.prototype.hasOwnProperty.call(strategy, 'lastValidBlockHeight')
     ) {
-      return await this.confirmTransactionUsingBlockheightExceedenceStrategy({
+      return await this.confirmTransactionUsingBlockHeightExceedanceStrategy({
         commitment: commitment || this.commitment,
         strategy: strategy as BlockheightBasedTransactionConfirmationStrategy,
-        signature: rawSignature,
       });
     } else if (Object.prototype.hasOwnProperty.call(strategy, 'nonceValue')) {
       return await this.confirmTransactionUsingDurableNonceStrategy({
         commitment: commitment || this.commitment,
-        signature: rawSignature,
-        strategy: strategy as NonceBasedTransactionConfirmationStrategy,
+        strategy: strategy as DurableNonceTransactionConfirmationStrategy,
       });
     } else {
       return await this.confirmTransactionUsingLegacyTimeoutStrategy({
@@ -3450,13 +3459,13 @@ export class Connection {
   }: {
     commitment?: Commitment;
     signature: string;
-  }): [
-    Promise<{
+  }): {
+    abortConfirmation(): void;
+    confirmationPromise: Promise<{
       __type: TransactionStatus.PROCESSED;
       response: RpcResponseAndContext<SignatureResult>;
-    }>,
-    () => void,
-  ] {
+    }>;
+  } {
     let signatureSubscriptionId: number | undefined;
     let disposeSignatureSubscriptionStateChangeObserver:
       | SubscriptionStateChangeDisposeFn
@@ -3549,7 +3558,7 @@ export class Connection {
         reject(err);
       }
     });
-    const cancel = () => {
+    const abortConfirmation = () => {
       if (disposeSignatureSubscriptionStateChangeObserver) {
         disposeSignatureSubscriptionStateChangeObserver();
         disposeSignatureSubscriptionStateChangeObserver = undefined;
@@ -3559,17 +3568,15 @@ export class Connection {
         signatureSubscriptionId = undefined;
       }
     };
-    return [confirmationPromise, cancel];
+    return {abortConfirmation, confirmationPromise};
   }
 
-  private async confirmTransactionUsingBlockheightExceedenceStrategy({
+  private async confirmTransactionUsingBlockHeightExceedanceStrategy({
     commitment,
-    strategy: {lastValidBlockHeight},
-    signature,
+    strategy: {lastValidBlockHeight, signature},
   }: {
     commitment?: Commitment;
     strategy: BlockheightBasedTransactionConfirmationStrategy;
-    signature: string;
   }) {
     let done: boolean = false;
     const expiryPromise = new Promise<{
@@ -3595,7 +3602,7 @@ export class Connection {
         resolve({__type: TransactionStatus.BLOCKHEIGHT_EXCEEDED});
       })();
     });
-    const [confirmationPromise, cancelConfirmationDetector] =
+    const {abortConfirmation, confirmationPromise} =
       this.getTransactionConfirmationPromise({commitment, signature});
     let result: RpcResponseAndContext<SignatureResult>;
     try {
@@ -3607,72 +3614,54 @@ export class Connection {
       }
     } finally {
       done = true;
-      cancelConfirmationDetector();
+      abortConfirmation();
     }
     return result;
   }
 
   private async confirmTransactionUsingDurableNonceStrategy({
     commitment,
-    signature,
-    strategy: {minContextSlot, nonceAccountPubkey, nonceValue},
+    strategy: {minContextSlot, nonceAccountPubkey, nonceValue, signature},
   }: {
     commitment?: Commitment;
-    signature: string;
-    strategy: NonceBasedTransactionConfirmationStrategy;
+    strategy: DurableNonceTransactionConfirmationStrategy;
   }) {
     let done: boolean = false;
     const expiryPromise = new Promise<{
       __type: TransactionStatus.NONCE_INVALID;
     }>(resolve => {
-      const INVALID_NONCE_ERROR_SENTINEL = {} as const;
-      let currentNonceValue = nonceValue;
+      let currentNonceValue: string | undefined = nonceValue;
       const getCurrentNonceValue = async () => {
         try {
           const nonceAccount = await this.getNonce(nonceAccountPubkey, {
             commitment,
             minContextSlot,
           });
-          if (nonceAccount == null) {
-            throw INVALID_NONCE_ERROR_SENTINEL;
-          }
-          return nonceAccount.nonce;
+          return nonceAccount?.nonce;
         } catch (e) {
-          if (e === INVALID_NONCE_ERROR_SENTINEL) {
-            throw e;
-          }
           // If for whatever reason we can't reach/read the nonce
           // account, just keep using the last-known value.
           return currentNonceValue;
         }
       };
       (async () => {
-        try {
-          currentNonceValue = await getCurrentNonceValue();
-          if (done) return;
-          while (
-            true // eslint-disable-line no-constant-condition
-          ) {
-            if (nonceValue !== currentNonceValue) {
-              resolve({__type: TransactionStatus.NONCE_INVALID});
-              return;
-            }
-            await sleep(2000);
-            if (done) return;
-            currentNonceValue = await getCurrentNonceValue();
-            if (done) return;
-          }
-        } catch (e) {
-          if (e === INVALID_NONCE_ERROR_SENTINEL) {
+        currentNonceValue = await getCurrentNonceValue();
+        if (done) return;
+        while (
+          true // eslint-disable-line no-constant-condition
+        ) {
+          if (nonceValue !== currentNonceValue) {
             resolve({__type: TransactionStatus.NONCE_INVALID});
             return;
-          } else {
-            throw e;
           }
+          await sleep(2000);
+          if (done) return;
+          currentNonceValue = await getCurrentNonceValue();
+          if (done) return;
         }
       })();
     });
-    const [confirmationPromise, cancelConfirmationDetector] =
+    const {abortConfirmation, confirmationPromise} =
       this.getTransactionConfirmationPromise({commitment, signature});
     let result: RpcResponseAndContext<SignatureResult>;
     try {
@@ -3731,6 +3720,7 @@ export class Connection {
               }
               break;
             default:
+              // Exhaustive switch.
               // eslint-disable-next-line @typescript-eslint/no-unused-vars
               ((_: never) => {})(commitmentForStatus);
           }
@@ -3744,7 +3734,7 @@ export class Connection {
       }
     } finally {
       done = true;
-      cancelConfirmationDetector();
+      abortConfirmation();
     }
     return result;
   }
@@ -3781,7 +3771,7 @@ export class Connection {
         timeoutMs,
       );
     });
-    const [confirmationPromise, cancelConfirmationDetector] =
+    const {abortConfirmation, confirmationPromise} =
       this.getTransactionConfirmationPromise({
         commitment,
         signature,
@@ -3799,7 +3789,7 @@ export class Connection {
       }
     } finally {
       clearTimeout(timeoutId);
-      cancelConfirmationDetector();
+      abortConfirmation();
     }
     return result;
   }
