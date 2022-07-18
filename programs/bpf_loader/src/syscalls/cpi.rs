@@ -752,7 +752,7 @@ fn check_instruction_size(
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::ID)
     {
-        let data_len = u64::try_from(data_len).unwrap();
+        let data_len = data_len as u64;
         let max_data_len = MAX_CPI_INSTRUCTION_DATA_LEN;
         if data_len > max_data_len {
             return Err(SyscallError::MaxInstructionDataLenExceeded {
@@ -762,8 +762,8 @@ fn check_instruction_size(
             .into());
         }
 
-        let num_accounts = u64::try_from(num_accounts).unwrap();
-        let max_accounts = u64::from(MAX_CPI_INSTRUCTION_ACCOUNTS);
+        let num_accounts = num_accounts as u64;
+        let max_accounts = MAX_CPI_INSTRUCTION_ACCOUNTS as u64;
         if num_accounts > max_accounts {
             return Err(SyscallError::MaxInstructionAccountsExceeded {
                 num_accounts,
