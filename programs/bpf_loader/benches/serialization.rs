@@ -106,7 +106,7 @@ fn create_inputs() -> TransactionContext {
         TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
     let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     transaction_context
-        .push(&[0], &instruction_accounts, &instruction_data, true)
+        .push(&[0], &instruction_accounts, &instruction_data)
         .unwrap();
     transaction_context
 }
