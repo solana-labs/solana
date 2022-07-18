@@ -64,5 +64,3 @@ signal-hook = "0.3.14"
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
-[profile.release]
-debug = true

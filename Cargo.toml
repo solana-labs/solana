@@ -94,3 +94,6 @@ exclude = [
 
 # This prevents a Travis CI error when building for Windows.
 resolver = "2"
+
+[profile.release]
+debug = true
