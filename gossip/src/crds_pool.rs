@@ -16,11 +16,11 @@ use {
     },
 };
 
-const NUM_CHUNKS: usize = 64;
-const CHUNK_INDEX_MASK: u8 = 0b0011_1111;
+const NUM_SHARDS: usize = 64;
+const SHARD_INDEX_MASK: u8 = 0b0011_1111;
 
 pub struct CrdsPool {
-    chunks: Vec<RwLock<Crds>>,
+    shards: Vec<RwLock<Crds>>,
     offset: usize,
 }
 
@@ -38,19 +38,19 @@ pub struct GuardRef<'a, T: 'a> {
 #[derive(Clone, Default)]
 pub struct Cursor(Vec<CrdsCursor>);
 
-macro_rules! flat_map_chunks (
+macro_rules! flat_map_shards (
     ($self:ident, $method:ident) => {
-        $self.chunks.iter().flat_map(|chunk| {
-            let guard = chunk.read().unwrap();
+        $self.shards.iter().flat_map(|shard| {
+            let guard = shard.read().unwrap();
             let crds: &Crds = unsafe { change_lifetime_const(&*guard) };
             let inner = crds.$method();
             GuardIter { _guard: guard, inner }
         })
     };
     ($self:ident, $cursor: ident, $method:ident) => {{
-        $cursor.init($self.chunks.len());
-        $self.chunks.iter().zip($cursor).flat_map(|(chunk, cursor)| {
-            let guard = chunk.read().unwrap();
+        $cursor.init($self.shards.len());
+        $self.shards.iter().zip($cursor).flat_map(|(shard, cursor)| {
+            let guard = shard.read().unwrap();
             let crds: &Crds = unsafe { change_lifetime_const(&*guard) };
             let inner = crds.$method(cursor);
             GuardIter { _guard: guard, inner }
@@ -58,15 +58,15 @@ macro_rules! flat_map_chunks (
     }};
 );
 
-macro_rules! sum_chunks (
+macro_rules! sum_shards (
     ($self:ident, $method:ident) => {
-        $self.chunks.iter().map(|chunk| chunk.read().unwrap().$method()).sum()
+        $self.shards.iter().map(|shard| shard.read().unwrap().$method()).sum()
     };
 );
 
 impl CrdsPool {
-    fn chunk_index(&self, pubkey: &Pubkey) -> usize {
-        usize::from(pubkey.as_ref()[self.offset] & CHUNK_INDEX_MASK)
+    fn shard_index(&self, pubkey: &Pubkey) -> usize {
+        usize::from(pubkey.as_ref()[self.offset] & SHARD_INDEX_MASK)
     }
 
     /// Returns true if the given value updates an existing one in the table.
@@ -74,14 +74,14 @@ impl CrdsPool {
     /// table with a more recent wallclock.
     /// TODO: Probably want to get rid of this!
     pub(crate) fn upserts(&self, value: &CrdsValue) -> bool {
-        let index = self.chunk_index(&value.pubkey());
-        let crds = self.chunks[index].read().unwrap();
+        let index = self.shard_index(&value.pubkey());
+        let crds = self.shards[index].read().unwrap();
         crds.upserts(value)
     }
 
     pub fn insert(&self, value: CrdsValue, now: u64, route: GossipRoute) -> Result<(), CrdsError> {
-        let index = self.chunk_index(&value.pubkey());
-        let mut crds = self.chunks[index].write().unwrap();
+        let index = self.shard_index(&value.pubkey());
+        let mut crds = self.shards[index].write().unwrap();
         crds.insert(value, now, route)
     }
 
@@ -90,8 +90,8 @@ impl CrdsPool {
         V: CrdsEntry<'a, 'b>,
         V::Key: Copy,
     {
-        let index = self.chunk_index(&V::pubkey(key));
-        let guard = self.chunks[index].read().unwrap();
+        let index = self.shard_index(&V::pubkey(key));
+        let guard = self.shards[index].read().unwrap();
         let crds: &Crds = unsafe { change_lifetime_const(&*guard) };
         let inner = crds.get(key)?;
         Some(GuardRef {
@@ -101,19 +101,19 @@ impl CrdsPool {
     }
 
     pub(crate) fn get_shred_version(&self, pubkey: &Pubkey) -> Option<u16> {
-        let index = self.chunk_index(pubkey);
-        let crds = self.chunks[index].read().unwrap();
+        let index = self.shard_index(pubkey);
+        let crds = self.shards[index].read().unwrap();
         crds.get_shred_version(pubkey)
     }
 
     /// Returns all entries which are ContactInfo.
     pub(crate) fn get_nodes(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
-        flat_map_chunks!(self, get_nodes)
+        flat_map_shards!(self, get_nodes)
     }
 
     /// Returns ContactInfo of all known nodes.
     pub(crate) fn get_nodes_contact_info(&self) -> impl Iterator<Item = &ContactInfo> {
-        flat_map_chunks!(self, get_nodes_contact_info)
+        flat_map_shards!(self, get_nodes_contact_info)
     }
 
     /// Returns all vote entries inserted since the given cursor.
@@ -122,7 +122,7 @@ impl CrdsPool {
         &'a self,
         cursor: &'a mut Cursor,
     ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
-        flat_map_chunks!(self, cursor, get_votes)
+        flat_map_shards!(self, cursor, get_votes)
     }
 
     /// Returns epoch-slots inserted since the given cursor.
@@ -131,7 +131,7 @@ impl CrdsPool {
         &'a self,
         cursor: &'a mut Cursor,
     ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
-        flat_map_chunks!(self, cursor, get_epoch_slots)
+        flat_map_shards!(self, cursor, get_epoch_slots)
     }
 
     /// Returns all entries inserted since the given cursor.
@@ -139,7 +139,7 @@ impl CrdsPool {
         &'a self,
         cursor: &'a mut Cursor,
     ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
-        flat_map_chunks!(self, cursor, get_entries)
+        flat_map_shards!(self, cursor, get_entries)
     }
 
     /// Returns all records associated with a pubkey.
@@ -147,8 +147,8 @@ impl CrdsPool {
         &'a self,
         pubkey: &'a Pubkey,
     ) -> impl Iterator<Item = &'a VersionedCrdsValue> {
-        let index = self.chunk_index(pubkey);
-        let guard = self.chunks[index].read().unwrap();
+        let index = self.shard_index(pubkey);
+        let guard = self.shards[index].read().unwrap();
         let crds: &Crds = unsafe { change_lifetime_const(&*guard) };
         let inner = crds.get_records(pubkey);
         GuardIter {
@@ -159,28 +159,28 @@ impl CrdsPool {
 
     /// Returns number of known contact-infos (network size).
     pub(crate) fn num_nodes(&self) -> usize {
-        sum_chunks!(self, num_nodes)
+        sum_shards!(self, num_nodes)
     }
 
     /// Returns number of unique pubkeys.
     pub(crate) fn num_pubkeys(&self) -> usize {
-        sum_chunks!(self, num_pubkeys)
+        sum_shards!(self, num_pubkeys)
     }
 
     pub fn len(&self) -> usize {
-        sum_chunks!(self, len)
+        sum_shards!(self, len)
     }
 
     pub fn is_empty(&self) -> bool {
-        self.chunks
+        self.shards
             .iter()
-            .all(|chunk| chunk.read().unwrap().is_empty())
+            .all(|shard| shard.read().unwrap().is_empty())
     }
 
     #[cfg(test)]
     pub(crate) fn values(&self) -> impl Iterator<Item = &VersionedCrdsValue> {
-        self.chunks.iter().flat_map(|chunk| {
-            let guard = chunk.read().unwrap();
+        self.shards.iter().flat_map(|shard| {
+            let guard = shard.read().unwrap();
             let crds: &Crds = unsafe { change_lifetime_const(&*guard) };
             let inner = crds.values();
             GuardIter {
@@ -192,8 +192,8 @@ impl CrdsPool {
 
     pub(crate) fn par_values(&self) -> impl ParallelIterator<Item = &VersionedCrdsValue> {
         // TODO How to change this to ParallelIterator/flat_map?
-        self.chunks.par_iter().flat_map_iter(|chunk| {
-            let guard = chunk.read().unwrap();
+        self.shards.par_iter().flat_map_iter(|shard| {
+            let guard = shard.read().unwrap();
             let crds: &Crds = unsafe { change_lifetime_const(&*guard) };
             let inner = crds.values();
             GuardIter {
@@ -204,13 +204,13 @@ impl CrdsPool {
     }
 
     pub(crate) fn num_purged(&self) -> usize {
-        sum_chunks!(self, num_purged)
+        sum_shards!(self, num_purged)
     }
 
     pub(crate) fn purged(&self) -> impl ParallelIterator<Item = Hash> + '_ {
         // TODO: How to change this to ParallelIterator/flat_map?
-        self.chunks.par_iter().flat_map_iter(|chunk| {
-            let guard = chunk.read().unwrap();
+        self.shards.par_iter().flat_map_iter(|shard| {
+            let guard = shard.read().unwrap();
             let crds: &Crds = unsafe { change_lifetime_const(&*guard) };
             let inner = crds.purged();
             GuardIter {
@@ -222,9 +222,9 @@ impl CrdsPool {
 
     /// Drops purged value hashes with timestamp less than the given one.
     pub(crate) fn trim_purged(&self, timestamp: u64) {
-        for chunk in &self.chunks {
-            let mut chunk = chunk.write().unwrap();
-            chunk.trim_purged(timestamp);
+        for shard in &self.shards {
+            let mut shard = shard.write().unwrap();
+            shard.trim_purged(timestamp);
         }
     }
 
@@ -235,8 +235,8 @@ impl CrdsPool {
         mask: u64,
         mask_bits: u32,
     ) -> impl Iterator<Item = &VersionedCrdsValue> {
-        self.chunks.iter().flat_map(move |chunk| {
-            let guard = chunk.read().unwrap();
+        self.shards.iter().flat_map(move |shard| {
+            let guard = shard.read().unwrap();
             let crds: &Crds = unsafe { change_lifetime_const(&*guard) };
             let inner = crds.filter_bitmask(mask, mask_bits);
             GuardIter {
@@ -248,8 +248,8 @@ impl CrdsPool {
 
     /// Update the timestamp's of all the labels that are associated with Pubkey
     pub(crate) fn update_record_timestamp(&self, pubkey: &Pubkey, now: u64) {
-        let index = self.chunk_index(pubkey);
-        let mut crds = self.chunks[index].write().unwrap();
+        let index = self.shard_index(pubkey);
+        let mut crds = self.shards[index].write().unwrap();
         crds.update_record_timestamp(pubkey, now);
     }
 
@@ -263,10 +263,10 @@ impl CrdsPool {
     ) -> Vec<CrdsValueLabel> {
         assert!(timeouts.contains_key(&Pubkey::default()));
         thread_pool.install(|| {
-            self.chunks
+            self.shards
                 .par_iter()
-                .flat_map(|chunk| {
-                    let crds = chunk.read().unwrap();
+                .flat_map(|shard| {
+                    let crds = shard.read().unwrap();
                     crds.find_old_labels(thread_pool, now, timeouts)
                 })
                 .collect()
@@ -274,8 +274,8 @@ impl CrdsPool {
     }
 
     pub fn remove(&self, key: &CrdsValueLabel, now: u64) {
-        let index = self.chunk_index(&key.pubkey());
-        let mut crds = self.chunks[index].write().unwrap();
+        let index = self.shard_index(&key.pubkey());
+        let mut crds = self.shards[index].write().unwrap();
         crds.remove(key, now)
     }
 
@@ -300,28 +300,28 @@ impl CrdsPool {
         now: u64,
     ) -> Result</*num purged:*/ usize, CrdsError> {
         // TODO: This should apply cap globally!
-        let cap = cap / self.chunks.len();
-        self.chunks.iter().try_fold(0, |num_purged, chunk| {
-            if !chunk.read().unwrap().should_trim(cap) {
+        let cap = cap / self.shards.len();
+        self.shards.iter().try_fold(0, |num_purged, shard| {
+            if !shard.read().unwrap().should_trim(cap) {
                 return Ok(num_purged);
             }
-            let mut crds = chunk.write().unwrap();
+            let mut crds = shard.write().unwrap();
             Ok(num_purged + crds.trim(cap, keep, stakes, now)?)
         })
     }
 
     pub(crate) fn take_stats(&self) -> CrdsStats {
-        sum_chunks!(self, take_stats)
+        sum_shards!(self, take_stats)
     }
 
     // Only for tests and simulations.
     pub(crate) fn mock_clone(&self) -> Self {
-        let chunks = self.chunks.iter().map(|chunk| {
-            let chunk = chunk.read().unwrap().mock_clone();
-            RwLock::new(chunk)
+        let shards = self.shards.iter().map(|shard| {
+            let shard = shard.read().unwrap().mock_clone();
+            RwLock::new(shard)
         });
         Self {
-            chunks: chunks.collect(),
+            shards: shards.collect(),
             offset: self.offset,
         }
     }
@@ -330,7 +330,7 @@ impl CrdsPool {
 impl Default for CrdsPool {
     fn default() -> Self {
         Self {
-            chunks: repeat_with(RwLock::default).take(NUM_CHUNKS).collect(),
+            shards: repeat_with(RwLock::default).take(NUM_SHARDS).collect(),
             offset: rand::thread_rng().gen_range(0, 32),
         }
     }
