@@ -290,7 +290,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
     fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: Arc<AccountMapEntryInner<T>>) {
-        let mut slot_list = in_mem.slot_list.write().unwrap();
+        let mut slot_list = in_mem.slot_list.lock().unwrap();
         let slot_list2 = disk.slot_list.write().unwrap();
 
         for (slot, new_entry) in slot_list2.iter().copied() {
