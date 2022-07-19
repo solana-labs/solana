@@ -30,7 +30,7 @@ use {
         accounts_index::{
             AccountIndexGetResult, AccountSecondaryIndexes, AccountsIndex, AccountsIndexConfig,
             AccountsIndexRootsStats, AccountsIndexScanResult, IndexKey, IndexValue, IsCached,
-            RefCount, ScanConfig, ScanResult, SlotList, SlotSlice, UpsertReclaim, ZeroLamport,
+            RefCount, ScanConfig, ScanResult, SlotList, UpsertReclaim, ZeroLamport,
             ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS, ACCOUNTS_INDEX_CONFIG_FOR_TESTING,
         },
         accounts_index_storage::Startup,
@@ -2149,6 +2149,7 @@ impl AccountsDb {
         &self,
         purges: Vec<Pubkey>,
         max_clean_root: Option<Slot>,
+        ancient_account_cleans: &AtomicU64,
     ) -> ReclaimResult {
         if purges.is_empty() {
             return ReclaimResult::default();
@@ -2157,18 +2158,28 @@ impl AccountsDb {
         // the hot loop will be the order of ~Xms.
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
 
+        let one_epoch_old = self.get_accounts_hash_complete_one_epoch_old();
+
         let mut clean_rooted = Measure::start("clean_old_root-ms");
         let reclaim_vecs = purges
             .par_chunks(INDEX_CLEAN_BULK_COUNT)
-            .map(|pubkeys: &[Pubkey]| {
+            .filter_map(|pubkeys: &[Pubkey]| {
                 let mut reclaims = Vec::new();
                 for pubkey in pubkeys {
                     self.accounts_index
                         .clean_rooted_entries(pubkey, &mut reclaims, max_clean_root);
                 }
-                reclaims
-            });
-        let reclaims: Vec<_> = reclaim_vecs.flatten().collect();
+                (!reclaims.is_empty()).then(|| {
+                    // figure out how many ancient accounts have been reclaimed
+                    let old_reclaims = reclaims
+                        .iter()
+                        .filter_map(|(slot, _)| (slot < &one_epoch_old).then(|| 1))
+                        .sum();
+                    ancient_account_cleans.fetch_add(old_reclaims, Ordering::Relaxed);
+                    reclaims
+                })
+            })
+            .collect::<Vec<_>>();
         clean_rooted.stop();
         inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
         self.clean_accounts_stats
@@ -2183,7 +2194,7 @@ impl AccountsDb {
 
         let mut reclaim_result = ReclaimResult::default();
         self.handle_reclaims(
-            &reclaims,
+            (!reclaim_vecs.is_empty()).then(|| reclaim_vecs.iter().flatten()),
             None,
             Some((&self.clean_accounts_stats.purge_stats, &mut reclaim_result)),
             reset_accounts,
@@ -2505,6 +2516,8 @@ impl AccountsDb {
     ) {
         let _guard = self.active_stats.activate(ActiveStatItem::Clean);
 
+        let ancient_account_cleans = AtomicU64::default();
+
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
 
@@ -2639,8 +2652,11 @@ impl AccountsDb {
         accounts_scan.stop();
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
-        let (purged_account_slots, removed_accounts) =
-            self.clean_accounts_older_than_root(purges_old_accounts, max_clean_root);
+        let (purged_account_slots, removed_accounts) = self.clean_accounts_older_than_root(
+            purges_old_accounts,
+            max_clean_root,
+            &ancient_account_cleans,
+        );
 
         if self.caching_enabled {
             self.do_reset_uncleaned_roots(max_clean_root);
@@ -2740,7 +2756,7 @@ impl AccountsDb {
         let reset_accounts = false;
         let mut reclaim_result = ReclaimResult::default();
         self.handle_reclaims(
-            &reclaims,
+            (!reclaims.is_empty()).then(|| reclaims.iter()),
             None,
             Some((&self.clean_accounts_stats.purge_stats, &mut reclaim_result)),
             reset_accounts,
@@ -2851,6 +2867,11 @@ impl AccountsDb {
                     .swap(0, Ordering::Relaxed),
                 i64
             ),
+            (
+                "ancient_account_cleans",
+                ancient_account_cleans.load(Ordering::Relaxed),
+                i64
+            ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
         );
     }
@@ -2885,19 +2906,20 @@ impl AccountsDb {
     /// * `reset_accounts` - Reset the append_vec store when the store is dead (count==0)
     ///    From the clean and shrink paths it should be false since there may be an in-progress
     ///    hash operation and the stores may hold accounts that need to be unref'ed.
-    fn handle_reclaims(
-        &self,
-        reclaims: SlotSlice<AccountInfo>,
+    fn handle_reclaims<'a, I>(
+        &'a self,
+        reclaims: Option<I>,
         expected_single_dead_slot: Option<Slot>,
         purge_stats_and_reclaim_result: Option<(&PurgeStats, &mut ReclaimResult)>,
         reset_accounts: bool,
-    ) {
-        if reclaims.is_empty() {
-            return;
-        }
-
-        let (purge_stats, purged_account_slots, reclaimed_offsets) =
-            if let Some((purge_stats, (ref mut purged_account_slots, ref mut reclaimed_offsets))) =
+    ) where
+        I: Iterator<Item = &'a (Slot, AccountInfo)>,
+    {
+        if let Some(reclaims) = reclaims {
+            let (purge_stats, purged_account_slots, reclaimed_offsets) = if let Some((
+                purge_stats,
+                (ref mut purged_account_slots, ref mut reclaimed_offsets),
+            )) =
                 purge_stats_and_reclaim_result
             {
                 (
@@ -2909,26 +2931,27 @@ impl AccountsDb {
                 (None, None, None)
             };
 
-        let dead_slots = self.remove_dead_accounts(
-            reclaims,
-            expected_single_dead_slot,
-            reclaimed_offsets,
-            reset_accounts,
-        );
+            let dead_slots = self.remove_dead_accounts(
+                reclaims,
+                expected_single_dead_slot,
+                reclaimed_offsets,
+                reset_accounts,
+            );
 
-        if let Some(purge_stats) = purge_stats {
-            if let Some(expected_single_dead_slot) = expected_single_dead_slot {
-                assert!(dead_slots.len() <= 1);
-                if dead_slots.len() == 1 {
-                    assert!(dead_slots.contains(&expected_single_dead_slot));
+            if let Some(purge_stats) = purge_stats {
+                if let Some(expected_single_dead_slot) = expected_single_dead_slot {
+                    assert!(dead_slots.len() <= 1);
+                    if dead_slots.len() == 1 {
+                        assert!(dead_slots.contains(&expected_single_dead_slot));
+                    }
                 }
-            }
 
-            self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
-        } else {
-            // not sure why this fails yet with ancient append vecs
-            if !self.ancient_append_vecs {
-                assert!(dead_slots.is_empty());
+                self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
+            } else {
+                // not sure why this fails yet with ancient append vecs
+                if !self.ancient_append_vecs {
+                    assert!(dead_slots.is_empty());
+                }
             }
         }
     }
@@ -5191,7 +5214,7 @@ impl AccountsDb {
         // Slot should be dead after removing all its account entries
         let expected_dead_slot = Some(remove_slot);
         self.handle_reclaims(
-            &reclaims,
+            (!reclaims.is_empty()).then(|| reclaims.iter()),
             expected_dead_slot,
             Some((purge_stats, &mut ReclaimResult::default())),
             false,
@@ -6439,7 +6462,7 @@ impl AccountsDb {
                 let eligible_for_caching =
                     !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
 
-                if eligible_for_caching {
+                if eligible_for_caching || config.store_detailed_debug_info_on_failure {
                     let range = bin_range.end - bin_range.start;
                     scanner.init_accum(range);
                 }
@@ -6455,7 +6478,9 @@ impl AccountsDb {
 
                 let mut file_name = String::default();
                 // if we're using the write cache, we can't cache the hash calc results because not all accounts are in append vecs.
-                if should_cache_hash_data && eligible_for_caching {
+                if (should_cache_hash_data && eligible_for_caching)
+                    || config.store_detailed_debug_info_on_failure
+                {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
@@ -6492,7 +6517,7 @@ impl AccountsDb {
                             amod.hash(&mut hasher);
                         }
                     }
-                    if load_from_cache {
+                    if load_from_cache && eligible_for_caching {
                         // we have a hash value for all the storages in this slot
                         // so, build a file name:
                         let hash = hasher.finish();
@@ -6596,7 +6621,6 @@ impl AccountsDb {
         slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
-        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         if !use_index {
             let mut collect_time = Measure::start("collect");
             let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors);
@@ -6674,6 +6698,7 @@ impl AccountsDb {
                     use_write_cache: can_cached_slot_be_unflushed,
                     epoch_schedule,
                     rent_collector,
+                    store_detailed_debug_info_on_failure: false,
                 },
                 expected_capitalization,
             )
@@ -6787,6 +6812,20 @@ impl AccountsDb {
         );
     }
 
+    /// normal code path returns the common cache path
+    /// when called after a failure has been detected, redirect the cache storage to a separate folder for debugging later
+    fn get_cache_hash_data(&self, config: &CalcAccountsHashConfig<'_>) -> CacheHashData {
+        if !config.store_detailed_debug_info_on_failure {
+            CacheHashData::new(&self.accounts_hash_cache_path)
+        } else {
+            // this path executes when we are failing with a hash mismatch
+            let mut new = self.accounts_hash_cache_path.clone();
+            new.push("failed_calculate_accounts_hash_cache");
+            let _ = std::fs::remove_dir_all(&new);
+            CacheHashData::new(&new)
+        }
+    }
+
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
@@ -6795,6 +6834,8 @@ impl AccountsDb {
         storages: &SortedStorages<'_>,
         mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
+        let _guard = self.active_stats.activate(ActiveStatItem::Hash);
+
         self.mark_old_slots_as_dirty(storages, Some(config.epoch_schedule.slots_per_epoch));
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
@@ -6803,7 +6844,7 @@ impl AccountsDb {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            let cache_hash_data = CacheHashData::new(&self.accounts_hash_cache_path);
+            let cache_hash_data = self.get_cache_hash_data(config);
 
             for pass in 0..num_hash_scan_passes {
                 let bounds = Range {
@@ -6938,6 +6979,7 @@ impl AccountsDb {
                     use_write_cache: can_cached_slot_be_unflushed,
                     epoch_schedule,
                     rent_collector,
+                    store_detailed_debug_info_on_failure: false,
                 },
                 None,
             )?;
@@ -7239,13 +7281,16 @@ impl AccountsDb {
         }
     }
 
-    fn remove_dead_accounts(
-        &self,
-        reclaims: SlotSlice<AccountInfo>,
+    fn remove_dead_accounts<'a, I>(
+        &'a self,
+        reclaims: I,
         expected_slot: Option<Slot>,
         mut reclaimed_offsets: Option<&mut AppendVecOffsets>,
         reset_accounts: bool,
-    ) -> HashSet<Slot> {
+    ) -> HashSet<Slot>
+    where
+        I: Iterator<Item = &'a (Slot, AccountInfo)>,
+    {
         let mut dead_slots = HashSet::new();
         let mut new_shrink_candidates: ShrinkCandidates = HashMap::new();
         let mut measure = Measure::start("remove");
@@ -7799,7 +7844,12 @@ impl AccountsDb {
         // From 1) and 2) we guarantee passing `no_purge_stats` == None, which is
         // equivalent to asserting there will be no dead slots, is safe.
         let mut handle_reclaims_time = Measure::start("handle_reclaims");
-        self.handle_reclaims(&reclaims, expected_single_dead_slot, None, reset_accounts);
+        self.handle_reclaims(
+            (!reclaims.is_empty()).then(|| reclaims.iter()),
+            expected_single_dead_slot,
+            None,
+            reset_accounts,
+        );
         handle_reclaims_time.stop();
         self.stats
             .store_handle_reclaims
@@ -8342,7 +8392,7 @@ impl AccountsDb {
                                 let (key, account_info) = account;
                                 let lock = self.accounts_index.get_account_maps_read_lock(&key);
                                 let x = lock.get(&key).unwrap();
-                                let sl = x.slot_list.read().unwrap();
+                                let sl = x.slot_list.lock().unwrap();
                                 let mut count = 0;
                                 for (slot2, account_info2) in sl.iter() {
                                     if slot2 == slot {
@@ -8669,7 +8719,7 @@ impl AccountsDb {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",
-                    *account_entry.slot_list.read().unwrap()
+                    *account_entry.slot_list.lock().unwrap()
                 );
             }
         });
@@ -8969,6 +9019,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
                 None,
             )
@@ -9358,6 +9409,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -9387,6 +9439,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -9497,6 +9550,7 @@ pub mod tests {
                 use_write_cache: false,
                 epoch_schedule: &EpochSchedule::default(),
                 rent_collector: &RentCollector::default(),
+                store_detailed_debug_info_on_failure: false,
             },
             &get_storage_refs(&storages),
             test_scan,
@@ -11538,6 +11592,7 @@ pub mod tests {
                         use_write_cache: false,
                         epoch_schedule: &EpochSchedule::default(),
                         rent_collector: &RentCollector::default(),
+                        store_detailed_debug_info_on_failure: false,
                     },
                 )
                 .is_err());
@@ -11570,6 +11625,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
             )
             .unwrap(),
@@ -11583,6 +11639,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
             )
             .unwrap(),
@@ -13698,7 +13755,7 @@ pub mod tests {
             assert_eq!(removed_data_size, account.stored_size as StoredSize);
             assert_eq!(account_info.0, slot);
             let reclaims = vec![account_info];
-            accounts_db.remove_dead_accounts(&reclaims, None, None, true);
+            accounts_db.remove_dead_accounts(reclaims.iter(), None, None, true);
             let after_size = storage0.alive_bytes.load(Ordering::Acquire);
             assert_eq!(before_size, after_size + account.stored_size);
         }

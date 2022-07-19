@@ -5,6 +5,7 @@ use {
     fd_lock::{RwLock, RwLockWriteGuard},
     indicatif::{ProgressDrawTarget, ProgressStyle},
     solana_net_utils::MINIMUM_VALIDATOR_PORT_RANGE_WIDTH,
+    solana_sdk::quic::QUIC_PORT_OFFSET,
     std::{
         borrow::Cow,
         env,
@@ -98,6 +99,8 @@ pub fn port_range_validator(port_range: String) -> Result<(), String> {
                 start,
                 start + MINIMUM_VALIDATOR_PORT_RANGE_WIDTH
             ))
+        } else if end.checked_add(QUIC_PORT_OFFSET).is_none() {
+            Err("Invalid dynamic_port_range.".to_string())
         } else {
             Ok(())
         }

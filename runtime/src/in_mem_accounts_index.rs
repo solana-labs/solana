@@ -21,7 +21,7 @@ use {
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
-            Arc, Mutex, RwLock, RwLockWriteGuard,
+            Arc, Mutex, MutexGuard, RwLock,
         },
     },
 };
@@ -331,7 +331,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
 
                 let result =
-                    self.remove_if_slot_list_empty_value(&occupied.get().slot_list.read().unwrap());
+                    self.remove_if_slot_list_empty_value(&occupied.get().slot_list.lock().unwrap());
                 if result {
                     // note there is a potential race here that has existed.
                     // if someone else holds the arc,
@@ -383,13 +383,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn slot_list_mut<RT>(
         &self,
         pubkey: &Pubkey,
-        user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
+        user: impl for<'a> FnOnce(&mut MutexGuard<'a, SlotList<T>>) -> RT,
     ) -> Option<RT> {
         self.get_internal(pubkey, |entry| {
             (
                 true,
                 entry.map(|entry| {
-                    let result = user(&mut entry.slot_list.write().unwrap());
+                    let result = user(&mut entry.slot_list.lock().unwrap());
                     entry.set_dirty(true);
                     result
                 }),
@@ -531,7 +531,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         reclaim: UpsertReclaim,
     ) {
-        let mut slot_list = current.slot_list.write().unwrap();
+        let mut slot_list = current.slot_list.lock().unwrap();
         let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
             &mut slot_list,
@@ -998,7 +998,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         startup: bool,
         update_stats: bool,
         exceeds_budget: bool,
-    ) -> (bool, Option<std::sync::RwLockReadGuard<'a, SlotList<T>>>) {
+    ) -> (bool, Option<std::sync::MutexGuard<'a, SlotList<T>>>) {
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
         if Self::should_evict_based_on_age(current_age, entry, startup) {
@@ -1007,7 +1007,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 (true, None)
             } else {
                 // only read the slot list if we are planning to throw the item out
-                let slot_list = entry.slot_list.read().unwrap();
+                let slot_list = entry.slot_list.lock().unwrap();
                 if slot_list.len() != 1 {
                     if update_stats {
                         Self::update_stat(&self.stats().held_in_mem_slot_list_len, 1);
@@ -1217,7 +1217,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 let disk_resize = {
                                     let slot_list = slot_list
                                         .take()
-                                        .unwrap_or_else(|| v.slot_list.read().unwrap());
+                                        .unwrap_or_else(|| v.slot_list.lock().unwrap());
                                     disk.try_write(k, (&slot_list, v.ref_count()))
                                 };
                                 match disk_resize {

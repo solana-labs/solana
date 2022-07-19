@@ -1,7 +1,7 @@
 pub use reqwest;
 use {
-    crate::{rpc_request, rpc_response},
-    quinn::{ConnectError, WriteError},
+    crate::{nonblocking::quic_client::QuicError, rpc_request, rpc_response},
+    quinn::ConnectError,
     solana_faucet::faucet::FaucetError,
     solana_sdk::{
         signature::SignerError, transaction::TransactionError, transport::TransportError,
@@ -73,9 +73,9 @@ impl From<ClientErrorKind> for TransportError {
     }
 }
 
-impl From<WriteError> for ClientErrorKind {
-    fn from(write_error: WriteError) -> Self {
-        Self::Custom(format!("{:?}", write_error))
+impl From<QuicError> for ClientErrorKind {
+    fn from(quic_error: QuicError) -> Self {
+        Self::Custom(format!("{:?}", quic_error))
     }
 }
 
