@@ -37,48 +37,56 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
-/// Split input vector of keypairs into two sets of chunks of given size
-fn split_into_source_destination(
-    keypairs: &[Keypair],
-    chunk_size: usize,
-) -> (Vec<Vec<&Keypair>>, Vec<VecDeque<&Keypair>>) {
-    let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
-    let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
-    for chunk in keypairs.chunks_exact(2 * chunk_size) {
-        source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
-        dest_keypair_chunks.push(chunk[chunk_size..].iter().collect());
-    }
-    (source_keypair_chunks, dest_keypair_chunks)
+/// Keypairs split into source and destination
+/// used for transfer transactions
+struct KeypairChunks<'a> {
+    source: Vec<Vec<&'a Keypair>>,
+    dest: Vec<VecDeque<&'a Keypair>>,
 }
+
+impl<'a> KeypairChunks<'a> {
+    /// Split input vector of keypairs into two sets of chunks of given size
+    fn new(keypairs: &'a [Keypair], chunk_size: usize) -> Self {
+        let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
+        let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
+        for chunk in keypairs.chunks_exact(2 * chunk_size) {
+            source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
+            dest_keypair_chunks.push(chunk[chunk_size..].iter().collect());
+        }
+        KeypairChunks {
+            source: source_keypair_chunks,
+            dest: dest_keypair_chunks,
+        }
+    }
+}
+
 struct TransactionChunkGenerator<'a> {
-    source_keypair_chunks: Vec<Vec<&'a Keypair>>,
-    dest_keypair_chunks: Vec<VecDeque<&'a Keypair>>,
+    account_chunks: KeypairChunks<'a>,
     chunk_index: usize,
     reclaim_lamports_back_to_source_account: bool,
 }
 
 impl<'a> TransactionChunkGenerator<'a> {
     fn new(gen_keypairs: &'a [Keypair], chunk_size: usize) -> Self {
-        let (source_keypair_chunks, dest_keypair_chunks) =
-            split_into_source_destination(gen_keypairs, chunk_size);
+        let account_chunks = KeypairChunks::new(gen_keypairs, chunk_size);
         TransactionChunkGenerator {
-            source_keypair_chunks,
-            dest_keypair_chunks,
+            account_chunks,
             chunk_index: 0,
             reclaim_lamports_back_to_source_account: false,
         }
     }
 
+    /// generate transactions to transfer lamports from source to destination accounts
     fn generate(&mut self, blockhash: Option<&Hash>) -> Vec<(Transaction, u64)> {
-        let tx_count = self.source_keypair_chunks.len();
+        let tx_count = self.account_chunks.source.len();
         info!(
             "Signing transactions... {} (reclaim={}, blockhash={:?})",
             tx_count, self.reclaim_lamports_back_to_source_account, blockhash
         );
         let signing_start = Instant::now();
 
-        let source_chunk = &self.source_keypair_chunks[self.chunk_index];
-        let dest_chunk = &self.dest_keypair_chunks[self.chunk_index];
+        let source_chunk = &self.account_chunks.source[self.chunk_index];
+        let dest_chunk = &self.account_chunks.dest[self.chunk_index];
         assert!(blockhash.is_some());
         let transactions = generate_system_txs(
             source_chunk,
@@ -109,10 +117,10 @@ impl<'a> TransactionChunkGenerator<'a> {
     fn advance(&mut self) {
         // Rotate destination keypairs so that the next round of transactions will have different
         // transaction signatures even when blockhash is reused.
-        self.dest_keypair_chunks[self.chunk_index].rotate_left(1);
+        self.account_chunks.dest[self.chunk_index].rotate_left(1);
 
         // Move on to next chunk
-        self.chunk_index = (self.chunk_index + 1) % self.source_keypair_chunks.len();
+        self.chunk_index = (self.chunk_index + 1) % self.account_chunks.source.len();
 
         // Switch directions after transfering for each "chunk"
         if self.chunk_index == 0 {
