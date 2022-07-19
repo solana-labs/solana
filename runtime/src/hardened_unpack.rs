@@ -306,8 +306,35 @@ pub fn unpack_snapshot<A: Read>(
     account_paths: &[PathBuf],
     parallel_selector: Option<ParallelSelector>,
 ) -> Result<UnpackedAppendVecMap> {
-    assert!(!account_paths.is_empty());
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
+
+    unpack_snapshot_with_processors(
+        archive,
+        ledger_dir,
+        account_paths,
+        parallel_selector,
+        |file, path| {
+            unpacked_append_vec_map.insert(file.to_string(), path.join("accounts").join(file));
+        },
+        |_| {},
+    )
+    .map(|_| unpacked_append_vec_map)
+}
+
+fn unpack_snapshot_with_processors<A, F, G>(
+    archive: &mut Archive<A>,
+    ledger_dir: &Path,
+    account_paths: &[PathBuf],
+    parallel_selector: Option<ParallelSelector>,
+    mut accounts_path_processor: F,
+    entry_processor: G,
+) -> Result<()>
+where
+    A: Read,
+    F: FnMut(&str, &Path),
+    G: Fn(PathBuf),
+{
+    assert!(!account_paths.is_empty());
     let mut i = 0;
 
     unpack_archive(
@@ -329,12 +356,14 @@ pub fn unpack_snapshot<A: Read>(
                 if let ["accounts", file] = parts {
                     // Randomly distribute the accounts files about the available `account_paths`,
                     let path_index = thread_rng().gen_range(0, account_paths.len());
-                    match account_paths.get(path_index).map(|path_buf| {
-                        unpacked_append_vec_map
-                            .insert(file.to_string(), path_buf.join("accounts").join(file));
-                        path_buf.as_path()
-                    }) {
-                        Some(path) => UnpackPath::Valid(path),
+                    match account_paths
+                        .get(path_index)
+                        .map(|path_buf| path_buf.as_path())
+                    {
+                        Some(path) => {
+                            accounts_path_processor(*file, path);
+                            UnpackPath::Valid(path)
+                        }
                         None => UnpackPath::Invalid,
                     }
                 } else {
@@ -344,9 +373,8 @@ pub fn unpack_snapshot<A: Read>(
                 UnpackPath::Invalid
             }
         },
-        |_| {},
+        entry_processor,
     )
-    .map(|_| unpacked_append_vec_map)
 }
 
 fn all_digits(v: &str) -> bool {
