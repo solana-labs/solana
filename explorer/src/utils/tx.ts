@@ -442,10 +442,7 @@ export function tokenLabel(
   if (!tokenRegistry) return;
   const tokenInfo = tokenRegistry.get(address);
   if (!tokenInfo) return;
-  if (tokenInfo.name === tokenInfo.symbol) {
-    return tokenInfo.name;
-  }
-  return `${tokenInfo.symbol} - ${tokenInfo.name}`;
+  return tokenInfo.symbol;
 }
 
 export function addressLabel(

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   ParsedMessageAccount,
   PublicKey,
@@ -14,6 +14,7 @@ import { useTokenRegistry } from "providers/mints/token-registry";
 
 export type TokenBalanceRow = {
   account: PublicKey;
+  owner: string | undefined;
   mint: string;
   balance: TokenAmount;
   delta: BigNumber;
@@ -23,6 +24,7 @@ export type TokenBalanceRow = {
 export function TokenBalancesCard({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
   const { tokenRegistry } = useTokenRegistry();
+  const [toggleAddressOrOwner, setToggleAddressOrOwner] = useState(true);
 
   if (!details) {
     return null;
@@ -48,14 +50,18 @@ export function TokenBalancesCard({ signature }: SignatureProps) {
     return null;
   }
 
-  const accountRows = rows.map(({ account, delta, balance, mint }) => {
+  const accountRows = rows.map(({ account, owner, delta, balance, mint }) => {
     const key = account.toBase58() + mint;
     const units = tokenRegistry.get(mint)?.symbol || "tokens";
 
     return (
       <tr key={key}>
         <td>
-          <Address pubkey={account} link />
+          {toggleAddressOrOwner ? (
+            <Address pubkey={account} link />
+          ) : (
+            owner && <Address pubkey={new PublicKey(owner)} link />
+          )}
         </td>
         <td>
           <Address pubkey={new PublicKey(mint)} link />
@@ -74,12 +80,22 @@ export function TokenBalancesCard({ signature }: SignatureProps) {
     <div className="card">
       <div className="card-header">
         <h3 className="card-header-title">Token Balances</h3>
+        <button
+          className={`btn btn-sm d-flex ${
+            toggleAddressOrOwner ? "btn-black active" : "btn-white"
+          }`}
+          onClick={() => setToggleAddressOrOwner((e) => !e)}
+        >
+          {toggleAddressOrOwner ? "<> Owner" : "<> Address"}
+        </button>
       </div>
       <div className="table-responsive mb-0">
         <table className="table table-sm table-nowrap card-table">
           <thead>
             <tr>
-              <th className="text-muted">Address</th>
+              <th className="text-muted">
+                {toggleAddressOrOwner ? "Address" : "Owner"}
+              </th>
               <th className="text-muted">Token</th>
               <th className="text-muted">Change</th>
               <th className="text-muted">Post Balance</th>
@@ -105,7 +121,7 @@ export function generateTokenBalanceRows(
 
   let rows: TokenBalanceRow[] = [];
 
-  postTokenBalances.forEach(({ uiTokenAmount, accountIndex, mint }) => {
+  postTokenBalances.forEach(({ uiTokenAmount, accountIndex, owner, mint }) => {
     const preBalance = preBalanceMap[accountIndex];
     const account = accounts[accountIndex].pubkey;
 
@@ -123,6 +139,7 @@ export function generateTokenBalanceRows(
 
       rows.push({
         account: accounts[accountIndex].pubkey,
+        owner: preBalance.owner,
         accountIndex,
         balance: {
           decimals: preBalance.uiTokenAmount.decimals,
@@ -135,6 +152,7 @@ export function generateTokenBalanceRows(
 
       rows.push({
         account: accounts[accountIndex].pubkey,
+        owner,
         accountIndex,
         balance: uiTokenAmount,
         delta: new BigNumber(uiTokenAmount.uiAmountString),
@@ -160,6 +178,7 @@ export function generateTokenBalanceRows(
 
     rows.push({
       account,
+      owner,
       mint,
       balance: uiTokenAmount,
       delta,
