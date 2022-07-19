@@ -382,13 +382,15 @@ describe('StakeProgram', () => {
   if (process.env.TEST_LIVE) {
     it('live staking actions', async () => {
       const connection = new Connection(url, 'confirmed');
-      const SYSTEM_ACCOUNT_MIN_BALANCE =
-        await connection.getMinimumBalanceForRentExemption(0);
-      const STAKE_ACCOUNT_MIN_BALANCE =
-        await connection.getMinimumBalanceForRentExemption(StakeProgram.space);
-
-      // todo: use `Connection.getMinimumStakeDelegation` when implemented
-      const MIN_STAKE_DELEGATION = LAMPORTS_PER_SOL;
+      const [
+        SYSTEM_ACCOUNT_MIN_BALANCE,
+        STAKE_ACCOUNT_MIN_BALANCE,
+        {value: MIN_STAKE_DELEGATION},
+      ] = await Promise.all([
+        connection.getMinimumBalanceForRentExemption(0),
+        connection.getMinimumBalanceForRentExemption(StakeProgram.space),
+        connection.getStakeMinimumDelegation(),
+      ]);
 
       const voteAccounts = await connection.getVoteAccounts();
       const voteAccount = voteAccounts.current.concat(
