@@ -7,6 +7,7 @@ use {
     },
     log::*,
     rayon::prelude::*,
+    solana_client::nonce_utils,
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
@@ -60,23 +61,39 @@ impl<'a> KeypairChunks<'a> {
     }
 }
 
-struct TransactionChunkGenerator<'a> {
+struct TransactionChunkGenerator<'a, 'b, T> {
+    client: Arc<T>,
     account_chunks: KeypairChunks<'a>,
+    nonce_chunks: Option<KeypairChunks<'b>>,
     chunk_index: usize,
     reclaim_lamports_back_to_source_account: bool,
 }
 
-impl<'a> TransactionChunkGenerator<'a> {
-    fn new(gen_keypairs: &'a [Keypair], chunk_size: usize) -> Self {
+impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
+where
+    T: 'static + BenchTpsClient + Send + Sync,
+{
+    fn new(
+        client: Arc<T>,
+        gen_keypairs: &'a [Keypair],
+        nonce_keypairs: Option<&'b Vec<Keypair>>,
+        chunk_size: usize,
+    ) -> Self {
         let account_chunks = KeypairChunks::new(gen_keypairs, chunk_size);
+        let nonce_chunks =
+            nonce_keypairs.map(|nonce_keypairs| KeypairChunks::new(nonce_keypairs, chunk_size));
+
         TransactionChunkGenerator {
+            client,
             account_chunks,
+            nonce_chunks,
             chunk_index: 0,
             reclaim_lamports_back_to_source_account: false,
         }
     }
 
     /// generate transactions to transfer lamports from source to destination accounts
+    /// if durable nonce is used, blockhash is None
     fn generate(&mut self, blockhash: Option<&Hash>) -> Vec<(Transaction, u64)> {
         let tx_count = self.account_chunks.source.len();
         info!(
@@ -87,13 +104,26 @@ impl<'a> TransactionChunkGenerator<'a> {
 
         let source_chunk = &self.account_chunks.source[self.chunk_index];
         let dest_chunk = &self.account_chunks.dest[self.chunk_index];
-        assert!(blockhash.is_some());
-        let transactions = generate_system_txs(
-            source_chunk,
-            dest_chunk,
-            self.reclaim_lamports_back_to_source_account,
-            blockhash.unwrap(),
-        );
+        let transactions = if let Some(nonce_chunks) = &self.nonce_chunks {
+            let source_nonce_chunk = &nonce_chunks.source[self.chunk_index];
+            let dest_nonce_chunk: &VecDeque<&Keypair> = &nonce_chunks.dest[self.chunk_index];
+            generate_nonced_system_txs(
+                self.client.clone(),
+                source_chunk,
+                dest_chunk,
+                source_nonce_chunk,
+                dest_nonce_chunk,
+                self.reclaim_lamports_back_to_source_account,
+            )
+        } else {
+            assert!(blockhash.is_some());
+            generate_system_txs(
+                source_chunk,
+                dest_chunk,
+                self.reclaim_lamports_back_to_source_account,
+                blockhash.unwrap(),
+            )
+        };
 
         let duration = signing_start.elapsed();
         let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -118,7 +148,9 @@ impl<'a> TransactionChunkGenerator<'a> {
         // Rotate destination keypairs so that the next round of transactions will have different
         // transaction signatures even when blockhash is reused.
         self.account_chunks.dest[self.chunk_index].rotate_left(1);
-
+        if let Some(nonce_chunks) = &mut self.nonce_chunks {
+            nonce_chunks.dest[self.chunk_index].rotate_left(1);
+        }
         // Move on to next chunk
         self.chunk_index = (self.chunk_index + 1) % self.account_chunks.source.len();
 
@@ -176,11 +208,11 @@ where
         .unwrap()
 }
 
-fn generate_chunked_transfers(
+fn generate_chunked_transfers<T: 'static + BenchTpsClient + Send + Sync>(
     recent_blockhash: Arc<RwLock<Hash>>,
     shared_txs: &SharedTransactions,
     shared_tx_active_thread_count: Arc<AtomicIsize>,
-    mut chunk_generator: TransactionChunkGenerator<'_>,
+    mut chunk_generator: TransactionChunkGenerator<'_, '_, T>,
     threads: usize,
     duration: Duration,
     sustained: bool,
@@ -273,7 +305,12 @@ where
     } = config;
 
     assert!(gen_keypairs.len() >= 2 * tx_count);
-    let chunk_generator = TransactionChunkGenerator::new(&gen_keypairs, tx_count);
+    let chunk_generator = TransactionChunkGenerator::new(
+        client.clone(),
+        &gen_keypairs,
+        None, // TODO(klykov): to be added in the follow up PR
+        tx_count,
+    );
 
     let first_tx_count = loop {
         match client.get_transaction_count() {
@@ -403,10 +440,69 @@ fn generate_system_txs(
         .collect()
 }
 
-fn generate_txs(
+fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    nonce_account_pubkey: Pubkey,
+) -> Hash {
+    let nonce_account = client
+        .get_account(&nonce_account_pubkey)
+        .unwrap_or_else(|error| panic!("{:?}", error));
+    let nonce_data = nonce_utils::data_from_account(&nonce_account)
+        .unwrap_or_else(|error| panic!("{:?}", error));
+    nonce_data.blockhash()
+}
+
+fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    source: &[&Keypair],
+    dest: &VecDeque<&Keypair>,
+    source_nonce: &[&Keypair],
+    dest_nonce: &VecDeque<&Keypair>,
+    reclaim: bool,
+) -> Vec<(Transaction, u64)> {
+    let length = source.len();
+    let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(length);
+    for i in 0..length {
+        let (from, to, nonce, nonce_blockhash) = if !reclaim {
+            (
+                source[i],
+                dest[i],
+                source_nonce[i],
+                get_nonce_blockhash(client.clone(), source_nonce[i].pubkey()),
+            )
+        } else {
+            (
+                dest[i],
+                source[i],
+                dest_nonce[i],
+                get_nonce_blockhash(client.clone(), dest_nonce[i].pubkey()),
+            )
+        };
+
+        transactions.push((
+            system_transaction::nonced_transfer(
+                from,
+                &to.pubkey(),
+                1,
+                &nonce.pubkey(),
+                from,
+                nonce_blockhash,
+            ),
+            timestamp(),
+        ));
+    }
+    // current timestamp to avoid filtering out some transactions if they are too old
+    let t = timestamp();
+    for mut tx in &mut transactions {
+        tx.1 = t;
+    }
+    transactions
+}
+
+fn generate_txs<T: 'static + BenchTpsClient + Send + Sync>(
     shared_txs: &SharedTransactions,
     blockhash: &Arc<RwLock<Hash>>,
-    chunk_generator: &mut TransactionChunkGenerator<'_>,
+    chunk_generator: &mut TransactionChunkGenerator<'_, '_, T>,
     threads: usize,
 ) {
     let blockhash = blockhash.read().map(|x| *x).ok();
