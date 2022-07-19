@@ -227,7 +227,22 @@ pub(crate) fn compare_two_serialized_banks(
     Ok(fields1 == fields2)
 }
 
-pub(crate) fn fields_from_streams<R>(
+pub(crate) fn fields_from_stream<R: Read>(
+    serde_style: SerdeStyle,
+    snapshot_stream: &mut BufReader<R>,
+) -> std::result::Result<
+    (
+        BankFieldsToDeserialize,
+        AccountsDbFields<SerializableAccountStorageEntry>,
+    ),
+    Error,
+> {
+    match serde_style {
+        SerdeStyle::Newer => newer::Context::deserialize_bank_fields(snapshot_stream),
+    }
+}
+
+pub(crate) fn fields_from_streams<R: Read>(
     serde_style: SerdeStyle,
     snapshot_streams: &mut SnapshotStreams<R>,
 ) -> std::result::Result<
@@ -236,37 +251,22 @@ pub(crate) fn fields_from_streams<R>(
         SnapshotAccountsDbFields<SerializableAccountStorageEntry>,
     ),
     Error,
->
-where
-    R: Read,
-{
-    let (
-        full_snapshot_bank_fields,
-        full_snapshot_accounts_db_fields,
-        incremental_snapshot_bank_fields,
-        incremental_snapshot_accounts_db_fields,
-    ) = match serde_style {
-        SerdeStyle::Newer => {
-            let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
-                newer::Context::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
-            let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
-                if let Some(ref mut incremental_snapshot_stream) =
-                    snapshot_streams.incremental_snapshot_stream
-                {
-                    let (bank_fields, accounts_db_fields) =
-                        newer::Context::deserialize_bank_fields(incremental_snapshot_stream)?;
-                    (Some(bank_fields), Some(accounts_db_fields))
-                } else {
-                    (None, None)
-                };
-            (
-                full_snapshot_bank_fields,
-                full_snapshot_accounts_db_fields,
-                incremental_snapshot_bank_fields,
-                incremental_snapshot_accounts_db_fields,
-            )
-        }
-    };
+> {
+    let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
+        fields_from_stream(serde_style, snapshot_streams.full_snapshot_stream)?;
+    let incremental_fields = snapshot_streams
+        .incremental_snapshot_stream
+        .as_mut()
+        .map(|stream| fields_from_stream(serde_style, stream))
+        .transpose()?;
+
+    // Option::unzip() not stabilized yet
+    let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
+        if let Some((bank_fields, accounts_fields)) = incremental_fields {
+            (Some(bank_fields), Some(accounts_fields))
+        } else {
+            (None, None)
+        };
 
     let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
         full_snapshot_accounts_db_fields,
