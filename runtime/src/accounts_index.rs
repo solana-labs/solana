@@ -635,7 +635,6 @@ pub trait ZeroLamport {
 type MapType<T> = AccountMap<T>;
 type LockMapType<T> = Vec<RwLock<MapType<T>>>;
 type LockMapTypeSlice<T> = [RwLock<MapType<T>>];
-type AccountMapsWriteLock<'a, T> = RwLockWriteGuard<'a, MapType<T>>;
 type AccountMapsReadLock<'a, T> = RwLockReadGuard<'a, MapType<T>>;
 
 #[derive(Debug, Default)]
@@ -1143,7 +1142,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     ) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
-                let w_index = self.get_account_maps_write_lock(key);
+                let w_index = self.get_account_maps_read_lock(key);
                 if w_index.remove_if_slot_list_empty(**key) {
                     // Note it's only safe to remove all the entries for this key
                     // because we have the lock for this key's entry in the AccountsIndex,
@@ -1527,12 +1526,6 @@ impl<T: IndexValue> AccountsIndex<T> {
         );
     }
 
-    fn get_account_maps_write_lock(&self, pubkey: &Pubkey) -> AccountMapsWriteLock<T> {
-        self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
-            .write()
-            .unwrap()
-    }
-
     pub(crate) fn get_account_maps_read_lock(&self, pubkey: &Pubkey) -> AccountMapsReadLock<T> {
         self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
@@ -1593,7 +1586,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let insertion_time = AtomicU64::new(0);
 
         binned.into_iter().for_each(|(pubkey_bin, items)| {
-            let w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
+            let w_account_maps = self.account_maps[pubkey_bin].read().unwrap();
             let mut insert_time = Measure::start("insert_into_primary_index");
             if use_disk {
                 w_account_maps.startup_insert_only(slot, items.into_iter());
@@ -1744,7 +1737,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // locked and inserted the pubkey in-between when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
-            let w_maps = self.get_account_maps_write_lock(pubkey);
+            let w_maps = self.get_account_maps_read_lock(pubkey);
             w_maps.remove_if_slot_list_empty(*pubkey);
         }
     }
@@ -2689,7 +2682,7 @@ pub mod tests {
         assert_eq!((slot, account_info), new_entry.clone().into());
 
         assert_eq!(0, account_maps_stats_len(&index));
-        let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
+        let w_account_maps = index.get_account_maps_read_lock(&key.pubkey());
         w_account_maps.upsert(
             &key.pubkey(),
             new_entry,
