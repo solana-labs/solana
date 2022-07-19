@@ -2149,6 +2149,7 @@ impl AccountsDb {
         &self,
         purges: Vec<Pubkey>,
         max_clean_root: Option<Slot>,
+        ancient_account_cleans: &AtomicU64,
     ) -> ReclaimResult {
         if purges.is_empty() {
             return ReclaimResult::default();
@@ -2156,6 +2157,8 @@ impl AccountsDb {
         // This number isn't carefully chosen; just guessed randomly such that
         // the hot loop will be the order of ~Xms.
         const INDEX_CLEAN_BULK_COUNT: usize = 4096;
+
+        let one_epoch_old = self.get_accounts_hash_complete_one_epoch_old();
 
         let mut clean_rooted = Measure::start("clean_old_root-ms");
         let reclaim_vecs = purges
@@ -2166,7 +2169,15 @@ impl AccountsDb {
                     self.accounts_index
                         .clean_rooted_entries(pubkey, &mut reclaims, max_clean_root);
                 }
-                (!reclaims.is_empty()).then(|| reclaims)
+                (!reclaims.is_empty()).then(|| {
+                    // figure out how many ancient accounts have been reclaimed
+                    let old_reclaims = reclaims
+                        .iter()
+                        .filter_map(|(slot, _)| (slot < &one_epoch_old).then(|| 1))
+                        .sum();
+                    ancient_account_cleans.fetch_add(old_reclaims, Ordering::Relaxed);
+                    reclaims
+                })
             })
             .collect::<Vec<_>>();
         clean_rooted.stop();
@@ -2505,6 +2516,8 @@ impl AccountsDb {
     ) {
         let _guard = self.active_stats.activate(ActiveStatItem::Clean);
 
+        let ancient_account_cleans = AtomicU64::default();
+
         let mut measure_all = Measure::start("clean_accounts");
         let max_clean_root = self.max_clean_root(max_clean_root);
 
@@ -2639,8 +2652,11 @@ impl AccountsDb {
         accounts_scan.stop();
 
         let mut clean_old_rooted = Measure::start("clean_old_roots");
-        let (purged_account_slots, removed_accounts) =
-            self.clean_accounts_older_than_root(purges_old_accounts, max_clean_root);
+        let (purged_account_slots, removed_accounts) = self.clean_accounts_older_than_root(
+            purges_old_accounts,
+            max_clean_root,
+            &ancient_account_cleans,
+        );
 
         if self.caching_enabled {
             self.do_reset_uncleaned_roots(max_clean_root);
@@ -2849,6 +2865,11 @@ impl AccountsDb {
                 self.accounts_index
                     .max_distance_to_min_scan_slot
                     .swap(0, Ordering::Relaxed),
+                i64
+            ),
+            (
+                "ancient_account_cleans",
+                ancient_account_cleans.load(Ordering::Relaxed),
                 i64
             ),
             ("next_store_id", self.next_id.load(Ordering::Relaxed), i64),
