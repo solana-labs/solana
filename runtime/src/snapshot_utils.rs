@@ -1531,9 +1531,9 @@ fn unpack_snapshot_local(
 fn untar_snapshot_create_shared_buffer(
     snapshot_tar: &Path,
     archive_format: ArchiveFormat,
-) -> Result<SharedBuffer> {
+) -> SharedBuffer {
     let open_file = || File::open(&snapshot_tar).unwrap();
-    Ok(match archive_format {
+    match archive_format {
         ArchiveFormat::TarBzip2 => SharedBuffer::new(BzDecoder::new(BufReader::new(open_file()))),
         ArchiveFormat::TarGzip => SharedBuffer::new(GzDecoder::new(BufReader::new(open_file()))),
         ArchiveFormat::TarZstd => SharedBuffer::new(
@@ -1543,7 +1543,7 @@ fn untar_snapshot_create_shared_buffer(
             SharedBuffer::new(lz4::Decoder::new(BufReader::new(open_file())).unwrap())
         }
         ArchiveFormat::Tar => SharedBuffer::new(BufReader::new(open_file())),
-    })
+    }
 }
 
 fn untar_snapshot_in<P: AsRef<Path>>(
@@ -1553,7 +1553,7 @@ fn untar_snapshot_in<P: AsRef<Path>>(
     archive_format: ArchiveFormat,
     parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
-    let shared_buffer = untar_snapshot_create_shared_buffer(snapshot_tar.as_ref(), archive_format)?;
+    let shared_buffer = untar_snapshot_create_shared_buffer(snapshot_tar.as_ref(), archive_format);
     unpack_snapshot_local(shared_buffer, unpack_dir, account_paths, parallel_divisions)
 }
 
