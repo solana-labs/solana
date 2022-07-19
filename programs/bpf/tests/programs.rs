@@ -230,17 +230,27 @@ fn run_program(name: &str) -> u64 {
         )
         .unwrap();
 
+        #[allow(unused_mut)]
         let mut verified_executable = VerifiedExecutable::<
             RequisiteVerifier,
             BpfError,
             ThisInstructionMeter,
         >::from_executable(executable)
         .unwrap();
-        verified_executable.jit_compile().unwrap();
+
+        let run_program_iterations = {
+            #[cfg(target_arch = "x86_64")]
+            {
+                verified_executable.jit_compile().unwrap();
+                2
+            }
+            #[cfg(not(target_arch = "x86_64"))]
+            1
+        };
 
         let mut instruction_count = 0;
         let mut tracer = None;
-        for i in 0..2 {
+        for i in 0..run_program_iterations {
             let transaction_context = &mut invoke_context.transaction_context;
             let instruction_context = transaction_context
                 .get_current_instruction_context()
@@ -305,7 +315,7 @@ fn run_program(name: &str) -> u64 {
                     tracer = Some(vm.get_tracer().clone());
                 }
             }
-            deserialize_parameters(
+            assert!(match deserialize_parameters(
                 invoke_context.transaction_context,
                 invoke_context
                     .transaction_context
@@ -313,8 +323,21 @@ fn run_program(name: &str) -> u64 {
                     .unwrap(),
                 parameter_bytes.as_slice(),
                 &account_lengths,
-            )
-            .unwrap();
+            ) {
+                Ok(()) => true,
+                Err(InstructionError::ModifiedProgramId) => true,
+                Err(InstructionError::ExternalAccountLamportSpend) => true,
+                Err(InstructionError::ReadonlyLamportChange) => true,
+                Err(InstructionError::ExecutableLamportChange) => true,
+                Err(InstructionError::ExecutableAccountNotRentExempt) => true,
+                Err(InstructionError::ExecutableModified) => true,
+                Err(InstructionError::AccountDataSizeChanged) => true,
+                Err(InstructionError::InvalidRealloc) => true,
+                Err(InstructionError::ExecutableDataModified) => true,
+                Err(InstructionError::ReadonlyDataModified) => true,
+                Err(InstructionError::ExternalAccountDataModified) => true,
+                _ => false,
+            });
         }
         instruction_count
     })
@@ -336,6 +359,7 @@ fn process_transaction_and_record_inner(
             false,
             false,
             &mut ExecuteTimings::default(),
+            None,
         )
         .0;
     let result = results
@@ -378,6 +402,7 @@ fn execute_transactions(
         true,
         true,
         &mut timings,
+        None,
     );
     let tx_post_token_balances = collect_token_balances(&bank, &batch, &mut mint_decimals);
 

@@ -1423,13 +1423,9 @@ fn test_snapshots_restart_validity() {
         .full_snapshot_archives_dir;
 
     // Set up the cluster with 1 snapshotting validator
-    let mut all_account_storage_dirs = vec![vec![]];
-
-    std::mem::swap(
-        &mut all_account_storage_dirs[0],
+    let mut all_account_storage_dirs = vec![std::mem::take(
         &mut snapshot_test_config.account_storage_dirs,
-    );
-
+    )];
     let mut config = ClusterConfig {
         node_stakes: vec![DEFAULT_NODE_STAKE],
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,

@@ -1,3 +1,5 @@
+import {URL} from './url-impl';
+
 export function makeWebsocketUrl(endpoint: string) {
   let url = new URL(endpoint);
   const useHttps = url.protocol === 'https:';

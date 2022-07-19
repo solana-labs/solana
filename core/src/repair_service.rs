@@ -14,15 +14,10 @@ use {
     crossbeam_channel::{Receiver as CrossbeamReceiver, Sender as CrossbeamSender},
     lru::LruCache,
     solana_gossip::cluster_info::ClusterInfo,
-    solana_ledger::{
-        blockstore::{Blockstore, SlotMeta},
-        shred::Nonce,
-    },
+    solana_ledger::blockstore::{Blockstore, SlotMeta},
     solana_measure::measure::Measure,
     solana_runtime::{bank_forks::BankForks, contains::Contains},
-    solana_sdk::{
-        clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey, timing::timestamp,
-    },
+    solana_sdk::{clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey},
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
     std::{
         collections::{HashMap, HashSet},
@@ -36,6 +31,8 @@ use {
         time::{Duration, Instant},
     },
 };
+#[cfg(test)]
+use {solana_ledger::shred::Nonce, solana_sdk::timing::timestamp};
 
 pub type DuplicateSlotsResetSender = CrossbeamSender<Vec<(Slot, Hash)>>;
 pub type DuplicateSlotsResetReceiver = CrossbeamReceiver<Vec<(Slot, Hash)>>;
@@ -387,7 +384,7 @@ impl RepairService {
                 info!("repair_stats: {:?}", slot_to_count);
                 if repair_total > 0 {
                     datapoint_info!(
-                        "serve_repair-repair",
+                        "repair_service-my_requests",
                         ("repair-total", repair_total, i64),
                         ("shred-count", repair_stats.shred.count, i64),
                         ("highest-shred-count", repair_stats.highest_shred.count, i64),
@@ -397,7 +394,7 @@ impl RepairService {
                     );
                 }
                 datapoint_info!(
-                    "serve_repair-repair-timing",
+                    "repair_service-repair_timing",
                     ("set-root-elapsed", repair_timing.set_root_elapsed, i64),
                     ("get-votes-elapsed", repair_timing.get_votes_elapsed, i64),
                     ("add-votes-elapsed", repair_timing.add_votes_elapsed, i64),
@@ -570,7 +567,7 @@ impl RepairService {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     fn generate_duplicate_repairs_for_slot(
         blockstore: &Blockstore,
         slot: Slot,
@@ -595,7 +592,7 @@ impl RepairService {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     fn generate_and_send_duplicate_repairs(
         duplicate_slot_repair_statuses: &mut HashMap<Slot, DuplicateSlotRepairStatus>,
         cluster_slots: &ClusterSlots,
@@ -646,7 +643,7 @@ impl RepairService {
         })
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     fn serialize_and_send_request(
         repair_type: &ShredRepairType,
         repair_socket: &UdpSocket,
@@ -662,7 +659,7 @@ impl RepairService {
         Ok(())
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     fn update_duplicate_slot_repair_addr(
         slot: Slot,
         status: &mut DuplicateSlotRepairStatus,
@@ -684,6 +681,7 @@ impl RepairService {
         }
     }
 
+    #[cfg(test)]
     #[allow(dead_code)]
     fn initiate_repair_for_duplicate_slot(
         slot: Slot,

@@ -3,12 +3,13 @@ use {
     clap::value_t,
     log::*,
     solana_bench_tps::{
-        bench::{do_bench_tps, generate_keypairs},
+        bench::do_bench_tps,
         cli::{self, ExternalClientType},
         keypairs::get_keypairs,
+        send_batch::generate_keypairs,
     },
     solana_client::{
-        connection_cache::{ConnectionCache, UseQUIC},
+        connection_cache::ConnectionCache,
         rpc_client::RpcClient,
         thin_client::ThinClient,
         tpu_client::{TpuClient, TpuClientConfig},
@@ -103,9 +104,10 @@ fn main() {
             do_bench_tps(client, cli_config, keypairs);
         }
         ExternalClientType::ThinClient => {
-            let use_quic = UseQUIC::new(*use_quic).expect("Failed to initialize QUIC flags");
-            let connection_cache =
-                Arc::new(ConnectionCache::new(use_quic, *tpu_connection_pool_size));
+            let connection_cache = match use_quic {
+                true => Arc::new(ConnectionCache::new(*tpu_connection_pool_size)),
+                false => Arc::new(ConnectionCache::with_udp(*tpu_connection_pool_size)),
+            };
 
             let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
                 let rpc = rpc_addr.parse().unwrap_or_else(|e| {
@@ -176,16 +178,17 @@ fn main() {
                 json_rpc_url.to_string(),
                 CommitmentConfig::confirmed(),
             ));
-            let use_quic = UseQUIC::new(*use_quic).expect("Failed to initialize QUIC flags");
-            let connection_cache =
-                Arc::new(ConnectionCache::new(use_quic, *tpu_connection_pool_size));
+            let connection_cache = match use_quic {
+                true => ConnectionCache::new(*tpu_connection_pool_size),
+                false => ConnectionCache::with_udp(*tpu_connection_pool_size),
+            };
 
             let client = Arc::new(
                 TpuClient::new_with_connection_cache(
                     rpc_client,
                     websocket_url,
                     TpuClientConfig::default(),
-                    connection_cache,
+                    Arc::new(connection_cache),
                 )
                 .unwrap_or_else(|err| {
                     eprintln!("Could not create TpuClient {:?}", err);

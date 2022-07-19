@@ -32,6 +32,8 @@ fn main() {
             args.remove(0);
         }
     }
+    args.push("--arch".to_string());
+    args.push("bpf".to_string());
     print!("cargo-test-bpf child: {}", program.display());
     for a in &args {
         print!(" {}", a);

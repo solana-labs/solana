@@ -251,6 +251,7 @@ pub struct CliSlotStatus {
 pub struct CliEpochInfo {
     #[serde(flatten)]
     pub epoch_info: EpochInfo,
+    pub epoch_completed_percent: f64,
     #[serde(skip)]
     pub average_slot_time_ms: u64,
     #[serde(skip)]
@@ -285,10 +286,7 @@ impl fmt::Display for CliEpochInfo {
         writeln_name_value(
             f,
             "Epoch Completed Percent:",
-            &format!(
-                "{:>3.3}%",
-                self.epoch_info.slot_index as f64 / self.epoch_info.slots_in_epoch as f64 * 100_f64
-            ),
+            &format!("{:>3.3}%", self.epoch_completed_percent),
         )?;
         let remaining_slots_in_epoch = self.epoch_info.slots_in_epoch - self.epoch_info.slot_index;
         writeln_name_value(

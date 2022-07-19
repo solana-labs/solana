@@ -1,6 +1,6 @@
 [package]
 name = "solana-version"
-version = "1.11.2"
+version = "1.11.4"
 description = "Solana Version"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,11 +12,11 @@ edition = "2021"
 [dependencies]
 log = "0.4.17"
 semver = "1.0.10"
-serde = "1.0.137"
+serde = "1.0.138"
 serde_derive = "1.0.103"
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.2" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.2" }
-solana-sdk = { path = "../sdk", version = "=1.11.2" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.4" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.4" }
+solana-sdk = { path = "../sdk", version = "=1.11.4" }
 
 [lib]
 name = "solana_version"

@@ -10,20 +10,22 @@ use {
             VerifiedVoteReceiver, VoteTracker,
         },
         cluster_slots::ClusterSlots,
+        cluster_slots_service::ClusterSlotsService,
         completed_data_sets_service::CompletedDataSetsSender,
         cost_update_service::CostUpdateService,
         drop_bank_service::DropBankService,
         ledger_cleanup_service::LedgerCleanupService,
+        repair_service::RepairInfo,
         replay_stage::{ReplayStage, ReplayStageConfig},
         retransmit_stage::RetransmitStage,
         rewards_recorder_service::RewardsRecorderSender,
         shred_fetch_stage::ShredFetchStage,
-        sigverify_shreds::ShredSigVerifier,
-        sigverify_stage::SigVerifyStage,
+        sigverify_shreds,
         tower_storage::TowerStorage,
         validator::ProcessBlockStore,
         voting_service::VotingService,
         warm_quic_cache_service::WarmQuicCacheService,
+        window_service::WindowService,
     },
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
@@ -39,35 +41,31 @@ use {
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
-        accounts_background_service::AbsRequestSender,
-        bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
-        cost_model::CostModel,
-        transaction_cost_metrics_sender::{
-            TransactionCostMetricsSender, TransactionCostMetricsService,
-        },
+        accounts_background_service::AbsRequestSender, bank_forks::BankForks,
+        commitment::BlockCommitmentCache, cost_model::CostModel,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     std::{
         collections::HashSet,
         net::UdpSocket,
-        sync::{atomic::AtomicBool, Arc, Mutex, RwLock},
-        thread,
+        sync::{atomic::AtomicBool, Arc, RwLock},
+        thread::{self, JoinHandle},
     },
 };
 
 pub struct Tvu {
     fetch_stage: ShredFetchStage,
-    sigverify_stage: SigVerifyStage,
+    shred_sigverify: JoinHandle<()>,
     retransmit_stage: RetransmitStage,
+    window_service: WindowService,
+    cluster_slots_service: ClusterSlotsService,
     replay_stage: ReplayStage,
     ledger_cleanup_service: Option<LedgerCleanupService>,
     cost_update_service: CostUpdateService,
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
-    transaction_cost_metrics_service: TransactionCostMetricsService,
 }
 
 pub struct TvuSockets {
@@ -105,7 +103,7 @@ impl Tvu {
         blockstore: Arc<Blockstore>,
         ledger_signal_receiver: Receiver<bool>,
         rpc_subscriptions: &Arc<RpcSubscriptions>,
-        poh_recorder: &Arc<Mutex<PohRecorder>>,
+        poh_recorder: &Arc<RwLock<PohRecorder>>,
         maybe_process_block_store: Option<ProcessBlockStore>,
         tower_storage: Arc<dyn TowerStorage>,
         leader_schedule_cache: &Arc<LeaderScheduleCache>,
@@ -129,6 +127,7 @@ impl Tvu {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
+        log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
     ) -> Self {
         let TvuSockets {
@@ -157,45 +156,66 @@ impl Tvu {
         );
 
         let (verified_sender, verified_receiver) = unbounded();
-        let sigverify_stage = SigVerifyStage::new(
+        let (retransmit_sender, retransmit_receiver) = unbounded();
+        let shred_sigverify = sigverify_shreds::spawn_shred_sigverify(
+            cluster_info.id(),
+            bank_forks.clone(),
+            leader_schedule_cache.clone(),
             fetch_receiver,
-            ShredSigVerifier::new(
-                cluster_info.id(),
-                bank_forks.clone(),
-                leader_schedule_cache.clone(),
-                verified_sender,
-            ),
-            "shred-verifier",
+            retransmit_sender.clone(),
+            verified_sender,
+            turbine_disabled,
+        );
+
+        let retransmit_stage = RetransmitStage::new(
+            bank_forks.clone(),
+            leader_schedule_cache.clone(),
+            cluster_info.clone(),
+            Arc::new(retransmit_sockets),
+            retransmit_receiver,
+            max_slots.clone(),
+            Some(rpc_subscriptions.clone()),
         );
 
         let cluster_slots = Arc::new(ClusterSlots::default());
         let (duplicate_slots_reset_sender, duplicate_slots_reset_receiver) = unbounded();
         let (duplicate_slots_sender, duplicate_slots_receiver) = unbounded();
-        let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
         let (ancestor_hashes_replay_update_sender, ancestor_hashes_replay_update_receiver) =
             unbounded();
-        let retransmit_stage = RetransmitStage::new(
-            bank_forks.clone(),
-            leader_schedule_cache.clone(),
+        let window_service = {
+            let epoch_schedule = *bank_forks.read().unwrap().working_bank().epoch_schedule();
+            let repair_info = RepairInfo {
+                bank_forks: bank_forks.clone(),
+                epoch_schedule,
+                duplicate_slots_reset_sender,
+                repair_validators: tvu_config.repair_validators,
+                cluster_info: cluster_info.clone(),
+                cluster_slots: cluster_slots.clone(),
+            };
+            WindowService::new(
+                blockstore.clone(),
+                verified_receiver,
+                retransmit_sender,
+                repair_socket,
+                ancestor_hashes_socket,
+                exit.clone(),
+                repair_info,
+                leader_schedule_cache.clone(),
+                verified_vote_receiver,
+                completed_data_sets_sender,
+                duplicate_slots_sender,
+                ancestor_hashes_replay_update_receiver,
+            )
+        };
+
+        let (cluster_slots_update_sender, cluster_slots_update_receiver) = unbounded();
+        let cluster_slots_service = ClusterSlotsService::new(
             blockstore.clone(),
-            cluster_info.clone(),
-            Arc::new(retransmit_sockets),
-            repair_socket,
-            ancestor_hashes_socket,
-            verified_receiver,
-            exit.clone(),
-            cluster_slots_update_receiver,
-            *bank_forks.read().unwrap().working_bank().epoch_schedule(),
-            turbine_disabled,
             cluster_slots.clone(),
-            duplicate_slots_reset_sender,
-            verified_vote_receiver,
-            tvu_config.repair_validators,
-            completed_data_sets_sender,
-            max_slots.clone(),
-            Some(rpc_subscriptions.clone()),
-            duplicate_slots_sender,
-            ancestor_hashes_replay_update_receiver,
+            bank_forks.clone(),
+            cluster_info.clone(),
+            cluster_slots_update_receiver,
+            exit.clone(),
         );
 
         let (ledger_cleanup_slot_sender, ledger_cleanup_slot_receiver) = unbounded();
@@ -227,7 +247,7 @@ impl Tvu {
             bank_forks.clone(),
         );
 
-        let warm_quic_cache_service = if connection_cache.get_use_quic() {
+        let warm_quic_cache_service = if connection_cache.use_quic() {
             Some(WarmQuicCacheService::new(
                 connection_cache.clone(),
                 cluster_info.clone(),
@@ -242,14 +262,6 @@ impl Tvu {
             CostUpdateService::new(blockstore.clone(), cost_model.clone(), cost_update_receiver);
 
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
-
-        let (tx_cost_metrics_sender, tx_cost_metrics_receiver) = unbounded();
-        let transaction_cost_metrics_sender = Some(TransactionCostMetricsSender::new(
-            cost_model.clone(),
-            tx_cost_metrics_sender,
-        ));
-        let transaction_cost_metrics_service =
-            TransactionCostMetricsService::new(tx_cost_metrics_receiver);
 
         let drop_bank_service = DropBankService::new(drop_bank_receiver);
 
@@ -274,7 +286,7 @@ impl Tvu {
             voting_sender,
             drop_bank_sender,
             block_metadata_notifier,
-            transaction_cost_metrics_sender,
+            log_messages_bytes_limit,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -290,22 +302,25 @@ impl Tvu {
 
         Tvu {
             fetch_stage,
-            sigverify_stage,
+            shred_sigverify,
             retransmit_stage,
+            window_service,
+            cluster_slots_service,
             replay_stage,
             ledger_cleanup_service,
             cost_update_service,
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
-            transaction_cost_metrics_service,
         }
     }
 
     pub fn join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
+        self.window_service.join()?;
+        self.cluster_slots_service.join()?;
         self.fetch_stage.join()?;
-        self.sigverify_stage.join()?;
+        self.shred_sigverify.join()?;
         if self.ledger_cleanup_service.is_some() {
             self.ledger_cleanup_service.unwrap().join()?;
         }
@@ -316,7 +331,6 @@ impl Tvu {
             warmup_service.join()?;
         }
         self.drop_bank_service.join()?;
-        self.transaction_cost_metrics_service.join()?;
         Ok(())
     }
 }
@@ -433,6 +447,7 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
+            None,
             &Arc::new(ConnectionCache::default()),
         );
         exit.store(true, Ordering::Relaxed);

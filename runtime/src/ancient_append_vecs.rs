@@ -46,7 +46,7 @@ impl<'a> AccountsToStore<'a> {
         // index of the first account that doesn't fit in the current append vec
         let mut index_first_item_overflow = num_accounts; // assume all fit
         stored_accounts.iter().for_each(|account| {
-            let account_size = account.1.account_size as u64;
+            let account_size = account.1.account.stored_size as u64;
             if available_bytes >= account_size {
                 available_bytes = available_bytes.saturating_sub(account_size);
             } else if index_first_item_overflow == num_accounts {
@@ -92,7 +92,8 @@ pub fn get_ancient_append_vec_capacity() -> u64 {
     use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
     // smaller than max by a bit just in case
     // some functions add slop on allocation
-    MAXIMUM_APPEND_VEC_FILE_SIZE - 2048
+    // temporarily smaller to force ancient append vec operations to occur more often to flush out any bugs
+    MAXIMUM_APPEND_VEC_FILE_SIZE / 10 - 2048
 }
 
 /// true iff storage is ancient size and is almost completely full
@@ -147,7 +148,6 @@ pub mod tests {
             rent_epoch: 0,
         };
         let offset = 3;
-        let stored_size = 4;
         let hash = Hash::new(&[2; 32]);
         let stored_meta = StoredMeta {
             /// global write version
@@ -162,15 +162,10 @@ pub mod tests {
             account_meta: &account_meta,
             data: account.data(),
             offset,
-            stored_size,
+            stored_size: account_size,
             hash: &hash,
         };
-        // let account = StoredAccountMeta::new();
-        let found = FoundStoredAccount {
-            account,
-            store_id,
-            account_size,
-        };
+        let found = FoundStoredAccount { account, store_id };
         let item = (pubkey, found);
         let map = vec![&item];
         for (selector, available_bytes) in [
@@ -208,7 +203,7 @@ pub mod tests {
     fn test_get_ancient_append_vec_capacity() {
         assert_eq!(
             get_ancient_append_vec_capacity(),
-            crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE - 2048
+            crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE / 10 - 2048
         );
     }
 

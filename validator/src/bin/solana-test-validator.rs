@@ -209,10 +209,12 @@ fn main() {
                 .value_name("ADDRESS FILENAME.JSON")
                 .takes_value(true)
                 .number_of_values(2)
+                .allow_hyphen_values(true)
                 .multiple(true)
                 .help(
                     "Load an account from the provided JSON file (see `solana account --help` on how to dump \
                         an account to file). Files are searched for relatively to CWD and tests/fixtures. \
+                        If ADDRESS is omitted via the `-` placeholder, the one in the file will be used. \
                         If the ledger already exists then this parameter is silently ignored",
                 ),
         )
@@ -386,6 +388,14 @@ fn main() {
                 .takes_value(true)
                 .help("Override the runtime's compute unit limit per transaction")
         )
+        .arg(
+            Arg::with_name("log_messages_bytes_limit")
+                .long("log-messages-bytes-limit")
+                .value_name("BYTES")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .help("Maximum number of bytes written to the program log before truncation")
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -541,10 +551,14 @@ fn main() {
         for address_filename in values.chunks(2) {
             match address_filename {
                 [address, filename] => {
-                    let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
-                        println!("Error: invalid address {}: {}", address, err);
-                        exit(1);
-                    });
+                    let address = if *address == "-" {
+                        None
+                    } else {
+                        Some(address.parse::<Pubkey>().unwrap_or_else(|err| {
+                            println!("Error: invalid address {}: {}", address, err);
+                            exit(1);
+                        }))
+                    };
 
                     accounts_to_load.push(AccountInfo { address, filename });
                 }
@@ -643,6 +657,7 @@ fn main() {
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
     genesis.accounts_db_caching_enabled = !matches.is_present("no_accounts_db_caching");
+    genesis.log_messages_bytes_limit = value_t!(matches, "log_messages_bytes_limit", usize).ok();
 
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 

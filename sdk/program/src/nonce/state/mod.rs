@@ -22,12 +22,8 @@ pub enum AuthorizeNonceError {
 }
 
 impl Versions {
-    pub fn new(state: State, separate_domains: bool) -> Self {
-        if separate_domains {
-            Self::Current(Box::new(state))
-        } else {
-            Self::Legacy(Box::new(state))
-        }
+    pub fn new(state: State) -> Self {
+        Self::Current(Box::new(state))
     }
 
     pub fn state(&self) -> &State {
@@ -42,23 +38,17 @@ impl Versions {
     pub fn verify_recent_blockhash(
         &self,
         recent_blockhash: &Hash, // Transaction.message.recent_blockhash
-        separate_domains: bool,
     ) -> Option<&Data> {
-        let state = match self {
-            Self::Legacy(state) => {
-                if separate_domains {
-                    // Legacy durable nonces are invalid and should not
-                    // allow durable transactions.
-                    return None;
-                } else {
-                    state
+        match self {
+            // Legacy durable nonces are invalid and should not
+            // allow durable transactions.
+            Self::Legacy(_) => None,
+            Self::Current(state) => match **state {
+                State::Uninitialized => None,
+                State::Initialized(ref data) => {
+                    (recent_blockhash == &data.blockhash()).then(|| data)
                 }
-            }
-            Self::Current(state) => state,
-        };
-        match **state {
-            State::Uninitialized => None,
-            State::Initialized(ref data) => (recent_blockhash == &data.blockhash()).then(|| data),
+            },
         }
     }
 
@@ -73,10 +63,7 @@ impl Versions {
                     // upgrade Uninitialized legacy nonces.
                     State::Uninitialized => None,
                     State::Initialized(ref mut data) => {
-                        data.durable_nonce = DurableNonce::from_blockhash(
-                            &data.blockhash(),
-                            true, // separate_domains
-                        );
+                        data.durable_nonce = DurableNonce::from_blockhash(&data.blockhash());
                         Some(Self::Current(state))
                     }
                 }
@@ -136,29 +123,12 @@ mod tests {
     fn test_verify_recent_blockhash() {
         let blockhash = Hash::from([171; 32]);
         let versions = Versions::Legacy(Box::new(State::Uninitialized));
-        for separate_domains in [false, true] {
-            assert_eq!(
-                versions.verify_recent_blockhash(&blockhash, separate_domains),
-                None
-            );
-            assert_eq!(
-                versions.verify_recent_blockhash(&Hash::default(), separate_domains),
-                None
-            );
-        }
+        assert_eq!(versions.verify_recent_blockhash(&blockhash), None);
+        assert_eq!(versions.verify_recent_blockhash(&Hash::default()), None);
         let versions = Versions::Current(Box::new(State::Uninitialized));
-        for separate_domains in [false, true] {
-            assert_eq!(
-                versions.verify_recent_blockhash(&blockhash, separate_domains),
-                None
-            );
-            assert_eq!(
-                versions.verify_recent_blockhash(&Hash::default(), separate_domains),
-                None
-            );
-        }
-        let durable_nonce =
-            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
+        assert_eq!(versions.verify_recent_blockhash(&blockhash), None);
+        assert_eq!(versions.verify_recent_blockhash(&Hash::default()), None);
+        let durable_nonce = DurableNonce::from_blockhash(&blockhash);
         let data = Data {
             authority: Pubkey::new_unique(),
             durable_nonce,
@@ -167,66 +137,30 @@ mod tests {
             },
         };
         let versions = Versions::Legacy(Box::new(State::Initialized(data.clone())));
-        let separate_domains = false;
+        assert_eq!(versions.verify_recent_blockhash(&Hash::default()), None);
+        assert_eq!(versions.verify_recent_blockhash(&blockhash), None);
+        assert_eq!(versions.verify_recent_blockhash(&data.blockhash()), None);
         assert_eq!(
-            versions.verify_recent_blockhash(&Hash::default(), separate_domains),
+            versions.verify_recent_blockhash(durable_nonce.as_hash()),
             None
         );
-        assert_eq!(
-            versions.verify_recent_blockhash(&blockhash, separate_domains),
-            Some(&data)
-        );
-        assert_eq!(
-            versions.verify_recent_blockhash(&data.blockhash(), separate_domains),
-            Some(&data)
-        );
-        assert_eq!(
-            versions.verify_recent_blockhash(durable_nonce.as_hash(), separate_domains),
-            Some(&data)
-        );
-        let separate_domains = true;
-        assert_eq!(
-            versions.verify_recent_blockhash(&Hash::default(), separate_domains),
-            None
-        );
-        assert_eq!(
-            versions.verify_recent_blockhash(&blockhash, separate_domains),
-            None
-        );
-        assert_eq!(
-            versions.verify_recent_blockhash(&data.blockhash(), separate_domains),
-            None
-        );
-        assert_eq!(
-            versions.verify_recent_blockhash(durable_nonce.as_hash(), separate_domains),
-            None
-        );
-        let durable_nonce =
-            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ true);
+        let durable_nonce = DurableNonce::from_blockhash(durable_nonce.as_hash());
         assert_ne!(data.durable_nonce, durable_nonce);
         let data = Data {
             durable_nonce,
             ..data
         };
         let versions = Versions::Current(Box::new(State::Initialized(data.clone())));
-        for separate_domains in [false, true] {
-            assert_eq!(
-                versions.verify_recent_blockhash(&blockhash, separate_domains),
-                None
-            );
-            assert_eq!(
-                versions.verify_recent_blockhash(&Hash::default(), separate_domains),
-                None
-            );
-            assert_eq!(
-                versions.verify_recent_blockhash(&data.blockhash(), separate_domains),
-                Some(&data)
-            );
-            assert_eq!(
-                versions.verify_recent_blockhash(durable_nonce.as_hash(), separate_domains),
-                Some(&data)
-            );
-        }
+        assert_eq!(versions.verify_recent_blockhash(&blockhash), None);
+        assert_eq!(versions.verify_recent_blockhash(&Hash::default()), None);
+        assert_eq!(
+            versions.verify_recent_blockhash(&data.blockhash()),
+            Some(&data)
+        );
+        assert_eq!(
+            versions.verify_recent_blockhash(durable_nonce.as_hash()),
+            Some(&data)
+        );
     }
 
     #[test]
@@ -236,8 +170,7 @@ mod tests {
         assert_eq!(versions.upgrade(), None);
         // Initialized
         let blockhash = Hash::from([171; 32]);
-        let durable_nonce =
-            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
+        let durable_nonce = DurableNonce::from_blockhash(&blockhash);
         let data = Data {
             authority: Pubkey::new_unique(),
             durable_nonce,
@@ -246,8 +179,7 @@ mod tests {
             },
         };
         let versions = Versions::Legacy(Box::new(State::Initialized(data.clone())));
-        let durable_nonce =
-            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ true);
+        let durable_nonce = DurableNonce::from_blockhash(durable_nonce.as_hash());
         assert_ne!(data.durable_nonce, durable_nonce);
         let data = Data {
             durable_nonce,
@@ -277,8 +209,7 @@ mod tests {
         );
         // Initialized, Legacy
         let blockhash = Hash::from([171; 32]);
-        let durable_nonce =
-            DurableNonce::from_blockhash(&blockhash, /*separate_domains:*/ false);
+        let durable_nonce = DurableNonce::from_blockhash(&blockhash);
         let data = Data {
             authority: Pubkey::new_unique(),
             durable_nonce,

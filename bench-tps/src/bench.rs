@@ -3,31 +3,29 @@ use {
         bench_tps_client::*,
         cli::Config,
         perf_utils::{sample_txs, SampleStats},
+        send_batch::*,
     },
     log::*,
     rayon::prelude::*,
-    solana_core::gen_keys::GenKeys,
-    solana_measure::measure::Measure,
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
-        commitment_config::CommitmentConfig,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         message::Message,
         native_token::Sol,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_instruction, system_transaction,
+        system_transaction,
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
         transaction::Transaction,
     },
     std::{
-        collections::{HashSet, VecDeque},
+        collections::VecDeque,
         process::exit,
         sync::{
             atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -37,19 +35,90 @@ use {
 // The point at which transactions become "too old", in seconds.
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
-pub const MAX_SPENDS_PER_TX: u64 = 4;
-
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
 
-fn get_latest_blockhash<T: BenchTpsClient>(client: &T) -> Hash {
-    loop {
-        match client.get_latest_blockhash_with_commitment(CommitmentConfig::processed()) {
-            Ok((blockhash, _)) => return blockhash,
-            Err(err) => {
-                info!("Couldn't get last blockhash: {:?}", err);
-                sleep(Duration::from_secs(1));
-            }
-        };
+/// Split input vector of keypairs into two sets of chunks of given size
+fn split_into_source_destination(
+    keypairs: &[Keypair],
+    chunk_size: usize,
+) -> (Vec<Vec<&Keypair>>, Vec<VecDeque<&Keypair>>) {
+    let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
+    let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
+    for chunk in keypairs.chunks_exact(2 * chunk_size) {
+        source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
+        dest_keypair_chunks.push(chunk[chunk_size..].iter().collect());
+    }
+    (source_keypair_chunks, dest_keypair_chunks)
+}
+struct TransactionChunkGenerator<'a> {
+    source_keypair_chunks: Vec<Vec<&'a Keypair>>,
+    dest_keypair_chunks: Vec<VecDeque<&'a Keypair>>,
+    chunk_index: usize,
+    reclaim_lamports_back_to_source_account: bool,
+}
+
+impl<'a> TransactionChunkGenerator<'a> {
+    fn new(gen_keypairs: &'a [Keypair], chunk_size: usize) -> Self {
+        let (source_keypair_chunks, dest_keypair_chunks) =
+            split_into_source_destination(gen_keypairs, chunk_size);
+        TransactionChunkGenerator {
+            source_keypair_chunks,
+            dest_keypair_chunks,
+            chunk_index: 0,
+            reclaim_lamports_back_to_source_account: false,
+        }
+    }
+
+    fn generate(&mut self, blockhash: Option<&Hash>) -> Vec<(Transaction, u64)> {
+        let tx_count = self.source_keypair_chunks.len();
+        info!(
+            "Signing transactions... {} (reclaim={}, blockhash={:?})",
+            tx_count, self.reclaim_lamports_back_to_source_account, blockhash
+        );
+        let signing_start = Instant::now();
+
+        let source_chunk = &self.source_keypair_chunks[self.chunk_index];
+        let dest_chunk = &self.dest_keypair_chunks[self.chunk_index];
+        assert!(blockhash.is_some());
+        let transactions = generate_system_txs(
+            source_chunk,
+            dest_chunk,
+            self.reclaim_lamports_back_to_source_account,
+            blockhash.unwrap(),
+        );
+
+        let duration = signing_start.elapsed();
+        let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
+        let bsps = (tx_count) as f64 / ns as f64;
+        let nsps = ns as f64 / (tx_count) as f64;
+        info!(
+            "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time, {:?}",
+            bsps * 1_000_000_f64,
+            nsps / 1_000_f64,
+            duration_as_ms(&duration),
+            blockhash,
+        );
+        datapoint_info!(
+            "bench-tps-generate_txs",
+            ("duration", duration_as_us(&duration), i64)
+        );
+
+        transactions
+    }
+
+    fn advance(&mut self) {
+        // Rotate destination keypairs so that the next round of transactions will have different
+        // transaction signatures even when blockhash is reused.
+        self.dest_keypair_chunks[self.chunk_index].rotate_left(1);
+
+        // Move on to next chunk
+        self.chunk_index = (self.chunk_index + 1) % self.source_keypair_chunks.len();
+
+        // Switch directions after transfering for each "chunk"
+        if self.chunk_index == 0 {
+            self.reclaim_lamports_back_to_source_account =
+                !self.reclaim_lamports_back_to_source_account;
+        }
     }
 }
 
@@ -103,28 +172,17 @@ fn generate_chunked_transfers(
     recent_blockhash: Arc<RwLock<Hash>>,
     shared_txs: &SharedTransactions,
     shared_tx_active_thread_count: Arc<AtomicIsize>,
-    source_keypair_chunks: Vec<Vec<&Keypair>>,
-    dest_keypair_chunks: &mut [VecDeque<&Keypair>],
+    mut chunk_generator: TransactionChunkGenerator<'_>,
     threads: usize,
     duration: Duration,
     sustained: bool,
 ) {
     // generate and send transactions for the specified duration
     let start = Instant::now();
-    let keypair_chunks = source_keypair_chunks.len();
-    let mut reclaim_lamports_back_to_source_account = false;
-    let mut chunk_index = 0;
     let mut last_generate_txs_time = Instant::now();
 
     while start.elapsed() < duration {
-        generate_txs(
-            shared_txs,
-            &recent_blockhash,
-            &source_keypair_chunks[chunk_index],
-            &dest_keypair_chunks[chunk_index],
-            threads,
-            reclaim_lamports_back_to_source_account,
-        );
+        generate_txs(shared_txs, &recent_blockhash, &mut chunk_generator, threads);
 
         datapoint_info!(
             "blockhash_stats",
@@ -151,18 +209,7 @@ fn generate_chunked_transfers(
                 sleep(Duration::from_millis(1));
             }
         }
-
-        // Rotate destination keypairs so that the next round of transactions will have different
-        // transaction signatures even when blockhash is reused.
-        dest_keypair_chunks[chunk_index].rotate_left(1);
-
-        // Move on to next chunk
-        chunk_index = (chunk_index + 1) % keypair_chunks;
-
-        // Switch directions after transfering for each "chunk"
-        if chunk_index == 0 {
-            reclaim_lamports_back_to_source_account = !reclaim_lamports_back_to_source_account;
-        }
+        chunk_generator.advance();
     }
 }
 
@@ -217,13 +264,8 @@ where
         ..
     } = config;
 
-    let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
-    let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
     assert!(gen_keypairs.len() >= 2 * tx_count);
-    for chunk in gen_keypairs.chunks_exact(2 * tx_count) {
-        source_keypair_chunks.push(chunk[..tx_count].iter().collect());
-        dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
-    }
+    let chunk_generator = TransactionChunkGenerator::new(&gen_keypairs, tx_count);
 
     let first_tx_count = loop {
         match client.get_transaction_count() {
@@ -281,8 +323,7 @@ where
         blockhash,
         &shared_txs,
         shared_tx_active_thread_count,
-        source_keypair_chunks,
-        &mut dest_keypair_chunks,
+        chunk_generator,
         threads,
         duration,
         sustained,
@@ -357,36 +398,12 @@ fn generate_system_txs(
 fn generate_txs(
     shared_txs: &SharedTransactions,
     blockhash: &Arc<RwLock<Hash>>,
-    source: &[&Keypair],
-    dest: &VecDeque<&Keypair>,
+    chunk_generator: &mut TransactionChunkGenerator<'_>,
     threads: usize,
-    reclaim: bool,
 ) {
-    let blockhash = *blockhash.read().unwrap();
-    let tx_count = source.len();
-    info!(
-        "Signing transactions... {} (reclaim={}, blockhash={})",
-        tx_count, reclaim, &blockhash
-    );
-    let signing_start = Instant::now();
+    let blockhash = blockhash.read().map(|x| *x).ok();
 
-    let transactions = generate_system_txs(source, dest, reclaim, &blockhash);
-
-    let duration = signing_start.elapsed();
-    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-    let bsps = (tx_count) as f64 / ns as f64;
-    let nsps = ns as f64 / (tx_count) as f64;
-    info!(
-        "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time, {}",
-        bsps * 1_000_000_f64,
-        nsps / 1_000_f64,
-        duration_as_ms(&duration),
-        blockhash,
-    );
-    datapoint_info!(
-        "bench-tps-generate_txs",
-        ("duration", duration_as_us(&duration), i64)
-    );
+    let transactions = chunk_generator.generate(blockhash.as_ref());
 
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
@@ -548,236 +565,6 @@ fn do_tx_transfers<T: BenchTpsClient>(
     }
 }
 
-fn verify_funding_transfer<T: BenchTpsClient>(
-    client: &Arc<T>,
-    tx: &Transaction,
-    amount: u64,
-) -> bool {
-    for a in &tx.message().account_keys[1..] {
-        match client.get_balance_with_commitment(a, CommitmentConfig::processed()) {
-            Ok(balance) => return balance >= amount,
-            Err(err) => error!("failed to get balance {:?}", err),
-        }
-    }
-    false
-}
-
-trait FundingTransactions<'a> {
-    fn fund<T: 'static + BenchTpsClient + Send + Sync>(
-        &mut self,
-        client: &Arc<T>,
-        to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)],
-        to_lamports: u64,
-    );
-    fn make(&mut self, to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)]);
-    fn sign(&mut self, blockhash: Hash);
-    fn send<T: BenchTpsClient>(&self, client: &Arc<T>);
-    fn verify<T: 'static + BenchTpsClient + Send + Sync>(
-        &mut self,
-        client: &Arc<T>,
-        to_lamports: u64,
-    );
-}
-
-impl<'a> FundingTransactions<'a> for Vec<(&'a Keypair, Transaction)> {
-    fn fund<T: 'static + BenchTpsClient + Send + Sync>(
-        &mut self,
-        client: &Arc<T>,
-        to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)],
-        to_lamports: u64,
-    ) {
-        self.make(to_fund);
-
-        let mut tries = 0;
-        while !self.is_empty() {
-            info!(
-                "{} {} each to {} accounts in {} txs",
-                if tries == 0 {
-                    "transferring"
-                } else {
-                    " retrying"
-                },
-                to_lamports,
-                self.len() * MAX_SPENDS_PER_TX as usize,
-                self.len(),
-            );
-
-            let blockhash = get_latest_blockhash(client.as_ref());
-
-            // re-sign retained to_fund_txes with updated blockhash
-            self.sign(blockhash);
-            self.send(client);
-
-            // Sleep a few slots to allow transactions to process
-            sleep(Duration::from_secs(1));
-
-            self.verify(client, to_lamports);
-
-            // retry anything that seems to have dropped through cracks
-            //  again since these txs are all or nothing, they're fine to
-            //  retry
-            tries += 1;
-        }
-        info!("transferred");
-    }
-
-    fn make(&mut self, to_fund: &[(&'a Keypair, Vec<(Pubkey, u64)>)]) {
-        let mut make_txs = Measure::start("make_txs");
-        let to_fund_txs: Vec<(&Keypair, Transaction)> = to_fund
-            .par_iter()
-            .map(|(k, t)| {
-                let instructions = system_instruction::transfer_many(&k.pubkey(), t);
-                let message = Message::new(&instructions, Some(&k.pubkey()));
-                (*k, Transaction::new_unsigned(message))
-            })
-            .collect();
-        make_txs.stop();
-        debug!(
-            "make {} unsigned txs: {}us",
-            to_fund_txs.len(),
-            make_txs.as_us()
-        );
-        self.extend(to_fund_txs);
-    }
-
-    fn sign(&mut self, blockhash: Hash) {
-        let mut sign_txs = Measure::start("sign_txs");
-        self.par_iter_mut().for_each(|(k, tx)| {
-            tx.sign(&[*k], blockhash);
-        });
-        sign_txs.stop();
-        debug!("sign {} txs: {}us", self.len(), sign_txs.as_us());
-    }
-
-    fn send<T: BenchTpsClient>(&self, client: &Arc<T>) {
-        let mut send_txs = Measure::start("send_and_clone_txs");
-        let batch: Vec<_> = self.iter().map(|(_keypair, tx)| tx.clone()).collect();
-        client.send_batch(batch).expect("transfer");
-        send_txs.stop();
-        debug!("send {} {}", self.len(), send_txs);
-    }
-
-    fn verify<T: 'static + BenchTpsClient + Send + Sync>(
-        &mut self,
-        client: &Arc<T>,
-        to_lamports: u64,
-    ) {
-        let starting_txs = self.len();
-        let verified_txs = Arc::new(AtomicUsize::new(0));
-        let too_many_failures = Arc::new(AtomicBool::new(false));
-        let loops = if starting_txs < 1000 { 3 } else { 1 };
-        // Only loop multiple times for small (quick) transaction batches
-        let time = Arc::new(Mutex::new(Instant::now()));
-        for _ in 0..loops {
-            let time = time.clone();
-            let failed_verify = Arc::new(AtomicUsize::new(0));
-            let client = client.clone();
-            let verified_txs = &verified_txs;
-            let failed_verify = &failed_verify;
-            let too_many_failures = &too_many_failures;
-            let verified_set: HashSet<Pubkey> = self
-                .par_iter()
-                .filter_map(move |(k, tx)| {
-                    if too_many_failures.load(Ordering::Relaxed) {
-                        return None;
-                    }
-
-                    let verified = if verify_funding_transfer(&client, tx, to_lamports) {
-                        verified_txs.fetch_add(1, Ordering::Relaxed);
-                        Some(k.pubkey())
-                    } else {
-                        failed_verify.fetch_add(1, Ordering::Relaxed);
-                        None
-                    };
-
-                    let verified_txs = verified_txs.load(Ordering::Relaxed);
-                    let failed_verify = failed_verify.load(Ordering::Relaxed);
-                    let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
-                    if failed_verify > 100 && failed_verify > verified_txs {
-                        too_many_failures.store(true, Ordering::Relaxed);
-                        warn!(
-                            "Too many failed transfers... {} remaining, {} verified, {} failures",
-                            remaining_count, verified_txs, failed_verify
-                        );
-                    }
-                    if remaining_count > 0 {
-                        let mut time_l = time.lock().unwrap();
-                        if time_l.elapsed().as_secs() > 2 {
-                            info!(
-                                "Verifying transfers... {} remaining, {} verified, {} failures",
-                                remaining_count, verified_txs, failed_verify
-                            );
-                            *time_l = Instant::now();
-                        }
-                    }
-
-                    verified
-                })
-                .collect();
-
-            self.retain(|(k, _)| !verified_set.contains(&k.pubkey()));
-            if self.is_empty() {
-                break;
-            }
-            info!("Looping verifications");
-
-            let verified_txs = verified_txs.load(Ordering::Relaxed);
-            let failed_verify = failed_verify.load(Ordering::Relaxed);
-            let remaining_count = starting_txs.saturating_sub(verified_txs + failed_verify);
-            info!(
-                "Verifying transfers... {} remaining, {} verified, {} failures",
-                remaining_count, verified_txs, failed_verify
-            );
-            sleep(Duration::from_millis(100));
-        }
-    }
-}
-
-/// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
-/// on every iteration.  This allows us to replay the transfers because the source is either empty,
-/// or full
-pub fn fund_keys<T: 'static + BenchTpsClient + Send + Sync>(
-    client: Arc<T>,
-    source: &Keypair,
-    dests: &[Keypair],
-    total: u64,
-    max_fee: u64,
-    lamports_per_account: u64,
-) {
-    let mut funded: Vec<&Keypair> = vec![source];
-    let mut funded_funds = total;
-    let mut not_funded: Vec<&Keypair> = dests.iter().collect();
-    while !not_funded.is_empty() {
-        // Build to fund list and prepare funding sources for next iteration
-        let mut new_funded: Vec<&Keypair> = vec![];
-        let mut to_fund: Vec<(&Keypair, Vec<(Pubkey, u64)>)> = vec![];
-        let to_lamports = (funded_funds - lamports_per_account - max_fee) / MAX_SPENDS_PER_TX;
-        for f in funded {
-            let start = not_funded.len() - MAX_SPENDS_PER_TX as usize;
-            let dests: Vec<_> = not_funded.drain(start..).collect();
-            let spends: Vec<_> = dests.iter().map(|k| (k.pubkey(), to_lamports)).collect();
-            to_fund.push((f, spends));
-            new_funded.extend(dests.into_iter());
-        }
-
-        // try to transfer a "few" at a time with recent blockhash
-        //  assume 4MB network buffers, and 512 byte packets
-        const FUND_CHUNK_LEN: usize = 4 * 1024 * 1024 / 512;
-
-        to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
-            Vec::<(&Keypair, Transaction)>::with_capacity(chunk.len()).fund(
-                &client,
-                chunk,
-                to_lamports,
-            );
-        });
-
-        info!("funded: {} left: {}", new_funded.len(), not_funded.len());
-        funded = new_funded;
-        funded_funds = to_lamports;
-    }
-}
-
 fn compute_and_report_stats(
     maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>,
     sample_period: u64,
@@ -843,22 +630,6 @@ fn compute_and_report_stats(
         "\tAverage TPS: {}",
         max_tx_count as f32 / duration_as_s(tx_send_elapsed)
     );
-}
-
-pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
-    let mut seed = [0u8; 32];
-    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
-    let mut rnd = GenKeys::new(seed);
-
-    let mut total_keys = 0;
-    let mut extra = 0; // This variable tracks the number of keypairs needing extra transaction fees funded
-    let mut delta = 1;
-    while total_keys < count {
-        extra += delta;
-        delta *= MAX_SPENDS_PER_TX;
-        total_keys += delta;
-    }
-    (rnd.gen_n_keypairs(total_keys), extra)
 }
 
 pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
@@ -961,8 +732,8 @@ mod tests {
         super::*,
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
-            fee_calculator::FeeRateGovernor, genesis_config::create_genesis_config,
-            native_token::sol_to_lamports,
+            commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor,
+            genesis_config::create_genesis_config, native_token::sol_to_lamports, nonce::State,
         },
     };
 
@@ -1024,6 +795,32 @@ mod tests {
 
         for kp in &keypairs {
             assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports + rent);
+        }
+    }
+
+    #[test]
+    fn test_bench_tps_create_durable_nonce() {
+        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
+        let bank = Bank::new_for_tests(&genesis_config);
+        let client = Arc::new(BankClient::new(bank));
+        let keypair_count = 10;
+        let lamports = 10_000_000;
+
+        let authority_keypairs =
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
+
+        let nonce_keypairs = generate_durable_nonce_accounts(client.clone(), &authority_keypairs);
+
+        let rent = client
+            .get_minimum_balance_for_rent_exemption(State::size())
+            .unwrap();
+        for kp in &nonce_keypairs {
+            assert_eq!(
+                client
+                    .get_balance_with_commitment(&kp.pubkey(), CommitmentConfig::processed())
+                    .unwrap(),
+                rent
+            );
         }
     }
 }

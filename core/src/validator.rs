@@ -25,7 +25,7 @@ use {
     },
     crossbeam_channel::{bounded, unbounded, Receiver},
     rand::{thread_rng, Rng},
-    solana_client::connection_cache::{ConnectionCache, UseQUIC},
+    solana_client::connection_cache::ConnectionCache,
     solana_entry::poh::compute_hash_time_ns,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_gossip::{
@@ -106,7 +106,7 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -341,7 +341,7 @@ pub struct Validator {
     serve_repair_service: ServeRepairService,
     completed_data_sets_service: CompletedDataSetsService,
     snapshot_packager_service: Option<SnapshotPackagerService>,
-    poh_recorder: Arc<Mutex<PohRecorder>>,
+    poh_recorder: Arc<RwLock<PohRecorder>>,
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
@@ -755,10 +755,18 @@ impl Validator {
                 exit.clone(),
             )
         };
-        let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+        let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
-        let use_quic = UseQUIC::new(use_quic).expect("Failed to initialize QUIC flags");
-        let connection_cache = Arc::new(ConnectionCache::new(use_quic, tpu_connection_pool_size));
+        let connection_cache = match use_quic {
+            true => {
+                let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
+                connection_cache
+                    .update_client_certificate(&identity_keypair, node.info.gossip.ip())
+                    .expect("Failed to update QUIC client certificates");
+                Arc::new(connection_cache)
+            }
+            false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
+        };
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
@@ -980,6 +988,7 @@ impl Validator {
             block_metadata_notifier,
             config.wait_to_vote_slot,
             accounts_background_request_sender,
+            config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
         );
 
@@ -1026,6 +1035,7 @@ impl Validator {
             &cost_model,
             &connection_cache,
             &identity_keypair,
+            config.runtime_config.log_messages_bytes_limit,
             enable_quic_servers,
         );
 

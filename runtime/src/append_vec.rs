@@ -198,6 +198,7 @@ impl Drop for AppendVec {
                 // disabled due to many false positive warnings while running tests.
                 // blocked by rpc's upgrade to jsonrpc v17
                 //error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
+                inc_new_counter_info!("append_vec_drop_fail", 1);
             }
         }
     }
@@ -481,7 +482,12 @@ impl AppendVec {
         self.path.clone()
     }
 
-    /// Return account metadata for each account, starting from `offset`.
+    /// Return iterator for account metadata
+    pub fn account_iter(&self) -> AppendVecAccountsIter {
+        AppendVecAccountsIter::new(self)
+    }
+
+    /// Return a vector of account metadata for each account, starting from `offset`.
     pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(offset) {

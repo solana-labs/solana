@@ -258,17 +258,25 @@ export class Transaction {
   ) {
     if (!opts) {
       return;
-    } else if (
-      Object.prototype.hasOwnProperty.call(opts, 'lastValidBlockHeight')
-    ) {
-      const newOpts = opts as TransactionBlockhashCtor;
-      Object.assign(this, newOpts);
-      this.recentBlockhash = newOpts.blockhash;
-      this.lastValidBlockHeight = newOpts.lastValidBlockHeight;
+    }
+    if (opts.feePayer) {
+      this.feePayer = opts.feePayer;
+    }
+    if (opts.signatures) {
+      this.signatures = opts.signatures;
+    }
+    if (Object.prototype.hasOwnProperty.call(opts, 'lastValidBlockHeight')) {
+      const {blockhash, lastValidBlockHeight} =
+        opts as TransactionBlockhashCtor;
+      this.recentBlockhash = blockhash;
+      this.lastValidBlockHeight = lastValidBlockHeight;
     } else {
-      const oldOpts = opts as TransactionCtorFields_DEPRECATED;
-      Object.assign(this, oldOpts);
-      this.recentBlockhash = oldOpts.recentBlockhash;
+      const {recentBlockhash, nonceInfo} =
+        opts as TransactionCtorFields_DEPRECATED;
+      if (nonceInfo) {
+        this.nonceInfo = nonceInfo;
+      }
+      this.recentBlockhash = recentBlockhash;
     }
   }
 

@@ -54,6 +54,7 @@ gives a convenient interface for the RPC methods.
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getSlotLeaders](jsonrpc-api.md#getslotleaders)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
+- [getStakeMinimumDelegation](jsonrpc-api.md#getstakeminimumdelegation)
 - [getSupply](jsonrpc-api.md#getsupply)
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
 - [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
@@ -1906,7 +1907,9 @@ Returns all accounts owned by the provided program Pubkey
 - `memcmp: <object>` - compares a provided series of bytes with program account data at a particular offset. Fields:
 
   - `offset: <usize>` - offset into program account data to start comparison
-  - `bytes: <string>` - data to match, as base-58 encoded string and limited to less than 129 bytes
+  - `bytes: <string>` - data to match, as encoded string
+  - `encoding: <string>` - encoding for filter `bytes` data, either "base58" or "base64". Data is limited in size to 128 or fewer decoded bytes.
+    **NEW: This field, and base64 support generally, is only available in solana-core v1.11.4 or newer. Please omit when querying nodes on earlier versions**
 
 - `dataSize: <u64>` - compares the program account data length with the provided data size
 
@@ -2444,6 +2447,45 @@ Result:
     "active": 124429280,
     "inactive": 73287840,
     "state": "activating"
+  },
+  "id": 1
+}
+```
+
+### getStakeMinimumDelegation
+
+Returns the stake minimum delegation, in lamports.
+
+#### Parameters:
+
+None
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to:
+
+- `<u64>` - The stake minimum delegation, in lamports
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1,"method":"getStakeMinimumDelegation"}
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 501
+    },
+    "value": 1000000000
   },
   "id": 1
 }
@@ -3086,7 +3128,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 
 ```json
-{ "jsonrpc": "2.0", "result": { "solana-core": "1.11.2" }, "id": 1 }
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.11.4" }, "id": 1 }
 ```
 
 ### getVoteAccounts

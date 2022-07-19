@@ -310,8 +310,7 @@ impl RepairWeight {
         // Purge `self.unrooted_slots` of slots less than `new_root` as we know any
         // unrooted votes for slots < `new_root` will now be rejected, so we won't
         // need to check `self.unrooted_slots` to see if those slots are unrooted.
-        let mut new_unrooted_slots = self.unrooted_slots.split_off(&new_root);
-        std::mem::swap(&mut self.unrooted_slots, &mut new_unrooted_slots);
+        self.unrooted_slots = self.unrooted_slots.split_off(&new_root);
         self.root = new_root;
     }
 

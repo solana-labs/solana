@@ -22,7 +22,7 @@ use {
         connection_cache::ConnectionCache,
         rpc_client::RpcClient,
         rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
-        rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+        rpc_filter::{Memcmp, RpcFilterType},
         tpu_client::{TpuClient, TpuClientConfig},
     },
     solana_program_runtime::invoke_context::InvokeContext,
@@ -46,6 +46,7 @@ use {
         signature::{keypair_from_seed, read_keypair_file, Keypair, Signature, Signer},
         system_instruction::{self, SystemError},
         system_program,
+        sysvar::rent::Rent,
         transaction::{Transaction, TransactionError},
         transaction_context::TransactionContext,
     },
@@ -1203,24 +1204,19 @@ fn get_buffers(
     authority_pubkey: Option<Pubkey>,
     use_lamports_unit: bool,
 ) -> Result<CliUpgradeableBuffers, Box<dyn std::error::Error>> {
-    let mut filters = vec![RpcFilterType::Memcmp(Memcmp {
-        offset: 0,
-        bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1, 0, 0, 0]).into_string()),
-        encoding: None,
-    })];
+    let mut filters = vec![RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+        0,
+        &[1, 0, 0, 0],
+    ))];
     if let Some(authority_pubkey) = authority_pubkey {
-        filters.push(RpcFilterType::Memcmp(Memcmp {
-            offset: ACCOUNT_TYPE_SIZE,
-            bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1]).into_string()),
-            encoding: None,
-        }));
-        filters.push(RpcFilterType::Memcmp(Memcmp {
-            offset: ACCOUNT_TYPE_SIZE + OPTION_SIZE,
-            bytes: MemcmpEncodedBytes::Base58(
-                bs58::encode(authority_pubkey.as_ref()).into_string(),
-            ),
-            encoding: None,
-        }));
+        filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+            ACCOUNT_TYPE_SIZE,
+            &[1],
+        )));
+        filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+            ACCOUNT_TYPE_SIZE + OPTION_SIZE,
+            authority_pubkey.as_ref(),
+        )));
     }
 
     let results = get_accounts_with_filter(
@@ -1256,24 +1252,19 @@ fn get_programs(
     authority_pubkey: Option<Pubkey>,
     use_lamports_unit: bool,
 ) -> Result<CliUpgradeablePrograms, Box<dyn std::error::Error>> {
-    let mut filters = vec![RpcFilterType::Memcmp(Memcmp {
-        offset: 0,
-        bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![3, 0, 0, 0]).into_string()),
-        encoding: None,
-    })];
+    let mut filters = vec![RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+        0,
+        &[3, 0, 0, 0],
+    ))];
     if let Some(authority_pubkey) = authority_pubkey {
-        filters.push(RpcFilterType::Memcmp(Memcmp {
-            offset: ACCOUNT_TYPE_SIZE + SLOT_SIZE,
-            bytes: MemcmpEncodedBytes::Base58(bs58::encode(vec![1]).into_string()),
-            encoding: None,
-        }));
-        filters.push(RpcFilterType::Memcmp(Memcmp {
-            offset: ACCOUNT_TYPE_SIZE + SLOT_SIZE + OPTION_SIZE,
-            bytes: MemcmpEncodedBytes::Base58(
-                bs58::encode(authority_pubkey.as_ref()).into_string(),
-            ),
-            encoding: None,
-        }));
+        filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+            ACCOUNT_TYPE_SIZE + SLOT_SIZE,
+            &[1],
+        )));
+        filters.push(RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+            ACCOUNT_TYPE_SIZE + SLOT_SIZE + OPTION_SIZE,
+            authority_pubkey.as_ref(),
+        )));
     }
 
     let results = get_accounts_with_filter(
@@ -1291,11 +1282,7 @@ fn get_programs(
         {
             let mut bytes = vec![2, 0, 0, 0];
             bytes.extend_from_slice(programdata_address.as_ref());
-            let filters = vec![RpcFilterType::Memcmp(Memcmp {
-                offset: 0,
-                bytes: MemcmpEncodedBytes::Base58(bs58::encode(bytes).into_string()),
-                encoding: None,
-            })];
+            let filters = vec![RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &bytes))];
 
             let results = get_accounts_with_filter(rpc_client, filters, 0)?;
             if results.len() != 1 {
@@ -2074,7 +2061,7 @@ fn read_and_verify_elf(program_location: &str) -> Result<Vec<u8>, Box<dyn std::e
     let mut program_data = Vec::new();
     file.read_to_end(&mut program_data)
         .map_err(|err| format!("Unable to read program file: {}", err))?;
-    let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+    let mut transaction_context = TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
 
     // Verify the program
