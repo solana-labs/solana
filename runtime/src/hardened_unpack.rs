@@ -300,6 +300,7 @@ impl ParallelSelector {
     }
 }
 
+/// Unpacks snapshot and collects AppendVec file names & paths
 pub fn unpack_snapshot<A: Read>(
     archive: &mut Archive<A>,
     ledger_dir: &Path,
@@ -319,6 +320,28 @@ pub fn unpack_snapshot<A: Read>(
         |_| {},
     )
     .map(|_| unpacked_append_vec_map)
+}
+
+/// Unpacks snapshots and sends entry file paths through the `sender` channel
+pub fn streaming_unpack_snapshot<A: Read>(
+    archive: &mut Archive<A>,
+    ledger_dir: &Path,
+    account_paths: &[PathBuf],
+    parallel_selector: Option<ParallelSelector>,
+    sender: &crossbeam_channel::Sender<PathBuf>,
+) -> Result<()> {
+    unpack_snapshot_with_processors(
+        archive,
+        ledger_dir,
+        account_paths,
+        parallel_selector,
+        |_, _| {},
+        |entry_path_buf| {
+            if entry_path_buf.is_file() {
+                sender.send(entry_path_buf).unwrap();
+            }
+        },
+    )
 }
 
 fn unpack_snapshot_with_processors<A, F, G>(
