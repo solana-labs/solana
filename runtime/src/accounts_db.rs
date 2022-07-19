@@ -8392,7 +8392,7 @@ impl AccountsDb {
                                 let (key, account_info) = account;
                                 let lock = self.accounts_index.get_account_maps_read_lock(&key);
                                 let x = lock.get(&key).unwrap();
-                                let sl = x.slot_list.read().unwrap();
+                                let sl = x.slot_list.lock().unwrap();
                                 let mut count = 0;
                                 for (slot2, account_info2) in sl.iter() {
                                     if slot2 == slot {
@@ -8719,7 +8719,7 @@ impl AccountsDb {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
                 info!(
                     "      slots: {:?}",
-                    *account_entry.slot_list.read().unwrap()
+                    *account_entry.slot_list.lock().unwrap()
                 );
             }
         });

@@ -37,7 +37,7 @@ use {
         path::PathBuf,
         sync::{
             atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
-            Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+            Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard,
         },
     },
     thiserror::Error,
@@ -256,7 +256,7 @@ pub struct AccountMapEntryInner<T> {
     /// list of slots in which this pubkey was updated
     /// Note that 'clean' removes outdated entries (ie. older roots) from this slot_list
     /// purge_slot() also removes non-rooted slots from this list
-    pub slot_list: RwLock<SlotList<T>>,
+    pub slot_list: Mutex<SlotList<T>>,
     /// synchronization metadata for in-memory state since last flush to disk accounts index
     pub meta: AccountMapEntryMeta,
 }
@@ -264,7 +264,7 @@ pub struct AccountMapEntryInner<T> {
 impl<T: IndexValue> AccountMapEntryInner<T> {
     pub fn new(slot_list: SlotList<T>, ref_count: RefCount, meta: AccountMapEntryMeta) -> Self {
         Self {
-            slot_list: RwLock::new(slot_list),
+            slot_list: Mutex::new(slot_list),
             ref_count: AtomicU64::new(ref_count),
             meta,
         }
@@ -328,7 +328,7 @@ pub struct ReadAccountMapEntry<T: IndexValue> {
     owned_entry: AccountMapEntry<T>,
     #[borrows(owned_entry)]
     #[covariant]
-    slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
+    slot_list_guard: MutexGuard<'this, SlotList<T>>,
 }
 
 impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
@@ -341,7 +341,7 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
         ReadAccountMapEntryBuilder {
             owned_entry: account_map_entry,
-            slot_list_guard_builder: |lock| lock.slot_list.read().unwrap(),
+            slot_list_guard_builder: |lock| lock.slot_list.lock().unwrap(),
         }
         .build()
     }
@@ -373,7 +373,7 @@ impl<T: IndexValue> ZeroLamport for PreAllocatedAccountMapEntry<T> {
     fn is_zero_lamport(&self) -> bool {
         match self {
             PreAllocatedAccountMapEntry::Entry(entry) => {
-                entry.slot_list.read().unwrap()[0].1.is_zero_lamport()
+                entry.slot_list.lock().unwrap()[0].1.is_zero_lamport()
             }
             PreAllocatedAccountMapEntry::Raw(raw) => raw.1.is_zero_lamport(),
         }
@@ -383,7 +383,7 @@ impl<T: IndexValue> ZeroLamport for PreAllocatedAccountMapEntry<T> {
 impl<T: IndexValue> From<PreAllocatedAccountMapEntry<T>> for (Slot, T) {
     fn from(source: PreAllocatedAccountMapEntry<T>) -> (Slot, T) {
         match source {
-            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.read().unwrap()[0],
+            PreAllocatedAccountMapEntry::Entry(entry) => entry.slot_list.lock().unwrap()[0],
             PreAllocatedAccountMapEntry::Raw(raw) => raw,
         }
     }
@@ -1048,7 +1048,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             for (pubkey, list) in pubkey_list {
                 num_keys_iterated += 1;
                 let mut read_lock_timer = Measure::start("read_lock");
-                let list_r = &list.slot_list.read().unwrap();
+                let list_r = &list.slot_list.lock().unwrap();
                 read_lock_timer.stop();
                 read_lock_elapsed += read_lock_timer.as_us();
                 let mut latest_slot_timer = Measure::start("latest_slot");
@@ -1127,7 +1127,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     fn slot_list_mut<RT>(
         &self,
         pubkey: &Pubkey,
-        user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
+        user: impl for<'a> FnOnce(&mut MutexGuard<'a, SlotList<T>>) -> RT,
     ) -> Option<RT> {
         let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
             .read()
@@ -1366,7 +1366,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let mut cache = false;
                 match entry {
                     Some(locked_entry) => {
-                        let slot_list = &locked_entry.slot_list.read().unwrap();
+                        let slot_list = &locked_entry.slot_list.lock().unwrap();
                         let result = callback(pubkey, Some((slot_list, locked_entry.ref_count())));
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
@@ -2070,7 +2070,7 @@ pub mod tests {
             // clone the AccountMapEntryInner into a new Arc
             match self {
                 PreAllocatedAccountMapEntry::Entry(entry) => {
-                    let (slot, account_info) = entry.slot_list.read().unwrap()[0];
+                    let (slot, account_info) = entry.slot_list.lock().unwrap()[0];
                     let meta = AccountMapEntryMeta {
                         dirty: AtomicBool::new(entry.dirty()),
                         age: AtomicU8::new(entry.age()),
@@ -2485,9 +2485,9 @@ pub mod tests {
                 )
                 .into_account_map_entry(&index.storage.storage);
                 assert_eq!(new_entry.ref_count(), 0);
-                assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
+                assert_eq!(new_entry.slot_list.lock().unwrap().capacity(), 1);
                 assert_eq!(
-                    new_entry.slot_list.read().unwrap().to_vec(),
+                    new_entry.slot_list.lock().unwrap().to_vec(),
                     vec![(slot, account_info)]
                 );
 
@@ -2504,9 +2504,9 @@ pub mod tests {
                 )
                 .into_account_map_entry(&index.storage.storage);
                 assert_eq!(new_entry.ref_count(), 1);
-                assert_eq!(new_entry.slot_list.read().unwrap().capacity(), 1);
+                assert_eq!(new_entry.slot_list.lock().unwrap().capacity(), 1);
                 assert_eq!(
-                    new_entry.slot_list.read().unwrap().to_vec(),
+                    new_entry.slot_list.lock().unwrap().to_vec(),
                     vec![(slot, account_info)]
                 );
             }
@@ -2595,7 +2595,7 @@ pub mod tests {
             .into_account_map_entry(&index.storage.storage);
             assert_eq!(
                 entry.slot_list().to_vec(),
-                new_entry.slot_list.read().unwrap().to_vec(),
+                new_entry.slot_list.lock().unwrap().to_vec(),
             );
         }
 
