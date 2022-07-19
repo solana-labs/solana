@@ -2892,6 +2892,7 @@ pub mod tests {
             .get_for_tests(&key.pubkey(), Some(&ancestors), None)
             .unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
+        drop(list);
 
         let mut num = 0;
         let mut found_key = false;
@@ -3285,6 +3286,7 @@ pub mod tests {
             .get_for_tests(&key.pubkey(), Some(&ancestors), None)
             .unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
+        drop(list);
         let ancestors = vec![(1, 0)].into_iter().collect();
         let (list, idx) = index
             .get_for_tests(&key.pubkey(), Some(&ancestors), None)
@@ -3294,6 +3296,7 @@ pub mod tests {
 
     #[test]
     fn test_update_gc_purged_slot() {
+        solana_logger::setup();
         let key = Keypair::new();
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
@@ -3357,6 +3360,7 @@ pub mod tests {
         assert_eq!(gc, vec![]);
         let (list, idx) = index.get_for_tests(&key.pubkey(), None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (3, true));
+        drop(list);
 
         let mut num = 0;
         let mut found_key = false;
