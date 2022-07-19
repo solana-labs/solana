@@ -90,15 +90,18 @@ pub enum UnpackPath<'a> {
     Invalid,
 }
 
-fn unpack_archive<'a, A: Read, C>(
+fn unpack_archive<'a, A, C, D>(
     archive: &mut Archive<A>,
     apparent_limit_size: u64,
     actual_limit_size: u64,
     limit_count: u64,
-    mut entry_checker: C,
+    mut entry_checker: C, // checks if entry is valid
+    entry_processor: D,   // processes entry after setting permissions
 ) -> Result<()>
 where
+    A: Read,
     C: FnMut(&[&str], tar::EntryType) -> UnpackPath<'a>,
+    D: Fn(PathBuf),
 {
     let mut apparent_total_size: u64 = 0;
     let mut actual_total_size: u64 = 0;
@@ -175,7 +178,11 @@ where
             GNUSparse | Regular => 0o644,
             _ => 0o755,
         };
-        set_perms(&unpack_dir.join(entry.path()?), mode)?;
+        let entry_path_buf = unpack_dir.join(entry.path()?);
+        set_perms(&entry_path_buf, mode)?;
+
+        // Process entry after setting permissions
+        entry_processor(entry_path_buf);
 
         total_entries += 1;
         let now = Instant::now();
@@ -337,6 +344,7 @@ pub fn unpack_snapshot<A: Read>(
                 UnpackPath::Invalid
             }
         },
+        |_| {},
     )
     .map(|_| unpacked_append_vec_map)
 }
@@ -450,6 +458,7 @@ fn unpack_genesis<A: Read>(
         max_genesis_archive_unpacked_size,
         MAX_GENESIS_ARCHIVE_UNPACKED_COUNT,
         |p, k| is_valid_genesis_archive_entry(unpack_dir, p, k),
+        |_| {},
     )
 }
 
