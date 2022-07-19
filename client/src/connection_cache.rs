@@ -791,4 +791,22 @@ mod tests {
         assert!(conn.tpu_addr().port() != 0);
         assert!(conn.tpu_addr().port() == port);
     }
+
+    // Test that we can get_connection with a connection cache configured for quic
+    // on an address with a port that, if QUIC_PORT_OFFSET were added to it, it would overflow to
+    // an invalid port.
+    #[test]
+    fn test_overflow_address() {
+        let port = u16::MAX - QUIC_PORT_OFFSET + 1;
+        assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+        let connection_cache = ConnectionCache::new(1);
+
+        let conn = connection_cache.get_connection(&addr);
+        // We (intentionally) don't have an interface that allows us to distinguish between
+        // UDP and Quic connections, so check instead that the port is valid (non-zero)
+        // and is the same as the input port (falling back on UDP)
+        assert!(conn.tpu_addr().port() != 0);
+        assert!(conn.tpu_addr().port() == port);
+    }
 }
