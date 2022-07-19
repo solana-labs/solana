@@ -2038,7 +2038,7 @@ impl AccountsDb {
 
         let skip_rewrites = true;
         let ancient_append_vecs = true;
-    
+
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
@@ -6589,7 +6589,8 @@ impl AccountsDb {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
         if !use_index {
             let mut collect_time = Measure::start("collect");
-            let (combined_maps, slots) = self.get_snapshot_storages(slot, None, config.ancestors, config.debug_startup);
+            let (combined_maps, slots) =
+                self.get_snapshot_storages(slot, None, config.ancestors, config.debug_startup);
             collect_time.stop();
             error!("maps: {}", combined_maps.len());
 
@@ -8306,6 +8307,7 @@ impl AccountsDb {
                                 let (key, account_info) = account;
                                 let lock = self.accounts_index.get_account_maps_read_lock(&key);
                                 let x = lock.get(&key).unwrap();
+                                x.push_slot_list_reader("runtime/src/accounts_db.rs:8310:44");
                                 let sl = x.slot_list.read().unwrap();
                                 let mut count = 0;
                                 for (slot2, account_info2) in sl.iter() {
@@ -8323,6 +8325,7 @@ impl AccountsDb {
                                     }
                                 }
                                 assert_eq!(1, count);
+                                x.pop_slot_list_reader("runtime/src/accounts_db.rs:8310:44");
                             }
                             lookup_time.stop();
                             lookup_time.as_us()
@@ -8628,10 +8631,12 @@ impl AccountsDb {
         self.accounts_index.account_maps.iter().for_each(|map| {
             for (pubkey, account_entry) in map.read().unwrap().items(&full_pubkey_range) {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
+                *account_entry.push_slot_list_reader("runtime/src/accounts_db.rs:8634:36");
                 info!(
                     "      slots: {:?}",
                     *account_entry.slot_list.read().unwrap()
                 );
+                *account_entry.pop_slot_list_reader("runtime/src/accounts_db.rs:8634:36");
             }
         });
     }

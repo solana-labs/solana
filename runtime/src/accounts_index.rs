@@ -25,7 +25,7 @@ use {
         pubkey::Pubkey,
     },
     std::{
-        collections::{btree_map::BTreeMap, HashSet},
+        collections::{btree_map::BTreeMap, HashMap, HashSet},
         fmt::Debug,
         ops::{
             Bound,
@@ -263,7 +263,12 @@ pub struct AccountMapEntryInner<T> {
     /// list of slots in which this pubkey was updated
     /// Note that 'clean' removes outdated entries (ie. older roots) from this slot_list
     /// purge_slot() also removes non-rooted slots from this list
-    pub slot_list: RwLock<SlotList<T>>,
+    pub slot_list2: RwLock<SlotList<T>>,
+
+    pub slot_list_readers: RwLock<HashMap<String, i32>>,
+
+    pub slot_list_writers: RwLock<HashMap<String, i32>>,
+
     /// synchronization metadata for in-memory state since last flush to disk accounts index
     pub meta: AccountMapEntryMeta,
 }
@@ -273,9 +278,38 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         Self {
             slot_list: RwLock::new(slot_list),
             ref_count: AtomicU64::new(ref_count),
+            slot_list_readers: RwLock::new(HashMap::new()),
+            slot_list_writers: RwLock::new(HashMap::new()),
             meta,
         }
     }
+
+    pub fn push_slot_list_reader(&self, s: &str) {
+        let m = self.slot_list_readers.write().unwrap();
+        let v = m.entry(s.to_string()).or_insert(0);
+        *v += 1;
+    }
+
+    pub fn pop_slot_list_reader(&self, s: &str) {
+        let m = self.slot_list_readers.write().unwrap();
+        assert!(m.contains(&s));
+        let v = m.entry(s.to_string()).or_insert(0);
+        *v -= 1;
+    }
+
+    pub fn push_slot_list_writer(&self, s: &str) {
+        let m = self.slot_list_writers.write().unwrap();
+        let v = m.entry(s.to_string()).or_insert(1);
+        *v += 1;
+    }
+
+    pub fn pop_slot_list_writer(&self, s: &str) {
+        let m = self.slot_list_writers.write().unwrap();
+        assert!(m.contains(&s));
+        let v = m.entry(s.to_string()).or_insert(1);
+        *v -= 1;
+    }
+
     pub fn ref_count(&self) -> RefCount {
         self.ref_count.load(Ordering::Relaxed)
     }
