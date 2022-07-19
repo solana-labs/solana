@@ -178,9 +178,7 @@ impl QuicNewConnection {
         let mut make_connection_measure = Measure::start("make_connection_measure");
         let endpoint = endpoint.get_endpoint().await;
 
-        let connecting = endpoint
-            .connect(addr, "connect")
-            .expect("QuicNewConnection::make_connection endpoint.connect");
+        let connecting = endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         if let Ok(connecting_result) = timeout(
             Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
@@ -219,11 +217,8 @@ impl QuicNewConnection {
         &mut self,
         addr: SocketAddr,
         stats: &ClientStats,
-    ) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self
-            .endpoint
-            .connect(addr, "connect")
-            .expect("QuicNewConnection::make_connection_0rtt endpoint.connect");
+    ) -> Result<Arc<NewConnection>, QuicError> {
+        let connecting = self.endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
