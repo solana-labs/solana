@@ -12,8 +12,8 @@ use {
     itertools::Itertools,
     log::*,
     quinn::{
-        ClientConfig, ConnectionError, Endpoint, EndpointConfig, IdleTimeout, NewConnection,
-        VarInt, WriteError,
+        ClientConfig, ConnectError, ConnectionError, Endpoint, EndpointConfig, IdleTimeout,
+        NewConnection, VarInt, WriteError,
     },
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
@@ -35,6 +35,7 @@ use {
         thread,
         time::Duration,
     },
+    thiserror::Error,
     tokio::{sync::RwLock, time::timeout},
 };
 
@@ -69,6 +70,16 @@ pub struct QuicClientCertificate {
 pub struct QuicLazyInitializedEndpoint {
     endpoint: RwLock<Option<Arc<Endpoint>>>,
     client_certificate: Arc<QuicClientCertificate>,
+}
+
+#[derive(Error, Debug)]
+pub enum QuicError {
+    #[error(transparent)]
+    WriteError(#[from] WriteError),
+    #[error(transparent)]
+    ConnectionError(#[from] ConnectionError),
+    #[error(transparent)]
+    ConnectError(#[from] ConnectError),
 }
 
 impl QuicLazyInitializedEndpoint {
@@ -163,13 +174,11 @@ impl QuicNewConnection {
         endpoint: Arc<QuicLazyInitializedEndpoint>,
         addr: SocketAddr,
         stats: &ClientStats,
-    ) -> Result<Self, WriteError> {
+    ) -> Result<Self, QuicError> {
         let mut make_connection_measure = Measure::start("make_connection_measure");
         let endpoint = endpoint.get_endpoint().await;
 
-        let connecting = endpoint
-            .connect(addr, "connect")
-            .expect("QuicNewConnection::make_connection endpoint.connect");
+        let connecting = endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         if let Ok(connecting_result) = timeout(
             Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
@@ -208,11 +217,8 @@ impl QuicNewConnection {
         &mut self,
         addr: SocketAddr,
         stats: &ClientStats,
-    ) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self
-            .endpoint
-            .connect(addr, "connect")
-            .expect("QuicNewConnection::make_connection_0rtt endpoint.connect");
+    ) -> Result<Arc<NewConnection>, QuicError> {
+        let connecting = self.endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
@@ -272,7 +278,7 @@ impl QuicClient {
     async fn _send_buffer_using_conn(
         data: &[u8],
         connection: &NewConnection,
-    ) -> Result<(), WriteError> {
+    ) -> Result<(), QuicError> {
         let mut send_stream = connection.connection.open_uni().await?;
 
         send_stream.write_all(data).await?;
@@ -287,7 +293,7 @@ impl QuicClient {
         data: &[u8],
         stats: &ClientStats,
         connection_stats: Arc<ConnectionCacheStats>,
-    ) -> Result<Arc<NewConnection>, WriteError> {
+    ) -> Result<Arc<NewConnection>, QuicError> {
         let mut connection_try_count = 0;
         let mut last_connection_id = 0;
         let mut last_error = None;
@@ -390,7 +396,7 @@ impl QuicClient {
                     return Ok(connection);
                 }
                 Err(err) => match err {
-                    WriteError::ConnectionLost(_) => {
+                    QuicError::ConnectionError(_) => {
                         last_error = Some(err);
                     }
                     _ => {
