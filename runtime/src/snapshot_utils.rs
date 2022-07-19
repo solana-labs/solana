@@ -1496,26 +1496,26 @@ fn unpack_snapshot_local<T: 'static + Read + std::marker::Send, F: Fn() -> T>(
     reader: F,
     ledger_dir: &Path,
     account_paths: &[PathBuf],
-    parallel_archivers: usize,
+    parallel_divisions: usize,
 ) -> Result<UnpackedAppendVecMap> {
-    assert!(parallel_archivers > 0);
+    assert!(parallel_divisions > 0);
     // a shared 'reader' that reads the decompressed stream once, keeps some history, and acts as a reader for multiple parallel archive readers
     let shared_buffer = SharedBuffer::new(reader());
 
     // allocate all readers before any readers start reading
-    let readers = (0..parallel_archivers)
+    let readers = (0..parallel_divisions)
         .into_iter()
         .map(|_| SharedBufferReader::new(&shared_buffer))
         .collect::<Vec<_>>();
 
-    // create 'parallel_archivers' # of parallel workers, each responsible for 1/parallel_archivers of all the files to extract.
+    // create 'parallel_divisions' # of parallel workers, each responsible for 1/parallel_divisions of all the files to extract.
     let all_unpacked_append_vec_map = readers
         .into_par_iter()
         .enumerate()
         .map(|(index, reader)| {
             let parallel_selector = Some(ParallelSelector {
                 index,
-                divisions: parallel_archivers,
+                divisions: parallel_divisions,
             });
             let mut archive = Archive::new(reader);
             unpack_snapshot(&mut archive, ledger_dir, account_paths, parallel_selector)
