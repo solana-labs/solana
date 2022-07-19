@@ -6462,7 +6462,7 @@ impl AccountsDb {
                 let eligible_for_caching =
                     !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
 
-                if eligible_for_caching {
+                if eligible_for_caching || config.store_detailed_debug_info_on_failure {
                     let range = bin_range.end - bin_range.start;
                     scanner.init_accum(range);
                 }
@@ -6478,7 +6478,9 @@ impl AccountsDb {
 
                 let mut file_name = String::default();
                 // if we're using the write cache, we can't cache the hash calc results because not all accounts are in append vecs.
-                if should_cache_hash_data && eligible_for_caching {
+                if (should_cache_hash_data && eligible_for_caching)
+                    || config.store_detailed_debug_info_on_failure
+                {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
@@ -6515,7 +6517,7 @@ impl AccountsDb {
                             amod.hash(&mut hasher);
                         }
                     }
-                    if load_from_cache {
+                    if load_from_cache && eligible_for_caching {
                         // we have a hash value for all the storages in this slot
                         // so, build a file name:
                         let hash = hasher.finish();
@@ -6696,6 +6698,7 @@ impl AccountsDb {
                     use_write_cache: can_cached_slot_be_unflushed,
                     epoch_schedule,
                     rent_collector,
+                    store_detailed_debug_info_on_failure: false,
                 },
                 expected_capitalization,
             )
@@ -6809,6 +6812,20 @@ impl AccountsDb {
         );
     }
 
+    /// normal code path returns the common cache path
+    /// when called after a failure has been detected, redirect the cache storage to a separate folder for debugging later
+    fn get_cache_hash_data(&self, config: &CalcAccountsHashConfig<'_>) -> CacheHashData {
+        if !config.store_detailed_debug_info_on_failure {
+            CacheHashData::new(&self.accounts_hash_cache_path)
+        } else {
+            // this path executes when we are failing with a hash mismatch
+            let mut new = self.accounts_hash_cache_path.clone();
+            new.push("failed_calculate_accounts_hash_cache");
+            let _ = std::fs::remove_dir_all(&new);
+            CacheHashData::new(&new)
+        }
+    }
+
     // modeled after get_accounts_delta_hash
     // intended to be faster than calculate_accounts_hash
     pub fn calculate_accounts_hash_without_index(
@@ -6827,7 +6844,7 @@ impl AccountsDb {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            let cache_hash_data = CacheHashData::new(&self.accounts_hash_cache_path);
+            let cache_hash_data = self.get_cache_hash_data(config);
 
             for pass in 0..num_hash_scan_passes {
                 let bounds = Range {
@@ -6962,6 +6979,7 @@ impl AccountsDb {
                     use_write_cache: can_cached_slot_be_unflushed,
                     epoch_schedule,
                     rent_collector,
+                    store_detailed_debug_info_on_failure: false,
                 },
                 None,
             )?;
@@ -9001,6 +9019,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
                 None,
             )
@@ -9390,6 +9409,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -9419,6 +9439,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
                 &get_storage_refs(&storages),
                 HashStats::default(),
@@ -9529,6 +9550,7 @@ pub mod tests {
                 use_write_cache: false,
                 epoch_schedule: &EpochSchedule::default(),
                 rent_collector: &RentCollector::default(),
+                store_detailed_debug_info_on_failure: false,
             },
             &get_storage_refs(&storages),
             test_scan,
@@ -11570,6 +11592,7 @@ pub mod tests {
                         use_write_cache: false,
                         epoch_schedule: &EpochSchedule::default(),
                         rent_collector: &RentCollector::default(),
+                        store_detailed_debug_info_on_failure: false,
                     },
                 )
                 .is_err());
@@ -11602,6 +11625,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
             )
             .unwrap(),
@@ -11615,6 +11639,7 @@ pub mod tests {
                     use_write_cache: false,
                     epoch_schedule: &EpochSchedule::default(),
                     rent_collector: &RentCollector::default(),
+                    store_detailed_debug_info_on_failure: false,
                 },
             )
             .unwrap(),
