@@ -291,7 +291,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
     fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: Arc<AccountMapEntryInner<T>>) {
         let mut slot_list = in_mem.slot_list.lock().unwrap();
-        let slot_list2 = disk.slot_list.write().unwrap();
+        let slot_list2 = disk.slot_list.lock().unwrap();
 
         for (slot, new_entry) in slot_list2.iter().copied() {
             if !slot_list.iter().map(|x| x.0.to_owned()).any(|x| x == slot) {
