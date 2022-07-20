@@ -2022,7 +2022,7 @@ impl AccountsDb {
             .as_ref()
             .map(|config| config.filler_accounts_config)
             .unwrap_or_default();
-        let skip_rewrites = accounts_db_config
+        let _skip_rewrites = accounts_db_config
             .as_ref()
             .map(|config| config.skip_rewrites)
             .unwrap_or_default();
@@ -2031,7 +2031,7 @@ impl AccountsDb {
             .map(|config| config.skip_initial_hash_calc)
             .unwrap_or_default();
 
-        let ancient_append_vecs = accounts_db_config
+        let _ancient_append_vecs = accounts_db_config
             .as_ref()
             .map(|config| config.ancient_append_vecs)
             .unwrap_or_default();

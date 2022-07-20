@@ -375,6 +375,20 @@ pub enum AccountIndexGetResult<T: IndexValue> {
     NotFound,
 }
 
+pub struct KeepTrack<T: IndexValue> {
+    pub borrowed: AtomicBool,
+    pub owned_entry: AccountMapEntry<T>,
+}
+
+impl<T: IndexValue> KeepTrack<T> {
+    fn drop(&mut self) {
+        if self.borrowed.load(Ordering::Relaxed) {
+            self.owned_entry
+                .pop_slot_list_reader("runtime/src/accounts_index.rs:394");
+        }
+    }
+}
+
 #[self_referencing]
 pub struct ReadAccountMapEntry<T: IndexValue> {
     owned_entry: AccountMapEntry<T>,
@@ -382,7 +396,7 @@ pub struct ReadAccountMapEntry<T: IndexValue> {
     #[covariant]
     slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
 
-    locked: bool,
+    keep_track: KeepTrack<T>,
 }
 
 impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
@@ -400,12 +414,19 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
                 lock.push_slot_list_reader("runtime/src/accounts_index.rs:394");
                 lock.slot_list.read().unwrap()
             },
-            locked: true,
+
+            keep_track: KeepTrack {
+                borrowed: AtomicBool::new(false),
+                owned_entry: Arc::clone(&account_map_entry),
+            },
         }
         .build()
     }
 
     pub fn slot_list(&self) -> &SlotList<T> {
+        self.borrow_keep_track()
+            .borrowed
+            .store(true, Ordering::Relaxed);
         self.borrow_slot_list_guard()
     }
 
@@ -421,18 +442,9 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
         self.borrow_owned_entry().add_un_ref(true);
     }
 
-    pub fn is_locked(&self) -> bool {
-        *self.borrow_locked()
-    }
-}
-
-impl<T: IndexValue> Drop for ReadAccountMapEntry<T> {
-    fn drop(&mut self) {
-        if self.is_locked() {
-            self.borrow_owned_entry()
-                .pop_slot_list_reader("runtime/src/accounts_index.rs:394");
-        }
-    }
+    // pub fn is_locked(&self) -> bool {
+    //     *self.borrow_locked()
+    // }
 }
 
 /// can be used to pre-allocate structures for insertion into accounts index outside of lock
