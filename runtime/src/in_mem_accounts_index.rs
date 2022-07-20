@@ -293,17 +293,30 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         in_mem.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
         disk.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:297");
 
-        let mut slot_list = in_mem.slot_list.write().unwrap();
-        let slot_list2 = disk.slot_list.write().unwrap();
+        let mut i = 0;
+        loop {
+            let lock = in_mem.slot_list.try_write();
 
-        for (slot, new_entry) in slot_list2.iter().copied() {
-            if !slot_list.iter().map(|x| x.0.to_owned()).any(|x| x == slot) {
-                slot_list.push((slot, new_entry));
+            if lock.is_err() {
+                i += 1;
+                if i % 100000 == 0 {
+                    use log::*;
+                    error!("deadlocked");
+                }
+                continue;
             }
-        }
+            let mut slot_list = lock.unwrap();
+            let slot_list2 = disk.slot_list.write().unwrap();
 
-        in_mem.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
-        disk.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:297");
+            for (slot, new_entry) in slot_list2.iter().copied() {
+                if !slot_list.iter().map(|x| x.0.to_owned()).any(|x| x == slot) {
+                    slot_list.push((slot, new_entry));
+                }
+            }
+
+            in_mem.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
+            disk.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:297");
+        }
     }
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
@@ -442,80 +455,97 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 // age is incremented by caller
             } else {
                 let mut m = Measure::start("entry");
-                let mut map = self.map_internal.write().unwrap();
-                let entry = map.entry(*pubkey);
-                m.stop();
-                let found = matches!(entry, Entry::Occupied(_));
-                match entry {
-                    Entry::Occupied(mut occupied) => {
-                        let current = occupied.get_mut();
-                        Self::lock_and_update_slot_list(
-                            current,
-                            new_value.into(),
-                            other_slot,
-                            reclaims,
-                            reclaim,
-                        );
-                        current.set_age(self.storage.future_age_to_flush());
+                let mut i = 0;
+                loop {
+                    let lock = self.map_internal.try_write();
+
+                    if lock.is_err() {
+                        i += 1;
+                        if i % 100000 == 0 {
+                            use log::*;
+                            error!("deadlocked on {}", pubkey);
+                        }
+                        continue;
                     }
-                    Entry::Vacant(vacant) => {
-                        // not in cache, look on disk
-                        updated_in_mem = false;
+                    let mut map = lock.unwrap();
+                    let entry = map.entry(*pubkey);
+                    m.stop();
+                    let found = matches!(entry, Entry::Occupied(_));
+                    match entry {
+                        Entry::Occupied(mut occupied) => {
+                            let current = occupied.get_mut();
+                            Self::lock_and_update_slot_list(
+                                current,
+                                new_value.into(),
+                                other_slot,
+                                reclaims,
+                                reclaim,
+                            );
+                            current.set_age(self.storage.future_age_to_flush());
+                        }
+                        Entry::Vacant(vacant) => {
+                            // not in cache, look on disk
+                            updated_in_mem = false;
 
-                        // desired to be this for filler accounts: self.storage.get_startup();
-                        // but, this has proven to be far too slow at high account counts
-                        let directly_to_disk = false;
+                            // desired to be this for filler accounts: self.storage.get_startup();
+                            // but, this has proven to be far too slow at high account counts
+                            let directly_to_disk = false;
 
-                        let enable_lazy_disk_load = true;
+                            let enable_lazy_disk_load = true;
 
-                        let previous_slot_entry_was_cached =
-                            reclaim == UpsertReclaim::PreviousSlotEntryWasCached;
+                            let previous_slot_entry_was_cached =
+                                reclaim == UpsertReclaim::PreviousSlotEntryWasCached;
 
-                        if directly_to_disk {
-                            // We may like this to always run, but it is unclear.
-                            // If disk bucket needs to resize, then this call can stall for a long time.
-                            // Right now, we know it is safe during startup.
-                            let already_existed = self
-                                .upsert_on_disk(vacant, new_value, other_slot, reclaims, reclaim);
-                            if !already_existed {
-                                self.stats().inc_insert();
-                            }
-                        } else if enable_lazy_disk_load && previous_slot_entry_was_cached {
-                            // skip checking the disk
-                            self.stats().inc_insert();
-                            let entry = new_value.into_account_map_entry(&self.storage);
-                            entry.set_lazy_disk_load();
-                            assert!(entry.dirty());
-                            vacant.insert(entry);
-                            self.stats().inc_mem_count(self.bin);
-                            Self::update_stat(&self.stats().lazy_disk_index_lookup_set_count, 1);
-                        } else {
-                            // go to in-mem cache first
-                            let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                            let new_value = if let Some(disk_entry) = disk_entry {
-                                // on disk, so merge new_value with what was on disk
-                                Self::lock_and_update_slot_list(
-                                    &disk_entry,
-                                    new_value.into(),
-                                    other_slot,
-                                    reclaims,
-                                    reclaim,
+                            if directly_to_disk {
+                                // We may like this to always run, but it is unclear.
+                                // If disk bucket needs to resize, then this call can stall for a long time.
+                                // Right now, we know it is safe during startup.
+                                let already_existed = self.upsert_on_disk(
+                                    vacant, new_value, other_slot, reclaims, reclaim,
                                 );
-                                disk_entry
-                            } else {
-                                // not on disk, so insert new thing
+                                if !already_existed {
+                                    self.stats().inc_insert();
+                                }
+                            } else if enable_lazy_disk_load && previous_slot_entry_was_cached {
+                                // skip checking the disk
                                 self.stats().inc_insert();
-                                new_value.into_account_map_entry(&self.storage)
-                            };
-                            assert!(new_value.dirty());
-                            vacant.insert(new_value);
-                            self.stats().inc_mem_count(self.bin);
+                                let entry = new_value.into_account_map_entry(&self.storage);
+                                entry.set_lazy_disk_load();
+                                assert!(entry.dirty());
+                                vacant.insert(entry);
+                                self.stats().inc_mem_count(self.bin);
+                                Self::update_stat(
+                                    &self.stats().lazy_disk_index_lookup_set_count,
+                                    1,
+                                );
+                            } else {
+                                // go to in-mem cache first
+                                let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                                let new_value = if let Some(disk_entry) = disk_entry {
+                                    // on disk, so merge new_value with what was on disk
+                                    Self::lock_and_update_slot_list(
+                                        &disk_entry,
+                                        new_value.into(),
+                                        other_slot,
+                                        reclaims,
+                                        reclaim,
+                                    );
+                                    disk_entry
+                                } else {
+                                    // not on disk, so insert new thing
+                                    self.stats().inc_insert();
+                                    new_value.into_account_map_entry(&self.storage)
+                                };
+                                assert!(new_value.dirty());
+                                vacant.insert(new_value);
+                                self.stats().inc_mem_count(self.bin);
+                            }
                         }
                     }
+                    drop(map);
+                    self.update_entry_stats(m, found);
+                    break;
                 }
-
-                drop(map);
-                self.update_entry_stats(m, found);
             };
         });
         if updated_in_mem {
