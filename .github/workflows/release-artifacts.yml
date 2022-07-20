@@ -44,8 +44,8 @@ jobs:
           git checkout ${{ inputs.commit }}
 
 
-      # The Windows build fails without resolver = "2", but including it in Cargo.toml causes 
-      # other problems (see PR #26555 and Issue #22603). These lines add resolver = "2" to 
+      # The Windows build fails without resolver = "2", but including it in Cargo.toml causes
+      # other problems (see PR #26555 and Issue #22603). These lines add resolver = "2" to
       # Cargo.toml and commit the change to the local build environment before building.
       # Since the build environment does not persist the changes are discarded after the build
       # and do not interfere with non-Windows builds.
