@@ -310,6 +310,26 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         *v -= 1;
     }
 
+    pub fn log_rws(&self) -> String {
+        let mut s = "".to_owned();
+        s += "writer: ";
+        let m = self.slot_list_writers.read().unwrap();
+        for (k, v) in m.iter() {
+            if *v > 0 {
+                s.push_str(&format!("{}={},", *k, *v));
+            }
+        }
+
+        s += "\nreader: ";
+        let m = self.slot_list_readers.read().unwrap();
+        for (k, v) in m.iter() {
+            if *v > 0 {
+                s.push_str(&format!("{}={}", *k, *v));
+            }
+        }
+        s
+    }
+
     pub fn ref_count(&self) -> RefCount {
         self.ref_count.load(Ordering::Relaxed)
     }

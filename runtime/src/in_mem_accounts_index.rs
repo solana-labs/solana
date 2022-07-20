@@ -8,6 +8,7 @@ use {
         bucket_map_holder_stats::BucketMapHolderStats,
         waitable_condvar::WaitableCondvar,
     },
+    log::*,
     rand::{thread_rng, Rng},
     solana_bucket_map::bucket_api::BucketApi,
     solana_measure::measure::Measure,
@@ -292,6 +293,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: Arc<AccountMapEntryInner<T>>) {
         in_mem.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
         disk.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:297");
+        error!("merge_slot_list: {}", in_mem.log_rws());
 
         let mut i = 0;
         loop {
