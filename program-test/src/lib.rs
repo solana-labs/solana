@@ -120,6 +120,7 @@ pub fn builtin_process_instruction(
         invoke_context
             .transaction_context
             .get_current_instruction_context()?,
+        true,
     )?;
 
     // Deserialize data back into instruction params
