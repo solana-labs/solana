@@ -3735,6 +3735,37 @@ impl RpcClient {
         self.invoke(self.rpc_client.get_stake_minimum_delegation())
     }
 
+    /// Returns the stake minimum delegation, in lamports, based on the commitment level.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getStakeMinimumDelegation`] RPC method.
+    ///
+    /// [`getStakeMinimumDelegation`]: https://docs.solana.com/developing/clients/jsonrpc-api#getstakeminimumdelegation
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     rpc_client::RpcClient,
+    /// #     client_error::ClientError,
+    /// # };
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
+    /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// let stake_minimum_delegation =
+    /// rpc_client.get_stake_minimum_delegation_with_commitment(CommitmentConfig::confirmed())?;
+    /// # Ok::<(), ClientError>(())
+    /// ```
+    pub fn get_stake_minimum_delegation_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<u64> {
+        self.invoke(
+            self.rpc_client
+                .get_stake_minimum_delegation_with_commitment(commitment_config),
+        )
+    }
+
     /// Request the transaction count.
     pub fn get_transaction_count(&self) -> ClientResult<u64> {
         self.invoke(self.rpc_client.get_transaction_count())
@@ -4345,7 +4376,19 @@ mod tests {
     fn test_get_stake_minimum_delegation() {
         let expected_minimum_delegation: u64 = 123_456_789;
         let rpc_client = RpcClient::new_mock("succeeds".to_string());
-        let actual_minimum_delegation = rpc_client.get_stake_minimum_delegation().unwrap();
-        assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
+
+        // Test: without commitment
+        {
+            let actual_minimum_delegation = rpc_client.get_stake_minimum_delegation().unwrap();
+            assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
+        }
+
+        // Test: with commitment
+        {
+            let actual_minimum_delegation = rpc_client
+                .get_stake_minimum_delegation_with_commitment(CommitmentConfig::confirmed())
+                .unwrap();
+            assert_eq!(expected_minimum_delegation, actual_minimum_delegation);
+        }
     }
 }

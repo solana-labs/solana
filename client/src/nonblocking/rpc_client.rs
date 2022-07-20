@@ -4544,8 +4544,42 @@ impl RpcClient {
     /// # Ok::<(), ClientError>(())
     /// ```
     pub async fn get_stake_minimum_delegation(&self) -> ClientResult<u64> {
+        self.get_stake_minimum_delegation_with_commitment(self.commitment())
+            .await
+    }
+
+    /// Returns the stake minimum delegation, in lamports, based on the commitment level.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getStakeMinimumDelegation`] RPC method.
+    ///
+    /// [`getStakeMinimumDelegation`]: https://docs.solana.com/developing/clients/jsonrpc-api#getstakeminimumdelegation
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     nonblocking::rpc_client::RpcClient,
+    /// #     client_error::ClientError,
+    /// # };
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
+    /// # futures::executor::block_on(async {
+    /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// let stake_minimum_delegation = rpc_client.get_stake_minimum_delegation_with_commitment(CommitmentConfig::confirmed()).await?;
+    /// #     Ok::<(), ClientError>(())
+    /// # })?;
+    /// # Ok::<(), ClientError>(())
+    /// ```
+    pub async fn get_stake_minimum_delegation_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<u64> {
         Ok(self
-            .send::<Response<u64>>(RpcRequest::GetStakeMinimumDelegation, Value::Null)
+            .send::<Response<u64>>(
+                RpcRequest::GetStakeMinimumDelegation,
+                json!([self.maybe_map_commitment(commitment_config).await?]),
+            )
             .await?
             .value)
     }

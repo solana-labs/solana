@@ -2458,7 +2458,7 @@ Returns the stake minimum delegation, in lamports.
 
 #### Parameters:
 
-None
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
