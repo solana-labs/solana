@@ -18,7 +18,7 @@ use {
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
         stats_reporter_service::StatsReporterService,
-        system_monitor_service::{verify_udp_stats_access, SystemMonitorService},
+        system_monitor_service::{verify_net_stats_access, SystemMonitorService},
         tower_storage::TowerStorage,
         tpu::{Tpu, TpuSockets, DEFAULT_TPU_COALESCE_MS},
         tvu::{Tvu, TvuConfig, TvuSockets},
@@ -390,8 +390,8 @@ impl Validator {
         warn!("vote account: {}", vote_account);
 
         if !config.no_os_network_stats_reporting {
-            verify_udp_stats_access().unwrap_or_else(|err| {
-                error!("Failed to access UDP stats: {}. Bypass check with --no-os-network-stats-reporting.", err);
+            verify_net_stats_access().unwrap_or_else(|err| {
+                error!("Failed to access Network stats: {}. Bypass check with --no-os-network-stats-reporting.", err);
                 abort();
             });
         }
