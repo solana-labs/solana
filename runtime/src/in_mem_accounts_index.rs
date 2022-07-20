@@ -290,7 +290,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
     fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: Arc<AccountMapEntryInner<T>>) {
-        let mut slot_list = in_mem.slot_list.write().unwrap();
+        let mut i = 0;
+        loop {
+        let lock = in_mem.slot_list.try_write();
+
+        if lock.is_err() {
+            i += 1;
+            if i % 100000 == 0 {
+                use log::*;error!("deadlocked");
+            }
+            continue;
+        }
+        let mut slot_list = lock.unwrap();
         let slot_list2 = disk.slot_list.write().unwrap();
 
         for (slot, new_entry) in slot_list2.iter().copied() {
@@ -298,6 +309,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 slot_list.push((slot, new_entry));
             }
         }
+    }
     }
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
@@ -428,7 +440,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 // age is incremented by caller
             } else {
                 let mut m = Measure::start("entry");
-                let mut map = self.map_internal.write().unwrap();
+                let mut i = 0;
+                loop {
+                let lock = self.map_internal.try_write();
+
+                if lock.is_err() {
+                    i += 1;
+                    if i % 100000 == 0 {
+                        use log::*;error!("deadlocked on {}", pubkey);
+                    }
+                    continue;
+                }
+                let mut map = lock.unwrap();
                 let entry = map.entry(*pubkey);
                 m.stop();
                 let found = matches!(entry, Entry::Occupied(_));
@@ -455,7 +478,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         let enable_lazy_disk_load = true;
 
                         let previous_slot_entry_was_cached =
-                            (reclaim == UpsertReclaim::PreviousSlotEntryWasCached);
+                            reclaim == UpsertReclaim::PreviousSlotEntryWasCached;
 
                         if directly_to_disk {
                             // We may like this to always run, but it is unclear.
@@ -499,9 +522,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         }
                     }
                 }
-
                 drop(map);
                 self.update_entry_stats(m, found);
+                break;
+            }
             };
         });
         if updated_in_mem {
