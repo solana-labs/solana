@@ -705,7 +705,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     48 => InstructionError::UnsupportedSysvar,
                     49 => InstructionError::IllegalOwner,
                     50 => InstructionError::MaxAccountsDataSizeExceeded,
-                    51 => InstructionError::ActiveVoteAccountClose,
+                    51 => InstructionError::MaxAccountsExceeded,
                     _ => return Err("Invalid InstructionError"),
                 };
 
@@ -1022,8 +1022,8 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             InstructionError::MaxAccountsDataSizeExceeded => {
                                 tx_by_addr::InstructionErrorType::MaxAccountsDataSizeExceeded
                             }
-                            InstructionError::ActiveVoteAccountClose => {
-                                tx_by_addr::InstructionErrorType::ActiveVoteAccountClose
+                            InstructionError::MaxAccountsExceeded => {
+                                tx_by_addr::InstructionErrorType::MaxAccountsExceeded
                             }
                         } as i32,
                         custom: match instruction_error {
