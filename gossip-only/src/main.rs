@@ -1,51 +1,39 @@
 #![allow(clippy::integer_arithmetic)]
 #[cfg(not(target_env = "msvc"))]
 use {
-    log::*,
     clap::{
-        crate_description, crate_name, value_t, values_t, value_t_or_exit, App, Arg, ArgMatches,
+        crate_description, crate_name, value_t, value_t_or_exit, values_t, App, Arg, ArgMatches,
     },
-    solana_core::{
-        gen_keys::GenKeys,
-    },
+    crossbeam_channel::unbounded,
+    log::*,
+    solana_core::gen_keys::GenKeys,
     solana_gossip::{
-        cluster_info::{
-            ClusterInfo, Node,
-        },
-        gossip_service::GossipService,
+        cluster_info::{ClusterInfo, Node},
         contact_info::ContactInfo,
+        gossip_service::GossipService,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_runtime::{
-        accounts_db,
-        accounts_index::AccountSecondaryIndexes,
-        bank::Bank,
-        bank_forks::BankForks,
-        genesis_utils::{
-            create_genesis_config_with_leader,
-        },
-    },
-    crossbeam_channel::unbounded,
-    std::{
-        sync::{
-            atomic::AtomicBool,
-            Arc, RwLock,
-        },
-        path::Path,
-        net::{SocketAddr,IpAddr},
-        str::FromStr,
-        process::exit,
-        env,
-        fs::{self, File},
-        collections::HashMap,
-        io::Write,
-        collections::HashSet,
+        accounts_db, accounts_index::AccountSecondaryIndexes, bank::Bank, bank_forks::BankForks,
+        genesis_utils::create_genesis_config_with_leader,
     },
     solana_sdk::{
-        signature::{Signer, Keypair},
         native_token::LAMPORTS_PER_SOL,
+        signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
+    std::{
+        collections::HashMap,
+        collections::HashSet,
+        env,
+        fs::{self, File},
+        io::Write,
+        net::{IpAddr, SocketAddr},
+        path::Path,
+        process::exit,
+        str::FromStr,
+        sync::{atomic::AtomicBool, Arc, RwLock},
+    },
     tempfile::TempDir,
 };
 
@@ -62,7 +50,6 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u
 }
 
 fn parse_matches() -> ArgMatches<'static> {
-
     App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
@@ -121,10 +108,9 @@ pub fn main() {
 
     //Write keys to file and exit
     if write_keys {
-        let keypair_count = value_t!(matches, "num_keys", u64).unwrap_or_else(|_|{
+        let keypair_count = value_t!(matches, "num_keys", u64).unwrap_or_else(|_| {
             error!("Number of keys to write was not specified! Use \"--num-keys <count>\"");
             exit(1);
-
         });
 
         info!("Generating {} keypairs", keypair_count);
@@ -134,7 +120,7 @@ pub fn main() {
         keypairs.iter().for_each(|keypair| {
             accounts.insert(
                 serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
-                DEFAULT_NODE_STAKE,         // this value can be a struct if we want. like Base64Account
+                DEFAULT_NODE_STAKE, // this value can be a struct if we want. like Base64Account
             );
         });
         info!("Writing {}", account_infile);
@@ -145,27 +131,24 @@ pub fn main() {
 
         info!("Wrote {} keys to file: {}", keypair_count, account_infile);
         exit(0);
-
     }
 
     // Read keys from file and spin up gossip nodes
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
     let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
-    let socket_addr_space = SocketAddrSpace::Unspecified;    
+    let socket_addr_space = SocketAddrSpace::Unspecified;
 
     //Set dynamic port range for node ports
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
-    let dynamic_port_range =
-        solana_net_utils::parse_port_range(default_dynamic_port_range)
-            .expect("invalid dynamic_port_range");
+    let dynamic_port_range = solana_net_utils::parse_port_range(default_dynamic_port_range)
+        .expect("invalid dynamic_port_range");
 
-    let shred_version = value_t!(matches, "shred_version", u16).unwrap_or_else(|_| {
-        DEFAULT_SHRED_VERSION
-    });
+    let shred_version =
+        value_t!(matches, "shred_version", u16).unwrap_or_else(|_| DEFAULT_SHRED_VERSION);
 
-     //Entrypoint to join Gossip Cluster
-     let entrypoint_addrs = values_t!(matches, "entrypoint", String)
+    //Entrypoint to join Gossip Cluster
+    let entrypoint_addrs = values_t!(matches, "entrypoint", String)
         .unwrap_or_default()
         .into_iter()
         .map(|entrypoint| {
@@ -196,9 +179,12 @@ pub fn main() {
         exit(1);
     }
 
-    info!("Spinning up {} Gossip nodes with the following accounts/stakes: ", num_nodes);
+    info!(
+        "Spinning up {} Gossip nodes with the following accounts/stakes: ",
+        num_nodes
+    );
     let mut count = 0;
-    for (k,v) in &accounts {
+    for (k, v) in &accounts {
         println!("{}, {}", k, v);
         count = count + 1;
         if count == num_nodes {
@@ -208,13 +194,11 @@ pub fn main() {
 
     let mut node_keys: Vec<Keypair> = Vec::new();
     let mut node_stakes: Vec<u64> = Vec::new();
-    accounts
-        .into_iter()
-        .for_each(|(keypair, stake)| {
-            let bytes: Vec<u8> = serde_json::from_str(keypair.as_str()).unwrap();
-            node_keys.push(Keypair::from_bytes(&bytes).unwrap());
-            node_stakes.push(stake);
-        });
+    accounts.into_iter().for_each(|(keypair, stake)| {
+        let bytes: Vec<u8> = serde_json::from_str(keypair.as_str()).unwrap();
+        node_keys.push(Keypair::from_bytes(&bytes).unwrap());
+        node_stakes.push(stake);
+    });
 
     //Setup genesis config.
     let genesis_config_info = &mut create_genesis_config_with_leader(
@@ -239,8 +223,8 @@ pub fn main() {
             |err| {
                 eprintln!("Unable to find an available gossip port: {}", err);
                 exit(1);
-            }
-        )
+            },
+        ),
     );
 
     //set entrypoints for gossip
@@ -249,10 +233,10 @@ pub fn main() {
         .map(ContactInfo::new_gossip_entry_point)
         .collect::<Vec<_>>();
 
-    // Loop through nodes, spin up a leader first, then have all others join leader 
+    // Loop through nodes, spin up a leader first, then have all others join leader
     for i in 0..num_nodes {
         //create new node with external ip
-        let mut node = Node::new_with_external_ip( 
+        let mut node = Node::new_with_external_ip(
             &node_keys[i].pubkey(),
             &gossip_addr,
             dynamic_port_range,
@@ -262,11 +246,8 @@ pub fn main() {
         let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[i].to_bytes()).unwrap());
         node.info.shred_version = shred_version;
 
-        let cluster_info = ClusterInfo::new(
-            node.info.clone(),
-            my_keypair.clone(),
-            socket_addr_space,
-        );
+        let cluster_info =
+            ClusterInfo::new(node.info.clone(), my_keypair.clone(), socket_addr_space);
 
         cluster_info.set_entrypoints(cluster_entrypoints.clone());
         let cluster_info = Arc::new(cluster_info);
@@ -281,6 +262,7 @@ pub fn main() {
             false,
             accounts_db::AccountShrinkThreshold::default(),
             false,
+            None,
         );
         bank0.freeze();
         let bank_forks = BankForks::new(bank0);
@@ -295,18 +277,14 @@ pub fn main() {
             Some(bank_forks.clone()),
             node.sockets.gossip,
             None,
-            true,   //should check dup instance
+            true, //should check dup instance
             Some(stats_reporter_sender.clone()),
-
             &exit_gossip,
         );
 
         gossip_threads.push(gossip_service);
     }
     for thread in gossip_threads {
-        thread
-            .join()
-            .unwrap();
+        thread.join().unwrap();
     }
-
 }
