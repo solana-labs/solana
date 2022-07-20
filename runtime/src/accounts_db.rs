@@ -6585,8 +6585,8 @@ impl AccountsDb {
 
                     if result.is_err() {
                         info!(
-                            "FAILED_TO_SAVE: {}-{}, {}, first_boundary: {}, {:?}",
-                            range.start, range.end, width, first_boundary, file_name,
+                            "FAILED_TO_SAVE: {}-{}, {}, first_boundary: {}, {:?}, error: {:?}",
+                            range.start, range.end, width, first_boundary, file_name, result,
                         );
                     }
                 }
