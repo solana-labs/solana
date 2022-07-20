@@ -101,10 +101,22 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
             invoke_context.get_check_size(),
         )?
         .to_vec();
+
+        let ix_data_len = ix.data.len() as u64;
+        if invoke_context
+            .feature_set
+            .is_active(&feature_set::loosen_cpi_size_restriction::id())
+        {
+            invoke_context.get_compute_meter().consume(
+                (ix_data_len)
+                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
+            )?;
+        }
+
         let data = translate_slice::<u8>(
             memory_mapping,
             ix.data.as_ptr() as u64,
-            ix.data.len() as u64,
+            ix_data_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?
@@ -399,10 +411,22 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?;
+
+        let ix_data_len = ix_c.data_len as u64;
+        if invoke_context
+            .feature_set
+            .is_active(&feature_set::loosen_cpi_size_restriction::id())
+        {
+            invoke_context.get_compute_meter().consume(
+                (ix_data_len)
+                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
+            )?;
+        }
+
         let data = translate_slice::<u8>(
             memory_mapping,
             ix_c.data_addr,
-            ix_c.data_len as u64,
+            ix_data_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?
@@ -739,10 +763,6 @@ where
     Ok(accounts)
 }
 
-#[cfg(test)]
-static_assertions::const_assert_eq!(ACCOUNT_META_SIZE, 34);
-const ACCOUNT_META_SIZE: usize = size_of::<AccountMeta>();
-
 fn check_instruction_size(
     num_accounts: usize,
     data_len: usize,
@@ -750,7 +770,7 @@ fn check_instruction_size(
 ) -> Result<(), EbpfError<BpfError>> {
     if invoke_context
         .feature_set
-        .is_active(&feature_set::loosen_cpi_size_restriction::ID)
+        .is_active(&feature_set::loosen_cpi_size_restriction::id())
     {
         let data_len = data_len as u64;
         let max_data_len = MAX_CPI_INSTRUCTION_DATA_LEN;
@@ -771,14 +791,10 @@ fn check_instruction_size(
             }
             .into());
         }
-
-        invoke_context.get_compute_meter().consume(
-            (data_len).saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
-        )?;
     } else {
         let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size;
         let size = num_accounts
-            .saturating_mul(ACCOUNT_META_SIZE)
+            .saturating_mul(size_of::<AccountMeta>())
             .saturating_add(data_len);
         if size > max_size {
             return Err(SyscallError::InstructionTooLarge(size, max_size).into());
@@ -793,7 +809,7 @@ fn check_account_infos(
 ) -> Result<(), EbpfError<BpfError>> {
     if invoke_context
         .feature_set
-        .is_active(&feature_set::loosen_cpi_size_restriction::ID)
+        .is_active(&feature_set::loosen_cpi_size_restriction::id())
     {
         let num_account_infos = num_account_infos as u64;
         let max_account_infos = MAX_CPI_ACCOUNT_INFOS as u64;

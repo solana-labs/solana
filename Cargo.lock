@@ -4733,7 +4733,6 @@ dependencies = [
  "solana-sdk 1.11.4",
  "solana-zk-token-sdk 1.11.4",
  "solana_rbpf",
- "static_assertions",
  "thiserror",
 ]
 
