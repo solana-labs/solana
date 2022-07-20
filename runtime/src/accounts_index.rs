@@ -381,6 +381,8 @@ pub struct ReadAccountMapEntry<T: IndexValue> {
     #[borrows(owned_entry)]
     #[covariant]
     slot_list_guard: RwLockReadGuard<'this, SlotList<T>>,
+
+    locked: bool,
 }
 
 impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
@@ -391,10 +393,14 @@ impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
 
 impl<T: IndexValue> ReadAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
-        /// leaking readlock???
+        // leaking readlock ???
         ReadAccountMapEntryBuilder {
             owned_entry: account_map_entry,
-            slot_list_guard_builder: |lock| lock.slot_list.read().unwrap(),
+            slot_list_guard_builder: |lock| {
+                lock.push_slot_list_reader("runtime/src/accounts_index.rs:394");
+                lock.slot_list.read().unwrap()
+            },
+            locked: true,
         }
         .build()
     }
@@ -413,6 +419,19 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
 
     pub fn addref(&self) {
         self.borrow_owned_entry().add_un_ref(true);
+    }
+
+    pub fn is_locked(&self) -> bool {
+        *self.borrow_locked()
+    }
+}
+
+impl<T: IndexValue> Drop for ReadAccountMapEntry<T> {
+    fn drop(&mut self) {
+        if self.is_locked() {
+            self.borrow_owned_entry()
+                .pop_slot_list_reader("runtime/src/accounts_index.rs:394");
+        }
     }
 }
 
