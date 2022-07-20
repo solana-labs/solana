@@ -3,7 +3,7 @@ use {
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SnapshotStorage,
+            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SlotStores, SnapshotStorage,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -12,18 +12,17 @@ use {
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
         epoch_stakes::EpochStakes,
-        hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
-        serde_snapshot::storage::SerializableAccountStorageEntry,
+        serde_snapshot::storage::{SerializableAccountStorageEntry, SerializedAppendVecId},
         snapshot_utils::{self, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
+    dashmap::DashMap,
     log::*,
-    rayon::prelude::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
-    solana_measure::{measure, measure::Measure},
+    solana_measure::measure::Measure,
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -41,12 +40,12 @@ use {
         path::{Path, PathBuf},
         result::Result,
         sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc, RwLock,
+            atomic::{AtomicU32, AtomicUsize, Ordering},
+            Arc,
         },
         thread::Builder,
     },
-    storage::{SerializableStorage, SerializedAppendVecId},
+    storage::SerializableStorage,
 };
 
 mod newer;
@@ -305,7 +304,8 @@ pub(crate) fn bank_from_streams<R>(
     serde_style: SerdeStyle,
     snapshot_streams: &mut SnapshotStreams<R>,
     account_paths: &[PathBuf],
-    unpacked_append_vec_map: UnpackedAppendVecMap,
+    storage: DashMap<Slot, SlotStores>,
+    next_append_vec_id: AtomicU32,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -328,7 +328,8 @@ where
         genesis_config,
         runtime_config,
         account_paths,
-        unpacked_append_vec_map,
+        storage,
+        next_append_vec_id,
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
@@ -517,7 +518,8 @@ fn reconstruct_bank_from_fields<E>(
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     account_paths: &[PathBuf],
-    unpacked_append_vec_map: UnpackedAppendVecMap,
+    storage: DashMap<Slot, SlotStores>,
+    next_append_vec_id: AtomicU32,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
@@ -534,7 +536,8 @@ where
     let (accounts_db, reconstructed_accounts_db_info) = reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
-        unpacked_append_vec_map,
+        storage,
+        next_append_vec_id,
         genesis_config,
         account_secondary_indexes,
         caching_enabled,
@@ -620,7 +623,7 @@ fn remap_append_vec_file(
     Ok((remapped_append_vec_id, remapped_append_vec_path))
 }
 
-fn remap_and_reconstruct_single_storage(
+pub(crate) fn remap_and_reconstruct_single_storage(
     slot: Slot,
     old_append_vec_id: SerializedAppendVecId,
     current_len: usize,
@@ -644,66 +647,6 @@ fn remap_and_reconstruct_single_storage(
     Ok(storage)
 }
 
-fn remap_and_reconstruct_slot_storage<E>(
-    slot: Slot,
-    slot_storage: &[E],
-    unpacked_append_vec_map: &UnpackedAppendVecMap,
-    next_append_vec_id: &AtomicAppendVecId,
-    num_collisions: &AtomicUsize,
-) -> Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, Error>
-where
-    E: SerializableStorage,
-{
-    slot_storage
-        .iter()
-        .map(|storage_entry| {
-            let file_name = AppendVec::file_name(slot, storage_entry.id());
-            let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("{} not found in unpacked append vecs", file_name),
-                )
-            })?;
-
-            let new_storage_entry = remap_and_reconstruct_single_storage(
-                slot,
-                storage_entry.id(),
-                storage_entry.current_len(),
-                append_vec_path,
-                next_append_vec_id,
-                num_collisions,
-            )?;
-            Ok((new_storage_entry.append_vec_id(), new_storage_entry))
-        })
-        .collect::<Result<HashMap<AppendVecId, _>, Error>>()
-}
-
-fn remap_and_reconstruct_storages<E>(
-    snapshot_storages: Vec<(Slot, Vec<E>)>,
-    unpacked_append_vec_map: &UnpackedAppendVecMap,
-    next_append_vec_id: &AtomicAppendVecId,
-    num_collisions: &AtomicUsize,
-) -> Result<HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEntry>>>, Error>
-where
-    E: SerializableStorage + std::marker::Sync,
-{
-    snapshot_storages
-        .into_par_iter()
-        .map(|(slot, slot_storage)| {
-            Ok((
-                *slot,
-                remap_and_reconstruct_slot_storage(
-                    *slot,
-                    slot_storage,
-                    unpacked_append_vec_map,
-                    next_append_vec_id,
-                    num_collisions,
-                )?,
-            ))
-        })
-        .collect::<Result<HashMap<Slot, _>, Error>>()
-}
-
 /// This struct contains side-info while reconstructing the accounts DB from fields.
 #[derive(Debug, Default, Copy, Clone)]
 struct ReconstructedAccountsDbInfo {
@@ -714,7 +657,8 @@ struct ReconstructedAccountsDbInfo {
 fn reconstruct_accountsdb_from_fields<E>(
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     account_paths: &[PathBuf],
-    unpacked_append_vec_map: UnpackedAppendVecMap,
+    storage: DashMap<Slot, SlotStores>,
+    next_append_vec_id: AtomicU32,
     genesis_config: &GenesisConfig,
     account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
@@ -738,15 +682,13 @@ where
     );
 
     let AccountsDbFields(
-        snapshot_storages,
+        _snapshot_storages,
         snapshot_version,
         snapshot_slot,
         snapshot_bank_hash_info,
         snapshot_historical_roots,
         snapshot_historical_roots_with_hash,
     ) = snapshot_accounts_db_fields.collapse_into()?;
-
-    let snapshot_storages = snapshot_storages.into_iter().collect::<Vec<_>>();
 
     // Ensure all account paths exist
     for path in &accounts_db.paths {
@@ -760,20 +702,10 @@ where
         snapshot_historical_roots_with_hash,
     );
 
-    // Remap the deserialized AppendVec paths to point to correct local paths
-    let num_collisions = AtomicUsize::new(0);
-    let next_append_vec_id = AtomicAppendVecId::new(0);
-    let (mut storage, measure_remap) = measure!(remap_and_reconstruct_storages(
-        snapshot_storages,
-        &unpacked_append_vec_map,
-        &next_append_vec_id,
-        &num_collisions
-    )?);
-
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized
     // but non-root stores should not be included in the snapshot
-    storage.retain(|_slot, stores| !stores.is_empty());
+    storage.retain(|_slot, stores| !stores.read().unwrap().is_empty());
     assert!(
         !storage.is_empty(),
         "At least one storage entry must exist from deserializing stream"
@@ -793,11 +725,7 @@ where
         .write()
         .unwrap()
         .insert(snapshot_slot, snapshot_bank_hash_info);
-    accounts_db.storage.map.extend(
-        storage
-            .into_iter()
-            .map(|(slot, slot_storage_entry)| (slot, Arc::new(RwLock::new(slot_storage_entry)))),
-    );
+    accounts_db.storage.map.extend(storage.into_iter());
     accounts_db
         .next_id
         .store(next_append_vec_id, Ordering::Release);
@@ -841,12 +769,6 @@ where
 
     datapoint_info!(
         "reconstruct_accountsdb_from_fields()",
-        ("remap-time-us", measure_remap.as_us(), i64),
-        (
-            "remap-collisions",
-            num_collisions.load(Ordering::Relaxed),
-            i64
-        ),
         ("accountsdb-notify-at-start-us", measure_notify.as_us(), i64),
     );
 
