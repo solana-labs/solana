@@ -47,23 +47,40 @@ struct UdpStats {
 
 #[derive(Default)]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+// These stats are aggregated across all network devices excluding the loopback interface.
 struct NetDevStats {
-    rx_bytes: usize,
-    rx_packets: usize,
-    rx_errs: usize,
-    rx_drops: usize,
-    rx_fifo: usize,
-    rx_frame: usize,
-    rx_compressed: usize,
-    rx_multicast: usize,
-    tx_bytes: usize,
-    tx_packets: usize,
-    tx_errs: usize,
-    tx_drops: usize,
-    tx_fifo: usize,
-    tx_colls: usize,
-    tx_carrier: usize,
-    tx_compressed: usize,
+    // Number of bytes received
+    rx_bytes: u64,
+    // Number of packets received
+    rx_packets: u64,
+    // Number of receive errors detected by device driver
+    rx_errs: u64,
+    // Number of receive packets dropped by the device driver (not included in error count)
+    rx_drops: u64,
+    // Number of receive FIFO buffer errors
+    rx_fifo: u64,
+    // Number of receive packet framing errors
+    rx_frame: u64,
+    // Number of compressed packets received
+    rx_compressed: u64,
+    // Number of multicast frames received by device driver
+    rx_multicast: u64,
+    // Number of bytes transmitted
+    tx_bytes: u64,
+    // Number of packets transmitted
+    tx_packets: u64,
+    // Number of transmit errors detected by device driver
+    tx_errs: u64,
+    // Number of transmit packets dropped by device driver
+    tx_drops: u64,
+    // Number of transmit FIFO buffer errors
+    tx_fifo: u64,
+    // Number of transmit collisions detected
+    tx_colls: u64,
+    // Number of transmit carrier losses detected by device driver
+    tx_carrier: u64,
+    // Number of compressed packets transmitted
+    tx_compressed: u64,
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -156,7 +173,6 @@ fn parse_udp_stats(reader_snmp: &mut impl BufRead) -> Result<UdpStats, String> {
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn parse_net_dev_stats(reader_dev: &mut impl BufRead) -> Result<NetDevStats, String> {
     let mut stats = NetDevStats::default();
-    let mut found_one_line = false;
     for (line_number, line) in reader_dev.lines().enumerate() {
         if line_number < 2 {
             // Skip first two lines with header information.
@@ -164,33 +180,33 @@ fn parse_net_dev_stats(reader_dev: &mut impl BufRead) -> Result<NetDevStats, Str
         }
 
         let line = line.map_err(|e| e.to_string())?;
-        found_one_line = true;
         let values: Vec<_> = line.split_ascii_whitespace().collect();
 
         if values.len() != 17 {
             return Err("parse error, expected exactly 17 stat elements".to_string());
         }
+        if values[0] == "lo:" {
+            // Filter out the loopback network interface as we are only concerned with
+            // external traffic.
+            continue;
+        }
 
-        stats.rx_bytes += values[1].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.rx_packets += values[2].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.rx_errs += values[3].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.rx_drops += values[4].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.rx_fifo += values[5].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.rx_frame += values[6].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.rx_compressed += values[7].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.rx_multicast += values[8].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.tx_bytes += values[9].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.tx_packets += values[10].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.tx_errs += values[11].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.tx_drops += values[12].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.tx_fifo += values[13].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.tx_colls += values[14].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.tx_carrier += values[15].parse::<usize>().map_err(|e| e.to_string())?;
-        stats.tx_compressed += values[16].parse::<usize>().map_err(|e| e.to_string())?;
-    }
-
-    if !found_one_line {
-        return Err("parse error, expected at least 1 valid net dev stats line".to_string());
+        stats.rx_bytes += values[1].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_packets += values[2].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_errs += values[3].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_drops += values[4].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_fifo += values[5].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_frame += values[6].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_compressed += values[7].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_multicast += values[8].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_bytes += values[9].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_packets += values[10].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_errs += values[11].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_drops += values[12].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_fifo += values[13].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_colls += values[14].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_carrier += values[15].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_compressed += values[16].parse::<u64>().map_err(|e| e.to_string())?;
     }
 
     Ok(stats)
@@ -381,82 +397,98 @@ impl SystemMonitorService {
             ("sndbuf_errors", new_stats.udp_stats.sndbuf_errors, i64),
             (
                 "rx_bytes_delta",
-                new_stats.net_dev_stats.rx_bytes - old_stats.net_dev_stats.rx_bytes,
+                new_stats
+                    .net_dev_stats
+                    .rx_bytes
+                    .saturating_sub(old_stats.net_dev_stats.rx_bytes),
                 i64
             ),
             (
                 "rx_packets_delta",
-                new_stats.net_dev_stats.rx_packets - old_stats.net_dev_stats.rx_packets,
+                new_stats
+                    .net_dev_stats
+                    .rx_packets
+                    .saturating_sub(old_stats.net_dev_stats.rx_packets),
                 i64
             ),
             (
                 "rx_errs_delta",
-                new_stats.net_dev_stats.rx_errs - old_stats.net_dev_stats.rx_errs,
+                new_stats
+                    .net_dev_stats
+                    .rx_errs
+                    .saturating_sub(old_stats.net_dev_stats.rx_errs),
                 i64
             ),
             (
                 "rx_drops_delta",
-                new_stats.net_dev_stats.rx_drops - old_stats.net_dev_stats.rx_drops,
+                new_stats
+                    .net_dev_stats
+                    .rx_drops
+                    .saturating_sub(old_stats.net_dev_stats.rx_drops),
                 i64
             ),
             (
                 "rx_fifo_delta",
-                new_stats.net_dev_stats.rx_fifo - old_stats.net_dev_stats.rx_fifo,
+                new_stats
+                    .net_dev_stats
+                    .rx_fifo
+                    .saturating_sub(old_stats.net_dev_stats.rx_fifo),
                 i64
             ),
             (
                 "rx_frame_delta",
-                new_stats.net_dev_stats.rx_frame - old_stats.net_dev_stats.rx_frame,
-                i64
-            ),
-            (
-                "rx_compressed_delta",
-                new_stats.net_dev_stats.rx_compressed - old_stats.net_dev_stats.rx_compressed,
-                i64
-            ),
-            (
-                "rx_multicast_delta",
-                new_stats.net_dev_stats.rx_multicast - old_stats.net_dev_stats.rx_multicast,
+                new_stats
+                    .net_dev_stats
+                    .rx_frame
+                    .saturating_sub(old_stats.net_dev_stats.rx_frame),
                 i64
             ),
             (
                 "tx_bytes_delta",
-                new_stats.net_dev_stats.tx_bytes - old_stats.net_dev_stats.tx_bytes,
+                new_stats
+                    .net_dev_stats
+                    .tx_bytes
+                    .saturating_sub(old_stats.net_dev_stats.tx_bytes),
                 i64
             ),
             (
                 "tx_packets_delta",
-                new_stats.net_dev_stats.tx_packets - old_stats.net_dev_stats.tx_packets,
+                new_stats
+                    .net_dev_stats
+                    .tx_packets
+                    .saturating_sub(old_stats.net_dev_stats.tx_packets),
                 i64
             ),
             (
                 "tx_errs_delta",
-                new_stats.net_dev_stats.tx_errs - old_stats.net_dev_stats.tx_errs,
+                new_stats
+                    .net_dev_stats
+                    .tx_errs
+                    .saturating_sub(old_stats.net_dev_stats.tx_errs),
                 i64
             ),
             (
                 "tx_drops_delta",
-                new_stats.net_dev_stats.tx_drops - old_stats.net_dev_stats.tx_drops,
+                new_stats
+                    .net_dev_stats
+                    .tx_drops
+                    .saturating_sub(old_stats.net_dev_stats.tx_drops),
                 i64
             ),
             (
                 "tx_fifo_delta",
-                new_stats.net_dev_stats.tx_fifo - old_stats.net_dev_stats.tx_fifo,
+                new_stats
+                    .net_dev_stats
+                    .tx_fifo
+                    .saturating_sub(old_stats.net_dev_stats.tx_fifo),
                 i64
             ),
             (
                 "tx_colls_delta",
-                new_stats.net_dev_stats.tx_colls - old_stats.net_dev_stats.tx_colls,
-                i64
-            ),
-            (
-                "tx_carrier_delta",
-                new_stats.net_dev_stats.tx_carrier - old_stats.net_dev_stats.tx_carrier,
-                i64
-            ),
-            (
-                "tx_compressed_delta",
-                new_stats.net_dev_stats.tx_compressed - old_stats.net_dev_stats.tx_compressed,
+                new_stats
+                    .net_dev_stats
+                    .tx_colls
+                    .saturating_sub(old_stats.net_dev_stats.tx_colls),
                 i64
             ),
         );
@@ -615,9 +647,12 @@ UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
         const MOCK_DEV: &[u8] =
 b"Inter-|   Receive                                                |  Transmit
 face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
-lo: 100     1    0    0    0     0          0         0 200 3    2    0    0     0       0          0
+lo: 50     1    0    0    0     0          0         0 100 2    1    0    0     0       0          0
+eno1: 100     1    0    0    0     0          0         0 200 3    2    0    0     0       0          0
 ens4: 400     4    0    1    0     0          0         0 250 5    0    0    0     0       0          0" as &[u8];
-        const UNEXPECTED_DATA: &[u8] = b"unexpected data" as &[u8];
+        const UNEXPECTED_DATA: &[u8] = b"un
+expected
+data" as &[u8];
 
         let mut mock_dev = MOCK_DEV;
         let stats = parse_net_dev_stats(&mut mock_dev).unwrap();
