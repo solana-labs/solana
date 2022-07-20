@@ -380,7 +380,7 @@ pub struct KeepTrack<T: IndexValue> {
     pub owned_entry: AccountMapEntry<T>,
 }
 
-impl<T: IndexValue> KeepTrack<T> {
+impl<T: IndexValue> Drop for KeepTrack<T> {
     fn drop(&mut self) {
         if self.borrowed.load(Ordering::Relaxed) {
             self.owned_entry
@@ -408,6 +408,7 @@ impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
 impl<T: IndexValue> ReadAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
         // leaking readlock ???
+        let clone = Arc::clone(&account_map_entry);
         ReadAccountMapEntryBuilder {
             owned_entry: account_map_entry,
             slot_list_guard_builder: |lock| {
@@ -417,7 +418,7 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
 
             keep_track: KeepTrack {
                 borrowed: AtomicBool::new(false),
-                owned_entry: Arc::clone(&account_map_entry),
+                owned_entry: clone,
             },
         }
         .build()
