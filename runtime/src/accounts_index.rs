@@ -320,7 +320,7 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
             }
         }
 
-        s += "\nreader: ";
+        s += "; reader: ";
         let m = self.slot_list_readers.read().unwrap();
         for (k, v) in m.iter() {
             if *v > 0 {
