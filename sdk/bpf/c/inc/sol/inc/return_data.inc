@@ -32,7 +32,7 @@ extern "C"
  * @param program_id the program_id which set the return data. Only set if there was some return data (the function returns non-zero).
  * @param result length of return data (may exceed bytes_len if the return data is longer)
  */
-@SYSCALL uint64_t sol_get_return_data(const uint8_t *, uint64_t, SolPubkey *);
+@SYSCALL uint64_t sol_get_return_data(uint8_t *, uint64_t, SolPubkey *);
 
 #ifdef __cplusplus
 }
