@@ -1657,11 +1657,13 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
-        if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.ref_count()
-        } else {
-            0
-        }
+        let map = self.get_account_maps_read_lock(pubkey);
+        map.get_internal(pubkey, |entry| {
+            (
+                false,
+                entry.map(|entry| entry.ref_count()).unwrap_or_default(),
+            )
+        })
     }
 
     fn purge_secondary_indexes_by_inner_key<'a>(
