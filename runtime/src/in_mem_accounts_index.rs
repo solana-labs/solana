@@ -290,6 +290,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
     fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: Arc<AccountMapEntryInner<T>>) {
+        in_mem.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
+        disk.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:297");
+
         let mut slot_list = in_mem.slot_list.write().unwrap();
         let slot_list2 = disk.slot_list.write().unwrap();
 
@@ -298,6 +301,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 slot_list.push((slot, new_entry));
             }
         }
+
+        in_mem.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
+        disk.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:297");
     }
 
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
@@ -330,8 +336,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
                 }
 
+                occupied
+                    .get()
+                    .push_slot_list_reader("runtime/src/in_mem_accounts_index.rs:343");
                 let result =
                     self.remove_if_slot_list_empty_value(&occupied.get().slot_list.read().unwrap());
+                occupied
+                    .get()
+                    .pop_slot_list_reader("runtime/src/in_mem_accounts_index.rs:343");
                 if result {
                     // note there is a potential race here that has existed.
                     // if someone else holds the arc,
@@ -389,8 +401,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             (
                 true,
                 entry.map(|entry| {
+                    entry.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:405");
                     let result = user(&mut entry.slot_list.write().unwrap());
                     entry.set_dirty(true);
+                    entry.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:405");
                     result
                 }),
             )
@@ -455,7 +469,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         let enable_lazy_disk_load = true;
 
                         let previous_slot_entry_was_cached =
-                            (reclaim == UpsertReclaim::PreviousSlotEntryWasCached);
+                            reclaim == UpsertReclaim::PreviousSlotEntryWasCached;
 
                         if directly_to_disk {
                             // We may like this to always run, but it is unclear.
@@ -531,6 +545,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         reclaim: UpsertReclaim,
     ) {
+        current.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
         let mut slot_list = current.slot_list.write().unwrap();
         let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
@@ -541,6 +556,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             reclaims,
             reclaim,
         );
+        current.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
         if addref {
             current.add_un_ref(true);
         }
@@ -1004,11 +1020,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 (true, None)
             } else {
                 // only read the slot list if we are planning to throw the item out
+                entry.push_slot_list_reader("runtime/src/in_mem_accounts_index.rs:1023");
                 let slot_list = entry.slot_list.read().unwrap();
                 if slot_list.len() != 1 {
                     if update_stats {
                         Self::update_stat(&self.stats().held_in_mem_slot_list_len, 1);
                     }
+                    entry.pop_slot_list_reader("runtime/src/in_mem_accounts_index.rs:1023");
                     (false, None) // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
                 } else {
                     // keep items with slot lists that contained cached items
@@ -1016,6 +1034,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     if !evict && update_stats {
                         Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
                     }
+                    entry.pop_slot_list_reader("runtime/src/in_mem_accounts_index.rs:1023");
                     (evict, if evict { Some(slot_list) } else { None })
                 }
             }
@@ -1212,10 +1231,17 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // may have to loop if disk has to grow and we have to retry the write
                             loop {
                                 let disk_resize = {
+                                    v.push_slot_list_reader(
+                                        "runtime/src/in_mem_accounts_index.rs:1231",
+                                    );
                                     let slot_list = slot_list
                                         .take()
                                         .unwrap_or_else(|| v.slot_list.read().unwrap());
-                                    disk.try_write(k, (&slot_list, v.ref_count()))
+                                    let r = disk.try_write(k, (&slot_list, v.ref_count()));
+                                    v.pop_slot_list_reader(
+                                        "runtime/src/in_mem_accounts_index.rs:1231",
+                                    );
+                                    r
                                 };
                                 match disk_resize {
                                     Ok(_) => {

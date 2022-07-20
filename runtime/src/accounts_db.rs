@@ -8631,12 +8631,12 @@ impl AccountsDb {
         self.accounts_index.account_maps.iter().for_each(|map| {
             for (pubkey, account_entry) in map.read().unwrap().items(&full_pubkey_range) {
                 info!("  key: {} ref_count: {}", pubkey, account_entry.ref_count(),);
-                *account_entry.push_slot_list_reader("runtime/src/accounts_db.rs:8634:36");
+                account_entry.push_slot_list_reader("runtime/src/accounts_db.rs:8634:36");
                 info!(
                     "      slots: {:?}",
                     *account_entry.slot_list.read().unwrap()
                 );
-                *account_entry.pop_slot_list_reader("runtime/src/accounts_db.rs:8634:36");
+                account_entry.pop_slot_list_reader("runtime/src/accounts_db.rs:8634:36");
             }
         });
     }

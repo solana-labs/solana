@@ -263,7 +263,7 @@ pub struct AccountMapEntryInner<T> {
     /// list of slots in which this pubkey was updated
     /// Note that 'clean' removes outdated entries (ie. older roots) from this slot_list
     /// purge_slot() also removes non-rooted slots from this list
-    pub slot_list2: RwLock<SlotList<T>>,
+    pub slot_list: RwLock<SlotList<T>>,
 
     pub slot_list_readers: RwLock<HashMap<String, i32>>,
 
@@ -285,27 +285,27 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn push_slot_list_reader(&self, s: &str) {
-        let m = self.slot_list_readers.write().unwrap();
+        let mut m = self.slot_list_readers.write().unwrap();
         let v = m.entry(s.to_string()).or_insert(0);
         *v += 1;
     }
 
     pub fn pop_slot_list_reader(&self, s: &str) {
-        let m = self.slot_list_readers.write().unwrap();
-        assert!(m.contains(&s));
+        let mut m = self.slot_list_readers.write().unwrap();
+        assert!(m.contains(&s.to_string()));
         let v = m.entry(s.to_string()).or_insert(0);
         *v -= 1;
     }
 
     pub fn push_slot_list_writer(&self, s: &str) {
-        let m = self.slot_list_writers.write().unwrap();
+        let mut m = self.slot_list_writers.write().unwrap();
         let v = m.entry(s.to_string()).or_insert(1);
         *v += 1;
     }
 
     pub fn pop_slot_list_writer(&self, s: &str) {
-        let m = self.slot_list_writers.write().unwrap();
-        assert!(m.contains(&s));
+        let mut m = self.slot_list_writers.write().unwrap();
+        assert!(m.contains(&s.to_string()));
         let v = m.entry(s.to_string()).or_insert(1);
         *v -= 1;
     }
@@ -391,6 +391,7 @@ impl<T: IndexValue> Debug for ReadAccountMapEntry<T> {
 
 impl<T: IndexValue> ReadAccountMapEntry<T> {
     pub fn from_account_map_entry(account_map_entry: AccountMapEntry<T>) -> Self {
+        /// leaking readlock???
         ReadAccountMapEntryBuilder {
             owned_entry: account_map_entry,
             slot_list_guard_builder: |lock| lock.slot_list.read().unwrap(),
@@ -1097,6 +1098,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             for (pubkey, list) in pubkey_list {
                 num_keys_iterated += 1;
                 let mut read_lock_timer = Measure::start("read_lock");
+                list.push_slot_list_reader("runtime/src/accounts_index.rs:1101");
                 let list_r = &list.slot_list.read().unwrap();
                 read_lock_timer.stop();
                 read_lock_elapsed += read_lock_timer.as_us();
@@ -1109,6 +1111,8 @@ impl<T: IndexValue> AccountsIndex<T> {
                     load_account_timer.stop();
                     load_account_elapsed += load_account_timer.as_us();
                 }
+                list.pop_slot_list_reader("runtime/src/accounts_index.rs:1101");
+
                 if config.is_aborted() {
                     return;
                 }
@@ -1415,6 +1419,8 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let mut cache = false;
                 match entry {
                     Some(locked_entry) => {
+                        locked_entry.push_slot_list_reader("runtime/src/accounts_index.rs:1422");
+
                         let slot_list = &locked_entry.slot_list.read().unwrap();
                         let result = callback(pubkey, Some((slot_list, locked_entry.ref_count())));
                         cache = match result {
@@ -1425,6 +1431,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                             AccountsIndexScanResult::KeepInMemory => true,
                             AccountsIndexScanResult::None => false,
                         };
+                        locked_entry.pop_slot_list_reader("runtime/src/accounts_index.rs:1422");
                     }
                     None => {
                         callback(pubkey, None);
@@ -1724,11 +1731,19 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
-        if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.ref_count()
-        } else {
-            0
-        }
+        // if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
+        //     locked_entry.ref_count()
+        // } else {
+        //     0
+        // }
+
+        let map = self.get_account_maps_read_lock(pubkey);
+        map.get_internal(pubkey, |entry| {
+            (
+                false,
+                entry.map(|entry| entry.ref_count()).unwrap_or_default(),
+            )
+        })
     }
 
     fn purge_secondary_indexes_by_inner_key<'a>(
