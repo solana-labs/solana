@@ -90,7 +90,7 @@ use {
         clock::Slot,
         epoch_schedule::MAX_LEADER_SCHEDULE_EPOCH_OFFSET,
         exit::Exit,
-        genesis_config::{ClusterType, GenesisConfig},
+        genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
         shred_version::compute_shred_version,
@@ -238,7 +238,7 @@ impl Default for ValidatorConfig {
             wait_to_vote_slot: None,
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
-            enable_quic_servers: false,
+            enable_quic_servers: true,
         }
     }
 }
@@ -992,18 +992,6 @@ impl Validator {
             &connection_cache,
         );
 
-        let enable_quic_servers = if genesis_config.cluster_type == ClusterType::MainnetBeta {
-            config.enable_quic_servers
-        } else {
-            if config.enable_quic_servers {
-                warn!(
-                    "ignoring --enable-quic-servers. QUIC is always enabled for cluster type: {:?}",
-                    genesis_config.cluster_type
-                );
-            }
-            true
-        };
-
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
@@ -1036,7 +1024,7 @@ impl Validator {
             &connection_cache,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
-            enable_quic_servers,
+            config.enable_quic_servers,
         );
 
         datapoint_info!(
