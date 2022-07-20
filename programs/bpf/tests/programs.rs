@@ -213,6 +213,7 @@ fn run_program(name: &str) -> u64 {
                 .transaction_context
                 .get_current_instruction_context()
                 .unwrap(),
+            true, // should_cap_ix_accounts
         )
         .unwrap();
 

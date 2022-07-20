@@ -85,6 +85,7 @@ fn transform(inc: &PathBuf) {
         let ty = &caps[1].to_string();
         let func = &caps[2].to_string();
         let args = &caps[3].to_string();
+        let warn = format!("/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE {} AND RUN `cargo run --bin gen-headers` */", inc.display());
         let ifndef = format!("#ifndef SOL_SBFV2\n{} {}({});", ty, func, args);
         let hash = sys_hash(func);
         let typedef_statement = format!("typedef {}(*{}_pointer_type)({});", ty, func, args);
@@ -117,8 +118,8 @@ fn transform(inc: &PathBuf) {
             format!("return {}_pointer({});", func, arg_list)
         };
         format!(
-            "{}\n#else\n{}\n{} {{\n  {}\n  {}\n}}\n#endif",
-            ifndef, typedef_statement, function_signature, pointer_assignment, return_statement,
+            "{}\n{}\n#else\n{}\n{} {{\n  {}\n  {}\n}}\n#endif",
+            warn, ifndef, typedef_statement, function_signature, pointer_assignment, return_statement,
         )
     });
     write!(output_writer, "{}", output_content).unwrap();

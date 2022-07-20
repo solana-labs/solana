@@ -236,6 +236,7 @@ native machine code before execting it in the virtual machine.",
             .transaction_context
             .get_current_instruction_context()
             .unwrap(),
+        true, // should_cap_ix_accounts
     )
     .unwrap();
     let compute_meter = invoke_context.get_compute_meter();
