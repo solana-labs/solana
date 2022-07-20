@@ -34,6 +34,7 @@ typedef struct {
 /**
  * Internal cross-program invocation function
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/cpi.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 uint64_t sol_invoke_signed_c(
   const SolInstruction *,
