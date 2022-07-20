@@ -6758,7 +6758,11 @@ impl Bank {
         true
     }
 
-    pub fn get_snapshot_storages(&self, base_slot: Option<Slot>, debug_startup: bool) -> SnapshotStorages {
+    pub fn get_snapshot_storages(
+        &self,
+        base_slot: Option<Slot>,
+        debug_startup: bool,
+    ) -> SnapshotStorages {
         self.rc
             .accounts
             .accounts_db
