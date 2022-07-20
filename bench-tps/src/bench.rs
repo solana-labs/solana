@@ -36,7 +36,8 @@ use {
 // The point at which transactions become "too old", in seconds.
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
-pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
+pub type TimestampedTransaction = (Transaction, Option<u64>);
+pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
 
 /// Keypairs split into source and destination
 /// used for transfer transactions
@@ -94,7 +95,7 @@ where
 
     /// generate transactions to transfer lamports from source to destination accounts
     /// if durable nonce is used, blockhash is None
-    fn generate(&mut self, blockhash: Option<&Hash>) -> Vec<(Transaction, u64)> {
+    fn generate(&mut self, blockhash: Option<&Hash>) -> Vec<TimestampedTransaction> {
         let tx_count = self.account_chunks.source.len();
         info!(
             "Signing transactions... {} (reclaim={}, blockhash={:?})",
@@ -422,7 +423,7 @@ fn generate_system_txs(
     dest: &VecDeque<&Keypair>,
     reclaim: bool,
     blockhash: &Hash,
-) -> Vec<(Transaction, u64)> {
+) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
     } else {
@@ -434,7 +435,7 @@ fn generate_system_txs(
         .map(|(from, to)| {
             (
                 system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
-                timestamp(),
+                Some(timestamp()),
             )
         })
         .collect()
@@ -459,9 +460,9 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
     source_nonce: &[&Keypair],
     dest_nonce: &VecDeque<&Keypair>,
     reclaim: bool,
-) -> Vec<(Transaction, u64)> {
+) -> Vec<TimestampedTransaction> {
     let length = source.len();
-    let mut transactions: Vec<(Transaction, u64)> = Vec::with_capacity(length);
+    let mut transactions: Vec<TimestampedTransaction> = Vec::with_capacity(length);
     for i in 0..length {
         let (from, to, nonce, nonce_blockhash) = if !reclaim {
             (
@@ -488,13 +489,8 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
                 from,
                 nonce_blockhash,
             ),
-            timestamp(),
+            None,
         ));
-    }
-    // current timestamp to avoid filtering out some transactions if they are too old
-    let t = timestamp();
-    for mut tx in &mut transactions {
-        tx.1 = t;
     }
     transactions
 }
@@ -612,14 +608,16 @@ fn do_tx_transfers<T: BenchTpsClient>(
             let mut min_timestamp = u64::MAX;
             for tx in txs0 {
                 let now = timestamp();
-                // Transactions that are too old will be rejected by the cluster Don't bother
+                // Transactions without durable nonce that are too old will be rejected by the cluster Don't bother
                 // sending them.
-                if tx.1 < min_timestamp {
-                    min_timestamp = tx.1;
-                }
-                if now > tx.1 && now - tx.1 > 1000 * MAX_TX_QUEUE_AGE {
-                    old_transactions = true;
-                    continue;
+                if let Some(tx_timestamp) = tx.1 {
+                    if tx_timestamp < min_timestamp {
+                        min_timestamp = tx_timestamp;
+                    }
+                    if now > tx_timestamp && now - tx_timestamp > 1000 * MAX_TX_QUEUE_AGE {
+                        old_transactions = true;
+                        continue;
+                    }
                 }
                 transactions.push(tx.0);
             }
