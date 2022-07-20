@@ -2523,10 +2523,11 @@ pub fn process_delegate_stake(
 
 pub fn process_stake_minimum_delegation(
     rpc_client: &RpcClient,
-    _config: &CliConfig, // bprumo TODO: am I supposed to use the config somewhere?
+    config: &CliConfig,
     use_lamports_unit: bool,
 ) -> ProcessResult {
-    let stake_minimum_delegation = rpc_client.get_stake_minimum_delegation()?;
+    let stake_minimum_delegation =
+        rpc_client.get_stake_minimum_delegation_with_commitment(config.commitment)?;
     Ok(solana_cli_output::display::build_balance_message(
         stake_minimum_delegation,
         use_lamports_unit,
