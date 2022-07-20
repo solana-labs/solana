@@ -33,14 +33,14 @@ pub struct SystemMonitorService {
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 struct UdpStats {
-    in_datagrams: usize,
-    no_ports: usize,
-    in_errors: usize,
-    out_datagrams: usize,
-    rcvbuf_errors: usize,
-    sndbuf_errors: usize,
-    in_csum_errors: usize,
-    ignored_multi: usize,
+    in_datagrams: u64,
+    no_ports: u64,
+    in_errors: u64,
+    out_datagrams: u64,
+    rcvbuf_errors: u64,
+    sndbuf_errors: u64,
+    in_csum_errors: u64,
+    ignored_multi: u64,
 }
 
 struct CpuInfo {
@@ -51,7 +51,7 @@ struct CpuInfo {
 }
 
 impl UdpStats {
-    fn from_map(udp_stats: &HashMap<String, usize>) -> Self {
+    fn from_map(udp_stats: &HashMap<String, u64>) -> Self {
         Self {
             in_datagrams: *udp_stats.get("InDatagrams").unwrap_or(&0),
             no_ports: *udp_stats.get("NoPorts").unwrap_or(&0),
@@ -104,9 +104,9 @@ fn parse_udp_stats(reader: &mut impl BufRead) -> Result<UdpStats, String> {
         .split_ascii_whitespace()
         .zip(udp_lines[1].split_ascii_whitespace())
         .collect();
-    let udp_stats: HashMap<String, usize> = pairs[1..]
+    let udp_stats: HashMap<String, u64> = pairs[1..]
         .iter()
-        .map(|(label, val)| (label.to_string(), val.parse::<usize>().unwrap()))
+        .map(|(label, val)| (label.to_string(), val.parse::<u64>().unwrap()))
         .collect();
 
     let stats = UdpStats::from_map(&udp_stats);
