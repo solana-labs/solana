@@ -318,6 +318,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
             in_mem.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
             disk.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:297");
+            break;
         }
     }
 
