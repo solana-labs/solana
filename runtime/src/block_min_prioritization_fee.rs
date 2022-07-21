@@ -93,6 +93,10 @@ impl BlockMinPrioritizationFee {
         self.write_lock_fees.get(key).copied()
     }
 
+    pub fn get_account_fees(&self) -> impl Iterator<Item = (&Pubkey, &u64)> {
+        self.write_lock_fees.iter()
+    }
+
     pub fn is_finalized(&self) -> bool {
         self.is_finalized
     }
