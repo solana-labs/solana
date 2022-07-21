@@ -1,5 +1,5 @@
 ---
-title: "Deploying"
+title: "Deploying Programs"
 ---
 
 ![SDK tools](/img/sdk-tools.svg)

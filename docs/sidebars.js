@@ -1,4 +1,76 @@
 module.exports = {
+  developingSidebar: [
+    {
+      type: "doc",
+      id: "developing/programming-model/overview",
+      label: "Overview",
+    },
+    {
+      type: "category",
+      label: "Core Concepts",
+      // collapsed: false,
+      items: [
+        "developing/programming-model/transactions",
+        "developing/programming-model/accounts",
+        "developing/programming-model/calling-between-programs",
+        "developing/programming-model/runtime",
+      ],
+    },
+    {
+      type: "category",
+      label: "Clients",
+      items: [
+        "developing/clients/jsonrpc-api",
+        "developing/clients/javascript-api",
+        "developing/clients/javascript-reference",
+        "developing/clients/rust-api",
+      ],
+    },
+    {
+      type: "category",
+      label: "Writing Programs",
+      items: [
+        "developing/on-chain-programs/overview",
+        "developing/on-chain-programs/developing-rust",
+        "developing/on-chain-programs/developing-c",
+        {
+          type: "doc",
+          label: "Deploying",
+          id: "developing/on-chain-programs/deploying",
+        },
+        {
+          type: "doc",
+          label: "Debugging",
+          id: "developing/on-chain-programs/debugging",
+        },
+        "developing/on-chain-programs/examples",
+        "developing/on-chain-programs/faq",
+      ],
+    },
+    {
+      type: "category",
+      label: "Native Programs",
+      items: [
+        {
+          type: "doc",
+          label: "Overview",
+          id: "developing/runtime-facilities/programs",
+        },
+        "developing/runtime-facilities/sysvars",
+      ],
+    },
+    
+    {
+      type: "category",
+      label: "Local Development",
+      collapsed: false,
+      items: [
+        "developing/test-validator",
+      ]
+    },
+    "developing/backwards-compatibility",
+    "developing/plugins/geyser-plugins"
+  ],
   docs: {
     About: ["introduction", "terminology", "history"],
     Wallets: [
@@ -34,53 +106,6 @@ module.exports = {
       "offline-signing",
       "offline-signing/durable-nonce",
       "cli/usage",
-    ],
-    Developing: [
-      {
-        type: "category",
-        label: "Programming Model",
-        items: [
-          "developing/programming-model/overview",
-          "developing/programming-model/transactions",
-          "developing/programming-model/accounts",
-          "developing/programming-model/runtime",
-          "developing/programming-model/calling-between-programs",
-        ],
-      },
-      {
-        type: "category",
-        label: "Clients",
-        items: [
-          "developing/clients/jsonrpc-api",
-          "developing/clients/javascript-api",
-          "developing/clients/javascript-reference",
-          "developing/clients/rust-api",
-        ],
-      },
-      {
-        type: "category",
-        label: "Runtime Facilities",
-        items: [
-          "developing/runtime-facilities/programs",
-          "developing/runtime-facilities/sysvars",
-        ],
-      },
-      {
-        type: "category",
-        label: "On-chain Programs",
-        items: [
-          "developing/on-chain-programs/overview",
-          "developing/on-chain-programs/developing-rust",
-          "developing/on-chain-programs/developing-c",
-          "developing/on-chain-programs/deploying",
-          "developing/on-chain-programs/debugging",
-          "developing/on-chain-programs/examples",
-          "developing/on-chain-programs/faq",
-        ],
-      },
-      "developing/test-validator",
-      "developing/backwards-compatibility",
-      "developing/plugins/geyser-plugins"
     ],
     Integrating: ["integrations/exchange"],
     Validating: [
