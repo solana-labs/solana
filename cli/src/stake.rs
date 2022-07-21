@@ -21,7 +21,7 @@ use {
         ArgConstant,
     },
     solana_cli_output::{
-        return_signers_with_config, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry,
+        self, return_signers_with_config, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry,
         CliStakeState, CliStakeType, OutputFormat, ReturnSignersConfig,
     },
     solana_client::{
@@ -656,6 +656,16 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Display NUM recent epochs worth of stake history in text mode. 0 for all")
                 )
         )
+        .subcommand(
+            SubCommand::with_name("stake-minimum-delegation")
+                .about("Get the stake minimum delegation amount")
+                .arg(
+                    Arg::with_name("lamports")
+                        .long("lamports")
+                        .takes_value(false)
+                        .help("Display minimum delegation in lamports instead of SOL")
+                )
+        )
     }
 }
 
@@ -1191,6 +1201,16 @@ pub fn parse_show_stake_history(matches: &ArgMatches<'_>) -> Result<CliCommandIn
             use_lamports_unit,
             limit_results,
         },
+        signers: vec![],
+    })
+}
+
+pub fn parse_stake_minimum_delegation(
+    matches: &ArgMatches<'_>,
+) -> Result<CliCommandInfo, CliError> {
+    let use_lamports_unit = matches.is_present("lamports");
+    Ok(CliCommandInfo {
+        command: CliCommand::StakeMinimumDelegation { use_lamports_unit },
         signers: vec![],
     })
 }
@@ -2499,6 +2519,20 @@ pub fn process_delegate_stake(
         let result = rpc_client.send_and_confirm_transaction_with_spinner(&tx);
         log_instruction_custom_error::<StakeError>(result, config)
     }
+}
+
+pub fn process_stake_minimum_delegation(
+    rpc_client: &RpcClient,
+    config: &CliConfig,
+    use_lamports_unit: bool,
+) -> ProcessResult {
+    let stake_minimum_delegation =
+        rpc_client.get_stake_minimum_delegation_with_commitment(config.commitment)?;
+    Ok(solana_cli_output::display::build_balance_message(
+        stake_minimum_delegation,
+        use_lamports_unit,
+        true,
+    ))
 }
 
 #[cfg(test)]
