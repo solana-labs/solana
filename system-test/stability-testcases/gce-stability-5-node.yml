@@ -15,4 +15,4 @@ steps:
       ADDITIONAL_FLAGS: "--dedicated"
       TEST_TYPE: "fixed_duration"
     agents:
-      - "queue=stability-deploy"
+      queue: "stability-deploy"

@@ -17,4 +17,4 @@ steps:
       ADDITIONAL_FLAGS: ""
       TEST_TYPE: "fixed_duration"
     agents:
-      - "queue=aws-deploy"
+      queue: "aws-deploy"
