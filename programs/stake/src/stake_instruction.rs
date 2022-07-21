@@ -3764,7 +3764,7 @@ mod tests {
             epoch: Epoch::MAX,
             ..Clock::default()
         };
-        transaction_accounts[3] = (
+        transaction_accounts[4] = (
             sysvar::clock::id(),
             account::create_account_shared_data_for_test(&clock),
         );
