@@ -10,10 +10,7 @@ use {
     },
     solana_sdk::{
         account::WritableAccount,
-        feature_set::{
-            prevent_calling_precompiles_as_programs,
-            record_instruction_in_transaction_context_push, FeatureSet,
-        },
+        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
         hash::Hash,
         message::SanitizedMessage,
         precompiles::is_precompile,
@@ -93,14 +90,6 @@ impl MessageProcessor {
                 .feature_set
                 .is_active(&prevent_calling_precompiles_as_programs::id())
                 && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id));
-            if is_precompile
-                && !invoke_context
-                    .feature_set
-                    .is_active(&record_instruction_in_transaction_context_push::id())
-            {
-                // Precompiled programs don't have an instruction processor
-                continue;
-            }
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
@@ -140,19 +129,10 @@ impl MessageProcessor {
                 });
             }
 
-            let result = if is_precompile
-                && invoke_context
-                    .feature_set
-                    .is_active(&record_instruction_in_transaction_context_push::id())
-            {
+            let result = if is_precompile {
                 invoke_context
                     .transaction_context
-                    .push(
-                        program_indices,
-                        &instruction_accounts,
-                        &instruction.data,
-                        true,
-                    )
+                    .push(program_indices, &instruction_accounts, &instruction.data)
                     .and_then(|_| invoke_context.transaction_context.pop())
             } else {
                 let mut time = Measure::start("execute_instruction");

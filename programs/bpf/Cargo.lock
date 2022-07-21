@@ -1634,6 +1634,9 @@ name = "hashbrown"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db0d4cf898abf0081f964436dc980e96670a0f36863e4b83aaacdb65c9d7ccc3"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "headers"
@@ -4793,7 +4796,7 @@ dependencies = [
  "either",
  "generic-array 0.14.5",
  "getrandom 0.1.14",
- "hashbrown 0.11.2",
+ "hashbrown 0.12.1",
  "im",
  "lazy_static",
  "log",

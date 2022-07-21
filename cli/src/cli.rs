@@ -416,6 +416,9 @@ pub enum CliCommand {
         derived_address_seed: Option<String>,
         derived_address_program_id: Option<Pubkey>,
     },
+    StakeMinimumDelegation {
+        use_lamports_unit: bool,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -706,6 +709,7 @@ pub fn parse_command(
         }
         ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
+        ("stake-minimum-delegation", Some(matches)) => parse_stake_minimum_delegation(matches),
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
             ("publish", Some(matches)) => {
@@ -1301,6 +1305,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed.as_ref(),
             *fee_payer,
         ),
+        CliCommand::StakeMinimumDelegation { use_lamports_unit } => {
+            process_stake_minimum_delegation(&rpc_client, config, *use_lamports_unit)
+        }
 
         // Validator Info Commands
 

@@ -35,7 +35,7 @@ generic-array = { version = "0.14.5", default-features = false, features = [
 	"more_lengths"
 ] }
 getrandom = { version = "0.1", features = ["dummy"] }
-hashbrown = { version = "0.11", features = ["raw"] }
+hashbrown = { version = "0.12", features = ["raw"] }
 im = { version = "15.1.0", features = ["rayon", "serde"] }
 memmap2 = "0.5.3"
 once_cell = { version = "1.8", features = ["alloc", "default", "race", "std"] }

@@ -219,6 +219,30 @@ fn main() {
                 ),
         )
         .arg(
+            Arg::with_name("account_dir")
+                .long("account-dir")
+                .value_name("DIRECTORY")
+                .validator(|value| {
+                    value
+                        .parse::<PathBuf>()
+                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .and_then(|path| {
+                            if path.exists() && path.is_dir() {
+                                Ok(())
+                            } else {
+                                Err(format!("path does not exist or is not a directory: {}", value))
+                            }
+                        })
+                })
+                .takes_value(true)
+                .multiple(true)
+                .help(
+                    "Load all the accounts from the JSON files found in the specified DIRECTORY \
+                        (see also the `--account` flag). \
+                        If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
             Arg::with_name("no_bpf_jit")
                 .long("no-bpf-jit")
                 .takes_value(false)
@@ -567,6 +591,11 @@ fn main() {
         }
     }
 
+    let accounts_from_dirs: HashSet<_> = matches
+        .values_of("account_dir")
+        .unwrap_or_default()
+        .collect();
+
     let accounts_to_clone: HashSet<_> = pubkeys_of(&matches, "clone_account")
         .map(|v| v.into_iter().collect())
         .unwrap_or_default();
@@ -727,6 +756,7 @@ fn main() {
         .rpc_port(rpc_port)
         .add_programs_with_path(&programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
+        .add_accounts_from_directories(&accounts_from_dirs)
         .deactivate_features(&features_to_deactivate);
 
     if !accounts_to_clone.is_empty() {
