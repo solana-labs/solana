@@ -191,7 +191,6 @@ impl TransactionContext {
         program_accounts: &[usize],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
-        record_instruction_in_transaction_context_push: bool,
     ) -> Result<(), InstructionError> {
         let callee_instruction_accounts_lamport_sum =
             self.instruction_accounts_lamport_sum(instruction_accounts)?;
@@ -224,16 +223,14 @@ impl TransactionContext {
                 }
             }
             if let Some(instruction_trace) = self.instruction_trace.last_mut() {
-                if record_instruction_in_transaction_context_push {
-                    let instruction_context = InstructionContext {
-                        nesting_level: self.instruction_stack.len(),
-                        instruction_accounts_lamport_sum: callee_instruction_accounts_lamport_sum,
-                        program_accounts: program_accounts.to_vec(),
-                        instruction_accounts: instruction_accounts.to_vec(),
-                        instruction_data: instruction_data.to_vec(),
-                    };
-                    instruction_trace.push(instruction_context);
-                }
+                let instruction_context = InstructionContext {
+                    nesting_level: self.instruction_stack.len(),
+                    instruction_accounts_lamport_sum: callee_instruction_accounts_lamport_sum,
+                    program_accounts: program_accounts.to_vec(),
+                    instruction_accounts: instruction_accounts.to_vec(),
+                    instruction_data: instruction_data.to_vec(),
+                };
+                instruction_trace.push(instruction_context);
                 instruction_trace.len().saturating_sub(1)
             } else {
                 return Err(InstructionError::CallDepth);
@@ -296,23 +293,13 @@ impl TransactionContext {
         Ok(())
     }
 
-    /// Used by the runtime when a new CPI instruction begins
-    ///
-    /// Deprecated, automatically done in push()
-    /// once record_instruction_in_transaction_context_push is activated.
-    pub fn record_instruction(&mut self, instruction: InstructionContext) {
-        if let Some(records) = self.instruction_trace.last_mut() {
-            records.push(instruction);
-        }
-    }
-
     /// Returns instruction trace
     pub fn get_instruction_trace(&self) -> &InstructionTrace {
         &self.instruction_trace
     }
 
     /// Calculates the sum of all lamports within an instruction
-    pub fn instruction_accounts_lamport_sum(
+    fn instruction_accounts_lamport_sum(
         &self,
         instruction_accounts: &[InstructionAccount],
     ) -> Result<u128, InstructionError> {
