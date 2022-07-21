@@ -20,9 +20,9 @@ use {
         offline::*,
     },
     solana_cli_output::{
-        display::build_balance_message, return_signers_with_config, CliAccount,
-        CliSignatureVerificationStatus, CliTransaction, CliTransactionConfirmation, OutputFormat,
-        ReturnSignersConfig,
+        display::{build_balance_message, BuildBalanceMessageConfig},
+        return_signers_with_config, CliAccount, CliBalance, CliSignatureVerificationStatus,
+        CliTransaction, CliTransactionConfirmation, OutputFormat, ReturnSignersConfig,
     },
     solana_client::{
         blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
@@ -543,7 +543,16 @@ pub fn process_balance(
         config.pubkey()?
     };
     let balance = rpc_client.get_balance(&pubkey)?;
-    Ok(build_balance_message(balance, use_lamports_unit, true))
+    let balance_output = CliBalance {
+        lamports: balance,
+        config: BuildBalanceMessageConfig {
+            use_lamports_unit,
+            show_unit: true,
+            trim_trailing_zeros: true,
+        },
+    };
+
+    Ok(config.output_format.formatted_string(&balance_output))
 }
 
 pub fn process_confirm(
