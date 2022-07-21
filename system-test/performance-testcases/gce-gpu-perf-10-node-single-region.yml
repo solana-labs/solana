@@ -16,4 +16,4 @@ steps:
       ADDITIONAL_FLAGS: "--dedicated"
       TEST_TYPE: "fixed_duration"
     agents:
-      - "queue=gce-deploy"
+      queue: "gce-deploy"

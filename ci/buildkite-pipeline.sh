@@ -103,7 +103,7 @@ command_step() {
     timeout_in_minutes: $3
     artifact_paths: "log-*.txt"
     agents:
-      - "queue=solana"
+      queue: "solana"
 EOF
 }
 
@@ -182,7 +182,7 @@ all_test_steps() {
     timeout_in_minutes: 35
     artifact_paths: "bpf-dumps.tar.bz2"
     agents:
-      - "queue=gcp"
+      queue: "gcp"
 EOF
   else
     annotate --style info \
@@ -209,7 +209,7 @@ EOF
     timeout_in_minutes: 20
     artifact_paths: "log-*.txt"
     agents:
-      - "queue=cuda"
+      queue: "cuda"
 EOF
   else
     annotate --style info \
@@ -236,7 +236,7 @@ EOF
     name: "downstream-projects"
     timeout_in_minutes: 30
     agents:
-      - "queue=solana"
+      queue: "solana"
 EOF
   else
     annotate --style info \
