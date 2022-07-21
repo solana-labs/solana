@@ -59,7 +59,6 @@ module.exports = {
         "developing/runtime-facilities/sysvars",
       ],
     },
-    
     {
       type: "category",
       label: "Local Development",
