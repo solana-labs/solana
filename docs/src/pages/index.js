@@ -129,7 +129,7 @@ function Home() {
                 </Link>
               </div>
               <div className={clsx("col col--4", styles.feature)}>
-                <Link className="navbar__link" to="cluster/overview">
+                <Link className="navbar__link" to="introduction">
                   <div className="card">
                     <div className="card__header">
                       <h3>

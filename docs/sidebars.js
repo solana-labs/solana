@@ -1,31 +1,92 @@
 module.exports = {
+  introdutionSidebar: [
+    {
+      type: "category",
+      collapsed: false,
+      label: "Introduction to Solana",
+      items: [
+        {
+          type: "doc",
+          id: "introduction",
+          label: "What is Solana?",
+        },
+        {
+          type: "doc",
+          id: "economics_overview",
+          label: "How do the economics work?",
+        },
+        {
+          type: "doc",
+          id: "history",
+          label: "History of Solana",
+        },
+      ],
+    },
+    {
+      type: "category",
+      collapsed: false,
+      label: "Getting started with Solana",
+      items: [
+        {
+          type: "doc",
+          id: "wallet-guide",
+          label: "Wallets",
+        },
+        // This will be the future home of the `staking` page, with the introductory info on what staking on Solana looks like
+        // {
+        //   type: "doc",
+        //   id: "staking",
+        //   label: "Staking",
+        // },
+      ],
+    },
+    {
+      type: "category",
+      collapsed: false,
+      label: "Dive into Solana",
+      items: [
+        "terminology",
+        {
+          type: "link",
+          label: "Developers",
+          href: "developing/programming-model/overview",
+        },
+        {
+          type: "link",
+          label: "Validators",
+          href: "running-validator",
+        },
+        {
+          type: "link",
+          label: "Command Line",
+          href: "cli",
+        },
+      ],
+    },
+  ],
   docs: {
-    About: ["introduction", "terminology", "history"],
-    Wallets: [
-      "wallet-guide",
-      {
-        type: "category",
-        label: "Command-line Wallets",
-        items: [
-          "wallet-guide/cli",
-          "wallet-guide/paper-wallet",
-          {
-            type: "category",
-            label: "Hardware Wallets",
-            items: [
-              "wallet-guide/hardware-wallets",
-              "wallet-guide/hardware-wallets/ledger",
-            ],
-          },
-          "wallet-guide/file-system-wallet",
-        ],
-      },
-      "wallet-guide/support",
-    ],
     Staking: ["staking", "staking/stake-accounts"],
     "Command Line": [
       "cli",
       "cli/install-solana-cli-tools",
+        {
+          type: "category",
+          label: "Command-line Wallets",
+          items: [
+            "wallet-guide/cli",
+            "wallet-guide/paper-wallet",
+            {
+              type: "category",
+              label: "Hardware Wallets",
+              items: [
+                "wallet-guide/hardware-wallets",
+                "wallet-guide/hardware-wallets/ledger",
+              ],
+            },
+            "wallet-guide/file-system-wallet",
+            "wallet-guide/support",
+          ],
+        },
       "cli/conventions",
       "cli/choose-a-cluster",
       "cli/transfer-tokens",
