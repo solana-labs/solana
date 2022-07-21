@@ -43,12 +43,6 @@ jobs:
         run: |
           git checkout ${{ inputs.commit }}
 
-
-      # The Windows build fails without resolver = "2", but including it in Cargo.toml causes
-      # other problems (see PR #26555 and Issue #22603). These lines add resolver = "2" to
-      # Cargo.toml and commit the change to the local build environment before building.
-      # Since the build environment does not persist the changes are discarded after the build
-      # and do not interfere with non-Windows builds.
       - name: Build
         id: build
         shell: bash
@@ -60,12 +54,6 @@ jobs:
           echo "::set-output name=tag::$CI_TAG"
           eval "$(ci/channel-info.sh)"
           echo "::set-output name=channel::$CHANNEL"
-          echo "resolver = \"2\"" >> Cargo.toml
-          echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          git config --global user.email "<>"
-          git config --global user.name "Github Action Bot"
-          git add -u
-          git commit -m "Add resolver=2"
           ci/publish-tarball.sh
 
       - name: Prepare Upload Files
