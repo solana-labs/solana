@@ -42,7 +42,7 @@ base64 = { version = "0.13", features = ["alloc", "std"] }
 curve25519-dalek = { version = "3.2.1", features = ["serde"] }
 itertools = "0.10.1"
 libc = { version = "0.2.126", features = ["extra_traits"] }
-libsecp256k1 = "0.6.0"
+libsecp256k1 = "0.7.1"
 rand = "0.7"
 rand_chacha = { version = "0.2.2", default-features = true, features = ["simd", "std"] }
 tiny-bip39 = "0.8.2"

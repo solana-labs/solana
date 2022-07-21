@@ -5847,7 +5847,7 @@ dependencies = [
  "js-sys",
  "lazy_static",
  "libc",
- "libsecp256k1 0.6.0",
+ "libsecp256k1 0.7.1",
  "log",
  "memoffset",
  "num-derive",
