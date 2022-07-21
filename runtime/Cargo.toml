@@ -69,7 +69,7 @@ name = "solana_runtime"
 [dev-dependencies]
 assert_matches = "1.5.0"
 ed25519-dalek = "=1.0.1"
-libsecp256k1 = "0.6.0"
+libsecp256k1 = "0.7.1"
 rand_chacha = "0.2.2"
 solana-logger = { path = "../logger", version = "=1.11.4" }
 
