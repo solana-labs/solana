@@ -179,6 +179,14 @@ A [program](#program) with the ability to interpret the binary encoding of other
 
 The duration of time for which a [validator](#validator) is unable to [vote](#ledger-vote) on another [fork](#fork).
 
+## mint
+
+Verb. Mint tokens increases the supply and transfers the new tokens to a specific [token account](#token-account).
+
+## mint account
+
+An [account](#account) used to mint tokens to store in a seperate [token account](#token-account).
+
 ## native token
 
 The [token](#token) used to track work done by [nodes](#node) in a cluster.
@@ -296,6 +304,10 @@ The Nth [tick](#tick) in the [ledger](#ledger).
 ## token
 
 A digitally transferable asset.
+
+## token account
+
+An [account](#account) that holds the balance for newly [mint](#minted) token. Each token account is associated with a single [mint account](#mint-account).
 
 ## tps
 
