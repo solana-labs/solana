@@ -33,7 +33,7 @@ fn copy_append_vecs<P: AsRef<Path>>(
     output_dir: P,
 ) -> std::io::Result<UnpackedAppendVecMap> {
     let storage_entries = accounts_db
-        .get_snapshot_storages(Slot::max_value(), None, None)
+        .get_snapshot_storages(Slot::max_value(), None, None, false)
         .0;
     let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
     for storage in storage_entries.iter().flatten() {
@@ -157,7 +157,10 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
         &mut writer,
         &*accounts.accounts_db,
         0,
-        &accounts.accounts_db.get_snapshot_storages(0, None, None).0,
+        &accounts
+            .accounts_db
+            .get_snapshot_storages(0, None, None, false)
+            .0,
     )
     .unwrap();
 
@@ -215,7 +218,7 @@ fn test_bank_serialize_style(
     bank2.squash();
     bank2.force_flush_accounts_cache();
 
-    let snapshot_storages = bank2.get_snapshot_storages(None);
+    let snapshot_storages = bank2.get_snapshot_storages(None, false);
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
     crate::serde_snapshot::bank_to_stream(
@@ -317,7 +320,7 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     slot: Slot,
 ) -> AccountsDb {
     let mut writer = Cursor::new(vec![]);
-    let snapshot_storages = accounts.get_snapshot_storages(slot, None, None).0;
+    let snapshot_storages = accounts.get_snapshot_storages(slot, None, None, false).0;
     accountsdb_to_stream(
         SerdeStyle::Newer,
         &mut writer,
@@ -380,7 +383,7 @@ fn test_extra_fields_eof() {
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
     // Serialize
-    let snapshot_storages = bank.get_snapshot_storages(None);
+    let snapshot_storages = bank.get_snapshot_storages(None, false);
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
     crate::serde_snapshot::bank_to_stream(
@@ -501,7 +504,7 @@ fn test_blank_extra_fields() {
     bank.fee_rate_governor.lamports_per_signature = 7000;
 
     // Serialize, but don't serialize the extra fields
-    let snapshot_storages = bank.get_snapshot_storages(None);
+    let snapshot_storages = bank.get_snapshot_storages(None, false);
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
     crate::serde_snapshot::bank_to_stream_no_extra_fields(
@@ -566,7 +569,7 @@ mod test_bank_serialize {
             .rc
             .accounts
             .accounts_db
-            .get_snapshot_storages(0, None, None)
+            .get_snapshot_storages(0, None, None, false)
             .0;
         // ensure there is a single snapshot storage example for ABI digesting
         assert_eq!(snapshot_storages.len(), 1);

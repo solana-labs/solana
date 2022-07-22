@@ -672,7 +672,9 @@ mod tests {
         };
         minimizer.minimize_accounts_db();
 
-        let snapshot_storages = accounts.get_snapshot_storages(current_slot, None, None).0;
+        let snapshot_storages = accounts
+            .get_snapshot_storages(current_slot, None, None, false)
+            .0;
         assert_eq!(snapshot_storages.len(), 3);
 
         let mut account_count = 0;

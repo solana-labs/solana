@@ -333,6 +333,18 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
+    /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
+    /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
+    pub fn merge_slot_lists_for_test(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>) {
+        let mut slot_list = in_mem.slot_list.write().unwrap();
+
+        for (slot, new_entry) in disk.into_iter() {
+            if !slot_list.iter().any(|(x, _)| x == &slot) {
+                slot_list.push((slot, new_entry));
+            }
+        }
+    }
+
     fn remove_if_slot_list_empty_value(&self, slot_list: SlotSlice<T>) -> bool {
         if slot_list.is_empty() {
             self.stats().inc_delete();
@@ -2012,5 +2024,37 @@ mod tests {
 
         // After the FlushGuard is dropped, the flag will be cleared.
         assert!(!flushing_active.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn test_parallel_merge() {
+        let mut threads = vec![];
+
+        let l = Arc::new(AccountMapEntryInner::new(
+            vec![],
+            1,
+            AccountMapEntryMeta::default(),
+        ));
+
+        for j in 1..20 {
+            let l = Arc::clone(&l);
+            threads.push(thread::spawn(move || {
+                let mut i = 1u64;
+                loop {
+                    // todo
+                    let l2 = vec![(i, i)];
+                    InMemAccountsIndex::merge_slot_lists_for_test(&l, l2);
+                    i += 1;
+
+                    if i % 1000 == 0 {
+                        println!("{} going", j);
+                    }
+                }
+            }))
+        }
+
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 }
