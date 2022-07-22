@@ -6045,6 +6045,7 @@ dependencies = [
 name = "solana-scheduler"
 version = "1.11.4"
 dependencies = [
+ "log",
  "solana-logger 1.11.4",
  "solana-version",
 ]
