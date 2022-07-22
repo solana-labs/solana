@@ -4577,6 +4577,10 @@ export class Connection {
   _wsOnClose(code: number) {
     this._rpcWebSocketConnected = false;
     this._rpcWebSocketGeneration++;
+    if (this._rpcWebSocketIdleTimeout) {
+      clearTimeout(this._rpcWebSocketIdleTimeout);
+      this._rpcWebSocketIdleTimeout = null;
+    }
     if (this._rpcWebSocketHeartbeat) {
       clearInterval(this._rpcWebSocketHeartbeat);
       this._rpcWebSocketHeartbeat = null;
