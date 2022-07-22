@@ -227,7 +227,8 @@ pub fn parse_token(
                 | AuthorityType::FreezeAccount
                 | AuthorityType::TransferFeeConfig
                 | AuthorityType::WithheldWithdraw
-                | AuthorityType::CloseMint => "mint",
+                | AuthorityType::CloseMint
+                | AuthorityType::InterestRate => "mint",
                 AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
             };
             let mut value = json!({
@@ -550,6 +551,12 @@ pub fn parse_token(
                 }),
             })
         }
+        TokenInstruction::InitializeNonTransferableMint => Err(
+            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        ),
+        TokenInstruction::InterestBearingMintExtension => Err(
+            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        ),
     }
 }
 
@@ -563,6 +570,7 @@ pub enum UiAuthorityType {
     TransferFeeConfig,
     WithheldWithdraw,
     CloseMint,
+    InterestRate,
 }
 
 impl From<AuthorityType> for UiAuthorityType {
@@ -575,6 +583,7 @@ impl From<AuthorityType> for UiAuthorityType {
             AuthorityType::TransferFeeConfig => UiAuthorityType::TransferFeeConfig,
             AuthorityType::WithheldWithdraw => UiAuthorityType::WithheldWithdraw,
             AuthorityType::CloseMint => UiAuthorityType::CloseMint,
+            AuthorityType::InterestRate => UiAuthorityType::InterestRate,
         }
     }
 }
@@ -591,6 +600,8 @@ pub enum UiExtensionType {
     DefaultAccountState,
     ImmutableOwner,
     MemoTransfer,
+    NonTransferable,
+    InterestBearingConfig,
 }
 
 impl From<ExtensionType> for UiExtensionType {
@@ -607,6 +618,8 @@ impl From<ExtensionType> for UiExtensionType {
             ExtensionType::DefaultAccountState => UiExtensionType::DefaultAccountState,
             ExtensionType::ImmutableOwner => UiExtensionType::ImmutableOwner,
             ExtensionType::MemoTransfer => UiExtensionType::MemoTransfer,
+            ExtensionType::NonTransferable => UiExtensionType::NonTransferable,
+            ExtensionType::InterestBearingConfig => UiExtensionType::InterestBearingConfig,
         }
     }
 }

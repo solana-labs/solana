@@ -18,6 +18,8 @@ pub enum UiExtension {
     DefaultAccountState(UiDefaultAccountState),
     ImmutableOwner,
     MemoTransfer(UiMemoTransfer),
+    NonTransferable,
+    InterestBearingConfig,
     UnparseableExtension,
 }
 
@@ -50,6 +52,8 @@ pub fn parse_extension<S: BaseState>(
             .get_extension::<extension::memo_transfer::MemoTransfer>()
             .map(|&extension| UiExtension::MemoTransfer(extension.into()))
             .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::NonTransferable => UiExtension::NonTransferable,
+        ExtensionType::InterestBearingConfig => UiExtension::InterestBearingConfig,
     }
 }
 
