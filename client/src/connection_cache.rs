@@ -9,8 +9,14 @@ use {
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::{quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval},
-    solana_streamer::tls_certificates::new_self_signed_tls_certificate_chain,
+    solana_sdk::{
+        pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval,
+    },
+    solana_streamer::{
+        nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
+        streamer::StakedNodes,
+        tls_certificates::new_self_signed_tls_certificate_chain,
+    },
     std::{
         error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
@@ -228,6 +234,8 @@ pub struct ConnectionCache {
     tpu_udp_socket: Arc<UdpSocket>,
     client_certificate: Arc<QuicClientCertificate>,
     use_quic: bool,
+    maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
+    maybe_client_pubkey: Option<Pubkey>,
 }
 
 /// Models the pool of connections
@@ -279,6 +287,15 @@ impl ConnectionCache {
         Ok(())
     }
 
+    pub fn set_staked_nodes(
+        &mut self,
+        staked_nodes: &Arc<RwLock<StakedNodes>>,
+        client_pubkey: &Pubkey,
+    ) {
+        self.maybe_staked_nodes = Some(staked_nodes.clone());
+        self.maybe_client_pubkey = Some(client_pubkey.clone());
+    }
+
     pub fn with_udp(connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
@@ -301,6 +318,24 @@ impl ConnectionCache {
         } else {
             None
         }
+    }
+
+    fn compute_max_parallel_chunks(&self) -> usize {
+        let (client_type, stake, total_stake) =
+            self.maybe_client_pubkey
+                .map_or((ConnectionPeerType::Unstaked, 0, 0), |pubkey| {
+                    self.maybe_staked_nodes.as_ref().map_or(
+                        (ConnectionPeerType::Unstaked, 0, 0),
+                        |stakes| {
+                            let rstakes = stakes.read().unwrap();
+                            rstakes.pubkey_stake_map.get(&pubkey).map_or(
+                                (ConnectionPeerType::Unstaked, 0, rstakes.total_stake),
+                                |stake| (ConnectionPeerType::Staked, *stake, rstakes.total_stake),
+                            )
+                        },
+                    )
+                });
+        compute_max_allowed_uni_streams(client_type, stake, total_stake)
     }
 
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
@@ -335,6 +370,7 @@ impl ConnectionCache {
                 BaseTpuConnection::Quic(Arc::new(QuicClient::new(
                     endpoint.as_ref().unwrap().clone(),
                     *addr,
+                    self.compute_max_parallel_chunks(),
                 )))
             };
 
@@ -534,6 +570,8 @@ impl Default for ConnectionCache {
                 key: priv_key,
             }),
             use_quic: DEFAULT_TPU_USE_QUIC,
+            maybe_staked_nodes: None,
+            maybe_client_pubkey: None,
         }
     }
 }

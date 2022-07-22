@@ -263,15 +263,21 @@ pub struct QuicClient {
     connection: Arc<Mutex<Option<QuicNewConnection>>>,
     addr: SocketAddr,
     stats: Arc<ClientStats>,
+    num_chunks: usize,
 }
 
 impl QuicClient {
-    pub fn new(endpoint: Arc<QuicLazyInitializedEndpoint>, addr: SocketAddr) -> Self {
+    pub fn new(
+        endpoint: Arc<QuicLazyInitializedEndpoint>,
+        addr: SocketAddr,
+        num_chunks: usize,
+    ) -> Self {
         Self {
             endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
             stats: Arc::new(ClientStats::default()),
+            num_chunks,
         }
     }
 
@@ -439,7 +445,7 @@ impl QuicClient {
 
     fn compute_chunk_length(num_buffers_to_chunk: usize, num_chunks: usize) -> usize {
         // The function is equivalent to checked div_ceil()
-        // Also, if num_chunks == 0 || num_buffers_per_chunk == 0, return 1
+        // Also, if num_chunks == 0 || num_buffers_to_chunk == 0, return 1
         num_buffers_to_chunk
             .checked_div(num_chunks)
             .map_or(1, |value| {
@@ -483,8 +489,7 @@ impl QuicClient {
         // by just getting a reference to the NewConnection once
         let connection_ref: &NewConnection = &connection;
 
-        let chunk_len =
-            Self::compute_chunk_length(buffers.len() - 1, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS);
+        let chunk_len = Self::compute_chunk_length(buffers.len() - 1, self.num_chunks);
         let chunks = buffers[1..buffers.len()].iter().chunks(chunk_len);
 
         let futures: Vec<_> = chunks
@@ -528,7 +533,11 @@ impl QuicTpuConnection {
         addr: SocketAddr,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Self {
-        let client = Arc::new(QuicClient::new(endpoint, addr));
+        let client = Arc::new(QuicClient::new(
+            endpoint,
+            addr,
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
+        ));
         Self::new_with_client(client, connection_stats)
     }
 
