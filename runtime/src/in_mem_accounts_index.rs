@@ -574,8 +574,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         reclaim: UpsertReclaim,
     ) {
-        current.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
         let mut slot_list = current.slot_list.write().unwrap();
+        current.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
         let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
             &mut slot_list,
@@ -585,11 +585,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             reclaims,
             reclaim,
         );
-        current.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
         if addref {
             current.add_un_ref(true);
         }
         current.set_dirty(true);
+        current.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
     }
 
     /// modifies slot_list
