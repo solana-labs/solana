@@ -454,6 +454,14 @@ export type GetBlockConfig = {
 };
 
 /**
+ * Configuration object for changing `getStakeMinimumDelegation` query behavior
+ */
+export type GetStakeMinimumDelegationConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+};
+
+/**
  * Configuration object for changing `getBlockHeight` query behavior
  */
 export type GetBlockHeightConfig = {
@@ -4315,6 +4323,25 @@ export class Connection {
     } finally {
       this._pollingBlockhash = false;
     }
+  }
+
+  /**
+   * get the stake minimum delegation
+   */
+  async getStakeMinimumDelegation(
+    config?: GetStakeMinimumDelegationConfig,
+  ): Promise<RpcResponseAndContext<number>> {
+    const {commitment, config: configArg} = extractCommitmentFromConfig(config);
+    const args = this._buildArgs([], commitment, 'base64', configArg);
+    const unsafeRes = await this._rpcRequest('getStakeMinimumDelegation', args);
+    const res = create(unsafeRes, jsonRpcResultAndContext(number()));
+    if ('error' in res) {
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get stake minimum delegation`,
+      );
+    }
+    return res.result;
   }
 
   /**
