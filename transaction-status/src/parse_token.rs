@@ -3,8 +3,8 @@ use {
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
     extension::{
-        default_account_state::*, memo_transfer::*, mint_close_authority::*, reallocate::*,
-        transfer_fee::*,
+        default_account_state::*, interest_bearing_mint::*, memo_transfer::*,
+        mint_close_authority::*, reallocate::*, transfer_fee::*,
     },
     serde_json::{json, Map, Value},
     solana_account_decoder::parse_token::{
@@ -560,9 +560,18 @@ pub fn parse_token(
                 }),
             })
         }
-        TokenInstruction::InterestBearingMintExtension => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
+        TokenInstruction::InterestBearingMintExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_interest_bearing_mint_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
     }
 }
 
