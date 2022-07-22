@@ -432,7 +432,7 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
         ReadAccountMapEntryBuilder {
             owned_entry: account_map_entry,
             slot_list_guard_builder: |lock| {
-                panic!("not expected here");
+                error!("from_account_map_entry");
                 lock.push_slot_list_reader("runtime/src/accounts_index.rs:394");
                 lock.slot_list.read().unwrap()
             },
@@ -446,7 +446,6 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 
     pub fn slot_list(&self) -> &SlotList<T> {
-        panic!("not expected here2");
         self.borrow_keep_track()
             .borrowed
             .store(true, Ordering::Relaxed);
