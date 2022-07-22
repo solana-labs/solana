@@ -527,6 +527,14 @@ impl BankingStage {
             result
         };
 
+        // Iterates buffered packets from high priority to low, places each packet into
+        // forwarding account buckets by calling `forward_packet_batches_by_accounts.add_packet()`.
+        // Iteration stops as soon as `add_packet()` returns false when a packet fails to fit into
+        // buckets, ignoring remaining lower priority packets that could fit.
+        // The motivation of this is during bot spamming, buffer is likely to be filled with
+        // transactions have higher priority and write to same account(s), other lower priority
+        // transactions will not make into buffer, therefore it shall exit as soon as first
+        // transaction failed to fit in forwarding buckets.
         buffered_packet_batches.iter_desc(filter_forwardable_packet);
 
         inc_new_counter_info!(
