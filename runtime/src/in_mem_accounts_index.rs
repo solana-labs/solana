@@ -24,6 +24,8 @@ use {
             atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
+        thread,
+        time::Duration,
     },
 };
 type K = Pubkey;
@@ -290,12 +292,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
-    fn merge_slot_lists(&self, in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>, pubkey: &Pubkey) {
-        Self::update_stat(
-            &self.stats().lazy_disk_index_merged_count,
-            1,
-        );
-        in_mem.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
+    fn merge_slot_lists(
+        &self,
+        in_mem: &AccountMapEntryInner<T>,
+        disk: SlotList<T>,
+        pubkey: &Pubkey,
+    ) {
+        Self::update_stat(&self.stats().lazy_disk_index_merged_count, 1);
         error!("merge_slot_list: {}, {}", in_mem.log_rws(), pubkey);
 
         let mut i = 0;
@@ -304,18 +307,24 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
             if lock.is_err() {
                 i += 1;
-                if i % 100000 == 0 {
+                if i % 1000 == 0 {
                     use log::*;
                     error!("deadlocked");
                 }
+                thread::sleep(Duration::from_millis(1));
                 continue;
             }
+            in_mem.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
             let mut slot_list = lock.unwrap();
 
             for (slot, new_entry) in disk.into_iter() {
-                if !slot_list.iter().any(|(x,_)| x == &slot) {
+                if !slot_list.iter().any(|(x, _)| x == &slot) {
                     slot_list.push((slot, new_entry));
-                    error!("merge slot list after: {}, {:?}", pubkey, slot_list.iter().map(|(slot, _)| slot).collect::<Vec<_>>());
+                    error!(
+                        "merge slot list after: {}, {:?}",
+                        pubkey,
+                        slot_list.iter().map(|(slot, _)| slot).collect::<Vec<_>>()
+                    );
                 }
             }
 
@@ -465,10 +474,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                     if lock.is_err() {
                         i += 1;
-                        if i % 100000 == 0 {
+                        if i % 1000 == 0 {
                             use log::*;
                             error!("deadlocked on {}", pubkey);
                         }
+                        thread::sleep(Duration::from_millis(1));
                         continue;
                     }
                     let mut map = lock.unwrap();
@@ -637,9 +647,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     if found_slot && matched_slot || matched_other_slot && found_other_slot {
                         error!(
                             "FAILED {:?}, slot: {}, other_slot: {:?}",
-                            slot_list,
-                            slot,
-                            other_slot
+                            slot_list, slot, other_slot
                         );
                     }
                     assert!(
