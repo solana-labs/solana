@@ -629,6 +629,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 if matched_slot || Some(*cur_slot) == other_slot {
                     // make sure neither 'slot' nor 'other_slot' are in the slot list more than once
                     let matched_other_slot = !matched_slot;
+                    if found_slot && matched_slot || matched_other_slot && found_other_slot {
+                        error!(
+                            "FAILED {:?}, slot: {}, other_slot: {:?}",
+                            slot_list,
+                            slot,
+                            other_slot
+                        );
+                    }
                     assert!(
                         !(found_slot && matched_slot || matched_other_slot && found_other_slot),
                         "{:?}, slot: {}, other_slot: {:?}",
