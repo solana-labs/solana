@@ -55,6 +55,7 @@ pub struct BucketMapHolderStats {
     pub flush_should_evict_us: AtomicU64,
     pub lazy_disk_index_lookup_set_count: AtomicU64,
     pub lazy_disk_index_lookup_clear_count: AtomicU64,
+    pub lazy_disk_index_merged_count: AtomicU64,
 }
 
 impl BucketMapHolderStats {
@@ -473,6 +474,12 @@ impl BucketMapHolderStats {
                 (
                     "lazy_disk_index_lookup_set_count",
                     self.lazy_disk_index_lookup_set_count
+                        .swap(0, Ordering::Relaxed),
+                    i64
+                ),
+                (
+                    "lazy_disk_index_merged",
+                    self.lazy_disk_index_merged_count
                         .swap(0, Ordering::Relaxed),
                     i64
                 ),
