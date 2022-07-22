@@ -50,7 +50,7 @@
     "react-json-view": "^1.21.3",
     "react-moment": "^1.1.1",
     "react-router-dom": "^5.3.0",
-    "react-scripts": "^4.0.3",
+    "react-scripts": "^5.0.1",
     "react-select": "^4.3.1",
     "sass": "^1.53.0",
     "superstruct": "^0.15.3",
