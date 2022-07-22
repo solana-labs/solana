@@ -725,18 +725,7 @@ impl BankingStage {
                             max_tx_ingestion_ns,
                         )
                     {
-                        let poh_recorder_lock_time = {
-                            let (_poh_recorder_locked, poh_recorder_lock_time) =
-                                measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
-
-                            reached_end_of_slot = true;
-                            poh_recorder_lock_time
-                        };
-
-                        slot_metrics_tracker
-                            .increment_consume_buffered_packets_poh_recorder_lock_us(
-                                poh_recorder_lock_time.as_us(),
-                            );
+                        reached_end_of_slot = true;
                     }
 
                     // The difference between all transactions passed to execution and the ones that
@@ -787,16 +776,7 @@ impl BankingStage {
                 } else {
                     // mark as end-of-slot to avoid aggressively lock poh for the remaining for
                     // packet batches in buffer
-                    let poh_recorder_lock_time = {
-                        let (_poh_recorder_locked, poh_recorder_lock_time) =
-                            measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
-
-                        reached_end_of_slot = true;
-                        poh_recorder_lock_time
-                    };
-                    slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
-                        poh_recorder_lock_time.as_us(),
-                    );
+                    reached_end_of_slot = true;
 
                     packets_to_process
                 }
