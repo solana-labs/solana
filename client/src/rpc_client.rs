@@ -155,13 +155,10 @@ pub struct RpcClient {
     runtime: Arc<tokio::runtime::Runtime>,
 }
 
-pub struct RuntimeWrapper {
-    runtime: Arc<tokio::runtime::Runtime>,
-}
-
 impl Drop for RpcClient {
     fn drop(&mut self) {
-        self.runtime.shutdown_background();
+        //todo: figure out what do do about thiss
+        //self.runtime.shutdown_background();
     }
 }
 

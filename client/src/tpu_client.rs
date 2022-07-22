@@ -4,7 +4,6 @@ use {
         connection_cache::ConnectionCache,
         nonblocking::tpu_client::TpuClient as NonblockingTpuClient, rpc_client::RpcClient,
     },
-    lazy_static::lazy_static,
     solana_sdk::{
         clock::Slot,
         message::Message,
@@ -109,7 +108,7 @@ impl TpuClient {
             _deprecated: UdpSocket::bind("0.0.0.0:0").unwrap(),
             rpc_client,
             tpu_client: Arc::new(tpu_client),
-            runtime
+            runtime,
         })
     }
 
@@ -120,7 +119,6 @@ impl TpuClient {
         config: TpuClientConfig,
         connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
-
         let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
             rpc_client.get_nonblocking_client(),
             websocket_url,
@@ -136,7 +134,7 @@ impl TpuClient {
             _deprecated: UdpSocket::bind("0.0.0.0:0").unwrap(),
             rpc_client,
             tpu_client: Arc::new(tpu_client),
-            runtime
+            runtime,
         })
     }
 
@@ -149,7 +147,8 @@ impl TpuClient {
         let send_and_confirm_messages_with_spinner = self
             .tpu_client
             .send_and_confirm_messages_with_spinner(messages, signers);
-        self.runtime.block_on(send_and_confirm_messages_with_spinner)
+        self.runtime
+            .block_on(send_and_confirm_messages_with_spinner)
     }
 
     pub fn rpc_client(&self) -> &RpcClient {
