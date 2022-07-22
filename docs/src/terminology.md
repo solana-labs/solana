@@ -307,7 +307,7 @@ A digitally transferable asset.
 
 ## token account
 
-An [account](#account) that holds the balance for newly [mint](#minted) token. Each token account is associated with a single [mint account](#mint-account).
+An [account](#account) that holds the balance for newly [mint](#mint)ed [token](#token)s. Each token account is associated with a single [mint account](#mint-account).
 
 ## tps
 
