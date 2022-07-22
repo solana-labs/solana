@@ -444,6 +444,16 @@ export type GetBalanceConfig = {
 };
 
 /**
+ * Configuration object for changing `getBlock` query behavior
+ */
+export type GetBlockConfig = {
+  /** The level of finality desired */
+  commitment?: Finality;
+  /** The max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned */
+  maxSupportedTransactionVersion?: number;
+};
+
+/**
  * Configuration object for changing `getBlockHeight` query behavior
  */
 export type GetBlockHeightConfig = {
@@ -503,6 +513,16 @@ export type GetSlotLeaderConfig = {
   commitment?: Commitment;
   /** The minimum slot that the request can be evaluated at */
   minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getTransaction` query behavior
+ */
+export type GetTransactionConfig = {
+  /** The level of finality desired */
+  commitment?: Finality;
+  /** The max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned */
+  maxSupportedTransactionVersion?: number;
 };
 
 /**
@@ -3592,11 +3612,14 @@ export class Connection {
    */
   async getBlock(
     slot: number,
-    opts?: {commitment?: Finality},
+    rawConfig?: GetBlockConfig,
   ): Promise<BlockResponse | null> {
+    const {commitment, config} = extractCommitmentFromConfig(rawConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [slot],
-      opts && opts.commitment,
+      commitment as Finality,
+      undefined /* encoding */,
+      config,
     );
     const unsafeRes = await this._rpcRequest('getBlock', args);
     const res = create(unsafeRes, GetBlockRpcResult);
@@ -3684,11 +3707,14 @@ export class Connection {
    */
   async getTransaction(
     signature: string,
-    opts?: {commitment?: Finality},
+    rawConfig?: GetTransactionConfig,
   ): Promise<TransactionResponse | null> {
+    const {commitment, config} = extractCommitmentFromConfig(rawConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [signature],
-      opts && opts.commitment,
+      commitment as Finality,
+      undefined /* encoding */,
+      config,
     );
     const unsafeRes = await this._rpcRequest('getTransaction', args);
     const res = create(unsafeRes, GetTransactionRpcResult);
