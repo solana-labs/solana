@@ -392,7 +392,7 @@ Returns identity and transaction information about a confirmed block in the ledg
   - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
   - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
-  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested block contains a transaction with a higher version, an error will be returned.
+  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested block contains a transaction with a higher version, an error will be returned. If this parameter is omitted, only legacy transactions will be returned, and a block containing any versioned transaction will prompt the error.
 
 #### Results:
 
@@ -2923,7 +2923,7 @@ Returns transaction details for a confirmed transaction
   - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json".
     "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
-  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned.
+  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned. If this parameter is omitted, only legacy transactions will be returned, and any versioned transaction will prompt the error.
 
 #### Results:
 
