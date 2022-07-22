@@ -249,6 +249,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic_enum"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a57588a20357c74ee9036656b7fad5c54328ee8657c6ff29ba31fd5ea503a1c"
+dependencies = [
+ "proc-macro2 1.0.38",
+ "quote 1.0.18",
+ "syn 1.0.93",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5512,8 +5523,10 @@ dependencies = [
  "solana-ledger",
  "solana-logger 1.11.5",
  "solana-measure",
+ "solana-metrics",
  "solana-runtime",
  "solana-sdk 1.11.5",
+ "solana-scheduler",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-transaction-status",
@@ -6041,6 +6054,24 @@ dependencies = [
  "tempfile",
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "solana-scheduler"
+version = "1.11.4"
+dependencies = [
+ "atomic_enum",
+ "crossbeam-channel",
+ "log",
+ "rand 0.7.3",
+ "sha2 0.10.2",
+ "solana-entry",
+ "solana-logger 1.11.4",
+ "solana-measure",
+ "solana-metrics",
+ "solana-runtime",
+ "solana-sdk 1.11.4",
+ "solana-version",
 ]
 
 [[package]]

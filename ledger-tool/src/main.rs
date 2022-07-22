@@ -52,6 +52,7 @@ use {
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
+    solana_scheduler::{AddressBook, ScheduleStage, TaskQueue, Weight, LockAttempt, RequestedUsage},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -140,9 +141,12 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
+    to_schedule_stage: &mut Vec<Box<(SanitizedTransaction, Vec<LockAttempt>)>>,
+    skip_voting: bool,
 ) {
     match method {
         LedgerOutputMethod::Print => {
+            /*
             println!(
                 "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
                 entry_index,
@@ -150,8 +154,33 @@ fn output_entry(
                 entry.hash,
                 entry.transactions.len()
             );
+            */
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
-                println!("    Transaction {}", transactions_index);
+                //println!("    Transaction {}", transactions_index);
+                let sanitized_tx = SanitizedTransaction::try_create(
+                    transaction.clone(),
+                    MessageHash::Compute,
+                    None,
+                    SimpleAddressLoader::Disabled,
+                    true, // require_static_program_ids
+                )
+                .unwrap();
+                if !skip_voting
+                    || !solana_runtime::vote_parser::is_simple_vote_transaction(&sanitized_tx)
+                {
+                    let locks = sanitized_tx.get_account_locks().unwrap();
+                    let writable_lock_iter = locks
+                        .writable
+                        .iter()
+                        .map(|address| LockAttempt::new(**address, RequestedUsage::Writable));
+                    let readonly_lock_iter = locks
+                        .readonly
+                        .iter()
+                        .map(|address| LockAttempt::new(**address, RequestedUsage::Readonly));
+                    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+                    to_schedule_stage.push(Box::new((sanitized_tx, locks)));
+                }
+                /*
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
@@ -171,6 +200,7 @@ fn output_entry(
                     None,
                     None,
                 );
+                */
             }
         }
         LedgerOutputMethod::Json => {
@@ -219,10 +249,149 @@ fn output_slot(
         }
     }
 
+    let (muxed_sender, muxed_receiver) = crossbeam_channel::unbounded();
+
+    // this should be target number of saturated cpu cores
+    let lane_count = std::env::var("EXECUTION_LANE_COUNT")
+        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
+        .parse::<usize>()
+        .unwrap();
+    let lane_channel_factor = std::env::var("LANE_CHANNEL_FACTOR")
+        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
+        .parse::<usize>()
+        .unwrap();
+    //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
+    let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
+
+    //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
+    //let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
+    //
+    let (post_schedule_env_sender, post_schedule_env_receiver) = crossbeam_channel::unbounded();
+    let mut runnable_queue = TaskQueue::default();
+    let mut contended_queue = TaskQueue::default();
+    let mut address_book = AddressBook::default();
+    let t1 = std::thread::Builder::new()
+        .name("sol-scheduler".to_string())
+        .spawn(move || loop {
+            ScheduleStage::run(
+                lane_count * lane_channel_factor,
+                &mut runnable_queue,
+                &mut contended_queue,
+                &mut address_book,
+                &muxed_receiver,
+                &pre_execute_env_sender,
+                &post_schedule_env_sender,
+            );
+        })
+        .unwrap();
+    let handles = (0..lane_count)
+        .map(|thx| {
+            let pre_execute_env_receiver = pre_execute_env_receiver.clone();
+            let muxed_sender = muxed_sender.clone();
+
+            let t2 = std::thread::Builder::new()
+                .name(format!("blockstore_processor_{}", thx))
+                .spawn(move || {
+                    use solana_metrics::datapoint_info;
+                    let current_thread_name = std::thread::current().name().unwrap().to_string();
+                    let send_metrics = std::env::var("SEND_METRICS").is_ok();
+
+                    for step in 0.. {
+                        let ee = pre_execute_env_receiver.recv().unwrap();
+                        if step % 1966 == 0 {
+                            error!("executing!: {} {}", step, pre_execute_env_receiver.len());
+                        }
+
+                        if send_metrics {
+                            let mut process_message_time = Measure::start("process_message_time");
+                            let sig = ee.task.tx.0.signature().to_string();
+                            trace!("execute substage: #{} {:#?}", step, &sig);
+                            std::thread::sleep(std::time::Duration::from_micros(
+                                ee.cu.try_into().unwrap(),
+                            ));
+
+                            process_message_time.stop();
+                            let duration_with_overhead = process_message_time.as_us();
+
+                            datapoint_info!(
+                                "individual_tx_stats",
+                                ("slot", 33333, i64),
+                                ("thread", current_thread_name, String),
+                                ("signature", &sig, String),
+                                ("account_locks_in_json", "{}", String),
+                                ("status", "Ok", String),
+                                ("duration", duration_with_overhead, i64),
+                                ("compute_units", ee.cu, i64),
+                            );
+                        }
+
+                        muxed_sender
+                            .send(solana_scheduler::MultiplexedPayload::FromExecute(ee))
+                            .unwrap();
+                    }
+                })
+                .unwrap();
+            t2
+        })
+        .collect::<Vec<_>>();
+
+    let depth = Arc::new(std::sync::atomic::AtomicUsize::default());
+
+    let d = depth.clone();
+    let t3 = std::thread::Builder::new()
+        .name("sol-consumer".to_string())
+        .spawn(move || {
+            for step in 0.. {
+                let ee = post_schedule_env_receiver.recv().unwrap();
+                d.fetch_sub(1, Ordering::Relaxed);
+                trace!(
+                    "post schedule stage: #{} {:#?}",
+                    step,
+                    ee.task.tx.0.signature()
+                );
+                if step % 1966 == 0 {
+                    error!("finished!: {} {}", step, post_schedule_env_receiver.len());
+                }
+            }
+        })
+        .unwrap();
+
     if verbose_level >= 2 {
+        let mut txes = Vec::new();
+        let skip_voting = std::env::var("SKIP_VOTING").is_ok();
         for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry);
+            output_entry(
+                blockstore,
+                method,
+                slot,
+                entry_index,
+                entry,
+                &mut txes,
+                skip_voting,
+            );
         }
+
+        let mut weight = 10_000_000;
+        for i in 0..10000 {
+            error!("started!: {} {}", i, txes.len());
+            for tx in txes.clone() {
+                while depth.load(Ordering::Relaxed) > 10_000 {
+                    std::thread::sleep(std::time::Duration::from_micros(10));
+                }
+
+                muxed_sender
+                    .send(solana_scheduler::MultiplexedPayload::FromPrevious((
+                        Weight { ix: weight },
+                        tx,
+                    )))
+                    .unwrap();
+                depth.fetch_add(1, Ordering::Relaxed);
+                weight -= 1;
+            }
+        }
+        t1.join().unwrap();
+        handles.into_iter().for_each(|t| t.join().unwrap());
+        t3.join().unwrap();
 
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {

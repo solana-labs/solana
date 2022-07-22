@@ -65,6 +65,7 @@ members = [
     "rpc-test",
     "runtime",
     "runtime/store-tool",
+    "scheduler",
     "sdk",
     "sdk/cargo-build-bpf",
     "sdk/cargo-build-sbf",
