@@ -243,7 +243,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // so, we have to load from disk first, then merge with in-mem
                     // right now we have a read lock on the in-mem idx, fwiw
                     if let Some(disk_entry) = self.load_from_disk(pubkey) {
-                        Self::merge_slot_lists(entry, disk_entry.0);
+                        Self::merge_slot_lists(entry, disk_entry.0, pubkey);
                     }
                     entry.clear_lazy_disk_load();
                     Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
@@ -266,7 +266,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     Entry::Occupied(occupied) => {
                         let entry = occupied.get();
                         if entry.lazy_disk_load() {
-                            Self::merge_slot_lists(entry, disk_entry.0);
+                            Self::merge_slot_lists(entry, disk_entry.0, pubkey);
 
                             entry.clear_lazy_disk_load();
                             Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
@@ -290,9 +290,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
-    fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>) {
+    fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>, pubkey: &Pubkey) {
         in_mem.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
-        error!("merge_slot_list: {}", in_mem.log_rws());
+        error!("merge_slot_list: {}, {}", in_mem.log_rws(), pubkey);
 
         let mut i = 0;
         loop {
@@ -311,6 +311,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             for (slot, new_entry) in disk.into_iter() {
                 if !slot_list.iter().any(|(x,_)| x == &slot) {
                     slot_list.push((slot, new_entry));
+                    error!("merge slot list after: {}, {:?}", pubkey, slot_list.iter().map(|(slot, _)| slot).collect::<Vec<_>>());
                 }
             }
 
@@ -342,7 +343,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let entry = occupied.get();
                     let key = occupied.key();
                     if let Some((disk_entry, _)) = self.load_from_disk(key) {
-                        Self::merge_slot_lists(entry, disk_entry);
+                        Self::merge_slot_lists(entry, disk_entry, key);
                     }
                     entry.clear_lazy_disk_load();
                     Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
@@ -1247,7 +1248,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // check to see if needed to lazy disk index before flushing.
                             if v.lazy_disk_load() {
                                 if let Some((disk_entry, _)) = self.load_from_disk(k) {
-                                    Self::merge_slot_lists(&v, disk_entry);
+                                    Self::merge_slot_lists(&v, disk_entry, k);
                                 }
                                 v.clear_lazy_disk_load();
                                 Self::update_stat(
