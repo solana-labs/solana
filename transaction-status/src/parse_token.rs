@@ -551,9 +551,15 @@ pub fn parse_token(
                 }),
             })
         }
-        TokenInstruction::InitializeNonTransferableMint => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
-        ),
+        TokenInstruction::InitializeNonTransferableMint => {
+            check_num_token_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeNonTransferableMint".to_string(),
+                info: json!({
+                    "mint": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
         TokenInstruction::InterestBearingMintExtension => Err(
             ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
         ),
