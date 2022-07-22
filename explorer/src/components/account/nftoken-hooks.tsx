@@ -1,6 +1,7 @@
-import { NftokenFetcher, NftokenTypes } from "@glow-xyz/nftoken-js";
 import useSWR, { SWRResponse } from "swr";
 import { useCluster } from "../../providers/cluster";
+import { NftokenFetcher } from "../../utils/nftoken";
+import { NftokenTypes } from "../../utils/nftoken-types";
 
 export const useCollectionNfts = ({
   collectionAddress,

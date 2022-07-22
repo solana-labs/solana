@@ -1,11 +1,11 @@
-import { NftokenTypes } from "@glow-xyz/nftoken-js";
 import "bootstrap/dist/js/bootstrap.min.js";
 import React from "react";
 import { Account } from "../../providers/accounts";
 import {
   parseNFTokenCollectionAccount,
   parseNFTokenNFTAccount,
-} from "../../providers/accounts/utils/isNFTokenAccount";
+} from "../../utils/nftoken-parsers.ts/isNFTokenAccount";
+import { NftokenTypes } from "../../utils/nftoken-types";
 import { InfoTooltip } from "../common/InfoTooltip";
 import { CachedImageContent } from "../common/NFTArt";
 import { useNftokenMetadata } from "./nftoken-hooks";
@@ -30,7 +30,7 @@ export function NFTokenAccountHeader({ account }: { account: Account }) {
   );
 }
 
-export function NFTokenNFTHeader({ nft }: { nft: NftokenTypes.Nft }) {
+export function NFTokenNFTHeader({ nft }: { nft: NftokenTypes.NftAccount }) {
   const { data: metadata } = useNftokenMetadata(nft.metadata_url);
 
   return (
@@ -71,7 +71,7 @@ export function NFTokenNFTHeader({ nft }: { nft: NftokenTypes.Nft }) {
 export function NFTokenCollectionHeader({
   collection,
 }: {
-  collection: NftokenTypes.Collection;
+  collection: NftokenTypes.CollectionAccount;
 }) {
   const { data: metadata } = useNftokenMetadata(collection.metadata_url);
 

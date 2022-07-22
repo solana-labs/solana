@@ -1,4 +1,3 @@
-import { NFTOKEN_ADDRESS } from "@glow-xyz/nftoken-js";
 import { PublicKey } from "@solana/web3.js";
 import { AnchorAccountCard } from "components/account/AnchorAccountCard";
 import { AnchorProgramCard } from "components/account/AnchorProgramCard";
@@ -48,10 +47,11 @@ import { clusterPath } from "utils/url";
 import { NFTokenAccountHeader } from "../components/account/NFTokenAccountHeader";
 import { NFTokenAccountSection } from "../components/account/NFTokenAccountSection";
 import { NFTokenCollectionNFTGrid } from "../components/account/NFTokenCollectionNFTGrid";
+import {NFTOKEN_ADDRESS} from "../utils/nftoken";
 import {
   isNFTokenAccount,
   parseNFTokenCollectionAccount,
-} from "../providers/accounts/utils/isNFTokenAccount";
+} from "../utils/nftoken-parsers.ts/isNFTokenAccount";
 
 const IDENTICON_WIDTH = 64;
 

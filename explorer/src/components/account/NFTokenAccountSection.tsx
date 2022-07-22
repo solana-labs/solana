@@ -1,4 +1,3 @@
-import { NftokenTypes } from "@glow-xyz/nftoken-js";
 import { PublicKey } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 import { TableCardBody } from "components/common/TableCardBody";
@@ -11,7 +10,8 @@ import { useEffect, useState } from "react";
 import {
   parseNFTokenCollectionAccount,
   parseNFTokenNFTAccount,
-} from "../../providers/accounts/utils/isNFTokenAccount";
+} from "../../utils/nftoken-parsers.ts/isNFTokenAccount";
+import { NftokenTypes } from "../../utils/nftoken-types";
 import { MAX_TIME_LOADING_IMAGE, useCachedImage } from "../common/NFTArt";
 import { useCollectionNfts, useNftokenMetadata } from "./nftoken-hooks";
 import { UnknownAccountCard } from "./UnknownAccountCard";
@@ -30,7 +30,7 @@ export function NFTokenAccountSection({ account }: { account: Account }) {
   return <UnknownAccountCard account={account} />;
 }
 
-const NFTCard = ({ nft }: { nft: NftokenTypes.Nft }) => {
+const NFTCard = ({ nft }: { nft: NftokenTypes.NftAccount }) => {
   const fetchInfo = useFetchAccountInfo();
   const refresh = () => fetchInfo(new PublicKey(nft.address));
 
@@ -210,7 +210,7 @@ export const NftokenImage = ({
 const CollectionCard = ({
   collection,
 }: {
-  collection: NftokenTypes.Collection;
+  collection: NftokenTypes.CollectionAccount;
 }) => {
   const fetchInfo = useFetchAccountInfo();
   const refresh = () => fetchInfo(new PublicKey(collection.address));
