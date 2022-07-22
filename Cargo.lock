@@ -6042,6 +6042,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-scheduler"
+version = "1.11.4"
+dependencies = [
+ "solana-logger 1.11.4",
+ "solana-version",
+]
+
+[[package]]
 name = "solana-sdk"
 version = "1.10.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
