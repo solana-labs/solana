@@ -3739,12 +3739,15 @@ export class Connection {
    */
   async getParsedTransaction(
     signature: TransactionSignature,
-    commitment?: Finality,
+    commitmentOrConfig?: GetTransactionConfig | Finality,
   ): Promise<ParsedConfirmedTransaction | null> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [signature],
-      commitment,
+      commitment as Finality,
       'jsonParsed',
+      config,
     );
     const unsafeRes = await this._rpcRequest('getTransaction', args);
     const res = create(unsafeRes, GetParsedTransactionRpcResult);
@@ -3759,13 +3762,16 @@ export class Connection {
    */
   async getParsedTransactions(
     signatures: TransactionSignature[],
-    commitment?: Finality,
+    commitmentOrConfig?: GetTransactionConfig | Finality,
   ): Promise<(ParsedConfirmedTransaction | null)[]> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const batch = signatures.map(signature => {
       const args = this._buildArgsAtLeastConfirmed(
         [signature],
-        commitment,
+        commitment as Finality,
         'jsonParsed',
+        config,
       );
       return {
         methodName: 'getTransaction',
@@ -3791,10 +3797,17 @@ export class Connection {
    */
   async getTransactions(
     signatures: TransactionSignature[],
-    commitment?: Finality,
+    commitmentOrConfig?: GetTransactionConfig | Finality,
   ): Promise<(TransactionResponse | null)[]> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const batch = signatures.map(signature => {
-      const args = this._buildArgsAtLeastConfirmed([signature], commitment);
+      const args = this._buildArgsAtLeastConfirmed(
+        [signature],
+        commitment as Finality,
+        undefined /* encoding */,
+        config,
+      );
       return {
         methodName: 'getTransaction',
         args,
