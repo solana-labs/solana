@@ -1012,7 +1012,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// This causes non-determinism in cache contents per validator.
     fn random_chance_of_eviction() -> bool {
         // random eviction
-        const N: usize = 1000;
+        const N: usize = 10;
         // 1/N chance of eviction
         thread_rng().gen_range(0, N) == 0
     }
