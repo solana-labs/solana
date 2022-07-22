@@ -44,7 +44,7 @@ Once approved, continue to submit PRs that implement the proposal. When the impl
 After a proposal has been fully implemented into the Solana architecture, a PR should be created to perform the following:
 
 1. Move the newly implemented proposal file from `docs/src/proposals` to `docs/src/implemented-proposals`
-2. Create a new redirect in the `publishp-docs.sh` to 
+2. Create a new redirect in the `publishp-docs.sh` to redirect the old `accepted` proposal page to the new `implemented-proposal` page
 3. Publish the PR
 
 >**NOTE:** Moving the proposal document into the `implemented-proposals` directory will **automatically** move the link in the "Accepted Proposals" table of contents sidebar to the "Implemented Proposals" sidebar.

@@ -1,7 +1,6 @@
 module.exports = {
   "Design Proposals": [
     "proposals",
-    
     {
       type: "category",
       label: "Accepted Proposals",
