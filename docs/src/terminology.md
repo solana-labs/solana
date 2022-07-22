@@ -181,11 +181,11 @@ The duration of time for which a [validator](#validator) is unable to [vote](#le
 
 ## mint
 
-Verb. Mint tokens increases the supply and transfers the new tokens to a specific [token account](#token-account).
+Verb. Minting tokens increases the supply of the tokens and transfers the new tokens to a specific [token account](#token-account).
 
 ## mint account
 
-An [account](#account) used to mint tokens to store in a seperate [token account](#token-account).
+An [account](#account) used to [mint](#mint) tokens to store in a separate [token account](#token-account).
 
 ## native token
 
