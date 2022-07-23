@@ -34,7 +34,7 @@ fn main() {
         let r2 = r2.clone();
         std::thread::spawn(move || {
             let mut i = 0;
-            for _ in 0..6 {//000000 {
+            for _ in 0..60 {//000000 {
             //loop {
                 let ss = (thx, i, r2.recv().unwrap());
                 let mut hasher = Sha256::default();
@@ -54,7 +54,7 @@ fn main() {
         let mut count = 0;
         let start = std::time::Instant::now();
         let mut rrr = Vec::with_capacity(10);
-        for _ in 0..100 {
+        for _ in 0..10 {
         //loop {
             let rr = r.recv().unwrap();
             rrr.push((rr.2.0.elapsed(), rr));
