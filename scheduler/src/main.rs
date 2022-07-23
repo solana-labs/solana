@@ -19,8 +19,8 @@ fn main() {
             let mut i = 0;
             //for _ in 0..6000000 {
             loop {
-                let ss = r2.recv().unwrap();
-                s.send(ss).unwrap((thx, i, ss));
+                let ss = (thx, i, r2.recv().unwrap());
+                s.send(ss).unwrap();
                 i += 1;
             }
         })
