@@ -2,7 +2,7 @@ use log::*;
 use crossbeam_channel::bounded;
 use crossbeam_channel::unbounded;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct ExecutionEnvironment {
     accounts: Vec<i8>,
 }
