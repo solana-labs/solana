@@ -21,6 +21,11 @@ fn main() {
             //for _ in 0..6000000 {
             loop {
                 let ss = (thx, i, r2.recv().unwrap());
+                let mut hasher = Sha256::default();
+                for i in (0_usize..ss.2.cu) {
+                    hasher.update(i.to_le_bytes());
+                }
+                hasher.finalize()
                 s.send(ss).unwrap();
                 i += 1;
             }
