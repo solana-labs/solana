@@ -11,10 +11,11 @@ fn main() {
     solana_logger::setup();
     error!("hello");
     let (s, r) = bounded(1000);
-    let (s2, r2) = &bounded(20);
+    let (s2, r2) = bounded(20);
 
     let mut joins = (0..3).map(|thx| {
         let s = s.clone();
+        let r2 = r2.clone();
         std::thread::spawn(move || {
             let mut i = 0;
             //for _ in 0..6000000 {
