@@ -13,7 +13,7 @@ fn main() {
     let (s, r) = unbounded();
 
     let mut joins = (0..10).map(|_| {
-        std::thread::spawn(move || {
+        std::thread::spawn(|| {
             loop {
                 s.clone().send(ExecutionEnvironment::default()).unwrap();
             }
