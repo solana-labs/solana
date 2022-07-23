@@ -30,7 +30,7 @@ fn main() {
             r.recv().unwrap();
             count += 1;
             if count % 1_000_000 == 0 {
-                error!("recv-ed: {}", count / start.elapsed().as_secs());
+                error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
             }
         }
     }));
