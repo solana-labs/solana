@@ -36,6 +36,7 @@ fn main() {
         let s = s.clone();
         let r2 = r2.clone();
         std::thread::Builder::new().name(format!("blockstore_processor_{}", thx)).spawn(move || {
+            let current_thread_name = std::thread::current().name().unwrap().to_string();
             let mut i = 0;
             for _ in 0..60 {//000000 {
             //loop {
@@ -56,6 +57,7 @@ fn main() {
 
                 datapoint_info!(
                     "individual_tx_stats",
+                    ("thread", current_thread_name, String),
                     ("duration", duration_with_overhead, i64),
                 );
                 s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
