@@ -15,7 +15,7 @@ fn main() {
     let mut joins = (0..10).map(|_| {
         std::thread::spawn(move || {
             loop {
-                s.send(ExecutionEnvironment::default()).unwrap();
+                s.clone().send(ExecutionEnvironment::default()).unwrap();
             }
         })
     }).collect::<Vec<_>>();
