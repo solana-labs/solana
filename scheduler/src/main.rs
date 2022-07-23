@@ -2,6 +2,7 @@ use log::*;
 use crossbeam_channel::bounded;
 use crossbeam_channel::unbounded;
 use sha2::{Digest, Sha256};
+use rand::Rng;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
@@ -22,8 +23,9 @@ fn main() {
     let (s2, r2) = bounded(20);
 
     let p = std::thread::spawn(move || {
+        let mut rng = rand::thread_rng();
         loop {
-            s2.send((std::time::Instant::now(), ExecutionEnvironment::new(0))).unwrap();
+            s2.send((std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0..1000)))).unwrap();
         }
     });
 
