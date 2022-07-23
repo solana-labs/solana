@@ -50,7 +50,7 @@ When blockstore receives a new shred `s`, there are two cases:
 
 1. Replay stage replays entries from blockstore, keeping track of the number of
    ticks it has seen per slot, and verifying there are `hashes_per_tick` number of
-   hashes between ticcks. After the tick from this last shred has been played,
+   hashes between ticks. After the tick from this last shred has been played,
    replay stage then checks the total number of ticks.
 
 Failure scenario 1: If ever there are two consecutive ticks between which the
