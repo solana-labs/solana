@@ -38,8 +38,8 @@ fn main() {
         std::thread::Builder::new().name(format!("blockstore_processor_{}", thx)).spawn(move || {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
             let mut i = 0;
-            for _ in 0..60 {//000000 {
-            //loop {
+            //for _ in 0..60 {//000000 {
+            loop {
                 let ss = (thx, i, r2.recv().unwrap());
 
                 let mut process_message_time = Measure::start("process_message_time");
@@ -72,15 +72,15 @@ fn main() {
         let mut count = 0;
         let start = std::time::Instant::now();
         let mut rrr = Vec::with_capacity(10);
-        for _ in 0..100 {
-        //loop {
+        //for _ in 0..100 {
+        loop {
             let rr = r.recv().unwrap();
-            rrr.push((rr.0.2.0.elapsed(), rr));
-        }
+        //    rrr.push((rr.0.2.0.elapsed(), rr));
+        //}
 
-        for rr in rrr {
+        //for rr in rrr {
             count += 1;
-            error!("recv-ed: {:?}", &rr);
+            //error!("recv-ed: {:?}", &rr);
             if count % 100_000 == 0 {
                 error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
                 //break
