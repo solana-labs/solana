@@ -15,9 +15,14 @@ fn main() {
     let mut joins = (0..10).map(|_| {
         let s = s.clone();
         std::thread::spawn(move || {
-                s.send(ExecutionEnvironment::default()).unwrap();
+            let mut i = 0;
+            loop {
+                s.send((i, ExecutionEnvironment::default())).unwrap();
+                i += 1;
+            }
         })
     }).collect::<Vec<_>>();
+
     joins.push(std::thread::spawn(move || {
         error!("{:?}", r.recv());
     }));
