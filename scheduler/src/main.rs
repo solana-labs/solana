@@ -10,7 +10,7 @@ struct ExecutionEnvironment {
 fn main() {
     solana_logger::setup();
     error!("hello");
-    let (s, r) = unbounded();
+    let (s, r) = bound(1000);
 
     let mut joins = (0..10).map(|thx| {
         let s = s.clone();
