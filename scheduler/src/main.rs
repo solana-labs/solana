@@ -11,7 +11,7 @@ struct ExecutionEnvironment {
 
 impl ExecutionEnvironment {
     fn new(cu: usize) -> Self {
-        ExecutionEnvironment {cu, ..}
+        Self {cu, ..Self::default()}
     }
 }
 
