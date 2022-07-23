@@ -16,7 +16,8 @@ fn main() {
         let s = s.clone();
         std::thread::spawn(move || {
             let mut i = 0;
-            for _ in 0..6000000 {
+            //for _ in 0..6000000 {
+            loop {
                 let ss = (thx, i, std::time::Instant::now(), ExecutionEnvironment::default());
                 s.send(ss).unwrap();
                 i += 1;
