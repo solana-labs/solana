@@ -6045,7 +6045,7 @@ dependencies = [
 name = "solana-scheduler"
 version = "1.11.4"
 dependencies = [
- "crossbeam-deque",
+ "crossbeam-channel",
  "log",
  "solana-logger 1.11.4",
  "solana-version",
