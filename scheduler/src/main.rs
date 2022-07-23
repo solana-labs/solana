@@ -1,6 +1,8 @@
 use log::*;
 
+#[derive(Default)]
 struct ExecutionEnvironment {
+    accounts: Vec<i8>,
 }
 
 fn main() {
