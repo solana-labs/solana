@@ -3,6 +3,7 @@ use crossbeam_channel::bounded;
 use crossbeam_channel::unbounded;
 use sha2::{Digest, Sha256};
 use rand::Rng;
+use solana_metrics::datapoint_info;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
