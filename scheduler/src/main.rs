@@ -25,12 +25,12 @@ fn main() {
     let (s, r) = bounded(thread_count * 10);
     let (s2, r2) = bounded(thread_count * 2);
 
-    let p = std::thread::spawn(move || {
+    let p = std::thread::Builder::new().name("producher").spawn(move || {
         let mut rng = rand::thread_rng();
         loop {
             s2.send((std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 1000)))).unwrap();
         }
-    });
+    }).unwrap();
 
     let mut joins = (0..thread_count).map(|thx| {
         let s = s.clone();
