@@ -57,7 +57,7 @@ fn main() {
         for _ in 0..10 {
         //loop {
             let rr = r.recv().unwrap();
-            rrr.push((rr.2.0.elapsed(), rr));
+            rrr.push((rr.0.2.0.elapsed(), rr));
         }
 
         for rr in rrr {
