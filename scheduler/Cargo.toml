@@ -15,6 +15,7 @@ crossbeam-channel = "0.5.5"
 log = "0.4.17"
 solana-logger = { path = "../logger", version = "=1.11.4" }
 solana-version = { path = "../version", version = "=1.11.4" }
+sha2 = { version = "0.10.2" }
 
 
 [[bin]]
