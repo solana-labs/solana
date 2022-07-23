@@ -12,8 +12,8 @@ fn main() {
     error!("hello");
     let (s, r) = unbounded();
 
-    let mut joins = (0..10).map(|_| {
-        std::thread::spawn(|| {
+    let mut joins = (0..10).map(move |_| {
+        std::thread::spawn(move || {
             loop {
                 s.clone().send(ExecutionEnvironment::default()).unwrap();
             }
