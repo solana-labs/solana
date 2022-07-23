@@ -135,7 +135,7 @@ export function BlockHistoryCard({ block }: { block: BlockResponse }) {
           return true;
         } else if (programFilter === HIDE_VOTES) {
           // hide vote txs that don't invoke any other programs
-          return !(invocations.size === 1 || invocations.has(voteFilter));
+          return !(invocations.has(voteFilter) && invocations.size === 1);
         }
         return invocations.has(programFilter);
       })
