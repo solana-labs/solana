@@ -61,7 +61,7 @@ fn main() {
                 s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
                 i += 1;
             }
-        })
+        }).unwrap()
     }).collect::<Vec<_>>();
 
     joins.push(p);
