@@ -27,7 +27,7 @@ fn main() {
     joins.push(std::thread::spawn(move || {
         let mut count = 0;
         let start = std::time::Instant::now();
-        let rrr = Vec::new();
+        let mut rrr = Vec::new();
         for _ in 0..8 {
             rrr.push(r.recv().unwrap());
         }
