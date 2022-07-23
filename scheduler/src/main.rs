@@ -74,7 +74,7 @@ fn main() {
 
     joins.push(p);
 
-    joins.push(std::thread::spawn(move || {
+    joins.push(std::thread::Builder::new().name("consumer").spawn(move || {
         let mut count = 0;
         let start = std::time::Instant::now();
         //let mut rrr = Vec::with_capacity(10);
@@ -92,6 +92,6 @@ fn main() {
                 //break
             }
         }
-    }));
+    }).unwrap());
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
