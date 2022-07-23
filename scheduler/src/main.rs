@@ -20,7 +20,7 @@ fn main() {
     solana_logger::setup();
     error!("hello");
     let thread_count = 10;
-    let (s, r) = bounded(1000);
+    let (s, r) = bounded(thread_count * 10);
     let (s2, r2) = bounded(thread_count * 2);
 
     let p = std::thread::spawn(move || {
