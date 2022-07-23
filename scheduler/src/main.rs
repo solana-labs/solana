@@ -30,7 +30,7 @@ fn main() {
         loop {
             let rr = r.recv().unwrap();
             count += 1;
-            error!("recv-ed: {:?}", rr, rr.2.elapsed().as_nsecs());
+            error!("recv-ed: {:?} latency: {}", rr, rr.2.elapsed().as_nsecs());
             if count % 100_000 == 0 {
                 error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
                 break
