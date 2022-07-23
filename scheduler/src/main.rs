@@ -20,7 +20,7 @@ fn main() {
     solana_logger::setup();
     error!("hello");
     let (s, r) = bounded(1000);
-    let (s2, r2) = bounded(200);
+    let (s2, r2) = bounded(10);
 
     let p = std::thread::spawn(move || {
         let mut rng = rand::thread_rng();
