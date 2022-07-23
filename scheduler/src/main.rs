@@ -14,6 +14,12 @@ fn main() {
     let (s, r) = bounded(1000);
     let (s2, r2) = bounded(20);
 
+    let p = std::thread::spawn(move || {
+        loop {
+            s2.send((std::time::Instant::now(), ExecutionEnvironment::default())).unwrap();
+        }
+    });
+
     let mut joins = (0..3).map(|thx| {
         let s = s.clone();
         let r2 = r2.clone();
@@ -33,11 +39,7 @@ fn main() {
         })
     }).collect::<Vec<_>>();
 
-    joins.push(std::thread::spawn(move || {
-        loop {
-            s2.send((std::time::Instant::now(), ExecutionEnvironment::default())).unwrap();
-        }
-    }));
+    joins.push(p);
 
     joins.push(std::thread::spawn(move || {
         let mut count = 0;
