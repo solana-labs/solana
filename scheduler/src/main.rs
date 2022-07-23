@@ -16,7 +16,7 @@ fn main() {
         let s = s.clone();
         std::thread::spawn(move || {
             let mut i = 0;
-            for _ in 0..100_000 {
+            for _ in 0..1 {
                 let ss = (thx, i, ExecutionEnvironment::default());
                 error!("send-ed: {:?}", ss);
                 s.send(ss).unwrap();
