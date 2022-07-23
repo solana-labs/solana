@@ -32,9 +32,9 @@ fn main() {
         loop {
             let rr = r.recv().unwrap();
             rrr.push((rr.2.elapsed(), rr));
-        }
+        //}
 
-        for rr in rrr {
+        //for rr in rrr {
             count += 1;
             //error!("recv-ed: {:?}", &rr);
             if count % 100_000 == 0 {
