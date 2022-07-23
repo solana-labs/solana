@@ -25,7 +25,7 @@ fn main() {
 
     joins.push(std::thread::spawn(move || {
         loop {
-            error!("{:?}", r.recv());
+            error!("{:?}", r.recv().unwrap());
         }
     }));
     joins.into_iter().for_each(|j| j.join().unwrap());
