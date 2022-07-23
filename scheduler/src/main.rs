@@ -39,18 +39,21 @@ fn main() {
             for _ in 0..60 {//000000 {
             //loop {
                 let ss = (thx, i, r2.recv().unwrap());
+                let mut process_message_time = Measure::start("process_message_time");
                 let mut hasher = Sha256::default();
                 for i in 0_usize..ss.2.1.cu {
                     //for _ in 0..10 {
                         hasher.update(i.to_le_bytes());
                     //}
                 }
+                process_message_time.stop();
+                let duration_with_overhead = process_message_time.as_us();
                 let h = hasher.finalize();
-                s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
                 datapoint_info!(
                     "individual_tx_stats",
                     ("duration", 3, i64),
                 );
+                s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
                 i += 1;
             }
         })
