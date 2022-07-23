@@ -383,6 +383,12 @@ trait NonceTransactions<'a>: SendBatchTransactions<'a, (&'a Keypair, &'a Keypair
         nonce_rent: u64,
     );
 
+    fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_withdraw: &'a NonceChunk<'a>,
+    );
+
     fn make<F: Fn(&Pubkey, &Pubkey) -> Vec<Instruction> + Send + Sync>(
         &mut self,
         chunk: &'a NonceChunk<'a>,
@@ -417,6 +423,41 @@ impl<'a> NonceTransactions<'a> for NonceContainer<'a> {
             );
         };
         self.send_transactions(client, nonce_rent, log_progress);
+    }
+
+    fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_withdraw: &'a NonceChunk<'a>,
+    ) {
+        self.make(
+            to_withdraw,
+            |nonce_pubkey: &Pubkey, authority_pubkey: &Pubkey| -> Vec<Instruction> {
+                let nonce_balance = client.get_balance(nonce_pubkey).unwrap();
+                vec![
+                    system_instruction::withdraw_nonce_account(
+                        nonce_pubkey,
+                        authority_pubkey,
+                        authority_pubkey,
+                        nonce_balance,
+                    );
+                    1
+                ]
+            },
+        );
+
+        let log_progress = |tries: usize, batch_len: usize| {
+            info!(
+                "@ {} {} accounts",
+                if tries == 0 {
+                    "withdrawing"
+                } else {
+                    " retrying"
+                },
+                batch_len,
+            );
+        };
+        self.send_transactions(client, 0, log_progress);
     }
 
     fn make<F: Fn(&Pubkey, &Pubkey) -> Vec<Instruction> + Send + Sync>(
