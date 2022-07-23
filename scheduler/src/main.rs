@@ -30,12 +30,12 @@ fn main() {
         let mut rrr = Vec::with_capacity(10);
         for _ in 0..10 {
             let rr = r.recv().unwrap();
-            rrr.push((rr, rr.2.elapsed()));
+            rrr.push((rr.2.elapsed(), rr));
         }
 
         for rr in rrr {
             count += 1;
-            error!("recv-ed: {:?} latency: {}", &rr, rr.1.as_nanos());
+            error!("recv-ed: {:?} latency: {}", &rr, rr.0.as_nanos());
             if count % 100_000 == 0 {
                 error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
                 break
