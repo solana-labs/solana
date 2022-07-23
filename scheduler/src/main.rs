@@ -25,7 +25,7 @@ fn main() {
 
     joins.push(std::thread::spawn(move || {
         let mut count = 0;
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         loop {
             r.recv().unwrap();
             count += 1;
