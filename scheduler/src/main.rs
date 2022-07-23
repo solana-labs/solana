@@ -35,7 +35,7 @@ fn main() {
 
         for rr in rrr {
             count += 1;
-            error!("recv-ed: {:?} latency: {}", rr.1.as_nanos());
+            error!("recv-ed: {:?} latency: {}", rr, rr.1.as_nanos());
             if count % 100_000 == 0 {
                 error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
                 break
