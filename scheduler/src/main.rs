@@ -40,7 +40,7 @@ fn main() {
                 let ss = (thx, i, r2.recv().unwrap());
                 let mut hasher = Sha256::default();
                 for i in 0_usize..ss.2.1.cu {
-                    for _ in 0..100 {
+                    for _ in 0..10 {
                         hasher.update(i.to_le_bytes());
                     }
                 }
