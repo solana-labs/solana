@@ -42,7 +42,7 @@ fn main() {
                     hasher.update(i.to_le_bytes());
                 }
                 let h = hasher.finalize();
-                s.send((ss, h[0..10].collect::<Vec<_>>())).unwrap();
+                s.send((ss, h[0..10].into_vec())).unwrap();
                 i += 1;
             }
         })
