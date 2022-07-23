@@ -37,7 +37,7 @@ fn main() {
         //for rr in rrr {
             count += 1;
             //error!("recv-ed: {:?}", &rr);
-            if count % 100_000 == 0 {
+            if count % 1_000_000 == 0 {
                 error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
                 //break
             }
