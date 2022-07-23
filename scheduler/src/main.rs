@@ -17,8 +17,7 @@ fn main() {
         std::thread::spawn(move || {
             let mut i = 0;
             for _ in 0..3 {
-                let ss = (thx, i, ExecutionEnvironment::default());
-                error!("send-ed: {:?}", ss);
+                let ss = (thx, i, std::time::Instant::now(), ExecutionEnvironment::default());
                 s.send(ss).unwrap();
                 i += 1;
             }
