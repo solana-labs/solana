@@ -19,8 +19,9 @@ impl ExecutionEnvironment {
 fn main() {
     solana_logger::setup();
     error!("hello");
+    let thread_count = 10;
     let (s, r) = bounded(1000);
-    let (s2, r2) = bounded(10);
+    let (s2, r2) = bounded(thread_count * 2);
 
     let p = std::thread::spawn(move || {
         let mut rng = rand::thread_rng();
@@ -29,7 +30,7 @@ fn main() {
         }
     });
 
-    let mut joins = (0..3).map(|thx| {
+    let mut joins = (0..thread_count).map(|thx| {
         let s = s.clone();
         let r2 = r2.clone();
         std::thread::spawn(move || {
