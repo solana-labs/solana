@@ -24,8 +24,14 @@ fn main() {
     }).collect::<Vec<_>>();
 
     joins.push(std::thread::spawn(move || {
+        let mut count = 0;
+        let start = Instant::now();
         loop {
-            error!("{:?}", r.recv().unwrap());
+            r.recv().unwrap();
+            count += 1;
+            if count % 1_000_000 == 0 {
+                error!("recv-ed: {}", count / start.elapsed().as_secs());
+            }
         }
     }));
     joins.into_iter().for_each(|j| j.join().unwrap());
