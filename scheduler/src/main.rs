@@ -39,7 +39,9 @@ fn main() {
                 let ss = (thx, i, r2.recv().unwrap());
                 let mut hasher = Sha256::default();
                 for i in 0_usize..ss.2.1.cu {
-                    hasher.update(i.to_le_bytes());
+                    for _ in 0..100 {
+                        hasher.update(i.to_le_bytes());
+                    }
                 }
                 let h = hasher.finalize();
                 s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
