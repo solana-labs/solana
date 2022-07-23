@@ -45,7 +45,8 @@ fn main() {
                 let mut process_message_time = Measure::start("process_message_time");
 
                 let mut hasher = Sha256::default();
-                for i in 0_usize..ss.2.1.cu {
+                let cu = ss.2.1.cu;
+                for i in 0_usize..cu {
                     //for _ in 0..10 {
                         hasher.update(i.to_le_bytes());
                     //}
@@ -57,8 +58,13 @@ fn main() {
 
                 datapoint_info!(
                     "individual_tx_stats",
+                    ("slot", 33333, i64),
                     ("thread", current_thread_name, String),
+                    ("signature", "ffffff", String),
+                    ("account_locks_in_json", "{}", String),
+                    ("status", "Ok", String),
                     ("duration", duration_with_overhead, i64),
+                    ("compute_units", cu, i64),
                 );
                 s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
                 i += 1;
