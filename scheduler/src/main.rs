@@ -34,8 +34,8 @@ fn main() {
         let r2 = r2.clone();
         std::thread::spawn(move || {
             let mut i = 0;
-            //for _ in 0..6000000 {
-            loop {
+            for _ in 0..6 {//000000 {
+            //loop {
                 let ss = (thx, i, r2.recv().unwrap());
                 let mut hasher = Sha256::default();
                 for i in 0_usize..ss.2.1.cu {
