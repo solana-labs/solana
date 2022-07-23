@@ -1,6 +1,7 @@
 use log::*;
 use crossbeam_channel::bounded;
 use crossbeam_channel::unbounded;
+use sha2::Sha256;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
@@ -22,7 +23,7 @@ fn main() {
             loop {
                 let ss = (thx, i, r2.recv().unwrap());
                 let mut hasher = Sha256::default();
-                for i in (0_usize..ss.2.cu) {
+                for i in 0_usize..ss.2.cu {
                     hasher.update(i.to_le_bytes());
                 }
                 hasher.finalize()
