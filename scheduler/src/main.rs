@@ -1,5 +1,8 @@
 use log::*;
 
+struct ExecutionEnvironment {
+}
+
 fn main() {
     solana_logger::setup();
     error!("hello");
