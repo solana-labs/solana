@@ -25,7 +25,7 @@ fn main() {
     let (s, r) = bounded(thread_count * 10);
     let (s2, r2) = bounded(thread_count * 2);
 
-    let p = std::thread::Builder::new().name("producher").spawn(move || {
+    let p = std::thread::Builder::new().name("producer".to_string()).spawn(move || {
         let mut rng = rand::thread_rng();
         loop {
             s2.send((std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 1000)))).unwrap();
