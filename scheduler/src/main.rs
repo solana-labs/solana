@@ -24,7 +24,9 @@ fn main() {
     }).collect::<Vec<_>>();
 
     joins.push(std::thread::spawn(move || {
-        error!("{:?}", r.recv());
+        loop {
+            error!("{:?}", r.recv());
+        }
     }));
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
