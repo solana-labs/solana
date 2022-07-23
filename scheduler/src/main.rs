@@ -1,4 +1,6 @@
 use log::*;
+use crossbeam_channel::bounded;
+use crossbeam_channel::unbounded;
 
 #[derive(Default)]
 struct ExecutionEnvironment {
@@ -8,6 +10,8 @@ struct ExecutionEnvironment {
 fn main() {
     solana_logger::setup();
     error!("hello");
+    let (s, r) = unbounded();
+
     let mut joins = (0..10).map(|_| {
         std::thread::spawn(move || {
             let mut i = 0;
