@@ -79,11 +79,11 @@ fn main() {
         let start = std::time::Instant::now();
         //let mut rrr = Vec::with_capacity(10);
         //for _ in 0..100 {
-        let mut elapsed;
+        let mut elapsed = 0;
 
         loop {
             let rr = r.recv().unwrap();
-            elapsed += rr.0.2.0.elapsed();
+            elapsed += rr.0.2.0.elapsed().as_nanos();
         //    rrr.push((rr.0.2.0.elapsed(), rr));
         //}
 
