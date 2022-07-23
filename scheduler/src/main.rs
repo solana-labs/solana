@@ -54,7 +54,7 @@ fn main() {
         let mut count = 0;
         let start = std::time::Instant::now();
         let mut rrr = Vec::with_capacity(10);
-        for _ in 0..10 {
+        for _ in 0..100 {
         //loop {
             let rr = r.recv().unwrap();
             rrr.push((rr.0.2.0.elapsed(), rr));
