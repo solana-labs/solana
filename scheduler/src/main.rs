@@ -16,7 +16,7 @@ fn main() {
         let s = s.clone();
         std::thread::spawn(move || {
             let mut i = 0;
-            for _ in 0..3 {
+            for _ in 0..6 {
                 let ss = (thx, i, std::time::Instant::now(), ExecutionEnvironment::default());
                 s.send(ss).unwrap();
                 i += 1;
@@ -29,7 +29,8 @@ fn main() {
         let start = std::time::Instant::now();
         let mut rrr = Vec::with_capacity(10);
         for _ in 0..10 {
-            rrr.push(r.recv().unwrap());
+            let rr = r.recv().unwrap();
+            rrr.push((rr, rr.2.elapsed()));
         }
 
         for rr in rrr {
