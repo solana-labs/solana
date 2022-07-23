@@ -27,11 +27,11 @@ fn main() {
     joins.push(std::thread::spawn(move || {
         let mut count = 0;
         let start = std::time::Instant::now();
-        let mut rrr = Vec::with_capacity(10);
+        //let mut rrr = Vec::with_capacity(10);
         //for _ in 0..10 {
         loop {
             let rr = r.recv().unwrap();
-            rrr.push((rr.2.elapsed(), rr));
+            //rrr.push((rr.2.elapsed(), rr));
         //}
 
         //for rr in rrr {
