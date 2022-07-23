@@ -36,7 +36,7 @@ fn main() {
             loop {
                 let ss = (thx, i, r2.recv().unwrap());
                 let mut hasher = Sha256::default();
-                for i in 0_usize..ss.2.cu {
+                for i in 0_usize..ss.2.1.cu {
                     hasher.update(i.to_le_bytes());
                 }
                 hasher.finalize();
