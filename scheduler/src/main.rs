@@ -41,8 +41,8 @@ fn main() {
                 for i in 0_usize..ss.2.1.cu {
                     hasher.update(i.to_le_bytes());
                 }
-                hasher.finalize();
-                s.send(ss).unwrap();
+                let h = hasher.finalize();
+                s.send((ss, h)).unwrap();
                 i += 1;
             }
         })
