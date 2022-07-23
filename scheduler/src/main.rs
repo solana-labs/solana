@@ -12,10 +12,11 @@ fn main() {
     error!("hello");
     let (s, r) = unbounded();
 
-    let mut joins = (0..10).map(move |_| {
+    let mut joins = (0..10).map(|_| {
+        let s = s.clone();
         std::thread::spawn(move || {
             loop {
-                s.clone().send(ExecutionEnvironment::default()).unwrap();
+                s.send(ExecutionEnvironment::default()).unwrap();
             }
         })
     }).collect::<Vec<_>>();
