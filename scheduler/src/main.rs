@@ -49,13 +49,7 @@ fn main() {
                 s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
                 datapoint_info!(
                     "individual_tx_stats",
-                    ("slot", slot, i64),
-                    ("thread", current_thread_name, String),
-                    ("signature", signature, String),
-                    ("account_locks_in_json", account_locks_in_json, String),
-                    ("status", process_result_in_debug, String),
-                    ("duration", duration_with_overhead, i64),
-                    ("compute_units", executed_units, i64),
+                    ("duration", 3, i64),
                 );
                 i += 1;
             }
