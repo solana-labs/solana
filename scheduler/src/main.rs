@@ -25,7 +25,7 @@ fn main() {
     let p = std::thread::spawn(move || {
         let mut rng = rand::thread_rng();
         loop {
-            s2.send((std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 1000)))).unwrap();
+            s2.send((std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 100)))).unwrap();
         }
     });
 
@@ -63,7 +63,7 @@ fn main() {
         //for rr in rrr {
             count += 1;
             //error!("recv-ed: {:?}", &rr);
-            if count % 1_000_000 == 0 {
+            if count % 100_000 == 0 {
                 error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
                 //break
             }
