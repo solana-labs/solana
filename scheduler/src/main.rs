@@ -6,6 +6,13 @@ use sha2::{Digest, Sha256};
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
     accounts: Vec<i8>,
+    cu: usize,
+}
+
+impl ExecutionEnvironment {
+    fn new(cu: usize) -> Self {
+        ExecutionEnvironment {cu, ...}
+    }
 }
 
 fn main() {
@@ -16,7 +23,7 @@ fn main() {
 
     let p = std::thread::spawn(move || {
         loop {
-            s2.send((std::time::Instant::now(), ExecutionEnvironment::default())).unwrap();
+            s2.send((std::time::Instant::now(), ExecutionEnvironment::new(0))).unwrap();
         }
     });
 
