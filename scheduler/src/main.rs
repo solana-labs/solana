@@ -35,7 +35,7 @@ fn main() {
     let mut joins = (0..thread_count).map(|thx| {
         let s = s.clone();
         let r2 = r2.clone();
-        std::thread::Builder::new().spawn(move || {
+        std::thread::Builder::new().name(format!("blockstore_processor_{}", thx)).spawn(move || {
             let mut i = 0;
             for _ in 0..60 {//000000 {
             //loop {
