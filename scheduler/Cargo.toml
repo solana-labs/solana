@@ -16,6 +16,7 @@ log = "0.4.17"
 solana-logger = { path = "../logger", version = "=1.11.4" }
 solana-version = { path = "../version", version = "=1.11.4" }
 solana-metrics = { path = "../metrics", version = "=1.11.4" }
+solana-measure = { path = "../measure", version = "=1.11.4" }
 sha2 = { version = "0.10.2" }
 rand = "0.7.0"
 
