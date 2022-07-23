@@ -54,13 +54,13 @@ fn main() {
         let mut count = 0;
         let start = std::time::Instant::now();
         //let mut rrr = Vec::with_capacity(10);
-        //for _ in 0..10 {
-        loop {
+        for _ in 0..100 {
+        //loop {
             let rr = r.recv().unwrap();
-            //rrr.push((rr.2.elapsed(), rr));
-        //}
+            rr.push((rr.2.elapsed(), rr));
+        }
 
-        //for rr in rrr {
+        for rr in rrr {
             count += 1;
             //error!("recv-ed: {:?}", &rr);
             if count % 100_000 == 0 {
