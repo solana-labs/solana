@@ -74,13 +74,16 @@ fn main() {
 
     joins.push(p);
 
-    joins.push(std::thread::Builder::new().name("consumer").spawn(move || {
+    joins.push(std::thread::Builder::new().name("consumer".to_string()).spawn(move || {
         let mut count = 0;
         let start = std::time::Instant::now();
         //let mut rrr = Vec::with_capacity(10);
         //for _ in 0..100 {
+        let mut elapsed;
+
         loop {
             let rr = r.recv().unwrap();
+            elapsed += rr.0.2.0.elapsed();
         //    rrr.push((rr.0.2.0.elapsed(), rr));
         //}
 
