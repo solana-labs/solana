@@ -27,8 +27,12 @@ fn main() {
     joins.push(std::thread::spawn(move || {
         let mut count = 0;
         let start = std::time::Instant::now();
-        loop {
-            let rr = r.recv().unwrap();
+        let rrr = Vec::new();
+        for _ in 0..8 {
+            rrr.push(r.recv().unwrap());
+        }
+
+        for rr in rrr {
             count += 1;
             error!("recv-ed: {:?} latency: {}", rr, rr.2.elapsed().as_nanos());
             if count % 100_000 == 0 {
