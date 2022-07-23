@@ -16,7 +16,7 @@ fn main() {
         let s = s.clone();
         std::thread::spawn(move || {
             let mut i = 0;
-            loop {
+            for _ in 0..100_000 {
                 s.send((thx, i, ExecutionEnvironment::default())).unwrap();
                 i += 1;
             }
@@ -27,10 +27,12 @@ fn main() {
         let mut count = 0;
         let start = std::time::Instant::now();
         loop {
-            r.recv().unwrap();
+            let rr = r.recv().unwrap();
             count += 1;
-            if count % 10_000_000 == 0 {
+            error!("{}", rr);
+            if count % 100_000 == 0 {
                 error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
+                break
             }
         }
     }));
