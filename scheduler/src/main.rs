@@ -17,7 +17,9 @@ fn main() {
         std::thread::spawn(move || {
             let mut i = 0;
             for _ in 0..100_000 {
-                s.send((thx, i, ExecutionEnvironment::default())).unwrap();
+                let ss = (thx, i, ExecutionEnvironment::default());
+                error!("send-ed: {:?}", ss);
+                s.send(ss).unwrap();
                 i += 1;
             }
         })
@@ -29,7 +31,7 @@ fn main() {
         loop {
             let rr = r.recv().unwrap();
             count += 1;
-            error!("{:?}", rr);
+            error!("recv-ed: {:?}", rr);
             if count % 100_000 == 0 {
                 error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
                 break
