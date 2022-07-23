@@ -12,12 +12,12 @@ fn main() {
     error!("hello");
     let (s, r) = unbounded();
 
-    let mut joins = (0..10).map(|_| {
+    let mut joins = (0..10).map(|thx| {
         let s = s.clone();
         std::thread::spawn(move || {
             let mut i = 0;
             loop {
-                s.send((i, ExecutionEnvironment::default())).unwrap();
+                s.send((thx, i, ExecutionEnvironment::default())).unwrap();
                 i += 1;
             }
         })
