@@ -12,7 +12,7 @@ fn main() {
     error!("hello");
     let (s, r) = bounded(1000);
 
-    let mut joins = (0..10).map(|thx| {
+    let mut joins = (0..1).map(|thx| {
         let s = s.clone();
         std::thread::spawn(move || {
             let mut i = 0;
