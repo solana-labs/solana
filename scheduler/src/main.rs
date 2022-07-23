@@ -26,7 +26,7 @@ fn main() {
     let p = std::thread::spawn(move || {
         let mut rng = rand::thread_rng();
         loop {
-            s2.send((std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 10000)))).unwrap();
+            s2.send((std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 100)))).unwrap();
         }
     });
 
@@ -40,9 +40,9 @@ fn main() {
                 let ss = (thx, i, r2.recv().unwrap());
                 let mut hasher = Sha256::default();
                 for i in 0_usize..ss.2.1.cu {
-                    for _ in 0..10 {
+                    //for _ in 0..10 {
                         hasher.update(i.to_le_bytes());
-                    }
+                    //}
                 }
                 let h = hasher.finalize();
                 s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
