@@ -6047,6 +6047,7 @@ version = "1.11.4"
 dependencies = [
  "crossbeam-channel",
  "log",
+ "sha2 0.10.2",
  "solana-logger 1.11.4",
  "solana-version",
 ]

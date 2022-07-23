@@ -1,7 +1,7 @@
 use log::*;
 use crossbeam_channel::bounded;
 use crossbeam_channel::unbounded;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
