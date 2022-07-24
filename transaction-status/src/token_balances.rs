@@ -180,7 +180,7 @@ mod test {
         let other_mint = Account {
             lamports: 100,
             data: data.to_vec(),
-            owner: Pubkey::new_unique(),
+            owner: Pubkey::new_unique(), // !is_known_spl_token_id
             executable: false,
             rent_epoch: 0,
         };
@@ -209,7 +209,7 @@ mod test {
         let other_account = Account {
             lamports: 100,
             data: data.to_vec(),
-            owner: Pubkey::new_unique(),
+            owner: Pubkey::new_unique(), // !is_known_spl_token_id
             executable: false,
             rent_epoch: 0,
         };
@@ -253,16 +253,19 @@ mod test {
         let bank = Bank::new_for_tests(&genesis_config);
         let mut mint_decimals = HashMap::new();
 
+        // Account is not owned by spl_token (nor does it have TokenAccount state)
         assert_eq!(
             collect_token_balance_from_account(&bank, &account_pubkey, &mut mint_decimals),
             None
         );
 
+        // Mint does not have TokenAccount state
         assert_eq!(
             collect_token_balance_from_account(&bank, &mint_pubkey, &mut mint_decimals),
             None
         );
 
+        // TokenAccount owned by spl_token::id() works
         assert_eq!(
             collect_token_balance_from_account(
                 &bank,
@@ -282,11 +285,13 @@ mod test {
             })
         );
 
+        // TokenAccount is not owned by known spl-token program_id
         assert_eq!(
             collect_token_balance_from_account(&bank, &other_account_pubkey, &mut mint_decimals),
             None
         );
 
+        // TokenAccount's mint is not owned by known spl-token program_id
         assert_eq!(
             collect_token_balance_from_account(
                 &bank,
@@ -433,16 +438,19 @@ mod test {
         let bank = Bank::new_for_tests(&genesis_config);
         let mut mint_decimals = HashMap::new();
 
+        // Account is not owned by spl_token (nor does it have TokenAccount state)
         assert_eq!(
             collect_token_balance_from_account(&bank, &account_pubkey, &mut mint_decimals),
             None
         );
 
+        // Mint does not have TokenAccount state
         assert_eq!(
             collect_token_balance_from_account(&bank, &mint_pubkey, &mut mint_decimals),
             None
         );
 
+        // TokenAccount owned by spl_token_2022::id() works
         assert_eq!(
             collect_token_balance_from_account(
                 &bank,
@@ -462,11 +470,13 @@ mod test {
             })
         );
 
+        // TokenAccount is not owned by known spl-token program_id
         assert_eq!(
             collect_token_balance_from_account(&bank, &other_account_pubkey, &mut mint_decimals),
             None
         );
 
+        // TokenAccount's mint is not owned by known spl-token program_id
         assert_eq!(
             collect_token_balance_from_account(
                 &bank,
