@@ -47,7 +47,7 @@ import { clusterPath } from "utils/url";
 import { NFTokenAccountHeader } from "../components/account/NFTokenAccountHeader";
 import { NFTokenAccountSection } from "../components/account/NFTokenAccountSection";
 import { NFTokenCollectionNFTGrid } from "../components/account/NFTokenCollectionNFTGrid";
-import {NFTOKEN_ADDRESS} from "../utils/nftoken";
+import { NFTOKEN_ADDRESS } from "../utils/nftoken";
 import {
   isNFTokenAccount,
   parseNFTokenCollectionAccount,
