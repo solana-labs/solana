@@ -8,7 +8,7 @@ use {
     solana_metrics::datapoint_debug,
     solana_runtime::{bank::Bank, transaction_batch::TransactionBatch},
     solana_sdk::{account::ReadableAccount, pubkey::Pubkey},
-    spl_token::{
+    spl_token_2022::{
         solana_program::program_pack::Pack,
         state::{Account as TokenAccount, Mint},
     },
@@ -141,7 +141,14 @@ mod test {
         super::*,
         solana_account_decoder::parse_token::{pubkey_from_spl_token, spl_token_pubkey},
         solana_sdk::{account::Account, genesis_config::create_genesis_config},
-        spl_token::solana_program::program_option::COption,
+        spl_token_2022::{
+            extension::{
+                immutable_owner::ImmutableOwner, memo_transfer::MemoTransfer,
+                mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
+            },
+            pod::OptionalNonZeroPubkey,
+            solana_program::program_option::COption,
+        },
         std::collections::BTreeMap,
     };
 
@@ -184,7 +191,7 @@ mod test {
             owner: spl_token_pubkey(&token_owner),
             amount: 42,
             delegate: COption::None,
-            state: spl_token::state::AccountState::Initialized,
+            state: spl_token_2022::state::AccountState::Initialized,
             is_native: COption::Some(100),
             delegated_amount: 0,
             close_authority: COption::None,
@@ -212,7 +219,7 @@ mod test {
             owner: spl_token_pubkey(&token_owner),
             amount: 42,
             delegate: COption::None,
-            state: spl_token::state::AccountState::Initialized,
+            state: spl_token_2022::state::AccountState::Initialized,
             is_native: COption::Some(100),
             delegated_amount: 0,
             close_authority: COption::None,
@@ -272,6 +279,186 @@ mod test {
                     ui_amount_string: "0.42".to_string(),
                 },
                 program_id: spl_token::id().to_string(),
+            })
+        );
+
+        assert_eq!(
+            collect_token_balance_from_account(&bank, &other_account_pubkey, &mut mint_decimals),
+            None
+        );
+
+        assert_eq!(
+            collect_token_balance_from_account(
+                &bank,
+                &other_mint_account_pubkey,
+                &mut mint_decimals
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn test_collect_token_balance_from_spl_token_2022_account() {
+        let (mut genesis_config, _mint_keypair) = create_genesis_config(500);
+
+        // Add a variety of accounts, token and not
+        let account = Account::new(42, 55, &Pubkey::new_unique());
+
+        let mint_authority = Pubkey::new_unique();
+        let mint_size =
+            ExtensionType::get_account_len::<Mint>(&[ExtensionType::MintCloseAuthority]);
+        let mint_base = Mint {
+            mint_authority: COption::None,
+            supply: 4242,
+            decimals: 2,
+            is_initialized: true,
+            freeze_authority: COption::None,
+        };
+        let mut mint_data = vec![0; mint_size];
+        let mut mint_state =
+            StateWithExtensionsMut::<Mint>::unpack_uninitialized(&mut mint_data).unwrap();
+        mint_state.base = mint_base;
+        mint_state.pack_base();
+        mint_state.init_account_type().unwrap();
+        let mut mint_close_authority = mint_state.init_extension::<MintCloseAuthority>().unwrap();
+        mint_close_authority.close_authority =
+            OptionalNonZeroPubkey::try_from(Some(spl_token_pubkey(&mint_authority))).unwrap();
+
+        let mint_pubkey = Pubkey::new_unique();
+        let mint = Account {
+            lamports: 100,
+            data: mint_data.to_vec(),
+            owner: pubkey_from_spl_token(&spl_token_2022::id()),
+            executable: false,
+            rent_epoch: 0,
+        };
+        let other_mint_pubkey = Pubkey::new_unique();
+        let other_mint = Account {
+            lamports: 100,
+            data: mint_data.to_vec(),
+            owner: Pubkey::new_unique(),
+            executable: false,
+            rent_epoch: 0,
+        };
+
+        let token_owner = Pubkey::new_unique();
+        let token_base = TokenAccount {
+            mint: spl_token_pubkey(&mint_pubkey),
+            owner: spl_token_pubkey(&token_owner),
+            amount: 42,
+            delegate: COption::None,
+            state: spl_token_2022::state::AccountState::Initialized,
+            is_native: COption::Some(100),
+            delegated_amount: 0,
+            close_authority: COption::None,
+        };
+        let account_size = ExtensionType::get_account_len::<TokenAccount>(&[
+            ExtensionType::ImmutableOwner,
+            ExtensionType::MemoTransfer,
+        ]);
+        let mut account_data = vec![0; account_size];
+        let mut account_state =
+            StateWithExtensionsMut::<TokenAccount>::unpack_uninitialized(&mut account_data)
+                .unwrap();
+        account_state.base = token_base;
+        account_state.pack_base();
+        account_state.init_account_type().unwrap();
+        account_state.init_extension::<ImmutableOwner>().unwrap();
+        let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
+        memo_transfer.require_incoming_transfer_memos = true.into();
+
+        let spl_token_account = Account {
+            lamports: 100,
+            data: account_data.to_vec(),
+            owner: pubkey_from_spl_token(&spl_token_2022::id()),
+            executable: false,
+            rent_epoch: 0,
+        };
+        let other_account = Account {
+            lamports: 100,
+            data: account_data.to_vec(),
+            owner: Pubkey::new_unique(),
+            executable: false,
+            rent_epoch: 0,
+        };
+
+        let other_mint_token_base = TokenAccount {
+            mint: spl_token_pubkey(&other_mint_pubkey),
+            owner: spl_token_pubkey(&token_owner),
+            amount: 42,
+            delegate: COption::None,
+            state: spl_token_2022::state::AccountState::Initialized,
+            is_native: COption::Some(100),
+            delegated_amount: 0,
+            close_authority: COption::None,
+        };
+        let account_size = ExtensionType::get_account_len::<TokenAccount>(&[
+            ExtensionType::ImmutableOwner,
+            ExtensionType::MemoTransfer,
+        ]);
+        let mut account_data = vec![0; account_size];
+        let mut account_state =
+            StateWithExtensionsMut::<TokenAccount>::unpack_uninitialized(&mut account_data)
+                .unwrap();
+        account_state.base = other_mint_token_base;
+        account_state.pack_base();
+        account_state.init_account_type().unwrap();
+        account_state.init_extension::<ImmutableOwner>().unwrap();
+        let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
+        memo_transfer.require_incoming_transfer_memos = true.into();
+
+        let other_mint_token_account = Account {
+            lamports: 100,
+            data: account_data.to_vec(),
+            owner: pubkey_from_spl_token(&spl_token_2022::id()),
+            executable: false,
+            rent_epoch: 0,
+        };
+
+        let mut accounts = BTreeMap::new();
+
+        let account_pubkey = Pubkey::new_unique();
+        accounts.insert(account_pubkey, account);
+        accounts.insert(mint_pubkey, mint);
+        accounts.insert(other_mint_pubkey, other_mint);
+        let spl_token_account_pubkey = Pubkey::new_unique();
+        accounts.insert(spl_token_account_pubkey, spl_token_account);
+        let other_account_pubkey = Pubkey::new_unique();
+        accounts.insert(other_account_pubkey, other_account);
+        let other_mint_account_pubkey = Pubkey::new_unique();
+        accounts.insert(other_mint_account_pubkey, other_mint_token_account);
+
+        genesis_config.accounts = accounts;
+
+        let bank = Bank::new_for_tests(&genesis_config);
+        let mut mint_decimals = HashMap::new();
+
+        assert_eq!(
+            collect_token_balance_from_account(&bank, &account_pubkey, &mut mint_decimals),
+            None
+        );
+
+        assert_eq!(
+            collect_token_balance_from_account(&bank, &mint_pubkey, &mut mint_decimals),
+            None
+        );
+
+        assert_eq!(
+            collect_token_balance_from_account(
+                &bank,
+                &spl_token_account_pubkey,
+                &mut mint_decimals
+            ),
+            Some(TokenBalanceData {
+                mint: mint_pubkey.to_string(),
+                owner: token_owner.to_string(),
+                ui_token_amount: UiTokenAmount {
+                    ui_amount: Some(0.42),
+                    decimals: 2,
+                    amount: "42".to_string(),
+                    ui_amount_string: "0.42".to_string(),
+                },
+                program_id: spl_token_2022::id().to_string(),
             })
         );
 
