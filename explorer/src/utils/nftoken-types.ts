@@ -50,7 +50,8 @@ export namespace NftokenTypes {
     BufferLayout.u8("unused_1"),
     BufferLayout.u8("unused_2"),
     BufferLayout.u8("unused_3"),
-    BufferLayout.utf8(200, "metadata_url"),
+    BufferLayout.u32("metadata_url_length"),
+    BufferLayout.utf8(400, "metadata_url"),
   ]);
 
   export const collectionAccountLayout = BufferLayout.struct([
@@ -62,6 +63,7 @@ export namespace NftokenTypes {
     BufferLayout.u8("unused_2"),
     BufferLayout.u8("unused_3"),
     BufferLayout.u8("unused_4"),
-    BufferLayout.utf8(200, "metadata_url"),
+    BufferLayout.u32("metadata_url_length"),
+    BufferLayout.utf8(400, "metadata_url"),
   ]);
 }

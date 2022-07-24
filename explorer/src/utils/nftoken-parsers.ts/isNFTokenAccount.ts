@@ -1,3 +1,4 @@
+import { PublicKey } from "@solana/web3.js";
 import { NFTOKEN_ADDRESS } from "../nftoken";
 import { Account } from "../../providers/accounts";
 import { NftokenTypes } from "../nftoken-types";
@@ -24,16 +25,22 @@ export const parseNFTokenNFTAccount = (
     return null;
   }
 
+  if (
+    Buffer.from(parsed!.discriminator).toString("base64") !== "IbRbNewPP2E="
+  ) {
+    return null;
+  }
+
   return {
     address: account!.pubkey.toBase58(),
-    holder: parsed.holder,
-    authority: parsed.authority,
+    holder: new PublicKey(parsed.holder).toBase58(),
+    authority: new PublicKey(parsed.authority).toBase58(),
     authority_can_update: Boolean(parsed.authority_can_update),
 
-    collection: parsed.collection,
-    delegate: parsed.delegate,
+    collection: new PublicKey(parsed.collection).toBase58(),
+    delegate: new PublicKey(parsed.delegate).toBase58(),
 
-    metadata_url: parsed.metadata_url,
+    metadata_url: parsed.metadata_url?.replace(/\0/g, "") ?? null,
   };
 };
 
@@ -51,11 +58,14 @@ export const parseNFTokenCollectionAccount = (
   if (!parsed) {
     return null;
   }
+  if (Buffer.from(parsed.discriminator).toString("base64") !== "RQLwA3YS2fI=") {
+    return null;
+  }
 
   return {
     address: account!.pubkey.toBase58(),
     authority: parsed.authority,
     authority_can_update: Boolean(parsed.authority_can_update),
-    metadata_url: parsed.metadata_url,
+    metadata_url: parsed.metadata_url?.replace(/\0/g, "") ?? null,
   };
 };
