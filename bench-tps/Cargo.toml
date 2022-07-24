@@ -14,7 +14,7 @@ crossbeam-channel = "0.5"
 log = "0.4.17"
 rayon = "1.5.3"
 serde_json = "1.0.81"
-serde_yaml = "0.8.24"
+serde_yaml = "0.8.26"
 solana-clap-utils = { path = "../clap-utils", version = "=1.11.4" }
 solana-cli-config = { path = "../cli-config", version = "=1.11.4" }
 solana-client = { path = "../client", version = "=1.11.4" }
