@@ -1,4 +1,10 @@
-use {super::*, crate::declare_syscall};
+use {
+    super::*,
+    crate::declare_syscall,
+    solana_sdk::syscalls::{
+        MAX_CPI_ACCOUNT_INFOS, MAX_CPI_INSTRUCTION_ACCOUNTS, MAX_CPI_INSTRUCTION_DATA_LEN,
+    },
+};
 
 struct CallerAccount<'a> {
     lamports: &'a mut u64,
@@ -94,10 +100,22 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
             invoke_context.get_check_size(),
         )?
         .to_vec();
+
+        let ix_data_len = ix.data.len() as u64;
+        if invoke_context
+            .feature_set
+            .is_active(&feature_set::loosen_cpi_size_restriction::id())
+        {
+            invoke_context.get_compute_meter().consume(
+                (ix_data_len)
+                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
+            )?;
+        }
+
         let data = translate_slice::<u8>(
             memory_mapping,
             ix.data.as_ptr() as u64,
-            ix.data.len() as u64,
+            ix_data_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?
@@ -383,10 +401,22 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?;
+
+        let ix_data_len = ix_c.data_len as u64;
+        if invoke_context
+            .feature_set
+            .is_active(&feature_set::loosen_cpi_size_restriction::id())
+        {
+            invoke_context.get_compute_meter().consume(
+                (ix_data_len)
+                    .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
+            )?;
+        }
+
         let data = translate_slice::<u8>(
             memory_mapping,
             ix_c.data_addr,
-            ix_c.data_len as u64,
+            ix_data_len,
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?
@@ -719,36 +749,76 @@ fn check_instruction_size(
     data_len: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    let size = num_accounts
-        .saturating_mul(size_of::<AccountMeta>())
-        .saturating_add(data_len);
-    let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size;
-    if size > max_size {
-        return Err(SyscallError::InstructionTooLarge(size, max_size).into());
+    if invoke_context
+        .feature_set
+        .is_active(&feature_set::loosen_cpi_size_restriction::id())
+    {
+        let data_len = data_len as u64;
+        let max_data_len = MAX_CPI_INSTRUCTION_DATA_LEN;
+        if data_len > max_data_len {
+            return Err(SyscallError::MaxInstructionDataLenExceeded {
+                data_len,
+                max_data_len,
+            }
+            .into());
+        }
+
+        let num_accounts = num_accounts as u64;
+        let max_accounts = MAX_CPI_INSTRUCTION_ACCOUNTS as u64;
+        if num_accounts > max_accounts {
+            return Err(SyscallError::MaxInstructionAccountsExceeded {
+                num_accounts,
+                max_accounts,
+            }
+            .into());
+        }
+    } else {
+        let max_size = invoke_context.get_compute_budget().max_cpi_instruction_size;
+        let size = num_accounts
+            .saturating_mul(size_of::<AccountMeta>())
+            .saturating_add(data_len);
+        if size > max_size {
+            return Err(SyscallError::InstructionTooLarge(size, max_size).into());
+        }
     }
     Ok(())
 }
 
 fn check_account_infos(
-    len: usize,
+    num_account_infos: usize,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    let adjusted_len = if invoke_context
+    if invoke_context
         .feature_set
-        .is_active(&syscall_saturated_math::id())
+        .is_active(&feature_set::loosen_cpi_size_restriction::id())
     {
-        len.saturating_mul(size_of::<Pubkey>())
-    } else {
-        #[allow(clippy::integer_arithmetic)]
-        {
-            len * size_of::<Pubkey>()
+        let num_account_infos = num_account_infos as u64;
+        let max_account_infos = MAX_CPI_ACCOUNT_INFOS as u64;
+        if num_account_infos > max_account_infos {
+            return Err(SyscallError::MaxInstructionAccountInfosExceeded {
+                num_account_infos,
+                max_account_infos,
+            }
+            .into());
         }
-    };
-    if adjusted_len > invoke_context.get_compute_budget().max_cpi_instruction_size {
-        // Cap the number of account_infos a caller can pass to approximate
-        // maximum that accounts that could be passed in an instruction
-        return Err(SyscallError::TooManyAccounts.into());
-    };
+    } else {
+        let adjusted_len = if invoke_context
+            .feature_set
+            .is_active(&syscall_saturated_math::id())
+        {
+            num_account_infos.saturating_mul(size_of::<Pubkey>())
+        } else {
+            #[allow(clippy::integer_arithmetic)]
+            {
+                num_account_infos * size_of::<Pubkey>()
+            }
+        };
+        if adjusted_len > invoke_context.get_compute_budget().max_cpi_instruction_size {
+            // Cap the number of account_infos a caller can pass to approximate
+            // maximum that accounts that could be passed in an instruction
+            return Err(SyscallError::TooManyAccounts.into());
+        };
+    }
     Ok(())
 }
 
