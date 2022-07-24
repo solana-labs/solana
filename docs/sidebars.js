@@ -1,4 +1,42 @@
 module.exports = {
+  architectureSidebar: [
+    {
+      type: "doc",
+      label: "What is a Solana Cluster?",
+      id: "cluster/overview",
+    },
+    {
+      type: "category",
+      label: "Consensus",
+      collapsed: false,
+      items: [
+        "cluster/synchronization",
+        "cluster/leader-rotation",
+        "cluster/fork-generation",
+        "cluster/managing-forks",
+        "cluster/turbine-block-propagation",
+        "cluster/vote-signing",
+        "cluster/stake-delegation-and-rewards",
+      ],
+    },
+    {
+      type: "category",
+      label: "Validators",
+      collapsed: false,
+      items: [
+        {
+          type:"doc",
+          label:"Overview",
+          id:"validator/anatomy",
+        },
+        "validator/tpu",
+        "validator/tvu",
+        "validator/blockstore",
+        "validator/gossip",
+        "validator/runtime",
+      ],
+    },
+  ],
   docs: {
     About: ["introduction", "terminology", "history"],
     Wallets: [
@@ -99,34 +137,6 @@ module.exports = {
       "cluster/rpc-endpoints",
       "cluster/bench-tps",
       "cluster/performance-metrics",
-    ],
-    Architecture: [
-      {
-        type: "category",
-        label: "Cluster",
-        items: [
-          "cluster/overview",
-          "cluster/synchronization",
-          "cluster/leader-rotation",
-          "cluster/fork-generation",
-          "cluster/managing-forks",
-          "cluster/turbine-block-propagation",
-          "cluster/vote-signing",
-          "cluster/stake-delegation-and-rewards",
-        ],
-      },
-      {
-        type: "category",
-        label: "Validator",
-        items: [
-          "validator/anatomy",
-          "validator/tpu",
-          "validator/tvu",
-          "validator/blockstore",
-          "validator/gossip",
-          "validator/runtime",
-        ],
-      },
     ],
     Economics: [
       "economics_overview",

@@ -109,6 +109,10 @@ module.exports = {
               label: "Introduction",
               to: "introduction",
             },
+            {
+              label: "Architecture",
+              to: "cluster/overview",
+            },
           ],
         },
         {
