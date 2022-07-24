@@ -9,7 +9,7 @@ use {
     solana_runtime::{bank::Bank, transaction_batch::TransactionBatch},
     solana_sdk::{account::ReadableAccount, pubkey::Pubkey},
     spl_token_2022::{
-        solana_program::program_pack::Pack,
+        extension::StateWithExtensions,
         state::{Account as TokenAccount, Mint},
     },
     std::collections::HashMap,
@@ -45,8 +45,8 @@ fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
             return None;
         }
 
-        let decimals = Mint::unpack(mint_account.data())
-            .map(|mint| mint.decimals)
+        let decimals = StateWithExtensions::<Mint>::unpack(mint_account.data())
+            .map(|mint| mint.base.decimals)
             .ok()?;
 
         Some(decimals)
@@ -118,8 +118,8 @@ fn collect_token_balance_from_account(
         return None;
     }
 
-    let token_account = TokenAccount::unpack(account.data()).ok()?;
-    let mint = pubkey_from_spl_token(&token_account.mint);
+    let token_account = StateWithExtensions::<TokenAccount>::unpack(account.data()).ok()?;
+    let mint = pubkey_from_spl_token(&token_account.base.mint);
 
     let decimals = mint_decimals.get(&mint).cloned().or_else(|| {
         let decimals = get_mint_decimals(bank, &mint)?;
@@ -128,9 +128,9 @@ fn collect_token_balance_from_account(
     })?;
 
     Some(TokenBalanceData {
-        mint: token_account.mint.to_string(),
-        owner: token_account.owner.to_string(),
-        ui_token_amount: token_amount_to_ui_amount(token_account.amount, decimals),
+        mint: token_account.base.mint.to_string(),
+        owner: token_account.base.owner.to_string(),
+        ui_token_amount: token_amount_to_ui_amount(token_account.base.amount, decimals),
         program_id: account.owner().to_string(),
     })
 }
@@ -147,7 +147,7 @@ mod test {
                 mint_close_authority::MintCloseAuthority, ExtensionType, StateWithExtensionsMut,
             },
             pod::OptionalNonZeroPubkey,
-            solana_program::program_option::COption,
+            solana_program::{program_option::COption, program_pack::Pack},
         },
         std::collections::BTreeMap,
     };
