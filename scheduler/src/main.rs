@@ -57,6 +57,7 @@ impl AddressBook {
                     Writable => return Err(())
                 }
             }
+            Entry::Vacant => todo!()
         }
 
         Ok(Guard{account: ()})
