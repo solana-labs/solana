@@ -25,7 +25,7 @@ impl ExecutionEnvironment {
 fn try_lock_tx(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
-    for a in locks.writeable {
+    for a in locks.writable {
         try_lock_account(a)
     }
     Ok(tx)
