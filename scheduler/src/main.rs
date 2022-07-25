@@ -91,7 +91,7 @@ struct TransactionQueue {
 
 impl TransactionQueue {
     fn add(&mut self, weight: Weight, task: Task) {
-        panic!()
+        map.insert(weight, task).unwrap();
     }
 
     fn tasks(&self) -> impl std::iter::Iterator<Item = &Task> {
