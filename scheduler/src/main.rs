@@ -287,7 +287,7 @@ impl ScheduleStage {
                 send(to_execution_stage, schedule(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
                 }
-                recv(from_execution_stage) -> msg => {
+                recv(from_execution_stage) -> msg if 3 == 3 => {
                     let mut msg = msg.unwrap();
                     Self::commit(&mut msg);
                     committed_ee = Some(msg);
