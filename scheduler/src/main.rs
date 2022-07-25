@@ -101,7 +101,7 @@ impl TransactionQueue {
     }
 }
 
-fn try_lock_tx(address_book: &mut AddressBook, tx: &SanitizedTransaction) -> Result<Vec<AddressGuard>, ()> {
+fn try_lock_for_tx(address_book: &mut AddressBook, tx: &SanitizedTransaction) -> Result<Vec<AddressGuard>, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
     let writable_guards = locks.writable.into_iter().map(|&a|
@@ -125,7 +125,7 @@ fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, ent
         tx_queue.add(Fee {ix, random_sequence: 32322}, Task {tx});
     }
     for next_task in tx_queue.tasks() {
-        if let Ok(lock_guards) = try_lock_tx(address_book, &next_task.tx) {
+        if let Ok(lock_guards) = try_lock_for_tx(address_book, &next_task.tx) {
             let ee = create_execution_environment(lock_guards);
             send_to_execution_lane(ee);
         }
