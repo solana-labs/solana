@@ -36,7 +36,7 @@ impl ExecutionEnvironment {
 }
 
 struct LockAttempt {
-    account: (),
+    address: Pubkey,
 }
 
 impl LockAttempt {
@@ -73,6 +73,9 @@ impl AddressBook {
                 match &page.current_usage {
                     Usage::Unused => {
                         page.current_usage = requested_usage;
+                        LockAttempt {
+                            address
+                        }
                     }
                     Usage::Readonly => {
                         match &requested_usage {
