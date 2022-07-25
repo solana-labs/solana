@@ -184,7 +184,7 @@ fn try_lock_for_tx<'a>(
         .readonly
         .iter()
         .cloned()
-        .map(|&a| address_book.try_lock_address(a, RequestedUsage::Readonly));
+        .map(|&a| panic!());
 
     writable_guards.chain(readonly_guards).collect::<Vec<_>>()
 }
