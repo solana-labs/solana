@@ -22,6 +22,7 @@ impl ExecutionEnvironment {
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
     for tx in entry.transactions {
         let tx = bank.verify_transaction(tx, solana_sdk::transaction::TransactionVerificationMode::FullVerification).unwrap();
+        let sig = tx.signature();
         let locks = tx.get_account_locks();
         //tx.foo();
     }
