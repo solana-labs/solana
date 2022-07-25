@@ -31,7 +31,7 @@ struct Guard {
 
 #[atomic_enum]
 #[derive(PartialEq)]
-struct Usage {
+enum Usage {
 }
 
 struct Page {
