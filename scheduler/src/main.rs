@@ -74,6 +74,7 @@ impl AddressBook {
     }
 }
 
+#[derive(Ord)]
 struct Weight { // naming: Sequence Ordering?
     ix: usize, // index in ledger entry?
     randomness: usize, // tie breaker? random noise?
