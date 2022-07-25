@@ -53,7 +53,7 @@ struct TransactionQueue {
 }
 
 impl TransactionQueue {
-    fn add(fee: Fee, task: Task) {
+    fn add(&mut self, fee: Fee, task: Task) {
         panic!()
     }
 
