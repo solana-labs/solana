@@ -193,6 +193,12 @@ fn try_lock_for_tx<'a>(
     writable_attempts
 }
 
+fn ensure_unlock_for_tx(address_book: &mut AddressBook, Vec<LockAttempt>) {
+    for l in lock_attempts {
+        ensure_unlock(address_book, &l)
+    }
+}
+
 fn create_execution_environment(attemps: Vec<LockAttempt>) -> ExecutionEnvironment {
     // load account now from AccountsDb
     panic!()
@@ -343,9 +349,7 @@ impl ScheduleStage {
             if lock_attempts.iter().all(|g| g.is_success()) {
                 return create_execution_environment(lock_attempts);
             } else {
-                for l in lock_attempts {
-                    ensure_unlock(address_book, l)
-                }
+                ensure_unlock_for_tx(address_book, lock_attempts)
             }
         }
 
