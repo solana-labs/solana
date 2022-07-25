@@ -128,7 +128,10 @@ impl AddressBook {
                     }
                     CurrentUsage::Writable => {
                         match &requested_usage {
-                            RequestedUsage::Readonly | RequestedUsage::Writable => panic!(),
+                            RequestedUsage::Readonly | RequestedUsage::Writable => {
+                                // add to contended queeu?
+                                LockAttempt::failure(address)
+                            }
                         }
                     }
                 }
