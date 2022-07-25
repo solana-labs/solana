@@ -114,7 +114,7 @@ impl AddressBook {
                         page.current_usage = CurrentUsage::renew(requested_usage);
                         LockAttempt::success(address) 
                     }
-                    CurrentUsage::Readonly(ref curent_count) => {
+                    CurrentUsage::Readonly(ref current_count) => {
                         match &requested_usage {
                             RequestedUsage::Readonly => {
                                 current_count += 1;
