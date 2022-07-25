@@ -141,7 +141,7 @@ fn main() {
     solana_logger::setup();
     error!("hello");
     let thread_count = 10;
-    let (s, r) = bounded::<usize>(thread_count * 10);
+    let (s, r) = bounded::<((usize, usize, (Instant, ExecutionEnvironment)), Vec<u8>)>(thread_count * 10);
     let (s2, r2) = bounded(thread_count * 2);
 
     /*
