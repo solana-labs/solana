@@ -174,7 +174,7 @@ fn try_lock_for_tx<'a>(
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
 ) -> Vec<LockAttempt> {
-    let writable_guards = locks
+    let mut writable_guards = locks
         .writable
         .iter()
         .cloned()
@@ -189,6 +189,7 @@ fn try_lock_for_tx<'a>(
         .collect::<Vec<_>>();
 
     writable_guards.append(&mut readonly_guards)
+    writable_guards
 }
 
 fn create_execution_environment(guards: Vec<LockAttempt>) -> ExecutionEnvironment {
