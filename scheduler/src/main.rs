@@ -94,7 +94,14 @@ impl AddressBook {
 
                 match &page.current_usage {
                     Usage::Unused => {
-                        page.current_usage = requested_usage;
+                        match requested_usage {
+                            RequestedUsage::Readonly => {
+                                page.current_usage = Usage::Readonly//(1)
+                            }
+                            RequestedUsage::Writable => {
+                                page.current_usage = Usage::Writable
+                            }
+                        }
                         LockAttempt::success(address) 
                     }
                     Usage::Readonly => {
