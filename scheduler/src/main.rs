@@ -91,7 +91,10 @@ impl AddressBook {
                     }
                 }
             }
-            Entry::Vacant(entry) => todo!(),
+            Entry::Vacant(entry) => {
+                entry.insert(Page {
+                }).unwrap();
+            }
         }
 
         LockAttempt { account: () }
