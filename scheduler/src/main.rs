@@ -95,10 +95,15 @@ impl AddressBook {
                     Usage::Readonly => {
                         match &requested_usage {
                             Usage::Readonly => {
-                               LockAttempt::success(address)
+                                LockAttempt::success(address)
                             },
-                            Usage::Writable => panic!(),
-                            Usage::Unused => unreachable!(),
+                            Usage::Writable => {
+                                // add to contended queue?
+                                LockAttempt::failure(address)
+                            }
+                            Usage::Unused => {
+                                LockAttempt::success(address)
+                            }
                         }
                     }
                     Usage::Writable => {
