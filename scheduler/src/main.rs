@@ -20,6 +20,9 @@ impl ExecutionEnvironment {
 }
 
 fn schedule(entry: Entry) {
+    for tx in entry.transactions {
+        tx.foo();
+    }
 }
 
 fn main() {
