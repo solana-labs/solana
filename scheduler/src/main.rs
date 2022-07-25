@@ -174,6 +174,7 @@ fn try_lock_for_tx<'a>(
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
 ) -> Vec<LockAttempt> {
+    // no short-cuircuit; we at least all need to add to the contended queue
     let mut writable_attempts = locks
         .writable
         .iter()
@@ -192,7 +193,7 @@ fn try_lock_for_tx<'a>(
     writable_attempts
 }
 
-fn create_execution_environment(guards: Vec<LockAttempt>) -> ExecutionEnvironment {
+fn create_execution_environment(attemps: Vec<LockAttempt>) -> ExecutionEnvironment {
     // load account now from AccountsDb
     panic!()
 }
@@ -309,7 +310,7 @@ struct ScheduleStage {
 
 impl ScheduleStage {
     fn commit(ee: &mut ExecutionEnvironment) {
-        // par()-ly release address guards
+        // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
         // async-ly propagate the result to rpc subsystems
     }
@@ -341,6 +342,10 @@ impl ScheduleStage {
             let lock_attempts = try_lock_for_tx(address_book, &message_hash, &locks);
             if lock_attempts.iter().all(|g| g.is_success()) {
                 return create_execution_environment(lock_attempts);
+            } else {
+                for l in lock_attempts {
+                    l.ensure_unlock()
+                }
             }
         }
 
