@@ -102,6 +102,7 @@ impl AddressBook {
                                 LockAttempt::failure(address)
                             }
                             Usage::Unused => {
+                                page.current_usage = requested_usage;
                                 LockAttempt::success(address)
                             }
                         }
