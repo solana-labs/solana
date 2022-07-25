@@ -1,3 +1,5 @@
+#![feature(map_first_last)]
+
 use log::*;
 use crossbeam_channel::bounded;
 use crossbeam_channel::unbounded;
