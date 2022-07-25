@@ -218,6 +218,7 @@ fn main() {
 }
 
 fn scheduler_loop(to_execution_stage: crossbeam_channel::Sender<usize>, from_execution_stage: crossbeam_channel::Receiver<usize>) {
+    use crossbeam_channel::select;
     let exit = true;
     while exit {
         select! {
