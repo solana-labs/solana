@@ -272,13 +272,17 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         entry: Entry,
         bank: solana_runtime::bank::Bank,
+        from_previous_stage: crossbeam_channel::Receiver<u8>,
         to_execution_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
         from_execution_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
+        to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
     ) {
         use crossbeam_channel::select;
         let exit = true;
         while exit {
             select! {
+                recv(from_previous_stage) -> tx => {
+                }
                 send(to_execution_stage, schedule(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
                 }
