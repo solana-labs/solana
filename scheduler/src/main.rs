@@ -173,10 +173,10 @@ impl AddressBook {
                         }
                     }
                 }
-            }
 
-            if now_unused {
-                page.current_usage = CurrentUsage::Unused
+                if now_unused {
+                    page.current_usage = CurrentUsage::Unused
+                }
             }
         }
     }
