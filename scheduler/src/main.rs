@@ -74,9 +74,10 @@ impl AddressBook {
     }
 }
 
-struct Fee {
+struct Weight { // naming: Sequence Ordering?
     ix: usize,
-    random_sequence: usize, // tie breaker? random noise?
+    randomness: usize, // tie breaker? random noise?
+    // fee?
 }
 
 struct Task {
@@ -85,11 +86,11 @@ struct Task {
 
 // RunnableQueue, ContendedQueue?
 struct TransactionQueue {
-    map: std::collections::BTreeMap<Fee, Task>,
+    map: std::collections::BTreeMap<Weight, Task>,
 }
 
 impl TransactionQueue {
-    fn add(&mut self, fee: Fee, task: Task) {
+    fn add(&mut self, weight: Weight, task: Task) {
         panic!()
     }
 
@@ -244,9 +245,9 @@ impl ScheduleStage {
             .unwrap();
         //tx.foo();
         tx_queue.add(
-            Fee {
+            Sequence {
                 ix,
-                random_sequence: 32322,
+                random: 32322,
             },
             Task { tx },
         );
