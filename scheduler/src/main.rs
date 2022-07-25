@@ -54,7 +54,7 @@ impl AddressBook {
         match self.map.entry(address) {
             Entry::Occupied(entry) => {
                 match &entry.get().usage {
-                    Writable => return Err(())
+                    Usage::Writable => return Err(())
                 }
             }
             Entry::Vacant(entry) => todo!()
