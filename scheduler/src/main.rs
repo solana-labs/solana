@@ -152,6 +152,36 @@ fn main() {
         }
     }).unwrap();
     */
+    let pc = std::thread::Builder::new().name("prosumer".to_string()).spawn(move || {
+        let mut rng = rand::thread_rng();
+        let mut count = 0;
+        let start = std::time::Instant::now();
+        //let mut rrr = Vec::with_capacity(10);
+        //for _ in 0..100 {
+        let mut elapsed = 0;
+
+        loop {
+            select! {
+                send(s2, (std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 1000)))) -> res => {
+                    res.unwrap();
+                }
+                recv(r) -> msg => {
+                    let rr = msg.unwrap();
+                    elapsed += rr.0.2.0.elapsed().as_nanos();
+                    //    rrr.push((rr.0.2.0.elapsed(), rr));
+                    //}
+
+                    //for rr in rrr {
+                    count += 1;
+                    //error!("recv-ed: {:?}", &rr);
+                    if count % 100_000 == 0 {
+                        error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
+                        //break
+                    }
+                }
+                }
+        }
+    };
 
     let mut joins = (0..thread_count).map(|thx| {
         let s = s.clone();
@@ -197,36 +227,7 @@ fn main() {
 
     //joins.push(p);
 
-    joins.push(std::thread::Builder::new().name("prosumer".to_string()).spawn(move || {
-        let mut rng = rand::thread_rng();
-        let mut count = 0;
-        let start = std::time::Instant::now();
-        //let mut rrr = Vec::with_capacity(10);
-        //for _ in 0..100 {
-        let mut elapsed = 0;
-
-        loop {
-            select! {
-                send(s2, (std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 1000)))) -> res => {
-                    res.unwrap();
-                }
-                recv(r) -> msg => {
-                    let rr = msg.unwrap();
-                    elapsed += rr.0.2.0.elapsed().as_nanos();
-                    //    rrr.push((rr.0.2.0.elapsed(), rr));
-                    //}
-
-                    //for rr in rrr {
-                    count += 1;
-                    //error!("recv-ed: {:?}", &rr);
-                    if count % 100_000 == 0 {
-                        error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
-                        //break
-                    }
-                }
-                }
-        }
-    }).unwrap());
+    joins.push(pc).unwrap());
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
 
