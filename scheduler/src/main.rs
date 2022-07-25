@@ -55,7 +55,7 @@ impl TransactionQueue {
     fn add() {
     }
 
-    fn tasks() -> bool {
+    fn tasks(&self) -> bool {
         map.values()
     }
 }
