@@ -30,12 +30,6 @@ impl ExecutionEnvironment {
     //fn abort() {
     //  pass AtomicBool into InvokeContext??
     //}
-
-    fn commit(&mut self) {
-        // release address guards
-        // clone updated Accounts into address book
-        // async-ly propagate the result to rpc subsystems
-    }
 }
 
 struct AddressGuard {
@@ -267,6 +261,12 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
+    fn commit(ee: &mut ExecutionEnvironment) {
+        // release address guards
+        // clone updated Accounts into address book
+        // async-ly propagate the result to rpc subsystems
+    }
+
     fn run(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
@@ -288,8 +288,8 @@ impl ScheduleStage {
                     res.unwrap();
                 }
                 recv(from_execution_stage) -> msg => {
-                    let msg = msg.unwrap();
-                    msg.commit();
+                    let mut msg = msg.unwrap();
+                    Self::commit(msg);
                     committed_ee = Some(msg);
                 }
             }
