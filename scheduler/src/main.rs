@@ -79,6 +79,7 @@ impl CurrentUsage {
     }
 }
 
+#[derive(Copy)]
 enum RequestedUsage {
     Readonly,
     Writable,
