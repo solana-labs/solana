@@ -138,6 +138,9 @@ impl AddressBook {
             }
         }
     }
+
+    fn ensure_unlock(attempt: &LockAttempt) {
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
