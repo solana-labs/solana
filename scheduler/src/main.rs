@@ -42,6 +42,10 @@ fn try_lock_tx(tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     writable_guards
 }
 
+fn create_execution_environment() -> ExecutionEnvironment {
+    panic!()
+}
+
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
     let mut tx_queue = std::collections::BTreeMap::default();
 
