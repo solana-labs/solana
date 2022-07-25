@@ -35,7 +35,7 @@ impl ExecutionEnvironment {
     //}
 }
 
-struct AddressGuard {
+struct LockAttempt {
     account: (),
 }
 
@@ -58,7 +58,7 @@ struct AddressBook {
 }
 
 impl AddressBook {
-    fn try_lock_address(&mut self, address: Pubkey, requested_usage: Usage) -> Result<AddressGuard, ()> {
+    fn try_lock_address(&mut self, address: Pubkey, requested_usage: Usage) -> Result<LockAttempt, ()> {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
@@ -88,7 +88,7 @@ impl AddressBook {
             Entry::Vacant(entry) => todo!(),
         }
 
-        Ok(AddressGuard { account: () })
+        Ok(LockAttempt { account: () })
     }
 }
 
@@ -125,7 +125,7 @@ fn try_lock_for_tx<'a>(
     address_book: &mut AddressBook,
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
-) -> Result<Vec<AddressGuard>, ()> {
+) -> Result<Vec<LockAttempt>, ()> {
     let writable_guards = locks
         .writable
         .iter()
@@ -136,7 +136,7 @@ fn try_lock_for_tx<'a>(
     writable_guards
 }
 
-fn create_execution_environment(guards: Vec<AddressGuard>) -> ExecutionEnvironment {
+fn create_execution_environment(guards: Vec<LockAttempt>) -> ExecutionEnvironment {
     panic!()
 }
 
