@@ -28,6 +28,13 @@ struct Guard {
     account: (),
 } 
 
+struct Foo {
+}
+
+struct AddressMap {
+    map: std::collections::BTreeMap<Pubkey, Foo>
+}
+
 fn try_lock_address(address: &Pubkey) -> Result<Guard, ()> {
     Ok(Guard{account: ()})
 }
