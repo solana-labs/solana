@@ -2,7 +2,7 @@ use {
     crate::{
         accounts_index::{
             AccountMapEntry, AccountMapEntryInner, AccountMapEntryMeta, IndexValue,
-            PreAllocatedAccountMapEntry, RefCount, SlotList, SlotSlice, ZeroLamport,
+            PreAllocatedAccountMapEntry, RefCount, SlotList, SlotSlice, UpsertReclaim, ZeroLamport,
         },
         bucket_map_holder::{Age, BucketMapHolder},
         bucket_map_holder_stats::BucketMapHolderStats,
@@ -364,7 +364,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         new_value: PreAllocatedAccountMapEntry<T>,
         other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
+        reclaim: UpsertReclaim,
     ) {
         let mut updated_in_mem = true;
         // try to get it just from memory first using only a read lock
@@ -375,7 +375,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     new_value.into(),
                     other_slot,
                     reclaims,
-                    previous_slot_entry_was_cached,
+                    reclaim,
                 );
                 // age is incremented by caller
             } else {
@@ -392,7 +392,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             new_value.into(),
                             other_slot,
                             reclaims,
-                            previous_slot_entry_was_cached,
+                            reclaim,
                         );
                         current.set_age(self.storage.future_age_to_flush());
                     }
@@ -407,13 +407,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // We may like this to always run, but it is unclear.
                             // If disk bucket needs to resize, then this call can stall for a long time.
                             // Right now, we know it is safe during startup.
-                            let already_existed = self.upsert_on_disk(
-                                vacant,
-                                new_value,
-                                other_slot,
-                                reclaims,
-                                previous_slot_entry_was_cached,
-                            );
+                            let already_existed = self
+                                .upsert_on_disk(vacant, new_value, other_slot, reclaims, reclaim);
                             if !already_existed {
                                 self.stats().inc_insert();
                             }
@@ -427,7 +422,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                     new_value.into(),
                                     other_slot,
                                     reclaims,
-                                    previous_slot_entry_was_cached,
+                                    reclaim,
                                 );
                                 disk_entry
                             } else {
@@ -471,7 +466,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         new_value: (Slot, T),
         other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
+        reclaim: UpsertReclaim,
     ) {
         let mut slot_list = current.slot_list.write().unwrap();
         let (slot, new_entry) = new_value;
@@ -481,7 +476,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             new_entry,
             other_slot,
             reclaims,
-            previous_slot_entry_was_cached,
+            reclaim,
         );
         if addref {
             current.add_un_ref(true);
@@ -504,7 +499,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         account_info: T,
         mut other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
+        reclaim: UpsertReclaim,
     ) -> bool {
         let mut addref = !account_info.is_cached();
 
@@ -539,17 +534,21 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let reclaim_item = if !(found_slot || found_other_slot) {
                         // first time we found an entry in 'slot' or 'other_slot', so replace it in-place.
                         // this may be the only instance we find
-                        let mut new_item = (slot, account_info);
-                        std::mem::swap(&mut new_item, &mut slot_list[slot_list_index]);
-                        new_item
+                        std::mem::replace(&mut slot_list[slot_list_index], (slot, account_info))
                     } else {
                         // already replaced one entry, so this one has to be removed
                         slot_list.remove(slot_list_index)
                     };
-                    if previous_slot_entry_was_cached {
-                        assert!(is_cur_account_cached);
-                    } else {
-                        reclaims.push(reclaim_item);
+                    match reclaim {
+                        UpsertReclaim::PopulateReclaims => {
+                            reclaims.push(reclaim_item);
+                        }
+                        UpsertReclaim::PreviousSlotEntryWasCached => {
+                            assert!(is_cur_account_cached);
+                        }
+                        UpsertReclaim::IgnoreReclaims => {
+                            // do nothing. nothing to assert. nothing to return in reclaims
+                        }
                     }
 
                     if matched_slot {
@@ -618,7 +617,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     (slot, account_info),
                     None, // should be None because we don't expect a different slot # during index generation
                     &mut Vec::default(),
-                    false,
+                    UpsertReclaim::PopulateReclaims, // this should be ignore?
                 );
                 (
                     true, /* found in mem */
@@ -637,7 +636,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         new_entry,
                         None, // not changing slots here since it doesn't exist in the index at all
                         &mut Vec::default(),
-                        false,
+                        UpsertReclaim::PopulateReclaims,
                     );
                     (false, already_existed)
                 } else {
@@ -652,7 +651,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // There can be no 'other' slot in the list.
                             None,
                             &mut Vec::default(),
-                            false,
+                            UpsertReclaim::PopulateReclaims,
                         );
                         vacant.insert(disk_entry);
                         (
@@ -694,7 +693,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         new_entry: PreAllocatedAccountMapEntry<T>,
         other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
-        previous_slot_entry_was_cached: bool,
+        reclaim: UpsertReclaim,
     ) -> bool {
         if let Some(disk) = self.bucket.as_ref() {
             let mut existed = false;
@@ -709,7 +708,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         account_info,
                         other_slot,
                         reclaims,
-                        previous_slot_entry_was_cached,
+                        reclaim,
                     );
                     if addref {
                         ref_count += 1
@@ -1005,11 +1004,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     fn write_startup_info_to_disk(&self) {
-        let mut insert = vec![];
-        {
-            let mut lock = self.startup_info.lock().unwrap();
-            std::mem::swap(&mut insert, &mut lock.insert);
-        }
+        let insert = std::mem::take(&mut self.startup_info.lock().unwrap().insert);
         if insert.is_empty() {
             // nothing to insert for this bin
             return;
@@ -1069,10 +1064,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // in order to return accurate and complete duplicates, we must have nothing left remaining to insert
         assert!(write.insert.is_empty());
 
-        let write = &mut write.duplicates;
-        let mut duplicates = vec![];
-        std::mem::swap(&mut duplicates, write);
-        duplicates
+        std::mem::take(&mut write.duplicates)
     }
 
     /// synchronize the in-mem index with the disk index
@@ -1672,7 +1664,7 @@ mod tests {
     #[test]
     fn test_update_slot_list_other() {
         solana_logger::setup();
-        let previous_slot_entry_was_cached = false;
+        let reclaim = UpsertReclaim::PopulateReclaims;
         let new_slot = 0;
         let info = 1;
         let other_value = info + 1;
@@ -1689,7 +1681,7 @@ mod tests {
                     info,
                     other_slot,
                     &mut reclaims,
-                    previous_slot_entry_was_cached
+                    reclaim
                 ),
                 "other_slot: {:?}",
                 other_slot
@@ -1711,7 +1703,7 @@ mod tests {
                 info,
                 other_slot,
                 &mut reclaims,
-                previous_slot_entry_was_cached
+                reclaim
             ),
             "other_slot: {:?}",
             other_slot
@@ -1732,7 +1724,7 @@ mod tests {
                 info,
                 other_slot,
                 &mut reclaims,
-                previous_slot_entry_was_cached
+                reclaim
             ),
             "other_slot: {:?}",
             other_slot
@@ -1805,7 +1797,7 @@ mod tests {
                         info,
                         other_slot,
                         &mut reclaims,
-                        previous_slot_entry_was_cached,
+                        reclaim,
                     );
 
                     // calculate expected results

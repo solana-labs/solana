@@ -265,6 +265,8 @@ impl Accounts {
             let mut accounts = Vec::with_capacity(account_keys.len());
             let mut account_deps = Vec::with_capacity(account_keys.len());
             let mut rent_debits = RentDebits::default();
+            let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
+                .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
             for (i, key) in account_keys.iter().enumerate() {
                 let account = if !message.is_non_loader_key(i) {
                     // Fill in an empty account for the program slots.
@@ -292,6 +294,7 @@ impl Accounts {
                                                 key,
                                                 &mut account,
                                                 self.accounts_db.filler_account_suffix.as_ref(),
+                                                preserve_rent_epoch_for_rent_exempt_accounts,
                                             )
                                             .rent_amount;
                                         (account, rent_due)
@@ -438,6 +441,8 @@ impl Accounts {
             feature_set
                 .is_active(&feature_set::include_account_index_in_rent_error::ID)
                 .then(|| payer_index),
+            feature_set
+                .is_active(&feature_set::prevent_crediting_accounts_that_end_rent_paying::id()),
         )
     }
 
@@ -1182,15 +1187,16 @@ impl Accounts {
     /// Store the accounts into the DB
     // allow(clippy) needed for various gating flags
     #[allow(clippy::too_many_arguments)]
-    pub fn store_cached<'a>(
+    pub(crate) fn store_cached(
         &self,
         slot: Slot,
-        txs: &'a [SanitizedTransaction],
-        res: &'a [TransactionExecutionResult],
-        loaded: &'a mut [TransactionLoadResult],
+        txs: &[SanitizedTransaction],
+        res: &[TransactionExecutionResult],
+        loaded: &mut [TransactionLoadResult],
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
+        preserve_rent_epoch_for_rent_exempt_accounts: bool,
     ) {
         let (accounts_to_store, txn_signatures) = self.collect_accounts_to_store(
             txs,
@@ -1199,6 +1205,7 @@ impl Accounts {
             rent_collector,
             durable_nonce,
             lamports_per_signature,
+            preserve_rent_epoch_for_rent_exempt_accounts,
         );
         self.accounts_db
             .store_cached((slot, &accounts_to_store[..]), Some(&txn_signatures));
@@ -1225,6 +1232,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         durable_nonce: &DurableNonce,
         lamports_per_signature: u64,
+        preserve_rent_epoch_for_rent_exempt_accounts: bool,
     ) -> (
         Vec<(&'a Pubkey, &'a AccountSharedData)>,
         Vec<Option<&'a Signature>>,
@@ -1280,7 +1288,11 @@ impl Accounts {
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
                         if account.rent_epoch() == INITIAL_RENT_EPOCH {
                             let rent = rent_collector
-                                .collect_from_created_account(address, account)
+                                .collect_from_created_account(
+                                    address,
+                                    account,
+                                    preserve_rent_epoch_for_rent_exempt_accounts,
+                                )
                                 .rent_amount;
                             loaded_transaction.rent += rent;
                             loaded_transaction.rent_debits.insert(
@@ -1537,8 +1549,7 @@ mod tests {
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.start));
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.end));
         accts.hold_range_in_memory(&range, true, &test_thread_pool());
-        idx.account_maps.iter().enumerate().for_each(|(_bin, map)| {
-            let map = map.read().unwrap();
+        idx.account_maps.iter().for_each(|map| {
             assert_eq!(
                 map.cache_ranges_held.read().unwrap().to_vec(),
                 vec![range.clone()]
@@ -1546,7 +1557,6 @@ mod tests {
         });
         accts.hold_range_in_memory(&range2, true, &test_thread_pool());
         idx.account_maps.iter().enumerate().for_each(|(bin, map)| {
-            let map = map.read().unwrap();
             let expected = if bin == 0 {
                 vec![range.clone(), range2_inclusive.clone()]
             } else {
@@ -2995,6 +3005,7 @@ mod tests {
             &rent_collector,
             &DurableNonce::default(),
             0,
+            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 2);
         assert!(collected_accounts
@@ -3478,6 +3489,7 @@ mod tests {
             &rent_collector,
             &durable_nonce,
             0,
+            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 2);
         assert_eq!(
@@ -3592,6 +3604,7 @@ mod tests {
             &rent_collector,
             &durable_nonce,
             0,
+            true, // preserve_rent_epoch_for_rent_exempt_accounts
         );
         assert_eq!(collected_accounts.len(), 1);
         let collected_nonce_account = collected_accounts

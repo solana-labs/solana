@@ -309,6 +309,10 @@ thread_local! {static PER_THREAD_ROCKS_PERF_CONTEXT: RefCell<PerfContext> = RefC
 
 // The minimum time duration between two RocksDB perf samples of the same operation.
 const PERF_SAMPLING_MIN_DURATION: Duration = Duration::from_secs(1);
+pub(crate) const PERF_METRIC_OP_NAME_GET: &str = "get";
+
+pub(crate) const PERF_METRIC_OP_NAME_PUT: &str = "put";
+pub(crate) const PERF_METRIC_OP_NAME_WRITE_BATCH: &str = "write_batch";
 
 /// The function enables RocksDB PerfContext once for every `sample_interval`.
 ///
@@ -335,6 +339,7 @@ pub(crate) fn maybe_enable_rocksdb_perf(
 /// reporting.
 pub(crate) fn report_rocksdb_read_perf(
     cf_name: &'static str,
+    op_name: &'static str,
     total_op_duration: &Duration,
     column_options: &LedgerColumnOptions,
 ) {
@@ -344,7 +349,7 @@ pub(crate) fn report_rocksdb_read_perf(
         datapoint_info!(
             "blockstore_rocksdb_read_perf",
             // tags that support group-by operations
-            "op" => "get",
+            "op" => op_name,
             "cf_name" => cf_name,
             "storage" => column_options.get_storage_type_string(),
             "compression" => column_options.get_compression_type_string(),

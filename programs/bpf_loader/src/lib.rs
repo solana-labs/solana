@@ -41,10 +41,11 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            cap_accounts_data_len, disable_bpf_deprecated_load_instructions,
-            disable_bpf_unresolved_symbols_at_runtime, disable_deploy_of_alloc_free_syscall,
-            disable_deprecated_loader, error_on_syscall_bpf_function_hash_collisions,
-            reduce_required_deploy_balance, reject_callx_r10,
+            cap_accounts_data_len, cap_bpf_program_instruction_accounts,
+            disable_bpf_deprecated_load_instructions, disable_bpf_unresolved_symbols_at_runtime,
+            disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
+            enable_bpf_loader_extend_program_data_ix,
+            error_on_syscall_bpf_function_hash_collisions, reject_callx_r10,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -620,11 +621,8 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidArgument);
             }
 
-            let predrain_buffer = invoke_context
-                .feature_set
-                .is_active(&reduce_required_deploy_balance::id());
-            if predrain_buffer {
-                // Drain the Buffer account to payer before paying for programdata account
+            // Drain the Buffer account to payer before paying for programdata account
+            {
                 let mut payer =
                     instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
                 payer.checked_add_lamports(buffer_lamports)?;
@@ -705,17 +703,6 @@ fn process_loader_upgradeable_instruction(
             })?;
             program.set_executable(true)?;
             drop(program);
-
-            if !predrain_buffer {
-                // Drain the Buffer account back to the payer
-                let mut payer =
-                    instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
-                payer.checked_add_lamports(buffer_lamports)?;
-                drop(payer);
-                let mut buffer =
-                    instruction_context.try_borrow_instruction_account(transaction_context, 3)?;
-                buffer.set_lamports(0)?;
-            }
 
             ic_logger_msg!(log_collector, "Deployed program {:?}", new_program_id);
         }
@@ -1058,6 +1045,102 @@ fn process_loader_upgradeable_instruction(
                 }
             }
         }
+        UpgradeableLoaderInstruction::ExtendProgramData { additional_bytes } => {
+            if !invoke_context
+                .feature_set
+                .is_active(&enable_bpf_loader_extend_program_data_ix::ID)
+            {
+                return Err(InstructionError::InvalidInstructionData);
+            }
+
+            if additional_bytes == 0 {
+                ic_logger_msg!(log_collector, "Additional bytes must be greater than 0");
+                return Err(InstructionError::InvalidInstructionData);
+            }
+
+            const PROGRAM_DATA_ACCOUNT_INDEX: usize = 0;
+            #[allow(dead_code)]
+            // System program is only required when a CPI is performed
+            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: usize = 1;
+            const OPTIONAL_PAYER_ACCOUNT_INDEX: usize = 2;
+
+            let programdata_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
+            let programdata_key = *programdata_account.get_key();
+
+            if program_id != programdata_account.get_owner() {
+                ic_logger_msg!(log_collector, "ProgramData owner is invalid");
+                return Err(InstructionError::InvalidAccountOwner);
+            }
+            if !programdata_account.is_writable() {
+                ic_logger_msg!(log_collector, "ProgramData is not writable");
+                return Err(InstructionError::InvalidArgument);
+            }
+
+            let old_len = programdata_account.get_data().len();
+            let new_len = old_len.saturating_add(additional_bytes as usize);
+            if new_len > MAX_PERMITTED_DATA_LENGTH as usize {
+                ic_logger_msg!(
+                    log_collector,
+                    "Extended ProgramData length of {} bytes exceeds max account data length of {} bytes",
+                    new_len,
+                    MAX_PERMITTED_DATA_LENGTH
+                );
+                return Err(InstructionError::InvalidRealloc);
+            }
+
+            if let UpgradeableLoaderState::ProgramData {
+                slot: _,
+                upgrade_authority_address,
+            } = programdata_account.get_state()?
+            {
+                if upgrade_authority_address.is_none() {
+                    ic_logger_msg!(
+                        log_collector,
+                        "Cannot extend ProgramData accounts that are not upgradeable"
+                    );
+                    return Err(InstructionError::Immutable);
+                }
+            } else {
+                ic_logger_msg!(log_collector, "ProgramData state is invalid");
+                return Err(InstructionError::InvalidAccountData);
+            }
+
+            let required_payment = {
+                let balance = programdata_account.get_lamports();
+                let rent = invoke_context.get_sysvar_cache().get_rent()?;
+                let min_balance = rent.minimum_balance(new_len).max(1);
+                min_balance.saturating_sub(balance)
+            };
+
+            // Borrowed accounts need to be dropped before native_invoke
+            drop(programdata_account);
+
+            if required_payment > 0 {
+                let payer_key = *transaction_context.get_key_of_account_at_index(
+                    instruction_context.get_index_of_instruction_account_in_transaction(
+                        OPTIONAL_PAYER_ACCOUNT_INDEX,
+                    )?,
+                )?;
+
+                invoke_context.native_invoke(
+                    system_instruction::transfer(&payer_key, &programdata_key, required_payment),
+                    &[],
+                )?;
+            }
+
+            let transaction_context = &invoke_context.transaction_context;
+            let instruction_context = transaction_context.get_current_instruction_context()?;
+            let mut programdata_account = instruction_context
+                .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
+            programdata_account.set_data_length(new_len)?;
+
+            ic_logger_msg!(
+                log_collector,
+                "Extended ProgramData account by {} bytes",
+                additional_bytes
+            );
+        }
     }
 
     Ok(())
@@ -1203,8 +1286,13 @@ impl Executor for BpfExecutor {
         let program_id = *instruction_context.get_last_program_key(transaction_context)?;
 
         let mut serialize_time = Measure::start("serialize");
-        let (mut parameter_bytes, account_lengths) =
-            serialize_parameters(invoke_context.transaction_context, instruction_context)?;
+        let (mut parameter_bytes, account_lengths) = serialize_parameters(
+            invoke_context.transaction_context,
+            instruction_context,
+            invoke_context
+                .feature_set
+                .is_active(&cap_bpf_program_instruction_accounts::ID),
+        )?;
         serialize_time.stop();
 
         let mut create_vm_time = Measure::start("create_vm");

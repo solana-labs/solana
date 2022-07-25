@@ -5,4 +5,5 @@ use solana_program_runtime::compute_budget::ComputeBudget;
 pub struct RuntimeConfig {
     pub bpf_jit: bool,
     pub compute_budget: Option<ComputeBudget>,
+    pub log_messages_bytes_limit: Option<usize>,
 }

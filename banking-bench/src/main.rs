@@ -356,6 +356,7 @@ fn main() {
             None,
             replay_vote_sender,
             Arc::new(RwLock::new(CostModel::default())),
+            None,
             Arc::new(connection_cache),
             bank_forks.clone(),
         );

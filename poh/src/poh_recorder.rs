@@ -459,7 +459,6 @@ impl PohRecorder {
     // synchronize PoH with a bank
     pub fn reset(&mut self, reset_bank: Arc<Bank>, next_leader_slot: Option<(Slot, Slot)>) {
         self.clear_bank();
-        let mut cache = vec![];
         let blockhash = reset_bank.last_blockhash();
         let poh_hash = {
             let mut poh = self.poh.lock().unwrap();
@@ -475,8 +474,7 @@ impl PohRecorder {
             reset_bank.slot()
         );
 
-        std::mem::swap(&mut cache, &mut self.tick_cache);
-
+        self.tick_cache = vec![];
         self.start_bank = reset_bank;
         self.tick_height = (self.start_slot() + 1) * self.ticks_per_slot;
         self.start_tick_height = self.tick_height + 1;

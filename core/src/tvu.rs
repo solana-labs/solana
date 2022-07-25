@@ -41,13 +41,8 @@ use {
         rpc_subscriptions::RpcSubscriptions,
     },
     solana_runtime::{
-        accounts_background_service::AbsRequestSender,
-        bank_forks::BankForks,
-        commitment::BlockCommitmentCache,
-        cost_model::CostModel,
-        transaction_cost_metrics_sender::{
-            TransactionCostMetricsSender, TransactionCostMetricsService,
-        },
+        accounts_background_service::AbsRequestSender, bank_forks::BankForks,
+        commitment::BlockCommitmentCache, cost_model::CostModel,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
@@ -71,7 +66,6 @@ pub struct Tvu {
     voting_service: VotingService,
     warm_quic_cache_service: Option<WarmQuicCacheService>,
     drop_bank_service: DropBankService,
-    transaction_cost_metrics_service: TransactionCostMetricsService,
 }
 
 pub struct TvuSockets {
@@ -133,6 +127,7 @@ impl Tvu {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         wait_to_vote_slot: Option<Slot>,
         accounts_background_request_sender: AbsRequestSender,
+        log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
     ) -> Self {
         let TvuSockets {
@@ -268,14 +263,6 @@ impl Tvu {
 
         let (drop_bank_sender, drop_bank_receiver) = unbounded();
 
-        let (tx_cost_metrics_sender, tx_cost_metrics_receiver) = unbounded();
-        let transaction_cost_metrics_sender = Some(TransactionCostMetricsSender::new(
-            cost_model.clone(),
-            tx_cost_metrics_sender,
-        ));
-        let transaction_cost_metrics_service =
-            TransactionCostMetricsService::new(tx_cost_metrics_receiver);
-
         let drop_bank_service = DropBankService::new(drop_bank_receiver);
 
         let replay_stage = ReplayStage::new(
@@ -299,7 +286,7 @@ impl Tvu {
             voting_sender,
             drop_bank_sender,
             block_metadata_notifier,
-            transaction_cost_metrics_sender,
+            log_messages_bytes_limit,
         );
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -325,7 +312,6 @@ impl Tvu {
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
-            transaction_cost_metrics_service,
         }
     }
 
@@ -345,7 +331,6 @@ impl Tvu {
             warmup_service.join()?;
         }
         self.drop_bank_service.join()?;
-        self.transaction_cost_metrics_service.join()?;
         Ok(())
     }
 }
@@ -462,6 +447,7 @@ pub mod tests {
             None,
             None,
             AbsRequestSender::default(),
+            None,
             &Arc::new(ConnectionCache::default()),
         );
         exit.store(true, Ordering::Relaxed);

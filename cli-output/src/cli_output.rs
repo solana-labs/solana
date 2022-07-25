@@ -251,6 +251,7 @@ pub struct CliSlotStatus {
 pub struct CliEpochInfo {
     #[serde(flatten)]
     pub epoch_info: EpochInfo,
+    pub epoch_completed_percent: f64,
     #[serde(skip)]
     pub average_slot_time_ms: u64,
     #[serde(skip)]
@@ -285,10 +286,7 @@ impl fmt::Display for CliEpochInfo {
         writeln_name_value(
             f,
             "Epoch Completed Percent:",
-            &format!(
-                "{:>3.3}%",
-                self.epoch_info.slot_index as f64 / self.epoch_info.slots_in_epoch as f64 * 100_f64
-            ),
+            &format!("{:>3.3}%", self.epoch_completed_percent),
         )?;
         let remaining_slots_in_epoch = self.epoch_info.slots_in_epoch - self.epoch_info.slot_index;
         writeln_name_value(
@@ -2714,6 +2712,45 @@ impl fmt::Display for CliPingConfirmationStats {
 }
 impl QuietDisplay for CliPingConfirmationStats {}
 impl VerboseDisplay for CliPingConfirmationStats {}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CliBalance {
+    pub lamports: u64,
+    #[serde(skip)]
+    pub config: BuildBalanceMessageConfig,
+}
+
+impl QuietDisplay for CliBalance {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        let config = BuildBalanceMessageConfig {
+            show_unit: false,
+            trim_trailing_zeros: true,
+            ..self.config
+        };
+        let balance_message = build_balance_message_with_config(self.lamports, &config);
+        write!(w, "{}", balance_message)
+    }
+}
+
+impl VerboseDisplay for CliBalance {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        let config = BuildBalanceMessageConfig {
+            show_unit: true,
+            trim_trailing_zeros: false,
+            ..self.config
+        };
+        let balance_message = build_balance_message_with_config(self.lamports, &config);
+        write!(w, "{}", balance_message)
+    }
+}
+
+impl fmt::Display for CliBalance {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let balance_message = build_balance_message_with_config(self.lamports, &self.config);
+        write!(f, "{}", balance_message)
+    }
+}
 
 #[cfg(test)]
 mod tests {

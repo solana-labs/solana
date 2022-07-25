@@ -220,9 +220,8 @@ impl SlotMeta {
     }
 
     pub fn clear_unconfirmed_slot(&mut self) {
-        let mut new_self = SlotMeta::new_orphan(self.slot);
-        std::mem::swap(&mut new_self.next_slots, &mut self.next_slots);
-        std::mem::swap(self, &mut new_self);
+        let old = std::mem::replace(self, SlotMeta::new_orphan(self.slot));
+        self.next_slots = old.next_slots;
     }
 
     pub(crate) fn new(slot: Slot, parent_slot: Option<Slot>) -> Self {

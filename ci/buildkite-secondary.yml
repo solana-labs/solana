@@ -5,32 +5,32 @@ steps:
   - name: "publish tarball (x86_64-unknown-linux-gnu)"
     command: "ci/publish-tarball.sh"
     agents:
-      - "queue=release-build"
+      queue: "release-build"
     timeout_in_minutes: 60
   - name: "publish installer"
     command: "ci/publish-installer.sh"
     agents:
-      - "queue=release-build"
+      queue: "release-build"
     timeout_in_minutes: 5
   - wait
   - name: "publish docker"
     command: "sdk/docker-solana/build.sh"
     agents:
-      - "queue=release-build"
+      queue: "release-build"
     timeout_in_minutes: 60
   - name: "publish crate"
     command: "ci/publish-crate.sh"
     agents:
-      - "queue=release-build"
+      queue: "release-build"
     timeout_in_minutes: 240
     branches: "!master"
   - name: "publish tarball (aarch64-apple-darwin)"
     command: "ci/publish-tarball.sh"
     agents:
-      - "queue=release-build-aarch64-apple-darwin"
+      queue: "release-build-aarch64-apple-darwin"
     timeout_in_minutes: 60
   - name: "publish tarball (x86_64-apple-darwin)"
     command: "ci/publish-tarball.sh"
     agents:
-      - "queue=release-build-x86_64-apple-darwin"
+      queue: "release-build-x86_64-apple-darwin"
     timeout_in_minutes: 60

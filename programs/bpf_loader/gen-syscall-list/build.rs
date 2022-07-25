@@ -14,7 +14,7 @@ use {
  * to verify undefined symbols in a .so module that cargo-build-bpf has built.
  */
 fn main() {
-    let syscalls_rs_path = PathBuf::from("../src/syscalls.rs");
+    let syscalls_rs_path = PathBuf::from("../src/syscalls/mod.rs");
     let syscalls_txt_path = PathBuf::from("../../../sdk/bpf/syscalls.txt");
     println!(
         "cargo:warning=(not a warning) Generating {1} from {0}",

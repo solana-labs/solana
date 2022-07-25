@@ -44,7 +44,7 @@ use {
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
 // allow multiple connections for NAT and any open/close overlap
-pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
+pub const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
 
 pub struct TpuSockets {
     pub transactions: Vec<UdpSocket>,
@@ -95,6 +95,7 @@ impl Tpu {
         cost_model: &Arc<RwLock<CostModel>>,
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
+        log_messages_bytes_limit: Option<usize>,
         enable_quic_servers: bool,
     ) -> Self {
         let TpuSockets {
@@ -160,7 +161,7 @@ impl Tpu {
                 cluster_info.my_contact_info().tpu.ip(),
                 packet_sender,
                 exit.clone(),
-                MAX_QUIC_CONNECTIONS_PER_IP,
+                MAX_QUIC_CONNECTIONS_PER_PEER,
                 staked_nodes.clone(),
                 MAX_STAKED_CONNECTIONS,
                 MAX_UNSTAKED_CONNECTIONS,
@@ -176,7 +177,7 @@ impl Tpu {
                 cluster_info.my_contact_info().tpu_forwards.ip(),
                 forwarded_packet_sender,
                 exit.clone(),
-                MAX_QUIC_CONNECTIONS_PER_IP,
+                MAX_QUIC_CONNECTIONS_PER_PEER,
                 staked_nodes,
                 MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
                 0, // Prevent unstaked nodes from forwarding transactions
@@ -229,6 +230,7 @@ impl Tpu {
             transaction_status_sender,
             replay_vote_sender,
             cost_model.clone(),
+            log_messages_bytes_limit,
             connection_cache.clone(),
             bank_forks.clone(),
         );

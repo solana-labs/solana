@@ -80,6 +80,7 @@ use {
         send_transaction_service::{SendTransactionService, TransactionInfo},
         tpu_info::NullTpuInfo,
     },
+    solana_stake_program,
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
     solana_transaction_status::{
@@ -1739,24 +1740,24 @@ impl JsonRpcRequestProcessor {
             .state()
             .map_err(|_| Error::invalid_params("Invalid param: not a stake account".to_string()))?;
         let delegation = stake_state.delegation();
-        if delegation.is_none() {
-            match stake_state.meta() {
-                None => {
-                    return Err(Error::invalid_params(
-                        "Invalid param: stake account not initialized".to_string(),
-                    ));
-                }
-                Some(meta) => {
-                    let rent_exempt_reserve = meta.rent_exempt_reserve;
-                    return Ok(RpcStakeActivation {
-                        state: StakeActivationState::Inactive,
-                        active: 0,
-                        inactive: stake_account.lamports().saturating_sub(rent_exempt_reserve),
-                    });
-                }
+
+        let rent_exempt_reserve = stake_state
+            .meta()
+            .ok_or_else(|| {
+                Error::invalid_params("Invalid param: stake account not initialized".to_string())
+            })?
+            .rent_exempt_reserve;
+
+        let delegation = match delegation {
+            None => {
+                return Ok(RpcStakeActivation {
+                    state: StakeActivationState::Inactive,
+                    active: 0,
+                    inactive: stake_account.lamports().saturating_sub(rent_exempt_reserve),
+                })
             }
-        }
-        let delegation = delegation.unwrap();
+            Some(delegation) => delegation,
+        };
 
         let stake_history_account = bank
             .get_account(&stake_history::id())
@@ -1782,8 +1783,12 @@ impl JsonRpcRequestProcessor {
         let inactive_stake = match stake_activation_state {
             StakeActivationState::Activating => activating,
             StakeActivationState::Active => 0,
-            StakeActivationState::Deactivating => delegation.stake.saturating_sub(effective),
-            StakeActivationState::Inactive => delegation.stake,
+            StakeActivationState::Deactivating => stake_account
+                .lamports()
+                .saturating_sub(effective + rent_exempt_reserve),
+            StakeActivationState::Inactive => {
+                stake_account.lamports().saturating_sub(rent_exempt_reserve)
+            }
         };
         Ok(RpcStakeActivation {
             state: stake_activation_state,
@@ -2164,6 +2169,13 @@ impl JsonRpcRequestProcessor {
         let bank = self.get_bank_with_config(config)?;
         let fee = bank.get_fee_for_message(message);
         Ok(new_response(&bank, fee))
+    }
+
+    fn get_stake_minimum_delegation(&self, config: RpcContextConfig) -> Result<RpcResponse<u64>> {
+        let bank = self.get_bank_with_config(config)?;
+        let stake_minimum_delegation =
+            solana_stake_program::get_minimum_delegation(&bank.feature_set);
+        Ok(new_response(&bank, stake_minimum_delegation))
     }
 }
 
@@ -3397,6 +3409,13 @@ pub mod rpc_full {
             data: String,
             config: Option<RpcContextConfig>,
         ) -> Result<RpcResponse<Option<u64>>>;
+
+        #[rpc(meta, name = "getStakeMinimumDelegation")]
+        fn get_stake_minimum_delegation(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<u64>>;
     }
 
     pub struct FullImpl;
@@ -3965,6 +3984,15 @@ pub mod rpc_full {
                 Error::invalid_params(format!("invalid transaction message: {}", err))
             })?;
             meta.get_fee_for_message(&sanitized_message, config.unwrap_or_default())
+        }
+
+        fn get_stake_minimum_delegation(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<u64>> {
+            debug!("get_stake_minimum_delegation rpc request received");
+            meta.get_stake_minimum_delegation(config.unwrap_or_default())
         }
     }
 }
@@ -4892,13 +4920,12 @@ pub mod tests {
                     slot,
                 ));
 
-            let mut new_block_commitment = BlockCommitmentCache::new(
+            let new_block_commitment = BlockCommitmentCache::new(
                 HashMap::new(),
                 0,
                 CommitmentSlots::new_from_slot(self.bank_forks.read().unwrap().highest_slot()),
             );
-            let mut w_block_commitment_cache = self.block_commitment_cache.write().unwrap();
-            std::mem::swap(&mut *w_block_commitment_cache, &mut new_block_commitment);
+            *self.block_commitment_cache.write().unwrap() = new_block_commitment;
             bank
         }
 
@@ -8353,6 +8380,23 @@ pub mod tests {
             Error::invalid_params(
                 "invalid transaction: Transaction loads an address table account that doesn't exist".to_string(),
             )
+        );
+    }
+
+    #[test]
+    fn test_rpc_get_stake_minimum_delegation() {
+        let rpc = RpcHandler::start();
+        let bank = rpc.working_bank();
+        let expected_stake_minimum_delegation =
+            solana_stake_program::get_minimum_delegation(&bank.feature_set);
+
+        let request = create_test_request("getStakeMinimumDelegation", None);
+        let response: RpcResponse<u64> = parse_success_result(rpc.handle_request_sync(request));
+        let actual_stake_minimum_delegation = response.value;
+
+        assert_eq!(
+            actual_stake_minimum_delegation,
+            expected_stake_minimum_delegation
         );
     }
 }

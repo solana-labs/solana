@@ -32,7 +32,6 @@ use {
         cost_model::CostModel,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
-        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_account::VoteAccountsHashMap,
         vote_sender_types::ReplayVoteSender,
     },
@@ -174,6 +173,7 @@ fn execute_batch(
     timings: &mut ExecuteTimings,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_cost: u64,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let TransactionBatchWithIndexes {
         batch,
@@ -199,6 +199,7 @@ fn execute_batch(
         transaction_status_sender.is_some(),
         transaction_status_sender.is_some(),
         timings,
+        log_messages_bytes_limit,
     );
 
     if bank
@@ -281,6 +282,7 @@ fn execute_batches_internal(
     replay_vote_sender: Option<&ReplayVoteSender>,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_costs: &[u64],
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
@@ -307,6 +309,7 @@ fn execute_batches_internal(
                             &mut timings,
                             cost_capacity_meter.clone(),
                             tx_costs[index],
+                            log_messages_bytes_limit,
                         );
                         if let Some(entry_callback) = entry_callback {
                             entry_callback(bank);
@@ -382,6 +385,7 @@ fn execute_batches(
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     cost_model: &CostModel,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
         .iter()
@@ -466,6 +470,7 @@ fn execute_batches(
         replay_vote_sender,
         cost_capacity_meter,
         &tx_batch_costs,
+        log_messages_bytes_limit,
     )?;
 
     confirmation_timing.process_execute_batches_internal_metrics(execute_batches_internal_metrics);
@@ -518,9 +523,9 @@ pub fn process_entries_for_tests(
         None,
         transaction_status_sender,
         replay_vote_sender,
-        None,
         &mut confirmation_timing,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
+        None,
     );
 
     debug!("process_entries: {:?}", confirmation_timing);
@@ -536,9 +541,9 @@ fn process_entries_with_callback(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut batches = vec![];
@@ -567,6 +572,7 @@ fn process_entries_with_callback(
                         confirmation_timing,
                         cost_capacity_meter.clone(),
                         &cost_model,
+                        log_messages_bytes_limit,
                     )?;
                     batches.clear();
                     for hash in &tick_hashes {
@@ -576,11 +582,6 @@ fn process_entries_with_callback(
                 }
             }
             EntryType::Transactions(transactions) => {
-                if let Some(transaction_cost_metrics_sender) = transaction_cost_metrics_sender {
-                    transaction_cost_metrics_sender
-                        .send_cost_details(bank.clone(), transactions.iter());
-                }
-
                 let starting_index = *starting_index;
                 let transaction_indexes = if randomize {
                     let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
@@ -637,6 +638,7 @@ fn process_entries_with_callback(
                             confirmation_timing,
                             cost_capacity_meter.clone(),
                             &cost_model,
+                            log_messages_bytes_limit,
                         )?;
                         batches.clear();
                     }
@@ -653,6 +655,7 @@ fn process_entries_with_callback(
         confirmation_timing,
         cost_capacity_meter,
         &cost_model,
+        log_messages_bytes_limit,
     )?;
     for hash in tick_hashes {
         bank.register_tick(hash);
@@ -759,7 +762,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     bank0.set_compute_budget(opts.runtime_config.compute_budget);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
-    info!("processing ledger for slot 0...");
+    info!("Processing ledger for slot 0...");
     process_bank_0(
         &bank_forks.read().unwrap().root_bank(),
         blockstore,
@@ -787,7 +790,7 @@ pub fn process_blockstore_from_root(
     assert!(bank.parent().is_none());
 
     let start_slot = bank.slot();
-    info!("processing ledger from slot {}...", start_slot);
+    info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
     // ensure start_slot is rooted for correct replay
@@ -831,9 +834,15 @@ pub fn process_blockstore_from_root(
             accounts_background_request_sender,
         )?;
     } else {
-        // If there's no meta for the input `start_slot`, then we started from a snapshot
-        // and there's no point in processing the rest of blockstore and implies blockstore
-        // should be empty past this point.
+        // If there's no meta in the blockstore for the input `start_slot`,
+        // then we started from a snapshot and are unable to process anything.
+        //
+        // If the ledger has any data at all, the snapshot was likely taken at
+        // a slot that is not within the range of ledger min/max slot(s).
+        warn!(
+            "Starting slot {} is not in Blockstore, unable to process",
+            start_slot
+        );
     };
 
     let processing_time = now.elapsed();
@@ -956,10 +965,10 @@ fn confirm_full_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        None,
         opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
+        opts.runtime_config.log_messages_bytes_limit,
     )?;
 
     timing.accumulate(&confirmation_timing.execute_timings);
@@ -1082,10 +1091,10 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
+    log_messages_bytes_limit: Option<usize>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -1111,9 +1120,9 @@ pub fn confirm_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        transaction_cost_metrics_sender,
         entry_callback,
         recyclers,
+        log_messages_bytes_limit,
     )
 }
 
@@ -1126,9 +1135,9 @@ fn confirm_slot_entries(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
+    log_messages_bytes_limit: Option<usize>,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
     let (entries, num_shreds, slot_full) = slot_entries_load_result;
@@ -1227,9 +1236,9 @@ fn confirm_slot_entries(
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
-                transaction_cost_metrics_sender,
                 timing,
                 cost_capacity_meter,
+                log_messages_bytes_limit,
             )
             .map_err(BlockstoreProcessorError::from);
             replay_elapsed.stop();
@@ -1530,6 +1539,7 @@ fn load_frozen_forks(
                     can_cached_slot_be_unflushed,
                     ignore_mismatch: true,
                     require_rooted_bank: false,
+                    run_in_background: false,
                 });
                 break;
             }
@@ -3656,6 +3666,7 @@ pub mod tests {
             false,
             AccountShrinkThreshold::default(),
             false,
+            None,
         );
         *bank.epoch_schedule()
     }
@@ -3728,6 +3739,7 @@ pub mod tests {
             false,
             false,
             &mut ExecuteTimings::default(),
+            None,
         );
         let (err, signature) = get_first_error(&batch, fee_collection_results).unwrap();
         assert_eq!(err.unwrap_err(), TransactionError::AccountNotFound);
@@ -4104,8 +4116,8 @@ pub mod tests {
             None,
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
+            None,
         )
     }
 
@@ -4247,8 +4259,8 @@ pub mod tests {
             Some(&transaction_status_sender),
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
+            None,
         )
         .unwrap();
         assert_eq!(progress.num_txs, 2);
@@ -4292,8 +4304,8 @@ pub mod tests {
             Some(&transaction_status_sender),
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
+            None,
         )
         .unwrap();
         assert_eq!(progress.num_txs, 5);
@@ -4505,7 +4517,10 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config((1_000_000 + NUM_ACCOUNTS + 1) * LAMPORTS_PER_SOL);
-        let bank = Bank::new_for_tests(&genesis_config);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.deactivate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         let bank = Arc::new(bank);
         assert!(bank
             .feature_set
@@ -4568,6 +4583,9 @@ pub mod tests {
             mock_realloc::process_instruction,
         );
         bank.set_accounts_data_size_initial_for_tests(INITIAL_ACCOUNTS_DATA_SIZE);
+        bank.deactivate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         let bank = Arc::new(bank);
         let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
         assert!(bank

@@ -14,4 +14,4 @@ steps:
       TEST_TYPE: "script"
       CUSTOM_SCRIPT: "system-test/stake-operations-testcases/stake_test_automation.sh"
     agents:
-      - "queue=colo-deploy"
+      queue: "colo-deploy"

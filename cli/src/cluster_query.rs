@@ -1101,8 +1101,11 @@ pub fn process_get_epoch(rpc_client: &RpcClient, _config: &CliConfig) -> Process
 
 pub fn process_get_epoch_info(rpc_client: &RpcClient, config: &CliConfig) -> ProcessResult {
     let epoch_info = rpc_client.get_epoch_info()?;
+    let epoch_completed_percent =
+        epoch_info.slot_index as f64 / epoch_info.slots_in_epoch as f64 * 100_f64;
     let mut cli_epoch_info = CliEpochInfo {
         epoch_info,
+        epoch_completed_percent,
         average_slot_time_ms: 0,
         start_block_time: None,
         current_block_time: None,

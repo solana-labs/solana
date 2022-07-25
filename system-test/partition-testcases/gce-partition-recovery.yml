@@ -19,4 +19,4 @@ steps:
       NETEM_CONFIG_FILE: "system-test/netem-configs/complete-loss-two-partitions"
       CUSTOM_SCRIPT: "system-test/partition-testcases/measure-partition-recovery.sh"
     agents:
-      - "queue=gce-deploy"
+      queue: "gce-deploy"
