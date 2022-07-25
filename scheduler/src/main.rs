@@ -50,7 +50,7 @@ struct AddressBook {
 impl AddressBook {
     fn try_lock_address(&mut self, address: Pubkey) -> Result<Guard, ()> {
         match self.map.entry(address) {
-            AddressBookMap::Entry::Ocuppied => {
+            Entry::Ocuppied => {
             }
         }
 
