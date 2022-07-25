@@ -31,7 +31,7 @@ fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
         //tx.foo();
         tx_queue.insert(ix, tx);
     }
-    tx_queue.last();
+    let next_tx = tx_queue.first_entry();
 }
 
 fn main() {
