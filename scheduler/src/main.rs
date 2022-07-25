@@ -62,7 +62,7 @@ enum Usage {
 }
 
 impl Usage {
-    fn renew(requested_usage) -> Self {
+    fn renew(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
             RequestedUsage::Readonly => {
                 Usage::Readonly//(1)
