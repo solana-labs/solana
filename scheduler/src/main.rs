@@ -125,9 +125,13 @@ fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, ent
         tx_queue.add(Fee {ix, random_sequence: 32322}, Task {tx});
     }
     for next_task in tx_queue.tasks() {
-        if let Ok(lock_guards) = try_lock_for_tx(address_book, &next_task.tx) {
-            let ee = create_execution_environment(lock_guards);
-            send_to_execution_stage(ee);
+        match try_lock_for_tx(address_book, &next_task.tx) {
+            Ok(lock_guards) => {
+                let ee = create_execution_environment(lock_guards);
+                send_to_execution_stage(ee);
+            },
+            Err(_) => {
+            },
         }
     }
 }
