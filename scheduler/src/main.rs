@@ -139,7 +139,7 @@ impl AddressBook {
         }
     }
 
-    fn ensure_unlock(attempt: &LockAttempt) {
+    fn ensure_unlock(&mut self, attempt: &LockAttempt) {
     }
 }
 
