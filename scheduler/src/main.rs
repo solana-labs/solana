@@ -23,8 +23,11 @@ impl ExecutionEnvironment {
     }
 }
 
-fn try_lock_account(address: &Pubkey) {
+struct Guard {
+    account: (),
+} 
 
+fn try_lock_account(address: &Pubkey) {
 }
 
 fn try_lock_tx(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
