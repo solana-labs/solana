@@ -19,8 +19,7 @@ impl ExecutionEnvironment {
     }
 }
 
-fn schedule(entry: Entry) {
-    let b = solana_runtime::bank::Bank::default();
+fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
     for tx in entry.transactions {
         //tx.foo();
     }
