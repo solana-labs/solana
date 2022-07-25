@@ -51,6 +51,15 @@ struct TransactionQueue {
     map: std::collections::BTreeMap<Fee, Task>
 }
 
+impl TransactionQueue {
+    fn add() {
+    }
+
+    fn tasks() -> bool {
+        map.values()
+    }
+}
+
 fn try_lock_tx(address_book: &mut AddressBook, tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
@@ -74,7 +83,7 @@ fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, ent
         //tx.foo();
         tx_queue.add(ix, tx);
     }
-    for next_tx in tx_queue.values() {
+    for next_tx in tx_queue.tasks() {
         if let Ok(lock_guards) = try_lock_tx(address_book, next_tx) {
             let ee = create_execution_environment(lock_guards);
             send_to_execution_lane(ee);
