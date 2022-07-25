@@ -109,13 +109,12 @@ fn try_lock_for_tx<'a>(
     address_book: &mut AddressBook,
     signature: &'a Signature,
     locks: &'a TransactionAccountLocks,
-) -> Result<Vec<AddressGuard>, TransactionAccountLocks<'a>> {
+) -> Result<Vec<AddressGuard>, ()> {
     let writable_guards = locks
         .writable
         .into_iter()
         .map(|&a| address_book.try_lock_address(a))
-        .collect::<Result<Vec<_>, ()>>()
-        .map_err(|e| locks);
+        .collect::<Result<Vec<_>, ()>>();
 
     writable_guards
 }
