@@ -61,6 +61,11 @@ enum Usage {
     Writable,
 }
 
+enum RequestedUsage {
+    Readonly,
+    Writable,
+}
+
 struct Page {
     current_usage: Usage,
 }
@@ -73,7 +78,7 @@ struct AddressBook {
 }
 
 impl AddressBook {
-    fn try_lock_address(&mut self, address: Pubkey, requested_usage: Usage) -> LockAttempt {
+    fn try_lock_address(&mut self, address: Pubkey, requested_usage: RequestedUsage) -> LockAttempt {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
@@ -157,7 +162,7 @@ fn try_lock_for_tx<'a>(
         .writable
         .iter()
         .cloned()
-        .map(|&a| address_book.try_lock_address(a, Usage::Writable))
+        .map(|&a| address_book.try_lock_address(a, RequestedUsage::Writable))
         .collect::<Vec<_>>();
 
     writable_guards
