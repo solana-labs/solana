@@ -77,6 +77,13 @@ impl AddressBook {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
+            // unconditional success if it's initial access
+            Entry::Vacant(entry) => {
+                entry.insert(Page {
+                    current_usage: requested_usage,
+                });
+                LockAttempt::success(address)
+            }
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
                 match &page.current_usage {
@@ -100,12 +107,6 @@ impl AddressBook {
                         }
                     }
                 }
-            }
-            Entry::Vacant(entry) => {
-                entry.insert(Page {
-                    current_usage: requested_usage,
-                });
-                LockAttempt::success(address)
             }
         }
     }
