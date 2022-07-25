@@ -1,4 +1,16 @@
 module.exports = {
+  cliSidebar: [
+    "cli",
+    "cli/install-solana-cli-tools",
+    "cli/conventions",
+    "cli/choose-a-cluster",
+    "cli/transfer-tokens",
+    "cli/delegate-stake",
+    "cli/deploy-a-program",
+    "offline-signing",
+    "offline-signing/durable-nonce",
+    "cli/usage",
+  ],
   docs: {
     About: ["introduction", "terminology", "history"],
     Wallets: [
@@ -23,18 +35,6 @@ module.exports = {
       "wallet-guide/support",
     ],
     Staking: ["staking", "staking/stake-accounts"],
-    "Command Line": [
-      "cli",
-      "cli/install-solana-cli-tools",
-      "cli/conventions",
-      "cli/choose-a-cluster",
-      "cli/transfer-tokens",
-      "cli/delegate-stake",
-      "cli/deploy-a-program",
-      "offline-signing",
-      "offline-signing/durable-nonce",
-      "cli/usage",
-    ],
     Developing: [
       {
         type: "category",
