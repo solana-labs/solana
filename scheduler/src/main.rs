@@ -289,7 +289,7 @@ impl ScheduleStage {
                 }
                 recv(from_execution_stage) -> msg => {
                     let mut msg = msg.unwrap();
-                    Self::commit(msg);
+                    Self::commit(&mut msg);
                     committed_ee = Some(msg);
                 }
             }
