@@ -39,7 +39,6 @@ struct AddressGuard {
     account: (),
 }
 
-#[atomic_enum]
 #[derive(PartialEq)]
 enum Usage {
     Unused,
@@ -48,7 +47,7 @@ enum Usage {
 }
 
 struct Page {
-    usage: AtomicUsage,
+    usage: Usage,
 }
 
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
@@ -64,7 +63,7 @@ impl AddressBook {
 
         match self.map.entry(address) {
             Entry::Occupied(entry) => {
-                match &entry.get().usage.load(std::sync::atomic::Ordering::Relaxed) {
+                match &entry.get().usage {
                     Usage::Unused => todo!(),
                     Usage::Readonly => todo!(),
                     Usage::Writable => return Err(()),
