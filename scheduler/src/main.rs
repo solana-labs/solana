@@ -98,7 +98,7 @@ impl AddressBook {
             // unconditional success if it's initial access
             Entry::Vacant(entry) => {
                 entry.insert(Page {
-                    current_usage: requested_usage,
+                    current_usage: Usage::renew(requested_usage),
                 });
                 LockAttempt::success(address)
             }
