@@ -50,7 +50,7 @@ fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
         tx_queue.insert(ix, tx);
     }
     for next_tx in tx_queue.values() {
-        if let Ok(next_tx, lock_guards) = try_lock_tx(next_tx) {
+        if let Ok((next_tx, lock_guards)) = try_lock_tx(next_tx) {
             //execution_lane.push(next_tx)
         }
     }
