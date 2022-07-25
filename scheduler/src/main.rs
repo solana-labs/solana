@@ -115,7 +115,7 @@ fn try_lock_for_tx(
         .into_iter()
         .map(|&a| address_book.try_lock_address(a))
         .collect::<Result<Vec<_>, ()>>()
-        .map_err(|e| Err(3));
+        .map_err(|e| Err(locks));
 
     writable_guards
 }
