@@ -52,7 +52,7 @@ impl AddressBook {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
-            Entry::Ocuppied => {
+            Entry::Occupied => {
             }
         }
 
