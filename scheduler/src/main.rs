@@ -28,6 +28,8 @@ struct Guard {
     account: (),
 } 
 
+#[atomic_enum]
+#[derive(PartialEq)]
 struct Usage {
 }
 
