@@ -21,7 +21,7 @@ impl ExecutionEnvironment {
 
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
     for tx in entry.transactions {
-        bank.verify_transaction(tx);
+        bank.verify_transaction(tx, 3);
         //tx.foo();
     }
 }
