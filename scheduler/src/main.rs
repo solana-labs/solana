@@ -58,7 +58,7 @@ struct AddressBook {
 }
 
 impl AddressBook {
-    fn try_lock_address(&mut self, address: Pubkey, requested_usage: Usage) -> Result<LockAttempt, ()> {
+    fn try_lock_address(&mut self, address: Pubkey, requested_usage: Usage) -> LockAttempt {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
@@ -73,13 +73,13 @@ impl AddressBook {
                             Usage::Readonly => {
                                todo!("ok"); 
                             },
-                            Usage::Writable => return Err(()),
+                            Usage::Writable => panic!(),
                             Usage::Unused => unreachable!(),
                         }
                     }
                     Usage::Writable => {
                         match &requested_usage {
-                            (Usage::Readonly | Usage::Writable) => return Err(()),
+                            (Usage::Readonly | Usage::Writable) => panic!(),
                             Usage::Unused => unreachable!(),
                         }
                     }
@@ -88,7 +88,7 @@ impl AddressBook {
             Entry::Vacant(entry) => todo!(),
         }
 
-        Ok(LockAttempt { account: () })
+        LockAttempt { account: () }
     }
 }
 
