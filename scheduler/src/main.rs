@@ -166,7 +166,7 @@ impl AddressBook {
                         }
                     }
                     CurrentUsage::Writable => {
-                        match &requested_usage {
+                        match &attempt.requested_usage {
                             RequestedUsage::Readonly => unreachable!(),
                             RequestedUsage::Writable => {
                                 now_unused = true;
