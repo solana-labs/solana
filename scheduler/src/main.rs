@@ -32,9 +32,9 @@ struct Guard {
 #[atomic_enum]
 #[derive(PartialEq)]
 enum Usage {
-    Unused = 0,
-    Readonly = 1,
-    Writable = 2,
+    Unused,
+    Readonly,
+    Writable,
 }
 
 struct Page {
