@@ -174,25 +174,26 @@ fn try_lock_for_tx<'a>(
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
 ) -> Vec<LockAttempt> {
-    let mut writable_guards = locks
+    let mut writable_attempts = locks
         .writable
         .iter()
         .cloned()
         .map(|&a| address_book.try_lock_address(a, RequestedUsage::Writable))
         .collect::<Vec<_>>();
 
-    let mut readonly_guards = locks
+    let mut readonly_attempts = locks
         .readonly
         .iter()
         .cloned()
         .map(|&a| address_book.try_lock_address(a, RequestedUsage::Readonly))
         .collect::<Vec<_>>();
 
-    writable_guards.append(&mut readonly_guards);
-    writable_guards
+    writable_attempts.append(&mut readonly_attempts);
+    writable_attempts
 }
 
 fn create_execution_environment(guards: Vec<LockAttempt>) -> ExecutionEnvironment {
+    // load account now from AccountsDb
     panic!()
 }
 
@@ -337,9 +338,9 @@ impl ScheduleStage {
         for next_task in tx_queue.tasks() {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
-            let lock_guards = try_lock_for_tx(address_book, &message_hash, &locks);
-            if lock_guards.iter().all(|g| g.is_success()) {
-                return create_execution_environment(lock_guards);
+            let lock_attempts = try_lock_for_tx(address_book, &message_hash, &locks);
+            if lock_attempts.iter().all(|g| g.is_success()) {
+                return create_execution_environment(lock_attempts);
             }
         }
 
