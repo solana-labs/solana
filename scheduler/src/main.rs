@@ -12,6 +12,7 @@ use {
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
 };
 use solana_sdk::transaction::VersionedTransaction;
+use solana_sdk::transaction::TransactionAccountLocks;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
