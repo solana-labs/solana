@@ -53,7 +53,8 @@ struct TransactionQueue {
 }
 
 impl TransactionQueue {
-    fn add() {
+    fn add(fee: Fee, task: Task) {
+        panic!()
     }
 
     fn tasks(&self) -> impl std::iter::Iterator<Item = &Task> {
