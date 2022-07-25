@@ -185,6 +185,7 @@ impl BigTableConnection {
 
                 let mut http = hyper::client::HttpConnector::new();
                 http.enforce_http(false);
+                http.set_nodelay(true);
                 let channel = match std::env::var("BIGTABLE_PROXY") {
                     Ok(proxy_uri) => {
                         let proxy = hyper_proxy::Proxy::new(
