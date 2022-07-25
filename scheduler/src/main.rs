@@ -77,7 +77,7 @@ impl TransactionQueue {
 fn try_lock_tx(address_book: &mut AddressBook, tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
-    let writable_guards = locks.writable.into_iter().map(|a|
+    let writable_guards = locks.writable.into_iter().map(|&a|
         address_book.try_lock_address(a)
     ).collect::<Result<Vec<_>, ()>>();
 
