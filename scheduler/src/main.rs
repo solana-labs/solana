@@ -247,7 +247,7 @@ impl ScheduleStage {
         tx_queue.add(
             Weight {
                 ix,
-                random: 32322,
+                randomness: 32322,
             },
             Task { tx },
         );
