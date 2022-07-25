@@ -55,20 +55,20 @@ impl LockAttempt {
 }
 
 #[derive(PartialEq)]
-enum Usage {
+enum CurrentUsage {
     Unused,
     Readonly,
     Writable,
 }
 
-impl Usage {
+impl CurrentUsage {
     fn renew(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
             RequestedUsage::Readonly => {
-                Usage::Readonly//(1)
+                CurrentUsage::Readonly//(1)
             }
             RequestedUsage::Writable => {
-                Usage::Writable
+                CurrentUsage::Writable
             }
         }
     }
@@ -80,7 +80,7 @@ enum RequestedUsage {
 }
 
 struct Page {
-    current_usage: Usage,
+    current_usage: CurrentUsage,
 }
 
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
@@ -98,7 +98,7 @@ impl AddressBook {
             // unconditional success if it's initial access
             Entry::Vacant(entry) => {
                 entry.insert(Page {
-                    current_usage: Usage::renew(requested_usage),
+                    current_usage: CurrentUsage::renew(requested_usage),
                 });
                 LockAttempt::success(address)
             }
@@ -106,11 +106,11 @@ impl AddressBook {
                 let mut page = entry.get_mut();
 
                 match &page.current_usage {
-                    Usage::Unused => {
-                        page.current_usage = Usage::renew(requested_usage);
+                    CurrentUsage::Unused => {
+                        page.current_usage = CurrentUsage::renew(requested_usage);
                         LockAttempt::success(address) 
                     }
-                    Usage::Readonly => {
+                    CurrentUsage::Readonly => {
                         match &requested_usage {
                             RequestedUsage::Readonly => {
                                 LockAttempt::success(address)
@@ -121,7 +121,7 @@ impl AddressBook {
                             }
                         }
                     }
-                    Usage::Writable => {
+                    CurrentUsage::Writable => {
                         match &requested_usage {
                             RequestedUsage::Readonly | RequestedUsage::Writable => panic!(),
                         }
