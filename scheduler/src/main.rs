@@ -34,7 +34,7 @@ fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
         //tx.foo();
         tx_queue.insert(ix, tx);
     }
-    let next_tx = tx_queue.first_key_value().unwrap();
+    let (_, next_tx) = tx_queue.first_key_value().unwrap();
     if is_schedulable(next_tx) {
         //execution_lane.push(next_tx)
     }
