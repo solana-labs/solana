@@ -38,7 +38,8 @@ fn try_lock_tx(tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     let writable_guards = locks.writable.iter().map(|a|
         try_lock_address(a)
     ).collect::<Result<Vec<_>, ()>>();
-    Ok(writable_guards)
+
+    writable_guards
 }
 
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
