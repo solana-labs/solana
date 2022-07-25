@@ -100,7 +100,7 @@ struct AddressBook {
 }
 
 impl AddressBook {
-    fn try_lock_address(&mut self, address: Pubkey, requested_usage: RequestedUsage) -> LockAttempt {
+    fn attempt_lock_address(&mut self, address: Pubkey, requested_usage: RequestedUsage) -> LockAttempt {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
@@ -232,14 +232,14 @@ fn try_lock_for_tx<'a>(
         .writable
         .iter()
         .cloned()
-        .map(|&a| address_book.try_lock_address(a, RequestedUsage::Writable))
+        .map(|&a| address_book.attempt_lock_address(a, RequestedUsage::Writable))
         .collect::<Vec<_>>();
 
     let mut readonly_attempts = locks
         .readonly
         .iter()
         .cloned()
-        .map(|&a| address_book.try_lock_address(a, RequestedUsage::Readonly))
+        .map(|&a| address_book.attempt_lock_address(a, RequestedUsage::Readonly))
         .collect::<Vec<_>>();
 
     writable_attempts.append(&mut readonly_attempts);
