@@ -8,6 +8,7 @@ use rand::Rng;
 use solana_metrics::datapoint_info;
 use solana_measure::measure::Measure;
 use solana_entry::entry::Entry;
+use solana_sdk::transaction::SanitizedTransaction;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
