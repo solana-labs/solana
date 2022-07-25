@@ -28,11 +28,11 @@ struct Guard {
     account: (),
 } 
 
-struct Foo {
+struct Page {
 }
 
 struct AddressBook {
-    map: std::collections::BTreeMap<Pubkey, Foo>
+    map: std::collections::BTreeMap<Pubkey, Page>
 }
 
 impl AddressBook {
