@@ -55,7 +55,7 @@ impl TransactionQueue {
     fn add() {
     }
 
-    fn tasks(&self) -> bool {
+    fn tasks(&self) -> impl Iter<Item = Task> {
         self.map.values()
     }
 }
