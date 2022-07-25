@@ -133,6 +133,8 @@ fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, ent
             },
         }
     }
+
+    panic!();
 }
 
 fn main() {
