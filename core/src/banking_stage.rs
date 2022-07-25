@@ -579,7 +579,8 @@ impl BankingStage {
         };
 
         const INTERVAL_MS: u64 = 100;
-        const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
+        // 12 MB outbound limit per second
+        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
         const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
         data_budget.update(INTERVAL_MS, |bytes| {
