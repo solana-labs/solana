@@ -275,7 +275,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         entry: Entry,
         bank: solana_runtime::bank::Bank,
-        from_previous_stage: crossbeam_channel::Receiver<u8>,
+        from_previous_stage: crossbeam_channel::Receiver<VersionedTransaction>,
         to_execution_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
         from_execution_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
