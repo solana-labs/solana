@@ -46,6 +46,9 @@ fn create_execution_environment(Vec<Guard>) -> ExecutionEnvironment {
     panic!()
 }
 
+fn send_to_execution_lane(ee: ExecutionEnvironment) {
+}
+
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
     let mut tx_queue = std::collections::BTreeMap::default();
 
