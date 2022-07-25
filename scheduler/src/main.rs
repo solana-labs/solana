@@ -54,18 +54,22 @@ impl LockAttempt {
     }
 }
 
+type UsageCount = usize;
+
 #[derive(PartialEq)]
 enum CurrentUsage {
     Unused,
-    Readonly,
+    Readonly(UsageCount),
     Writable,
 }
 
 impl CurrentUsage {
     fn renew(requested_usage: RequestedUsage) -> Self {
+        const INITIAL_COUNT: UsageCount = 1;
+
         match requested_usage {
             RequestedUsage::Readonly => {
-                CurrentUsage::Readonly//(1)
+                CurrentUsage::Readonly(INITIAL_COUNT)
             }
             RequestedUsage::Writable => {
                 CurrentUsage::Writable
