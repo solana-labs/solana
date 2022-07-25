@@ -47,7 +47,7 @@ enum Usage {
 }
 
 struct Page {
-    usage: Usage,
+    current_usage: Usage,
 }
 
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
@@ -58,17 +58,27 @@ struct AddressBook {
 }
 
 impl AddressBook {
-    fn try_lock_address(&mut self, address: Pubkey, usage: Usage) -> Result<AddressGuard, ()> {
+    fn try_lock_address(&mut self, address: Pubkey, requested_usage: Usage) -> Result<AddressGuard, ()> {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
-                match &page.usage {
+                match &page.current_usage {
                     Usage::Unused => {
-                        page.usage = Usage::Writable;
+                        page.current_usage = requested_usage;
                     }
-                    Usage::Readonly => todo!(),
+                    Usage::Readonly => {
+                        match &requested_usage {
+                            Usage::Writable => {
+                                return Err(())
+                            },
+                            Usage::Readonly => {
+                               todo!("ok"); 
+                            }
+                            Usage::Unused => unreachable!(),
+                        }
+                    }
                     Usage::Writable => return Err(()),
                 }
             }
