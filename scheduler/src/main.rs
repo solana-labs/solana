@@ -181,7 +181,7 @@ fn try_lock_for_tx<'a>(
         .map(|&a| address_book.try_lock_address(a, RequestedUsage::Writable))
         .collect::<Vec<_>>();
 
-    let readonly_guards = locks
+    let mut readonly_guards = locks
         .readonly
         .iter()
         .cloned()
