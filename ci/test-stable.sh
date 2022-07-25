@@ -64,7 +64,27 @@ test-stable-bpf)
       "$cargo_test_bpf" --bpf-sdk ../../../../sdk/bpf
       popd
     fi
+<<<<<<< HEAD
   done
+=======
+  done |& tee cargo.log
+  # Save the output of cargo building the bpf tests so we can analyze
+  # the number of redundant rebuilds of dependency crates. The
+  # expected number of solana-program crate compilations is 4. There
+  # should be 3 builds of solana-program while 128bit crate is
+  # built. These compilations are not redundant because the crate is
+  # built for different target each time. An additional compilation of
+  # solana-program is performed when simulation crate is built. This
+  # last compiled solana-program is of different version, normally the
+  # latest mainbeta release version.
+  solana_program_count=$(grep -c 'solana-program v' cargo.log)
+  rm -f cargo.log
+  if ((solana_program_count > 10)); then
+      echo "Regression of build redundancy ${solana_program_count}."
+      echo "Review dependency features that trigger redundant rebuilds of solana-program."
+      exit 1
+  fi
+>>>>>>> dbd3b6b53 (Parse more token-2022 extensions and instructions (#26746))
 
   # bpf-tools version
   "$cargo_build_bpf" -V

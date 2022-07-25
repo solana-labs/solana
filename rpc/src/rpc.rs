@@ -7265,8 +7265,10 @@ pub mod tests {
                 account_state.base = account_base;
                 account_state.pack_base();
                 account_state.init_account_type().unwrap();
-                account_state.init_extension::<ImmutableOwner>().unwrap();
-                let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
+                account_state
+                    .init_extension::<ImmutableOwner>(true)
+                    .unwrap();
+                let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
                 memo_transfer.require_incoming_transfer_memos = true.into();
 
                 let token_account = AccountSharedData::from(Account {
@@ -7294,8 +7296,9 @@ pub mod tests {
                 mint_state.base = mint_base;
                 mint_state.pack_base();
                 mint_state.init_account_type().unwrap();
-                let mut mint_close_authority =
-                    mint_state.init_extension::<MintCloseAuthority>().unwrap();
+                let mut mint_close_authority = mint_state
+                    .init_extension::<MintCloseAuthority>(true)
+                    .unwrap();
                 mint_close_authority.close_authority =
                     OptionalNonZeroPubkey::try_from(Some(owner)).unwrap();
 
@@ -7763,8 +7766,10 @@ pub mod tests {
                 account_state.base = account_base;
                 account_state.pack_base();
                 account_state.init_account_type().unwrap();
-                account_state.init_extension::<ImmutableOwner>().unwrap();
-                let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
+                account_state
+                    .init_extension::<ImmutableOwner>(true)
+                    .unwrap();
+                let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
                 memo_transfer.require_incoming_transfer_memos = true.into();
 
                 let token_account = AccountSharedData::from(Account {
@@ -7791,8 +7796,9 @@ pub mod tests {
                 mint_state.base = mint_base;
                 mint_state.pack_base();
                 mint_state.init_account_type().unwrap();
-                let mut mint_close_authority =
-                    mint_state.init_extension::<MintCloseAuthority>().unwrap();
+                let mut mint_close_authority = mint_state
+                    .init_extension::<MintCloseAuthority>(true)
+                    .unwrap();
                 mint_close_authority.close_authority =
                     OptionalNonZeroPubkey::try_from(Some(owner)).unwrap();
 
