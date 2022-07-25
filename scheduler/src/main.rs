@@ -28,6 +28,7 @@ struct Guard {
 } 
 
 fn try_lock_account(address: &Pubkey) -> Result<Guard, ()> {
+    Ok(Guard{account: ()})
 }
 
 fn try_lock_tx(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
