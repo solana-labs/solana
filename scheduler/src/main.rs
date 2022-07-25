@@ -285,7 +285,7 @@ impl ScheduleStage {
         while exit {
             select! {
                 recv(from_previous_stage) -> tx => {
-                    Self::push_to_queue(tx, tx_queue, &bank)
+                    Self::push_to_queue(tx.unwrap(), tx_queue, &bank)
                 }
                 send(to_execution_stage, pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
