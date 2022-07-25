@@ -37,11 +37,12 @@ impl ExecutionEnvironment {
 
 struct LockAttempt {
     address: Pubkey,
+    is_success: bool,
 }
 
 impl LockAttempt {
     fn is_success(&self) -> bool {
-        true
+        self.is_success
     }
 }
 
