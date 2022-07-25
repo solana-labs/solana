@@ -37,7 +37,7 @@ fn try_lock_tx(tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     let locks = tx.get_account_locks().unwrap();
     let writable_guards = locks.writable.iter().map(|a|
         try_lock_address(a)
-    ).collect::<Vec<Guard>>();
+    ).collect::<Result<Vec<_>>>();
     Ok(writable_guards)
 }
 
