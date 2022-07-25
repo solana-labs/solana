@@ -175,6 +175,7 @@ fn main() {
                 process_message_time.stop();
                 let duration_with_overhead = process_message_time.as_us();
 
+                /*
                 datapoint_info!(
                     "individual_tx_stats",
                     ("slot", 33333, i64),
@@ -185,6 +186,7 @@ fn main() {
                     ("duration", duration_with_overhead, i64),
                     ("compute_units", cu, i64),
                 );
+                */
                 s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
                 i += 1;
             }
