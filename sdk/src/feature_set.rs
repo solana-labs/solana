@@ -468,6 +468,13 @@ pub mod cap_bpf_program_instruction_accounts {
     solana_sdk::declare_id!("9k5ijzTbYPtjzu8wj2ErH9v45xecHzQ1x4PMYMMxFgdM");
 }
 
+// TODO: Rename the feature to reflect the minimum delegation
+pub mod stake_minimum_delegation_xxx_sol {
+    // TODO: Follow the feature-proposal instructions to generate the id
+    // https://spl.solana.com/feature-proposal
+    solana_sdk::declare_id!("generate a new feature-proposal id");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -579,6 +586,7 @@ lazy_static! {
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
+        (stake_minimum_delegation_xxx_sol::id(), "TODO: add name"), // TODO: Add a good name for the feature
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

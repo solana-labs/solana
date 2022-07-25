@@ -24,6 +24,11 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
 /// rent exempt reserve _plus_ the minimum stake delegation.
 #[inline(always)]
 pub fn get_minimum_delegation(feature_set: &FeatureSet) -> u64 {
+    if feature_set.is_active(&feature_set::stake_minimum_delegation_xxx_sol::id()) {
+        // TODO: Set the stake minimum delegation, in lamports
+        return 1337 * LAMPORTS_PER_SOL;
+    }
+
     if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()) {
         const MINIMUM_DELEGATION_SOL: u64 = 1;
         MINIMUM_DELEGATION_SOL * LAMPORTS_PER_SOL
