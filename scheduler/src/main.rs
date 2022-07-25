@@ -1,16 +1,16 @@
 #![feature(map_first_last)]
 
-use log::*;
-use crossbeam_channel::bounded;
-use crossbeam_channel::unbounded;
-use sha2::{Digest, Sha256};
-use rand::Rng;
-use solana_metrics::datapoint_info;
-use solana_measure::measure::Measure;
-use solana_entry::entry::Entry;
-use solana_sdk::transaction::SanitizedTransaction;
-use solana_sdk::pubkey::Pubkey;
-use atomic_enum::atomic_enum;
+use {
+    atomic_enum::atomic_enum,
+    crossbeam_channel::{bounded, unbounded},
+    log::*,
+    rand::Rng,
+    sha2::{Digest, Sha256},
+    solana_entry::entry::Entry,
+    solana_measure::measure::Measure,
+    solana_metrics::datapoint_info,
+    solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
+};
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
@@ -21,7 +21,10 @@ struct ExecutionEnvironment {
 
 impl ExecutionEnvironment {
     fn new(cu: usize) -> Self {
-        Self {cu, ..Self::default()}
+        Self {
+            cu,
+            ..Self::default()
+        }
     }
 
     //fn abort() {
@@ -35,10 +38,9 @@ impl ExecutionEnvironment {
     }
 }
 
-
 struct AddressGuard {
     account: (),
-} 
+}
 
 #[atomic_enum]
 #[derive(PartialEq)]
@@ -55,7 +57,7 @@ struct Page {
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
 
 struct AddressBook {
-    map: AddressBookMap ,
+    map: AddressBookMap,
 }
 
 impl AddressBook {
@@ -70,10 +72,10 @@ impl AddressBook {
                     Usage::Writable => return Err(()),
                 }
             }
-            Entry::Vacant(entry) => todo!()
+            Entry::Vacant(entry) => todo!(),
         }
 
-        Ok(AddressGuard{account: ()})
+        Ok(AddressGuard { account: () })
     }
 }
 
@@ -88,7 +90,7 @@ struct Task {
 
 // RunnableQueue, ContendedQueue?
 struct TransactionQueue {
-    map: std::collections::BTreeMap<Fee, Task>
+    map: std::collections::BTreeMap<Fee, Task>,
 }
 
 impl TransactionQueue {
@@ -101,12 +103,17 @@ impl TransactionQueue {
     }
 }
 
-fn try_lock_for_tx(address_book: &mut AddressBook, tx: &SanitizedTransaction) -> Result<Vec<AddressGuard>, ()> {
+fn try_lock_for_tx(
+    address_book: &mut AddressBook,
+    tx: &SanitizedTransaction,
+) -> Result<Vec<AddressGuard>, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
-    let writable_guards = locks.writable.into_iter().map(|&a|
-        address_book.try_lock_address(a)
-    ).collect::<Result<Vec<_>, ()>>();
+    let writable_guards = locks
+        .writable
+        .into_iter()
+        .map(|&a| address_book.try_lock_address(a))
+        .collect::<Result<Vec<_>, ()>>();
 
     writable_guards
 }
@@ -115,22 +122,36 @@ fn create_execution_environment(guards: Vec<AddressGuard>) -> ExecutionEnvironme
     panic!()
 }
 
-fn send_to_execution_stage(ee: ExecutionEnvironment) {
-}
+fn send_to_execution_stage(ee: ExecutionEnvironment) {}
 
-fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, entry: &Entry, bank: &solana_runtime::bank::Bank) -> ExecutionEnvironment {
+fn schedule(
+    tx_queue: &mut TransactionQueue,
+    address_book: &mut AddressBook,
+    entry: &Entry,
+    bank: &solana_runtime::bank::Bank,
+) -> ExecutionEnvironment {
     for (ix, tx) in entry.transactions.clone().into_iter().enumerate() {
-        let tx = bank.verify_transaction(tx, solana_sdk::transaction::TransactionVerificationMode::FullVerification).unwrap();
+        let tx = bank
+            .verify_transaction(
+                tx,
+                solana_sdk::transaction::TransactionVerificationMode::FullVerification,
+            )
+            .unwrap();
         //tx.foo();
-        tx_queue.add(Fee {ix, random_sequence: 32322}, Task {tx});
+        tx_queue.add(
+            Fee {
+                ix,
+                random_sequence: 32322,
+            },
+            Task { tx },
+        );
     }
     for next_task in tx_queue.tasks() {
         match try_lock_for_tx(address_book, &next_task.tx) {
             Ok(lock_guards) => {
                 return create_execution_environment(lock_guards);
-            },
-            Err(_) => {
-            },
+            }
+            Err(_) => {}
         }
     }
 
@@ -141,7 +162,10 @@ fn main() {
     solana_logger::setup();
     error!("hello");
     let thread_count = 10;
-    let (s, r) = bounded::<((usize, usize, (std::time::Instant, ExecutionEnvironment)), Vec<u8>)>(thread_count * 10);
+    let (s, r) = bounded::<(
+        (usize, usize, (std::time::Instant, ExecutionEnvironment)),
+        Vec<u8>,
+    )>(thread_count * 10);
     let (s2, r2) = bounded(thread_count * 2);
 
     /*
@@ -185,47 +209,53 @@ fn main() {
         }
     }).unwrap();
 
-    let mut joins = (0..thread_count).map(|thx| {
-        let s = s.clone();
-        let r2 = r2.clone();
-        std::thread::Builder::new().name(format!("blockstore_processor_{}", thx)).spawn(move || {
-            let current_thread_name = std::thread::current().name().unwrap().to_string();
-            let mut i = 0;
-            //for _ in 0..60 {//000000 {
-            loop {
-                let ss = (thx, i, r2.recv().unwrap());
+    let mut joins = (0..thread_count)
+        .map(|thx| {
+            let s = s.clone();
+            let r2 = r2.clone();
+            std::thread::Builder::new()
+                .name(format!("blockstore_processor_{}", thx))
+                .spawn(move || {
+                    let current_thread_name = std::thread::current().name().unwrap().to_string();
+                    let mut i = 0;
+                    //for _ in 0..60 {//000000 {
+                    loop {
+                        let ss = (thx, i, r2.recv().unwrap());
 
-                let mut process_message_time = Measure::start("process_message_time");
+                        let mut process_message_time = Measure::start("process_message_time");
 
-                let mut hasher = Sha256::default();
-                let cu = ss.2.1.cu;
-                for i in 0_usize..cu {
-                    //for _ in 0..10 {
-                        hasher.update(i.to_le_bytes());
-                    //}
-                }
-                let h = hasher.finalize();
+                        let mut hasher = Sha256::default();
+                        let cu = ss.2 .1.cu;
+                        for i in 0_usize..cu {
+                            //for _ in 0..10 {
+                            hasher.update(i.to_le_bytes());
+                            //}
+                        }
+                        let h = hasher.finalize();
 
-                process_message_time.stop();
-                let duration_with_overhead = process_message_time.as_us();
+                        process_message_time.stop();
+                        let duration_with_overhead = process_message_time.as_us();
 
-                /*
-                datapoint_info!(
-                    "individual_tx_stats",
-                    ("slot", 33333, i64),
-                    ("thread", current_thread_name, String),
-                    ("signature", "ffffff", String),
-                    ("account_locks_in_json", "{}", String),
-                    ("status", "Ok", String),
-                    ("duration", duration_with_overhead, i64),
-                    ("compute_units", cu, i64),
-                );
-                */
-                s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>())).unwrap();
-                i += 1;
-            }
-        }).unwrap()
-    }).collect::<Vec<_>>();
+                        /*
+                        datapoint_info!(
+                            "individual_tx_stats",
+                            ("slot", 33333, i64),
+                            ("thread", current_thread_name, String),
+                            ("signature", "ffffff", String),
+                            ("account_locks_in_json", "{}", String),
+                            ("status", "Ok", String),
+                            ("duration", duration_with_overhead, i64),
+                            ("compute_units", cu, i64),
+                        );
+                        */
+                        s.send((ss, h[0..10].into_iter().copied().collect::<Vec<_>>()))
+                            .unwrap();
+                        i += 1;
+                    }
+                })
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
 
     //joins.push(p);
 
@@ -233,7 +263,14 @@ fn main() {
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
 
-fn scheduler_loop(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, entry: Entry, bank: solana_runtime::bank::Bank, to_execution_stage: crossbeam_channel::Sender<ExecutionEnvironment>, from_execution_stage: crossbeam_channel::Receiver<ExecutionEnvironment>) {
+fn scheduler_loop(
+    tx_queue: &mut TransactionQueue,
+    address_book: &mut AddressBook,
+    entry: Entry,
+    bank: solana_runtime::bank::Bank,
+    to_execution_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
+    from_execution_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
+) {
     use crossbeam_channel::select;
     let exit = true;
     while exit {
