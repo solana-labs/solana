@@ -105,7 +105,7 @@ impl TransactionQueue {
     }
 }
 
-fn try_lock_for_tx<'tx, 'locks: 'tx>(
+fn try_lock_for_tx<'tx, 'locks>(
     address_book: &mut AddressBook,
     tx: &'tx SanitizedTransaction,
 ) -> Result<Vec<AddressGuard>, TransactionAccountLocks<'locks>> {
