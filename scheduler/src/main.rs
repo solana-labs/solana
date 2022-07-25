@@ -23,7 +23,17 @@ impl ExecutionEnvironment {
     fn new(cu: usize) -> Self {
         Self {cu, ..Self::default()}
     }
+
+    //fn abort() {
+    //  pass AtomicBool into InvokeContext??
+    //}
+
+    fn commit() {
+        // release address guards
+        // clone updated Accounts into address book
+    }
 }
+
 
 struct AddressGuard {
     account: (),
