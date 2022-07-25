@@ -262,8 +262,8 @@ impl ScheduleStage {
         bank: &solana_runtime::bank::Bank,
     ) -> ExecutionEnvironment {
         for next_task in tx_queue.tasks() {
-            let sig = tx.signature();
-            let locks = tx.get_account_locks().unwrap();
+            let sig = next_task.tx.signature();
+            let locks = next_task.tx.get_account_locks().unwrap();
             match try_lock_for_tx(address_book, &sig, &locks) {
                 Ok(lock_guards) => {
                     return create_execution_environment(lock_guards);
