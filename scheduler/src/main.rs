@@ -217,8 +217,16 @@ fn main() {
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
 
-fn scheduler_loop(to_execution_stage: usize, from_execution_stage: usize) {
-    let (s, r) = bounded(thread_count * 10);
-    if s == to_execution_stage {
+fn scheduler_loop(to_execution_stage: crossbeam_channel::Sender<usize>, from_execution_stage: crossbeam_channel::Receiver<usize>) {
+    let exit = true;
+    while exit {
+        select! {
+            send(to_execution_stage, 20) -> res => {
+                res.unwrap();
+            }
+            recv(from_execution_stage) -> msg => {
+                msg.unwrap();
+            }
+        }
     }
 }
