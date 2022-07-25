@@ -251,7 +251,7 @@ impl ScheduleStage {
         // async-ly propagate the result to rpc subsystems
     }
 
-    fn push_to_queue(tx: usize) {
+    fn push_to_queue(tx: usize, bank: &solana_runtime::bank::Bank) {
         let ix = 23;
         let tx = bank
             .verify_transaction(
@@ -284,7 +284,7 @@ impl ScheduleStage {
         while exit {
             select! {
                 recv(from_previous_stage) -> tx => {
-                    push_to_queue(tx)
+                    push_to_queue(tx, &bank)
                 }
                 send(to_execution_stage, pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
