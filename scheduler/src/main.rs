@@ -105,10 +105,10 @@ impl TransactionQueue {
     }
 }
 
-fn try_lock_for_tx(
+fn try_lock_for_tx<'tx, 'locks: 'tx>(
     address_book: &mut AddressBook,
-    tx: &SanitizedTransaction,
-) -> Result<Vec<AddressGuard>, TransactionAccountLocks> {
+    tx: &'tx SanitizedTransaction,
+) -> Result<Vec<AddressGuard>, TransactionAccountLocks<'locks>> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
     let writable_guards = locks
