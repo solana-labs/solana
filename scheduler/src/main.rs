@@ -18,6 +18,9 @@ impl ExecutionEnvironment {
     }
 }
 
+fn schedule(entry: Entry) {
+}
+
 fn main() {
     solana_logger::setup();
     error!("hello");
