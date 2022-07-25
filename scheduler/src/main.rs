@@ -117,7 +117,7 @@ fn try_lock_for_tx<'a>(
         .writable
         .iter()
         .cloned()
-        .map(|&a| address_book.try_lock_address(a))
+        .map(|&a| address_book.try_lock_address(a, Usage::Writable))
         .collect::<Result<Vec<_>, ()>>();
 
     writable_guards
