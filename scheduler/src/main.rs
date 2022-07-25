@@ -51,6 +51,7 @@ struct Page {
 
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
 
+// needs ttl mechanism and prune
 struct AddressBook {
     map: AddressBookMap,
 }
