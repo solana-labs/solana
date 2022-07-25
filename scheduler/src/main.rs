@@ -25,7 +25,7 @@ impl ExecutionEnvironment {
 fn try_lock(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks();
-    true
+    Ok(tx)
 }
 
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
