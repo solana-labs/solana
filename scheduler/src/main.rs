@@ -181,7 +181,7 @@ fn main() {
                 }
                 }
         }
-    };
+    });
 
     let mut joins = (0..thread_count).map(|thx| {
         let s = s.clone();
