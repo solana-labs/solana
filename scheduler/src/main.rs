@@ -28,7 +28,11 @@ struct Guard {
     account: (),
 } 
 
+struct Usage {
+}
+
 struct Page {
+    usage: usage,
 }
 
 struct AddressBook {
