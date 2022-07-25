@@ -227,7 +227,7 @@ fn main() {
 
     //joins.push(p);
 
-    joins.push(pc).unwrap());
+    joins.push(pc).unwrap();
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
 
