@@ -141,47 +141,13 @@ fn main() {
     solana_logger::setup();
     error!("hello");
     let thread_count = 10;
-    let (s, r) = bounded::<((usize, usize, (std::time::Instant, ExecutionEnvironment)), Vec<u8>)>(thread_count * 10);
+    let (s, r) = bounded(thread_count * 10);
     let (s2, r2) = bounded(thread_count * 2);
 
-    /*
     let p = std::thread::Builder::new().name("producer".to_string()).spawn(move || {
         let mut rng = rand::thread_rng();
         loop {
             s2.send((std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 1000)))).unwrap();
-        }
-    }).unwrap();
-    */
-    let pc = std::thread::Builder::new().name("prosumer".to_string()).spawn(move || {
-        use crossbeam_channel::select;
-
-        let mut rng = rand::thread_rng();
-        let mut count = 0;
-        let start = std::time::Instant::now();
-        //let mut rrr = Vec::with_capacity(10);
-        //for _ in 0..100 {
-        let mut elapsed = 0;
-
-        loop {
-            select! {
-                send(s2, (std::time::Instant::now(), ExecutionEnvironment::new(rng.gen_range(0, 1000)))) -> res => {
-                    res.unwrap();
-                }
-                recv(r) -> msg => {
-                    let rr = msg.unwrap();
-                    elapsed += rr.0.2.0.elapsed().as_nanos();
-                    //    rrr.push((rr.0.2.0.elapsed(), rr));
-                    //}
-
-                    //for rr in rrr {
-                    count += 1;
-                    //error!("recv-ed: {:?}", &rr);
-                    if count % 100_000 == 0 {
-                        error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
-                        //break
-                    }
-                }
-                }
         }
     }).unwrap();
 
@@ -227,9 +193,30 @@ fn main() {
         }).unwrap()
     }).collect::<Vec<_>>();
 
-    //joins.push(p);
+    joins.push(p);
 
-    joins.push(pc);
+    joins.push(std::thread::Builder::new().name("consumer".to_string()).spawn(move || {
+        let mut count = 0;
+        let start = std::time::Instant::now();
+        //let mut rrr = Vec::with_capacity(10);
+        //for _ in 0..100 {
+        let mut elapsed = 0;
+
+        loop {
+            let rr = r.recv().unwrap();
+            elapsed += rr.0.2.0.elapsed().as_nanos();
+        //    rrr.push((rr.0.2.0.elapsed(), rr));
+        //}
+
+        //for rr in rrr {
+            count += 1;
+            //error!("recv-ed: {:?}", &rr);
+            if count % 100_000 == 0 {
+                error!("recv-ed: {}", count / start.elapsed().as_secs().max(1));
+                //break
+            }
+        }
+    }).unwrap());
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
 
