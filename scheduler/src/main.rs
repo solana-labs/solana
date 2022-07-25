@@ -118,28 +118,12 @@ fn create_execution_environment(guards: Vec<AddressGuard>) -> ExecutionEnvironme
 
 fn send_to_execution_stage(ee: ExecutionEnvironment) {}
 
-fn schedule(
+fn pop_from_queue(
     tx_queue: &mut TransactionQueue,
     address_book: &mut AddressBook,
     entry: &Entry,
     bank: &solana_runtime::bank::Bank,
 ) -> ExecutionEnvironment {
-    for (ix, tx) in entry.transactions.clone().into_iter().enumerate() {
-        let tx = bank
-            .verify_transaction(
-                tx,
-                solana_sdk::transaction::TransactionVerificationMode::FullVerification,
-            )
-            .unwrap();
-        //tx.foo();
-        tx_queue.add(
-            Fee {
-                ix,
-                random_sequence: 32322,
-            },
-            Task { tx },
-        );
-    }
     for next_task in tx_queue.tasks() {
         match try_lock_for_tx(address_book, &next_task.tx) {
             Ok(lock_guards) => {
@@ -267,6 +251,25 @@ impl ScheduleStage {
         // async-ly propagate the result to rpc subsystems
     }
 
+    fn push_to_queue() {
+        for (ix, tx) in entry.transactions.clone().into_iter().enumerate() {
+            let tx = bank
+                .verify_transaction(
+                    tx,
+                    solana_sdk::transaction::TransactionVerificationMode::FullVerification,
+                )
+                .unwrap();
+            //tx.foo();
+            tx_queue.add(
+                Fee {
+                    ix,
+                    random_sequence: 32322,
+                },
+                Task { tx },
+            );
+        }
+    }
+
     fn run(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
@@ -282,8 +285,9 @@ impl ScheduleStage {
         while exit {
             select! {
                 recv(from_previous_stage) -> tx => {
+                    push_to_queue(tx)
                 }
-                send(to_execution_stage, schedule(tx_queue, address_book, &entry, &bank)) -> res => {
+                send(to_execution_stage, pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
                 }
                 recv(from_execution_stage) -> msg => {
