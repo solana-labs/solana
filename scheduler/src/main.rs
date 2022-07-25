@@ -245,7 +245,7 @@ impl ScheduleStage {
             .unwrap();
         //tx.foo();
         tx_queue.add(
-            Sequence {
+            Weight {
                 ix,
                 random: 32322,
             },
