@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-ledger-tool"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.11.4"
+version = "1.11.5"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -22,20 +22,20 @@ log = { version = "0.4.17" }
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.81"
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.4" }
-solana-cli-output = { path = "../cli-output", version = "=1.11.4" }
-solana-core = { path = "../core", version = "=1.11.4" }
-solana-entry = { path = "../entry", version = "=1.11.4" }
-solana-ledger = { path = "../ledger", version = "=1.11.4" }
-solana-logger = { path = "../logger", version = "=1.11.4" }
-solana-measure = { path = "../measure", version = "=1.11.4" }
-solana-runtime = { path = "../runtime", version = "=1.11.4" }
-solana-sdk = { path = "../sdk", version = "=1.11.4" }
-solana-stake-program = { path = "../programs/stake", version = "=1.11.4" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.4" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.4" }
-solana-version = { path = "../version", version = "=1.11.4" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.4" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.11.5" }
+solana-cli-output = { path = "../cli-output", version = "=1.11.5" }
+solana-core = { path = "../core", version = "=1.11.5" }
+solana-entry = { path = "../entry", version = "=1.11.5" }
+solana-ledger = { path = "../ledger", version = "=1.11.5" }
+solana-logger = { path = "../logger", version = "=1.11.5" }
+solana-measure = { path = "../measure", version = "=1.11.5" }
+solana-runtime = { path = "../runtime", version = "=1.11.5" }
+solana-sdk = { path = "../sdk", version = "=1.11.5" }
+solana-stake-program = { path = "../programs/stake", version = "=1.11.5" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.5" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.11.5" }
+solana-version = { path = "../version", version = "=1.11.5" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.5" }
 tokio = { version = "~1.14.1", features = ["full"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

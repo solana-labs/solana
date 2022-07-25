@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-net-shaper"
 description = "The solana cluster network shaping tool"
-version = "1.11.4"
+version = "1.11.5"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,7 +14,7 @@ clap = { version = "3.1.5", features = ["cargo"] }
 rand = "0.7.0"
 serde = { version = "1.0.138", features = ["derive"] }
 serde_json = "1.0.81"
-solana-logger = { path = "../logger", version = "=1.11.4" }
+solana-logger = { path = "../logger", version = "=1.11.5" }
 
 [[bin]]
 name = "solana-net-shaper"
