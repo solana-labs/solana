@@ -119,24 +119,6 @@ fn create_execution_environment(guards: Vec<AddressGuard>) -> ExecutionEnvironme
 
 fn send_to_execution_stage(ee: ExecutionEnvironment) {}
 
-fn pop_from_queue(
-    tx_queue: &mut TransactionQueue,
-    address_book: &mut AddressBook,
-    entry: &Entry,
-    bank: &solana_runtime::bank::Bank,
-) -> ExecutionEnvironment {
-    for next_task in tx_queue.tasks() {
-        match try_lock_for_tx(address_book, &next_task.tx) {
-            Ok(lock_guards) => {
-                return create_execution_environment(lock_guards);
-            }
-            Err(_) => {}
-        }
-    }
-
-    panic!();
-}
-
 fn main() {
     solana_logger::setup();
     error!("hello");
@@ -270,6 +252,24 @@ impl ScheduleStage {
         );
     }
 
+    fn pop_from_queue(
+        tx_queue: &mut TransactionQueue,
+        address_book: &mut AddressBook,
+        entry: &Entry,
+        bank: &solana_runtime::bank::Bank,
+    ) -> ExecutionEnvironment {
+        for next_task in tx_queue.tasks() {
+            match try_lock_for_tx(address_book, &next_task.tx) {
+                Ok(lock_guards) => {
+                    return create_execution_environment(lock_guards);
+                }
+                Err(_) => {}
+            }
+        }
+
+        panic!();
+    }
+
     fn run(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
@@ -287,7 +287,7 @@ impl ScheduleStage {
                 recv(from_previous_stage) -> tx => {
                     Self::push_to_queue(tx.unwrap(), tx_queue, &bank)
                 }
-                send(to_execute_stage, pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
+                send(to_execute_stage, Self::pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
                 }
                 recv(from_execute_stage) -> msg => {
