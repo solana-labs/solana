@@ -154,10 +154,6 @@ impl AddressBook {
         let mut now_unused = false;
 
         match self.map.entry(attempt.address) {
-            // unconditional success if it's initial access
-            Entry::Vacant(entry) => {
-                unreachable!()
-            }
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
 
@@ -188,6 +184,9 @@ impl AddressBook {
                 if now_unused {
                     page.current_usage = CurrentUsage::Unused
                 }
+            }
+            Entry::Vacant(entry) => {
+                unreachable!()
             }
         }
     }
