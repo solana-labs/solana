@@ -72,8 +72,8 @@ impl AddressBook {
                         match &requested_usage {
                             Usage::Readonly => {
                                todo!("ok"); 
-                            }
-                            Usage::Writable => return Err(())
+                            },
+                            Usage::Writable => return Err(()),
                             Usage::Unused => unreachable!(),
                         }
                     }
