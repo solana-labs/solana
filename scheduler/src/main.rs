@@ -55,7 +55,7 @@ impl TransactionQueue {
     fn add() {
     }
 
-    fn tasks(&self) -> impl Iter<Item = Task> {
+    fn tasks(&self) -> impl std::iter::Iter<Item = Task> {
         self.map.values()
     }
 }
