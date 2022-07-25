@@ -178,10 +178,15 @@ fn try_lock_for_tx<'a>(
         .writable
         .iter()
         .cloned()
-        .map(|&a| address_book.try_lock_address(a, RequestedUsage::Writable))
-        .collect::<Vec<_>>();
+        .map(|&a| address_book.try_lock_address(a, RequestedUsage::Writable));
 
-    writable_guards
+    let readonly_guards = locks
+        .readonly
+        .iter()
+        .cloned()
+        .map(|&a| address_book.try_lock_address(a, RequestedUsage::Readonly));
+
+    writable_guards.chain(readonly_guards).collect::<Vec<_>>()
 }
 
 fn create_execution_environment(guards: Vec<LockAttempt>) -> ExecutionEnvironment {
