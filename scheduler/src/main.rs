@@ -240,14 +240,14 @@ impl ScheduleStage {
         // async-ly propagate the result to rpc subsystems
     }
 
-    fn push_to_queue(tx: VersionedTransaction, tx_queue: &mut TransactionQueue, bank: &solana_runtime::bank::Bank) {
-        let ix = 23;
-        let tx = bank
-            .verify_transaction(
-                tx,
-                solana_sdk::transaction::TransactionVerificationMode::FullVerification,
-            )
-            .unwrap();
+    fn push_to_queue(tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue, bank: &solana_runtime::bank::Bank) {
+        //let ix = 23;
+        //let tx = bank
+        //    .verify_transaction(
+        //        tx,
+        //        solana_sdk::transaction::TransactionVerificationMode::FullVerification,
+        //    )
+        //    .unwrap();
         //tx.foo();
         tx_queue.add(
             Weight {
@@ -281,7 +281,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         entry: Entry,
         bank: solana_runtime::bank::Bank,
-        from_previous_stage: crossbeam_channel::Receiver<VersionedTransaction>,
+        from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
         to_execute_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
         from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
@@ -290,8 +290,8 @@ impl ScheduleStage {
         let exit = true;
         while exit {
             select! {
-                recv(from_previous_stage) -> tx => {
-                    Self::push_to_queue(tx.unwrap(), tx_queue, &bank)
+                recv(from_previous_stage) -> weighted_tx => {
+                    Self::push_to_queue(weighted_tx.unwrap(), tx_queue, &bank)
                 }
                 send(to_execute_stage, Self::pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
