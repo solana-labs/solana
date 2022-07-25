@@ -304,6 +304,12 @@ impl UnprocessedPacketBatches {
     pub fn capacity(&self) -> usize {
         self.packet_priority_queue.capacity()
     }
+
+    pub fn is_forwarded(&self, immutable_packet: &ImmutableDeserializedPacket) -> bool {
+        self.message_hash_to_transaction
+            .get(immutable_packet.message_hash())
+            .map_or(true, |p| p.forwarded)
+    }
 }
 
 pub fn deserialize_packets<'a>(
@@ -340,7 +346,6 @@ pub fn transaction_from_deserialized_packet(
     if votes_only && !deserialized_packet.is_simple_vote() {
         return None;
     }
-
     let tx = SanitizedTransaction::try_new(
         deserialized_packet.transaction().clone(),
         *deserialized_packet.message_hash(),

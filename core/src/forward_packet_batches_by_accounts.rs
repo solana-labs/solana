@@ -1,15 +1,12 @@
 use {
-    crate::{
-        immutable_deserialized_packet::ImmutableDeserializedPacket, unprocessed_packet_batches,
-    },
+    crate::immutable_deserialized_packet::ImmutableDeserializedPacket,
     solana_perf::packet::Packet,
     solana_runtime::{
-        bank::Bank,
         block_cost_limits,
         cost_tracker::{CostTracker, CostTrackerError},
     },
-    solana_sdk::pubkey::Pubkey,
-    std::{rc::Rc, sync::Arc},
+    solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
+    std::rc::Rc,
 };
 
 /// `ForwardBatch` to have half of default cost_tracker limits, as smaller batch
@@ -97,44 +94,40 @@ impl ForwardBatch {
 /// transactions that saturate those highly demanded accounts.
 #[derive(Debug)]
 pub struct ForwardPacketBatchesByAccounts {
-    // Need a `bank` to load all accounts for VersionedTransaction. Currently
-    // using current rooted bank for it.
-    pub(crate) current_bank: Arc<Bank>,
     // Forwardable packets are staged in number of batches, each batch is limited
     // by cost_tracker on both account limit and block limits. Those limits are
     // set as `limit_ratio` of regular block limits to facilitate quicker iteration.
     forward_batches: Vec<ForwardBatch>,
+    // Valid packets are iterated from high priority to low, then try to add into
+    // forwarding account buckets by calling `try_add_packet()` only when this flag is true.
+    // The motivation of this is during bot spamming, buffer is likely to be filled with
+    // transactions have higher priority and write to same account(s), other lower priority
+    // transactions will not make into buffer, saves from checking similar transactions if
+    // it exit as soon as first transaction failed to fit in forwarding buckets.
+    accepting_packets: bool,
 }
 
 impl ForwardPacketBatchesByAccounts {
-    pub fn new_with_default_batch_limits(current_bank: Arc<Bank>) -> Self {
-        Self::new(
-            current_bank,
-            FORWARDED_BLOCK_COMPUTE_RATIO,
-            DEFAULT_NUMBER_OF_BATCHES,
-        )
+    pub fn new_with_default_batch_limits() -> Self {
+        Self::new(FORWARDED_BLOCK_COMPUTE_RATIO, DEFAULT_NUMBER_OF_BATCHES)
     }
 
-    pub fn new(current_bank: Arc<Bank>, limit_ratio: u32, number_of_batches: u32) -> Self {
+    pub fn new(limit_ratio: u32, number_of_batches: u32) -> Self {
         let forward_batches = (0..number_of_batches)
             .map(|_| ForwardBatch::new(limit_ratio))
             .collect();
         Self {
-            current_bank,
             forward_batches,
+            accepting_packets: true,
         }
     }
 
-    pub fn add_packet(&mut self, packet: Rc<ImmutableDeserializedPacket>) -> bool {
-        // do not forward packet that cannot be sanitized
-        if let Some(sanitized_transaction) =
-            unprocessed_packet_batches::transaction_from_deserialized_packet(
-                &packet,
-                &self.current_bank.feature_set,
-                self.current_bank.vote_only_bank(),
-                self.current_bank.as_ref(),
-            )
-        {
+    pub fn try_add_packet(
+        &mut self,
+        sanitized_transaction: &SanitizedTransaction,
+        packet: Rc<ImmutableDeserializedPacket>,
+    ) -> bool {
+        if self.accepting_packets {
             // get write_lock_accounts
             let message = sanitized_transaction.message();
             let write_lock_accounts: Vec<_> = message
@@ -154,10 +147,10 @@ impl ForwardPacketBatchesByAccounts {
             let requested_cu = packet.compute_unit_limit();
 
             // try to fill into forward batches
-            self.add_packet_to_batches(&write_lock_accounts, requested_cu, packet)
-        } else {
-            false
+            self.accepting_packets =
+                self.add_packet_to_batches(&write_lock_accounts, requested_cu, packet);
         }
+        self.accepting_packets
     }
 
     pub fn iter_batches(&self) -> impl Iterator<Item = &ForwardBatch> {
@@ -190,22 +183,9 @@ mod tests {
     use {
         super::*,
         crate::unprocessed_packet_batches::DeserializedPacket,
-        solana_runtime::{
-            bank::Bank,
-            bank_forks::BankForks,
-            genesis_utils::{create_genesis_config, GenesisConfigInfo},
-            transaction_priority_details::TransactionPriorityDetails,
-        },
+        solana_runtime::transaction_priority_details::TransactionPriorityDetails,
         solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
-        std::sync::RwLock,
     };
-
-    fn build_bank_forks_for_test() -> Arc<RwLock<BankForks>> {
-        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
-        let bank = Bank::new_for_tests(&genesis_config);
-        let bank_forks = BankForks::new(bank);
-        Arc::new(RwLock::new(bank_forks))
-    }
 
     fn build_deserialized_packet_for_test(
         priority: u64,
@@ -261,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_packet_to_batches() {
+    fn test_try_add_packet_to_batches() {
         solana_logger::setup();
         // set test batch limit to be 1 millionth of regular block limit
         let limit_ratio = 1_000_000u32;
@@ -270,11 +250,8 @@ mod tests {
         let requested_cu =
             block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS.saturating_div(limit_ratio as u64);
 
-        let mut forward_packet_batches_by_accounts = ForwardPacketBatchesByAccounts::new(
-            build_bank_forks_for_test().read().unwrap().root_bank(),
-            limit_ratio,
-            number_of_batches,
-        );
+        let mut forward_packet_batches_by_accounts =
+            ForwardPacketBatchesByAccounts::new(limit_ratio, number_of_batches);
 
         // initially both batches are empty
         {
@@ -290,7 +267,7 @@ mod tests {
         let packet_low_priority = build_deserialized_packet_for_test(0, requested_cu);
         // with 4 packets, first 3 write to same hot_account with higher priority,
         // the 4th write to other_account with lower priority;
-        // assert the 1st and 4th fit in fist batch, the 2nd in 2nd batch and 3rd will be dropped.
+        // assert the 1st and 4th fit in first batch, the 2nd in 2nd batch and 3rd will be dropped.
 
         // 1st high-priority packet added to 1st batch
         {
