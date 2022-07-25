@@ -32,7 +32,7 @@ struct Usage {
 }
 
 struct Page {
-    usage: usage,
+    usage: AtomicUsage,
 }
 
 struct AddressBook {
