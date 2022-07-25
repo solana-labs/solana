@@ -4796,6 +4796,12 @@ impl Bank {
         self.accounts_data_size_initial = amount;
     }
 
+    /// Update the accounts data size off-chain delta
+    /// NOTE: This fn is *ONLY FOR TESTS*
+    pub fn update_accounts_data_size_delta_off_chain_for_tests(&self, amount: i64) {
+        self.update_accounts_data_size_delta_off_chain(amount)
+    }
+
     fn get_num_signatures_in_message(message: &SanitizedMessage) -> u64 {
         let mut num_signatures = u64::from(message.header().num_required_signatures);
         // This next part is really calculating the number of pre-processor
