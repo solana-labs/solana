@@ -70,16 +70,19 @@ impl AddressBook {
                     }
                     Usage::Readonly => {
                         match &requested_usage {
-                            Usage::Writable => {
-                                return Err(())
-                            },
                             Usage::Readonly => {
                                todo!("ok"); 
                             }
+                            Usage::Writable => return Err(())
                             Usage::Unused => unreachable!(),
                         }
                     }
-                    Usage::Writable => return Err(()),
+                    Usage::Writable => {
+                        match &requested_usage {
+                            Usage::Readonly | Usage::Writable => return Err(())
+                            Usage::Unused => unreachable!(),
+                        }
+                    }
                 }
             }
             Entry::Vacant(entry) => todo!(),
