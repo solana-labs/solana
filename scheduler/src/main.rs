@@ -53,7 +53,7 @@ impl AddressBook {
 
         match self.map.entry(address) {
             Entry::Occupied(entry) => {
-                match entry.value.usage {
+                match entry.get().1.usage {
                 }
             }
         }
