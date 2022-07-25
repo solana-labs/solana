@@ -125,13 +125,13 @@ fn try_lock_for_tx<'a>(
     address_book: &mut AddressBook,
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
-) -> Result<Vec<LockAttempt>, ()> {
+) -> Vec<LockAttempt> {
     let writable_guards = locks
         .writable
         .iter()
         .cloned()
         .map(|&a| address_book.try_lock_address(a, Usage::Writable))
-        .collect::<Result<Vec<_>, ()>>();
+        .collect::<Vec<_>>();
 
     writable_guards
 }
