@@ -287,7 +287,9 @@ impl ScheduleStage {
                     res.unwrap();
                 }
                 recv(from_execution_stage) -> msg => {
-                    msg.unwrap();
+                    let msg = msg.unwrap();
+                    msg.commit();
+                    committed_ee = msg;
                 }
             }
         }
