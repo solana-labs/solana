@@ -45,12 +45,12 @@ impl LockAttempt {
         self.is_success
     }
 
-    fn success(address: Pubkey) -> Self {
-        Self { address, is_success: true }
+    fn success(address: Pubkey, requested_usage: RequestedUsage) -> Self {
+        Self { address, is_success: true, requested_usage }
     }
 
-    fn failure(address: Pubkey) -> Self {
-        Self { address, is_success: false }
+    fn failure(address: Pubkey, requested_usage: RequestedUsage) -> Self {
+        Self { address, is_success: false, requested_usage }
     }
 }
 
@@ -112,17 +112,17 @@ impl AddressBook {
                 match &mut page.current_usage {
                     CurrentUsage::Unused => {
                         page.current_usage = CurrentUsage::renew(requested_usage);
-                        LockAttempt::success(address) 
+                        LockAttempt::success(address, requested_usage) 
                     }
                     CurrentUsage::Readonly(ref mut current_count) => {
                         match &requested_usage {
                             RequestedUsage::Readonly => {
                                 *current_count += 1;
-                                LockAttempt::success(address)
+                                LockAttempt::success(address, requested_usage)
                             },
                             RequestedUsage::Writable => {
                                 // add to contended queue?
-                                LockAttempt::failure(address)
+                                LockAttempt::failure(address, requested_usage)
                             }
                         }
                     }
@@ -130,7 +130,7 @@ impl AddressBook {
                         match &requested_usage {
                             RequestedUsage::Readonly | RequestedUsage::Writable => {
                                 // add to contended queeu?
-                                LockAttempt::failure(address)
+                                LockAttempt::failure(address, requested_usage)
                             }
                         }
                     }
