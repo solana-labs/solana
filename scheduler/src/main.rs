@@ -20,8 +20,9 @@ impl ExecutionEnvironment {
 }
 
 fn schedule(entry: Entry) {
+    let Bank::default();
     for tx in entry.transactions {
-        tx.foo();
+        //tx.foo();
     }
 }
 
