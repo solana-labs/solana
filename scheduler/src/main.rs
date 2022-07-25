@@ -230,8 +230,8 @@ struct ScheduleStage {
 
 impl ScheduleStage {
     fn commit(ee: &mut ExecutionEnvironment) {
-        // release address guards
-        // clone updated Accounts into address book
+        // par()-ly release address guards
+        // par()-ly clone updated Accounts into address book
         // async-ly propagate the result to rpc subsystems
     }
 
