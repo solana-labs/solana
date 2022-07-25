@@ -105,12 +105,11 @@ impl TransactionQueue {
     }
 }
 
-fn try_lock_for_tx<'tx, 'locks>(
+fn try_lock_for_tx(
     address_book: &mut AddressBook,
-    tx: &'tx SanitizedTransaction,
-) -> Result<Vec<AddressGuard>, TransactionAccountLocks<'locks>> {
-    let sig = tx.signature();
-    let locks = tx.get_account_locks().unwrap();
+    signature: &Signature,
+    locks: &TransactionAccountLocks,
+) -> Result<Vec<AddressGuard>, TransactionAccountLocks> {
     let writable_guards = locks
         .writable
         .into_iter()
@@ -264,7 +263,9 @@ impl ScheduleStage {
         bank: &solana_runtime::bank::Bank,
     ) -> ExecutionEnvironment {
         for next_task in tx_queue.tasks() {
-            match try_lock_for_tx(address_book, &next_task.tx) {
+            let sig = tx.signature();
+            let locks = tx.get_account_locks().unwrap();
+            match try_lock_for_tx(address_book, &sig, &locks) {
                 Ok(lock_guards) => {
                     return create_execution_environment(lock_guards);
                 }
