@@ -107,7 +107,7 @@ impl TransactionQueue {
 
 fn try_lock_for_tx<'a>(
     address_book: &mut AddressBook,
-    signature: &'a Signature,
+    message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
 ) -> Result<Vec<AddressGuard>, ()> {
     let writable_guards = locks
