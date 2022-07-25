@@ -40,7 +40,7 @@ struct LockAttempt {
 }
 
 impl LockAttempt {
-    fn is_success() -> bool {
+    fn is_success(&self) -> bool {
         true
     }
 }
