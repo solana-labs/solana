@@ -22,7 +22,7 @@ impl ExecutionEnvironment {
     }
 }
 
-fn try_lock(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
+fn try_lock_tx(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
     for a in locks.writeable {
@@ -40,7 +40,7 @@ fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
         tx_queue.insert(ix, tx);
     }
     for next_tx in tx_queue.values() {
-        if let Ok(next_tx) = try_lock(next_tx) {
+        if let Ok(next_tx) = try_lock_tx(next_tx) {
             //execution_lane.push(next_tx)
         }
     }
