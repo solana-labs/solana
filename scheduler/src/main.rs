@@ -115,7 +115,7 @@ fn create_execution_environment(guards: Vec<AddressGuard>) -> ExecutionEnvironme
     panic!()
 }
 
-fn send_to_execution_lane(ee: ExecutionEnvironment) {
+fn send_to_execution_stage(ee: ExecutionEnvironment) {
 }
 
 fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, entry: Entry, bank: solana_runtime::bank::Bank) {
@@ -127,7 +127,7 @@ fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, ent
     for next_task in tx_queue.tasks() {
         if let Ok(lock_guards) = try_lock_for_tx(address_book, &next_task.tx) {
             let ee = create_execution_environment(lock_guards);
-            send_to_execution_lane(ee);
+            send_to_execution_stage(ee);
         }
     }
 }
