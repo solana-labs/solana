@@ -151,7 +151,7 @@ impl AddressBook {
                 let mut page = entry.get_mut();
 
                 match &mut page.current_usage {
-                    CurrentUsage::Unused => unreachable!()
+                    CurrentUsage::Unused => unreachable!(),
                     CurrentUsage::Readonly(ref mut current_count) => {
                         match &attempt.requested_usage {
                             RequestedUsage::Readonly => {
