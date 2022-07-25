@@ -81,8 +81,11 @@ struct Weight { // naming: Sequence Ordering?
     // fee?
 }
 
+struct Bundle {
+}
+
 struct Task {
-    tx: SanitizedTransaction,
+    tx: SanitizedTransaction, // actually should be Bundle
 }
 
 // RunnableQueue, ContendedQueue?
