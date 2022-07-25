@@ -121,7 +121,7 @@ fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, ent
     for (ix, tx) in entry.transactions.into_iter().enumerate() {
         let tx = bank.verify_transaction(tx, solana_sdk::transaction::TransactionVerificationMode::FullVerification).unwrap();
         //tx.foo();
-        tx_queue.add(Fee {ix}, Task {tx});
+        tx_queue.add(Fee {ix}, Task {tx, random_sequence: 929299});
     }
     for next_task in tx_queue.tasks() {
         if let Ok(lock_guards) = try_lock_tx(address_book, &next_task.tx) {
