@@ -22,7 +22,7 @@ impl ExecutionEnvironment {
     }
 }
 
-fn try_lock_account(address: usize) {
+fn try_lock_account(address: &Pubkey) {
 
 }
 
