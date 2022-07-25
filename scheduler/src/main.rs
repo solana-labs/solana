@@ -41,6 +41,16 @@ impl AddressBook {
     }
 }
 
+struct Fee {
+}
+
+struct Task {
+}
+
+struct TransactionQueue {
+    map: std::collections::BTreeMap<Fee, Task>
+}
+
 fn try_lock_tx(address_book: &mut AddressBook, tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
