@@ -47,7 +47,7 @@ struct AddressBook {
 
 impl AddressBook {
     fn try_lock_address(&mut self, address: Pubkey) -> Result<Guard, ()> {
-        self.map.entry(address.clone());
+        self.map.entry(address);
         Ok(Guard{account: ()})
     }
 }
