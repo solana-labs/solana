@@ -63,7 +63,8 @@ impl AddressBook {
 
         match self.map.entry(address) {
             Entry::Occupied(mut entry) => {
-                match &entry.get().usage {
+                let page = entry.get();
+                match &page.usage {
                     Usage::Unused => {
                         entry.usage = Usage::Writable;
                     }
