@@ -119,7 +119,7 @@ fn send_to_execution_stage(ee: ExecutionEnvironment) {
 }
 
 fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, entry: &Entry, bank: &solana_runtime::bank::Bank) -> ExecutionEnvironment {
-    for (ix, tx) in entry.transactions.into_iter().enumerate() {
+    for (ix, tx) in entry.transactions.clone().into_iter().enumerate() {
         let tx = bank.verify_transaction(tx, solana_sdk::transaction::TransactionVerificationMode::FullVerification).unwrap();
         //tx.foo();
         tx_queue.add(Fee {ix, random_sequence: 32322}, Task {tx});
