@@ -279,7 +279,7 @@ impl ScheduleStage {
     ) {
         use crossbeam_channel::select;
         let exit = true;
-        let committed_ee = None;
+        let mut committed_ee = None;
         while exit {
             select! {
                 recv(from_previous_stage) -> tx => {
