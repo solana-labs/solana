@@ -58,7 +58,7 @@ struct AddressBook {
 }
 
 impl AddressBook {
-    fn try_lock_address(&mut self, address: Pubkey) -> Result<AddressGuard, ()> {
+    fn try_lock_address(&mut self, address: Pubkey, usage: Usage) -> Result<AddressGuard, ()> {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
