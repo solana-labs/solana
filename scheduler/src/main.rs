@@ -15,6 +15,7 @@ use solana_sdk::pubkey::Pubkey;
 struct ExecutionEnvironment {
     accounts: Vec<i8>,
     cu: usize,
+    //tx: Tx,
 }
 
 impl ExecutionEnvironment {
@@ -27,7 +28,7 @@ struct Guard {
     account: (),
 } 
 
-fn try_lock_account(address: &Pubkey) -> Result<Guard, ()> {
+fn try_lock_address(address: &Pubkey) -> Result<Guard, ()> {
     Ok(Guard{account: ()})
 }
 
@@ -35,7 +36,7 @@ fn try_lock_tx(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
     let writable_guards = locks.writable.iter().map(|a|
-        try_lock_account(a)
+        try_lock_address(a)
     ).collect::<Vec<_>>();
     Ok(tx)
 }
