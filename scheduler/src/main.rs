@@ -263,35 +263,35 @@ fn main() {
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
 
-fn scheduler_loop(
-    tx_queue: &mut TransactionQueue,
-    address_book: &mut AddressBook,
-    entry: Entry,
-    bank: solana_runtime::bank::Bank,
-    to_execution_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
-    from_execution_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
-) {
-    use crossbeam_channel::select;
-    let exit = true;
-    while exit {
-        select! {
-            send(to_execution_stage, schedule(tx_queue, address_book, &entry, &bank)) -> res => {
-                res.unwrap();
-            }
-            recv(from_execution_stage) -> msg => {
-                msg.unwrap();
+struct ScheduleStage {
+}
+
+impl ScheduleStage {
+    fn run(
+        tx_queue: &mut TransactionQueue,
+        address_book: &mut AddressBook,
+        entry: Entry,
+        bank: solana_runtime::bank::Bank,
+        to_execution_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
+        from_execution_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
+    ) {
+        use crossbeam_channel::select;
+        let exit = true;
+        while exit {
+            select! {
+                send(to_execution_stage, schedule(tx_queue, address_book, &entry, &bank)) -> res => {
+                    res.unwrap();
+                }
+                recv(from_execution_stage) -> msg => {
+                    msg.unwrap();
+                }
             }
         }
     }
 }
 
-struct ScheduleStage {
-}
-
-impl ScheduleStage {
-}
-
 struct ExecuteStage {
+    //bank: Bank,
 }
 
 impl ExecuteStage {
