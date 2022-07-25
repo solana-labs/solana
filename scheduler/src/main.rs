@@ -1,3 +1,5 @@
+#![feature(map_first_last)]
+
 use log::*;
 use crossbeam_channel::bounded;
 use crossbeam_channel::unbounded;
@@ -29,7 +31,7 @@ fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
         //tx.foo();
         tx_queue.insert(ix, tx);
     }
-    tx_queue.pop_last();
+    tx_queue.last();
 }
 
 fn main() {
