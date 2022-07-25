@@ -20,7 +20,7 @@ impl ExecutionEnvironment {
 }
 
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
-    let tx_queue = std::collections::BTreeMap::default();
+    let mut tx_queue = std::collections::BTreeMap::default();
 
     for (ix, tx) in entry.transactions.iter().enumerate() {
         let tx = bank.verify_transaction(*tx, solana_sdk::transaction::TransactionVerificationMode::FullVerification).unwrap();
