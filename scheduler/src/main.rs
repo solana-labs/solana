@@ -54,7 +54,9 @@ impl AddressBook {
         match self.map.entry(address) {
             Entry::Occupied(entry) => {
                 match &entry.get().usage.load(std::sync::atomic::Ordering::Relaxed) {
-                    Usage::Writable => return Err(())
+                    Usage::Unused => todo!(),
+                    Usage::Readonly => todo!(),
+                    Usage::Writable => return Err(()),
                 }
             }
             Entry::Vacant(entry) => todo!()
