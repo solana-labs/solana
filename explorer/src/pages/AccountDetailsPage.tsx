@@ -195,14 +195,14 @@ export function AccountHeader({
     let token;
     let unverified = false;
 
-    if (tokenDetails) {
-      token = tokenDetails;
-    } else {
+    if (data?.nftData) {
       token = {
         logoURI: data?.nftData?.json?.image,
         name: data?.nftData?.json?.name,
       };
       unverified = true;
+    } else if (tokenDetails) {
+      token = tokenDetails;
     }
 
     return (
