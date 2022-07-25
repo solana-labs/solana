@@ -42,7 +42,7 @@ fn try_lock_tx(tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     writable_guards
 }
 
-fn create_execution_environment(Vec<Guard>) -> ExecutionEnvironment {
+fn create_execution_environment(guards: Vec<Guard>) -> ExecutionEnvironment {
     panic!()
 }
 
