@@ -98,6 +98,9 @@ impl AddressBook {
                 entry.insert(Page {
                     current_usage: requested_usage,
                 });
+                LockAttempt {
+                    address,
+                }
             }
         }
     }
