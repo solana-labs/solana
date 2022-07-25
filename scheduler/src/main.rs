@@ -251,7 +251,7 @@ impl ScheduleStage {
         // async-ly propagate the result to rpc subsystems
     }
 
-    fn push_to_queue(tx: usize, bank: &solana_runtime::bank::Bank) {
+    fn push_to_queue(tx: VersionedTransaction, bank: &solana_runtime::bank::Bank) {
         let ix = 23;
         let tx = bank
             .verify_transaction(
