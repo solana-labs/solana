@@ -240,7 +240,7 @@ impl ScheduleStage {
         // async-ly propagate the result to rpc subsystems
     }
 
-    fn push_to_queue(tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue, bank: &solana_runtime::bank::Bank) {
+    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue, bank: &solana_runtime::bank::Bank) {
         //let ix = 23;
         //let tx = bank
         //    .verify_transaction(
@@ -250,10 +250,7 @@ impl ScheduleStage {
         //    .unwrap();
         //tx.foo();
         tx_queue.add(
-            Weight {
-                ix,
-                randomness: 32322,
-            },
+            weight, 
             Task { tx },
         );
     }
