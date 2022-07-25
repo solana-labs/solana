@@ -109,7 +109,7 @@ impl AddressBook {
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
 
-                match &page.current_usage {
+                match &mut page.current_usage {
                     CurrentUsage::Unused => {
                         page.current_usage = CurrentUsage::renew(requested_usage);
                         LockAttempt::success(address) 
