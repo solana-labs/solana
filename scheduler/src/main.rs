@@ -31,19 +31,21 @@ struct Guard {
 struct Foo {
 }
 
-struct AddressMap {
+struct AddressBook {
     map: std::collections::BTreeMap<Pubkey, Foo>
 }
 
-fn try_lock_address(address: &Pubkey) -> Result<Guard, ()> {
-    Ok(Guard{account: ()})
+impl AddressBook {
+    fn try_lock_address(&mut self, address: &Pubkey) -> Result<Guard, ()> {
+        Ok(Guard{account: ()})
+    }
 }
 
-fn try_lock_tx(tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
+fn try_lock_tx(address_book: &mut AddressBook, tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
     let writable_guards = locks.writable.iter().map(|a|
-        try_lock_address(a)
+        address_book.try_lock_address(a)
     ).collect::<Result<Vec<_>, ()>>();
 
     writable_guards
@@ -56,7 +58,7 @@ fn create_execution_environment(guards: Vec<Guard>) -> ExecutionEnvironment {
 fn send_to_execution_lane(ee: ExecutionEnvironment) {
 }
 
-fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
+fn schedule(address_book: &mut AddressBook, entry: Entry, bank: solana_runtime::bank::Bank) {
     let mut tx_queue = std::collections::BTreeMap::default();
 
     for (ix, tx) in entry.transactions.into_iter().enumerate() {
@@ -65,7 +67,7 @@ fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
         tx_queue.insert(ix, tx);
     }
     for next_tx in tx_queue.values() {
-        if let Ok(lock_guards) = try_lock_tx(next_tx) {
+        if let Ok(lock_guards) = try_lock_tx(address_book, next_tx) {
             let ee = create_execution_environment(lock_guards);
             send_to_execution_lane(ee);
         }
