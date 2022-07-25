@@ -27,9 +27,14 @@ use {
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
         data_budget::DataBudget,
+<<<<<<< HEAD
         packet::{Packet, PacketBatch, PacketBatchRecycler},
     },
     solana_runtime::{bank::Bank, bank_forks::BankForks},
+=======
+        packet::{PacketBatch, PacketBatchRecycler},
+    },
+>>>>>>> f6d5b253f (Enforce a 12MB limit on outbound repair (#26493))
     solana_sdk::{
         clock::Slot,
         feature_set::{check_ping_ancestor_requests, sign_repair_requests},
@@ -149,6 +154,7 @@ impl RequestResponse for AncestorHashesRepairType {
 }
 
 #[derive(Default)]
+<<<<<<< HEAD
 struct ServeRepairStats {
     total_requests: usize,
     dropped_requests: usize,
@@ -189,6 +195,20 @@ impl RepairRequestHeader {
             nonce,
         }
     }
+=======
+pub struct ServeRepairStats {
+    pub total_requests: usize,
+    pub dropped_requests: usize,
+    pub total_dropped_response_packets: usize,
+    pub total_response_packets: usize,
+    pub total_response_bytes: usize,
+    pub processed: usize,
+    pub self_repair: usize,
+    pub window_index: usize,
+    pub highest_window_index: usize,
+    pub orphan: usize,
+    pub ancestor_hashes: usize,
+>>>>>>> f6d5b253f (Enforce a 12MB limit on outbound repair (#26493))
 }
 
 pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
@@ -490,15 +510,24 @@ impl ServeRepair {
         stats.dropped_requests += dropped_requests;
         stats.total_requests += total_requests;
 
+<<<<<<< HEAD
         let root_bank = self.bank_forks.read().unwrap().root_bank();
         for reqs in reqs_v {
             self.handle_packets(
                 ping_cache,
+=======
+        for reqs in reqs_v {
+            Self::handle_packets(
+                obj,
+>>>>>>> f6d5b253f (Enforce a 12MB limit on outbound repair (#26493))
                 recycler,
                 blockstore,
                 reqs,
                 response_sender,
+<<<<<<< HEAD
                 &root_bank,
+=======
+>>>>>>> f6d5b253f (Enforce a 12MB limit on outbound repair (#26493))
                 stats,
                 data_budget,
             );
@@ -563,8 +592,12 @@ impl ServeRepair {
         const MAX_BYTES_PER_SECOND: usize = 12_000_000;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
 
+<<<<<<< HEAD
         let mut ping_cache = PingCache::new(REPAIR_PING_CACHE_TTL, REPAIR_PING_CACHE_CAPACITY);
 
+=======
+        let exit = exit.clone();
+>>>>>>> f6d5b253f (Enforce a 12MB limit on outbound repair (#26493))
         let recycler = PacketBatchRecycler::default();
         Builder::new()
             .name("solana-repair-listen".to_string())
@@ -756,11 +789,32 @@ impl ServeRepair {
 
         // iter over the packets
         for (i, packet) in packet_batch.iter().enumerate() {
+<<<<<<< HEAD
             let request: RepairProtocol = match packet.deserialize_slice(..) {
                 Ok(request) => request,
                 Err(_) => {
                     stats.err_malformed += 1;
                     continue;
+=======
+            if let Ok(request) = packet.deserialize_slice(..) {
+                stats.processed += 1;
+                let from_addr = packet.meta.socket_addr();
+                let rsp =
+                    match Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats)
+                    {
+                        None => continue,
+                        Some(rsp) => rsp,
+                    };
+                let num_response_packets = rsp.len();
+                let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
+                if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
+                    stats.total_response_bytes += num_response_bytes;
+                    stats.total_response_packets += num_response_packets;
+                } else {
+                    stats.dropped_requests += packet_batch.len() - i;
+                    stats.total_dropped_response_packets += num_response_packets;
+                    break;
+>>>>>>> f6d5b253f (Enforce a 12MB limit on outbound repair (#26493))
                 }
             };
 
@@ -768,6 +822,11 @@ impl ServeRepair {
                 stats.self_repair += 1;
                 continue;
             }
+<<<<<<< HEAD
+=======
+        }
+    }
+>>>>>>> f6d5b253f (Enforce a 12MB limit on outbound repair (#26493))
 
             let require_signature_check =
                 Self::requires_signature_check(&request, root_bank, sign_repairs_epoch);
