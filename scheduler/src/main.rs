@@ -252,6 +252,7 @@ impl ScheduleStage {
     }
 
     fn push_to_queue(tx: usize) {
+        let ix = 23;
         let tx = bank
             .verify_transaction(
                 tx,
