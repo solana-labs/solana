@@ -140,6 +140,7 @@ impl AddressBook {
     }
 
     fn ensure_unlock(&mut self, attempt: &LockAttempt) {
+        use std::collections::btree_map::Entry;
         let mut now_unused = false;
 
         match self.map.entry(address) {
