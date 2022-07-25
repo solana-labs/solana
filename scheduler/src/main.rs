@@ -284,3 +284,15 @@ fn scheduler_loop(
         }
     }
 }
+
+struct ScheduleStage {
+}
+
+impl ScheduleStage {
+}
+
+struct ExecuteStage {
+}
+
+impl ExecuteStage {
+}
