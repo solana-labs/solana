@@ -11,6 +11,7 @@ use {
     solana_metrics::datapoint_info,
     solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
 };
+use solana_sdk::transaction::VersionedTransaction;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
