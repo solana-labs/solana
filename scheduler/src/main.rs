@@ -104,7 +104,7 @@ impl AddressBook {
                 entry.insert(Page {
                     current_usage: CurrentUsage::renew(requested_usage),
                 });
-                LockAttempt::success(address)
+                LockAttempt::success(address, requested_usage)
             }
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
