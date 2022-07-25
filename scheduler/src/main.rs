@@ -41,14 +41,16 @@ struct Page {
     usage: AtomicUsage,
 }
 
+type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
+
 struct AddressBook {
-    map: std::collections::BTreeMap<Pubkey, Page>
+    map: AddressBookMap ,
 }
 
 impl AddressBook {
     fn try_lock_address(&mut self, address: Pubkey) -> Result<Guard, ()> {
         match self.map.entry(address) {
-            std::collections::BTreeMap::Entry::Ocuppied => {
+            AddressBookMap::Entry::Ocuppied => {
             }
         }
 
