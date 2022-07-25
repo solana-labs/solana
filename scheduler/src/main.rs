@@ -22,12 +22,16 @@ impl ExecutionEnvironment {
     }
 }
 
+fn try_lock_account(address: usize) {
+
+}
+
 fn try_lock_tx(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
-    for a in locks.writable {
+    let writable_guards = locks.writable.iter().map(|a|
         try_lock_account(a)
-    }
+    ).collect::<Vec<_>>();
     Ok(tx)
 }
 
