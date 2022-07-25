@@ -106,16 +106,11 @@ impl AddressBook {
                                 // add to contended queue?
                                 LockAttempt::failure(address)
                             }
-                            Usage::Unused => {
-                                page.current_usage = requested_usage;
-                                LockAttempt::success(address)
-                            }
                         }
                     }
                     Usage::Writable => {
                         match &requested_usage {
                             Usage::Readonly | Usage::Writable => panic!(),
-                            Usage::Unused => unreachable!(),
                         }
                     }
                 }
