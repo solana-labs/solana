@@ -20,11 +20,14 @@ impl ExecutionEnvironment {
 }
 
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
-    for tx in entry.transactions {
+    let tx_queue = std::collection::BTreeMap::default();
+
+    for (ix, tx) in entry.transactions.iter().enumerate() {
         let tx = bank.verify_transaction(tx, solana_sdk::transaction::TransactionVerificationMode::FullVerification).unwrap();
         let sig = tx.signature();
         let locks = tx.get_account_locks();
         //tx.foo();
+        tx_queue.insert(ix, tx);
     }
 }
 
