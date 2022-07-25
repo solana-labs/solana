@@ -93,6 +93,7 @@ impl AddressBook {
             }
             Entry::Vacant(entry) => {
                 entry.insert(Page {
+                    current_usage: requested_usage,
                 }).unwrap();
             }
         }
