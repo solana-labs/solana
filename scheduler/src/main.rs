@@ -21,7 +21,7 @@ impl ExecutionEnvironment {
     }
 }
 
-fn is_schedulable(tx: usize) {
+fn is_schedulable(tx: &SanitizedTransaction) -> bool {
 }
 
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
