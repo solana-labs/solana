@@ -140,6 +140,45 @@ impl AddressBook {
     }
 
     fn ensure_unlock(&mut self, attempt: &LockAttempt) {
+        let mut now_unused = false;
+
+        match self.map.entry(address) {
+            // unconditional success if it's initial access
+            Entry::Vacant(entry) => {
+                unreachable!()
+            }
+            Entry::Occupied(mut entry) => {
+                let mut page = entry.get_mut();
+
+                match &mut page.current_usage {
+                    CurrentUsage::Unused => unreachable!()
+                    CurrentUsage::Readonly(ref mut current_count) => {
+                        match &attempt.requested_usage {
+                            RequestedUsage::Readonly => {
+                                if *current_count == 1 {
+                                    now_unused = true;
+                                } else {
+                                    *current_count -= 1;
+                                }
+                            },
+                            RequestedUsage::Writable => unreachable!() 
+                        }
+                    }
+                    CurrentUsage::Writable => {
+                        match &requested_usage {
+                            RequestedUsage::Readonly => unreachable!(),
+                            RequestedUsage::Writable => {
+                                now_unused = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if now_unused {
+                page.current_usage = CurrentUsage::Unused
+            }
+        }
     }
 }
 
