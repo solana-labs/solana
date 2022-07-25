@@ -188,7 +188,7 @@ fn try_lock_for_tx<'a>(
         .map(|&a| address_book.try_lock_address(a, RequestedUsage::Readonly))
         .collect::<Vec<_>>();
 
-    writable_guards.concat(readonly_guards[..])
+    writable_guards.append(readonly_guards[..])
 }
 
 fn create_execution_environment(guards: Vec<LockAttempt>) -> ExecutionEnvironment {
