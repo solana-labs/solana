@@ -79,7 +79,7 @@ impl AddressBook {
                     }
                     Usage::Writable => {
                         match &requested_usage {
-                            Usage::Readonly | Usage::Writable => return Err(()),
+                            (Usage::Readonly | Usage::Writable) => return Err(()),
                             Usage::Unused => unreachable!(),
                         }
                     }
