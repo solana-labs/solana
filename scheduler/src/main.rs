@@ -39,6 +39,12 @@ struct LockAttempt {
     account: (),
 }
 
+impl LockAttempt {
+    fn is_success() -> {
+        true
+    }
+}
+
 #[derive(PartialEq)]
 enum Usage {
     Unused,
