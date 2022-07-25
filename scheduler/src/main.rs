@@ -344,7 +344,7 @@ impl ScheduleStage {
                 return create_execution_environment(lock_attempts);
             } else {
                 for l in lock_attempts {
-                    l.ensure_unlock()
+                    ensure_unlock(address_book, l)
                 }
             }
         }
