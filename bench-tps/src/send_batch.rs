@@ -110,9 +110,10 @@ pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync
     let (mut nonce_keypairs, _extra) = generate_keypairs(seed_keypair, count as u64);
     nonce_keypairs.truncate(count);
 
-    let to_fund: Vec<(&Keypair, &Keypair)> = authority_keypairs
+    let to_fund: Vec<NonceCreateSigners> = authority_keypairs
         .iter()
         .zip(nonce_keypairs.iter())
+        .map(|x| NonceCreateSigners(x.0, x.1))
         .collect();
 
     to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
@@ -120,6 +121,21 @@ pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync
     });
     nonce_keypairs
 }
+/*
+pub fn withdraw_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    authority_keypairs: &[Keypair],
+    nonce_keypairs: &[Keypair],
+) {
+    let to_withdraw: Vec<(&Keypair, &Keypair)> = authority_keypairs
+        .iter()
+        .zip(nonce_keypairs.iter())
+        .collect();
+
+    to_withdraw.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
+        NonceContainer::with_capacity(chunk.len()).withdraw_accounts(&client, chunk);
+    });
+}*/
 
 const MAX_SPENDS_PER_TX: u64 = 4;
 
@@ -361,7 +377,13 @@ impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
     }
 }
 
-impl<'a> Sliceable for (&'a Keypair, &'a Keypair) {
+// Introduce a new structure to specify Sliceable implementations
+// which uses both Keypairs to sign the transaction 
+struct NonceCreateSigners<'a>(&'a Keypair, &'a Keypair);
+type NonceChunk<'a> = [NonceCreateSigners<'a>];
+type NonceContainer<'a> = Vec<(NonceCreateSigners<'a>, Transaction)>;
+
+impl<'a> Sliceable for NonceCreateSigners<'a> {
     type Slice = [&'a Keypair; 2];
     fn as_slice(&self) -> Self::Slice {
         [self.0, self.1]
@@ -371,22 +393,12 @@ impl<'a> Sliceable for (&'a Keypair, &'a Keypair) {
     }
 }
 
-type NonceSigners<'a> = (&'a Keypair, &'a Keypair);
-type NonceChunk<'a> = [NonceSigners<'a>];
-type NonceContainer<'a> = Vec<(NonceSigners<'a>, Transaction)>;
-
-trait NonceTransactions<'a>: SendBatchTransactions<'a, (&'a Keypair, &'a Keypair)> {
+trait NonceTransactions<'a>: SendBatchTransactions<'a, NonceCreateSigners<'a>> {
     fn create_accounts<T: 'static + BenchTpsClient + Send + Sync>(
         &mut self,
         client: &Arc<T>,
         to_fund: &'a NonceChunk<'a>,
         nonce_rent: u64,
-    );
-
-    fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync>(
-        &mut self,
-        client: &Arc<T>,
-        to_withdraw: &'a NonceChunk<'a>,
     );
 
     fn make<F: Fn(&Pubkey, &Pubkey) -> Vec<Instruction> + Send + Sync>(
@@ -425,10 +437,62 @@ impl<'a> NonceTransactions<'a> for NonceContainer<'a> {
         self.send_transactions(client, nonce_rent, log_progress);
     }
 
+    fn make<F: Fn(&Pubkey, &Pubkey) -> Vec<Instruction> + Send + Sync>(
+        &mut self,
+        chunk: &'a NonceChunk<'a>,
+        create_instructions: F,
+    ) {
+        let mut make_txs = Measure::start("make_txs");
+        let txs: NonceContainer = chunk
+            .par_iter()
+            .map(|kp| {
+                let authority: &Keypair = kp.0;
+                let nonce: &Keypair = kp.1;
+                let instructions = create_instructions(&nonce.pubkey(), &authority.pubkey());
+                (
+                    NonceCreateSigners(authority, nonce),
+                    Transaction::new_with_payer(&instructions, Some(&authority.pubkey())),
+                )
+            })
+            .collect();
+        make_txs.stop();
+        debug!("make {} unsigned txs: {}us", txs.len(), make_txs.as_us());
+        self.extend(txs);
+    }
+}
+
+struct NonceWithdrawSigners<'a>(&'a Keypair, &'a Keypair);
+type NonceWithdrawChunk<'a> = [NonceWithdrawSigners<'a>];
+type NonceWithdrawContainer<'a> = Vec<(NonceWithdrawSigners<'a>, Transaction)>;
+
+impl<'a> Sliceable for NonceWithdrawSigners<'a> {
+    type Slice = [&'a Keypair; 1];
+    fn as_slice(&self) -> Self::Slice {
+        [self.0]
+    }
+    fn get_pubkey(&self) -> Pubkey {
+        self.0.pubkey()
+    }
+}
+
+trait NonceWithdrawTransactions<'a>: SendBatchTransactions<'a, NonceWithdrawSigners<'a>> {
     fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync>(
         &mut self,
         client: &Arc<T>,
-        to_withdraw: &'a NonceChunk<'a>,
+        to_withdraw: &'a NonceWithdrawChunk<'a>,
+    );
+
+    fn make<F: Fn(&Pubkey, &Pubkey) -> Vec<Instruction> + Send + Sync>(
+        &mut self,
+        chunk: &'a NonceWithdrawChunk<'a>,
+        create_instructions: F,
+    );
+}
+impl<'a> NonceWithdrawTransactions<'a> for NonceWithdrawContainer<'a> {
+    fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+        &mut self,
+        client: &Arc<T>,
+        to_withdraw: &'a NonceWithdrawChunk<'a>,
     ) {
         self.make(
             to_withdraw,
@@ -462,16 +526,18 @@ impl<'a> NonceTransactions<'a> for NonceContainer<'a> {
 
     fn make<F: Fn(&Pubkey, &Pubkey) -> Vec<Instruction> + Send + Sync>(
         &mut self,
-        chunk: &'a NonceChunk<'a>,
+        chunk: &'a NonceWithdrawChunk<'a>,
         create_instructions: F,
     ) {
         let mut make_txs = Measure::start("make_txs");
-        let txs: NonceContainer = chunk
+        let txs: NonceWithdrawContainer = chunk
             .par_iter()
-            .map(|(authority, nonce)| {
+            .map(|kp| {
+                let authority: &Keypair = kp.0;
+                let nonce: &Keypair = kp.1;
                 let instructions = create_instructions(&nonce.pubkey(), &authority.pubkey());
                 (
-                    (*authority, *nonce),
+                    NonceWithdrawSigners(authority, nonce),
                     Transaction::new_with_payer(&instructions, Some(&authority.pubkey())),
                 )
             })
