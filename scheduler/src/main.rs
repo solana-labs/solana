@@ -53,7 +53,7 @@ impl AddressBook {
 
         match self.map.entry(address) {
             Entry::Occupied(entry) => {
-                match &entry.get().usage.load() {
+                match &entry.get().usage.load(std::atomics::Ordering::Relaxed) {
                     Usage::Writable => return Err(())
                 }
             }
