@@ -216,3 +216,9 @@ fn main() {
     }).unwrap());
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
+
+fn scheduler_loop(to_execution_stage: usize, from_execution_stage: usize) {
+    let (s, r) = bounded(thread_count * 10);
+    if s == to_execution_stage {
+    }
+}
