@@ -38,6 +38,7 @@ impl ExecutionEnvironment {
 struct LockAttempt {
     address: Pubkey,
     is_success: bool,
+    requested_usage: RequestedUsage,
 }
 
 impl LockAttempt {
