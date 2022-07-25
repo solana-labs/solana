@@ -147,6 +147,7 @@ impl AddressBook {
 
     fn ensure_unlock(&mut self, attempt: &LockAttempt) {
         if attempt.is_failure() {
+            // nothing to do
             return;
         }
 
