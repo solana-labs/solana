@@ -13,6 +13,7 @@ use {
 };
 use solana_sdk::transaction::VersionedTransaction;
 use solana_sdk::transaction::TransactionAccountLocks;
+use solana_sdk::hash::Hash;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
