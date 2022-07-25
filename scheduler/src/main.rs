@@ -52,7 +52,7 @@ fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
     }
     for next_tx in tx_queue.values() {
         if let Ok(lock_guards) = try_lock_tx(next_tx) {
-            let ee = create_execution_environment(lock_guards)
+            let ee = create_execution_environment(lock_guards);
             send_to_execution_lane(ee);
         }
     }
