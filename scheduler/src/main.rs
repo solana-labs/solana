@@ -62,9 +62,11 @@ impl AddressBook {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
-            Entry::Occupied(entry) => {
+            Entry::Occupied(mut entry) => {
                 match &entry.get().usage {
-                    Usage::Unused => todo!(),
+                    Usage::Unused => {
+                        entry.usage = Usage::Writable;
+                    }
                     Usage::Readonly => todo!(),
                     Usage::Writable => return Err(()),
                 }
