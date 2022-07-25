@@ -1,4 +1,37 @@
 module.exports = {
+  validatorsSidebar: [
+    "running-validator",
+    {
+      type: "category",
+      label: "Getting Started",
+      collapsed: false,
+      items: [
+        "running-validator/validator-reqs",
+      ],
+    },
+    {
+      type: "category",
+      label: "Voting Setup",
+      collapsed: false,
+      items: [
+        "running-validator/validator-start",
+        "running-validator/vote-accounts",
+        "running-validator/validator-stake",
+        "running-validator/validator-monitor",
+        "running-validator/validator-info",
+        "running-validator/validator-failover",
+        "running-validator/validator-troubleshoot",
+      ],
+    },
+    {
+      type: "category",
+      label: "Geyser",
+      collapsed: false,
+      items: [
+        "developing/plugins/geyser-plugins"
+      ]
+    },
+  ],
   docs: {
     About: ["introduction", "terminology", "history"],
     Wallets: [
@@ -80,20 +113,8 @@ module.exports = {
       },
       "developing/test-validator",
       "developing/backwards-compatibility",
-      "developing/plugins/geyser-plugins"
     ],
     Integrating: ["integrations/exchange"],
-    Validating: [
-      "running-validator",
-      "running-validator/validator-reqs",
-      "running-validator/validator-start",
-      "running-validator/vote-accounts",
-      "running-validator/validator-stake",
-      "running-validator/validator-monitor",
-      "running-validator/validator-info",
-      "running-validator/validator-failover",
-      "running-validator/validator-troubleshoot",
-    ],
     Clusters: [
       "clusters",
       "cluster/rpc-endpoints",

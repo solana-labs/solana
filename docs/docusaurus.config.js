@@ -109,6 +109,10 @@ module.exports = {
               label: "Introduction",
               to: "introduction",
             },
+            {
+              label: "Validators",
+              to: "running-validator",
+            },
           ],
         },
         {
