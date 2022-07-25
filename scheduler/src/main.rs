@@ -251,23 +251,21 @@ impl ScheduleStage {
         // async-ly propagate the result to rpc subsystems
     }
 
-    fn push_to_queue() {
-        for (ix, tx) in entry.transactions.clone().into_iter().enumerate() {
-            let tx = bank
-                .verify_transaction(
-                    tx,
-                    solana_sdk::transaction::TransactionVerificationMode::FullVerification,
-                )
-                .unwrap();
-            //tx.foo();
-            tx_queue.add(
-                Fee {
-                    ix,
-                    random_sequence: 32322,
-                },
-                Task { tx },
-            );
-        }
+    fn push_to_queue(tx: usize) {
+        let tx = bank
+            .verify_transaction(
+                tx,
+                solana_sdk::transaction::TransactionVerificationMode::FullVerification,
+            )
+            .unwrap();
+        //tx.foo();
+        tx_queue.add(
+            Fee {
+                ix,
+                random_sequence: 32322,
+            },
+            Task { tx },
+        );
     }
 
     fn run(
