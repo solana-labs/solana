@@ -118,7 +118,7 @@ fn create_execution_environment(guards: Vec<AddressGuard>) -> ExecutionEnvironme
 fn send_to_execution_stage(ee: ExecutionEnvironment) {
 }
 
-fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, entry: Entry, bank: solana_runtime::bank::Bank) {
+fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, entry: Entry, bank: solana_runtime::bank::Bank) -> ExecutionEnvironment {
     for (ix, tx) in entry.transactions.into_iter().enumerate() {
         let tx = bank.verify_transaction(tx, solana_sdk::transaction::TransactionVerificationMode::FullVerification).unwrap();
         //tx.foo();
@@ -127,8 +127,7 @@ fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, ent
     for next_task in tx_queue.tasks() {
         match try_lock_for_tx(address_book, &next_task.tx) {
             Ok(lock_guards) => {
-                let ee = create_execution_environment(lock_guards);
-                send_to_execution_stage(ee);
+                return create_execution_environment(lock_guards);
             },
             Err(_) => {
             },
