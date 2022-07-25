@@ -275,11 +275,10 @@ impl ScheduleStage {
         from_previous_stage: crossbeam_channel::Receiver<u8>,
         to_execution_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
         from_execution_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
-        to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
+        to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
     ) {
         use crossbeam_channel::select;
         let exit = true;
-        let mut committed_ee = None;
         while exit {
             select! {
                 recv(from_previous_stage) -> tx => {
@@ -287,10 +286,10 @@ impl ScheduleStage {
                 send(to_execution_stage, schedule(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
                 }
-                recv(from_execution_stage) if 3 == 3 -> msg => {
+                recv(from_execution_stage) -> msg => {
                     let mut msg = msg.unwrap();
                     Self::commit(&mut msg);
-                    committed_ee = Some(msg);
+                    to_next_stage.send(msg).unwrap()
                 }
             }
         }
