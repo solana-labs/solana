@@ -107,7 +107,7 @@ impl AddressBook {
 
                 match &page.current_usage {
                     Usage::Unused => {
-                        page.current_usage = Usage::renew(requested_usage)
+                        page.current_usage = Usage::renew(requested_usage);
                         LockAttempt::success(address) 
                     }
                     Usage::Readonly => {
