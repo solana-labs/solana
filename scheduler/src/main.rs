@@ -68,13 +68,11 @@ fn create_execution_environment(guards: Vec<Guard>) -> ExecutionEnvironment {
 fn send_to_execution_lane(ee: ExecutionEnvironment) {
 }
 
-fn schedule(address_book: &mut AddressBook, entry: Entry, bank: solana_runtime::bank::Bank) {
-    let mut tx_queue = std::collections::BTreeMap::default();
-
+fn schedule(tx_queue: &mut TransactionQueue, address_book: &mut AddressBook, entry: Entry, bank: solana_runtime::bank::Bank) {
     for (ix, tx) in entry.transactions.into_iter().enumerate() {
         let tx = bank.verify_transaction(tx, solana_sdk::transaction::TransactionVerificationMode::FullVerification).unwrap();
         //tx.foo();
-        tx_queue.insert(ix, tx);
+        tx_queue.add(ix, tx);
     }
     for next_tx in tx_queue.values() {
         if let Ok(lock_guards) = try_lock_tx(address_book, next_tx) {
