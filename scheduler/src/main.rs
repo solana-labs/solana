@@ -223,7 +223,7 @@ fn scheduler_loop(tx_queue: &mut TransactionQueue, address_book: &mut AddressBoo
     let exit = true;
     while exit {
         select! {
-            send(to_execution_stage, schedule(tx_queue, address_book, entry, bank)) -> res => {
+            send(to_execution_stage, schedule(tx_queue, address_book, &entry, &bank)) -> res => {
                 res.unwrap();
             }
             recv(from_execution_stage) -> msg => {
