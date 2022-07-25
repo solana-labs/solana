@@ -78,12 +78,14 @@ impl AddressBook {
 
 struct Fee {
     ix: usize,
+    random_sequence: usize, // tie breaker? random noise?
 }
 
 struct Task {
     tx: SanitizedTransaction,
 }
 
+// RunnableQueue, ContendedQueue?
 struct TransactionQueue {
     map: std::collections::BTreeMap<Fee, Task>
 }
