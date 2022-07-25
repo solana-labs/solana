@@ -61,6 +61,19 @@ enum Usage {
     Writable,
 }
 
+impl Usage {
+    fn renew(requested_usage) -> Self {
+        match requested_usage {
+            RequestedUsage::Readonly => {
+                Usage::Readonly//(1)
+            }
+            RequestedUsage::Writable => {
+                Usage::Writable
+            }
+        }
+    }
+}
+
 enum RequestedUsage {
     Readonly,
     Writable,
@@ -94,14 +107,7 @@ impl AddressBook {
 
                 match &page.current_usage {
                     Usage::Unused => {
-                        match requested_usage {
-                            RequestedUsage::Readonly => {
-                                page.current_usage = Usage::Readonly//(1)
-                            }
-                            RequestedUsage::Writable => {
-                                page.current_usage = Usage::Writable
-                            }
-                        }
+                        page.current_usage = Usage::renew(requested_usage)
                         LockAttempt::success(address) 
                     }
                     Usage::Readonly => {
