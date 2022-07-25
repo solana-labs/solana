@@ -86,6 +86,7 @@ impl AddressBook {
             }
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
+
                 match &page.current_usage {
                     Usage::Unused => {
                         page.current_usage = requested_usage;
@@ -94,7 +95,7 @@ impl AddressBook {
                     Usage::Readonly => {
                         match &requested_usage {
                             Usage::Readonly => {
-                               todo!("ok"); 
+                               LockAttempt::success(address)
                             },
                             Usage::Writable => panic!(),
                             Usage::Unused => unreachable!(),
