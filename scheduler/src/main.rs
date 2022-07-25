@@ -276,8 +276,8 @@ impl ScheduleStage {
         entry: Entry,
         bank: solana_runtime::bank::Bank,
         from_previous_stage: crossbeam_channel::Receiver<VersionedTransaction>,
-        to_execution_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
-        from_execution_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
+        to_execute_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
+        from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
     ) {
         use crossbeam_channel::select;
@@ -287,10 +287,10 @@ impl ScheduleStage {
                 recv(from_previous_stage) -> tx => {
                     Self::push_to_queue(tx.unwrap(), tx_queue, &bank)
                 }
-                send(to_execution_stage, pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
+                send(to_execute_stage, pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
                 }
-                recv(from_execution_stage) -> msg => {
+                recv(from_execute_stage) -> msg => {
                     let mut msg = msg.unwrap();
                     Self::commit(&mut msg);
                     to_next_stage.send(msg).unwrap()
