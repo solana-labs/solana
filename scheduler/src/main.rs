@@ -117,7 +117,7 @@ impl AddressBook {
                     CurrentUsage::Readonly(curent_count) => {
                         match &requested_usage {
                             RequestedUsage::Readonly => {
-                                page.current_usage = CurrentUsage::Readonly(curent_count + 1)
+                                page.current_usage = CurrentUsage::Readonly(curent_count + 1);
                                 LockAttempt::success(address)
                             },
                             RequestedUsage::Writable => {
