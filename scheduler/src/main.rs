@@ -113,7 +113,8 @@ fn try_lock_for_tx<'a>(
 ) -> Result<Vec<AddressGuard>, ()> {
     let writable_guards = locks
         .writable
-        .into_iter()
+        .iter()
+        .cloned()
         .map(|&a| address_book.try_lock_address(a))
         .collect::<Result<Vec<_>, ()>>();
 
