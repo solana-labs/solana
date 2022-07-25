@@ -32,13 +32,13 @@ fn try_lock_address(address: &Pubkey) -> Result<Guard, ()> {
     Ok(Guard{account: ()})
 }
 
-fn try_lock_tx(tx: &SanitizedTransaction) -> Result<&SanitizedTransaction, ()> {
+fn try_lock_tx(tx: &SanitizedTransaction) -> Result<Vec<Guard>, ()> {
     let sig = tx.signature();
     let locks = tx.get_account_locks().unwrap();
     let writable_guards = locks.writable.iter().map(|a|
         try_lock_address(a)
     ).collect::<Vec<_>>();
-    Ok((tx, lock_guards))
+    Ok(lock_guards)
 }
 
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
@@ -50,7 +50,7 @@ fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
         tx_queue.insert(ix, tx);
     }
     for next_tx in tx_queue.values() {
-        if let Ok((next_tx, lock_guards)) = try_lock_tx(next_tx) {
+        if let Ok(lock_guards) = try_lock_tx(next_tx) {
             //execution_lane.push(next_tx)
         }
     }
