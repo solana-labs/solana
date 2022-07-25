@@ -31,6 +31,7 @@ impl ExecutionEnvironment {
     fn commit() {
         // release address guards
         // clone updated Accounts into address book
+        // async-ly propagate the result to rpc subsystems
     }
 }
 
