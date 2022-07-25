@@ -75,7 +75,7 @@ impl AddressBook {
 }
 
 struct Weight { // naming: Sequence Ordering?
-    ix: usize,
+    ix: usize, // index in ledger entry?
     randomness: usize, // tie breaker? random noise?
     // fee?
 }
