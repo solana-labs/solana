@@ -88,7 +88,7 @@ impl AddressBook {
                     }
                     Usage::Writable => {
                         match &requested_usage {
-                            (Usage::Readonly | Usage::Writable) => panic!(),
+                            Usage::Readonly | Usage::Writable => panic!(),
                             Usage::Unused => unreachable!(),
                         }
                     }
