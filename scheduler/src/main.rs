@@ -153,6 +153,8 @@ fn main() {
     }).unwrap();
     */
     let pc = std::thread::Builder::new().name("prosumer".to_string()).spawn(move || {
+        use crossbeam_channel::select;
+
         let mut rng = rand::thread_rng();
         let mut count = 0;
         let start = std::time::Instant::now();
