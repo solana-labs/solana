@@ -49,6 +49,8 @@ struct AddressBook {
 
 impl AddressBook {
     fn try_lock_address(&mut self, address: Pubkey) -> Result<Guard, ()> {
+        use std::collections::btree_map::Entry;
+
         match self.map.entry(address) {
             Entry::Ocuppied => {
             }
