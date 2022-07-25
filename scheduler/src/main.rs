@@ -21,6 +21,9 @@ impl ExecutionEnvironment {
     }
 }
 
+fn is_schedulable() {
+}
+
 fn schedule(entry: Entry, bank: solana_runtime::bank::Bank) {
     let mut tx_queue = std::collections::BTreeMap::default();
 
