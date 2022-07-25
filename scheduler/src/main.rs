@@ -398,6 +398,7 @@ impl ScheduleStage {
         for next_task in tx_queue.tasks() {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
+
             let lock_attempts = attempt_lock_for_tx(address_book, &message_hash, &locks);
             if lock_attempts.iter().all(|g| g.is_success()) {
                 return create_execution_environment(lock_attempts);
