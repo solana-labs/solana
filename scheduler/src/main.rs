@@ -193,7 +193,7 @@ fn try_lock_for_tx<'a>(
     writable_attempts
 }
 
-fn ensure_unlock_for_tx(address_book: &mut AddressBook, Vec<LockAttempt>) {
+fn ensure_unlock_for_tx(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
     for l in lock_attempts {
         ensure_unlock(address_book, &l)
     }
