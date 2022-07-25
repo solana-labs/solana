@@ -70,11 +70,11 @@ enum CurrentUsage {
 
 impl CurrentUsage {
     fn renew(requested_usage: RequestedUsage) -> Self {
-        const INITIAL_COUNT: UsageCount = 1;
+        const SOLE_USE_COUNT: UsageCount = 1;
 
         match requested_usage {
             RequestedUsage::Readonly => {
-                CurrentUsage::Readonly(INITIAL_COUNT)
+                CurrentUsage::Readonly(SOLE_USE_COUNT)
             }
             RequestedUsage::Writable => {
                 CurrentUsage::Writable
@@ -166,7 +166,7 @@ impl AddressBook {
                     CurrentUsage::Readonly(ref mut current_count) => {
                         match &attempt.requested_usage {
                             RequestedUsage::Readonly => {
-                                if *current_count == 1 {
+                                if *current_count == SOLE_USE_COUNT {
                                     now_unused = true;
                                 } else {
                                     *current_count -= 1;
