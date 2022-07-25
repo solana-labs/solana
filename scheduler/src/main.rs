@@ -97,8 +97,6 @@ impl AddressBook {
                 });
             }
         }
-
-        LockAttempt { account: () }
     }
 }
 
