@@ -44,6 +44,14 @@ impl LockAttempt {
     fn is_success(&self) -> bool {
         self.is_success
     }
+
+    fn success(address: Pubkey) -> Self {
+        Self { address, is_success: true }
+    }
+
+    fn failure(address: Pubkey) -> Self {
+        Self { address, is_success: false }
+    }
 }
 
 #[derive(PartialEq)]
@@ -74,9 +82,7 @@ impl AddressBook {
                 match &page.current_usage {
                     Usage::Unused => {
                         page.current_usage = requested_usage;
-                        LockAttempt {
-                            address
-                        }
+                        LockAttempt::success(address) 
                     }
                     Usage::Readonly => {
                         match &requested_usage {
@@ -99,9 +105,7 @@ impl AddressBook {
                 entry.insert(Page {
                     current_usage: requested_usage,
                 });
-                LockAttempt {
-                    address,
-                }
+                LockAttempt::success(address)
             }
         }
     }
