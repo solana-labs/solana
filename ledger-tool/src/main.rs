@@ -221,7 +221,7 @@ fn output_slot(
         }
     }
 
-    let (s2, r2) = crossbeam_channel::bounded(thread_count * 2);
+    let (s2, r2) = crossbeam_channel::bounded(10);
     //ScheduleStage::schedule_once(3, 4);
 
     if verbose_level >= 2 {
