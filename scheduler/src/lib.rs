@@ -19,18 +19,18 @@ use {
 #[derive(Default, Debug)]
 pub struct ExecutionEnvironment {
     lock_attempts: Vec<LockAttempt>,
-    accounts: Vec<i8>,
+    //accounts: Vec<i8>,
     cu: usize,
-    //tx: Tx,
+    task: Task,
 }
 
 impl ExecutionEnvironment {
-    fn new(cu: usize) -> Self {
-        Self {
-            cu,
-            ..Self::default()
-        }
-    }
+    //fn new(cu: usize) -> Self {
+    //    Self {
+    //        cu,
+    //        ..Self::default()
+    //    }
+    //}
 
     //fn abort() {
     //  pass AtomicBool into InvokeContext??
@@ -305,8 +305,6 @@ fn attempt_lock_for_execution<'a>(
     writable_attempts
 }
 
-fn send_to_execution_stage(ee: ExecutionEnvironment) {}
-
 pub struct ScheduleStage {}
 
 impl ScheduleStage {
@@ -464,12 +462,18 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
         task: Task,
-        attempts: Vec<LockAttempt>,
+        lock_attempts: Vec<LockAttempt>,
     ) -> ExecutionEnvironment {
+        let mut rng = rand::thread_rng();
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
         Self::apply_successful_lock_before_execution(address_book, unique_weight, &attempts);
         // load account now from AccountsDb
-        panic!()
+
+        ExecutionEnvironment {
+            lock_attempts,
+            task,
+            cu: rng.gen_range(0, 1000),
+        }
     }
 
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
