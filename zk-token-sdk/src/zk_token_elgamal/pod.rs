@@ -65,17 +65,13 @@ impl fmt::Debug for ElGamalPubkey {
     }
 }
 
-<<<<<<< HEAD
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
-=======
 impl fmt::Display for ElGamalPubkey {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", base64::encode(self.0))
     }
 }
 
-#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
->>>>>>> 2114136e5 (Add Display implementations for various ConfidentialTransfer pod structs (#26783))
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; 32]);
 
