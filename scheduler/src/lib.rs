@@ -16,7 +16,7 @@ use {
     },
 };
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct ExecutionEnvironment {
     lock_attempts: Vec<LockAttempt>,
     //accounts: Vec<i8>,
