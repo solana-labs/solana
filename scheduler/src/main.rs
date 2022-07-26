@@ -277,7 +277,7 @@ fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<Loc
         if newly_uncontended {
             page.current_usage = CurrentUsage::Unused;
             let address = *entry.key();
-            self.newly_uncontended_addresses.insert(address);
+            address_book.newly_uncontended_addresses.insert(address);
         }
         // mem::forget and panic in LockAttempt::drop()
     }
