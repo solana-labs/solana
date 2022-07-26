@@ -412,6 +412,17 @@ impl ScheduleStage {
         panic!();
     }
 
+    fn schedule_next_execution(
+        tx_queue: &mut TransactionQueue,
+        address_book: &mut AddressBook,
+    ) {
+        Self::pop_from_queue(tx_queue, address_book)
+    }
+
+    fn register_new_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
+        Self::push_to_queue(weighted_tx, tx_queue)
+    }
+
     fn run(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
@@ -427,14 +438,14 @@ impl ScheduleStage {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
                     let weighted_tx = weighted_tx.unwrap();
-                    Self::push_to_queue(weighted_tx, tx_queue)
+                    Self::register_new_task(weighted_tx, tx_queue)
                 }
-                send(to_execute_stage, Self::pop_from_queue(tx_queue, address_book)) -> res => {
+                send(to_execute_stage, Self::schedule_next_execution(tx_queue, address_book)) -> res => {
                     res.unwrap();
                 }
                 recv(from_execute_stage) -> execution_environment => {
                     let mut execution_environment = execution_environment.unwrap();
-                    Self::commit_execution_result(&mut execution_environment);
+                    Self::commit_result(&mut execution_environment);
                     to_next_stage.send(execution_environment).unwrap()
                 }
             }
