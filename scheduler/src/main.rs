@@ -142,7 +142,7 @@ impl AddressBook {
                     CurrentUsage::Writable => {
                         match &requested_usage {
                             RequestedUsage::Readonly | RequestedUsage::Writable => {
-                                page.contended_queue.insert(unique_weight.clone());
+                                page.contended_queue.insert(*unique_weight.clone());
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
