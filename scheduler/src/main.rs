@@ -155,7 +155,7 @@ impl AddressBook {
         }
     }
 
-    fn mark_address_as_uncontended(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
+    fn mark_unique_weight_as_uncontended(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(*address) {
@@ -491,7 +491,7 @@ impl ScheduleStage {
     fn apply_successful_lock_before_execution(address_book: &mut AddressBook, unique_weight: UniqueWeight, lock_attempts: &Vec<LockAttempt>) {
         for l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
-            address_book.mark_address_as_uncontended(&unique_weight, &l.address);
+            address_book.mark_unique_weight_as_uncontended(&unique_weight, &l.address);
 
             // revert because now contended again
             address_book.newly_uncontended_addresses.remove(&l.address);
