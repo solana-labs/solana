@@ -253,7 +253,7 @@ struct Bundle {
 
 #[derive(Debug, Default)]
 pub struct Task {
-    tx: SanitizedTransaction, // actually should be Bundle
+    tx: Option<SanitizedTransaction>, // actually should be Bundle
 }
 
 // RunnableQueue, ContendedQueue?
