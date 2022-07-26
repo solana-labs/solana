@@ -241,21 +241,21 @@ fn output_slot(
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
-    std::thread::spawn(move || {
+    let t1 = std::thread::spawn(move || {
         loop {
             ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, &pre_execute_env_sender, &post_execute_env_receiver, &post_schedule_env_sender);
         }
     });
-    std::thread::spawn(move || {
+    let t2 = std::thread::spawn(move || {
         loop {
             if let Some(ee) = pre_execute_env_receiver.recv().unwrap() {
-                info!("execute stage: {:#?}", ee);
+                info!("execute stage: {:#?}", ee.tx.signature());
                 post_execute_env_sender.send(ee).unwrap();
             }
         }
     });
 
-    std::thread::spawn(move || {
+    let t3 = std::thread::spawn(move || {
         loop {
             let ee = post_schedule_env_receiver.recv().unwrap();
             info!("post schedule stage");
@@ -266,6 +266,10 @@ fn output_slot(
         for (entry_index, entry) in entries.into_iter().enumerate() {
             output_entry(blockstore, method, slot, entry_index, entry, &tx_sender);
         }
+
+        t1.join();
+        t2.join();
+        t3.join();
 
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
