@@ -394,7 +394,7 @@ impl ScheduleStage {
         );
     }
 
-    fn pop_from_queue(
+    fn pop_then_lock_from_queue(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
     ) -> Option<(Task, Vec<LockAttempt>)> {
@@ -432,7 +432,7 @@ impl ScheduleStage {
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_from_queue(tx_queue, address_book).map(|(t, ll)| create_execution_environment(t, ll))
+        Self::pop_then_lock_from_queue(tx_queue, address_book).map(|(t, ll)| create_execution_environment(t, ll))
     }
 
     fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
