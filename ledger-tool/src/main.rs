@@ -279,7 +279,7 @@ fn output_slot(
 
         for _ in 0..100 {
             error!("started!");
-            for tx in txes {
+            for tx in txes.clone() {
                 tx_sender.send(tx).unwrap();
             }
         }
