@@ -436,15 +436,17 @@ impl ScheduleStage {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
                 if weight_from_contended < weight_from_runnable  {
                     runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
-                } else {
+                } else if weight_from_contended > weight_from_runnable {
                     panic!()
+                } else {
+                    unreachable!()
                 }
             },
             (Some(weight_from_contended), None) => {
                 panic!();
             },
             (None, Some(weight_from_runnable)) => {
-                    runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
+                runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
             },
             (None, None) => {
                 None
