@@ -217,8 +217,8 @@ impl TransactionQueue {
         self.map.insert(weight, task).unwrap();
     }
 
-    fn tasks(&self) -> impl std::iter::Iterator<Item = &Task> {
-        self.map.entries()
+    fn pop_next_task(&mut self) -> Task {
+        self.map.pop_last_value()
     }
 }
 
@@ -396,7 +396,7 @@ impl ScheduleStage {
         entry: &Entry,
         bank: &solana_runtime::bank::Bank,
     ) -> ExecutionEnvironment {
-        for next_task in tx_queue.tasks() {
+        for next_task in tx_queue.pop_next_task() {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
