@@ -7910,10 +7910,12 @@ impl AccountsDb {
         &self,
         storage_maps: &'a [Arc<AccountStorageEntry>],
     ) -> GenerateIndexAccountsMap<'a> {
+        use solana_sdk::account::accounts_equal;
         let num_accounts = storage_maps
             .iter()
             .map(|storage| storage.approx_stored_count())
             .sum();
+        let dup = AtomicUsize::default();
         let mut accounts_map = GenerateIndexAccountsMap::with_capacity(num_accounts);
         storage_maps.iter().for_each(|storage| {
             AppendVecAccountsIter::new(&storage.accounts).for_each(|stored_account| {
@@ -7937,12 +7939,30 @@ impl AccountsDb {
                                 stored_account,
                             });
                         } else {
-                            assert_ne!(occupied_version, this_version);
+                            if occupied_version == this_version {
+                                dup.fetch_add(1, Ordering::Relaxed);
+                                if !accounts_equal(&entry.get().stored_account, &stored_account) {
+                                    error!(
+                                        "different account value: {:?}, {:?}, {}",
+                                        entry.get().stored_account,
+                                        stored_account,
+                                        pubkey
+                                    );
+                                }
+                            }
                         }
                     }
                 }
             })
         });
+        let ld = dup.load(Ordering::Relaxed);
+        if ld != 0 {
+            error!(
+                "dup accounts, slot: {:?}, count: {}",
+                storage_maps.first().map(|s| s.slot()),
+                ld
+            );
+        }
         accounts_map
     }
 
