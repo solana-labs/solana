@@ -457,9 +457,10 @@ impl ScheduleStage {
 
     fn schedule_next_execution(
         runnable_queue: &mut TaskQueue,
+        contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_then_lock_from_queue(runnable_queue, address_book).map(|(t, ll)| Self::create_execution_environment(t, ll))
+        Self::pop_then_lock_from_queue(runnable_queue, contended_queue, address_book).map(|(t, ll)| Self::create_execution_environment(t, ll))
     }
 
     fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
@@ -468,6 +469,7 @@ impl ScheduleStage {
 
     fn run(
         runnable_queue: &mut TaskQueue,
+        contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         bank: solana_runtime::bank::Bank,
         from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
@@ -483,7 +485,7 @@ impl ScheduleStage {
                     let weighted_tx = weighted_tx.unwrap();
                     Self::register_runnable_task(weighted_tx, runnable_queue)
                 }
-                send(to_execute_stage, Self::schedule_next_execution(runnable_queue, address_book)) -> res => {
+                send(to_execute_stage, Self::schedule_next_execution(runnable_queue, contended_queue, address_book)) -> res => {
                     res.unwrap();
                 }
                 recv(from_execute_stage) -> processed_execution_environment => {
