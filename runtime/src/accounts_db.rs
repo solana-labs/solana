@@ -7958,9 +7958,10 @@ impl AccountsDb {
         let ld = dup.load(Ordering::Relaxed);
         if ld != 0 {
             error!(
-                "dup accounts, slot: {:?}, count: {}",
+                "dup accounts, slot: {:?}, count: {}, # append vecs: {}",
                 storage_maps.first().map(|s| s.slot()),
-                ld
+                ld,
+                storage_maps.len()
             );
         }
         accounts_map
