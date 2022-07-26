@@ -156,6 +156,8 @@ impl AddressBook {
     }
 
     fn unmark_unique_weight_as_contended(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
+        use std::collections::btree_map::Entry;
+
         match self.map.entry(*address) {
             // unconditional success if it's initial access
             Entry::Vacant(entry) => {
