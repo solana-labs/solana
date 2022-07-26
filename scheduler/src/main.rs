@@ -421,10 +421,10 @@ impl ScheduleStage {
 
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
+        // do par()-ly?
         unlock_after_execution(address_book, lock_attempts);
-        // par()-ly release lock attemps
+
         // par()-ly clone updated Accounts into address book
-        // async-ly propagate the result to rpc subsystems
     }
 
 
@@ -463,6 +463,8 @@ impl ScheduleStage {
                     let mut processed_execution_environment = processed_execution_environment.unwrap();
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
+
+                    // async-ly propagate the result to rpc subsystems
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap()
                 }
