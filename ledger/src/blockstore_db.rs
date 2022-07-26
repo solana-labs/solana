@@ -21,7 +21,7 @@ use {
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
         properties as RocksProperties, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision,
         DBCompactionStyle, DBIterator, DBRawIterator, FifoCompactOptions,
-        IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+        IteratorMode as RocksIteratorMode, LiveFile, Options, WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
     solana_runtime::hardened_unpack::UnpackError,
@@ -524,6 +524,13 @@ impl Rocks {
         match self.db.property_int_value_cf(cf, name) {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
             Ok(None) => Ok(0),
+            Err(e) => Err(BlockstoreError::RocksDb(e)),
+        }
+    }
+
+    fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        match self.db.live_files() {
+            Ok(live_files) => Ok(live_files),
             Err(e) => Err(BlockstoreError::RocksDb(e)),
         }
     }
@@ -1154,6 +1161,10 @@ impl Database {
 
     pub fn set_oldest_slot(&self, oldest_slot: Slot) {
         self.backend.oldest_slot.set(oldest_slot);
+    }
+
+    pub fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        self.backend.live_files_metadata()
     }
 }
 
