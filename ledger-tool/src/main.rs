@@ -142,7 +142,7 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
-    to_schedule_stage: crossbeam_channel::Sender<SanitizedTransaction>,
+    to_schedule_stage: &crossbeam_channel::Sender<SanitizedTransaction>,
 ) {
     match method {
         LedgerOutputMethod::Print => {
@@ -235,7 +235,7 @@ fn output_slot(
 
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry, s2);
+            output_entry(blockstore, method, slot, entry_index, entry, &s2);
         }
 
         output_slot_rewards(blockstore, slot, method);
