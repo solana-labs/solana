@@ -188,7 +188,8 @@ impl AddressBook {
                 }
 
                 if uncontended {
-                    page.current_usage = CurrentUsage::Unused
+                    page.current_usage = CurrentUsage::Unused;
+                    self.uncontended_addresses.insert(entry.key);
                 }
             }
             Entry::Vacant(entry) => {
