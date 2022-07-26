@@ -400,7 +400,7 @@ impl ScheduleStage {
         //    .unwrap();
         //tx.foo();
         tx_queue.add(
-            UniqueWeight { weight, unique_key: solana_sdk::hash::new_rand(rng) },
+            UniqueWeight { weight, unique_key: solana_sdk::hash::new_rand(&mut rng) },
             Task { tx },
         );
     }
