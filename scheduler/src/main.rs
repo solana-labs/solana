@@ -151,7 +151,7 @@ impl AddressBook {
         }
     }
 
-    fn unlock(&mut self, attempt) {
+    fn unlock(&mut self, attempt: &LockAttempt) {
         use std::collections::btree_map::Entry;
         let mut now_unused = false;
 
