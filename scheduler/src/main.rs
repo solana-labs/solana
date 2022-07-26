@@ -394,7 +394,6 @@ impl ScheduleStage {
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
         entry: &Entry,
-        bank: &solana_runtime::bank::Bank,
     ) -> ExecutionEnvironment {
         for next_task in tx_queue.pop_next_task() {
             let message_hash = next_task.tx.message_hash();
@@ -414,7 +413,6 @@ impl ScheduleStage {
     fn run(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
-        entry: Entry,
         bank: solana_runtime::bank::Bank,
         from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
         to_execute_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
@@ -429,7 +427,7 @@ impl ScheduleStage {
                     let weighted_tx = weighted_tx.unwrap();
                     Self::push_to_queue(weighted_tx, tx_queue)
                 }
-                send(to_execute_stage, Self::pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
+                send(to_execute_stage, Self::pop_from_queue(tx_queue, address_book)) -> res => {
                     res.unwrap();
                 }
                 recv(from_execute_stage) -> msg => {
