@@ -484,6 +484,9 @@ impl RpcSender for MockSender {
         let curr_mocks = self.mocks.read().unwrap();
         let mocks = curr_mocks.clone();
 
-        Box::new(Self { mocks: RwLock::new(mocks), url: self.url.clone()  })
+        Box::new(Self {
+            mocks: RwLock::new(mocks),
+            url: self.url.clone(),
+        })
     }
 }

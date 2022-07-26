@@ -163,7 +163,11 @@ impl RpcClient {
 
     pub async fn copy(&self) -> Self {
         let node_version = self.node_version.read().await.clone();
-        Self { sender: self.sender.clone(), config: self.config.clone(), node_version: RwLock::new(node_version) }
+        Self {
+            sender: self.sender.clone(),
+            config: self.config.clone(),
+            node_version: RwLock::new(node_version),
+        }
     }
 
     /// Create an HTTP `RpcClient`.

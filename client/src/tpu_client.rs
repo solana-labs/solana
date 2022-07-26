@@ -97,15 +97,21 @@ impl TpuClient {
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
-        let create_tpu_client =
-            async {NonblockingTpuClient::new(Arc::new(rpc_client.get_nonblocking_client().copy().await), websocket_url, config).await};
+        let create_tpu_client = async {
+            NonblockingTpuClient::new(
+                Arc::new(rpc_client.get_nonblocking_client().copy().await),
+                websocket_url,
+                config,
+            )
+            .await
+        };
 
         let runtime = tokio::runtime::Builder::new_current_thread()
-        .thread_name("tpu-client")
-        .enable_io()
-        .enable_time()
-        .build()
-        .unwrap();//rpc_client.get_runtime();
+            .thread_name("tpu-client")
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap(); //rpc_client.get_runtime();
         let _guard = runtime.enter();
         let tpu_client = runtime.block_on(create_tpu_client)?;
 
@@ -124,19 +130,22 @@ impl TpuClient {
         config: TpuClientConfig,
         connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
-        let create_tpu_client = async {NonblockingTpuClient::new_with_connection_cache(
-            Arc::new(rpc_client.get_nonblocking_client().copy().await),
-            websocket_url,
-            config,
-            connection_cache,
-        ).await};
+        let create_tpu_client = async {
+            NonblockingTpuClient::new_with_connection_cache(
+                Arc::new(rpc_client.get_nonblocking_client().copy().await),
+                websocket_url,
+                config,
+                connection_cache,
+            )
+            .await
+        };
 
         let runtime = tokio::runtime::Builder::new_current_thread()
-        .thread_name("tpu-client")
-        .enable_io()
-        .enable_time()
-        .build()
-        .unwrap();
+            .thread_name("tpu-client")
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap();
         let _guard = runtime.enter();
         let tpu_client = runtime.block_on(create_tpu_client)?;
 

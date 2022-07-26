@@ -59,7 +59,7 @@ impl HttpSender {
         let client = Arc::new(
             reqwest::Client::builder()
                 .default_headers(default_headers)
-                .timeout(timeout.clone())
+                .timeout(timeout)
                 .build()
                 .expect("build rpc client"),
         );
@@ -69,7 +69,7 @@ impl HttpSender {
             url: url.to_string(),
             request_id: AtomicU64::new(0),
             stats: RwLock::new(RpcTransportStats::default()),
-            timeout
+            timeout,
         }
     }
 }
@@ -227,17 +227,17 @@ impl RpcSender for HttpSender {
         let client = Arc::new(
             reqwest::Client::builder()
                 .default_headers(default_headers)
-                .timeout(self.timeout.clone())
+                .timeout(self.timeout)
                 .build()
                 .expect("build rpc client"),
         );
 
         Box::new(Self {
             client,
-            url: self.url,
+            url: self.url.clone(),
             request_id: AtomicU64::new(0),
             stats: RwLock::new(RpcTransportStats::default()),
-            timeout: self.timeout.clone()
+            timeout: self.timeout,
         })
     }
 }
