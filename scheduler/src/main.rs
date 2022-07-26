@@ -197,8 +197,13 @@ impl AddressBook {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct UniqueWeight { // naming: Sequence Ordering?
+struct Weight { // naming: Sequence Ordering?
     ix: usize, // index in ledger entry?
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+struct UniqueWeight { // naming: Sequence Ordering?
+    weight: Weight,
     randomness: Hash, // tie breaker? random noise? also for unique identification of txes?
     // fee?
 }
