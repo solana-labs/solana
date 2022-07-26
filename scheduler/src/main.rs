@@ -65,6 +65,7 @@ const SOLE_USE_COUNT: UsageCount = 1;
 #[derive(PartialEq)]
 enum CurrentUsage {
     Unused,
+    // weight to abort running tx?
     Readonly(UsageCount),
     Writable,
 }
