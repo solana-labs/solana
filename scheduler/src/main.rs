@@ -217,8 +217,8 @@ impl TransactionQueue {
         self.map.insert(weight, task).unwrap();
     }
 
-    fn pop_next_task(&mut self) -> Task {
-        self.map.pop_last()
+    fn pop_next_task(&mut self) -> Option<Task> {
+        self.map.pop_last().map(|(_k, v) v)
     }
 }
 
