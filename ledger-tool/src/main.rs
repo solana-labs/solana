@@ -231,6 +231,7 @@ fn output_slot(
     }
 
     let (tx_sender, tx_receiver) = crossbeam_channel::unbounded();
+    let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(8);
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
