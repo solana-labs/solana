@@ -204,7 +204,7 @@ struct Weight { // naming: Sequence Ordering?
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct UniqueWeight { // naming: Sequence Ordering?
     weight: Weight,
-    randomness: Hash, // tie breaker? random noise? also for unique identification of txes?
+    unique_key: Hash, // tie breaker? random noise? also for unique identification of txes?
     // fee?
 }
 
@@ -389,7 +389,7 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
-    fn push_to_queue((weight, tx): (UniqueWeight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
+    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
         //let ix = 23;
         //let tx = bank
         //    .verify_transaction(
@@ -399,7 +399,7 @@ impl ScheduleStage {
         //    .unwrap();
         //tx.foo();
         tx_queue.add(
-            weight, 
+            UniqueWeight { weight, unique_key: Hash::new_rand() }
             Task { tx },
         );
     }
@@ -445,7 +445,7 @@ impl ScheduleStage {
         Self::pop_then_lock_from_queue(tx_queue, address_book).map(|(t, ll)| create_execution_environment(t, ll))
     }
 
-    fn register_runnable_task(weighted_tx: (UniqueWeight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
+    fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
         Self::push_to_queue(weighted_tx, tx_queue)
     }
 
