@@ -272,6 +272,9 @@ fn output_slot(
             output_entry(blockstore, method, slot, entry_index, entry, &mut txes);
         }
 
+        for tx in txes {
+            tx_sender.send(tx).unwrap();
+        }
         t1.join().unwrap();
         t2.join().unwrap();
         t3.join().unwrap();

@@ -404,6 +404,7 @@ impl ScheduleStage {
             if is_success {
                 return Some((unique_weight, next_task, lock_attempts));
             } else {
+                info!("ensure_unlock_for_failed_execution(): {} {}", (unique_weight, from_runnable), next_task.tx.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
                     lock_attempts,
