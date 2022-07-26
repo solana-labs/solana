@@ -234,7 +234,7 @@ fn output_slot(
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
-    ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &tx_receiver, 6, 7, 8);
+    ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &tx_receiver, 6, 7, 8, 9);
 
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
