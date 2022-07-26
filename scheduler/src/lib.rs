@@ -515,13 +515,13 @@ impl ScheduleStage {
         use crossbeam_channel::select;
         let maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
 
-        if let Some(ee) = maybe_ee {
+        //if let Some(ee) = maybe_ee {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
                     let weighted_tx = weighted_tx.unwrap();
                     Self::register_runnable_task(weighted_tx, runnable_queue)
                 }
-                send(to_execute_substage, Some(ee)) -> res => {
+                send(to_execute_substage, maybe_ee) -> res => {
                     res.unwrap();
                 }
                 recv(from_execute_substage) -> processed_execution_environment => {
@@ -533,9 +533,9 @@ impl ScheduleStage {
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap()
                 }
-                default => { std::thread::sleep(std::time::Duration::from_millis(1)) }
+                //default => { std::thread::sleep(std::time::Duration::from_millis(1)) }
             }
-        } else {
+        /*} else {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
                     let weighted_tx = weighted_tx.unwrap();
@@ -552,7 +552,7 @@ impl ScheduleStage {
                 }
                 default => { std::thread::sleep(std::time::Duration::from_millis(1)) }
             }
-        }
+        }*/
     }
 
     pub fn run(
