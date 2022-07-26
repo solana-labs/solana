@@ -447,7 +447,7 @@ impl ScheduleStage {
             // ensure to remove remaining refs of this unique_weight
             address_book.mark_address_as_uncontended(&unique_weight, &l.address);
 
-            // revert because now contended
+            // revert because now contended again
             address_book.newly_uncontended_addresses.remove(&l.address);
         }
     }
@@ -469,7 +469,7 @@ impl ScheduleStage {
         }
     }
 
-    fn create_execution_environment(address_book: &mut AddressBook, unique_weight: UniqueWeight, task: Task, attempts: Vec<LockAttempt>) -> ExecutionEnvironment {
+    fn prepare_scheduled_execution(address_book: &mut AddressBook, unique_weight: UniqueWeight, task: Task, attempts: Vec<LockAttempt>) -> ExecutionEnvironment {
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
         Self::apply_successful_lock_before_execution(address_book, unique_weight, &attempts);
         // load account now from AccountsDb
@@ -489,7 +489,7 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_then_lock_from_queue(runnable_queue, contended_queue, address_book).map(|(uw, t, ll)| Self::create_execution_environment(address_book, uw, t, ll))
+        Self::pop_then_lock_from_queue(runnable_queue, contended_queue, address_book).map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll))
     }
 
     fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
