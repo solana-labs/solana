@@ -146,6 +146,7 @@ fn output_entry(
 ) {
     match method {
         LedgerOutputMethod::Print => {
+            /*
             println!(
                 "  Entry {} - num_hashes: {}, hash: {}, transactions: {}",
                 entry_index,
@@ -153,8 +154,9 @@ fn output_entry(
                 entry.hash,
                 entry.transactions.len()
             );
+            */
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
-                println!("    Transaction {}", transactions_index);
+                //println!("    Transaction {}", transactions_index);
                 let sanitized_tx = SanitizedTransaction::try_create(
                     transaction.clone(),
                     MessageHash::Compute,
@@ -162,7 +164,7 @@ fn output_entry(
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
                 ).unwrap();
-                to_schedule_stage.send((Weight { ix: entry_index * 1000 + transactions_index }, sanitized_tx)).unwrap();
+                to_schedule_stage.send((Weight { ix: 1000000 - entry_index * 1000 + transactions_index }, sanitized_tx)).unwrap();
                 /*
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
