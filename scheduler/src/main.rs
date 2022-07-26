@@ -225,7 +225,7 @@ impl TransactionQueue {
     }
 }
 
-fn attempt_lock_for_tx<'a>(
+fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
@@ -249,14 +249,14 @@ fn attempt_lock_for_tx<'a>(
     writable_attempts
 }
 
-fn ensure_unlock_for_tx(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+fn ensure_unlock_for_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
     for l in lock_attempts {
         address_book.ensure_unlock(&l)
         // mem::forget and panic in LockAttempt::drop()
     }
 }
 
-fn unlock_for_tx(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+fn unlock_for_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
     for l in lock_attempts {
         address_book.unlock(&l)
         // mem::forget and panic in LockAttempt::drop()
@@ -405,13 +405,13 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let lock_attempts = attempt_lock_for_tx(address_book, &message_hash, &locks);
+            let lock_attempts = attempt_lock_for_execution(address_book, &message_hash, &locks);
             let is_success = lock_attempts.iter().all(|g| g.is_success());
 
             if is_success {
                 return Some((next_task, lock_attempts));
             } else {
-                ensure_unlock_for_tx(address_book, lock_attempts);
+                ensure_unlock_for_execution(address_book, lock_attempts);
                 return None;
             }
         }
@@ -420,6 +420,7 @@ impl ScheduleStage {
     }
 
     fn commit_result(ee: &mut ExecutionEnvironment) {
+        unlock_for_execution(ee.lock_attempts)
         // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
         // async-ly propagate the result to rpc subsystems
