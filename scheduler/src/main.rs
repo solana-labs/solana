@@ -146,11 +146,12 @@ impl AddressBook {
     }
 
     fn ensure_unlock(&mut self, attempt: &LockAttempt) {
-        if attempt.is_failure() {
-            // nothing to do
-            return;
+        if attempt.is_success() {
+            self.unlock(&mut self, attempt);
         }
+    }
 
+    fn unlock(&mut self, attempt) {
         use std::collections::btree_map::Entry;
         let mut now_unused = false;
 
@@ -431,7 +432,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         bank: solana_runtime::bank::Bank,
         from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
-        to_execute_stage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>,
+        to_execute_stage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
         from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
     ) {
@@ -450,6 +451,7 @@ impl ScheduleStage {
                     let mut processed_execution_environment = processed_execution_environment.unwrap();
 
                     Self::commit_result(&mut processed_execution_environment);
+                    // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap()
                 }
             }
