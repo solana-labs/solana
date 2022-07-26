@@ -254,6 +254,13 @@ fn ensure_unlock_for_tx(address_book: &mut AddressBook, lock_attempts: Vec<LockA
     }
 }
 
+fn unlock_for_tx(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+    for l in lock_attempts {
+        address_book.unlock(&l)
+        // mem::forget and panic in LockAttempt::drop()
+    }
+}
+
 fn create_execution_environment(task: Task, attemps: Vec<LockAttempt>) -> ExecutionEnvironment {
     // load account now from AccountsDb
     panic!()
