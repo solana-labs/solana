@@ -491,8 +491,12 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
-            .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll))
+        let maybe_ee = Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
+            .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
+        if maybe_ee.is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(100);
+        }
+        maybe_ee
     }
 
     fn register_runnable_task(
