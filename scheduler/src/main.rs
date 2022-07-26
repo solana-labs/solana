@@ -68,6 +68,7 @@ const SOLE_USE_COUNT: UsageCount = 1;
 enum CurrentUsage {
     Unused,
     // weight to abort running tx?
+    // also sum all readonly weights to subvert to write lock with greater weight?
     Readonly(UsageCount),
     Writable,
 }
@@ -93,6 +94,7 @@ enum RequestedUsage {
 
 struct Page {
     current_usage: CurrentUsage,
+    //next_scheduled_task
 }
 
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
@@ -155,7 +157,7 @@ impl AddressBook {
 
     fn unlock(&mut self, attempt: &LockAttempt) {
         use std::collections::btree_map::Entry;
-        let mut now_unused = false;
+        let mut got_uncontended = false;
 
         match self.map.entry(attempt.address) {
             Entry::Occupied(mut entry) => {
@@ -166,7 +168,7 @@ impl AddressBook {
                         match &attempt.requested_usage {
                             RequestedUsage::Readonly => {
                                 if *current_count == SOLE_USE_COUNT {
-                                    now_unused = true;
+                                    got_uncontended = true;
                                 } else {
                                     *current_count -= 1;
                                 }
@@ -177,7 +179,7 @@ impl AddressBook {
                     CurrentUsage::Writable => {
                         match &attempt.requested_usage {
                             RequestedUsage::Writable => {
-                                now_unused = true;
+                                got_uncontended = true;
                             }
                             RequestedUsage::Readonly => unreachable!(),
                         }
@@ -185,7 +187,7 @@ impl AddressBook {
                     CurrentUsage::Unused => unreachable!(),
                 }
 
-                if now_unused {
+                if got_uncontended {
                     page.current_usage = CurrentUsage::Unused
                 }
             }
@@ -204,6 +206,8 @@ struct Weight { // naming: Sequence Ordering?
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct UniqueWeight { // naming: Sequence Ordering?
     weight: Weight,
+    // we can't use Transaction::message_hash because it's manipulatable to be favorous to the tx
+    // submitter
     unique_key: Hash, // tie breaker? random noise? also for unique identification of txes?
     // fee?
 }
@@ -222,12 +226,12 @@ struct TransactionQueue {
 }
 
 struct ContendedQueue {
-    map: std::collections::BTreeMap<UniqueWeight, TransactionQueue>,
+    map: std::collections::BTreeMap<UniqueWeight, Task>,
 }
 
 impl TransactionQueue {
-    fn add(&mut self, weight: UniqueWeight, task: Task) {
-        self.map.insert(weight, task).unwrap();
+    fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
+        self.map.insert(unique_weight, task).unwrap();
     }
 
     fn pop_next_task(&mut self) -> Option<Task> {
