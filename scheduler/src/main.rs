@@ -431,7 +431,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         bank: solana_runtime::bank::Bank,
         from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
-        to_execute_stage: crossbeam_channel::Sender<ExecutionEnvironment>,
+        to_execute_stage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>,
         from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
     ) {
