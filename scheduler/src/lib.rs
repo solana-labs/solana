@@ -493,9 +493,6 @@ impl ScheduleStage {
     ) -> Option<ExecutionEnvironment> {
         let maybe_ee = Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
             .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
-        if maybe_ee.is_none() {
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
         maybe_ee
     }
 
@@ -516,12 +513,14 @@ impl ScheduleStage {
         to_next_stage: &crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
     ) {
         use crossbeam_channel::select;
+        let maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+
         select! {
             recv(from_previous_stage) -> weighted_tx => {
                 let weighted_tx = weighted_tx.unwrap();
                 Self::register_runnable_task(weighted_tx, runnable_queue)
             }
-            send(to_execute_substage, Self::schedule_next_execution(runnable_queue, contended_queue, address_book)) -> res => {
+            send(maybe_ee.map(|| to_execute_substage).unwrap_or(&never()), maybe_ee.unwrap()) -> res => {
                 res.unwrap();
             }
             recv(from_execute_substage) -> processed_execution_environment => {
