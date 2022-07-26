@@ -500,7 +500,7 @@ impl ScheduleStage {
 
     fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>, from_runnable: bool) {
         for l in lock_attempts {
-            address_book.ensure_unlock(&l)
+            address_book.ensure_unlock(&l);
 
             // revert because now contended again
             if !from_runnable {
