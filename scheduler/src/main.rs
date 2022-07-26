@@ -447,7 +447,10 @@ impl ScheduleStage {
                 }
             },
             (Some(weight_from_contended), None) => {
-                panic!();
+                let heaviest_by_address = heaviest_by_address.unwrap();
+                let uw = heaviest_by_address.1.last().unwrap();
+                let task = contended_queue.map.remove(uw).unwrap();
+                Some((uw.clone(), task))
             },
             (None, Some(weight_from_runnable)) => {
                 runnable_queue.pop_next_task()
