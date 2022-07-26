@@ -247,18 +247,22 @@ fn output_slot(
         }
     });
     let t2 = std::thread::spawn(move || {
+        let mut step = 0;
         loop {
             if let Some(ee) = pre_execute_env_receiver.recv().unwrap() {
-                info!("execute stage: {:#?}", ee.task.tx.signature());
+                info!("execute substage: #{} {:#?}", step, ee.task.tx.signature());
                 post_execute_env_sender.send(ee).unwrap();
+                step += 1;
             }
         }
     });
 
     let t3 = std::thread::spawn(move || {
+        let mut step = 0;
         loop {
             let ee = post_schedule_env_receiver.recv().unwrap();
-            info!("post schedule stage: {:#?}", ee.task.tx.signature());
+            info!("post schedule stage: #{} {:#?}", step, ee.task.tx.signature());
+            step += 1;
         }
     });
 
