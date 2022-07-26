@@ -94,6 +94,7 @@ enum RequestedUsage {
 
 struct Page {
     current_usage: CurrentUsage,
+    contended_queue: std::collections::BTreeSet<UniqueWeight>,
     //next_scheduled_task
 }
 
