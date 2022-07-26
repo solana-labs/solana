@@ -156,7 +156,7 @@ impl AddressBook {
     }
 
     fn unmark_unique_weight_as_contended(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
-        match self.map.entry(address) {
+        match self.map.entry(*address) {
             // unconditional success if it's initial access
             Entry::Vacant(entry) => {
             }
