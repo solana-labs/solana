@@ -434,7 +434,7 @@ impl ScheduleStage {
         }
         match (*unique_weights_by_address.last_key_value().map(|a| a.0), runnable_queue.next_task_unique_weight()) {
             (Some(contended), Some(runnable)) => {
-                if  {
+                if contended < runnable  {
                     runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
                 } else {
                     panic!()
