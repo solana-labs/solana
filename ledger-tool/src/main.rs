@@ -155,7 +155,14 @@ fn output_entry(
             );
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
                 println!("    Transaction {}", transactions_index);
-                to_schedule_stage.send(transaction).unwrap();
+                let sanitized_tx = SanitizedTransaction::try_create(
+                    transaction,
+                    MessageHash::Compute,
+                    None,
+                    SimpleAddressLoader::Disabled,
+                    true, // require_static_program_ids
+                ).unwrap();
+                to_schedule_stage.send(sanitized_tx).unwrap();
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
