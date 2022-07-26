@@ -238,7 +238,7 @@ fn output_slot(
     let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
     ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, &pre_execute_env_sender, &post_execute_env_receiver, &post_schedule_env_sender);
-    std::thread::spawn(|| {
+    std::thread::spawn(move || {
         loop {
             if let Some(ee) = pre_execute_env_receiver.recv().unwrap() {
                 info!("execute stage");
@@ -247,7 +247,7 @@ fn output_slot(
         }
     });
 
-    std::thread::spawn(|| {
+    std::thread::spawn(move || {
         loop {
             let ee = post_schedule_env_receiver.recv().unwrap();
             info!("post schedule stage");
