@@ -375,7 +375,7 @@ impl ScheduleStage {
         // async-ly propagate the result to rpc subsystems
     }
 
-    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue, bank: &solana_runtime::bank::Bank) {
+    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
         //let ix = 23;
         //let tx = bank
         //    .verify_transaction(
@@ -427,7 +427,7 @@ impl ScheduleStage {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
                     let weighted_tx = weighted_tx.unwrap();
-                    Self::push_to_queue(weighted_tx, tx_queue, &bank)
+                    Self::push_to_queue(weighted_tx, tx_queue)
                 }
                 send(to_execute_stage, Self::pop_from_queue(tx_queue, address_book, &entry, &bank)) -> res => {
                     res.unwrap();
