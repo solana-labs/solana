@@ -267,6 +267,7 @@ struct ContendedQueue {
 
 impl TaskQueue {
     fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
+        info!("TaskQueue::add(): {:?}", unique_weight);
         self.map.insert(unique_weight, task).unwrap();
     }
 
