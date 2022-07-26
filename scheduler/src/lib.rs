@@ -533,11 +533,13 @@ impl ScheduleStage {
             }
 
         let maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+        if let Some(ee) = maybe_ee {
             select! {
-                send(to_execute_substage, maybe_ee) -> res => {
+                send(to_execute_substage, Some(ee)) -> res => {
                     res.unwrap();
                 }
             }
+        }
         /*} else {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
