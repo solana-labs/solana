@@ -197,13 +197,14 @@ impl AddressBook {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
-struct Weight { // naming: Sequence Ordering?
+struct UniqueWeight { // naming: Sequence Ordering?
     ix: usize, // index in ledger entry?
-    randomness: usize, // tie breaker? random noise?
+    randomness: usize, // tie breaker? random noise? also for unique identification of txes?
     // fee?
 }
 
 struct Bundle {
+    // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
 }
 
 struct Task {
@@ -212,11 +213,15 @@ struct Task {
 
 // RunnableQueue, ContendedQueue?
 struct TransactionQueue {
-    map: std::collections::BTreeMap<Weight, Task>,
+    map: std::collections::BTreeMap<UniqueWeight, Task>,
+}
+
+struct ContendedQueue {
+    map: std::collections::BTreeMap<UniqueWeight, TransactionQueue>,
 }
 
 impl TransactionQueue {
-    fn add(&mut self, weight: Weight, task: Task) {
+    fn add(&mut self, weight: UniqueWeight, task: Task) {
         self.map.insert(weight, task).unwrap();
     }
 
@@ -379,7 +384,7 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
-    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
+    fn push_to_queue((weight, tx): (UniqueWeight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
         //let ix = 23;
         //let tx = bank
         //    .verify_transaction(
@@ -435,7 +440,7 @@ impl ScheduleStage {
         Self::pop_then_lock_from_queue(tx_queue, address_book).map(|(t, ll)| create_execution_environment(t, ll))
     }
 
-    fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
+    fn register_runnable_task(weighted_tx: (UniqueWeight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
         Self::push_to_queue(weighted_tx, tx_queue)
     }
 
@@ -443,7 +448,7 @@ impl ScheduleStage {
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
         bank: solana_runtime::bank::Bank,
-        from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
+        from_previous_stage: crossbeam_channel::Receiver<(UniqueWeight, SanitizedTransaction)>,
         to_execute_stage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
         from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
