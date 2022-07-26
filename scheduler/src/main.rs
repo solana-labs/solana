@@ -453,7 +453,7 @@ impl ScheduleStage {
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
         bank: solana_runtime::bank::Bank,
-        from_previous_stage: crossbeam_channel::Receiver<(UniqueWeight, SanitizedTransaction)>,
+        from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
         to_execute_stage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
         from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
