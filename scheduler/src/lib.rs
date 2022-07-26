@@ -21,7 +21,7 @@ pub struct ExecutionEnvironment {
     lock_attempts: Vec<LockAttempt>,
     //accounts: Vec<i8>,
     cu: usize,
-    task: Task,
+    pub task: Task,
 }
 
 impl ExecutionEnvironment {
@@ -253,7 +253,7 @@ struct Bundle {
 
 #[derive(Debug)]
 pub struct Task {
-    tx: SanitizedTransaction, // actually should be Bundle
+    pub tx: SanitizedTransaction, // actually should be Bundle
 }
 
 // RunnableQueue, ContendedQueue?
