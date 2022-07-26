@@ -427,7 +427,7 @@ impl ScheduleStage {
         None
     }
 
-    fn apply_successful_lock_for_execution(address_book: &mut AddressBook, attempts: &Vec<LockAttempt>) {
+    fn apply_successful_lock_for_execution(address_book: &mut AddressBook, lock_attempts: &Vec<LockAttempt>) {
         for l in lock_attempts {
         }
     }
