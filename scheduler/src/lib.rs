@@ -237,7 +237,7 @@ pub struct Weight {
     pub ix: usize, // index in ledger entry?
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UniqueWeight {
     // naming: Sequence Ordering?
     weight: Weight,
