@@ -544,10 +544,11 @@ impl ScheduleStage {
         to_execute_substage: crossbeam_channel::Sender<ExecutionEnvironment>, // ideally want to stop wrapping with Option<...>...
         from_execute_substage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
+        to_full_channel: &crossbeam_channel::Sender<()>, // assume unbounded
     ) {
         let exit = true;
         while exit {
-            Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_substage, &from_execute_substage, &to_next_stage);
+            Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_substage, &from_execute_substage, &to_next_stage, &to_full_channel);
         }
     }
 }
