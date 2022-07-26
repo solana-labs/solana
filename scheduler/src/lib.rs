@@ -233,7 +233,7 @@ impl AddressBook {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Weight {
     // naming: Sequence Ordering?
-    ix: usize, // index in ledger entry?
+    pub ix: usize, // index in ledger entry?
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
