@@ -142,7 +142,7 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
-    to_schedule_stage: &crossbeam_channel::Sender<(Weight, SanitizedTransaction)>,
+    to_schedule_stage: &mut Vec<(Weight, SanitizedTransaction)>,
 ) {
     match method {
         LedgerOutputMethod::Print => {
@@ -164,7 +164,7 @@ fn output_entry(
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
                 ).unwrap();
-                to_schedule_stage.send((Weight { ix: 1000000 - (entry_index * 1000 + transactions_index) }, sanitized_tx)).unwrap();
+                to_schedule_stage.push((Weight { ix: 1000000 - (entry_index * 1000 + transactions_index) }, sanitized_tx)).unwrap();
                 /*
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
@@ -267,8 +267,9 @@ fn output_slot(
     });
 
     if verbose_level >= 2 {
+        let mut txes = Vec::new();
         for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry, &tx_sender);
+            output_entry(blockstore, method, slot, entry_index, entry, &mut txes);
         }
 
         t1.join().unwrap();
