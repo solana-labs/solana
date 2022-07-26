@@ -402,14 +402,17 @@ impl ScheduleStage {
             // detection?
 
             let lock_attempts = attempt_lock_for_tx(address_book, &message_hash, &locks);
-            if lock_attempts.iter().all(|g| g.is_success()) {
-                return create_execution_environment(next_task, lock_attempts);
+            let is_success = lock_attempts.iter().all(|g| g.is_success());
+
+            if is_success {
+                return Some(next_task, lock_attempts);
             } else {
-                ensure_unlock_for_tx(address_book, lock_attempts)
+                ensure_unlock_for_tx(address_book, lock_attempts);
+                return None;
             }
         }
 
-        panic!();
+        None
     }
 
     fn schedule_next_execution(
