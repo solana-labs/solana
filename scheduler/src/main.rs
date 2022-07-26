@@ -163,7 +163,7 @@ impl AddressBook {
         }
     }
 
-    fn mark_unique_weight_as_uncontended(
+    fn remove_contended_unique_weight(
         &mut self,
         unique_weight: &UniqueWeight,
         address: &Pubkey,
@@ -524,7 +524,7 @@ impl ScheduleStage {
     ) {
         for l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
-            address_book.mark_unique_weight_as_uncontended(&unique_weight, &l.address);
+            address_book.remove_contended_unique_weight(&unique_weight, &l.address);
 
             // revert because now contended again
             address_book.newly_uncontended_addresses.remove(&l.address);
