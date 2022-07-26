@@ -463,7 +463,7 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (from_runnable, unique_weight, next_task) in Self::select_next_task(runnable_queue, contended_queue, address_book) {
+        for (_from_runnable, unique_weight, next_task) in Self::select_next_task(runnable_queue, contended_queue, address_book) {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
@@ -477,9 +477,9 @@ impl ScheduleStage {
                 return Some((unique_weight, next_task, lock_attempts));
             } else {
                 Self::ensure_unlock_for_failed_execution(address_book, lock_attempts);
-                if from_runnable {
+                //if from_runnable {
                     contended_queue.add(unique_weight, next_task);
-                }
+                //}
                 return None;
             }
         }
