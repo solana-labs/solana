@@ -255,6 +255,7 @@ pub struct Task {
 }
 
 // RunnableQueue, ContendedQueue?
+#[derive(Default)]
 pub struct TaskQueue {
     map: std::collections::BTreeMap<UniqueWeight, Task>,
 }
