@@ -234,12 +234,12 @@ fn output_slot(
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(8);
     let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::bounded(100);
     let (post_schedule_env_sender, post_schedule_env_receiver) = crossbeam_channel::unbounded();
-    std::thread::spawn(|| {
-    });
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
-    ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, 6, 7, 8);
+    ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, pre_execute_env_sender, 7, 8);
+    std::thread::spawn(|| {
+    });
 
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
