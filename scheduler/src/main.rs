@@ -228,7 +228,7 @@ struct Task {
 }
 
 // RunnableQueue, ContendedQueue?
-struct TransactionQueue {
+struct TaskQueue {
     map: std::collections::BTreeMap<UniqueWeight, Task>,
 }
 
@@ -236,7 +236,7 @@ struct ContendedQueue {
     map: std::collections::BTreeMap<UniqueWeight, Task>,
 }
 
-impl TransactionQueue {
+impl TaskQueue {
     fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
         self.map.insert(unique_weight, task).unwrap();
     }
@@ -399,7 +399,7 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
-    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), runnable_queue: &mut TransactionQueue) {
+    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
         let mut rng = rand::thread_rng(); // manage randomness properly for future scheduling determinism
         //let ix = 23;
         //let tx = bank
@@ -416,7 +416,8 @@ impl ScheduleStage {
     }
 
     fn pop_then_lock_from_queue(
-        runnable_queue: &mut TransactionQueue,
+        runnable_queue: &mut TaskQueue,
+        contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(Task, Vec<LockAttempt>)> {
         for (unique_weight, next_task) in runnable_queue.pop_next_task() {
@@ -455,18 +456,18 @@ impl ScheduleStage {
     }
 
     fn schedule_next_execution(
-        runnable_queue: &mut TransactionQueue,
+        runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
         Self::pop_then_lock_from_queue(runnable_queue, address_book).map(|(t, ll)| Self::create_execution_environment(t, ll))
     }
 
-    fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), runnable_queue: &mut TransactionQueue) {
+    fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
         Self::push_to_queue(weighted_tx, runnable_queue)
     }
 
     fn run(
-        runnable_queue: &mut TransactionQueue,
+        runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         bank: solana_runtime::bank::Bank,
         from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
