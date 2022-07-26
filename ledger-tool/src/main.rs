@@ -162,7 +162,7 @@ fn output_entry(
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
                 ).unwrap();
-                to_schedule_stage.send(sanitized_tx).unwrap();
+                to_schedule_stage.send((Weight { ix: entry_index * 1000 + transactions_index) }, sanitized_tx)).unwrap();
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
