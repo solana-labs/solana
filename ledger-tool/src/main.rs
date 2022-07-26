@@ -262,6 +262,9 @@ fn output_slot(
         loop {
             let ee = post_schedule_env_receiver.recv().unwrap();
             info!("post schedule stage: #{} {:#?}", step, ee.task.tx.signature());
+            if step == 1966 {
+                error!("finished!");
+            }
             step += 1;
         }
     });
@@ -272,6 +275,7 @@ fn output_slot(
             output_entry(blockstore, method, slot, entry_index, entry, &mut txes);
         }
 
+        error!("started!");
         for tx in txes {
             tx_sender.send(tx).unwrap();
         }
