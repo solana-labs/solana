@@ -433,17 +433,17 @@ impl ScheduleStage {
             }
         }
         match (unique_weights_by_address.last_key_value().map(|a| a.0.clone()), runnable_queue.next_task_unique_weight()) {
-            (Some(contended), Some(runnable)) => {
-                if contended < runnable  {
+            (Some(weight_from_contended), Some(weight_from_runnable)) => {
+                if weight_from_contended < weight_from_runnable  {
                     runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
                 } else {
                     panic!()
                 }
             },
-            (Some(contended), None) => {
+            (Some(weight_from_contended), None) => {
                 panic!();
             },
-            (None, Some(runnable)) => {
+            (None, Some(weight_from_runnable)) => {
                     runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
             },
             (None, None) => {
