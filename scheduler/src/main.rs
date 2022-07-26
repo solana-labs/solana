@@ -389,7 +389,7 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
-    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
+    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue, rng: usize) {
         //let ix = 23;
         //let tx = bank
         //    .verify_transaction(
@@ -399,7 +399,7 @@ impl ScheduleStage {
         //    .unwrap();
         //tx.foo();
         tx_queue.add(
-            UniqueWeight { weight, unique_key: solana_sdk::hash::new_rand() },
+            UniqueWeight { weight, unique_key: solana_sdk::hash::new_rand(rng) },
             Task { tx },
         );
     }
