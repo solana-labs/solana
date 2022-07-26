@@ -218,7 +218,7 @@ impl TransactionQueue {
     }
 
     fn pop_next_task(&mut self) -> Task {
-        self.map.pop_last_value()
+        self.map.pop_last()
     }
 }
 
