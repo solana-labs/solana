@@ -424,7 +424,6 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(bool, UniqueWeight, Task)> {
-
         let mut unique_weights_by_address = std::collections::BTreeMap::<UniqueWeight, _>::new();
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = &address_book.map.get(address).unwrap().contended_unique_weights;
