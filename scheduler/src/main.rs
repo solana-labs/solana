@@ -155,6 +155,18 @@ impl AddressBook {
         }
     }
 
+    fn unmark_unique_weight_as_contended(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
+        match self.map.entry(address) {
+            // unconditional success if it's initial access
+            Entry::Vacant(entry) => {
+            }
+            Entry::Occupied(mut entry) => {
+                let mut page = entry.get_mut();
+                page.contended_unique_weights.remove(unique_weight);
+            }
+        }
+    }
+
     fn ensure_unlock(&mut self, attempt: &LockAttempt) {
         if attempt.is_success() {
             self.unlock(attempt);
@@ -429,6 +441,8 @@ impl ScheduleStage {
 
     fn apply_successful_lock_for_execution(address_book: &mut AddressBook, lock_attempts: &Vec<LockAttempt>) {
         for l in lock_attempts {
+            // now contended
+            address_book.newly_uncontended_addresses.remove(l.address);
         }
     }
 
