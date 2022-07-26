@@ -274,23 +274,6 @@ fn attempt_lock_for_execution<'a>(
     writable_attempts
 }
 
-fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
-    for l in lock_attempts {
-        address_book.ensure_unlock(&l)
-        // mem::forget and panic in LockAttempt::drop()
-    }
-}
-
-fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
-    for l in lock_attempts {
-        let newly_uncontended = address_book.unlock(&l);
-        if newly_uncontended {
-            address_book.newly_uncontended_addresses.insert(l.address);
-        }
-        // mem::forget and panic in LockAttempt::drop()
-    }
-}
-
 fn send_to_execution_stage(ee: ExecutionEnvironment) {}
 
 fn main() {
@@ -436,7 +419,7 @@ impl ScheduleStage {
             if is_success {
                 return Some((next_task, lock_attempts));
             } else {
-                ensure_unlock_for_failed_execution(address_book, lock_attempts);
+                Self::ensure_unlock_for_failed_execution(address_book, lock_attempts);
                 return None;
             }
         }
@@ -444,12 +427,29 @@ impl ScheduleStage {
         None
     }
 
-    fn apply_successful_lock_attempts(address_book: &mut AddressBook, attempts: &Vec<LockAttempt>) {
+    fn apply_successful_address_lock(address_book: &mut AddressBook, attempts: &Vec<LockAttempt>) {
+    }
+
+    fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+        for l in lock_attempts {
+            address_book.ensure_unlock(&l)
+            // mem::forget and panic in LockAttempt::drop()
+        }
+    }
+
+    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+        for l in lock_attempts {
+            let newly_uncontended = address_book.unlock(&l);
+            if newly_uncontended {
+                address_book.newly_uncontended_addresses.insert(l.address);
+            }
+            // mem::forget and panic in LockAttempt::drop()
+        }
     }
 
     fn create_execution_environment(address_book: &mut AddressBook, task: Task, attempts: Vec<LockAttempt>) -> ExecutionEnvironment {
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
-        Self::apply_successful_lock_attempts(address_book, &attempts);
+        Self::apply_successful_address_lock(address_book, &attempts);
         // load account now from AccountsDb
         panic!()
     }
@@ -457,7 +457,7 @@ impl ScheduleStage {
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         // do par()-ly?
-        unlock_after_execution(address_book, lock_attempts);
+        Self::unlock_after_execution(address_book, lock_attempts);
 
         // par()-ly clone updated Accounts into address book
     }
