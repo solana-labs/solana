@@ -285,11 +285,6 @@ fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<Loc
     }
 }
 
-fn create_execution_environment(task: Task, attemps: Vec<LockAttempt>) -> ExecutionEnvironment {
-    // load account now from AccountsDb
-    panic!()
-}
-
 fn send_to_execution_stage(ee: ExecutionEnvironment) {}
 
 fn main() {
@@ -442,6 +437,12 @@ impl ScheduleStage {
         None
     }
 
+    fn create_execution_environment(task: Task, attemps: Vec<LockAttempt>) -> ExecutionEnvironment {
+        // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
+        // load account now from AccountsDb
+        panic!()
+    }
+
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         // do par()-ly?
@@ -450,12 +451,11 @@ impl ScheduleStage {
         // par()-ly clone updated Accounts into address book
     }
 
-
     fn schedule_next_execution(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_then_lock_from_queue(tx_queue, address_book).map(|(t, ll)| create_execution_environment(t, ll))
+        Self::pop_then_lock_from_queue(tx_queue, address_book).map(|(t, ll)| Self::create_execution_environment(t, ll))
     }
 
     fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
