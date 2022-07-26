@@ -9,11 +9,12 @@ use {
     solana_entry::entry::Entry,
     solana_measure::measure::Measure,
     solana_metrics::datapoint_info,
-    solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
+    solana_sdk::{
+        hash::Hash,
+        pubkey::Pubkey,
+        transaction::{SanitizedTransaction, TransactionAccountLocks, VersionedTransaction},
+    },
 };
-use solana_sdk::transaction::VersionedTransaction;
-use solana_sdk::transaction::TransactionAccountLocks;
-use solana_sdk::hash::Hash;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
@@ -53,11 +54,19 @@ impl LockAttempt {
     }
 
     fn success(address: Pubkey, requested_usage: RequestedUsage) -> Self {
-        Self { address, is_success: true, requested_usage }
+        Self {
+            address,
+            is_success: true,
+            requested_usage,
+        }
     }
 
     fn failure(address: Pubkey, requested_usage: RequestedUsage) -> Self {
-        Self { address, is_success: false, requested_usage }
+        Self {
+            address,
+            is_success: false,
+            requested_usage,
+        }
     }
 }
 
@@ -76,12 +85,8 @@ enum CurrentUsage {
 impl CurrentUsage {
     fn renew(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
-            RequestedUsage::Readonly => {
-                CurrentUsage::Readonly(SOLE_USE_COUNT)
-            }
-            RequestedUsage::Writable => {
-                CurrentUsage::Writable
-            }
+            RequestedUsage::Readonly => CurrentUsage::Readonly(SOLE_USE_COUNT),
+            RequestedUsage::Writable => CurrentUsage::Writable,
         }
     }
 }
@@ -108,7 +113,12 @@ struct AddressBook {
 }
 
 impl AddressBook {
-    fn attempt_lock_address(&mut self, unique_weight: &UniqueWeight, address: Pubkey, requested_usage: RequestedUsage) -> LockAttempt {
+    fn attempt_lock_address(
+        &mut self,
+        unique_weight: &UniqueWeight,
+        address: Pubkey,
+        requested_usage: RequestedUsage,
+    ) -> LockAttempt {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
@@ -126,17 +136,18 @@ impl AddressBook {
                 match &mut page.current_usage {
                     CurrentUsage::Unused => {
                         page.current_usage = CurrentUsage::renew(requested_usage);
-                        LockAttempt::success(address, requested_usage) 
+                        LockAttempt::success(address, requested_usage)
                     }
                     CurrentUsage::Readonly(ref mut current_count) => {
                         match &requested_usage {
                             RequestedUsage::Readonly => {
                                 *current_count += 1;
                                 LockAttempt::success(address, requested_usage)
-                            },
+                            }
                             RequestedUsage::Writable => {
                                 // skip insert if existing
-                                page.contended_unique_weights.insert((*unique_weight).clone());
+                                page.contended_unique_weights
+                                    .insert((*unique_weight).clone());
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
@@ -145,7 +156,8 @@ impl AddressBook {
                         match &requested_usage {
                             RequestedUsage::Readonly | RequestedUsage::Writable => {
                                 // skip insert if existing
-                                page.contended_unique_weights.insert((*unique_weight).clone());
+                                page.contended_unique_weights
+                                    .insert((*unique_weight).clone());
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
@@ -155,13 +167,16 @@ impl AddressBook {
         }
     }
 
-    fn mark_unique_weight_as_uncontended(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
+    fn mark_unique_weight_as_uncontended(
+        &mut self,
+        unique_weight: &UniqueWeight,
+        address: &Pubkey,
+    ) {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(*address) {
             // unconditional success if it's initial access
-            Entry::Vacant(entry) => {
-            }
+            Entry::Vacant(entry) => {}
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
                 page.contended_unique_weights.remove(unique_weight);
@@ -194,18 +209,16 @@ impl AddressBook {
                                 } else {
                                     *current_count -= 1;
                                 }
-                            },
-                            RequestedUsage::Writable => unreachable!() 
-                        }
-                    }
-                    CurrentUsage::Writable => {
-                        match &attempt.requested_usage {
-                            RequestedUsage::Writable => {
-                                newly_uncontended = true;
                             }
-                            RequestedUsage::Readonly => unreachable!(),
+                            RequestedUsage::Writable => unreachable!(),
                         }
                     }
+                    CurrentUsage::Writable => match &attempt.requested_usage {
+                        RequestedUsage::Writable => {
+                            newly_uncontended = true;
+                        }
+                        RequestedUsage::Readonly => unreachable!(),
+                    },
                     CurrentUsage::Unused => unreachable!(),
                 }
 
@@ -223,17 +236,19 @@ impl AddressBook {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Weight { // naming: Sequence Ordering?
+struct Weight {
+    // naming: Sequence Ordering?
     ix: usize, // index in ledger entry?
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct UniqueWeight { // naming: Sequence Ordering?
+struct UniqueWeight {
+    // naming: Sequence Ordering?
     weight: Weight,
     // we can't use Transaction::message_hash because it's manipulatable to be favorous to the tx
     // submitter
     unique_key: Hash, // tie breaker? random noise? also for unique identification of txes?
-    // fee?
+                      // fee?
 }
 
 struct Bundle {
@@ -399,22 +414,24 @@ fn main() {
     joins.into_iter().for_each(|j| j.join().unwrap());
 }
 
-struct ScheduleStage {
-}
+struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
         let mut rng = rand::thread_rng(); // manage randomness properly for future scheduling determinism
-        //let ix = 23;
-        //let tx = bank
-        //    .verify_transaction(
-        //        tx,
-        //        solana_sdk::transaction::TransactionVerificationMode::FullVerification,
-        //    )
-        //    .unwrap();
-        //tx.foo();
+                                          //let ix = 23;
+                                          //let tx = bank
+                                          //    .verify_transaction(
+                                          //        tx,
+                                          //        solana_sdk::transaction::TransactionVerificationMode::FullVerification,
+                                          //    )
+                                          //    .unwrap();
+                                          //tx.foo();
         runnable_queue.add(
-            UniqueWeight { weight, unique_key: solana_sdk::hash::new_rand(&mut rng) },
+            UniqueWeight {
+                weight,
+                unique_key: solana_sdk::hash::new_rand(&mut rng),
+            },
             Task { tx },
         );
     }
@@ -426,16 +443,26 @@ impl ScheduleStage {
     ) -> Option<(bool, UniqueWeight, Task)> {
         let mut unique_weights_by_address = std::collections::BTreeMap::<UniqueWeight, _>::new();
         for address in address_book.newly_uncontended_addresses.iter() {
-            let newly_uncontended_unique_weights = &address_book.map.get(address).unwrap().contended_unique_weights;
+            let newly_uncontended_unique_weights = &address_book
+                .map
+                .get(address)
+                .unwrap()
+                .contended_unique_weights;
             if !newly_uncontended_unique_weights.is_empty() {
-                unique_weights_by_address.insert(newly_uncontended_unique_weights.last().cloned().unwrap(), newly_uncontended_unique_weights);
+                unique_weights_by_address.insert(
+                    newly_uncontended_unique_weights.last().cloned().unwrap(),
+                    newly_uncontended_unique_weights,
+                );
             }
         }
         let heaviest_by_address = unique_weights_by_address.last_key_value();
 
-        match (heaviest_by_address.map(|a| a.0.clone()), runnable_queue.next_task_unique_weight()) {
+        match (
+            heaviest_by_address.map(|a| a.0.clone()),
+            runnable_queue.next_task_unique_weight(),
+        ) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
-                if weight_from_contended < weight_from_runnable  {
+                if weight_from_contended < weight_from_runnable {
                     runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
                 } else if weight_from_contended > weight_from_runnable {
                     let heaviest_by_address = heaviest_by_address.unwrap();
@@ -443,21 +470,21 @@ impl ScheduleStage {
                     let task = contended_queue.map.remove(uw).unwrap();
                     Some((false, uw.clone(), task))
                 } else {
-                    unreachable!("identical unique weights shouldn't exist in both runnable and contended")
+                    unreachable!(
+                        "identical unique weights shouldn't exist in both runnable and contended"
+                    )
                 }
-            },
+            }
             (Some(weight_from_contended), None) => {
                 let heaviest_by_address = heaviest_by_address.unwrap();
                 let uw = heaviest_by_address.1.last().unwrap();
                 let task = contended_queue.map.remove(uw).unwrap();
                 Some((false, uw.clone(), task))
-            },
+            }
             (None, Some(weight_from_runnable)) => {
                 runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
-            },
-            (None, None) => {
-                None
-            },
+            }
+            (None, None) => None,
         }
     }
 
@@ -466,20 +493,27 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (from_runnable, unique_weight, next_task) in Self::select_next_task(runnable_queue, contended_queue, address_book) {
+        for (from_runnable, unique_weight, next_task) in
+            Self::select_next_task(runnable_queue, contended_queue, address_book)
+        {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let lock_attempts = attempt_lock_for_execution(address_book, &unique_weight, &message_hash, &locks);
+            let lock_attempts =
+                attempt_lock_for_execution(address_book, &unique_weight, &message_hash, &locks);
             let is_success = lock_attempts.iter().all(|g| g.is_success());
 
             if is_success {
                 return Some((unique_weight, next_task, lock_attempts));
             } else {
-                Self::ensure_unlock_for_failed_execution(address_book, lock_attempts, from_runnable);
+                Self::ensure_unlock_for_failed_execution(
+                    address_book,
+                    lock_attempts,
+                    from_runnable,
+                );
                 contended_queue.add(unique_weight, next_task);
                 return None;
             }
@@ -488,7 +522,11 @@ impl ScheduleStage {
         None
     }
 
-    fn apply_successful_lock_before_execution(address_book: &mut AddressBook, unique_weight: UniqueWeight, lock_attempts: &Vec<LockAttempt>) {
+    fn apply_successful_lock_before_execution(
+        address_book: &mut AddressBook,
+        unique_weight: UniqueWeight,
+        lock_attempts: &Vec<LockAttempt>,
+    ) {
         for l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
             address_book.mark_unique_weight_as_uncontended(&unique_weight, &l.address);
@@ -498,7 +536,11 @@ impl ScheduleStage {
         }
     }
 
-    fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>, from_runnable: bool) {
+    fn ensure_unlock_for_failed_execution(
+        address_book: &mut AddressBook,
+        lock_attempts: Vec<LockAttempt>,
+        from_runnable: bool,
+    ) {
         for l in lock_attempts {
             address_book.ensure_unlock(&l);
 
@@ -522,7 +564,12 @@ impl ScheduleStage {
         }
     }
 
-    fn prepare_scheduled_execution(address_book: &mut AddressBook, unique_weight: UniqueWeight, task: Task, attempts: Vec<LockAttempt>) -> ExecutionEnvironment {
+    fn prepare_scheduled_execution(
+        address_book: &mut AddressBook,
+        unique_weight: UniqueWeight,
+        task: Task,
+        attempts: Vec<LockAttempt>,
+    ) -> ExecutionEnvironment {
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
         Self::apply_successful_lock_before_execution(address_book, unique_weight, &attempts);
         // load account now from AccountsDb
@@ -542,10 +589,14 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book).map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll))
+        Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
+            .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll))
     }
 
-    fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
+    fn register_runnable_task(
+        weighted_tx: (Weight, SanitizedTransaction),
+        runnable_queue: &mut TaskQueue,
+    ) {
         Self::push_to_queue(weighted_tx, runnable_queue)
     }
 
@@ -588,5 +639,4 @@ struct ExecuteStage {
     //bank: Bank,
 }
 
-impl ExecuteStage {
-}
+impl ExecuteStage {}
