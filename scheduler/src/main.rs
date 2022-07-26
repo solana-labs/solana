@@ -190,7 +190,8 @@ impl AddressBook {
 
                 if newly_uncontended {
                     page.current_usage = CurrentUsage::Unused;
-                    self.newly_uncontended_addresses.insert(*entry.key());
+                    let address = *entry.key();
+                    self.newly_uncontended_addresses.insert(address);
                 }
             }
             Entry::Vacant(entry) => {
