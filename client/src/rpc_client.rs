@@ -187,8 +187,11 @@ impl RpcClient {
         }
     }
 
-    pub(crate) fn get_nonblocking_client(&self) -> Arc<nonblocking::rpc_client::RpcClient> {
-        self.rpc_client.clone()
+    pub(crate) fn get_nonblocking_client_copy(&self) -> Arc<nonblocking::rpc_client::RpcClient> {
+        let copy = self.rpc_client.copy();
+        Arc::new(tokio::task::block_in_place(move || {
+            self.runtime.as_ref().expect("runtime").block_on(copy)
+        }))
     }
 
     /// Create an HTTP `RpcClient`.

@@ -97,14 +97,10 @@ impl TpuClient {
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
-        let create_tpu_client = async {
-            NonblockingTpuClient::new(
-                Arc::new(rpc_client.get_nonblocking_client().copy().await),
-                websocket_url,
-                config,
-            )
-            .await
-        };
+        let nonblocking_rpc_client = rpc_client.get_nonblocking_client_copy();
+
+        let create_tpu_client =
+            NonblockingTpuClient::new(nonblocking_rpc_client, websocket_url, config);
 
         let runtime = tokio::runtime::Builder::new_current_thread()
             .thread_name("tpu-client")
@@ -130,15 +126,14 @@ impl TpuClient {
         config: TpuClientConfig,
         connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
-        let create_tpu_client = async {
-            NonblockingTpuClient::new_with_connection_cache(
-                Arc::new(rpc_client.get_nonblocking_client().copy().await),
-                websocket_url,
-                config,
-                connection_cache,
-            )
-            .await
-        };
+        let nonblocking_rpc_client = rpc_client.get_nonblocking_client_copy();
+
+        let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
+            nonblocking_rpc_client,
+            websocket_url,
+            config,
+            connection_cache,
+        );
 
         let runtime = tokio::runtime::Builder::new_current_thread()
             .thread_name("tpu-client")
