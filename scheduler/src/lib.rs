@@ -467,7 +467,7 @@ impl ScheduleStage {
     ) -> ExecutionEnvironment {
         let mut rng = rand::thread_rng();
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
-        Self::apply_successful_lock_before_execution(address_book, unique_weight, &attempts);
+        Self::apply_successful_lock_before_execution(address_book, unique_weight, &lock_attempts);
         // load account now from AccountsDb
 
         ExecutionEnvironment {
