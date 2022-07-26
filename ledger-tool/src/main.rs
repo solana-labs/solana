@@ -90,7 +90,7 @@ use {
     },
 };
 
-use solana_scheduler::Hello;
+use solana_scheduler::ScheduleStage;
 
 mod bigtable;
 mod ledger_path;
@@ -220,6 +220,8 @@ fn output_slot(
             }
         }
     }
+
+    ScheduleStage::schedule_once(3, 4);
 
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
