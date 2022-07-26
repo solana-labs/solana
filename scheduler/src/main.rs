@@ -218,7 +218,7 @@ impl TransactionQueue {
     }
 
     fn tasks(&self) -> impl std::iter::Iterator<Item = &Task> {
-        self.map.values()
+        self.map.entries()
     }
 }
 
@@ -249,6 +249,7 @@ fn attempt_lock_for_tx<'a>(
 fn ensure_unlock_for_tx(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
     for l in lock_attempts {
         address_book.ensure_unlock(&l)
+        // mem::forget and panic in LockAttempt::drop()
     }
 }
 
