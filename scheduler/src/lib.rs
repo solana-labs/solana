@@ -533,6 +533,7 @@ impl ScheduleStage {
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap()
                 }
+                default => { std::thread::sleep(std::time::Duration::from_millis(1)) }
             }
         } else {
             select! {
@@ -549,6 +550,7 @@ impl ScheduleStage {
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap()
                 }
+                default => { std::thread::sleep(std::time::Duration::from_millis(1)) }
             }
         }
     }
