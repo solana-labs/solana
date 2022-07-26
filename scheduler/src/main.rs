@@ -420,7 +420,7 @@ impl ScheduleStage {
     }
 
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
-        let lock_attempts = std::mem::take(ee.lock_attempts);
+        let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         unlock_for_execution(address_book, lock_attemps)
         // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
