@@ -420,7 +420,7 @@ impl ScheduleStage {
     }
 
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
-        unlock_for_execution(ee.lock_attempts)
+        unlock_for_execution(address_book, ee.lock_attempts)
         // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
         // async-ly propagate the result to rpc subsystems
