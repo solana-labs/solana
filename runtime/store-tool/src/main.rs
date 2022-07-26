@@ -1,7 +1,8 @@
 use {
     clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
     log::*,
-    solana_runtime::append_vec::AppendVec,
+    solana_runtime::append_vec::{AppendVec, StoredAccountMeta},
+    solana_sdk::{account::AccountSharedData, hash::Hash, pubkey::Pubkey},
 };
 
 fn main() {
@@ -32,8 +33,8 @@ fn main() {
     let mut store = AppendVec::new_from_file_unchecked(file, len).expect("should succeed");
     store.set_no_remove_on_drop();
     info!("store: len: {} capacity: {}", store.len(), store.capacity());
-    let mut num_accounts = 0;
-    let mut stored_accounts_len = 0;
+    let mut num_accounts: usize = 0;
+    let mut stored_accounts_len: usize = 0;
     for account in store.account_iter() {
         if is_account_zeroed(&account) {
             break;
@@ -42,7 +43,21 @@ fn main() {
             "  account: {:?} version: {} data: {} hash: {:?}",
             account.meta.pubkey, account.meta.write_version, account.meta.data_len, account.hash
         );
+        num_accounts = num_accounts.saturating_add(1);
+        stored_accounts_len = stored_accounts_len.saturating_add(account.stored_size);
     }
+    info!(
+        "num_accounts: {} stored_accounts_len: {}",
+        num_accounts, stored_accounts_len
+    );
+}
+
+fn is_account_zeroed(account: &StoredAccountMeta) -> bool {
+    account.hash == &Hash::default()
+        && account.meta.data_len == 0
+        && account.meta.write_version == 0
+        && account.meta.pubkey == Pubkey::default()
+        && account.clone_account() == AccountSharedData::default()
 }
 
 #[cfg(test)]
