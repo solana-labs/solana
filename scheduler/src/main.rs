@@ -399,7 +399,7 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
-    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
+    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), runnable_queue: &mut TransactionQueue) {
         let mut rng = rand::thread_rng(); // manage randomness properly for future scheduling determinism
         //let ix = 23;
         //let tx = bank
@@ -409,17 +409,17 @@ impl ScheduleStage {
         //    )
         //    .unwrap();
         //tx.foo();
-        tx_queue.add(
+        runnable_queue.add(
             UniqueWeight { weight, unique_key: solana_sdk::hash::new_rand(&mut rng) },
             Task { tx },
         );
     }
 
     fn pop_then_lock_from_queue(
-        tx_queue: &mut TransactionQueue,
+        runnable_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
     ) -> Option<(Task, Vec<LockAttempt>)> {
-        for (unique_weight, next_task) in tx_queue.pop_next_task() {
+        for (unique_weight, next_task) in runnable_queue.pop_next_task() {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
@@ -455,18 +455,18 @@ impl ScheduleStage {
     }
 
     fn schedule_next_execution(
-        tx_queue: &mut TransactionQueue,
+        runnable_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_then_lock_from_queue(tx_queue, address_book).map(|(t, ll)| Self::create_execution_environment(t, ll))
+        Self::pop_then_lock_from_queue(runnable_queue, address_book).map(|(t, ll)| Self::create_execution_environment(t, ll))
     }
 
-    fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
-        Self::push_to_queue(weighted_tx, tx_queue)
+    fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), runnable_queue: &mut TransactionQueue) {
+        Self::push_to_queue(weighted_tx, runnable_queue)
     }
 
     fn run(
-        tx_queue: &mut TransactionQueue,
+        runnable_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
         bank: solana_runtime::bank::Bank,
         from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
@@ -480,9 +480,9 @@ impl ScheduleStage {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
                     let weighted_tx = weighted_tx.unwrap();
-                    Self::register_runnable_task(weighted_tx, tx_queue)
+                    Self::register_runnable_task(weighted_tx, runnable_queue)
                 }
-                send(to_execute_stage, Self::schedule_next_execution(tx_queue, address_book)) -> res => {
+                send(to_execute_stage, Self::schedule_next_execution(runnable_queue, address_book)) -> res => {
                     res.unwrap();
                 }
                 recv(from_execute_stage) -> processed_execution_environment => {
