@@ -243,12 +243,12 @@ fn output_slot(
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
-    let t1 = std::thread::spawn(move || {
+    let t1 = std::thread::Builder::new().name("sol-scheduler").spawn(move || {
         loop {
             ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, &pre_execute_env_sender, &post_execute_env_receiver, &post_schedule_env_sender);
         }
-    });
-    let t2 = std::thread::spawn(move || {
+    }).unwrap();
+    let t2 = std::thread::Builder::new().name("sol-execute").spawn(move || {
         let mut step = 0;
         loop {
             if let Some(ee) = pre_execute_env_receiver.recv().unwrap() {
@@ -257,9 +257,9 @@ fn output_slot(
                 step += 1;
             }
         }
-    });
+    }).unswrap();
 
-    let t3 = std::thread::spawn(move || {
+    let t3 = std::thread::Builder::new().name("sol-consumer").spawn(move || {
         let mut step = 0;
         loop {
             let ee = post_schedule_env_receiver.recv().unwrap();
@@ -277,9 +277,11 @@ fn output_slot(
             output_entry(blockstore, method, slot, entry_index, entry, &mut txes);
         }
 
-        error!("started!");
-        for tx in txes {
-            tx_sender.send(tx).unwrap();
+        for _ in 0..100 {
+            error!("started!");
+            for tx in txes {
+                tx_sender.send(tx).unwrap();
+            }
         }
         t1.join().unwrap();
         t2.join().unwrap();
