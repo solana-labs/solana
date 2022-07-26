@@ -497,7 +497,6 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        bank: &solana_runtime::bank::Bank,
         from_previous_stage: &crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
         to_execute_stage: &crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
         from_execute_stage: &crossbeam_channel::Receiver<ExecutionEnvironment>,
@@ -528,7 +527,6 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        bank: solana_runtime::bank::Bank,
         from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
         to_execute_stage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
         from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
@@ -536,7 +534,7 @@ impl ScheduleStage {
     ) {
         let exit = true;
         while exit {
-            Self::schedule_once(runnable_queue, contended_queue, address_book, &bank, &from_previous_stage, &to_execute_stage, &from_execute_stage, &to_next_stage);
+            Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_stage, &from_execute_stage, &to_next_stage);
         }
     }
 }
