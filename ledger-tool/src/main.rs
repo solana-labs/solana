@@ -221,7 +221,8 @@ fn output_slot(
         }
     }
 
-    ScheduleStage::schedule_once(3, 4);
+    let (s2, r2) = crossbeam_channel::bounded(thread_count * 2);
+    //ScheduleStage::schedule_once(3, 4);
 
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
