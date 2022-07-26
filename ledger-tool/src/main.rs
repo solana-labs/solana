@@ -90,7 +90,7 @@ use {
     },
 };
 
-use solana_scheduler::{ScheduleStage, Weight, TaskQueue};
+use solana_scheduler::{AddressBook, ScheduleStage, Weight, TaskQueue};
 
 mod bigtable;
 mod ledger_path;
@@ -233,6 +233,7 @@ fn output_slot(
     let (tx_sender, tx_receiver) = crossbeam_channel::unbounded();
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
+    let mut address_book = AddressBook::default();
     ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, 5, 6, &tx_receiver, 7, 8);
 
     if verbose_level >= 2 {
