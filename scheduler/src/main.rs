@@ -641,7 +641,7 @@ impl ScheduleStage {
     ) {
         let exit = true;
         while exit {
-            Self::schedule_once(runnable_queue, contended_queue, address_book, bank, from_previous_stage, to_execute_stage, from_execute_stage, to_next_stage);
+            Self::schedule_once(runnable_queue, contended_queue, address_book, &bank, &from_previous_stage, &to_execute_stage, &from_execute_stage, &to_next_stage);
         }
     }
 }
