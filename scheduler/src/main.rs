@@ -445,7 +445,7 @@ impl ScheduleStage {
         for l in lock_attempts {
             // now contended
             address_book.newly_uncontended_addresses.remove(&l.address);
-            address_book.mark_address_as_uncontended(unique_weight, &l.address)
+            address_book.mark_address_as_uncontended(&unique_weight, &l.address)
         }
     }
 
@@ -468,7 +468,7 @@ impl ScheduleStage {
 
     fn create_execution_environment(address_book: &mut AddressBook, unique_weight: UniqueWeight, task: Task, attempts: Vec<LockAttempt>) -> ExecutionEnvironment {
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
-        Self::apply_successful_lock_for_execution(address_book, &unique_weight, &attempts);
+        Self::apply_successful_lock_for_execution(address_book, unique_weight, &attempts);
         // load account now from AccountsDb
         panic!()
     }
