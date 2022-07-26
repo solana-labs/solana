@@ -156,7 +156,9 @@ impl AddressBook {
         }
     }
 
-    fn unlock(&mut self, attempt: &LockAttempt) {
+    fn unlock(&mut self, attempt: &LockAttempt) -> bool {
+        assert!(attemps.is_success());
+
         use std::collections::btree_map::Entry;
         let mut newly_uncontended = false;
 
@@ -187,17 +189,13 @@ impl AddressBook {
                     }
                     CurrentUsage::Unused => unreachable!(),
                 }
-
-                if newly_uncontended {
-                    page.current_usage = CurrentUsage::Unused;
-                    let address = *entry.key();
-                    self.newly_uncontended_addresses.insert(address);
-                }
             }
             Entry::Vacant(entry) => {
                 unreachable!()
             }
         }
+
+        newly_uncontended
     }
 }
 
@@ -275,7 +273,12 @@ fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attem
 
 fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
     for l in lock_attempts {
-        address_book.unlock(&l)
+        let newly_uncontended = address_book.unlock(&l);
+        if newly_uncontended {
+            page.current_usage = CurrentUsage::Unused;
+            let address = *entry.key();
+            self.newly_uncontended_addresses.insert(address);
+        }
         // mem::forget and panic in LockAttempt::drop()
     }
 }
