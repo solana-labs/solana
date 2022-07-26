@@ -43,6 +43,12 @@ impl fmt::Debug for ElGamalCiphertext {
     }
 }
 
+impl fmt::Display for ElGamalCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
+    }
+}
+
 impl Default for ElGamalCiphertext {
     fn default() -> Self {
         Self::zeroed()
@@ -59,7 +65,17 @@ impl fmt::Debug for ElGamalPubkey {
     }
 }
 
+<<<<<<< HEAD
 #[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq)]
+=======
+impl fmt::Display for ElGamalPubkey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
+    }
+}
+
+#[derive(Clone, Copy, Default, Pod, Zeroable, PartialEq, Eq)]
+>>>>>>> 2114136e5 (Add Display implementations for various ConfidentialTransfer pod structs (#26783))
 #[repr(transparent)]
 pub struct PedersenCommitment(pub [u8; 32]);
 
@@ -177,6 +193,12 @@ unsafe impl Pod for AeCiphertext {}
 impl fmt::Debug for AeCiphertext {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.0)
+    }
+}
+
+impl fmt::Display for AeCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 
