@@ -94,7 +94,7 @@ enum RequestedUsage {
 
 struct Page {
     current_usage: CurrentUsage,
-    contended_queue: std::collections::BTreeSet<UniqueWeight>,
+    contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
     //next_scheduled_task
 }
 
@@ -115,7 +115,7 @@ impl AddressBook {
             Entry::Vacant(entry) => {
                 entry.insert(Page {
                     current_usage: CurrentUsage::renew(requested_usage),
-                    contended_queue: Default::default(),
+                    contended_unique_weights: Default::default(),
                 });
                 LockAttempt::success(address, requested_usage)
             }
@@ -134,7 +134,7 @@ impl AddressBook {
                                 LockAttempt::success(address, requested_usage)
                             },
                             RequestedUsage::Writable => {
-                                // add to contended queue?
+                                page.contended_unique_weights.insert((*unique_weight).clone());
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
@@ -142,7 +142,7 @@ impl AddressBook {
                     CurrentUsage::Writable => {
                         match &requested_usage {
                             RequestedUsage::Readonly | RequestedUsage::Writable => {
-                                page.contended_queue.insert((*unique_weight).clone());
+                                page.contended_unique_weights.insert((*unique_weight).clone());
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
