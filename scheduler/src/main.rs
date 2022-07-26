@@ -444,7 +444,7 @@ impl ScheduleStage {
         None
     }
 
-    fn apply_successful_lock_attempts(address_book: &mut AddressBook, attempts: &Vec<LockAttempts>) {
+    fn apply_successful_lock_attempts(address_book: &mut AddressBook, attempts: &Vec<LockAttempt>) {
     }
 
     fn create_execution_environment(address_book: &mut AddressBook, task: Task, attempts: Vec<LockAttempt>) -> ExecutionEnvironment {
