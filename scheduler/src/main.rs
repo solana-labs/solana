@@ -418,8 +418,12 @@ impl ScheduleStage {
     fn select_next_task(
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
+        address_book: &mut AddressBook,
     ) -> Option<(bool, UniqueWeight, Task)> {
-        runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
+        let runnable_next_task = runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t));
+        for address in address_book.newly_uncontended_addresses {
+            address_book.map.get(address).unwrap()
+        }
     }
 
     fn pop_from_queue_then_lock(
@@ -427,7 +431,7 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (from_runnable, unique_weight, next_task) in Self::select_next_task(runnable_queue, contended_queue) {
+        for (from_runnable, unique_weight, next_task) in Self::select_next_task(runnable_queue, contended_queue, address_book) {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
