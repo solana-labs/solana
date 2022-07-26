@@ -419,7 +419,7 @@ impl ScheduleStage {
         None
     }
 
-    fn commit_result(ee: &mut ExecutionEnvironment) {
+    fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         unlock_for_execution(ee.lock_attempts)
         // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
@@ -461,7 +461,7 @@ impl ScheduleStage {
                 recv(from_execute_stage) -> processed_execution_environment => {
                     let mut processed_execution_environment = processed_execution_environment.unwrap();
 
-                    Self::commit_result(&mut processed_execution_environment);
+                    Self::commit_result(&mut processed_execution_environment, address_book);
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap()
                 }
