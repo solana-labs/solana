@@ -479,4 +479,11 @@ impl RpcSender for MockSender {
     fn url(&self) -> String {
         format!("MockSender: {}", self.url)
     }
+
+    fn clone(&self) -> Box<dyn RpcSender + Send + Sync + 'static> {
+        let curr_mocks = self.mocks.read().unwrap();
+        let mocks = curr_mocks.clone();
+
+        Box::new(Self { mocks: RwLock::new(mocks), url: self.url.clone()  })
+    }
 }

@@ -45,7 +45,7 @@ use {
     std::{net::SocketAddr, str::FromStr, sync::Arc, time::Duration},
 };
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct RpcClientConfig {
     pub commitment_config: CommitmentConfig,
     pub confirm_transaction_initial_timeout: Option<Duration>,
@@ -157,8 +157,7 @@ pub struct RpcClient {
 
 impl Drop for RpcClient {
     fn drop(&mut self) {
-        //todo: figure out what do do about thiss
-        //self.runtime.shutdown_background();
+        self.runtime.shutdown_background();
     }
 }
 

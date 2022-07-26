@@ -30,6 +30,7 @@ pub struct HttpSender {
     url: String,
     request_id: AtomicU64,
     stats: RwLock<RpcTransportStats>,
+    timeout: Duration,
 }
 
 /// Nonblocking [`RpcSender`] over HTTP.
@@ -58,7 +59,7 @@ impl HttpSender {
         let client = Arc::new(
             reqwest::Client::builder()
                 .default_headers(default_headers)
-                .timeout(timeout)
+                .timeout(timeout.clone())
                 .build()
                 .expect("build rpc client"),
         );
@@ -68,6 +69,7 @@ impl HttpSender {
             url: url.to_string(),
             request_id: AtomicU64::new(0),
             stats: RwLock::new(RpcTransportStats::default()),
+            timeout
         }
     }
 }
@@ -210,6 +212,33 @@ impl RpcSender for HttpSender {
 
     fn url(&self) -> String {
         self.url.clone()
+    }
+
+    fn clone(&self) -> Box<dyn RpcSender + Send + Sync + 'static> {
+        let mut default_headers = header::HeaderMap::new();
+        default_headers.append(
+            header::HeaderName::from_static("solana-client"),
+            header::HeaderValue::from_str(
+                format!("rust/{}", solana_version::Version::default()).as_str(),
+            )
+            .unwrap(),
+        );
+
+        let client = Arc::new(
+            reqwest::Client::builder()
+                .default_headers(default_headers)
+                .timeout(self.timeout.clone())
+                .build()
+                .expect("build rpc client"),
+        );
+
+        Box::new(Self {
+            client,
+            url: self.url,
+            request_id: AtomicU64::new(0),
+            stats: RwLock::new(RpcTransportStats::default()),
+            timeout: self.timeout.clone()
+        })
     }
 }
 
