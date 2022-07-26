@@ -17,6 +17,7 @@ use solana_sdk::hash::Hash;
 
 #[derive(Default, Debug)]
 struct ExecutionEnvironment {
+    lock_attempts: Vec<LockAttempt>,
     accounts: Vec<i8>,
     cu: usize,
     //tx: Tx,
@@ -377,12 +378,6 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
-    fn commit_result(ee: &mut ExecutionEnvironment) {
-        // par()-ly release lock attemps
-        // par()-ly clone updated Accounts into address book
-        // async-ly propagate the result to rpc subsystems
-    }
-
     fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
         //let ix = 23;
         //let tx = bank
@@ -422,6 +417,13 @@ impl ScheduleStage {
 
         None
     }
+
+    fn commit_result(ee: &mut ExecutionEnvironment) {
+        // par()-ly release lock attemps
+        // par()-ly clone updated Accounts into address book
+        // async-ly propagate the result to rpc subsystems
+    }
+
 
     fn schedule_next_execution(
         tx_queue: &mut TransactionQueue,
