@@ -521,7 +521,7 @@ impl ScheduleStage {
                 let weighted_tx = weighted_tx.unwrap();
                 Self::register_runnable_task(weighted_tx, runnable_queue)
             }
-            send(maybe_ee.map(|_| to_execute_substage).unwrap_or(to_full_channel), maybe_ee.unwrap()) -> res => {
+            send(maybe_ee.as_ref().map(|_| to_execute_substage).unwrap_or(to_full_channel), maybe_ee.unwrap()) -> res => {
                 res.unwrap();
             }
             recv(from_execute_substage) -> processed_execution_environment => {
