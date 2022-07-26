@@ -472,6 +472,10 @@ pub mod loosen_cpi_size_restriction {
     solana_sdk::declare_id!("GDH5TVdbTPUpRnXaRyQqiKUa7uZAbZ28Q2N9bhbKoMLm");
 }
 
+pub mod use_default_units_in_fee_calculation {
+    solana_sdk::declare_id!("8sKQrMQoUHtQSUP83SPG4ta2JDjSAiWs7t5aJ9uEd6To");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -584,6 +588,7 @@ lazy_static! {
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
         (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
+        (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
