@@ -500,8 +500,8 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         from_previous_stage: &crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
-        to_execute_stage: &crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
-        from_execute_stage: &crossbeam_channel::Receiver<ExecutionEnvironment>,
+        to_execute_substage: &crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
+        from_execute_substage: &crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: &crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
     ) {
         use crossbeam_channel::select;
@@ -510,10 +510,10 @@ impl ScheduleStage {
                 let weighted_tx = weighted_tx.unwrap();
                 Self::register_runnable_task(weighted_tx, runnable_queue)
             }
-            send(to_execute_stage, Self::schedule_next_execution(runnable_queue, contended_queue, address_book)) -> res => {
+            send(to_execute_substage, Self::schedule_next_execution(runnable_queue, contended_queue, address_book)) -> res => {
                 res.unwrap();
             }
-            recv(from_execute_stage) -> processed_execution_environment => {
+            recv(from_execute_substage) -> processed_execution_environment => {
                 let mut processed_execution_environment = processed_execution_environment.unwrap();
 
                 Self::commit_result(&mut processed_execution_environment, address_book);
@@ -530,13 +530,13 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
-        to_execute_stage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
-        from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
+        to_execute_substage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
+        from_execute_substage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
     ) {
         let exit = true;
         while exit {
-            Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_stage, &from_execute_stage, &to_next_stage);
+            Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_substage, &from_execute_substage, &to_next_stage);
         }
     }
 }
