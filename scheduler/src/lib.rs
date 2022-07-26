@@ -251,6 +251,7 @@ struct Bundle {
     // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
 }
 
+#[derive(Debug)]
 pub struct Task {
     tx: SanitizedTransaction, // actually should be Bundle
 }
