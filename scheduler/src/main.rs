@@ -441,7 +441,7 @@ impl ScheduleStage {
                     let heaviest_by_address = heaviest_by_address.unwrap();
                     let uw = heaviest_by_address.1.last().unwrap();
                     let task = contended_queue.map.remove(uw).unwrap();
-                    Some((false, uw.clone(), task.clone()))
+                    Some((false, uw.clone(), task))
                 } else {
                     unreachable!("identical unique weights shouldn't exist in both runnable and contended")
                 }
