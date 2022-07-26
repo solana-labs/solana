@@ -423,7 +423,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-    ) -> Option<(UniqueWeight, Task)> {
+    ) -> Option<(bool, UniqueWeight, Task)> {
         let mut unique_weights_by_address = std::collections::BTreeMap::<UniqueWeight, _>::new();
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = &address_book.map.get(address).unwrap().contended_unique_weights;
@@ -436,12 +436,12 @@ impl ScheduleStage {
         match (heaviest_by_address.map(|a| a.0.clone()), runnable_queue.next_task_unique_weight()) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
                 if weight_from_contended < weight_from_runnable  {
-                    runnable_queue.pop_next_task()
+                    runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
                 } else if weight_from_contended > weight_from_runnable {
                     let heaviest_by_address = heaviest_by_address.unwrap();
                     let uw = heaviest_by_address.1.last().unwrap();
                     let task = contended_queue.map.remove(uw).unwrap();
-                    Some((uw.clone(), task))
+                    Some((false, uw.clone(), task))
                 } else {
                     unreachable!("identical unique weights shouldn't exist in both runnable and contended")
                 }
@@ -450,10 +450,10 @@ impl ScheduleStage {
                 let heaviest_by_address = heaviest_by_address.unwrap();
                 let uw = heaviest_by_address.1.last().unwrap();
                 let task = contended_queue.map.remove(uw).unwrap();
-                Some((uw.clone(), task))
+                Some((false, uw.clone(), task))
             },
             (None, Some(weight_from_runnable)) => {
-                runnable_queue.pop_next_task()
+                runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
             },
             (None, None) => {
                 None
@@ -466,7 +466,7 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (unique_weight, next_task) in Self::select_next_task(runnable_queue, contended_queue, address_book) {
+        for (from_runnable, unique_weight, next_task) in Self::select_next_task(runnable_queue, contended_queue, address_book) {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
@@ -479,7 +479,7 @@ impl ScheduleStage {
             if is_success {
                 return Some((unique_weight, next_task, lock_attempts));
             } else {
-                Self::ensure_unlock_for_failed_execution(address_book, lock_attempts);
+                Self::ensure_unlock_for_failed_execution(address_book, lock_attempts, from_runnable);
                 contended_queue.add(unique_weight, next_task);
                 return None;
             }
@@ -498,10 +498,16 @@ impl ScheduleStage {
         }
     }
 
-    fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+    fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>, from_runnable: bool) {
         for l in lock_attempts {
             address_book.ensure_unlock(&l)
-            // mem::forget and panic in LockAttempt::drop()
+
+            // revert because now contended again
+            if !from_runnable {
+                address_book.newly_uncontended_addresses.remove(&l.address);
+            }
+
+            // todo: mem::forget and panic in LockAttempt::drop()
         }
     }
 
@@ -511,7 +517,8 @@ impl ScheduleStage {
             if newly_uncontended {
                 address_book.newly_uncontended_addresses.insert(l.address);
             }
-            // mem::forget and panic in LockAttempt::drop()
+
+            // todo: mem::forget and panic in LockAttempt::drop()
         }
     }
 
