@@ -257,7 +257,7 @@ fn output_slot(
                 step += 1;
             }
         }
-    }).unswrap();
+    }).unwrap();
 
     let t3 = std::thread::Builder::new().name("sol-consumer".to_string()).spawn(move || {
         let mut step = 0;
@@ -269,7 +269,7 @@ fn output_slot(
             }
             step += 1;
         }
-    });
+    }).unwrap();
 
     if verbose_level >= 2 {
         let mut txes = Vec::new();
