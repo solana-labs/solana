@@ -268,7 +268,7 @@ struct ContendedQueue {
 
 impl TaskQueue {
     fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
-        info!("TaskQueue::add(): {:?}", unique_weight);
+        //info!("TaskQueue::add(): {:?}", unique_weight);
         assert!(self.map.insert(unique_weight, task).is_none(), "identical shouldn't exist");
     }
 
@@ -404,7 +404,7 @@ impl ScheduleStage {
             if is_success {
                 return Some((unique_weight, next_task, lock_attempts));
             } else {
-                info!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
+                //info!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
                     lock_attempts,
