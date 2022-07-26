@@ -24,7 +24,7 @@ use {
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, PurgeType},
-        blockstore_db::{self, Database},
+        blockstore_db::{self, columns as cf, Column, ColumnName, Database},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType,
@@ -823,6 +823,80 @@ fn open_blockstore(
             exit(1);
         }
     }
+}
+
+fn raw_key_to_slot(key: &[u8], column_name: &str) -> Option<Slot> {
+    match column_name {
+        cf::SlotMeta::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::Orphans::NAME => Some(cf::Orphans::slot(cf::Orphans::index(key))),
+        cf::DeadSlots::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::DuplicateSlots::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::ErasureMeta::NAME => Some(cf::ErasureMeta::slot(cf::ErasureMeta::index(key))),
+        cf::BankHash::NAME => Some(cf::BankHash::slot(cf::BankHash::index(key))),
+        cf::Root::NAME => Some(cf::Root::slot(cf::Root::index(key))),
+        cf::Index::NAME => Some(cf::Index::slot(cf::Index::index(key))),
+        cf::ShredData::NAME => Some(cf::ShredData::slot(cf::ShredData::index(key))),
+        cf::ShredCode::NAME => Some(cf::ShredCode::slot(cf::ShredCode::index(key))),
+        cf::TransactionStatus::NAME => Some(cf::TransactionStatus::slot(
+            cf::TransactionStatus::index(key),
+        )),
+        cf::AddressSignatures::NAME => Some(cf::AddressSignatures::slot(
+            cf::AddressSignatures::index(key),
+        )),
+        cf::TransactionMemos::NAME => None, // does not implement slot()
+        cf::TransactionStatusIndex::NAME => None, // does not implement slot()
+        cf::Rewards::NAME => Some(cf::Rewards::slot(cf::Rewards::index(key))),
+        cf::Blocktime::NAME => Some(cf::Blocktime::slot(cf::Blocktime::index(key))),
+        cf::PerfSamples::NAME => Some(cf::PerfSamples::slot(cf::PerfSamples::index(key))),
+        cf::BlockHeight::NAME => Some(cf::BlockHeight::slot(cf::BlockHeight::index(key))),
+        cf::ProgramCosts::NAME => None, // does not implement slot()
+        cf::OptimisticSlots::NAME => {
+            Some(cf::OptimisticSlots::slot(cf::OptimisticSlots::index(key)))
+        }
+        &_ => None,
+    }
+}
+
+fn print_blockstore_file_info(
+    blockstore: &Blockstore,
+    file_name: &Option<String>,
+) -> Result<(), String> {
+    match blockstore.live_files_metadata() {
+        Ok(live_files) => {
+            // All files under live_files_metadata are prefixed with "/".
+            let sst_file_name = file_name.as_ref().map(|name| format!("/{}", name));
+            for file in live_files {
+                if sst_file_name.is_none() || file.name.eq(sst_file_name.as_ref().unwrap()) {
+                    println!(
+                        "[{}] cf_name: {}, level: {}, start_slot: {:?}, end_slot: {:?}, size: {}, num_entries: {}",
+                        file.name,
+                        file.column_family_name,
+                        file.level,
+                        raw_key_to_slot(&file.start_key.unwrap(), &file.column_family_name),
+                        raw_key_to_slot(&file.end_key.unwrap(), &file.column_family_name),
+                        file.size,
+                        file.num_entries,
+                    );
+                    if sst_file_name.is_some() {
+                        return Ok(());
+                    }
+                }
+            }
+            if sst_file_name.is_some() {
+                return Err(format!(
+                    "Failed to find or load the metadata of the specified file {:?}",
+                    file_name
+                ));
+            }
+        }
+        Err(err) => {
+            return Err(format!(
+                "Unable to identify slot range of the specified file {:?}: {:?}",
+                file_name, err
+            ));
+        }
+    }
+    Ok(())
 }
 
 // This function is duplicated in validator/src/main.rs...
@@ -1948,6 +2022,19 @@ fn main() {
                     .multiple(true)
                     .takes_value(true)
                     .help("Slots that their blocks are computed for cost, default to all slots in ledger"),
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("print-file-info")
+            .about("Print the metadata of the specified ledger-store file. \
+                    If no file name is specified, it will print the metadata of all ledger files.")
+            .arg(
+                Arg::with_name("file_name")
+                    .long("file-name")
+                    .takes_value(true)
+                    .value_name("SST_FILE_NAME")
+                    .help("The ledger file name (e.g. 011080.sst.) \
+                           If no file name is specified, it will print the metadata of all ledger files.")
             )
         )
         .get_matches();
@@ -3931,6 +4018,21 @@ fn main() {
                     if let Err(err) = compute_slot_cost(&blockstore, slot) {
                         eprintln!("{}", err);
                     }
+                }
+            }
+            ("print-file-info", Some(arg_matches)) => {
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
+                let mut sst_file_name = None;
+                if arg_matches.is_present("file_name") {
+                    sst_file_name = Some(value_t_or_exit!(arg_matches, "file_name", String));
+                }
+                if let Err(err) = print_blockstore_file_info(&blockstore, &sst_file_name) {
+                    eprintln!("{}", err);
                 }
             }
             ("", _) => {
