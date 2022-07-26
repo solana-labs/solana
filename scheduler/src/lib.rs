@@ -516,22 +516,40 @@ impl ScheduleStage {
         use crossbeam_channel::select;
         let maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
 
-        select! {
-            recv(from_previous_stage) -> weighted_tx => {
-                let weighted_tx = weighted_tx.unwrap();
-                Self::register_runnable_task(weighted_tx, runnable_queue)
-            }
-            send(maybe_ee.as_ref().map(|_| to_execute_substage).unwrap_or(to_full_channel), maybe_ee) -> res => {
-                res.unwrap();
-            }
-            recv(from_execute_substage) -> processed_execution_environment => {
-                let mut processed_execution_environment = processed_execution_environment.unwrap();
+        if let Some(ee) = maybe_ee {
+            select! {
+                recv(from_previous_stage) -> weighted_tx => {
+                    let weighted_tx = weighted_tx.unwrap();
+                    Self::register_runnable_task(weighted_tx, runnable_queue)
+                }
+                send(to_execute_substage, Some(ee)) -> res => {
+                    res.unwrap();
+                }
+                recv(from_execute_substage) -> processed_execution_environment => {
+                    let mut processed_execution_environment = processed_execution_environment.unwrap();
 
-                Self::commit_result(&mut processed_execution_environment, address_book);
+                    Self::commit_result(&mut processed_execution_environment, address_book);
 
-                // async-ly propagate the result to rpc subsystems
-                // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
-                to_next_stage.send(processed_execution_environment).unwrap()
+                    // async-ly propagate the result to rpc subsystems
+                    // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
+                    to_next_stage.send(processed_execution_environment).unwrap()
+                }
+            }
+        } else {
+            select! {
+                recv(from_previous_stage) -> weighted_tx => {
+                    let weighted_tx = weighted_tx.unwrap();
+                    Self::register_runnable_task(weighted_tx, runnable_queue)
+                }
+                recv(from_execute_substage) -> processed_execution_environment => {
+                    let mut processed_execution_environment = processed_execution_environment.unwrap();
+
+                    Self::commit_result(&mut processed_execution_environment, address_book);
+
+                    // async-ly propagate the result to rpc subsystems
+                    // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
+                    to_next_stage.send(processed_execution_environment).unwrap()
+                }
             }
         }
     }
