@@ -426,8 +426,8 @@ impl ScheduleStage {
     ) -> Option<(bool, UniqueWeight, Task)> {
 
         let mut unique_weights_by_address = std::collections::BTreeMap::<UniqueWeight, _>::new();
-        for address in address_book.newly_uncontended_addresses {
-            let newly_uncontended_unique_weights = address_book.map.get(&address).unwrap().contended_unique_weights;
+        for address in address_book.newly_uncontended_addresses.iter() {
+            let newly_uncontended_unique_weights = address_book.map.get(address).unwrap().contended_unique_weights;
             if !newly_uncontended_unique_weights.is_empty() {
                 unique_weights_by_address.insert(newly_uncontended_unique_weights.last().cloned().unwrap(), newly_uncontended_unique_weights);
             }
