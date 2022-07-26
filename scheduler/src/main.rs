@@ -95,7 +95,8 @@ enum RequestedUsage {
 struct Page {
     current_usage: CurrentUsage,
     contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
-    //next_scheduled_task
+    //next_scheduled_task // reserved_task guaranteed_task
+    //loaded account
 }
 
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
@@ -134,6 +135,7 @@ impl AddressBook {
                                 LockAttempt::success(address, requested_usage)
                             },
                             RequestedUsage::Writable => {
+                                // skip insert if existing
                                 page.contended_unique_weights.insert((*unique_weight).clone());
                                 LockAttempt::failure(address, requested_usage)
                             }
@@ -142,6 +144,7 @@ impl AddressBook {
                     CurrentUsage::Writable => {
                         match &requested_usage {
                             RequestedUsage::Readonly | RequestedUsage::Writable => {
+                                // skip insert if existing
                                 page.contended_unique_weights.insert((*unique_weight).clone());
                                 LockAttempt::failure(address, requested_usage)
                             }
@@ -441,8 +444,12 @@ impl ScheduleStage {
         None
     }
 
-    fn create_execution_environment(task: Task, attemps: Vec<LockAttempt>) -> ExecutionEnvironment {
+    fn apply_successful_lock_attempts(address_book: &mut AddressBook, attempts: &Vec<LockAttempts>) {
+    }
+
+    fn create_execution_environment(address_book: &mut AddressBook, task: Task, attemps: Vec<LockAttempt>) -> ExecutionEnvironment {
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
+        Self::apply_successful_lock_attempts(address_book, &attempts);
         // load account now from AccountsDb
         panic!()
     }
@@ -460,7 +467,7 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_then_lock_from_queue(runnable_queue, contended_queue, address_book).map(|(t, ll)| Self::create_execution_environment(t, ll))
+        Self::pop_then_lock_from_queue(runnable_queue, contended_queue, address_book).map(|(t, ll)| Self::create_execution_environment(address_book, t, ll))
     }
 
     fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
