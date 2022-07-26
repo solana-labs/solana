@@ -267,9 +267,9 @@ fn output_slot(
             output_entry(blockstore, method, slot, entry_index, entry, &tx_sender);
         }
 
-        t1.join();
-        t2.join();
-        t3.join();
+        t1.join().unwrap();
+        t2.join().unwrap();
+        t3.join().unwrap();
 
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
