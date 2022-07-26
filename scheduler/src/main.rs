@@ -435,7 +435,7 @@ impl ScheduleStage {
         Self::pop_from_queue(tx_queue, address_book).map(|(t, ll)| create_execution_environment(t, ll))
     }
 
-    fn register_new_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
+    fn register_runnable_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
         Self::push_to_queue(weighted_tx, tx_queue)
     }
 
@@ -454,7 +454,7 @@ impl ScheduleStage {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
                     let weighted_tx = weighted_tx.unwrap();
-                    Self::register_new_task(weighted_tx, tx_queue)
+                    Self::register_runnable_task(weighted_tx, tx_queue)
                 }
                 send(to_execute_stage, Self::schedule_next_execution(tx_queue, address_book)) -> res => {
                     res.unwrap();
