@@ -252,7 +252,7 @@ fn output_slot(
     let t2 = std::thread::Builder::new().name("sol-execute".to_string()).spawn(move || {
         let mut step = 0;
         loop {
-            pre_execute_env_receiver.recv().unwrap();
+            let ee = pre_execute_env_receiver.recv().unwrap();
                 //info!("execute substage: #{} {:#?}", step, ee.task.tx.signature());
                 post_execute_env_sender.send(ee).unwrap();
                 step += 1;
