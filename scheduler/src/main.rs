@@ -115,6 +115,7 @@ impl AddressBook {
             Entry::Vacant(entry) => {
                 entry.insert(Page {
                     current_usage: CurrentUsage::renew(requested_usage),
+                    ..Page::default(),
                 });
                 LockAttempt::success(address, requested_usage)
             }
