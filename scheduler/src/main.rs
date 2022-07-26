@@ -419,7 +419,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
     ) -> Option<(bool, UniqueWeight, Task)> {
-        runnable_queue.pop_next_task().map(|(uq, t) (true, uq, t))
+        runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
     }
 
     fn pop_then_lock_from_queue(
