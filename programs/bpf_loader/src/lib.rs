@@ -18,9 +18,10 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf::{self, HOST_ALIGN, MM_HEAP_START},
+        ebpf::{self, HOST_ALIGN, MM_HEAP_START, MM_INPUT_START},
         elf::Executable,
-        memory_region::{MemoryCowCallback, MemoryMapping, MemoryRegion},
+        error::EbpfError,
+        memory_region::{AccessType, MemoryCowCallback, MemoryMapping, MemoryRegion},
         verifier::RequisiteVerifier,
         vm::{ContextObject, EbpfVm, ProgramResult, VerifiedExecutable},
     },
@@ -1597,7 +1598,21 @@ fn execute<'a, 'b: 'a>(
                 };
                 Err(Box::new(error) as Box<dyn std::error::Error>)
             }
-            ProgramResult::Err(error) => Err(error),
+            ProgramResult::Err(error) => {
+                let error = match error.downcast_ref() {
+                    Some(EbpfError::AccessViolation(
+                        _pc,
+                        AccessType::Store,
+                        address,
+                        _size,
+                        _section_name,
+                    )) if *address >= MM_INPUT_START => {
+                        InstructionError::ReadonlyDataModified.into()
+                    }
+                    _ => error,
+                };
+                Err(error)
+            }
             _ => Ok(()),
         }
     };
