@@ -432,7 +432,7 @@ impl ScheduleStage {
                 unique_weights_by_address.insert(*newly_uncontended_unique_weights.last().unwrap(), newly_uncontended_unique_weights);
             }
         }
-        if unique_weights_by_address.last_entry().unwrap().0 < runnable_queue.next_task().0 {
+        if unique_weights_by_address.last_entry().unwrap().unwrap().0 < runnable_queue.next_task().0 {
             runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
         } else {
             panic!()
