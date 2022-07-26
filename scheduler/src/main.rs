@@ -106,7 +106,7 @@ struct AddressBook {
 }
 
 impl AddressBook {
-    fn attempt_lock_address(&mut self, address: Pubkey, requested_usage: RequestedUsage) -> LockAttempt {
+    fn attempt_lock_address(&mut self, unique_weight: &UniqueWeight, address: Pubkey, requested_usage: RequestedUsage) -> LockAttempt {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(address) {
@@ -140,7 +140,7 @@ impl AddressBook {
                     CurrentUsage::Writable => {
                         match &requested_usage {
                             RequestedUsage::Readonly | RequestedUsage::Writable => {
-                                // add to contended queeu?
+                                page.contended_queue.insert(unique_weight.clone());
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
@@ -239,13 +239,14 @@ impl TransactionQueue {
         self.map.insert(unique_weight, task).unwrap();
     }
 
-    fn pop_next_task(&mut self) -> Option<Task> {
-        self.map.pop_last().map(|(_k, v)| v)
+    fn pop_next_task(&mut self) -> Option<(UniqueWeight, Task)> {
+        self.map.pop_last()
     }
 }
 
 fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
+    unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
 ) -> Vec<LockAttempt> {
@@ -254,14 +255,14 @@ fn attempt_lock_for_execution<'a>(
         .writable
         .iter()
         .cloned()
-        .map(|&a| address_book.attempt_lock_address(a, RequestedUsage::Writable))
+        .map(|&a| address_book.attempt_lock_address(unique_weight, a, RequestedUsage::Writable))
         .collect::<Vec<_>>();
 
     let mut readonly_attempts = locks
         .readonly
         .iter()
         .cloned()
-        .map(|&a| address_book.attempt_lock_address(a, RequestedUsage::Readonly))
+        .map(|&a| address_book.attempt_lock_address(unique_weight, a, RequestedUsage::Readonly))
         .collect::<Vec<_>>();
 
     writable_attempts.append(&mut readonly_attempts);
@@ -416,14 +417,14 @@ impl ScheduleStage {
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
     ) -> Option<(Task, Vec<LockAttempt>)> {
-        for next_task in tx_queue.pop_next_task() {
+        for (unique_weight, next_task) in tx_queue.pop_next_task() {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let lock_attempts = attempt_lock_for_execution(address_book, &message_hash, &locks);
+            let lock_attempts = attempt_lock_for_execution(address_book, &unique_weight, &message_hash, &locks);
             let is_success = lock_attempts.iter().all(|g| g.is_success());
 
             if is_success {
