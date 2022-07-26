@@ -443,9 +443,11 @@ impl ScheduleStage {
 
     fn apply_successful_lock_for_execution(address_book: &mut AddressBook, unique_weight: UniqueWeight, lock_attempts: &Vec<LockAttempt>) {
         for l in lock_attempts {
-            // now contended
-            address_book.newly_uncontended_addresses.remove(&l.address);
+            // ensure to remove remaining refs of this unique_weight
             address_book.mark_address_as_uncontended(&unique_weight, &l.address)
+
+            // revert because now contended
+            address_book.newly_uncontended_addresses.remove(&l.address);
         }
     }
 
