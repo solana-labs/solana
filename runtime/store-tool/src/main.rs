@@ -1,5 +1,5 @@
 use {
-    clap::{crate_description, crate_name, value_t_or_exit, App, Arg},
+    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
     log::*,
     solana_runtime::append_vec::AppendVec,
 };
@@ -26,16 +26,18 @@ fn main() {
         .get_matches();
 
     let file = value_t_or_exit!(matches, "file", String);
-    let len = value_t_or_exit!(matches, "len", usize);
-    let (mut store, num_accounts) = AppendVec::new_from_file(file, len).expect("should succeed");
+    let len = value_t!(matches, "len", usize)
+        .unwrap_or_else(|_| std::fs::metadata(&file).unwrap().len() as usize);
+
+    let mut store = AppendVec::new_from_file_unchecked(file, len).expect("should succeed");
     store.set_no_remove_on_drop();
-    info!(
-        "store: len: {} capacity: {} accounts: {}",
-        store.len(),
-        store.capacity(),
-        num_accounts,
-    );
+    info!("store: len: {} capacity: {}", store.len(), store.capacity());
+    let mut num_accounts = 0;
+    let mut stored_accounts_len = 0;
     for account in store.account_iter() {
+        if is_account_zeroed(&account) {
+            break;
+        }
         info!(
             "  account: {:?} version: {} data: {} hash: {:?}",
             account.meta.pubkey, account.meta.write_version, account.meta.data_len, account.hash
