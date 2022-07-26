@@ -432,7 +432,7 @@ impl ScheduleStage {
                 unique_weights_by_address.insert(newly_uncontended_unique_weights.last().cloned().unwrap(), newly_uncontended_unique_weights);
             }
         }
-        match (unique_weights_by_address.last_key_value().map(|a| a.0), runnable_queue.next_task_unique_weight()) {
+        match (unique_weights_by_address.last_key_value().map(|a| *a.0), runnable_queue.next_task_unique_weight()) {
             (Some(contended), Some(runnable)) => {
                 if contended < runnable  {
                     runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
