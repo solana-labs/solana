@@ -259,7 +259,7 @@ impl TaskQueue {
     }
 
     fn next_task(&self) -> Option<(UniqueWeight, Task)> {
-        self.map.last()
+        self.map.last_key()
     }
 
     fn pop_next_task(&mut self) -> Option<(UniqueWeight, Task)> {
