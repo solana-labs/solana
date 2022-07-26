@@ -393,7 +393,6 @@ impl ScheduleStage {
     fn pop_from_queue(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
-        entry: &Entry,
     ) -> ExecutionEnvironment {
         for next_task in tx_queue.pop_next_task() {
             let message_hash = next_task.tx.message_hash();
