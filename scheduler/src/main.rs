@@ -438,7 +438,8 @@ impl ScheduleStage {
                 if weight_from_contended < weight_from_runnable  {
                     runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
                 } else if weight_from_contended > weight_from_runnable {
-                    panic!()
+                    let heaviest_by_address = heaviest_by_address.unwrap();
+                    heaviest_by_address.last_key_value().unwrap()
                 } else {
                     unreachable!("identical unique weights shouldn't exist in both runnable and contended")
                 }
