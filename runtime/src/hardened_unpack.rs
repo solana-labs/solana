@@ -783,7 +783,7 @@ mod tests {
 
     fn finalize_and_unpack_snapshot(archive: tar::Builder<Vec<u8>>) -> Result<()> {
         with_finalize_and_unpack(archive, |a, b| {
-            unpack_snapshot(a, b, &[PathBuf::new()], None).map(|_| ())
+            unpack_snapshot_with_processors(a, b, &[PathBuf::new()], None, |_, _| {}, |_| {})
         })
     }
 
