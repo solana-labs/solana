@@ -265,7 +265,7 @@ fn output_slot(
             let ee = post_schedule_env_receiver.recv().unwrap();
             //info!("post schedule stage: #{} {:#?}", step, ee.task.tx.signature());
             if step % 1966 == 0 {
-                error!("finished!");
+                error!("finished!: {}", step);
             }
             step += 1;
         }
