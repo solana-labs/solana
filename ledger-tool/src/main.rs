@@ -142,7 +142,7 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
-    to_schedule_stage: &crossbeam_channel::Sender<SanitizedTransaction>,
+    to_schedule_stage: &crossbeam_channel::Sender<Weight, SanitizedTransaction>,
 ) {
     match method {
         LedgerOutputMethod::Print => {
