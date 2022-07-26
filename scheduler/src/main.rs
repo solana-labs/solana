@@ -218,7 +218,7 @@ impl TransactionQueue {
     }
 
     fn pop_next_task(&mut self) -> Option<Task> {
-        self.map.pop_last().map(|(_k, v) v)
+        self.map.pop_last().map(|(_k, v)| v)
     }
 }
 
