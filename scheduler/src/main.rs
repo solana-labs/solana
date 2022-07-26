@@ -393,7 +393,7 @@ impl ScheduleStage {
     fn pop_from_queue(
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
-    ) -> ExecutionEnvironment {
+    ) -> Option<(Task, Vec<LockAttempt>)> {
         for next_task in tx_queue.pop_next_task() {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
