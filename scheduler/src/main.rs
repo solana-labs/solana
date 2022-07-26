@@ -157,7 +157,7 @@ impl AddressBook {
 
     fn unlock(&mut self, attempt: &LockAttempt) {
         use std::collections::btree_map::Entry;
-        let mut got_uncontended = false;
+        let mut uncontended = false;
 
         match self.map.entry(attempt.address) {
             Entry::Occupied(mut entry) => {
@@ -168,7 +168,7 @@ impl AddressBook {
                         match &attempt.requested_usage {
                             RequestedUsage::Readonly => {
                                 if *current_count == SOLE_USE_COUNT {
-                                    got_uncontended = true;
+                                    uncontended = true;
                                 } else {
                                     *current_count -= 1;
                                 }
@@ -179,7 +179,7 @@ impl AddressBook {
                     CurrentUsage::Writable => {
                         match &attempt.requested_usage {
                             RequestedUsage::Writable => {
-                                got_uncontended = true;
+                                uncontended = true;
                             }
                             RequestedUsage::Readonly => unreachable!(),
                         }
@@ -187,7 +187,7 @@ impl AddressBook {
                     CurrentUsage::Unused => unreachable!(),
                 }
 
-                if got_uncontended {
+                if uncontended {
                     page.current_usage = CurrentUsage::Unused
                 }
             }
