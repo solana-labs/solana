@@ -432,7 +432,9 @@ impl ScheduleStage {
                 unique_weights_by_address.insert(newly_uncontended_unique_weights.last().cloned().unwrap(), newly_uncontended_unique_weights);
             }
         }
-        match (unique_weights_by_address.last_key_value().map(|a| a.0.clone()), runnable_queue.next_task_unique_weight()) {
+        let heaviest_by_address = unique_weights_by_address.last_key_value();
+
+        match (heaviest_by_address.map(|a| a.0.clone()), runnable_queue.next_task_unique_weight()) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
                 if weight_from_contended < weight_from_runnable  {
                     runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
