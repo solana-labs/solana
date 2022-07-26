@@ -90,6 +90,8 @@ use {
     },
 };
 
+use solana_scheduler::ScheduleStage;
+
 mod bigtable;
 mod ledger_path;
 
