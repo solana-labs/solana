@@ -419,7 +419,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-    ) -> Option<(Task, Vec<LockAttempt>)> {
+    ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
         for (unique_weight, next_task) in runnable_queue.pop_next_task() {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
