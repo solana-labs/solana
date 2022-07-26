@@ -90,7 +90,7 @@ use {
     },
 };
 
-use solana_scheduler::{ScheduleStage, Weight};
+use solana_scheduler::{ScheduleStage, Weight, TaskQueue};
 
 mod bigtable;
 mod ledger_path;
