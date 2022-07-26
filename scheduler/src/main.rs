@@ -258,6 +258,10 @@ impl TaskQueue {
         self.map.insert(unique_weight, task).unwrap();
     }
 
+    fn next_task(&self) -> Option<(UniqueWeight, Task)> {
+        self.map.last_entry()
+    }
+
     fn pop_next_task(&mut self) -> Option<(UniqueWeight, Task)> {
         self.map.pop_last()
     }
