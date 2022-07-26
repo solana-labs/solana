@@ -231,7 +231,7 @@ fn output_slot(
     }
 
     let (tx_sender, tx_receiver) = crossbeam_channel::bounded(10);
-    ScheduleStage::schedule_once(3, 4, 5, 6, tx_receiver, 7, 8, 9);
+    ScheduleStage::schedule_once(3, 4, 5, 6, &tx_receiver, 7, 8, 9);
 
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
