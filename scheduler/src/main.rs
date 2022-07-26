@@ -434,6 +434,7 @@ impl ScheduleStage {
                 return Some((unique_weight, next_task, lock_attempts));
             } else {
                 Self::ensure_unlock_for_failed_execution(address_book, lock_attempts);
+                contended_queue.add(unique_weight, next_task);
                 return None;
             }
         }
