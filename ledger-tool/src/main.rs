@@ -156,7 +156,7 @@ fn output_entry(
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
                 println!("    Transaction {}", transactions_index);
                 let sanitized_tx = SanitizedTransaction::try_create(
-                    transaction,
+                    transaction.clone(),
                     MessageHash::Compute,
                     None,
                     SimpleAddressLoader::Disabled,
