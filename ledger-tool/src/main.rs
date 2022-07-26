@@ -243,12 +243,12 @@ fn output_slot(
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
-    let t1 = std::thread::Builder::new().name("sol-scheduler").spawn(move || {
+    let t1 = std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
         loop {
             ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, &pre_execute_env_sender, &post_execute_env_receiver, &post_schedule_env_sender);
         }
     }).unwrap();
-    let t2 = std::thread::Builder::new().name("sol-execute").spawn(move || {
+    let t2 = std::thread::Builder::new().name("sol-execute".to_string()).spawn(move || {
         let mut step = 0;
         loop {
             if let Some(ee) = pre_execute_env_receiver.recv().unwrap() {
@@ -259,7 +259,7 @@ fn output_slot(
         }
     }).unswrap();
 
-    let t3 = std::thread::Builder::new().name("sol-consumer").spawn(move || {
+    let t3 = std::thread::Builder::new().name("sol-consumer".to_string()).spawn(move || {
         let mut step = 0;
         loop {
             let ee = post_schedule_env_receiver.recv().unwrap();
