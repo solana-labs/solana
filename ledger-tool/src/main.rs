@@ -142,6 +142,7 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
+    to_schedule_stage: usize,
 ) {
     match method {
         LedgerOutputMethod::Print => {
@@ -154,6 +155,7 @@ fn output_entry(
             );
             for (transactions_index, transaction) in entry.transactions.into_iter().enumerate() {
                 println!("    Transaction {}", transactions_index);
+                to_schedule_stage.send(transaction).unwrap();
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
                     .read_transaction_status((tx_signature, slot))
@@ -226,7 +228,7 @@ fn output_slot(
 
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry);
+            output_entry(blockstore, method, slot, entry_index, entry, s2);
         }
 
         output_slot_rewards(blockstore, slot, method);
