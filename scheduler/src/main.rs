@@ -420,14 +420,18 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(bool, UniqueWeight, Task)> {
-        let runnable_next_task = runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t));
+
         let mut unique_weights_by_address = std::collections::BTreeMap::<UniqueWeight, _>::new();
         for address in address_book.newly_uncontended_addresses {
             let newly_uncontended_unique_weights = address_book.map.get(&address).unwrap().contended_unique_weights;
             if !newly_uncontended_unique_weights.is_empty() {
                 unique_weights_by_address.insert(*newly_uncontended_unique_weights.last().unwrap(), newly_uncontended_unique_weights);
             }
-
+        }
+        if unique_weights_by_address.last() < runnable_queue.last() {
+            runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t))
+        } else {
+            panic!()
         }
     }
 
