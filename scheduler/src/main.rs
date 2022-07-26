@@ -413,15 +413,18 @@ struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
-        let mut rng = rand::thread_rng(); // manage randomness properly for future scheduling determinism
-                                          //let ix = 23;
-                                          //let tx = bank
-                                          //    .verify_transaction(
-                                          //        tx,
-                                          //        solana_sdk::transaction::TransactionVerificationMode::FullVerification,
-                                          //    )
-                                          //    .unwrap();
-                                          //tx.foo();
+        // manage randomness properly for future scheduling determinism
+        let mut rng = rand::thread_rng();
+
+        //let ix = 23;
+        //let tx = bank
+        //    .verify_transaction(
+        //        tx,
+        //        solana_sdk::transaction::TransactionVerificationMode::FullVerification,
+        //    )
+        //    .unwrap();
+        //tx.foo();
+
         runnable_queue.add(
             UniqueWeight {
                 weight,
