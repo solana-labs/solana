@@ -102,7 +102,7 @@ type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
 // needs ttl mechanism and prune
 struct AddressBook {
     map: AddressBookMap,
-    uncontended_addresses: std::collections::BTreeSet<Pubkey>,
+    newly_uncontended_addresses: std::collections::BTreeSet<Pubkey>,
 }
 
 impl AddressBook {
@@ -158,7 +158,7 @@ impl AddressBook {
 
     fn unlock(&mut self, attempt: &LockAttempt) {
         use std::collections::btree_map::Entry;
-        let mut uncontended = false;
+        let mut newly_uncontended = false;
 
         match self.map.entry(attempt.address) {
             Entry::Occupied(mut entry) => {
@@ -169,7 +169,7 @@ impl AddressBook {
                         match &attempt.requested_usage {
                             RequestedUsage::Readonly => {
                                 if *current_count == SOLE_USE_COUNT {
-                                    uncontended = true;
+                                    newly_uncontended = true;
                                 } else {
                                     *current_count -= 1;
                                 }
@@ -180,7 +180,7 @@ impl AddressBook {
                     CurrentUsage::Writable => {
                         match &attempt.requested_usage {
                             RequestedUsage::Writable => {
-                                uncontended = true;
+                                newly_uncontended = true;
                             }
                             RequestedUsage::Readonly => unreachable!(),
                         }
@@ -188,9 +188,9 @@ impl AddressBook {
                     CurrentUsage::Unused => unreachable!(),
                 }
 
-                if uncontended {
+                if newly_uncontended {
                     page.current_usage = CurrentUsage::Unused;
-                    self.uncontended_addresses.insert(*entry.key());
+                    self.newly_uncontended_addresses.insert(*entry.key());
                 }
             }
             Entry::Vacant(entry) => {
