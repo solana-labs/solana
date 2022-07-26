@@ -598,7 +598,7 @@ impl ScheduleStage {
         Self::push_to_queue(weighted_tx, runnable_queue)
     }
 
-    fn run(
+    fn schedule_once(
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -608,9 +608,6 @@ impl ScheduleStage {
         from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
         to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
     ) {
-        use crossbeam_channel::select;
-        let exit = true;
-        while exit {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
                     let weighted_tx = weighted_tx.unwrap();
@@ -629,6 +626,22 @@ impl ScheduleStage {
                     to_next_stage.send(processed_execution_environment).unwrap()
                 }
             }
+    }
+
+    fn run(
+        runnable_queue: &mut TaskQueue,
+        contended_queue: &mut TaskQueue,
+        address_book: &mut AddressBook,
+        bank: solana_runtime::bank::Bank,
+        from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
+        to_execute_stage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
+        from_execute_stage: crossbeam_channel::Receiver<ExecutionEnvironment>,
+        to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
+    ) {
+        use crossbeam_channel::select;
+        let exit = true;
+        while exit {
+            Self::schedule_once(runnable_queue, contended_queue, address_book, bank, from_previous_stage, to_execute_stage, from_execute_stage, to_next_stage);
         }
     }
 }
