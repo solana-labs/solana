@@ -205,7 +205,7 @@ impl AddressBook {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Weight { // naming: Sequence Ordering?
     ix: usize, // index in ledger entry?
 }
