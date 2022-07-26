@@ -232,7 +232,8 @@ fn output_slot(
 
     let (tx_sender, tx_receiver) = crossbeam_channel::unbounded();
     let mut runnable_queue = TaskQueue::default();
-    ScheduleStage::schedule_once(&mut runnable_queue, 4, 5, 6, &tx_receiver, 7, 8);
+    let mut contended_queue = TaskQueue::default();
+    ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, 5, 6, &tx_receiver, 7, 8);
 
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
