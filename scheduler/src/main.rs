@@ -171,8 +171,7 @@ impl AddressBook {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(*address) {
-            // unconditional success if it's initial access
-            Entry::Vacant(entry) => {}
+            Entry::Vacant(entry) => unreachable!(),
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
                 page.contended_unique_weights.remove(unique_weight);
