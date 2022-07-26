@@ -419,7 +419,7 @@ impl ScheduleStage {
         tx_queue: &mut TransactionQueue,
         address_book: &mut AddressBook,
     ) -> Option<ExecutionEnvironment> {
-        Self::pop_from_queue(tx_queue, address_book).map(|(t, ll)| Self::create_execution_environment(t, ll))
+        Self::pop_from_queue(tx_queue, address_book).map(|(t, ll)| create_execution_environment(t, ll))
     }
 
     fn register_new_task(weighted_tx: (Weight, SanitizedTransaction), tx_queue: &mut TransactionQueue) {
