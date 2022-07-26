@@ -369,7 +369,7 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
-    fn commit_execution_result(ee: &mut ExecutionEnvironment) {
+    fn commit_result(ee: &mut ExecutionEnvironment) {
         // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
         // async-ly propagate the result to rpc subsystems
