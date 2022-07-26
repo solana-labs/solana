@@ -421,7 +421,7 @@ impl ScheduleStage {
 
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
-        unlock_for_execution(address_book, lock_attemps)
+        unlock_for_execution(address_book, lock_attempts);
         // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
         // async-ly propagate the result to rpc subsystems
