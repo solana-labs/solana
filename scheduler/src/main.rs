@@ -258,7 +258,7 @@ impl TaskQueue {
         self.map.insert(unique_weight, task).unwrap();
     }
 
-    fn next_task(&self) -> Option<(UniqueWeight, Task)> {
+    fn next_task(&self) -> Option<(&UniqueWeight, &Task)> {
         self.map.last_entry().map(|e| (e.key(), e.get()))
     }
 
