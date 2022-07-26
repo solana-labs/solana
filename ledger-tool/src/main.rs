@@ -240,7 +240,9 @@ fn output_slot(
     ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, &pre_execute_env_sender, 7, 8);
     std::thread::spawn(|| {
         loop {
-            pre_execute_env_receiver.recv().unwrap()
+            if let Some(ee) = pre_execute_env_receiver.recv().unwrap() {
+                post_execute_env_sender.send(ee).unwrap();
+            }
         }
     });
 
