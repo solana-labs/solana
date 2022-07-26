@@ -249,7 +249,7 @@ fn output_slot(
     let t2 = std::thread::spawn(move || {
         loop {
             if let Some(ee) = pre_execute_env_receiver.recv().unwrap() {
-                info!("execute stage: {:#?}", ee.tx.signature());
+                info!("execute stage: {:#?}", ee.task.tx.signature());
                 post_execute_env_sender.send(ee).unwrap();
             }
         }
@@ -258,7 +258,7 @@ fn output_slot(
     let t3 = std::thread::spawn(move || {
         loop {
             let ee = post_schedule_env_receiver.recv().unwrap();
-            info!("post schedule stage");
+            info!("post schedule stage: {:#?}", ee.task.tx.signature());
         }
     });
 
