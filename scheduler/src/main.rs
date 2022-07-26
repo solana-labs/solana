@@ -427,7 +427,9 @@ impl ScheduleStage {
         None
     }
 
-    fn apply_successful_address_lock(address_book: &mut AddressBook, attempts: &Vec<LockAttempt>) {
+    fn apply_successful_lock_for_execution(address_book: &mut AddressBook, attempts: &Vec<LockAttempt>) {
+        for l in lock_attempts {
+        }
     }
 
     fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
@@ -449,7 +451,7 @@ impl ScheduleStage {
 
     fn create_execution_environment(address_book: &mut AddressBook, task: Task, attempts: Vec<LockAttempt>) -> ExecutionEnvironment {
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
-        Self::apply_successful_address_lock(address_book, &attempts);
+        Self::apply_successful_lock_for_execution(address_book, &attempts);
         // load account now from AccountsDb
         panic!()
     }
