@@ -369,7 +369,7 @@ struct ScheduleStage {
 }
 
 impl ScheduleStage {
-    fn commit(ee: &mut ExecutionEnvironment) {
+    fn commit_execution_result(ee: &mut ExecutionEnvironment) {
         // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
         // async-ly propagate the result to rpc subsystems
@@ -432,10 +432,10 @@ impl ScheduleStage {
                 send(to_execute_stage, Self::pop_from_queue(tx_queue, address_book)) -> res => {
                     res.unwrap();
                 }
-                recv(from_execute_stage) -> msg => {
-                    let mut msg = msg.unwrap();
-                    Self::commit(&mut msg);
-                    to_next_stage.send(msg).unwrap()
+                recv(from_execute_stage) -> execution_environment => {
+                    let mut execution_environment = execution_environment.unwrap();
+                    Self::commit_execution_result(&mut execution_environment);
+                    to_next_stage.send(execution_environment).unwrap()
                 }
             }
         }
