@@ -210,7 +210,7 @@ struct Weight { // naming: Sequence Ordering?
     ix: usize, // index in ledger entry?
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct UniqueWeight { // naming: Sequence Ordering?
     weight: Weight,
     // we can't use Transaction::message_hash because it's manipulatable to be favorous to the tx
