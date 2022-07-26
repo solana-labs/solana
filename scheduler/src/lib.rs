@@ -564,7 +564,7 @@ impl ScheduleStage {
     ) {
         let exit = true;
         while exit {
-            Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_substage, &from_execute_substage, &to_next_stage, &to_full_channel);
+            Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_substage, &from_execute_substage, &to_next_stage);
         }
     }
 }
