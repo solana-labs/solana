@@ -247,6 +247,14 @@ fn output_slot(
         }
     });
 
+    std::thread::spawn(|| {
+        loop {
+            if let Some(ee) = post_schedule_env_sender.recv().unwrap() {
+                info!("post schedule stage");
+            }
+        }
+    });
+
     if verbose_level >= 2 {
         for (entry_index, entry) in entries.into_iter().enumerate() {
             output_entry(blockstore, method, slot, entry_index, entry, &tx_sender);
