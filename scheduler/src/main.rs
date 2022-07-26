@@ -422,7 +422,7 @@ impl ScheduleStage {
     ) -> Option<(bool, UniqueWeight, Task)> {
         let runnable_next_task = runnable_queue.pop_next_task().map(|(uq, t)| (true, uq, t));
         for address in address_book.newly_uncontended_addresses {
-            address_book.map.get(address).unwrap()
+            address_book.map.get(&address).unwrap()
         }
     }
 
