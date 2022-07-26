@@ -415,12 +415,19 @@ impl ScheduleStage {
         );
     }
 
+    fn select_next_task(
+        runnable_queue: &mut TaskQueue,
+        contended_queue: &mut TaskQueue,
+    ) -> Option<(bool, UniqueWeight, Task)> {
+        runnable_queue.pop_next_task().map(|(uq, t) (true, uq, t))
+    }
+
     fn pop_then_lock_from_queue(
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (unique_weight, next_task) in runnable_queue.pop_next_task() {
+        for (from_runnable, unique_weight, next_task) in Self::select_next_task(runnable_queue, contended_queue) {
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
