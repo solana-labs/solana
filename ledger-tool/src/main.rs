@@ -249,7 +249,7 @@ fn output_slot(
 
     std::thread::spawn(|| {
         loop {
-            if let Some(ee) = post_schedule_env_sender.recv().unwrap() {
+            if let Some(ee) = post_schedule_env_receiver.recv().unwrap() {
                 info!("post schedule stage");
             }
         }
