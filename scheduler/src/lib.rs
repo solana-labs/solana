@@ -514,6 +514,8 @@ impl ScheduleStage {
     ) {
         use crossbeam_channel::select;
 
+        info("schedule_once!");
+
         //if let Some(ee) = maybe_ee {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
