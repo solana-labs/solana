@@ -199,7 +199,7 @@ impl AddressBook {
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 struct UniqueWeight { // naming: Sequence Ordering?
     ix: usize, // index in ledger entry?
-    randomness: usize, // tie breaker? random noise? also for unique identification of txes?
+    randomness: Hash::new_rand(), // tie breaker? random noise? also for unique identification of txes?
     // fee?
 }
 
