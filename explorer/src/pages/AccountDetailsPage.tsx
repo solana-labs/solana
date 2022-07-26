@@ -195,10 +195,13 @@ export function AccountHeader({
     let token;
     let unverified = false;
 
-    if (data?.nftData) {
+    // Fall back to legacy token list when there is stub metadata (blank uri), updatable by default by the mint authority
+    if (!data?.nftData?.metadata.data.uri && tokenDetails) {
+      token = tokenDetails;
+    } else if (data?.nftData) {
       token = {
         logoURI: data?.nftData?.json?.image,
-        name: data?.nftData?.json?.name,
+        name: data?.nftData?.json?.name ?? data?.nftData.metadata.data.name,
       };
       unverified = true;
     } else if (tokenDetails) {
