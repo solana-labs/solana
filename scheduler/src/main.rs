@@ -439,7 +439,7 @@ impl ScheduleStage {
                 } else if weight_from_contended > weight_from_runnable {
                     panic!()
                 } else {
-                    unreachable!()
+                    unreachable!("identical unique weights shouldn't exist in both runnable and contended")
                 }
             },
             (Some(weight_from_contended), None) => {
