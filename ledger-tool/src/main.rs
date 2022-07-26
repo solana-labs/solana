@@ -249,7 +249,7 @@ fn output_slot(
     std::thread::spawn(move || {
         loop {
             if let Some(ee) = pre_execute_env_receiver.recv().unwrap() {
-                info!("execute stage");
+                info!("execute stage: {:#?}", ee);
                 post_execute_env_sender.send(ee).unwrap();
             }
         }
