@@ -405,7 +405,7 @@ impl ScheduleStage {
             let is_success = lock_attempts.iter().all(|g| g.is_success());
 
             if is_success {
-                return Some(next_task, lock_attempts);
+                return Some((next_task, lock_attempts));
             } else {
                 ensure_unlock_for_tx(address_book, lock_attempts);
                 return None;
