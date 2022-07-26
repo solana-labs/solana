@@ -443,10 +443,11 @@ impl ScheduleStage {
                 send(to_execute_stage, Self::schedule_next_execution(tx_queue, address_book)) -> res => {
                     res.unwrap();
                 }
-                recv(from_execute_stage) -> execution_environment => {
-                    let mut execution_environment = execution_environment.unwrap();
-                    Self::commit_result(&mut execution_environment);
-                    to_next_stage.send(execution_environment).unwrap()
+                recv(from_execute_stage) -> exe_env => {
+                    let mut exe_env = exe_env.unwrap();
+
+                    Self::commit_result(&mut exe_env);
+                    to_next_stage.send(exe_env).unwrap()
                 }
             }
         }
