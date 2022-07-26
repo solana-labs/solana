@@ -189,6 +189,10 @@ impl AddressBook {
                     }
                     CurrentUsage::Unused => unreachable!(),
                 }
+
+                if newly_uncontended {
+                    page.current_usage = CurrentUsage::Unused;
+                }
             }
             Entry::Vacant(entry) => {
                 unreachable!()
@@ -275,9 +279,7 @@ fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<Loc
     for l in lock_attempts {
         let newly_uncontended = address_book.unlock(&l);
         if newly_uncontended {
-            page.current_usage = CurrentUsage::Unused;
-            let address = *entry.key();
-            address_book.newly_uncontended_addresses.insert(address);
+            address_book.newly_uncontended_addresses.insert(l.address);
         }
         // mem::forget and panic in LockAttempt::drop()
     }
