@@ -249,14 +249,14 @@ fn attempt_lock_for_execution<'a>(
     writable_attempts
 }
 
-fn ensure_unlock_for_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+fn ensure_unlock_for_failed_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
     for l in lock_attempts {
         address_book.ensure_unlock(&l)
         // mem::forget and panic in LockAttempt::drop()
     }
 }
 
-fn unlock_for_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
     for l in lock_attempts {
         address_book.unlock(&l)
         // mem::forget and panic in LockAttempt::drop()
@@ -411,7 +411,7 @@ impl ScheduleStage {
             if is_success {
                 return Some((next_task, lock_attempts));
             } else {
-                ensure_unlock_for_execution(address_book, lock_attempts);
+                ensure_unlock_for_failed_execution(address_book, lock_attempts);
                 return None;
             }
         }
@@ -421,7 +421,7 @@ impl ScheduleStage {
 
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
-        unlock_for_execution(address_book, lock_attempts);
+        unlock_after_execution(address_book, lock_attempts);
         // par()-ly release lock attemps
         // par()-ly clone updated Accounts into address book
         // async-ly propagate the result to rpc subsystems
