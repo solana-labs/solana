@@ -537,8 +537,11 @@ impl ScheduleStage {
                     to_next_stage.send(processed_execution_environment).unwrap();
                     maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 }
-                send(maybe_ee.as_ref().map(|_| to_execute_substage).unwrap_or(&s), maybe_ee) -> res => {
+                send(maybe_ee.as_ref().map(|_| to_execute_substage).unwrap_or(&s), {
+                    let a = maybe_ee;
                     maybe_ee = None;
+                    a
+                }) -> res => {
                     res.unwrap();
                 }
                 //default => { std::thread::sleep(std::time::Duration::from_millis(1)) }
