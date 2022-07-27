@@ -6,7 +6,7 @@ use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        latest_unprocessed_votes::{self, LatestUnprocessedVotes, VoteSource},
+        latest_unprocessed_votes::{self, DeserializedVotePacket, LatestUnprocessedVotes, VoteSource},
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
@@ -480,6 +480,7 @@ impl UnprocessedTransactionStorage {
 
     pub fn filter_forwardable_packets_and_add_batches(
         &mut self,
+        bank: &Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         match self {
@@ -489,7 +490,7 @@ impl UnprocessedTransactionStorage {
             ),
             Self::VoteStorage(v, VoteSource::Tpu) => {
                 let total_forwardable_packets =
-                    v.get_and_insert_forwardable_packets(forward_packet_batches_by_accounts);
+                    v.get_and_insert_forwardable_packets(bank, forward_packet_batches_by_accounts);
                 FilterForwardingResults {
                     total_forwardable_packets,
                     ..FilterForwardingResults::default()
@@ -499,16 +500,16 @@ impl UnprocessedTransactionStorage {
         }
     }
 
+    /// The processing function takes a stream of packets ready to process, and returns the indices
+    /// of the unprocessed packets that are eligible for retry. A return value of None means that
+    /// all packets are unprocessed and eligible for retry.
     pub fn process_packets<F>(
         &mut self,
         bank: Option<Arc<Bank>>,
         batch_size: usize,
         mut processing_function: F,
     ) where
-        F: FnMut(
-            Option<&mut UnprocessedPacketBatches>,
-            Vec<Rc<ImmutableDeserializedPacket>>,
-        ) -> Vec<Rc<ImmutableDeserializedPacket>>,
+        F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
         match self {
             Self::TransactionStorage(buffered_packet_batches, _) => {
@@ -525,10 +526,32 @@ impl UnprocessedTransactionStorage {
                         .chunks(batch_size)
                         .into_iter()
                         .flat_map(|packets_to_process| {
-                            processing_function(
-                                Some(buffered_packet_batches),
-                                packets_to_process.into_iter().collect_vec(),
-                            )
+                            let packets_to_process = packets_to_process.into_iter().collect_vec();
+                            if let Some(retryable_transaction_indexes) =
+                                processing_function(&packets_to_process)
+                            {
+                                // Remove the non-retryable packets, packets that were either:
+                                // 1) Successfully processed
+                                // 2) Failed but not retryable
+                                BankingStage::filter_processed_packets(
+                                    retryable_transaction_indexes
+                                        .iter()
+                                        .chain(std::iter::once(&packets_to_process.len())),
+                                    |start, end| {
+                                        for processed_packet in &packets_to_process[start..end] {
+                                            buffered_packet_batches
+                                                .message_hash_to_transaction
+                                                .remove(processed_packet.message_hash());
+                                        }
+                                    },
+                                );
+                                retryable_transaction_indexes
+                                    .iter()
+                                    .map(|i| packets_to_process[*i].clone())
+                                    .collect_vec()
+                            } else {
+                                packets_to_process
+                            }
                         })
                         .collect::<MinMaxHeap<_>>();
 
@@ -542,36 +565,23 @@ impl UnprocessedTransactionStorage {
             }
             Self::VoteStorage(latest_unprocessed_votes, VoteSource::Tpu) => {
                 // Based on the stake distribution present in the supplied bank, drain the unprocessed votes
-                // from each validator using a weighted random sample based on stake.
-                //
-                // Efraimidis and Spirakis algo for weighted random sample without replacement
-                // TODO: Add proper error handling
-                let mut sorted_pubkeys: Vec<(f64, Pubkey)> = bank
-                    .unwrap()
-                    .staked_nodes()
-                    .iter()
-                    .filter_map(|(&pubkey, &stake)| {
-                        if stake == 0 {
-                            None // Ignore votes from unstaked validators
-                        } else {
-                            Some((thread_rng().gen::<f64>().powf(1.0 / (stake as f64)), pubkey))
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                sorted_pubkeys.sort_by(|(w1, _), (w2, _)| w1.partial_cmp(w2).unwrap());
+                // from each validator using a weighted random ordering. Votes from validators with
+                // 0 stake are ignored.
+                // TODO: Add proper error handling in case bank is missing?
+                let bank = bank.unwrap();
+
                 let latest_votes_per_pubkey = latest_unprocessed_votes
                     .latest_votes_per_pubkey
                     .read()
                     .unwrap();
-                // TODO: Decide whether we should retry vote txs
-                let _retryable_votes = sorted_pubkeys
-                    .into_iter()
-                    .filter_map(|(_, pubkey)| {
+
+                let retryable_votes = weighted_random_order_by_stake(&bank)
+                    .filter_map(|pubkey| {
                         if let Some(lock) = latest_votes_per_pubkey.get(&pubkey) {
                             if let Ok(latest_vote) = lock.write() {
                                 if let Ok(mut latest_vote) = latest_vote.try_borrow_mut() {
                                     if !latest_vote.is_processed() {
-                                        let packet = latest_vote.get_vote_packet();
+                                        let packet = latest_vote.clone();
                                         latest_vote.clear();
                                         latest_unprocessed_votes
                                             .size
@@ -583,11 +593,28 @@ impl UnprocessedTransactionStorage {
                         }
                         None
                     })
-                    .chunks(batch_size) // TODO: do we need to chunk votes or can we process them all at once
+                    .chunks(batch_size)
                     .into_iter()
-                    .flat_map(|packets_to_process| {
-                        processing_function(None, packets_to_process.into_iter().collect_vec())
-                    });
+                    .flat_map(|vote_packets| {
+                        let vote_packets = vote_packets.into_iter().collect_vec();
+                        let packets_to_process = vote_packets
+                            .iter()
+                            .map(&DeserializedVotePacket::get_vote_packet)
+                            .collect_vec();
+                        if let Some(retryable_vote_indices) =
+                            processing_function(&packets_to_process)
+                        {
+                            retryable_vote_indices
+                                .iter()
+                                .map(|i| vote_packets[*i].clone())
+                                .collect_vec()
+                        } else {
+                            vote_packets
+                        }
+                    })
+                    .collect_vec();
+                // Insert the retryable votes back in
+                latest_unprocessed_votes.insert_batch(retryable_votes.into_iter());
             }
             Self::VoteStorage(_, VoteSource::Gossip) => {
                 panic!("Gossip vote thread should not be processing transactions")
@@ -901,7 +928,7 @@ impl BankingStage {
         unprocessed_transaction_storage.process_packets(
             bank,
             num_packets_to_process_per_iteration,
-            |buffered_packet_batches: Option<&mut UnprocessedPacketBatches>, packets_to_process: Vec<Rc<ImmutableDeserializedPacket>>| {
+            |packets_to_process: &Vec<Rc<ImmutableDeserializedPacket>>| {
                 // TODO: Right now we iterate through buffer and try the highest weighted transaction once
                 // but we should retry the highest weighted transactions more often.
                 let (bank_start, poh_recorder_lock_time) = measure!(
@@ -974,38 +1001,15 @@ impl BankingStage {
                         retryable_transaction_indexes.len() as u64,
                     );
 
-                    let result = retryable_transaction_indexes
-                        .iter()
-                        .map(|i| packets_to_process[*i].clone())
-                        .collect_vec();
-
-                    // Remove the non-retryable packets, packets that were either:
-                    // 1) Successfully processed
-                    // 2) Failed but not retryable
-                    if let Some(buffered_packet_batches) = buffered_packet_batches {
-                        Self::filter_processed_packets(
-                            retryable_transaction_indexes
-                            .iter()
-                            .chain(std::iter::once(&packets_to_process.len())),
-                            |start, end| {
-                                for processed_packet in &packets_to_process[start..end] {
-                                    buffered_packet_batches
-                                        .message_hash_to_transaction
-                                        .remove(processed_packet.message_hash());
-                                    }
-                            },
-                        );
-                    }
-
-                    result
+                    Some(retryable_transaction_indexes)
                 } else if reached_end_of_slot {
-                    packets_to_process
+                    None
                 } else {
                     // mark as end-of-slot to avoid aggressively lock poh for the remaining for
                     // packet batches in buffer
                     reached_end_of_slot = true;
 
-                    packets_to_process
+                    None
                 }
             });
 
@@ -1228,9 +1232,12 @@ impl BankingStage {
         // load all accounts from address loader;
         let current_bank = bank_forks.read().unwrap().root_bank();
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(current_bank);
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(current_bank.clone());
         let filter_forwarding_result = unprocessed_transaction_storage
-            .filter_forwardable_packets_and_add_batches(&mut forward_packet_batches_by_accounts);
+            .filter_forwardable_packets_and_add_batches(
+                &current_bank,
+                &mut forward_packet_batches_by_accounts,
+            );
 
         forward_packet_batches_by_accounts
             .iter_batches()
@@ -2375,6 +2382,23 @@ impl BankingStage {
         }
         Ok(())
     }
+}
+
+pub(crate) fn weighted_random_order_by_stake(bank: &Arc<Bank>) -> impl Iterator<Item = Pubkey> {
+    // Efraimidis and Spirakis algo for weighted random sample without replacement
+    let mut pubkey_with_weight: Vec<(f64, Pubkey)> = bank
+        .staked_nodes()
+        .iter()
+        .filter_map(|(&pubkey, &stake)| {
+            if stake == 0 {
+                None // Ignore votes from unstaked validators
+            } else {
+                Some((thread_rng().gen::<f64>().powf(1.0 / (stake as f64)), pubkey))
+            }
+        })
+        .collect::<Vec<_>>();
+    pubkey_with_weight.sort_by(|(w1, _), (w2, _)| w1.partial_cmp(w2).unwrap());
+    pubkey_with_weight.into_iter().map(|(_, pubkey)| pubkey)
 }
 
 pub(crate) fn next_leader_tpu(

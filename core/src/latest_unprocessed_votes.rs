@@ -1,12 +1,13 @@
 use {
     crate::{
+        banking_stage::weighted_random_order_by_stake,
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket}
     },
     solana_perf::packet::{Packet, PacketBatch},
+    solana_runtime::bank::Bank,
     solana_sdk::{
         clock::Slot,
-        message::Message,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
     },
@@ -17,7 +18,7 @@ use {
         rc::Rc,
         sync::{
             atomic::{AtomicUsize, Ordering},
-            RwLock,
+            Arc, RwLock,
         },
     },
 };
@@ -29,7 +30,7 @@ pub enum VoteSource {
 }
 
 /// Holds deserialized vote messages as well as their source, foward status and slot
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DeserializedVotePacket {
     vote_source: VoteSource,
     pubkey: Pubkey,
@@ -73,7 +74,7 @@ impl DeserializedVotePacket {
         }
     }
 
-    pub fn get_vote_packet(&mut self) -> Rc<ImmutableDeserializedPacket> {
+    pub fn get_vote_packet(&self) -> Rc<ImmutableDeserializedPacket> {
         self.vote.as_ref().unwrap().clone()
     }
 
@@ -211,24 +212,34 @@ impl LatestUnprocessedVotes {
     }
 
     /// Returns how many packets were forwardable
-    /// TODO: Should this also be prioritized by stake?
+    /// Performs a weighted random order based on stake and stops forwarding at the first error
+    /// Votes from validators with 0 stakes are ignored
     pub fn get_and_insert_forwardable_packets(
         &self,
+        bank: &Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> usize {
+        let mut continue_forwarding = true;
         if let Ok(latest_votes_per_pubkey) = self.latest_votes_per_pubkey.read() {
-            return latest_votes_per_pubkey
-                .values()
-                .filter(|lock| {
-                    if let Ok(cell) = lock.write() {
-                        if let Ok(mut vote) = cell.try_borrow_mut() {
-                            if !vote.is_processed() && !vote.is_forwarded() {
-                                if forward_packet_batches_by_accounts
-                                    .add_packet(vote.vote.as_ref().unwrap().clone())
-                                {
-                                    vote.forwarded = true;
+            return weighted_random_order_by_stake(bank)
+                .filter(|pubkey| {
+                    if let Some(lock) = latest_votes_per_pubkey.get(&pubkey) {
+                        if let Ok(cell) = lock.write() {
+                            if let Ok(mut vote) = cell.try_borrow_mut() {
+                                if !vote.is_processed() && !vote.is_forwarded() {
+                                    if continue_forwarding {
+                                        if forward_packet_batches_by_accounts
+                                            .add_packet(vote.vote.as_ref().unwrap().clone())
+                                        {
+                                            vote.forwarded = true;
+                                        } else {
+                                            // To match behavior of regular transactions we stop
+                                            // forwarding votes as soon as one fails
+                                            continue_forwarding = false;
+                                        }
+                                    }
+                                    return true;
                                 }
-                                return true;
                             }
                         }
                     }
@@ -241,7 +252,6 @@ impl LatestUnprocessedVotes {
 
     /// Sometimes we forward and hold the packets, sometimes we forward and clear.
     /// This also clears all gosisp votes since by definition they have been forwarded
-    /// TODO: Do we want this logic to apply to vote txs or should we treat them the same
     pub fn clear_forwarded_packets(&self) {
         if let Ok(latest_votes_per_pubkey) = self.latest_votes_per_pubkey.read() {
             latest_votes_per_pubkey
