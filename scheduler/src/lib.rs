@@ -144,8 +144,7 @@ impl AddressBook {
                             }
                             RequestedUsage::Writable => {
                                 // skip insert if existing
-                                page.contended_unique_weights
-                                    .insert((*unique_weight).clone());
+                                page.contended_unique_weights.insert(*unique_weight);
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
