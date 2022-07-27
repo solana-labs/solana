@@ -22,7 +22,7 @@ const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
 const SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
 const SAMPLE_INTERVAL_CPU_MS: u64 = MS_PER_S;
-const SAMPLE_INTERVAL_IO_MS: u64 = MS_PER_S;
+const SAMPLE_INTERVAL_DISK_MS: u64 = MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
@@ -727,13 +727,7 @@ impl SystemMonitorService {
                     .saturating_sub(old_stats.time_writing_ms),
                 i64
             ),
-            (
-                "io_in_progress",
-                new_stats
-                    .io_in_progress
-                    .saturating_sub(old_stats.io_in_progress),
-                i64
-            ),
+            ("io_in_progress", new_stats.io_in_progress, i64),
             (
                 "time_io_ms",
                 new_stats.time_io_ms.saturating_sub(old_stats.time_io_ms),
@@ -788,11 +782,7 @@ impl SystemMonitorService {
                     .saturating_sub(old_stats.time_flushing),
                 i64
             ),
-            (
-                "num_disks",
-                new_stats.num_disks.saturating_sub(old_stats.num_disks),
-                i64
-            ),
+            ("num_disks", new_stats.num_disks, i64),
         )
     }
 
@@ -804,11 +794,11 @@ impl SystemMonitorService {
         report_os_disk_stats: bool,
     ) {
         let mut udp_stats = None;
+        let mut disk_stats = None;
         let network_limits_timer = AtomicInterval::default();
         let udp_timer = AtomicInterval::default();
         let mem_timer = AtomicInterval::default();
         let cpu_timer = AtomicInterval::default();
-        let mut disk_stats = None;
         let disk_timer = AtomicInterval::default();
 
         loop {
@@ -829,7 +819,7 @@ impl SystemMonitorService {
             if report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
                 Self::report_cpu_stats();
             }
-            if report_os_disk_stats && disk_timer.should_update(SAMPLE_INTERVAL_IO_MS) {
+            if report_os_disk_stats && disk_timer.should_update(SAMPLE_INTERVAL_DISK_MS) {
                 Self::process_disk_stats(&mut disk_stats);
             }
             sleep(SLEEP_INTERVAL);
@@ -928,19 +918,11 @@ data" as &[u8];
         let mut mock_disk = MOCK_DISK;
         let stats = parse_disk_stats(&mut mock_disk).unwrap();
         assert_eq!(stats.reads_completed, 40883274);
+        assert_eq!(stats.time_flushing, 1122984);
 
         let mut mock_disk = UNEXPECTED_DATA;
         let stats = parse_disk_stats(&mut mock_disk);
         assert!(stats.is_err());
-    }
-
-    #[test]
-    fn test_bw_temp() {
-        solana_logger::setup();
-        let mut disk_stats = None;
-        SystemMonitorService::process_disk_stats(&mut disk_stats);
-        SystemMonitorService::process_disk_stats(&mut disk_stats);
-        SystemMonitorService::process_disk_stats(&mut disk_stats);
     }
 
     #[test]
