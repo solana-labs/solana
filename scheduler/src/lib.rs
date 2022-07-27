@@ -192,7 +192,7 @@ impl AddressBook {
 
         use std::collections::btree_map::Entry;
         let mut newly_uncontended = false;
-        let mut waiter = false;
+        let mut still_queued = false;
 
         match self.map.entry(attempt.address) {
             Entry::Occupied(mut entry) => {
@@ -224,7 +224,7 @@ impl AddressBook {
                 if newly_uncontended {
                     page.current_usage = CurrentUsage::Unused;
                     if !page.contended_unique_weights.is_empty() {
-                        waiter = true;
+                        still_queued = true;
                     }
                 }
             }
@@ -233,7 +233,7 @@ impl AddressBook {
             }
         }
 
-        waiter
+        still_queued
     }
 }
 
