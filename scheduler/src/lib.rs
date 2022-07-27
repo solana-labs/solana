@@ -516,6 +516,7 @@ impl ScheduleStage {
 
         let mut maybe_ee = None;
         let (s, r) = bounded(0);
+        let mut was_some = false;
 
         loop {
             info!("schedule_once!");
@@ -540,11 +541,13 @@ impl ScheduleStage {
                     maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 }
                 send(maybe_ee.as_ref().map(|_| {
+                    was_some = true;
                     to_execute_substage
                 }).unwrap_or(&s),
+                    was_some = false;
                     maybe_ee
                 ) -> res => {
-                    info!("send to execute: {}", maybe_ee.is_some());
+                    info!("send to execute: {}", was_some);
                     res.unwrap();
                     maybe_ee = None;
                 }
