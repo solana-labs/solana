@@ -281,7 +281,6 @@ fn read_io_stats() -> Result<IoStats, String> {
         .arg("-x")
         .output()
         .map_err(|e| e.to_string())?;
-    warn!("stdout = {:?}", output.stdout);
     let mut reader_io = &output.stdout as &[u8];
     parse_io_stats(&mut reader_io)
 }
@@ -297,13 +296,14 @@ fn parse_io_stats(reader_io: &mut impl BufRead) -> Result<IoStats, String> {
         }
 
         let line = line.map_err(|e| e.to_string())?;
-        warn!("line {} = {:?}", line_number, line);
         let values: Vec<_> = line.split_ascii_whitespace().collect();
 
-        if values.len() != 21 {
+        if values.is_empty() {
+            // Filter out empty lines.
+            continue;
+        } else if values.len() != 21 {
             return Err("parse error, expected exactly 21 io stat elements".to_string());
-        }
-        if values[0].starts_with("loop") {
+        } else if values[0].starts_with("loop") {
             // Filter out the loopback io devices as we are only concerned with
             // physical disks.
             continue;
@@ -706,69 +706,70 @@ impl SystemMonitorService {
 
     #[cfg(target_os = "linux")]
     fn report_io_stats() {
-        if let Ok(stats) = read_io_stats() {
-            datapoint_info!(
-                "io-stats",
-                ("read_iops", stats.read_iops, f64),
-                ("read_mbps", stats.read_mbps, f64),
-                (
-                    "read_req_merged_per_second",
-                    stats.read_req_merged_per_second,
-                    f64
-                ),
-                (
-                    "read_req_merged_percent",
-                    stats.read_req_merged_percent,
-                    f64
-                ),
-                ("read_avg_await_ms", stats.read_avg_await_ms, f64),
-                ("read_avg_req_sectors", stats.read_avg_req_sectors, f64),
-                ("write_iops", stats.write_iops, f64),
-                ("write_mbps", stats.write_mbps, f64),
-                (
-                    "write_req_merged_per_second",
-                    stats.write_req_merged_per_second,
-                    f64
-                ),
-                (
-                    "write_req_merged_percent",
-                    stats.write_req_merged_percent,
-                    f64
-                ),
-                ("write_avg_await_ms", stats.write_avg_await_ms, f64),
-                ("write_avg_req_sectors", stats.write_avg_req_sectors, f64),
-                ("discard_iops", stats.discard_iops, f64),
-                ("discard_mbps", stats.discard_mbps, f64),
-                (
-                    "discard_req_merged_per_second",
-                    stats.discard_req_merged_per_second,
-                    f64
-                ),
-                (
-                    "discard_req_merged_percent",
-                    stats.discard_req_merged_percent,
-                    f64
-                ),
-                ("discard_avg_await_ms", stats.discard_avg_await_ms, f64),
-                (
-                    "discard_avg_req_sectors",
-                    stats.discard_avg_req_sectors,
-                    f64
-                ),
-                ("avg_queue_length", stats.avg_queue_length, f64),
-                (
-                    "utilization_percent_avg",
-                    stats.utilization_percent_avg,
-                    f64
-                ),
-                (
-                    "utilization_percent_max",
-                    stats.utilization_percent_max,
-                    f64
-                ),
-            )
-        } else {
-            warn!("read_io_stats returned err");
+        match read_io_stats() {
+            Ok(stats) => {
+                datapoint_info!(
+                    "io-stats",
+                    ("read_iops", stats.read_iops, f64),
+                    ("read_mbps", stats.read_mbps, f64),
+                    (
+                        "read_req_merged_per_second",
+                        stats.read_req_merged_per_second,
+                        f64
+                    ),
+                    (
+                        "read_req_merged_percent",
+                        stats.read_req_merged_percent,
+                        f64
+                    ),
+                    ("read_avg_await_ms", stats.read_avg_await_ms, f64),
+                    ("read_avg_req_sectors", stats.read_avg_req_sectors, f64),
+                    ("write_iops", stats.write_iops, f64),
+                    ("write_mbps", stats.write_mbps, f64),
+                    (
+                        "write_req_merged_per_second",
+                        stats.write_req_merged_per_second,
+                        f64
+                    ),
+                    (
+                        "write_req_merged_percent",
+                        stats.write_req_merged_percent,
+                        f64
+                    ),
+                    ("write_avg_await_ms", stats.write_avg_await_ms, f64),
+                    ("write_avg_req_sectors", stats.write_avg_req_sectors, f64),
+                    ("discard_iops", stats.discard_iops, f64),
+                    ("discard_mbps", stats.discard_mbps, f64),
+                    (
+                        "discard_req_merged_per_second",
+                        stats.discard_req_merged_per_second,
+                        f64
+                    ),
+                    (
+                        "discard_req_merged_percent",
+                        stats.discard_req_merged_percent,
+                        f64
+                    ),
+                    ("discard_avg_await_ms", stats.discard_avg_await_ms, f64),
+                    (
+                        "discard_avg_req_sectors",
+                        stats.discard_avg_req_sectors,
+                        f64
+                    ),
+                    ("avg_queue_length", stats.avg_queue_length, f64),
+                    (
+                        "utilization_percent_avg",
+                        stats.utilization_percent_avg,
+                        f64
+                    ),
+                    (
+                        "utilization_percent_max",
+                        stats.utilization_percent_max,
+                        f64
+                    ),
+                )
+            }
+            Err(e) => warn!("read_io_stats: {}", e),
         }
     }
 
