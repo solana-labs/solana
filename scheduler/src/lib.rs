@@ -304,22 +304,21 @@ fn attempt_lock_for_execution<'a>(
     locks: &'a TransactionAccountLocks,
 ) -> Vec<LockAttempt> {
     // no short-cuircuit; we at least all need to add to the contended queue
-    let mut writable_attempts = locks
+    let writable_lock_iter = locks
         .writable
-        .iter()
+        .iter();
         .copied()
-        .map(|&a| address_book.attempt_lock_address(unique_weight, a, RequestedUsage::Writable))
-        .collect::<Vec<_>>();
-
-    let mut readonly_attempts = locks
+        .map(|a| (a, RequestedUsage::Writable))
+    let readonly_lock_iter = locks
         .readonly
-        .iter()
+        .iter();
         .copied()
-        .map(|&a| address_book.attempt_lock_address(unique_weight, a, RequestedUsage::Readonly))
-        .collect::<Vec<_>>();
+        .map(|a| (a, RequestedUsage::Readonly))
+    let all_iter = writable_lock_iter.chain(readonly_lock_iter);
 
-    writable_attempts.append(&mut readonly_attempts);
-    writable_attempts
+    all_iter
+        .map(|(a, usage)| address_book.attempt_lock_address(unique_weight, a, usage))
+        .collect::<Vec<_>>()
 }
 
 pub struct ScheduleStage {}
