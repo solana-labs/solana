@@ -514,11 +514,11 @@ impl ScheduleStage {
     ) {
         use crossbeam_channel::select;
 
-        info!("schedule_once!");
         let mut maybe_ee = None;
         let (s, r) = bounded(0);
 
         loop {
+            info!("schedule_once!");
 
         //if let Some(ee) = maybe_ee {
             select! {
