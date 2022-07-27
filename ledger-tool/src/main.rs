@@ -278,10 +278,12 @@ fn output_slot(
             output_entry(blockstore, method, slot, entry_index, entry, &mut txes);
         }
 
-        for _ in 0..1000 {
+        for i in 0..1000 {
             error!("started!");
-            for tx in txes.clone() {
-                tx_sender.send(tx).unwrap();
+            for (w, tx) in txes.clone() {
+                let mut w = w.clone();
+                w.ix -= i * 10_000;
+                tx_sender.send((w, tx)).unwrap();
             }
         }
         t1.join().unwrap();
