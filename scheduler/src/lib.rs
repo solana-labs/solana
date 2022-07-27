@@ -340,7 +340,7 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(bool, UniqueWeight, Task)> {
-        let mut heaviest_by_address = None
+        let mut heaviest_by_address: Option<UniqueWeight> = None;
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = &address_book
                 .map
