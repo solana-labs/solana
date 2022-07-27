@@ -43,7 +43,7 @@ bincode = "1.3.3"
 bitflags = "1.3.1"
 borsh = "0.9.3"
 bs58 = "0.4.0"
-bytemuck = { version = "1.10.0", features = ["derive"] }
+bytemuck = { version = "1.11.0", features = ["derive"] }
 byteorder = { version = "1.4.3", optional = true }
 chrono = { default-features = false, features = ["alloc"], version = "0.4", optional = true }
 curve25519-dalek = { version = "3.2.1", optional = true }
