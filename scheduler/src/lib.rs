@@ -541,13 +541,12 @@ impl ScheduleStage {
                 }
                 send(maybe_ee.as_ref().map(|_| {
                     to_execute_substage
-                }).unwrap_or(&s), {
-                    let a = maybe_ee;
-                    maybe_ee = None;
-                    a
-                }) -> res => {
+                }).unwrap_or(&s),
+                    maybe_ee
+                ) -> res => {
                     info!("send to execute");
                     res.unwrap();
+                    maybe_ee = None;
                 }
                 //default => { std::thread::sleep(std::time::Duration::from_millis(1)) }
             }
