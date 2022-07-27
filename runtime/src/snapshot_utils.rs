@@ -3877,13 +3877,14 @@ mod tests {
 
     #[test]
     fn test_verify_slot_deltas_good() {
+        // NOTE: slot deltas do not need to be sorted
         let slot_deltas = vec![
-            (111, true, Status::default()),
             (222, true, Status::default()),
             (333, true, Status::default()),
+            (111, true, Status::default()),
         ];
 
-        let bank_slot = 444;
+        let bank_slot = 333;
         let result = verify_slot_deltas(slot_deltas.as_slice(), bank_slot);
         assert_eq!(result, Ok(()));
     }
@@ -3892,11 +3893,11 @@ mod tests {
     fn test_verify_slot_deltas_bad_slot_not_root() {
         let slot_deltas = vec![
             (111, true, Status::default()),
-            (222, false, Status::default()),
+            (222, false, Status::default()), // <-- slot is not a root
             (333, true, Status::default()),
         ];
 
-        let bank_slot = 444;
+        let bank_slot = 333;
         let result = verify_slot_deltas(slot_deltas.as_slice(), bank_slot);
         assert_eq!(result, Err(VerifySlotDeltasError::SlotIsNotRoot(222)));
     }
@@ -3904,9 +3905,9 @@ mod tests {
     #[test]
     fn test_verify_slot_deltas_bad_slot_greater_than_bank() {
         let slot_deltas = vec![
-            (111, true, Status::default()),
             (222, true, Status::default()),
-            (555, true, Status::default()),
+            (111, true, Status::default()),
+            (555, true, Status::default()), // <-- slot is greater than the bank slot
         ];
 
         let bank_slot = 444;
@@ -3915,7 +3916,7 @@ mod tests {
             result,
             Err(VerifySlotDeltasError::SlotGreaterThanMaxRoot(
                 555, bank_slot
-            ))
+            )),
         );
     }
 
