@@ -490,7 +490,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-    ) -> Option<ExecutionEnvironment> {
+    ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee = Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
             .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
         maybe_ee
