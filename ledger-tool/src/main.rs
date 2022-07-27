@@ -278,7 +278,7 @@ fn output_slot(
             output_entry(blockstore, method, slot, entry_index, entry, &mut txes);
         }
 
-        for _ in 0..1 {
+        for _ in 0..100 {
             error!("started!");
             for tx in txes.clone() {
                 tx_sender.send(tx).unwrap();
