@@ -253,7 +253,7 @@ fn output_slot(
         loop {
             let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
             //info!("execute substage: #{} {:#?}", step, ee.task.tx.signature());
-            std::thread::sleep(std::time::Duration::from_micros(50))
+            std::thread::sleep(std::time::Duration::from_micros(50));
             post_execute_env_sender.send(ee).unwrap();
             step += 1;
         }
