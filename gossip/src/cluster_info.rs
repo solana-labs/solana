@@ -1421,6 +1421,7 @@ impl ClusterInfo {
         Vec<(SocketAddr, Ping)>,     // Ping packets.
         Vec<(SocketAddr, Protocol)>, // Pull requests
     ) {
+        info!("greg_new_pull_request()");
         let now = timestamp();
         let mut pings = Vec::new();
         let mut pulls = {
@@ -1478,6 +1479,7 @@ impl ClusterInfo {
         }
     }
     fn new_push_requests(&self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
+        info!("greg_new_push_request()");
         let self_id = self.id();
         let mut push_messages = {
             let _st = ScopedTimer::from(&self.stats.new_push_requests);
@@ -2895,6 +2897,8 @@ impl Node {
     ) -> Node {
         let (gossip_port, (gossip, ip_echo)) =
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
+
+        info!("greg_gossip_port: {}", gossip_port);
 
         let (tvu_port, tvu_sockets) =
             multi_bind_in_range(bind_ip_addr, port_range, 8).expect("tvu multi_bind");

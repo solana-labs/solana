@@ -43,7 +43,7 @@ impl GossipService {
     ) -> Self {
         let (request_sender, request_receiver) = unbounded();
         let gossip_socket = Arc::new(gossip_socket);
-        trace!(
+        info!(
             "GossipService: id: {}, listening on: {:?}",
             &cluster_info.id(),
             gossip_socket.local_addr().unwrap()
