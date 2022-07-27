@@ -535,10 +535,11 @@ impl ScheduleStage {
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
 
+                    maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+
                     // async-ly propagate the result to rpc subsystems
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap();
-                    maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 }
                 send(maybe_ee.as_ref().map(|_| {
                     was_some = true;
