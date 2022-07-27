@@ -350,7 +350,7 @@ impl ScheduleStage {
     fn get_newly_u_u_w<'a>(
         address: &'a Pubkey,
         address_book: &'a AddressBook,
-    ) -> &'a std::collections::BTreeSet<usize> {
+    ) -> &'a std::collections::BTreeSet<UniqueWeight> {
         &address_book
                 .map
                 .get(address)
