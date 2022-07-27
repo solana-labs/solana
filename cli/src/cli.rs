@@ -103,6 +103,7 @@ pub enum CliCommand {
     ShowStakes {
         use_lamports_unit: bool,
         vote_account_pubkeys: Option<Vec<Pubkey>>,
+        withdraw_authority: Option<Pubkey>,
     },
     ShowValidators {
         use_lamports_unit: bool,
@@ -415,6 +416,9 @@ pub enum CliCommand {
         derived_address_seed: Option<String>,
         derived_address_program_id: Option<Pubkey>,
     },
+    StakeMinimumDelegation {
+        use_lamports_unit: bool,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -705,6 +709,7 @@ pub fn parse_command(
         }
         ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
+        ("stake-minimum-delegation", Some(matches)) => parse_stake_minimum_delegation(matches),
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
             ("publish", Some(matches)) => {
@@ -904,11 +909,13 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
         CliCommand::ShowStakes {
             use_lamports_unit,
             vote_account_pubkeys,
+            withdraw_authority,
         } => process_show_stakes(
             &rpc_client,
             config,
             *use_lamports_unit,
             vote_account_pubkeys.as_deref(),
+            withdraw_authority.as_ref(),
         ),
         CliCommand::WaitForMaxStake { max_stake_percent } => {
             process_wait_for_max_stake(&rpc_client, config, *max_stake_percent)
@@ -1298,6 +1305,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed.as_ref(),
             *fee_payer,
         ),
+        CliCommand::StakeMinimumDelegation { use_lamports_unit } => {
+            process_stake_minimum_delegation(&rpc_client, config, *use_lamports_unit)
+        }
 
         // Validator Info Commands
 
@@ -1920,7 +1930,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_resolve_signer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::ResolveSigner(Some(keypair_file.clone())),
+                command: CliCommand::ResolveSigner(Some(keypair_file)),
                 signers: vec![],
             }
         );

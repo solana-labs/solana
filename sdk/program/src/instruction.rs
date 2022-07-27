@@ -253,9 +253,9 @@ pub enum InstructionError {
     #[error("Account data allocation exceeded the maximum accounts data size limit")]
     MaxAccountsDataSizeExceeded,
 
-    /// Active vote account close
-    #[error("Cannot close vote account unless it stopped voting at least one full epoch ago")]
-    ActiveVoteAccountClose,
+    /// Max accounts exceeded
+    #[error("Max accounts exceeded")]
+    MaxAccountsExceeded,
     // Note: For any new error added here an equivalent ProgramError and its
     // conversions must also be added
 }

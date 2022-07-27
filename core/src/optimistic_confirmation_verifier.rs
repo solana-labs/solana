@@ -29,11 +29,11 @@ impl OptimisticConfirmationVerifier {
     ) -> Vec<(Slot, Hash)> {
         let root = root_bank.slot();
         let root_ancestors = &root_bank.ancestors;
-        let mut slots_before_root = self
+        let slots_after_root = self
             .unchecked_slots
             .split_off(&((root + 1), Hash::default()));
         // `slots_before_root` now contains all slots <= root
-        std::mem::swap(&mut slots_before_root, &mut self.unchecked_slots);
+        let slots_before_root = std::mem::replace(&mut self.unchecked_slots, slots_after_root);
         slots_before_root
             .into_iter()
             .filter(|(optimistic_slot, optimistic_hash)| {

@@ -67,12 +67,16 @@ impl BucketMapHolderStats {
         }
     }
 
-    pub fn inc_insert(&self, _bin: usize) {
-        self.inserts.fetch_add(1, Ordering::Relaxed);
-        self.count.fetch_add(1, Ordering::Relaxed);
+    pub fn inc_insert(&self) {
+        self.inc_insert_count(1);
     }
 
-    pub fn inc_delete(&self, _bin: usize) {
+    pub fn inc_insert_count(&self, count: u64) {
+        self.inserts.fetch_add(count, Ordering::Relaxed);
+        self.count.fetch_add(count as usize, Ordering::Relaxed);
+    }
+
+    pub fn inc_delete(&self) {
         self.deletes.fetch_add(1, Ordering::Relaxed);
         self.count.fetch_sub(1, Ordering::Relaxed);
     }
@@ -402,6 +406,16 @@ impl BucketMapHolderStats {
                 (
                     "disk_index_flush_file_us",
                     disk.map(|disk| disk.stats.index.flush_file_us.swap(0, Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
+                    "disk_index_find_entry_mut_us",
+                    disk.map(|disk| disk
+                        .stats
+                        .index
+                        .find_entry_mut_us
+                        .swap(0, Ordering::Relaxed))
                         .unwrap_or_default(),
                     i64
                 ),

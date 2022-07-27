@@ -208,14 +208,17 @@ export function AccountHeader({
     let token;
     let unverified = false;
 
-    if (tokenDetails) {
+    // Fall back to legacy token list when there is stub metadata (blank uri), updatable by default by the mint authority
+    if (!data?.nftData?.metadata.data.uri && tokenDetails) {
       token = tokenDetails;
-    } else {
+    } else if (data?.nftData) {
       token = {
         logoURI: data?.nftData?.json?.image,
-        name: data?.nftData?.json?.name,
+        name: data?.nftData?.json?.name ?? data?.nftData.metadata.data.name,
       };
       unverified = true;
+    } else if (tokenDetails) {
+      token = tokenDetails;
     }
 
     return (
@@ -228,16 +231,14 @@ export function AccountHeader({
           </div>
         )}
         <div className="col-auto">
-          <div className="avatar avatar-lg header-avatar-top">
+          <div className="avatar-img border border-4 border-body">
             {token?.logoURI ? (
-              <div className="position-relative avatar-img border border-4 border-body">
-                <Image
-                  src={`/api/image-proxy?imageUrl=${token.logoURI}`}
-                  alt="token logo"
-                  layout="fill"
-                  className="rounded-circle"
-                />
-              </div>
+              <Image
+                src={`/api/image-proxy?imageUrl=${token.logoURI}`}
+                alt="token logo"
+                layout="fill"
+                className="rounded-circle"
+              />
             ) : (
               <Identicon
                 address={address}
@@ -298,7 +299,7 @@ function DetailsSections({
     tabComponents.filter((tabComponent) => tabComponent.tab.slug === tab)
       .length === 0
   ) {
-    router.push(`/address/${address}`);
+    router.push(clusterPath(`/address/${address}`, router.asPath));
     return null;
   } else if (tab) {
     moreTab = tab as MoreTabs;
@@ -596,8 +597,8 @@ function AnchorProgramLink({
   address: string;
   pubkey: PublicKey;
 }) {
-  const router = useRouter();
   const { url } = useCluster();
+  const router = useRouter();
   const anchorProgram = useAnchorProgram(pubkey.toString() ?? "", url);
 
   if (!anchorProgram) {
@@ -627,8 +628,8 @@ function AccountDataLink({
   tab: Tab;
   programId: PublicKey | undefined;
 }) {
-  const router = useRouter();
   const { url } = useCluster();
+  const router = useRouter();
   const accountAnchorProgram = useAnchorProgram(
     programId?.toString() ?? "",
     url

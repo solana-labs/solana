@@ -24,4 +24,4 @@ steps:
       WARMUP_SLOTS_BEFORE_TEST: 400
       NUMBER_OF_OFFLINE_NODES: 1
     agents:
-      - "queue=gce-deploy"
+      queue: "gce-deploy"

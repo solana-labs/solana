@@ -807,6 +807,7 @@ $(
     install-libssl-compatability.sh \
     install-redis.sh \
     install-rsync.sh \
+    install-perf.sh \
     localtime.sh \
     network-config.sh \
     remove-docker-interface.sh \

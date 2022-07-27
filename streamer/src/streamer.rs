@@ -9,7 +9,7 @@ use {
     },
     crossbeam_channel::{Receiver, RecvTimeoutError, SendError, Sender},
     histogram::Histogram,
-    solana_sdk::{packet::Packet, timing::timestamp},
+    solana_sdk::{packet::Packet, pubkey::Pubkey, timing::timestamp},
     std::{
         cmp::Reverse,
         collections::HashMap,
@@ -23,6 +23,14 @@ use {
     },
     thiserror::Error,
 };
+
+// Total stake and nodes => stake map
+#[derive(Default)]
+pub struct StakedNodes {
+    pub total_stake: u64,
+    pub ip_stake_map: HashMap<IpAddr, u64>,
+    pub pubkey_stake_map: HashMap<Pubkey, u64>,
+}
 
 pub type PacketBatchReceiver = Receiver<PacketBatch>;
 pub type PacketBatchSender = Sender<PacketBatch>;

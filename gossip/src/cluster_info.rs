@@ -218,16 +218,16 @@ impl Signable for PruneData {
 
     fn signable_data(&self) -> Cow<[u8]> {
         #[derive(Serialize)]
-        struct SignData {
-            pubkey: Pubkey,
-            prunes: Vec<Pubkey>,
-            destination: Pubkey,
+        struct SignData<'a> {
+            pubkey: &'a Pubkey,
+            prunes: &'a [Pubkey],
+            destination: &'a Pubkey,
             wallclock: u64,
         }
         let data = SignData {
-            pubkey: self.pubkey,
-            prunes: self.prunes.clone(),
-            destination: self.destination,
+            pubkey: &self.pubkey,
+            prunes: &self.prunes,
+            destination: &self.destination,
             wallclock: self.wallclock,
         };
         Cow::Owned(serialize(&data).expect("serialize PruneData"))
@@ -1556,6 +1556,7 @@ impl ClusterInfo {
         sender: &PacketBatchSender,
         generate_pull_requests: bool,
     ) -> Result<(), GossipError> {
+        let _st = ScopedTimer::from(&self.stats.gossip_transmit_loop_time);
         let reqs = self.generate_new_gossip_requests(
             thread_pool,
             gossip_validators,
@@ -1573,6 +1574,9 @@ impl ClusterInfo {
                 .add_relaxed(packet_batch.len() as u64);
             sender.send(packet_batch)?;
         }
+        self.stats
+            .gossip_transmit_loop_iterations_since_last_report
+            .add_relaxed(1);
         Ok(())
     }
 
@@ -2435,6 +2439,9 @@ impl ClusterInfo {
             stakes,
             response_sender,
         );
+        self.stats
+            .process_gossip_packets_iterations_since_last_report
+            .add_relaxed(1);
         Ok(())
     }
 
@@ -2490,6 +2497,7 @@ impl ClusterInfo {
         last_print: &mut Instant,
         should_check_duplicate_instance: bool,
     ) -> Result<(), GossipError> {
+        let _st = ScopedTimer::from(&self.stats.gossip_listen_loop_time);
         const RECV_TIMEOUT: Duration = Duration::from_secs(1);
         const SUBMIT_GOSSIP_STATS_INTERVAL: Duration = Duration::from_secs(2);
         let mut packets = VecDeque::from(receiver.recv_timeout(RECV_TIMEOUT)?);
@@ -2528,6 +2536,9 @@ impl ClusterInfo {
             submit_gossip_stats(&self.stats, &self.gossip, &stakes);
             *last_print = Instant::now();
         }
+        self.stats
+            .gossip_listen_loop_iterations_since_last_report
+            .add_relaxed(1);
         Ok(())
     }
 
@@ -3863,6 +3874,9 @@ RPC Enabled Nodes: 1"#;
         tower.push(slot);
         tower.remove(23);
         let vote = new_vote_transaction(&mut rng, vec![slot]);
+        // New versioned-crds-value should have wallclock later than existing
+        // entries, otherwise might not get inserted into the table.
+        sleep(Duration::from_millis(5));
         cluster_info.push_vote(&tower, vote);
         let vote_slots = get_vote_slots(&cluster_info);
         assert_eq!(vote_slots.len(), MAX_LOCKOUT_HISTORY);

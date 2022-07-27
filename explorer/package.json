@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@blazity/next-image-proxy": "^1.0.2",
-    "@blockworks-foundation/mango-client": "^3.6.0",
+    "@blockworks-foundation/mango-client": "^3.6.7",
     "@bonfida/bot": "^0.5.3",
     "@bonfida/spl-name-service": "^0.1.36",
     "@cloudflare/stream-react": "^1.8.0",
@@ -22,7 +22,7 @@
     "@sentry/nextjs": "^7.1.1",
     "@solana/buffer-layout": "^3.0.0",
     "@solana/spl-token-registry": "^0.2.4502",
-    "@solana/web3.js": "^1.44.0",
+    "@solana/web3.js": "^1.50.0",
     "bignumber.js": "^9.0.2",
     "bn.js": "^5.2.1",
     "bootstrap": "^5.1.3",
@@ -41,7 +41,9 @@
     "react-json-view": "^1.21.3",
     "react-moment": "^1.1.2",
     "react-select": "^4.3.1",
-    "sharp": "^0.30.6"
+    "sharp": "^0.30.6",
+    "sass": "^1.53.0",
+    "superstruct": "^0.15.3"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

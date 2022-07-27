@@ -21,11 +21,13 @@ fn main() {
     };
     // When run as a cargo subcommand, the first program argument is the subcommand name.
     // Remove it
-    if let Some(arg1) = args.get(1) {
-        if arg1 == "build-bpf" {
-            args.remove(1);
+    if let Some(arg0) = args.get(0) {
+        if arg0 == "build-bpf" {
+            args.remove(0);
         }
     }
+    args.push("--arch".to_string());
+    args.push("bpf".to_string());
     print!("cargo-build-bpf child: {}", program.display());
     for a in &args {
         print!(" {}", a);

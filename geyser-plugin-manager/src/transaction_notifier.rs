@@ -3,7 +3,7 @@ use {
     crate::geyser_plugin_manager::GeyserPluginManager,
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaTransactionInfo, ReplicaTransactionInfoVersions,
+        ReplicaTransactionInfoV2, ReplicaTransactionInfoVersions,
     },
     solana_measure::measure::Measure,
     solana_metrics::*,
@@ -25,13 +25,18 @@ impl TransactionNotifier for TransactionNotifierImpl {
     fn notify_transaction(
         &self,
         slot: Slot,
+        index: usize,
         signature: &Signature,
         transaction_status_meta: &TransactionStatusMeta,
         transaction: &SanitizedTransaction,
     ) {
         let mut measure = Measure::start("geyser-plugin-notify_plugins_of_transaction_info");
-        let transaction_log_info =
-            Self::build_replica_transaction_info(signature, transaction_status_meta, transaction);
+        let transaction_log_info = Self::build_replica_transaction_info(
+            index,
+            signature,
+            transaction_status_meta,
+            transaction,
+        );
 
         let mut plugin_manager = self.plugin_manager.write().unwrap();
 
@@ -44,7 +49,7 @@ impl TransactionNotifier for TransactionNotifierImpl {
                 continue;
             }
             match plugin.notify_transaction(
-                ReplicaTransactionInfoVersions::V0_0_1(&transaction_log_info),
+                ReplicaTransactionInfoVersions::V0_0_2(&transaction_log_info),
                 slot,
             ) {
                 Err(err) => {
@@ -78,11 +83,13 @@ impl TransactionNotifierImpl {
     }
 
     fn build_replica_transaction_info<'a>(
+        index: usize,
         signature: &'a Signature,
         transaction_status_meta: &'a TransactionStatusMeta,
         transaction: &'a SanitizedTransaction,
-    ) -> ReplicaTransactionInfo<'a> {
-        ReplicaTransactionInfo {
+    ) -> ReplicaTransactionInfoV2<'a> {
+        ReplicaTransactionInfoV2 {
+            index,
             signature,
             is_vote: transaction.is_simple_vote_transaction(),
             transaction,

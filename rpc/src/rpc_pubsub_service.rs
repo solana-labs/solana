@@ -193,10 +193,10 @@ pub struct TestBroadcastReceiver {
 #[cfg(test)]
 impl TestBroadcastReceiver {
     pub fn recv(&mut self) -> String {
-        return match self.recv_timeout(std::time::Duration::from_secs(10)) {
+        match self.recv_timeout(std::time::Duration::from_secs(10)) {
             Err(err) => panic!("broadcast receiver error: {}", err),
             Ok(str) => str,
-        };
+        }
     }
 
     pub fn recv_timeout(&mut self, timeout: std::time::Duration) -> Result<String, String> {

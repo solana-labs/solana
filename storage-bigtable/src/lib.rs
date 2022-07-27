@@ -4,7 +4,7 @@ use {
     crate::bigtable::RowKey,
     log::*,
     serde::{Deserialize, Serialize},
-    solana_metrics::inc_new_counter_debug,
+    solana_metrics::{datapoint_info, inc_new_counter_debug},
     solana_sdk::{
         clock::{Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -552,6 +552,68 @@ impl LedgerStorage {
         Ok(transaction_info.into())
     }
 
+    // Fetches and gets a vector of confirmed transactions via a multirow fetch
+    pub async fn get_confirmed_transactions(
+        &self,
+        signatures: &[Signature],
+    ) -> Result<Vec<ConfirmedTransactionWithStatusMeta>> {
+        debug!(
+            "LedgerStorage::get_confirmed_transactions request received: {:?}",
+            signatures
+        );
+        inc_new_counter_debug!("storage-bigtable-query", 1);
+        let mut bigtable = self.connection.client();
+
+        // Fetch transactions info
+        let keys = signatures.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let cells = bigtable
+            .get_bincode_cells::<TransactionInfo>("tx", &keys)
+            .await?;
+
+        // Collect by slot
+        let mut order: Vec<(Slot, u32, String)> = Vec::new();
+        let mut slots: HashSet<Slot> = HashSet::new();
+        for cell in cells {
+            if let (signature, Ok(TransactionInfo { slot, index, .. })) = cell {
+                order.push((slot, index, signature));
+                slots.insert(slot);
+            }
+        }
+
+        // Fetch blocks
+        let blocks = self
+            .get_confirmed_blocks_with_data(&slots.into_iter().collect::<Vec<_>>())
+            .await?
+            .collect::<HashMap<_, _>>();
+
+        // Extract transactions
+        Ok(order
+            .into_iter()
+            .filter_map(|(slot, index, signature)| {
+                blocks.get(&slot).and_then(|block| {
+                    block
+                        .transactions
+                        .get(index as usize)
+                        .and_then(|tx_with_meta| {
+                            if tx_with_meta.transaction_signature().to_string() != *signature {
+                                warn!(
+                                    "Transaction info or confirmed block for {} is corrupt",
+                                    signature
+                                );
+                                None
+                            } else {
+                                Some(ConfirmedTransactionWithStatusMeta {
+                                    slot,
+                                    tx_with_meta: tx_with_meta.clone(),
+                                    block_time: block.block_time,
+                                })
+                            }
+                        })
+                })
+            })
+            .collect::<Vec<_>>())
+    }
+
     /// Fetch a confirmed transaction
     pub async fn get_confirmed_transaction(
         &self,
@@ -855,11 +917,12 @@ impl LedgerStorage {
             .connection
             .put_protobuf_cells_with_retry::<generated::ConfirmedBlock>("blocks", &blocks_cells)
             .await?;
-        info!(
-            "uploaded block for slot {}: {} transactions, {} bytes",
-            slot, num_transactions, bytes_written
+        datapoint_info!(
+            "storage-bigtable-upload-block",
+            ("slot", slot, i64),
+            ("transactions", num_transactions, i64),
+            ("bytes", bytes_written, i64),
         );
-
         Ok(())
     }
 
