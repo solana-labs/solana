@@ -350,10 +350,10 @@ impl ScheduleStage {
             if let Some(uw) = newly_uncontended_unique_weights.last() {
                 if let Some(heaviest_by_address) = heaviest_by_address {
                     if uw > heaviest_by_address {
-                        heaviest_by_address = Some(uw);
+                        heaviest_by_address = Some(*uw);
                     }
                 } else {
-                    heaviest_by_address = Some(uw);
+                    heaviest_by_address = Some(*uw);
                 }
             }
         }
