@@ -306,14 +306,14 @@ fn attempt_lock_for_execution<'a>(
     // no short-cuircuit; we at least all need to add to the contended queue
     let writable_lock_iter = locks
         .writable
-        .iter();
+        .iter()
         .copied()
-        .map(|a| (a, RequestedUsage::Writable))
+        .map(|a| (a, RequestedUsage::Writable));
     let readonly_lock_iter = locks
         .readonly
         .iter();
         .copied()
-        .map(|a| (a, RequestedUsage::Readonly))
+        .map(|a| (a, RequestedUsage::Readonly));
     let all_iter = writable_lock_iter.chain(readonly_lock_iter);
 
     all_iter
