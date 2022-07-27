@@ -339,11 +339,9 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn select_next_task(
-        runnable_queue: &mut TaskQueue,
-        contended_queue: &mut TaskQueue,
+    fn get_weight_from_contended(
         address_book: &mut AddressBook,
-    ) -> Option<(bool, UniqueWeight, Task)> {
+    ) {
         let mut heaviest_by_address: Option<UniqueWeight> = None;
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = &address_book
@@ -361,9 +359,17 @@ impl ScheduleStage {
                 }
             }
         }
+        heaviest_by_address
+    }
 
+    #[inline(never)]
+    fn select_next_task(
+        runnable_queue: &mut TaskQueue,
+        contended_queue: &mut TaskQueue,
+        address_book: &mut AddressBook,
+    ) -> Option<(bool, UniqueWeight, Task)> {
         match (
-            heaviest_by_address,
+            Self::get_weight_from_contended(),
             runnable_queue.next_task_unique_weight(),
         ) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
