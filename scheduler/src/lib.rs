@@ -523,11 +523,13 @@ impl ScheduleStage {
         //if let Some(ee) = maybe_ee {
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
+                    info!("recv from previous");
                     let weighted_tx = weighted_tx.unwrap();
                     Self::register_runnable_task(weighted_tx, runnable_queue);
                     maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 }
                 recv(from_execute_substage) -> processed_execution_environment => {
+                    info!("recv from execute");
                     let mut processed_execution_environment = processed_execution_environment.unwrap();
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
@@ -538,6 +540,7 @@ impl ScheduleStage {
                     maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 }
                 send(maybe_ee.as_ref().map(|_| to_execute_substage).unwrap_or(&s), {
+                    info!("send to execute");
                     let a = maybe_ee;
                     maybe_ee = None;
                     a
