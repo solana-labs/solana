@@ -307,14 +307,14 @@ fn attempt_lock_for_execution<'a>(
     let mut writable_attempts = locks
         .writable
         .iter()
-        .cloned()
+        .copied()
         .map(|&a| address_book.attempt_lock_address(unique_weight, a, RequestedUsage::Writable))
         .collect::<Vec<_>>();
 
     let mut readonly_attempts = locks
         .readonly
         .iter()
-        .cloned()
+        .copied()
         .map(|&a| address_book.attempt_lock_address(unique_weight, a, RequestedUsage::Readonly))
         .collect::<Vec<_>>();
 
