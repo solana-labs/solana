@@ -253,7 +253,7 @@ fn output_slot(
         let mut step = 0;
         loop {
             let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
-            //info!("execute substage: #{} {:#?}", step, ee.task.tx.signature());
+            info!("execute substage: #{} {:#?}", step, ee.task.tx.signature());
             std::thread::sleep(std::time::Duration::from_micros(50));
             post_execute_env_sender.send(ee).unwrap();
             step += 1;
@@ -264,7 +264,7 @@ fn output_slot(
         let mut step = 0;
         loop {
             let ee = post_schedule_env_receiver.recv().unwrap();
-            //info!("post schedule stage: #{} {:#?}", step, ee.task.tx.signature());
+            info!("post schedule stage: #{} {:#?}", step, ee.task.tx.signature());
             if step % 1966 == 0 {
                 error!("finished!: {}", step);
             }
