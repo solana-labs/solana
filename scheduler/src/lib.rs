@@ -508,9 +508,9 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         from_previous_stage: &crossbeam_channel::Receiver<(Weight, Box<SanitizedTransaction>)>,
-        to_execute_substage: &crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
-        from_execute_substage: &crossbeam_channel::Receiver<ExecutionEnvironment>,
-        to_next_stage: &crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
+        to_execute_substage: &crossbeam_channel::Sender<Option<Box<ExecutionEnvironment>>>, // ideally want to stop wrapping with Option<...>...
+        from_execute_substage: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
+        to_next_stage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>, // assume unbounded
     ) {
         use crossbeam_channel::select;
 
