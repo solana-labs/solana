@@ -234,7 +234,7 @@ fn output_slot(
         }
     }
 
-    let (tx_sender, tx_receiver) = crossbeam_channel::unbounded();
+    let (tx_sender, tx_receiver) = crossbeam_channel::bounded(10_000);
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(8);
     let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::bounded(100);
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
