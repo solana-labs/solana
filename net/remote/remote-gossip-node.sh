@@ -441,6 +441,10 @@ EOF
         args+=(--keypair config/validator-identity.json)
       fi
 
+      echo "greg - running write keys"
+      gossip-only --account-file gossip-only/src/accounts.yaml --write-keys --num-keys 10
+
+
       if [[ ${extraPrimordialStakes} -eq 0 ]]; then
         echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
         multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
