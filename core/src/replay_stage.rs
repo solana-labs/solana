@@ -56,6 +56,7 @@ use {
     },
     solana_sdk::{
         clock::{BankId, Slot, MAX_PROCESSING_AGE, NUM_CONSECUTIVE_LEADER_SLOTS},
+        feature_set,
         genesis_config::ClusterType,
         hash::Hash,
         pubkey::Pubkey,
@@ -64,7 +65,7 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
-    solana_vote_program::vote_state::VoteTransaction,
+    solana_vote_program::vote_state::{CompactVoteStateUpdate, VoteTransaction},
     std::{
         collections::{HashMap, HashSet},
         result,
@@ -1980,6 +1981,16 @@ impl ReplayStage {
         };
 
         // Send our last few votes along with the new one
+        // Compact the vote state update before sending
+        let should_compact = bank
+            .feature_set
+            .is_active(&feature_set::compact_vote_state_updates::id());
+        let vote = match (should_compact, vote) {
+            (true, VoteTransaction::VoteStateUpdate(vote_state_update)) => {
+                VoteTransaction::from(CompactVoteStateUpdate::from(vote_state_update))
+            }
+            (_, vote) => vote,
+        };
         let vote_ix = switch_fork_decision
             .to_vote_instruction(
                 vote,
