@@ -432,9 +432,7 @@ impl ScheduleStage {
                 attempt_lock_for_execution(address_book, &unique_weight, &message_hash, &locks);
             let is_success = lock_attempts.iter().all(|g| g.is_success());
 
-            if is_success {
-                return Some((unique_weight, next_task, lock_attempts));
-            } else {
+            if !is_success {
                 //info!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
@@ -442,7 +440,10 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 contended_queue.add(unique_weight, next_task);
+                continue;
             }
+
+            return Some((unique_weight, next_task, lock_attempts));
         }
 
         None
