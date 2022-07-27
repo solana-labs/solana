@@ -339,16 +339,23 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
+    fn get_newly_u_u_w(
+        address_book: &mut AddressBook,
+    ) -> usize {
+        &address_book
+                .map
+                .get(address)
+                .unwrap()
+                .contended_unique_weights
+    }
+
+    #[inline(never)]
     fn get_weight_from_contended(
         address_book: &mut AddressBook,
     ) -> Option<UniqueWeight> {
         let mut heaviest_by_address: Option<UniqueWeight> = None;
         for address in address_book.newly_uncontended_addresses.iter() {
-            let newly_uncontended_unique_weights = &address_book
-                .map
-                .get(address)
-                .unwrap()
-                .contended_unique_weights;
+            let newly_uncontended_unique_weights = get_newly_u_u_w(address_book);
             if let Some(&uw) = newly_uncontended_unique_weights.last() {
                 if let Some(c) = heaviest_by_address {
                     if uw > c {
