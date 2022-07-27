@@ -341,7 +341,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn get_newly_u_u_w(
         address_book: &mut AddressBook,
-    ) -> &BTreeSet<usize> {
+    ) -> &std::collections::BTreeSet<usize> {
         &address_book
                 .map
                 .get(address)
