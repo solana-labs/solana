@@ -484,8 +484,8 @@ impl ScheduleStage {
     #[inline(never)]
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
         for l in lock_attempts {
-            let newly_uncontended = address_book.unlock(&l);
-            if newly_uncontended {
+            let newly_uncontended_while_queued = address_book.unlock(&l);
+            if newly_uncontended_while_queued {
                 address_book.newly_uncontended_addresses.insert(l.address);
             }
 
