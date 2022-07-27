@@ -527,7 +527,9 @@ impl ScheduleStage {
                     info!("recv from previous");
                     let weighted_tx = weighted_tx.unwrap();
                     Self::register_runnable_task(weighted_tx, runnable_queue);
-                    maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                    if maybe_ee.is_none() {
+                        maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                    }
                 }
                 recv(from_execute_substage) -> processed_execution_environment => {
                     info!("recv from execute");
@@ -535,7 +537,9 @@ impl ScheduleStage {
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
 
-                    maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                    if maybe_ee.is_none() {
+                        maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                    }
 
                     // async-ly propagate the result to rpc subsystems
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
