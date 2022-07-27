@@ -307,17 +307,15 @@ fn attempt_lock_for_execution<'a>(
     let writable_lock_iter = locks
         .writable
         .iter()
-        .copied()
         .map(|a| (a, RequestedUsage::Writable));
     let readonly_lock_iter = locks
         .readonly
         .iter()
-        .copied()
         .map(|a| (a, RequestedUsage::Readonly));
     let all_iter = writable_lock_iter.chain(readonly_lock_iter);
 
     all_iter
-        .map(|(a, usage)| address_book.attempt_lock_address(unique_weight, a, usage))
+        .map(|(a, usage)| address_book.attempt_lock_address(unique_weight, *a, usage))
         .collect::<Vec<_>>()
 }
 
