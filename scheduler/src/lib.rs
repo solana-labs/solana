@@ -327,10 +327,10 @@ impl ScheduleStage {
         //tx.foo();
 
         runnable_queue.add(
-            UniqueWeight {
+            //UniqueWeight {
                 weight,
                 //unique_key: solana_sdk::hash::new_rand(&mut rng),
-            },
+            //},
             Task { tx },
         );
     }
