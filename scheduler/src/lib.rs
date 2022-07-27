@@ -376,7 +376,7 @@ impl ScheduleStage {
             }
             (Some(weight_from_contended), None) => {
                 let task = contended_queue.map.remove(&weight_from_contended).unwrap();
-                Some((false, *weight_from_contended, task))
+                Some((false, weight_from_contended, task))
             }
             (None, Some(weight_from_runnable)) => {
                 runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
