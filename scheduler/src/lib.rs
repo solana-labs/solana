@@ -516,7 +516,7 @@ impl ScheduleStage {
 
         info!("schedule_once!");
         let mut maybe_ee = None;
-        let (r, s) = bounded(0);
+        let (s, r) = bounded(0);
 
         loop {
 
