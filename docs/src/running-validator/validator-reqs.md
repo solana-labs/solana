@@ -18,7 +18,8 @@ transaction for each block the validator agrees with, which can cost up to
   - 2.8GHz, or faster
   - AVX2 instruction support (to use official release binaries, self-compile
     otherwise)
-  - Support for AVX512f and/or SHA-NI instructions is helpful
+  - Support for SHA-NI instructions is recommended. SHA-NI is supported by Intel Ice Lake+ and AMD Zen+.
+  - Support for AVX512f is nice to have
   - The AMD Zen3 series is popular with the validator community
 - RAM
   - 128GB, or more
