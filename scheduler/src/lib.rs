@@ -497,7 +497,7 @@ impl ScheduleStage {
     }
 
     fn register_runnable_task(
-        weighted_tx: (Weight, SanitizedTransaction),
+        weighted_tx: (Weight, Box<SanitizedTransaction>),
         runnable_queue: &mut TaskQueue,
     ) {
         Self::push_to_queue(weighted_tx, runnable_queue)
