@@ -551,13 +551,15 @@ impl ScheduleStage {
         use crossbeam_channel::select;
 
         let mut maybe_ee = None;
-        let (s, r) = bounded(0);
-        let mut was_some = false;
+        // this trick is needed for conditional (Option<_>) send
+        // upstream this to crossbeam-channel...
+        let (&to_full, _r) = bounded(0);
 
         loop {
             info!("schedule_once!");
 
-        //if let Some(ee) = maybe_ee {
+            let to_execute_substage_if_ready = maybe_ee.as_ref().map(|_| to_execute_substage).unwrap_or(to_full);
+
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
                     info!("recv from previous");
@@ -566,6 +568,11 @@ impl ScheduleStage {
                     if maybe_ee.is_none() {
                         maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                     }
+                }
+                send(to_execute_substage_if_ready, maybe_ee) -> res => {
+                    info!("send to execute");
+                    res.unwrap();
+                    maybe_ee = None;
                 }
                 recv(from_execute_substage) -> processed_execution_environment => {
                     info!("recv from execute");
@@ -581,39 +588,8 @@ impl ScheduleStage {
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap();
                 }
-                send(maybe_ee.as_ref().map(|_| {
-                    was_some = true;
-                    to_execute_substage
-                }).unwrap_or_else(|| {
-                    was_some = false;
-                    &s
-                }), {
-                    maybe_ee
-                }) -> res => {
-                    info!("send to execute: {}", was_some);
-                    res.unwrap();
-                    maybe_ee = None;
-                }
             }
         }
-        /*} else {
-            select! {
-                recv(from_previous_stage) -> weighted_tx => {
-                    let weighted_tx = weighted_tx.unwrap();
-                    Self::register_runnable_task(weighted_tx, runnable_queue)
-                }
-                recv(from_execute_substage) -> processed_execution_environment => {
-                    let mut processed_execution_environment = processed_execution_environment.unwrap();
-
-                    Self::commit_result(&mut processed_execution_environment, address_book);
-
-                    // async-ly propagate the result to rpc subsystems
-                    // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
-                    to_next_stage.send(processed_execution_environment).unwrap()
-                }
-                default => { std::thread::sleep(std::time::Duration::from_millis(1)) }
-            }
-        }*/
     }
 
     /*
