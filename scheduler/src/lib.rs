@@ -543,7 +543,7 @@ impl ScheduleStage {
                 send(maybe_ee.as_ref().map(|_| {
                     was_some = true;
                     to_execute_substage
-                }).unwrap_or({
+                }).unwrap_or_else(|| {
                     was_some = false;
                     &s
                 }), {
