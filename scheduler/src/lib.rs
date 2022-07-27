@@ -348,7 +348,7 @@ impl ScheduleStage {
                 .unwrap()
                 .contended_unique_weights;
             if let Some(&uw) = newly_uncontended_unique_weights.last() {
-                if let Some(heaviest_by_address) = heaviest_by_address {
+                if let Some(&heaviest_by_address) = heaviest_by_address {
                     if uw > heaviest_by_address {
                         heaviest_by_address = Some(uw);
                     }
