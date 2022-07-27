@@ -234,11 +234,18 @@ fn output_slot(
         }
     }
 
+    // basically, this controls the maximum size of task queue, so unbounded isn't nice
     let (tx_sender, tx_receiver) = crossbeam_channel::bounded(10_000);
+
+    // this should be target number of saturated cpu cores
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(8);
-    let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::bounded(100);
+
+    // this channel should be okay to be unbounded, really?
+    let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
+
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
     //let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
+    //
     let (post_schedule_env_sender, post_schedule_env_receiver) = crossbeam_channel::unbounded();
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
