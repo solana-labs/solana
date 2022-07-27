@@ -544,7 +544,7 @@ impl ScheduleStage {
                 }).unwrap_or(&s),
                     maybe_ee
                 ) -> res => {
-                    info!("send to execute");
+                    info!("send to execute: {}", maybe_ee.is_some());
                     res.unwrap();
                     maybe_ee = None;
                 }
