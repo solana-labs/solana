@@ -19,6 +19,7 @@ use {
         snapshot_package::{
             AccountsPackage, PendingAccountsPackage, SnapshotPackage, SnapshotType,
         },
+        status_cache,
     },
     bincode::{config::Options, serialize_into},
     bzip2::bufread::BzDecoder,
@@ -232,6 +233,9 @@ pub type Result<T> = std::result::Result<T, SnapshotError>;
 /// Errors that can happen in `verify_slot_deltas()`
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum VerifySlotDeltasError {
+    #[error("too many entries: {0} (max: {1})")]
+    TooManyEntries(usize, usize),
+
     #[error("slot {0} is not a root")]
     SlotIsNotRoot(Slot),
 
@@ -1767,6 +1771,15 @@ fn verify_slot_deltas(
     slot_deltas: &[BankSlotDelta],
     bank_slot: Slot,
 ) -> std::result::Result<(), VerifySlotDeltasError> {
+    // there should not be more entries than that status cache's max
+    let num_entries = slot_deltas.len();
+    if num_entries > status_cache::MAX_CACHE_ENTRIES {
+        return Err(VerifySlotDeltasError::TooManyEntries(
+            num_entries,
+            status_cache::MAX_CACHE_ENTRIES,
+        ));
+    }
+
     let mut slots_seen_so_far = HashSet::new();
     for (slot, is_root, _) in slot_deltas {
         // all entries should be roots
@@ -3873,6 +3886,23 @@ mod tests {
                 can_submit_accounts_package(&new_accounts_package, &pending_accounts_package);
             assert_eq!(expected_result, actual_result);
         }
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_bad_too_many_entries() {
+        let bank_slot = status_cache::MAX_CACHE_ENTRIES as Slot + 1;
+        let slot_deltas: Vec<_> = (0..bank_slot)
+            .map(|slot| (slot, true, Status::default()))
+            .collect();
+
+        let result = verify_slot_deltas(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(
+            result,
+            Err(VerifySlotDeltasError::TooManyEntries(
+                status_cache::MAX_CACHE_ENTRIES + 1,
+                status_cache::MAX_CACHE_ENTRIES
+            )),
+        );
     }
 
     #[test]
