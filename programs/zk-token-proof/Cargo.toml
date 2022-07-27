@@ -8,7 +8,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-bytemuck = { version = "1.10.0", features = ["derive"] }
+bytemuck = { version = "1.11.0", features = ["derive"] }
 getrandom = { version = "0.1", features = ["dummy"] }
 num-derive = "0.3"
 num-traits = "0.2"

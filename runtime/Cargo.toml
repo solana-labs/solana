@@ -14,7 +14,7 @@ arrayref = "0.3.6"
 bincode = "1.3.3"
 blake3 = "1.3.1"
 bv = { version = "0.11.1", features = ["serde"] }
-bytemuck = "1.10.0"
+bytemuck = "1.11.0"
 byteorder = "1.4.3"
 bzip2 = "0.4.3"
 crossbeam-channel = "0.5"
