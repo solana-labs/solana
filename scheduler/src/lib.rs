@@ -356,7 +356,7 @@ impl ScheduleStage {
     ) -> Option<UniqueWeight> {
         let mut heaviest_by_address: Option<UniqueWeight> = None;
         for address in address_book.newly_uncontended_addresses.iter() {
-            let newly_uncontended_unique_weights = Self::get_newly_u_u_w(address, address_book);
+            let newly_uncontended_unique_weights = Self::get_newly_u_u_w(address, &mut address_book);
             if let Some(&uw) = newly_uncontended_unique_weights.last() {
                 if let Some(c) = heaviest_by_address {
                     if uw > c {
