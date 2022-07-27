@@ -642,8 +642,18 @@ mod tests {
         },
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
-        solana_sdk::quic::QUIC_PORT_OFFSET,
-        std::net::{IpAddr, Ipv4Addr, SocketAddr},
+        solana_sdk::{
+            pubkey::Pubkey,
+            quic::{
+                QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
+                QUIC_PORT_OFFSET,
+            },
+        },
+        solana_streamer::streamer::StakedNodes,
+        std::{
+            net::{IpAddr, Ipv4Addr, SocketAddr},
+            sync::{Arc, RwLock},
+        },
     };
 
     fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
@@ -697,6 +707,55 @@ mod tests {
         let map = connection_cache.map.read().unwrap();
         assert!(map.len() == MAX_CONNECTIONS);
         let _conn = map.get(&addr).expect("Address not found");
+    }
+
+    #[test]
+    fn test_connection_cache_max_parallel_chunks() {
+        solana_logger::setup();
+        let mut connection_cache = ConnectionCache::default();
+        assert_eq!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        let pubkey = Pubkey::new_unique();
+        connection_cache.set_staked_nodes(&staked_nodes, &pubkey);
+        assert_eq!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes.write().unwrap().total_stake = 10000;
+        assert_eq!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .insert(pubkey, 1);
+        assert_eq!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .remove(&pubkey);
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .insert(pubkey, 1000);
+        assert_ne!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+        );
     }
 
     // Test that we can get_connection with a connection cache configured for quic
