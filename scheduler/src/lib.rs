@@ -285,6 +285,7 @@ impl TaskQueue {
     }
 }
 
+#[inline(never)]
 fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
@@ -335,6 +336,7 @@ impl ScheduleStage {
         );
     }
 
+    #[inline(never)]
     fn select_next_task(
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
@@ -385,6 +387,7 @@ impl ScheduleStage {
         }
     }
 
+    #[inline(never)]
     fn pop_from_queue_then_lock(
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
@@ -420,6 +423,7 @@ impl ScheduleStage {
         None
     }
 
+    #[inline(never)]
     fn apply_successful_lock_before_execution(
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
@@ -434,6 +438,7 @@ impl ScheduleStage {
         }
     }
 
+    #[inline(never)]
     fn ensure_unlock_for_failed_execution(
         address_book: &mut AddressBook,
         lock_attempts: Vec<LockAttempt>,
@@ -462,6 +467,7 @@ impl ScheduleStage {
         }
     }
 
+    #[inline(never)]
     fn prepare_scheduled_execution(
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
