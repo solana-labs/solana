@@ -3,9 +3,9 @@ title: What is a dApp?
 description: "Decetralized applications, aka dApps, are the user facing applications of the Solana blockchain. They are written with languages like Javscript and Rust."
 ---
 
-Decetralized applications, "*dApps*" for short, are the user facing applications that interact with the Solana blockchain. These applications are generally a combination of frontend code (like HTML and Javascript) as well as [Solana Programs](./programs.md) deployed on the blockchain itself.
+Decetralized applications, "_dApps_" for short, are the user facing applications that interact with the Solana blockchain. These applications are generally a combination of frontend code (like HTML and Javascript) as well as [Solana Programs](./programs.md) deployed on the blockchain itself.
 
-Since Solana Programs are "*composable*" and callable by anyone, dApp developers are not required to build and deploy their own on-chain programs. In fact, they often use a combination of custom written code for their own [on-chain programs](./programs.md#on-chain-programs), [Native programs](../runtime-facilities/programs.md), and other programs from the [Solana Program Library](https://spl.solana.com).
+Since Solana Programs are "_composable_" and callable by anyone, dApp developers are not required to build and deploy their own on-chain programs. In fact, they often use a combination of custom written code for their own [on-chain programs](./programs.md#on-chain-programs), [Native programs](../runtime-facilities/programs.md), and other programs from the [Solana Program Library](https://spl.solana.com).
 
 ## dApp Examples
 
@@ -29,13 +29,13 @@ For the frontend, user facing portion of dApps, developers can use most modern J
 
 The blockchain deployable Solana programs are commonly created with the [Rust](https://www.rust-lang.org/) programming language. But can also be created with other low level languages that can be compiled with the BPF loader like C and C++.
 
-Due to it's developer convinience, the [Anchor framework](https://www.anchor-lang.com/) has emerged as the leading Rust based framework to develop on chain Solana programs. Anchor provides many tools and utilities for more rapidly developing Solana programs that operate on the [Sealevel runtime](https://medium.com/solana-labs/sealevel-parallel-processing-thousands-of-smart-contracts-d814b378192). 
+Due to it's developer convinience, the [Anchor framework](https://www.anchor-lang.com/) has emerged as the leading Rust based framework to develop on chain Solana programs. Anchor provides many tools and utilities for more rapidly developing Solana programs that operate on the [Sealevel runtime](https://medium.com/solana-labs/sealevel-parallel-processing-thousands-of-smart-contracts-d814b378192).
 
 ## dApp Boilerplate with NPX
 
 The Solana developer community has created a NPM package to empower developers to rapidly scaffold the boilerplate for Solana dApps. Including wiring up the wallet adapter for the most common [Solana wallets](../../wallet-guide.md).
 
-To quickly scaffold a Solana dApp with this tool, run the following command: 
+To quickly scaffold a Solana dApp with this tool, run the following command:
 
 ```sh
 npx create-solana-dapp
