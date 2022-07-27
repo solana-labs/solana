@@ -558,11 +558,6 @@ impl ScheduleStage {
                     res.unwrap();
                     maybe_ee = None;
                 }
-                default => { 
-                    info!("default");
-                    std::thread::sleep(std::time::Duration::from_micros(50));
-                    maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-                }
             }
         }
         /*} else {
