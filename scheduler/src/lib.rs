@@ -276,10 +276,12 @@ impl TaskQueue {
         assert!(self.map.insert(unique_weight, task).is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
+    #[inline(never)]
     fn next_task_unique_weight(&self) -> Option<UniqueWeight> {
         self.map.last_key_value().map(|e| e.0.clone())
     }
 
+    #[inline(never)]
     fn pop_next_task(&mut self) -> Option<(UniqueWeight, Task)> {
         self.map.pop_last()
     }
