@@ -537,7 +537,7 @@ impl ScheduleStage {
                     to_next_stage.send(processed_execution_environment).unwrap();
                     maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 }
-                send(maybe_ee.map(|_| to_execute_substage).unwrap_or(s), ee) -> res => {
+                send(maybe_ee.map(|_| to_execute_substage).unwrap_or(s), maybe_ee) -> res => {
                     maybe_ee = None;
                     res.unwrap();
                 }
