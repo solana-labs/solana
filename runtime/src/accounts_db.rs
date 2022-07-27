@@ -6459,6 +6459,11 @@ impl AccountsDb {
             .filter_map(|(slot, storages)| storages.map(|_| slot))
             .collect::<Vec<_>>();
         let ancient_slot_count = ancient_slots.len() as Slot;
+        if let Some(full_snapshot) = config.full_snapshot.as_ref() {
+            // When we are calculating an incremental accounts hash based off a full accounts hash, we must exclude
+            // slots that are in the full snapshot.
+            assert!(range.start > full_snapshot.slot);
+        }
         let slot0 = std::cmp::max(range.start, one_epoch_old_slot);
         let first_boundary =
             ((slot0 + MAX_ITEMS_PER_CHUNK) / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK;
@@ -6861,21 +6866,29 @@ impl AccountsDb {
 
     /// normal code path returns the common cache path
     /// when called after a failure has been detected, redirect the cache storage to a separate folder for debugging later
-    fn get_cache_hash_data(
-        &self,
-        config: &CalcAccountsHashConfig<'_>,
-        slot: Slot,
-    ) -> CacheHashData {
-        if !config.store_detailed_debug_info_on_failure {
-            CacheHashData::new(&self.accounts_hash_cache_path)
+    fn get_cache_hash_data(&self, config: &CalcAccountsHashConfig<'_>, slot: Slot) -> CacheHashData {
+        let mut add_slot = false;
+        let (folder_name, clean) = if !config.store_detailed_debug_info_on_failure {
+            if config.full_snapshot.is_none() {
+                return CacheHashData::new(&self.accounts_hash_cache_path);
+            } else {
+                // Incremental hash calculation will produce different hash results than a full hash calculation.
+                // So, store incremental hash results in a different folder.
+                ("calculate_accounts_hash_cache_incremental", false)
+            }
         } else {
             // this path executes when we are failing with a hash mismatch
-            let mut new = self.accounts_hash_cache_path.clone();
+            ("failed_calculate_accounts_hash_cache", true)
+        };
+        let mut path = self.accounts_hash_cache_path.clone();
+        path.push(folder_name);
+        if clean {
             new.push(slot.to_string());
-            new.push("failed_calculate_accounts_hash_cache");
-            let _ = std::fs::remove_dir_all(&new);
-            CacheHashData::new(&new)
         }
+        if clean {
+            let _ = std::fs::remove_dir_all(&path);
+        }
+        CacheHashData::new(&path)
     }
 
     // modeled after get_accounts_delta_hash
@@ -6912,6 +6925,7 @@ impl AccountsDb {
                     } else {
                         None
                     },
+                    include_zero_lamport_accounts: config.full_snapshot.is_some(),
                 };
 
                 let result = self.scan_snapshot_stores_with_cache(

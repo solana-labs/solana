@@ -32,9 +32,9 @@ pub struct PreviousPass {
 #[allow(dead_code)]
 pub struct FullSnapshotAccountsHashInfo {
     /// accounts hash over all accounts when the full snapshot was taken
-    hash: Hash,
+    pub hash: Hash,
     /// slot where full snapshot was taken
-    slot: Slot,
+    pub slot: Slot,
 }
 
 /// parameters to calculate accounts hash
@@ -371,7 +371,11 @@ impl CumulativeOffsets {
 
 #[derive(Debug, Default)]
 pub struct AccountsHash {
+    /// filler accounts are ignored by accounts hash calculation
     pub filler_account_suffix: Option<Pubkey>,
+    /// Normal hash calculation excludes hash values for accounts whose most recent lamports are zero
+    /// If this is true, then zero lamport accounts are hashed.
+    pub include_zero_lamport_accounts: bool,
 }
 
 impl AccountsHash {
@@ -844,7 +848,12 @@ impl AccountsHash {
             );
 
             // add lamports, get hash as long as the lamports are > 0
-            if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL
+            // or, if `include_zero_lamport_accounts`, then we include zero lamport accounts.
+            // This is because any zero lamport account we find MAY be zeroing out an account which was included in the full snapshot.
+            // Note this means the capitalization of this incremental hash calc will not match the bank's capitalization.
+            let zero_lamport_check =
+                item.lamports != ZERO_RAW_LAMPORTS_SENTINEL || self.include_zero_lamport_accounts;
+            if zero_lamport_check
                 && (!filler_accounts_enabled || !self.is_filler_account(&item.pubkey))
             {
                 overall_sum = Self::checked_cast_for_capitalization(
