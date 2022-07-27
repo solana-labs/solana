@@ -110,6 +110,7 @@ pub struct AddressBook {
 }
 
 impl AddressBook {
+    #[inline(never)]
     fn attempt_lock_address(
         &mut self,
         unique_weight: &UniqueWeight,
@@ -164,6 +165,7 @@ impl AddressBook {
         }
     }
 
+    #[inline(never)]
     fn remove_contended_unique_weight(
         &mut self,
         unique_weight: &UniqueWeight,
@@ -186,6 +188,7 @@ impl AddressBook {
         }
     }
 
+    #[inline(never)]
     fn unlock(&mut self, attempt: &LockAttempt) -> bool {
         assert!(attempt.is_success());
 
@@ -276,6 +279,7 @@ struct ContendedQueue {
 }
 
 impl TaskQueue {
+    #[inline(never)]
     fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
         //info!("TaskQueue::add(): {:?}", unique_weight);
         assert!(self.map.insert(unique_weight, task).is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
@@ -360,7 +364,7 @@ impl ScheduleStage {
         address_book: &AddressBook,
     ) -> Option<UniqueWeight> {
         let mut heaviest_by_address: Option<UniqueWeight> = None;
-        info!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
+        //info!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = Self::get_newly_u_u_w(address, &address_book);
             if let Some(&uw) = newly_uncontended_unique_weights.last() {
@@ -478,6 +482,7 @@ impl ScheduleStage {
         }
     }
 
+    #[inline(never)]
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
         for l in lock_attempts {
             let newly_uncontended = address_book.unlock(&l);
@@ -508,6 +513,7 @@ impl ScheduleStage {
         })
     }
 
+    #[inline(never)]
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         // do par()-ly?
@@ -516,6 +522,7 @@ impl ScheduleStage {
         // par()-ly clone updated Accounts into address book
     }
 
+    #[inline(never)]
     fn schedule_next_execution(
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
@@ -526,6 +533,7 @@ impl ScheduleStage {
         maybe_ee
     }
 
+    #[inline(never)]
     fn register_runnable_task(
         weighted_tx: (Weight, Box<SanitizedTransaction>),
         runnable_queue: &mut TaskQueue,
