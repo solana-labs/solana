@@ -29,6 +29,8 @@ const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 const PROC_NET_SNMP_PATH: &str = "/proc/net/snmp";
 #[cfg(target_os = "linux")]
 const PROC_NET_DEV_PATH: &str = "/proc/net/dev";
+#[cfg(target_os = "linux")]
+const PROC_DISKSTATS_PATH: &str = "/proc/diskstats";
 
 pub struct SystemMonitorService {
     thread_hdl: JoinHandle<()>,
@@ -99,51 +101,28 @@ struct CpuInfo {
 
 #[derive(Default)]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-// The first collection provides statistics concerning the time since the system
-// was booted. Each subsequent one covers the time since the previous one.
-struct IoStats {
-    // read operations per second across all disks
-    read_iops: f64,
-    // read MB per second across all disks
-    read_mbps: f64,
-    // read requests merged per second and queued across all devices
-    read_req_merged_per_second: f64,
-    // percentage of read requests merged (averaged across devices)
-    read_req_merged_percent: f64,
-    // average time in milliseconds for read requests to be served
-    read_avg_await_ms: f64,
-    // average number of sectors per read request
-    read_avg_req_sectors: f64,
-    // write operations per second across all disks
-    write_iops: f64,
-    // write MB per second across all disks
-    write_mbps: f64,
-    // write requests merged per second and queued across all devices
-    write_req_merged_per_second: f64,
-    // percentage of write requests merged (averaged across devices)
-    write_req_merged_percent: f64,
-    // average time in milliseconds for write requests to be served
-    write_avg_await_ms: f64,
-    // average number of sectors per write request
-    write_avg_req_sectors: f64,
-    // discard operations per second across all disks
-    discard_iops: f64,
-    // discard MB per second across all disks
-    discard_mbps: f64,
-    // discards requests merged per second and queued across all devices
-    discard_req_merged_per_second: f64,
-    // percentage of discard requests merged (averaged across devices)
-    discard_req_merged_percent: f64,
-    // average time in milliseconds for discard requests to be served
-    discard_avg_await_ms: f64,
-    // average number of sectors per discard request
-    discard_avg_req_sectors: f64,
-    // average number of commands in the queue (averaged across devices)
-    avg_queue_length: f64,
-    // percentage of time IO requests were issued to device (averaged across devices)
-    utilization_percent_avg: f64,
-    // percentage of time IO requests were issued to device (max of any single device)
-    utilization_percent_max: f64,
+// These stats are aggregated across all storage devices excluding internal loopbacks.
+// Fields are cumulative since boot with the exception of 'num_disks' and 'io_in_progress'
+struct DiskStats {
+    reads_completed: u64,
+    reads_merged: u64,
+    sectors_read: u64,
+    time_reading_ms: u64,
+    writes_completed: u64,
+    writes_merged: u64,
+    sectors_written: u64,
+    time_writing_ms: u64,
+    io_in_progress: u64,
+    time_io_ms: u64,
+    // weighted time multiplies time performing IO by number of commands in the queue
+    time_io_weighted_ms: u64,
+    discards_completed: u64,
+    discards_merged: u64,
+    sectors_discarded: u64,
+    time_discarding: u64,
+    flushes_completed: u64,
+    time_flushing: u64,
+    num_disks: u64,
 }
 
 impl UdpStats {
@@ -274,82 +253,50 @@ pub fn verify_net_stats_access() -> Result<(), String> {
 }
 
 #[cfg(target_os = "linux")]
-fn read_io_stats() -> Result<IoStats, String> {
-    let output = Command::new("iostat")
-        .arg("-d")
-        .arg("-m")
-        .arg("-x")
-        .output()
-        .map_err(|e| e.to_string())?;
-    let mut reader_io = &output.stdout as &[u8];
-    parse_io_stats(&mut reader_io)
+fn read_disk_stats() -> Result<DiskStats, String> {
+    let file_path_diskstats = PROC_DISKSTATS_PATH;
+    let file_diskstats = File::open(file_path_diskstats).map_err(|e| e.to_string())?;
+    let mut reader_diskstats = BufReader::new(file_diskstats);
+    parse_disk_stats(&mut reader_diskstats)
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn parse_io_stats(reader_io: &mut impl BufRead) -> Result<IoStats, String> {
-    let mut stats = IoStats::default();
-    let mut num_devices = 0 as f64;
-    for (line_number, line) in reader_io.lines().enumerate() {
-        if line_number < 3 {
-            // Skip first three lines with header information.
-            continue;
-        }
-
+fn parse_disk_stats(reader_diskstats: &mut impl BufRead) -> Result<DiskStats, String> {
+    let mut stats = DiskStats::default();
+    let mut num_disks = 0;
+    for line in reader_diskstats.lines() {
         let line = line.map_err(|e| e.to_string())?;
         let values: Vec<_> = line.split_ascii_whitespace().collect();
 
-        if values.is_empty() {
-            // Filter out empty lines.
-            continue;
-        } else if values.len() != 21 {
-            return Err("parse error, expected exactly 21 io stat elements".to_string());
-        } else if values[0].starts_with("loop") {
-            // Filter out the loopback io devices as we are only concerned with
-            // physical disks.
+        if values.len() != 20 {
+            return Err("parse error, expected exactly 20 disk stat elements".to_string());
+        }
+        if values[2].starts_with("loop") || values[1].ne("0") {
+            // Filter out the loopback io devices.
+            // Only look at raw device (filter partitions)
             continue;
         }
 
-        num_devices += 1.0;
-        stats.read_iops += values[1].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.read_mbps += values[2].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.read_req_merged_per_second += values[3].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.read_req_merged_percent += values[4].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.read_avg_await_ms += values[5].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.read_avg_req_sectors += values[6].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.write_iops += values[7].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.write_mbps += values[8].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.write_req_merged_per_second += values[9].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.write_req_merged_percent += values[10].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.write_avg_await_ms += values[11].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.write_avg_req_sectors += values[12].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.discard_iops += values[13].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.discard_mbps += values[14].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.discard_req_merged_per_second +=
-            values[15].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.discard_req_merged_percent += values[16].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.discard_avg_await_ms += values[17].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.discard_avg_req_sectors += values[18].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.avg_queue_length += values[19].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.utilization_percent_avg += values[20].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.utilization_percent_max = stats
-            .utilization_percent_max
-            .max(values[20].parse::<f64>().map_err(|e| e.to_string())?);
+        num_disks += 1;
+        stats.reads_completed += values[3].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.reads_merged += values[4].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.sectors_read += values[5].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_reading_ms += values[6].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.writes_completed += values[7].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.writes_merged += values[8].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.sectors_written += values[9].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_writing_ms += values[10].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.io_in_progress += values[11].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_io_ms += values[12].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_io_weighted_ms += values[13].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.discards_completed += values[14].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.discards_merged += values[15].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.sectors_discarded += values[16].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_discarding += values[17].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.flushes_completed += values[18].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_flushing += values[19].parse::<u64>().map_err(|e| e.to_string())?;
     }
-
-    if num_devices > 1.0 {
-        stats.read_req_merged_percent /= num_devices;
-        stats.read_avg_await_ms /= num_devices;
-        stats.read_avg_req_sectors /= num_devices;
-        stats.write_req_merged_percent /= num_devices;
-        stats.write_avg_await_ms /= num_devices;
-        stats.write_avg_req_sectors /= num_devices;
-        stats.discard_req_merged_percent /= num_devices;
-        stats.discard_avg_await_ms /= num_devices;
-        stats.discard_avg_req_sectors /= num_devices;
-        stats.avg_queue_length /= num_devices;
-        stats.utilization_percent_avg /= num_devices;
-    }
-
+    stats.num_disks = num_disks;
     Ok(stats)
 }
 
@@ -359,7 +306,7 @@ impl SystemMonitorService {
         report_os_memory_stats: bool,
         report_os_network_stats: bool,
         report_os_cpu_stats: bool,
-        report_os_io_stats: bool,
+        report_os_disk_stats: bool,
     ) -> Self {
         info!("Starting SystemMonitorService");
         let thread_hdl = Builder::new()
@@ -370,7 +317,7 @@ impl SystemMonitorService {
                     report_os_memory_stats,
                     report_os_network_stats,
                     report_os_cpu_stats,
-                    report_os_io_stats,
+                    report_os_disk_stats,
                 );
             })
             .unwrap();
@@ -705,90 +652,164 @@ impl SystemMonitorService {
     }
 
     #[cfg(target_os = "linux")]
-    fn report_io_stats() {
-        match read_io_stats() {
-            Ok(stats) => {
-                datapoint_info!(
-                    "io-stats",
-                    ("read_iops", stats.read_iops, f64),
-                    ("read_mbps", stats.read_mbps, f64),
-                    (
-                        "read_req_merged_per_second",
-                        stats.read_req_merged_per_second,
-                        f64
-                    ),
-                    (
-                        "read_req_merged_percent",
-                        stats.read_req_merged_percent,
-                        f64
-                    ),
-                    ("read_avg_await_ms", stats.read_avg_await_ms, f64),
-                    ("read_avg_req_sectors", stats.read_avg_req_sectors, f64),
-                    ("write_iops", stats.write_iops, f64),
-                    ("write_mbps", stats.write_mbps, f64),
-                    (
-                        "write_req_merged_per_second",
-                        stats.write_req_merged_per_second,
-                        f64
-                    ),
-                    (
-                        "write_req_merged_percent",
-                        stats.write_req_merged_percent,
-                        f64
-                    ),
-                    ("write_avg_await_ms", stats.write_avg_await_ms, f64),
-                    ("write_avg_req_sectors", stats.write_avg_req_sectors, f64),
-                    ("discard_iops", stats.discard_iops, f64),
-                    ("discard_mbps", stats.discard_mbps, f64),
-                    (
-                        "discard_req_merged_per_second",
-                        stats.discard_req_merged_per_second,
-                        f64
-                    ),
-                    (
-                        "discard_req_merged_percent",
-                        stats.discard_req_merged_percent,
-                        f64
-                    ),
-                    ("discard_avg_await_ms", stats.discard_avg_await_ms, f64),
-                    (
-                        "discard_avg_req_sectors",
-                        stats.discard_avg_req_sectors,
-                        f64
-                    ),
-                    ("avg_queue_length", stats.avg_queue_length, f64),
-                    (
-                        "utilization_percent_avg",
-                        stats.utilization_percent_avg,
-                        f64
-                    ),
-                    (
-                        "utilization_percent_max",
-                        stats.utilization_percent_max,
-                        f64
-                    ),
-                )
+    fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
+        match read_disk_stats() {
+            Ok(new_stats) => {
+                if let Some(old_stats) = disk_stats {
+                    Self::report_disk_stats(old_stats, &new_stats);
+                }
+                *disk_stats = Some(new_stats);
             }
-            Err(e) => warn!("read_io_stats: {}", e),
+            Err(e) => warn!("read_disk_stats: {}", e),
         }
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn report_io_stats() {}
+    fn process_disk_stats(_disk_stats: &mut Option<DiskStats>) {}
+
+    #[cfg(target_os = "linux")]
+    fn report_disk_stats(old_stats: &DiskStats, new_stats: &DiskStats) {
+        datapoint_info!(
+            "disk-stats",
+            (
+                "reads_completed",
+                new_stats
+                    .reads_completed
+                    .saturating_sub(old_stats.reads_completed),
+                u64
+            ),
+            (
+                "reads_merged",
+                new_stats
+                    .reads_merged
+                    .saturating_sub(old_stats.reads_merged),
+                u64
+            ),
+            (
+                "sectors_read",
+                new_stats
+                    .sectors_read
+                    .saturating_sub(old_stats.sectors_read),
+                u64
+            ),
+            (
+                "time_reading_ms",
+                new_stats
+                    .time_reading_ms
+                    .saturating_sub(old_stats.time_reading_ms),
+                u64
+            ),
+            (
+                "writes_completed",
+                new_stats
+                    .writes_completed
+                    .saturating_sub(old_stats.writes_completed),
+                u64
+            ),
+            (
+                "writes_merged",
+                new_stats
+                    .writes_merged
+                    .saturating_sub(old_stats.writes_merged),
+                u64
+            ),
+            (
+                "sectors_written",
+                new_stats
+                    .sectors_written
+                    .saturating_sub(old_stats.sectors_written),
+                u64
+            ),
+            (
+                "time_writing_ms",
+                new_stats
+                    .time_writing_ms
+                    .saturating_sub(old_stats.time_writing_ms),
+                u64
+            ),
+            (
+                "io_in_progress",
+                new_stats
+                    .io_in_progress
+                    .saturating_sub(old_stats.io_in_progress),
+                u64
+            ),
+            (
+                "time_io_ms",
+                new_stats.time_io_ms.saturating_sub(old_stats.time_io_ms),
+                u64
+            ),
+            (
+                "time_io_weighted_ms",
+                new_stats
+                    .time_io_weighted_ms
+                    .saturating_sub(old_stats.time_io_weighted_ms),
+                u64
+            ),
+            (
+                "discards_completed",
+                new_stats
+                    .discards_completed
+                    .saturating_sub(old_stats.discards_completed),
+                u64
+            ),
+            (
+                "discards_merged",
+                new_stats
+                    .discards_merged
+                    .saturating_sub(old_stats.discards_merged),
+                u64
+            ),
+            (
+                "sectors_discarded",
+                new_stats
+                    .sectors_discarded
+                    .saturating_sub(old_stats.sectors_discarded),
+                u64
+            ),
+            (
+                "time_discarding",
+                new_stats
+                    .time_discarding
+                    .saturating_sub(old_stats.time_discarding),
+                u64
+            ),
+            (
+                "flushes_completed",
+                new_stats
+                    .flushes_completed
+                    .saturating_sub(old_stats.flushes_completed),
+                u64
+            ),
+            (
+                "time_flushing",
+                new_stats
+                    .time_flushing
+                    .saturating_sub(old_stats.time_flushing),
+                u64
+            ),
+            (
+                "num_disks",
+                new_stats.num_disks.saturating_sub(old_stats.num_disks),
+                u64
+            ),
+        )
+    }
 
     pub fn run(
         exit: Arc<AtomicBool>,
         report_os_memory_stats: bool,
         report_os_network_stats: bool,
         report_os_cpu_stats: bool,
-        report_os_io_stats: bool,
+        report_os_disk_stats: bool,
     ) {
         let mut udp_stats = None;
         let network_limits_timer = AtomicInterval::default();
         let udp_timer = AtomicInterval::default();
         let mem_timer = AtomicInterval::default();
         let cpu_timer = AtomicInterval::default();
-        let io_timer = AtomicInterval::default();
+        let mut disk_stats = None;
+        let disk_timer = AtomicInterval::default();
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -808,8 +829,8 @@ impl SystemMonitorService {
             if report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
                 Self::report_cpu_stats();
             }
-            if report_os_io_stats && io_timer.should_update(SAMPLE_INTERVAL_IO_MS) {
-                Self::report_io_stats();
+            if report_os_disk_stats && disk_timer.should_update(SAMPLE_INTERVAL_IO_MS) {
+                Self::process_disk_stats(&mut disk_stats);
             }
             sleep(SLEEP_INTERVAL);
         }
@@ -880,39 +901,46 @@ data" as &[u8];
     }
 
     #[test]
-    fn test_parse_io_stats() {
-        const MOCK_IO: &[u8] =
-b"Linux 5.15.0-1013-gcp (dev-1) 	07/26/22 	_x86_64_	(64 CPU)
-
-Device            r/s     rMB/s   rrqm/s  %rrqm r_await rareq-sz     w/s     wMB/s   wrqm/s  %wrqm w_await wareq-sz     d/s     dMB/s   drqm/s  %drqm d_await dareq-sz  aqu-sz  %util
-loop0            0.00      0.00     0.00   0.00    0.25    13.45    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop1            0.00      0.00     0.00   0.00    0.48     7.46    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop10           0.00      0.00     0.00   0.00    0.02     6.23    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop2            0.00      0.00     0.00   0.00    0.19    13.50    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop3            0.00      0.00     0.00   0.00    0.50     8.57    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop4            0.00      0.00     0.00   0.00    0.56    13.05    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop5            0.00      0.00     0.00   0.00    2.28    18.25    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop6            0.00      0.00     0.00   0.00    0.69    16.18    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop7            0.00      0.00     0.00   0.00    0.45    36.83    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop8            0.00      0.00     0.00   0.00    1.29     8.39    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-loop9            0.00      0.00     0.00   0.00    0.75    19.15    0.00      0.00     0.00   0.00    0.00     0.00    0.00      0.00     0.00   0.00    0.00     0.00    0.00   0.00
-sda             69.50      1.04     0.53   0.75    0.73    15.24  606.05     32.35   353.50  36.84    5.96    54.67    0.93      1.73     0.00   0.00    0.34  1900.17    3.67  15.00
-sdb             71.50      1.04     0.53   0.75    0.73    15.24  606.05     32.35   353.50  36.84    5.96    54.67    0.93      1.73     0.00   0.00    0.34  1900.17    3.67  95.00" as &[u8];
+    fn test_parse_disk_stats() {
+        const MOCK_DISK: &[u8] =
+b"   7       0 loop0 108 0 2906 27 0 0 0 0 0 40 27 0 0 0 0 0 0
+7       1 loop1 48 0 716 23 0 0 0 0 0 28 23 0 0 0 0 0 0
+7       2 loop2 108 0 2916 21 0 0 0 0 0 36 21 0 0 0 0 0 0
+7       3 loop3 257 0 4394 131 0 0 0 0 0 296 131 0 0 0 0 0 0
+7       4 loop4 111 0 2896 62 0 0 0 0 0 68 62 0 0 0 0 0 0
+7       5 loop5 110 0 2914 138 0 0 0 0 0 112 138 0 0 0 0 0 0
+7       6 loop6 68 0 2200 47 0 0 0 0 0 44 47 0 0 0 0 0 0
+7       7 loop7 1397 0 101686 515 0 0 0 0 0 4628 515 0 0 0 0 0 0
+8       0 sda 40883273 294820 1408426268 30522643 352908152 204249001 37827695922 2073754124 0 86054536 2105005805 496399 4 1886486166 167545 18008621 561492
+8       1 sda1 40882879 291543 1408408989 30522451 352908150 204249001 37827695920 2073754122 0 86054508 2104444115 496393 0 1886085576 167541 0 0
+8      14 sda14 73 0 832 22 0 0 0 0 0 48 22 0 0 0 0 0 0
+8      15 sda15 146 3277 9855 62 2 0 2 1 0 76 68 6 4 400590 3 0 0
+7       9 loop9 55 0 2106 41 0 0 0 0 0 28 41 0 0 0 0 0 0
+7       8 loop8 41 0 688 53 0 0 0 0 0 44 53 0 0 0 0 0 0
+7      10 loop10 60 0 748 1 0 0 0 0 0 20 1 0 0 0 0 0 0
+9       0 sdb 1 1 1 1 352908152 204249001 37827695922 2073754124 0 86054536 2105005805 496399 4 1886486166 167545 18008621 561492" as &[u8];
         const UNEXPECTED_DATA: &[u8] = b"un
 ex
 pec
 ted
 data" as &[u8];
 
-        let mut mock_io = MOCK_IO;
-        let stats = parse_io_stats(&mut mock_io).unwrap();
-        assert_eq!(stats.read_iops, 141.00);
-        assert_eq!(stats.utilization_percent_avg, 55.00);
-        assert_eq!(stats.utilization_percent_max, 95.00);
+        let mut mock_disk = MOCK_DISK;
+        let stats = parse_disk_stats(&mut mock_disk).unwrap();
+        assert_eq!(stats.reads_completed, 40883274);
 
-        let mut mock_io = UNEXPECTED_DATA;
-        let stats = parse_io_stats(&mut mock_io);
+        let mut mock_disk = UNEXPECTED_DATA;
+        let stats = parse_disk_stats(&mut mock_disk);
         assert!(stats.is_err());
+    }
+
+    #[test]
+    fn test_bw_temp() {
+        solana_logger::setup();
+        let mut disk_stats = None;
+        SystemMonitorService::process_disk_stats(&mut disk_stats);
+        SystemMonitorService::process_disk_stats(&mut disk_stats);
+        SystemMonitorService::process_disk_stats(&mut disk_stats);
     }
 
     #[test]

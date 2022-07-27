@@ -48,7 +48,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         no_os_memory_stats_reporting: config.no_os_memory_stats_reporting,
         no_os_network_stats_reporting: config.no_os_network_stats_reporting,
         no_os_cpu_stats_reporting: config.no_os_cpu_stats_reporting,
-        no_os_io_stats_reporting: config.no_os_io_stats_reporting,
+        no_os_disk_stats_reporting: config.no_os_disk_stats_reporting,
         poh_pinned_cpu_core: config.poh_pinned_cpu_core,
         account_indexes: config.account_indexes.clone(),
         accounts_db_caching_enabled: config.accounts_db_caching_enabled,

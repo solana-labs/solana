@@ -972,9 +972,9 @@ pub fn main() {
                 .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
-            Arg::with_name("no_os_io_stats_reporting")
-                .long("no-os-io-stats-reporting")
-                .help("Disable reporting of OS IO statistics.")
+            Arg::with_name("no_os_disk_stats_reporting")
+                .long("no-os-disk-stats-reporting")
+                .help("Disable reporting of OS disk statistics.")
         )
         .arg(
             Arg::with_name("accounts-hash-interval-slots")
@@ -2646,7 +2646,7 @@ pub fn main() {
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
         no_os_network_stats_reporting: matches.is_present("no_os_network_stats_reporting"),
         no_os_cpu_stats_reporting: matches.is_present("no_os_cpu_stats_reporting"),
-        no_os_io_stats_reporting: matches.is_present("no_os_io_stats_reporting"),
+        no_os_disk_stats_reporting: matches.is_present("no_os_disk_stats_reporting"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
