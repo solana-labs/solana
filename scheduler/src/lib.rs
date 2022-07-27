@@ -340,34 +340,34 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(bool, UniqueWeight, Task)> {
-        let mut unique_weights_by_address = std::collections::BTreeMap::<UniqueWeight, &_>::new();
+        let mut heaviest_by_address = None
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = &address_book
                 .map
                 .get(address)
                 .unwrap()
                 .contended_unique_weights;
-            if !newly_uncontended_unique_weights.is_empty() {
-                unique_weights_by_address.insert(
-                    newly_uncontended_unique_weights.last().cloned().unwrap(),
-                    newly_uncontended_unique_weights,
-                );
+            if let Some(uw) = newly_uncontended_unique_weights.last() {
+                if let Some(heaviest_by_address) = heaviest_by_address {
+                    if uw > heaviest_by_address {
+                        heaviest_by_address = Some(uw);
+                    }
+                } else {
+                    heaviest_by_address = Some(uw);
+                }
             }
         }
-        let heaviest_by_address = unique_weights_by_address.last_key_value();
 
         match (
-            heaviest_by_address.map(|a| a.0.clone()),
+            heaviest_by_address,
             runnable_queue.next_task_unique_weight(),
         ) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
                 if weight_from_contended < weight_from_runnable {
                     runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
                 } else if weight_from_contended > weight_from_runnable {
-                    let heaviest_by_address = heaviest_by_address.unwrap();
-                    let uw = heaviest_by_address.1.last().unwrap();
-                    let task = contended_queue.map.remove(uw).unwrap();
-                    Some((false, uw.clone(), task))
+                    let task = contended_queue.map.remove(&weight_from_contended).unwrap();
+                    Some((false, weight_from_contended, task))
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
@@ -375,10 +375,8 @@ impl ScheduleStage {
                 }
             }
             (Some(weight_from_contended), None) => {
-                let heaviest_by_address = heaviest_by_address.unwrap();
-                let uw = heaviest_by_address.1.last().unwrap();
-                let task = contended_queue.map.remove(uw).unwrap();
-                Some((false, uw.clone(), task))
+                let task = contended_queue.map.remove(&weight_from_contended).unwrap();
+                Some((false, weight_from_contended, task))
             }
             (None, Some(weight_from_runnable)) => {
                 runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
