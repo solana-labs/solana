@@ -465,7 +465,7 @@ impl ScheduleStage {
         unique_weight: UniqueWeight,
         task: Task,
         lock_attempts: Vec<LockAttempt>,
-    ) -> ExecutionEnvironment {
+    ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
         Self::apply_successful_lock_before_execution(address_book, unique_weight, &lock_attempts);
