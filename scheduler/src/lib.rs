@@ -311,7 +311,7 @@ fn attempt_lock_for_execution<'a>(
         .map(|a| (a, RequestedUsage::Writable));
     let readonly_lock_iter = locks
         .readonly
-        .iter();
+        .iter()
         .copied()
         .map(|a| (a, RequestedUsage::Readonly));
     let all_iter = writable_lock_iter.chain(readonly_lock_iter);
