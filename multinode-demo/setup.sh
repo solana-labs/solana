@@ -9,9 +9,6 @@ set -e
 rm -rf "$SOLANA_CONFIG_DIR"/bootstrap-validator
 mkdir -p "$SOLANA_CONFIG_DIR"/bootstrap-validator
 
--echo "greg - in multinode-demo/setup.sh"
--echo "((((((((((((((((((((((((((((((((((((((((((((((((((((((((((("
-
 # Create genesis ledger
 if [[ -r $FAUCET_KEYPAIR ]]; then
   cp -f "$FAUCET_KEYPAIR" "$SOLANA_CONFIG_DIR"/faucet.json
