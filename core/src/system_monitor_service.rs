@@ -916,12 +916,6 @@ data" as &[u8];
     }
 
     #[test]
-    fn test_bw_temp() {
-        solana_logger::setup();
-        SystemMonitorService::report_io_stats();
-    }
-
-    #[test]
     fn test_calc_percent() {
         assert!(SystemMonitorService::calc_percent(99, 100) < 100.0);
         let one_tb_as_kb = (1u64 << 40) >> 10;
