@@ -515,7 +515,6 @@ impl ScheduleStage {
         use crossbeam_channel::select;
 
         let mut maybe_ee = None;
-        let mut reset = false;
         let (s, r) = bounded(0);
 
         loop {
@@ -541,13 +540,10 @@ impl ScheduleStage {
                     maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 }
                 send(maybe_ee.as_ref().map(|_| {
-                    reset = true;
                     to_execute_substage
                 }).unwrap_or(&s), {
                     let a = maybe_ee;
-                    if reset {
-                        maybe_ee = None;
-                    }
+                    maybe_ee = None;
                     a
                 }) -> res => {
                     info!("send to execute");
