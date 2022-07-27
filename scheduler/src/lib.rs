@@ -188,7 +188,7 @@ impl AddressBook {
 
     #[inline(never)]
     fn unlock(&mut self, attempt: &LockAttempt) -> bool {
-        assert!(attempt.is_success());
+        debug_assert!(attempt.is_success());
 
         use std::collections::btree_map::Entry;
         let mut newly_uncontended = false;
