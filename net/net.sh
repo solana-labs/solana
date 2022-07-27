@@ -329,6 +329,78 @@ startBootstrapLeader() {
   }
 }
 
+startGossipNode() {
+  echo "greg - in startGossipNode()"
+  declare ipAddress=$1
+  declare nodeType=$2
+  declare nodeIndex="$3"
+
+  initLogDir
+  declare logFile="$netLogDir/validator-$ipAddress.log"
+
+  if [[ -z $nodeType ]]; then
+    echo nodeType not specified
+    exit 1
+  fi
+
+  if [[ -z $nodeIndex ]]; then
+    echo nodeIndex not specified
+    exit 1
+  fi
+
+  echo "--- Starting $nodeType: $ipAddress"
+  echo "start log: $logFile"
+  (
+    set -x
+    startCommon "$ipAddress"
+
+    if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
+      #
+      # Create/renew TLS certificate
+      #
+      declare localArchive=~/letsencrypt-"$letsEncryptDomainName".tgz
+      if [[ -r "$localArchive" ]]; then
+        timeout 30s scp "${sshOptions[@]}" "$localArchive" "$ipAddress:letsencrypt.tgz"
+      fi
+      ssh "${sshOptions[@]}" -n "$ipAddress" \
+        "sudo -H /certbot-restore.sh $letsEncryptDomainName maintainers@solana.foundation"
+      rm -f letsencrypt.tgz
+      timeout 30s scp "${sshOptions[@]}" "$ipAddress:/letsencrypt.tgz" letsencrypt.tgz
+      test -s letsencrypt.tgz # Ensure non-empty before overwriting $localArchive
+      cp letsencrypt.tgz "$localArchive"
+    fi
+
+    ssh "${sshOptions[@]}" -n "$ipAddress" \
+      "./solana/net/remote/remote-gossip-node.sh \
+         $deployMethod \
+         $nodeType \
+         $entrypointIp \
+         $((${#validatorIpList[@]} + ${#blockstreamerIpList[@]})) \
+         \"$RUST_LOG\" \
+         $skipSetup \
+         $failOnValidatorBootupFailure \
+         \"$remoteExternalPrimordialAccountsFile\" \
+         \"$maybeDisableAirdrops\" \
+         \"$internalNodesStakeLamports\" \
+         \"$internalNodesLamports\" \
+         $nodeIndex \
+         ${#clientIpList[@]} \"$benchTpsExtraArgs\" \
+         \"$genesisOptions\" \
+         \"$maybeNoSnapshot $maybeSkipLedgerVerify $maybeLimitLedgerSize $maybeWaitForSupermajority $maybeAllowPrivateAddr $maybeAccountsDbSkipShrink $maybeSkipRequireTower\" \
+         \"$gpuMode\" \
+         \"$maybeWarpSlot\" \
+         \"$maybeFullRpc\" \
+         \"$waitForNodeInit\" \
+         \"$extraPrimordialStakes\" \
+         \"$TMPFS_ACCOUNTS\" \
+      "
+  ) >> "$logFile" 2>&1 &
+  declare pid=$!
+  ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
+  pids+=("$pid")
+
+}
+
 startNode() {
   declare ipAddress=$1
   declare nodeType=$2
@@ -579,6 +651,112 @@ prepareDeploy() {
       exit 0
     fi
   fi
+}
+
+gossipDeploy() {
+  echo "greg - in gossipDeploy()"
+  initLogDir
+
+  echo "Deployment started at $(date)"
+  $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
+
+  declare bootstrapLeader=true
+  for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
+    nodeType=
+    nodeIndex=
+    getNodeType
+    if $bootstrapLeader; then
+      SECONDS=0
+      declare bootstrapNodeDeployTime=
+      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log"
+      bootstrapNodeDeployTime=$SECONDS
+      $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
+
+      bootstrapLeader=false
+      SECONDS=0
+      pids=()
+    else
+      startNode "$ipAddress" $nodeType $nodeIndex
+
+      # Stagger additional node start time. If too many nodes start simultaneously
+      # the bootstrap node gets more rsync requests from the additional nodes than
+      # it can handle.
+      sleep 2
+    fi
+  done
+
+
+  for pid in "${pids[@]}"; do
+    declare ok=true
+    wait "$pid" || ok=false
+    if ! $ok; then
+      echo "+++ validator failed to start"
+      cat "$netLogDir/validator-$pid.log"
+      if $failOnValidatorBootupFailure; then
+        exit 1
+      else
+        echo "Failure is non-fatal"
+      fi
+    fi
+  done
+
+  if ! $waitForNodeInit; then
+    # Handle async init
+    declare startTime=$SECONDS
+    for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
+      declare timeWaited=$((SECONDS - startTime))
+      if [[ $timeWaited -gt 600 ]]; then
+        break
+      fi
+      ssh "${sshOptions[@]}" -n "$ipAddress" \
+        "./solana/net/remote/remote-node-wait-init.sh $((600 - timeWaited))"
+    done
+  fi
+
+  $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
+  additionalNodeDeployTime=$SECONDS
+
+  annotateBlockexplorerUrl
+
+  sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
+                                 # have caught up to the bootstrap validator yet
+
+  echo "--- Sleeping $clientDelayStart seconds after validators are started before starting clients"
+  sleep "$clientDelayStart"
+
+  SECONDS=0
+  startClients
+  clientDeployTime=$SECONDS
+
+  $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
+
+  declare networkVersion=unknown
+  case $deployMethod in
+  tar)
+    networkVersion="$(
+      (
+        set -o pipefail
+        grep "^commit: " "$SOLANA_ROOT"/solana-release/version.yml | head -n1 | cut -d\  -f2
+      ) || echo "tar-unknown"
+    )"
+    ;;
+  local)
+    networkVersion="$(git rev-parse HEAD || echo local-unknown)"
+    ;;
+  skip)
+    ;;
+  *)
+    usage "Internal error: invalid deployMethod: $deployMethod"
+    ;;
+  esac
+  $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
+
+  echo
+  echo "--- Deployment Successful"
+  echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
+  echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
+  echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
+  echo "Network start logs in $netLogDir"
 }
 
 deploy() {
@@ -1072,6 +1250,11 @@ fi
 checkPremptibleInstances
 
 case $command in
+gossip-only)
+  prepareDeploy
+  stop
+  gossipDeploy
+  ;;
 restart)
   prepareDeploy
   stop
