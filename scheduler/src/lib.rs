@@ -164,11 +164,7 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn remove_contended_unique_weight(
-        &mut self,
-        unique_weight: &UniqueWeight,
-        address: &Pubkey,
-    ) {
+    fn remove_contended_unique_weight(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(*address) {
@@ -220,7 +216,6 @@ impl AddressBook {
                     CurrentUsage::Unused => unreachable!(),
                 }
 
-
                 if newly_uncontended {
                     page.current_usage = CurrentUsage::Unused;
                     if !page.contended_unique_weights.is_empty() {
@@ -241,7 +236,7 @@ impl AddressBook {
 pub struct Weight {
     // naming: Sequence Ordering?
     pub ix: usize, // index in ledger entry?
-    // gas fee
+                   // gas fee
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -251,7 +246,7 @@ pub struct UniqueWeight {
     // we can't use Transaction::message_hash because it's manipulatable to be favorous to the tx
     // submitter
     //unique_key: Hash, // tie breaker? random noise? also for unique identification of txes?
-                      // fee?
+    // fee?
 }
 /*
 pub type Weight = usize;
@@ -304,14 +299,8 @@ fn attempt_lock_for_execution<'a>(
     locks: &'a TransactionAccountLocks,
 ) -> Vec<LockAttempt> {
     // no short-cuircuit; we at least all need to add to the contended queue
-    let writable_lock_iter = locks
-        .writable
-        .iter()
-        .map(|a| (a, RequestedUsage::Writable));
-    let readonly_lock_iter = locks
-        .readonly
-        .iter()
-        .map(|a| (a, RequestedUsage::Readonly));
+    let writable_lock_iter = locks.writable.iter().map(|a| (a, RequestedUsage::Writable));
+    let readonly_lock_iter = locks.readonly.iter().map(|a| (a, RequestedUsage::Readonly));
     let chained_iter = writable_lock_iter.chain(readonly_lock_iter);
 
     chained_iter
@@ -322,7 +311,10 @@ fn attempt_lock_for_execution<'a>(
 pub struct ScheduleStage {}
 
 impl ScheduleStage {
-    fn push_to_queue((weight, tx): (Weight, Box<SanitizedTransaction>), runnable_queue: &mut TaskQueue) {
+    fn push_to_queue(
+        (weight, tx): (Weight, Box<SanitizedTransaction>),
+        runnable_queue: &mut TaskQueue,
+    ) {
         // manage randomness properly for future scheduling determinism
         let mut rng = rand::thread_rng();
 
@@ -350,16 +342,14 @@ impl ScheduleStage {
         address_book: &'a AddressBook,
     ) -> &'a std::collections::BTreeSet<UniqueWeight> {
         &address_book
-                .map
-                .get(address)
-                .unwrap()
-                .contended_unique_weights
+            .map
+            .get(address)
+            .unwrap()
+            .contended_unique_weights
     }
 
     #[inline(never)]
-    fn get_weight_from_contended(
-        address_book: &AddressBook,
-    ) -> Option<UniqueWeight> {
+    fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
         let mut heaviest_by_address: Option<UniqueWeight> = None;
         //info!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for address in address_book.newly_uncontended_addresses.iter() {
@@ -525,8 +515,9 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<Box<ExecutionEnvironment>> {
-        let maybe_ee = Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
-            .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
+        let maybe_ee =
+            Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
+                .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
         maybe_ee
     }
 
@@ -558,7 +549,10 @@ impl ScheduleStage {
 
             // this trick is needed for conditional (Option<_>) send
             // upstream this to crossbeam-channel...
-            let to_execute_substage_if_ready = maybe_ee.as_ref().map(|_| to_execute_substage).unwrap_or(&to_full);
+            let to_execute_substage_if_ready = maybe_ee
+                .as_ref()
+                .map(|_| to_execute_substage)
+                .unwrap_or(&to_full);
 
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
