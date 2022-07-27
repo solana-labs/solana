@@ -237,6 +237,9 @@ pub enum VerifySlotDeltasError {
 
     #[error("slot {0} is greater than bank slot {1}")]
     SlotGreaterThanMaxRoot(Slot, Slot),
+
+    #[error("slot {0} has multiple entries")]
+    SlotHasMultipleEntries(Slot),
 }
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
@@ -1764,6 +1767,7 @@ fn verify_slot_deltas(
     slot_deltas: &[BankSlotDelta],
     bank_slot: Slot,
 ) -> std::result::Result<(), VerifySlotDeltasError> {
+    let mut slots_seen_so_far = HashSet::new();
     for (slot, is_root, _) in slot_deltas {
         // all entries should be roots
         if !is_root {
@@ -1775,6 +1779,12 @@ fn verify_slot_deltas(
             return Err(VerifySlotDeltasError::SlotGreaterThanMaxRoot(
                 *slot, bank_slot,
             ));
+        }
+
+        // there should only be one entry per slot
+        let inserted = slots_seen_so_far.insert(*slot);
+        if !inserted {
+            return Err(VerifySlotDeltasError::SlotHasMultipleEntries(*slot));
         }
     }
 
@@ -3906,6 +3916,22 @@ mod tests {
             Err(VerifySlotDeltasError::SlotGreaterThanMaxRoot(
                 555, bank_slot
             ))
+        );
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_bad_slot_has_multiple_entries() {
+        let slot_deltas = vec![
+            (111, true, Status::default()),
+            (222, true, Status::default()),
+            (111, true, Status::default()), // <-- slot is a duplicate
+        ];
+
+        let bank_slot = 222;
+        let result = verify_slot_deltas(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(
+            result,
+            Err(VerifySlotDeltasError::SlotHasMultipleEntries(111)),
         );
     }
 }
