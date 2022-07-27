@@ -268,7 +268,7 @@ struct ContendedQueue {
 
 impl TaskQueue {
     fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
-        //info!("TaskQueue::add(): {:?}", unique_weight);
+        info!("TaskQueue::add(): {:?}", unique_weight);
         assert!(self.map.insert(unique_weight.clone(), task).is_none(), "identical shouldn't exist: {:?}", unique_weight);
     }
 
