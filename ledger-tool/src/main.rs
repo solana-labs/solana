@@ -267,11 +267,29 @@ fn output_slot(
     let t2 = std::thread::Builder::new()
         .name("sol-execute".to_string())
         .spawn(move || {
+            let current_thread_name = std::thread::current().name().unwrap().to_string();
             let mut step = 0;
+
             loop {
                 let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
+                let mut process_message_time = Measure::start("process_message_time");
+
                 info!("execute substage: #{} {:#?}", step, ee.task.tx.signature());
-                //std::thread::sleep(std::time::Duration::from_micros(50));
+                std::thread::sleep(std::time::Duration::from_micros(ee.cu));
+
+                process_message_time.stop();
+                let duration_with_overhead = process_message_time.as_us();
+
+                datapoint_info!(
+                    "individual_tx_stats",
+                    ("slot", 33333, i64),
+                    ("thread", current_thread_name, String),
+                    ("signature", ee.tx.signature(), String),
+                    ("account_locks_in_json", "{}", String),
+                    ("status", "Ok", String),
+                    ("duration", duration_with_overhead, i64),
+                    ("compute_units", ee.cu, i64),
+                );
                 post_execute_env_sender.send(ee).unwrap();
                 step += 1;
             }
