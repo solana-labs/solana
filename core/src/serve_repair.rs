@@ -142,8 +142,9 @@ impl RequestResponse for AncestorHashesRepairType {
 
 #[derive(Default)]
 pub struct ServeRepairStats {
-    pub total_packets: usize,
-    pub dropped_packets: usize,
+    pub total_requests: usize,
+    pub dropped_requests: usize,
+    pub total_response_packets: usize,
     pub processed: usize,
     pub self_repair: usize,
     pub window_index: usize,
@@ -327,26 +328,26 @@ impl ServeRepair {
         //TODO cache connections
         let timeout = Duration::new(1, 0);
         let mut reqs_v = vec![requests_receiver.recv_timeout(timeout)?];
-        let mut total_packets = reqs_v[0].len();
+        let mut total_requests = reqs_v[0].len();
 
-        let mut dropped_packets = 0;
+        let mut dropped_requests = 0;
         while let Ok(more) = requests_receiver.try_recv() {
-            total_packets += more.len();
-            if packet_threshold.should_drop(total_packets) {
-                dropped_packets += more.len();
+            total_requests += more.len();
+            if packet_threshold.should_drop(total_requests) {
+                dropped_requests += more.len();
             } else {
                 reqs_v.push(more);
             }
         }
 
-        stats.dropped_packets += dropped_packets;
-        stats.total_packets += total_packets;
+        stats.dropped_requests += dropped_requests;
+        stats.total_requests += total_requests;
 
         let timer = Instant::now();
         for reqs in reqs_v {
             Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
         }
-        packet_threshold.update(total_packets, timer.elapsed());
+        packet_threshold.update(total_requests, timer.elapsed());
         Ok(())
     }
 
@@ -360,24 +361,26 @@ impl ServeRepair {
             inc_new_counter_debug!("serve_repair-handle-repair--eq", stats.self_repair);
         }
 
-        inc_new_counter_info!("serve_repair-total_packets", stats.total_packets);
-        inc_new_counter_info!("serve_repair-dropped_packets", stats.dropped_packets);
-
-        debug!(
-            "repair_listener: total_packets: {} passed: {}",
-            stats.total_packets, stats.processed
+        datapoint_info!(
+            "serve_repair-requests_received",
+            ("total_requests", stats.total_requests, i64),
+            ("dropped_requests", stats.dropped_requests, i64),
+            ("total_response_packets", stats.total_response_packets, i64),
+            ("self_repair", stats.self_repair, i64),
+            ("window_index", stats.window_index, i64),
+            (
+                "request-highest-window-index",
+                stats.highest_window_index,
+                i64
+            ),
+            ("orphan", stats.orphan, i64),
+            (
+                "serve_repair-request-ancestor-hashes",
+                stats.ancestor_hashes,
+                i64
+            ),
         );
 
-        inc_new_counter_debug!("serve_repair-request-window-index", stats.window_index);
-        inc_new_counter_debug!(
-            "serve_repair-request-highest-window-index",
-            stats.highest_window_index
-        );
-        inc_new_counter_debug!("serve_repair-request-orphan", stats.orphan);
-        inc_new_counter_debug!(
-            "serve_repair-request-ancestor-hashes",
-            stats.ancestor_hashes
-        );
         *stats = ServeRepairStats::default();
     }
 
@@ -436,6 +439,7 @@ impl ServeRepair {
                 stats.processed += 1;
                 let from_addr = packet.meta.socket_addr();
                 let rsp = Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
+                stats.total_response_packets += rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
                 if let Some(rsp) = rsp {
                     let _ignore_disconnect = response_sender.send(rsp);
                 }

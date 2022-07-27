@@ -251,6 +251,7 @@ pub struct CliSlotStatus {
 pub struct CliEpochInfo {
     #[serde(flatten)]
     pub epoch_info: EpochInfo,
+    pub epoch_completed_percent: f64,
     #[serde(skip)]
     pub average_slot_time_ms: u64,
     #[serde(skip)]
@@ -285,10 +286,7 @@ impl fmt::Display for CliEpochInfo {
         writeln_name_value(
             f,
             "Epoch Completed Percent:",
-            &format!(
-                "{:>3.3}%",
-                self.epoch_info.slot_index as f64 / self.epoch_info.slots_in_epoch as f64 * 100_f64
-            ),
+            &format!("{:>3.3}%", self.epoch_completed_percent),
         )?;
         let remaining_slots_in_epoch = self.epoch_info.slots_in_epoch - self.epoch_info.slot_index;
         writeln_name_value(
@@ -526,7 +524,12 @@ impl fmt::Display for CliValidators {
 
         for (i, validator) in sorted_validators.iter().enumerate() {
             if padding > 0 {
-                write!(f, "{:padding$}", i + 1, padding = padding)?;
+                let num = if self.validators_reverse_sort {
+                    i + 1
+                } else {
+                    sorted_validators.len() - i
+                };
+                write!(f, "{:padding$} ", num, padding = padding)?;
             }
             write_vote_account(
                 f,

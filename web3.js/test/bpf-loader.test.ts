@@ -147,6 +147,25 @@ if (process.env.TEST_LIVE) {
         );
       });
 
+      it('simulate transaction with returnData', async () => {
+        const simulatedTransaction = new Transaction().add({
+          keys: [
+            {pubkey: payerAccount.publicKey, isSigner: true, isWritable: true},
+          ],
+          programId: program.publicKey,
+        });
+        const {err, returnData} = (
+          await connection.simulateTransaction(simulatedTransaction, [
+            payerAccount,
+          ])
+        ).value;
+        const expectedReturnData = new Uint8Array([1, 2, 3]);
+        var decodedData = Buffer.from(returnData.data[0], returnData.data[1]);
+        expect(err).to.be.null;
+        expect(returnData.programId).to.eql(program.publicKey.toString());
+        expect(decodedData).to.eql(expectedReturnData);
+      });
+
       it('deprecated - simulate transaction without signature verification', async () => {
         const simulatedTransaction = new Transaction().add({
           keys: [

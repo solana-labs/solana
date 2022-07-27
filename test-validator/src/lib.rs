@@ -48,7 +48,9 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{HashMap, HashSet},
-        fs::{remove_dir_all, File},
+        ffi::OsStr,
+        fmt::Display,
+        fs::{self, remove_dir_all, File},
         io::Read,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
@@ -61,7 +63,7 @@ use {
 
 #[derive(Clone)]
 pub struct AccountInfo<'a> {
-    pub address: Pubkey,
+    pub address: Option<Pubkey>,
     pub filename: &'a str,
 }
 
@@ -119,6 +121,7 @@ pub struct TestValidatorGenesis {
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
+    pub log_messages_bytes_limit: Option<usize>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -147,6 +150,7 @@ impl Default for TestValidatorGenesis {
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
+            log_messages_bytes_limit: Option::<usize>::default(),
         }
     }
 }
@@ -317,7 +321,10 @@ impl TestValidatorGenesis {
                 }
                 Ok(deserialized) => deserialized,
             };
-            let address = Pubkey::from_str(account_info.keyed_account.pubkey.as_str()).unwrap();
+
+            let address = account.address.unwrap_or_else(|| {
+                Pubkey::from_str(account_info.keyed_account.pubkey.as_str()).unwrap()
+            });
             let account = account_info
                 .keyed_account
                 .account
@@ -326,6 +333,41 @@ impl TestValidatorGenesis {
 
             self.add_account(address, account);
         }
+        self
+    }
+
+    pub fn add_accounts_from_directories<T, P>(&mut self, dirs: T) -> &mut Self
+    where
+        T: IntoIterator<Item = P>,
+        P: AsRef<Path> + Display,
+    {
+        let mut json_files: HashSet<String> = HashSet::new();
+        for dir in dirs {
+            let matched_files = fs::read_dir(&dir)
+                .unwrap_or_else(|err| {
+                    error!("Cannot read directory {}: {}", dir, err);
+                    solana_core::validator::abort();
+                })
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.is_file() && path.extension() == Some(OsStr::new("json")))
+                .map(|path| String::from(path.to_string_lossy()));
+
+            json_files.extend(matched_files);
+        }
+
+        debug!("account files found: {:?}", json_files);
+
+        let accounts: Vec<_> = json_files
+            .iter()
+            .map(|filename| AccountInfo {
+                address: None,
+                filename,
+            })
+            .collect();
+
+        self.add_accounts_from_json_files(&accounts);
+
         self
     }
 
@@ -522,6 +564,15 @@ impl TestValidator {
             .expect("validator start failed")
     }
 
+    /// allow tests to indicate that validator has completed initialization
+    pub fn set_startup_verification_complete(&self) {
+        self.bank_forks()
+            .read()
+            .unwrap()
+            .root_bank()
+            .set_startup_verification_complete();
+    }
+
     /// Initialize the ledger directory
     ///
     /// If `ledger_path` is `None`, a temporary ledger will be created.  Otherwise the ledger will
@@ -702,6 +753,7 @@ impl TestValidator {
                     compute_unit_limit,
                     ..ComputeBudget::default()
                 }),
+            log_messages_bytes_limit: config.log_messages_bytes_limit,
         };
 
         let mut validator_config = ValidatorConfig {
@@ -913,6 +965,7 @@ mod test {
     #[test]
     fn get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start();
+        test_validator.set_startup_verification_complete();
         let rpc_client = test_validator.get_rpc_client();
         rpc_client.get_health().expect("health");
     }
@@ -920,6 +973,7 @@ mod test {
     #[tokio::test]
     async fn nonblocking_get_health() {
         let (test_validator, _payer) = TestValidatorGenesis::default().start_async().await;
+        test_validator.set_startup_verification_complete();
         let rpc_client = test_validator.get_async_rpc_client();
         rpc_client.get_health().await.expect("health");
     }

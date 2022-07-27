@@ -44,6 +44,10 @@ impl<T> StakeAccount<T> {
     pub(crate) fn stake_state(&self) -> &StakeState {
         &self.stake_state
     }
+
+    pub(crate) fn account(&self) -> &AccountSharedData {
+        &self.account
+    }
 }
 
 impl StakeAccount<Delegation> {
@@ -100,12 +104,6 @@ impl<T> From<StakeAccount<T>> for (AccountSharedData, StakeState) {
     #[inline]
     fn from(stake_account: StakeAccount<T>) -> Self {
         (stake_account.account, stake_account.stake_state)
-    }
-}
-
-impl<T> StakeAccount<T> {
-    pub fn account(&self) -> &AccountSharedData {
-        &self.account
     }
 }
 

@@ -9,7 +9,7 @@ To run the CI suite locally, you can run the `run-local.sh` script.
 Before you do, there are a few dependencies that need to be installed:
 
 ```bash
-cargo install grcov cargo-audit
+cargo install cargo-audit cargo-sort grcov
 ```
 
 ## macOS

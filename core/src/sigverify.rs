@@ -127,11 +127,7 @@ impl SigVerifier for TransactionSigVerifier {
         &mut self,
         packet_batches: Vec<PacketBatch>,
     ) -> Result<(), SigVerifyServiceError<Self::SendType>> {
-        let mut tracer_packet_stats_to_send = SigverifyTracerPacketStats::default();
-        std::mem::swap(
-            &mut tracer_packet_stats_to_send,
-            &mut self.tracer_packet_stats,
-        );
+        let tracer_packet_stats_to_send = std::mem::take(&mut self.tracer_packet_stats);
         self.packet_sender
             .send((packet_batches, Some(tracer_packet_stats_to_send)))?;
         Ok(())

@@ -2,12 +2,12 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "gossip-only"
-description = "gossip protocol only"
-version = "0.0.0"
-repository = "https://github.com/gregcusack/solana/tree/gossip-only"
+description = "Blockchain, Rebuilt for Scale"
+version = "1.11.4"
+repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.solana.com/validator/gossip"
+documentation = "https://docs.rs/"
 default-run = "gossip-only"
 
 [dependencies]
@@ -15,19 +15,29 @@ clap = "2.33.1"
 crossbeam-channel = "0.5"
 indicatif = "0.16.2"
 log = "0.4.17"
+num_cpus = "1.13.1"
 rand = "0.7.0"
-solana-core = { path = "../core", version = "=1.11.0" }
-solana-genesis-utils = { path = "../genesis-utils", version = "=1.11.0" }
-solana-gossip = { path = "../gossip", version = "=1.11.0" }
-solana-net-utils = { path = "../net-utils", version = "=1.11.0" }
-solana-runtime = { path = "../runtime", version = "=1.11.0" }
-solana-sdk = { path = "../sdk", version = "=1.11.0" }
-solana-streamer = { path = "../streamer", version = "=1.11.0" }
-solana-version = { path = "../version", version = "=1.11.0" }
-solana-logger = { path = "../logger", version = "=1.11.0" }
-symlink = "0.1.0"
+serde = "1.0.137"
+serde_json = "1.0.81"
+serde_yaml = "0.8.24"
+solana-clap-utils = { path = "../clap-utils", version = "=1.11.4" }
+solana-client = { path = "../client", version = "=1.11.4" }
+solana-core = { path = "../core", version = "=1.11.4" }
+solana-entry = { path = "../entry", version = "=1.11.4" }
+solana-genesis = { path = "../genesis", version = "=1.11.4" }
+solana-genesis-utils = { path = "../genesis-utils", version = "=1.11.4" }
+solana-gossip = { path = "../gossip", version = "=1.11.4" }
+solana-ledger = { path = "../ledger", version = "=1.11.4" }
+solana-logger = { path = "../logger", version = "=1.11.4" }
+solana-metrics = { path = "../metrics", version = "=1.11.4" }
+solana-net-utils = { path = "../net-utils", version = "=1.11.4" }
+solana-runtime = { path = "../runtime", version = "=1.11.4" }
+solana-sdk = { path = "../sdk", version = "=1.11.4" }
+solana-streamer = { path = "../streamer", version = "=1.11.4" }
+solana-version = { path = "../version", version = "=1.11.4" }
 tempfile = "3.3.0"
-solana-local-cluster = { path = "../local-cluster", version = "=1.11.0" }
+symlink = "0.1.0"
+csv = "1.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }

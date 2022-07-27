@@ -12,8 +12,7 @@ pub struct TempFile {
 
 impl Drop for TempFile {
     fn drop(&mut self) {
-        let mut path = PathBuf::new();
-        std::mem::swap(&mut path, &mut self.path);
+        let path = std::mem::replace(&mut self.path, PathBuf::new());
         let _ignored = std::fs::remove_file(path);
     }
 }

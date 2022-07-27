@@ -155,12 +155,12 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.count_buckets_flushed.load(Ordering::Acquire)
     }
 
-    /// if all buckets are flushed at the current age and time has elapsed, then advanced age
+    /// if all buckets are flushed at the current age and time has elapsed, then advance age
     pub fn maybe_advance_age(&self) -> bool {
         self.maybe_advance_age_internal(self.all_buckets_flushed_at_current_age())
     }
 
-    /// if all buckets are flushed at the current age and time has elapsed, then advanced age
+    /// if all buckets are flushed at the current age and time has elapsed, then advance age
     fn maybe_advance_age_internal(&self, all_buckets_flushed_at_current_age: bool) -> bool {
         // call has_age_interval_elapsed last since calling it modifies state on success
         if all_buckets_flushed_at_current_age && self.has_age_interval_elapsed() {
@@ -468,13 +468,25 @@ pub mod tests {
         let now = Instant::now();
         test.bucket_flushed_at_current_age(true); // done with age 0
         (0..threads).into_par_iter().for_each(|_| {
-            while now.elapsed().as_millis() < (time as u128) {
+            // This test used to be more strict with time, but in a parallel, multi test environment,
+            // sometimes threads starve and this test intermittently fails. So, give it more time than it should require.
+            // This may be aggrevated by the strategy of only allowing thread 0 to advance the age.
+            while now.elapsed().as_millis() < (time as u128) * 100 {
                 if test.maybe_advance_age() {
                     test.bucket_flushed_at_current_age(true);
                 }
+
+                if test.current_age() >= expected {
+                    break;
+                }
             }
         });
-        assert_eq!(test.current_age(), expected);
+        assert!(
+            test.current_age() >= expected,
+            "{}, {}",
+            test.current_age(),
+            expected
+        );
     }
 
     #[test]

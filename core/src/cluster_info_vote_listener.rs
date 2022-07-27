@@ -40,6 +40,7 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         slot_hashes,
+        timing::AtomicInterval,
         transaction::Transaction,
     },
     std::{
@@ -47,7 +48,7 @@ use {
         iter::repeat,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -182,6 +183,47 @@ impl BankSendVotesStats {
     }
 }
 
+#[derive(Default)]
+struct VoteProcessingTiming {
+    gossip_txn_processing_time_us: u64,
+    gossip_slot_confirming_time_us: u64,
+    last_report: AtomicInterval,
+}
+
+const VOTE_PROCESSING_REPORT_INTERVAL_MS: u64 = 1_000;
+
+impl VoteProcessingTiming {
+    fn reset(&mut self) {
+        self.gossip_slot_confirming_time_us = 0;
+        self.gossip_slot_confirming_time_us = 0;
+    }
+
+    fn update(&mut self, vote_txn_processing_time_us: u64, vote_slot_confirming_time_us: u64) {
+        self.gossip_txn_processing_time_us += vote_txn_processing_time_us;
+        self.gossip_slot_confirming_time_us += vote_slot_confirming_time_us;
+
+        if self
+            .last_report
+            .should_update(VOTE_PROCESSING_REPORT_INTERVAL_MS)
+        {
+            datapoint_info!(
+                "vote-processing-timing",
+                (
+                    "vote_txn_processing_us",
+                    self.gossip_txn_processing_time_us as i64,
+                    i64
+                ),
+                (
+                    "slot_confirming_time_us",
+                    self.gossip_slot_confirming_time_us as i64,
+                    i64
+                ),
+            );
+            self.reset();
+        }
+    }
+}
+
 pub struct ClusterInfoVoteListener {
     thread_hdls: Vec<JoinHandle<()>>,
 }
@@ -192,7 +234,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
         verified_packets_sender: BankingPacketSender,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
@@ -333,7 +375,7 @@ impl ClusterInfoVoteListener {
     fn bank_send_loop(
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
         verified_packets_sender: &BankingPacketSender,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
@@ -346,7 +388,7 @@ impl ClusterInfoVoteListener {
             }
 
             let would_be_leader = poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
 
@@ -367,7 +409,7 @@ impl ClusterInfoVoteListener {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
                 // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-                let current_working_bank = poh_recorder.lock().unwrap().bank();
+                let current_working_bank = poh_recorder.read().unwrap().bank();
                 if let Some(current_working_bank) = current_working_bank {
                     Self::check_for_leader_bank_and_send_votes(
                         &mut bank_vote_sender_state_option,
@@ -450,6 +492,7 @@ impl ClusterInfoVoteListener {
             OptimisticConfirmationVerifier::new(bank_forks.read().unwrap().root());
         let mut last_process_root = Instant::now();
         let cluster_confirmed_slot_sender = Some(cluster_confirmed_slot_sender);
+        let mut vote_processing_time = Some(VoteProcessingTiming::default());
         loop {
             if exit.load(Ordering::Relaxed) {
                 return Ok(());
@@ -480,6 +523,7 @@ impl ClusterInfoVoteListener {
                 &replay_votes_receiver,
                 &bank_notification_sender,
                 &cluster_confirmed_slot_sender,
+                &mut vote_processing_time,
             );
             match confirmed_slots {
                 Ok(confirmed_slots) => {
@@ -519,9 +563,11 @@ impl ClusterInfoVoteListener {
             replay_votes_receiver,
             &None,
             &None,
+            &mut None,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn listen_and_confirm_votes(
         gossip_vote_txs_receiver: &VerifiedVoteTransactionsReceiver,
         vote_tracker: &VoteTracker,
@@ -532,6 +578,7 @@ impl ClusterInfoVoteListener {
         replay_votes_receiver: &ReplayVoteReceiver,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        vote_processing_time: &mut Option<VoteProcessingTiming>,
     ) -> Result<ThresholdConfirmedSlots> {
         let mut sel = Select::new();
         sel.recv(gossip_vote_txs_receiver);
@@ -560,6 +607,7 @@ impl ClusterInfoVoteListener {
                     verified_vote_sender,
                     bank_notification_sender,
                     cluster_confirmed_slot_sender,
+                    vote_processing_time,
                 ));
             }
             remaining_wait_time = remaining_wait_time.saturating_sub(start.elapsed());
@@ -611,10 +659,7 @@ impl ClusterInfoVoteListener {
             // 2) We do not know the hash of the earlier slot
             if slot == last_vote_slot {
                 let vote_accounts = epoch_stakes.stakes().vote_accounts();
-                let stake = vote_accounts
-                    .get(vote_pubkey)
-                    .map(|(stake, _)| *stake)
-                    .unwrap_or_default();
+                let stake = vote_accounts.get_delegated_stake(vote_pubkey);
                 let total_stake = epoch_stakes.total_stake();
 
                 // Fast track processing of the last slot in a vote transactions
@@ -685,6 +730,7 @@ impl ClusterInfoVoteListener {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn filter_and_confirm_with_new_votes(
         vote_tracker: &VoteTracker,
         gossip_vote_txs: Vec<Transaction>,
@@ -695,11 +741,13 @@ impl ClusterInfoVoteListener {
         verified_vote_sender: &VerifiedVoteSender,
         bank_notification_sender: &Option<BankNotificationSender>,
         cluster_confirmed_slot_sender: &Option<GossipDuplicateConfirmedSlotsSender>,
+        vote_processing_time: &mut Option<VoteProcessingTiming>,
     ) -> ThresholdConfirmedSlots {
         let mut diff: HashMap<Slot, HashMap<Pubkey, bool>> = HashMap::new();
         let mut new_optimistic_confirmed_slots = vec![];
 
         // Process votes from gossip and ReplayStage
+        let mut gossip_vote_txn_processing_time = Measure::start("gossip_vote_processing_time");
         let votes = gossip_vote_txs
             .iter()
             .filter_map(vote_parser::parse_vote_transaction)
@@ -722,8 +770,11 @@ impl ClusterInfoVoteListener {
                 cluster_confirmed_slot_sender,
             );
         }
+        gossip_vote_txn_processing_time.stop();
+        let gossip_vote_txn_processing_time_us = gossip_vote_txn_processing_time.as_us();
 
         // Process all the slots accumulated from replay and gossip.
+        let mut gossip_vote_slot_confirming_time = Measure::start("gossip_vote_slot_confirm_time");
         for (slot, mut slot_diff) in diff {
             let slot_tracker = vote_tracker.get_or_insert_slot_tracker(slot);
             {
@@ -771,6 +822,16 @@ impl ClusterInfoVoteListener {
 
             w_slot_tracker.gossip_only_stake += gossip_only_stake
         }
+        gossip_vote_slot_confirming_time.stop();
+        let gossip_vote_slot_confirming_time_us = gossip_vote_slot_confirming_time.as_us();
+
+        match vote_processing_time {
+            Some(ref mut vote_processing_time) => vote_processing_time.update(
+                gossip_vote_txn_processing_time_us,
+                gossip_vote_slot_confirming_time_us,
+            ),
+            None => {}
+        }
         new_optimistic_confirmed_slots
     }
 
@@ -795,9 +856,7 @@ impl ClusterInfoVoteListener {
 
     fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {
         if let Some(stakes) = epoch_stakes {
-            if let Some(vote_account) = stakes.stakes().vote_accounts().get(pubkey) {
-                *sum += vote_account.0;
-            }
+            *sum += stakes.stakes().vote_accounts().get_delegated_stake(pubkey)
         }
     }
 }
@@ -954,6 +1013,7 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
+            &mut None,
         )
         .unwrap();
 
@@ -985,6 +1045,7 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
+            &mut None,
         )
         .unwrap();
 
@@ -1067,6 +1128,7 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
+            &mut None,
         )
         .unwrap();
 
@@ -1224,6 +1286,7 @@ mod tests {
             &replay_votes_receiver,
             &None,
             &None,
+            &mut None,
         )
         .unwrap();
 
@@ -1324,6 +1387,7 @@ mod tests {
                     &replay_votes_receiver,
                     &None,
                     &None,
+                    &mut None,
                 );
             }
             let slot_vote_tracker = vote_tracker.get_slot_vote_tracker(vote_slot).unwrap();
@@ -1414,6 +1478,7 @@ mod tests {
             &verified_vote_sender,
             &None,
             &None,
+            &mut None,
         );
 
         // Setup next epoch
@@ -1460,6 +1525,7 @@ mod tests {
             &verified_vote_sender,
             &None,
             &None,
+            &mut None,
         );
     }
 

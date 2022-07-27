@@ -1,6 +1,7 @@
 use {
     solana_gossip::cluster_info::ClusterInfo,
     solana_runtime::bank_forks::BankForks,
+    solana_sdk::pubkey::Pubkey,
     solana_streamer::streamer::StakedNodes,
     std::{
         collections::HashMap,
@@ -33,17 +34,20 @@ impl StakedNodesUpdaterService {
                 let mut last_stakes = Instant::now();
                 while !exit.load(Ordering::Relaxed) {
                     let mut new_ip_to_stake = HashMap::new();
+                    let mut new_id_to_stake = HashMap::new();
                     let mut total_stake = 0;
-                    if Self::try_refresh_ip_to_stake(
+                    if Self::try_refresh_stake_maps(
                         &mut last_stakes,
                         &mut new_ip_to_stake,
+                        &mut new_id_to_stake,
                         &mut total_stake,
                         &bank_forks,
                         &cluster_info,
                     ) {
                         let mut shared = shared_staked_nodes.write().unwrap();
-                        shared.total_stake = total_stake as f64;
-                        shared.stake_map = new_ip_to_stake;
+                        shared.total_stake = total_stake;
+                        shared.ip_stake_map = new_ip_to_stake;
+                        shared.pubkey_stake_map = new_id_to_stake;
                     }
                 }
             })
@@ -52,9 +56,10 @@ impl StakedNodesUpdaterService {
         Self { thread_hdl }
     }
 
-    fn try_refresh_ip_to_stake(
+    fn try_refresh_stake_maps(
         last_stakes: &mut Instant,
         ip_to_stake: &mut HashMap<IpAddr, u64>,
+        id_to_stake: &mut HashMap<Pubkey, u64>,
         total_stake: &mut u64,
         bank_forks: &RwLock<BankForks>,
         cluster_info: &ClusterInfo,
@@ -66,6 +71,14 @@ impl StakedNodesUpdaterService {
                 .iter()
                 .map(|(_pubkey, stake)| stake)
                 .sum::<u64>();
+            *id_to_stake = cluster_info
+                .tvu_peers()
+                .into_iter()
+                .filter_map(|node| {
+                    let stake = staked_nodes.get(&node.id)?;
+                    Some((node.id, *stake))
+                })
+                .collect();
             *ip_to_stake = cluster_info
                 .tvu_peers()
                 .into_iter()

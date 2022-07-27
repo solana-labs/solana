@@ -90,7 +90,6 @@ where
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        false,
     )
     .map(|(accounts_db, _)| accounts_db)
 }
@@ -269,7 +268,7 @@ fn test_bank_serialize_style(
             // This make serialized bytes not deterministic.
             // But, we can guarantee that the buffer is different if we change the hash!
             assert_ne!(buf, buf_reserialized);
-            std::mem::swap(&mut buf, &mut buf_reserialized);
+            buf = buf_reserialized;
         }
     }
 
@@ -303,7 +302,6 @@ fn test_bank_serialize_style(
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        false,
     )
     .unwrap();
     dbank.status_cache = Arc::new(RwLock::new(status_cache));
@@ -419,7 +417,6 @@ fn test_extra_fields_eof() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        false,
     )
     .unwrap();
 
@@ -541,7 +538,6 @@ fn test_blank_extra_fields() {
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
-        false,
     )
     .unwrap();
 

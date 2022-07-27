@@ -1,86 +1,92 @@
 #![allow(clippy::integer_arithmetic)]
 #[cfg(not(target_env = "msvc"))]
 use {
-    log::*,
     clap::{
-        crate_description, crate_name, value_t, values_t, App, Arg, ArgMatches,
-    },
-    solana_core::{
-        validator::{ValidatorConfig},
-    },
-    solana_gossip::{
-        cluster_info::{
-            ClusterInfo, Node,
-        },
-        gossip_service::GossipService,
-        contact_info::ContactInfo,
-    },
-    rand::{seq::SliceRandom, thread_rng},
-    solana_net_utils::VALIDATOR_PORT_RANGE,
-    solana_runtime::{
-        accounts_db,
-        accounts_index::AccountSecondaryIndexes,
-        bank::Bank,
-        bank_forks::BankForks,
-        genesis_utils::{
-            create_genesis_config_with_vote_accounts_and_cluster_type,
-            ValidatorVoteKeypairs,
-        },
+        crate_description, crate_name, value_t, value_t_or_exit, values_t, App, Arg, ArgMatches,
     },
     crossbeam_channel::unbounded,
-    std::{
-        sync::{
-            atomic::AtomicBool,
-            Arc, RwLock,
-        },
-        net::{SocketAddr,IpAddr},
-        str::FromStr,
-        process::exit,
-        collections::HashSet,
-        iter,
-
+    log::*,
+    solana_core::gen_keys::GenKeys,
+    solana_gossip::{
+        cluster_info::{ClusterInfo, Node},
+        contact_info::ContactInfo,
+        gossip_service::GossipService,
     },
-    solana_local_cluster::{
-        local_cluster::ClusterConfig,
-        validator_configs::make_identical_validator_configs,
+    solana_net_utils::VALIDATOR_PORT_RANGE,
+    solana_runtime::{
+        accounts_db, accounts_index::AccountSecondaryIndexes, bank::Bank, bank_forks::BankForks,
+        genesis_utils::create_genesis_config_with_leader,
+    },
+    solana_sdk::{
+        native_token::LAMPORTS_PER_SOL,
+        signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_sdk::{
-        signature::{Keypair, Signer},
-        native_token::LAMPORTS_PER_SOL,
+    std::{
+        collections::HashMap,
+        collections::HashSet,
+        env,
+        fs::{self, File},
+        io::Write,
+        net::{IpAddr, SocketAddr},
+        path::Path,
+        process::exit,
+        str::FromStr,
+        sync::{atomic::AtomicBool, Arc, RwLock},
     },
     tempfile::TempDir,
 };
 
 pub const DEFAULT_CLUSTER_LAMPORTS: u64 = 10_000_000 * LAMPORTS_PER_SOL;
 pub const DEFAULT_NODE_STAKE: u64 = 10 * LAMPORTS_PER_SOL;
+pub const DEFAULT_SHRED_VERSION: u16 = 44120;
+
+pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
+    let mut rnd = GenKeys::new(seed);
+
+    (rnd.gen_n_keypairs(count), 0)
+}
 
 fn parse_matches() -> ArgMatches<'static> {
-    // let shred_version_arg = Arg::with_name("shred_version")
-    //     .long("shred-version")
-    //     .value_name("VERSION")
-    //     .takes_value(true)
-    //     .default_value("0")
-    //     .help("Filter gossip nodes by this shred version");
-
     App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
         .arg(
-            Arg::with_name("gossip_host")
-                .long("gossip-host")
-                .value_name("HOST")
+            Arg::with_name("shred_version")
+                .long("shred-version")
+                .value_name("VERSION")
                 .takes_value(true)
-                .validator(solana_net_utils::is_host)
-                .help("Gossip DNS name or IP address for the validator to advertise in gossip \
-                       [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+                .help("Filter gossip nodes by this shred version"),
         )
         .arg(
-            Arg::with_name("gossip_port")
-                .long("gossip-port")
-                .value_name("PORT")
+            Arg::with_name("account_file")
+                .long("account-file")
+                .value_name("PATH")
                 .takes_value(true)
-                .help("Gossip port number for the validator"),
+                .help("CSV File with Accounts"),
+        )
+        .arg(
+            Arg::with_name("write_keys")
+                .long("write-keys")
+                .value_name("KEYS")
+                .takes_value(false)
+                .help("set if you just want to write keys to a file"),
+        )
+        .arg(
+            Arg::with_name("num_keys")
+                .long("num-keys")
+                .value_name("KEYS")
+                .takes_value(true)
+                .help("Number of keys to write"),
+        )
+        .arg(
+            Arg::with_name("num_nodes")
+                .long("num-nodes")
+                .value_name("NODES")
+                .takes_value(true)
+                .help("Number of nodes to spin up"),
         )
         .arg(
             Arg::with_name("entrypoint")
@@ -91,44 +97,55 @@ fn parse_matches() -> ArgMatches<'static> {
                 .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this entrypoint"),
         )
-        .arg(
-            Arg::with_name("num_nodes")
-                .long("num-nodes")
-                .value_name("NODES")
-                .takes_value(true)
-                .default_value("1")
-                .help("Number of gossip nodes in cluster"),
-        )
-        .arg(
-            Arg::with_name("node_stake")
-                .short("stake")
-                .long("node-stake")
-                .value_name("STAKE")
-                .takes_value(true)
-                .help("Stake of node. unit: lamports"),
-        )
         .get_matches()
 }
 
 pub fn main() {
     solana_logger::setup_with_default("info");
     let matches = parse_matches();
-    let socket_addr_space = SocketAddrSpace::Unspecified;
-    let exit_gossip = Arc::new(AtomicBool::new(false));
-    let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
+    let account_infile = value_t_or_exit!(matches, "account_file", String);
+    let write_keys = matches.is_present("write_keys");
+
+    //Write keys to file and exit
+    if write_keys {
+        let keypair_count = value_t!(matches, "num_keys", u64).unwrap_or_else(|_| {
+            error!("Number of keys to write was not specified! Use \"--num-keys <count>\"");
+            exit(1);
+        });
+
+        info!("Generating {} keypairs", keypair_count);
+        let id = &Keypair::new();
+        let (keypairs, _) = generate_keypairs(id, keypair_count);
+        let mut accounts = HashMap::new();
+        keypairs.iter().for_each(|keypair| {
+            accounts.insert(
+                serde_json::to_string(&keypair.to_bytes().to_vec()).unwrap(),
+                DEFAULT_NODE_STAKE, // this value can be a struct if we want. like Base64Account
+            );
+        });
+        info!("Writing {}", account_infile);
+        let serialized = serde_yaml::to_string(&accounts).unwrap();
+        let path = Path::new(&account_infile);
+        let mut file = File::create(path).unwrap();
+        file.write_all(&serialized.into_bytes()).unwrap();
+
+        info!("Wrote {} keys to file: {}", keypair_count, account_infile);
+        exit(0);
+    }
+
+    // Read keys from file and spin up gossip nodes
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
+    let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
+    let socket_addr_space = SocketAddrSpace::Unspecified;
 
     //Set dynamic port range for node ports
     let default_dynamic_port_range =
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
-    let dynamic_port_range =
-        solana_net_utils::parse_port_range(default_dynamic_port_range)
-            .expect("invalid dynamic_port_range");
+    let dynamic_port_range = solana_net_utils::parse_port_range(default_dynamic_port_range)
+        .expect("invalid dynamic_port_range");
 
-    // Get node stake from command line. Default node stake if not passed in
-    let node_stake = value_t!(matches, "node_stake", u64).unwrap_or_else(|_| {
-        DEFAULT_NODE_STAKE
-    });
+    let shred_version =
+        value_t!(matches, "shred_version", u16).unwrap_or_else(|_| DEFAULT_SHRED_VERSION);
 
     //Entrypoint to join Gossip Cluster
     let entrypoint_addrs = values_t!(matches, "entrypoint", String)
@@ -143,146 +160,71 @@ pub fn main() {
         .collect::<HashSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
+    println!("entrypoint_addr: {:?}", entrypoint_addrs);
 
-    //set gossip IP. will find public IP if one not specified
-    let gossip_host: IpAddr = matches
-        .value_of("gossip_host")
-        .map(|gossip_host| {
-            solana_net_utils::parse_host(gossip_host).unwrap_or_else(|err| {
-                eprintln!("Failed to parse --gossip-host: {}", err);
-                exit(1);
-            })
-        })
-        .unwrap_or_else(|| {
-            if !entrypoint_addrs.is_empty() {
-                let mut order: Vec<_> = (0..entrypoint_addrs.len()).collect();
-                order.shuffle(&mut thread_rng());
+    // READ ACCOUNTS FROM FILE
+    let path = Path::new(&account_infile);
+    let file = File::open(path).unwrap();
 
-                let gossip_host = order.into_iter().find_map(|i| {
-                    let entrypoint_addr = &entrypoint_addrs[i];
-                    info!(
-                        "Contacting {} to determine the validator's public IP address",
-                        entrypoint_addr
-                    );
-                    solana_net_utils::get_public_ip_addr(entrypoint_addr).map_or_else(
-                        |err| {
-                            eprintln!(
-                                "Failed to contact cluster entrypoint {}: {}",
-                                entrypoint_addr, err
-                            );
-                            None
-                        },
-                        Some,
-                    )
-                });
+    info!("Reading {}", account_infile);
+    let accounts: HashMap<String, u64> = serde_yaml::from_reader(file).unwrap();
+    info!("{} accounts read in", accounts.len());
 
-                gossip_host.unwrap_or_else(|| {
-                    eprintln!("Unable to determine the validator's public IP address");
-                    exit(1);
-                })
-            } else {
-                std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
-            }
-        });
-    
-    //set gossip addr (IP:port). Gets gossip port from commandline or finds available port
-    let gossip_addr = SocketAddr::new(
-        gossip_host,
-        value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
-            solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
-                |err| {
-                    eprintln!("Unable to find an available gossip port: {}", err);
-                    exit(1);
-                },
-            )
-        }),
+    let num_nodes = value_t!(matches, "num_nodes", usize).unwrap_or_else(|_| {
+        error!("Number of gossip nodes to spin up was not specified! Use \"--num-nodes <count>\"");
+        exit(1);
+    });
+    if num_nodes > accounts.len() {
+        error!("Attempting to spin up more nodes than there are accounts...exiting...");
+        exit(1);
+    }
+
+    info!(
+        "Spinning up {} Gossip nodes with the following accounts/stakes: ",
+        num_nodes
     );
-   
-    //Setup cluster with Node stakes. 
-    //Note we're only creating one node here since we're not creating a local cluster
-    let num_nodes = 1;
-    let stakes: Vec<_> = (0..num_nodes).map(|_| node_stake).collect();
-    let config = ClusterConfig {
-        node_stakes: stakes,
-        cluster_lamports,
-        validator_configs: make_identical_validator_configs(
-            &ValidatorConfig::default_for_test(),
-            num_nodes,
-        ),
-        ..ClusterConfig::default()
-    };
-    assert_eq!(config.validator_configs.len(), config.node_stakes.len());
-    
-    //generate keys for validators (aka just one validator)
-    let mut validator_keys: Vec<(Arc<Keypair>, bool)> = iter::repeat_with(|| (Arc::new(Keypair::new()), false))
-        .take(config.validator_configs.len())
-        .collect();
+    let mut count = 0;
+    for (k, v) in &accounts {
+        println!("{}, {}", k, v);
+        count = count + 1;
+        if count == num_nodes {
+            break;
+        }
+    }
 
-    // generate vote keys for a node/validator? (Just one)
-    // Not sure why we need diff vote keys
-    let vote_keys: Vec<Arc<Keypair>> = iter::repeat_with(|| Arc::new(Keypair::new()))
-        .take(config.validator_configs.len())
-        .collect();
-
-    // Bootstrap leader should always be in genesis block
-    // Think we need whoever starting cluster to run this part. aka include their key in genesis block
-    validator_keys[0].1 = true;
-    let (keys_in_genesis, stakes_in_genesis): (Vec<ValidatorVoteKeypairs>, Vec<u64>) =
-        validator_keys
-            .iter()
-            .zip(&config.node_stakes)
-            .zip(&vote_keys)
-            .filter_map(|(((node_keypair, in_genesis), stake), vote_keypair)| {
-                info!(
-                    "STARTING LOCAL CLUSTER: key {} vote_key {} has {} stake",
-                    node_keypair.pubkey(),
-                    vote_keypair.pubkey(),
-                    stake
-                );
-                if *in_genesis {
-                    Some((
-                        ValidatorVoteKeypairs {
-                            node_keypair: Keypair::from_bytes(&node_keypair.to_bytes())
-                                .unwrap(),
-                            vote_keypair: Keypair::from_bytes(&vote_keypair.to_bytes())
-                                .unwrap(),
-                            stake_keypair: Keypair::new(),
-                        },
-                        stake,
-                    ))
-                } else {
-                    None
-                }
-            })
-            .unzip();
-
-    let leader_keypair = &keys_in_genesis[0].node_keypair;
-    let leader_pubkey = leader_keypair.pubkey();
-
-    //create new node with external ip
-    let leader_node = Node::new_with_external_ip(
-        &leader_pubkey,
-        &gossip_addr,
-        dynamic_port_range,
-        bind_address,
-        None,
-    );
-    let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
+    let mut node_keys: Vec<Keypair> = Vec::new();
+    let mut node_stakes: Vec<u64> = Vec::new();
+    accounts.into_iter().for_each(|(keypair, stake)| {
+        let bytes: Vec<u8> = serde_json::from_str(keypair.as_str()).unwrap();
+        node_keys.push(Keypair::from_bytes(&bytes).unwrap());
+        node_stakes.push(stake);
+    });
 
     //Setup genesis config.
-    let genesis_config_info = &mut create_genesis_config_with_vote_accounts_and_cluster_type(
-        config.cluster_lamports,
-        &keys_in_genesis,
-        stakes_in_genesis,
-        config.cluster_type,
+    let genesis_config_info = &mut create_genesis_config_with_leader(
+        cluster_lamports,
+        &node_keys[0].pubkey(),
+        node_stakes[0],
     );
-
     let genesis_config = &mut genesis_config_info.genesis_config;
 
-    let cluster_info = ClusterInfo::new(
-        leader_node.info.clone(),
-        leader_keypair.clone(),
-        socket_addr_space,
+    let accounts_dir = TempDir::new().unwrap();
+    let ledger_path = accounts_dir.path().to_path_buf();
+    let ledger_path = fs::canonicalize(&ledger_path).unwrap_or_else(|err| {
+        eprintln!("Unable to access ledger path: {:?}", err);
+        exit(1);
+    });
+
+    let mut gossip_threads: Vec<GossipService> = Vec::new();
+    let gossip_host = entrypoint_addrs[0].ip();
+    let gossip_addr = SocketAddr::new(
+        gossip_host,
+        solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
+            |err| {
+                eprintln!("Unable to find an available gossip port: {}", err);
+                exit(1);
+            },
+        ),
     );
 
     //set entrypoints for gossip
@@ -291,47 +233,58 @@ pub fn main() {
         .map(ContactInfo::new_gossip_entry_point)
         .collect::<Vec<_>>();
 
-    cluster_info.set_entrypoints(cluster_entrypoints);
-    let cluster_info = Arc::new(cluster_info);
+    // Loop through nodes, spin up a leader first, then have all others join leader
+    for i in 0..num_nodes {
+        //create new node with external ip
+        let mut node = Node::new_with_external_ip(
+            &node_keys[i].pubkey(),
+            &gossip_addr,
+            dynamic_port_range,
+            bind_address,
+            None,
+        );
+        let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[i].to_bytes()).unwrap());
+        node.info.shred_version = shred_version;
 
-    //Generate new bank and bank forks
-    let accounts_dir = TempDir::new().unwrap();
-    let bank0 = Bank::new_with_paths_for_tests(
-        genesis_config,
-        vec![accounts_dir.path().to_path_buf()],
-        None,
-        None,
-        AccountSecondaryIndexes::default(),
-        false,
-        accounts_db::AccountShrinkThreshold::default(),
-        false,
-    );
-    bank0.freeze();
-    let bank_forks = BankForks::new(bank0);
-    let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let cluster_info =
+            ClusterInfo::new(node.info.clone(), my_keypair.clone(), socket_addr_space);
 
-    let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
+        cluster_info.set_entrypoints(cluster_entrypoints.clone());
+        let cluster_info = Arc::new(cluster_info);
 
-    // Run Gossip
-    let gossip_service = GossipService::new(
-        &cluster_info,
-        Some(bank_forks.clone()),
-        leader_node.sockets.gossip,
-        None,
-        true,   //should check dup instance
-        Some(stats_reporter_sender.clone()),
+        //Generate new bank and bank forks
+        let bank0 = Bank::new_with_paths_for_tests(
+            genesis_config,
+            vec![ledger_path.clone()],
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            accounts_db::AccountShrinkThreshold::default(),
+            false,
+            None,
+        );
+        bank0.freeze();
+        let bank_forks = BankForks::new(bank0);
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
 
-        &exit_gossip,
-    );
-    gossip_service.join().unwrap();
+        let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
+        // Run Gossip
+        let exit_gossip = Arc::new(AtomicBool::new(false));
+        let gossip_service = GossipService::new(
+            &cluster_info,
+            Some(bank_forks.clone()),
+            node.sockets.gossip,
+            None,
+            true, //should check dup instance
+            Some(stats_reporter_sender.clone()),
+            &exit_gossip,
+        );
 
+        gossip_threads.push(gossip_service);
+    }
+    for thread in gossip_threads {
+        thread.join().unwrap();
+    }
 }
-
-
-
-
-
-
-
-

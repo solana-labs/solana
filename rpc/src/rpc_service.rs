@@ -45,7 +45,7 @@ use {
         path::{Path, PathBuf},
         sync::{
             atomic::{AtomicBool, AtomicU64, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{self, Builder, JoinHandle},
     },
@@ -342,12 +342,13 @@ impl JsonRpcService {
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
         cluster_info: Arc<ClusterInfo>,
-        poh_recorder: Option<Arc<Mutex<PohRecorder>>>,
+        poh_recorder: Option<Arc<RwLock<PohRecorder>>>,
         genesis_hash: Hash,
         ledger_path: &Path,
         validator_exit: Arc<RwLock<Exit>>,
         known_validators: Option<HashSet<Pubkey>>,
         override_health_check: Arc<AtomicBool>,
+        startup_verification_complete: Arc<AtomicBool>,
         optimistically_confirmed_bank: Arc<RwLock<OptimisticallyConfirmedBank>>,
         send_transaction_service_config: send_transaction_service::Config,
         max_slots: Arc<MaxSlots>,
@@ -365,6 +366,7 @@ impl JsonRpcService {
             known_validators,
             config.health_check_slot_distance,
             override_health_check,
+            startup_verification_complete,
         ));
 
         let largest_accounts_cache = Arc::new(RwLock::new(LargestAccountsCache::new(
@@ -628,6 +630,7 @@ mod tests {
             validator_exit,
             None,
             Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(true)),
             optimistically_confirmed_bank,
             send_transaction_service::Config {
                 retry_rate_ms: 1000,
@@ -826,6 +829,7 @@ mod tests {
         ));
         let health_check_slot_distance = 123;
         let override_health_check = Arc::new(AtomicBool::new(false));
+        let startup_verification_complete = Arc::new(AtomicBool::new(true));
         let known_validators = vec![
             solana_sdk::pubkey::new_rand(),
             solana_sdk::pubkey::new_rand(),
@@ -837,6 +841,7 @@ mod tests {
             Some(known_validators.clone().into_iter().collect()),
             health_check_slot_distance,
             override_health_check.clone(),
+            startup_verification_complete,
         ));
 
         let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);

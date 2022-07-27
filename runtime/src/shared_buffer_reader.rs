@@ -237,9 +237,9 @@ impl SharedBufferBgReader {
                         bytes_read += size;
                         // loop to read some more. Underlying reader does not usually read all we ask for.
                     }
-                    Err(mut err) => {
+                    Err(err) => {
                         error_received = true;
-                        std::mem::swap(&mut error, &mut err);
+                        error = err;
                         break;
                     }
                 }
@@ -297,8 +297,7 @@ impl SharedBufferInternal {
             return false;
         }
         // grab all data from bg
-        let mut newly_read_data: Vec<OneSharedBuffer> = vec![];
-        std::mem::swap(&mut *from_lock, &mut newly_read_data);
+        let mut newly_read_data: Vec<OneSharedBuffer> = std::mem::take(&mut *from_lock);
         // append all data to fg
         let mut to_lock = self.data.write().unwrap();
         // from_lock has to be held until we have the to_lock lock. Otherwise, we can race with another reader and append to to_lock out of order.
@@ -367,10 +366,10 @@ impl SharedBufferReader {
             let eof = self.instance.has_reached_eof();
 
             for recycle in previous_buffer_index..new_min {
-                let mut remove = self.empty_buffer.clone();
-                let mut data = self.instance.data.write().unwrap();
-                std::mem::swap(&mut remove, &mut data[recycle]);
-                drop(data);
+                let remove = {
+                    let mut data = self.instance.data.write().unwrap();
+                    std::mem::replace(&mut data[recycle], self.empty_buffer.clone())
+                };
                 if remove.is_empty() {
                     continue; // another thread beat us swapping out this buffer, so nothing to recycle here
                 }
@@ -463,10 +462,8 @@ impl Read for SharedBufferReader {
                     let mut error = instance.bg_reader_data.error.write().unwrap();
                     if error.is_err() {
                         // replace the current error (with AN error instead of ok)
-                        let mut stored_error = Err(Self::default_error());
-                        std::mem::swap(&mut *error, &mut stored_error);
                         // return the original error
-                        return stored_error;
+                        return std::mem::replace(&mut *error, Err(Self::default_error()));
                     }
                 }
 

@@ -17,4 +17,4 @@ steps:
       PARTITION_ITERATION_COUNT: 1
       TEST_TYPE: "partition"
     agents:
-      - "queue=colo-deploy"
+      queue: "colo-deploy"

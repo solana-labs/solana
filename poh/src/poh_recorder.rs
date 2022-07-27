@@ -32,7 +32,7 @@ use {
         cmp,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
+            Arc, Mutex, RwLock,
         },
         time::{Duration, Instant},
     },
@@ -459,7 +459,6 @@ impl PohRecorder {
     // synchronize PoH with a bank
     pub fn reset(&mut self, reset_bank: Arc<Bank>, next_leader_slot: Option<(Slot, Slot)>) {
         self.clear_bank();
-        let mut cache = vec![];
         let blockhash = reset_bank.last_blockhash();
         let poh_hash = {
             let mut poh = self.poh.lock().unwrap();
@@ -475,8 +474,7 @@ impl PohRecorder {
             reset_bank.slot()
         );
 
-        std::mem::swap(&mut cache, &mut self.tick_cache);
-
+        self.tick_cache = vec![];
         self.start_bank = reset_bank;
         self.tick_height = (self.start_slot() + 1) * self.ticks_per_slot;
         self.start_tick_height = self.tick_height + 1;
@@ -949,7 +947,7 @@ pub fn create_test_recorder(
     leader_schedule_cache: Option<Arc<LeaderScheduleCache>>,
 ) -> (
     Arc<AtomicBool>,
-    Arc<Mutex<PohRecorder>>,
+    Arc<RwLock<PohRecorder>>,
     PohService,
     Receiver<WorkingBankEntry>,
 ) {
@@ -973,7 +971,7 @@ pub fn create_test_recorder(
     );
     poh_recorder.set_bank(bank, false);
 
-    let poh_recorder = Arc::new(Mutex::new(poh_recorder));
+    let poh_recorder = Arc::new(RwLock::new(poh_recorder));
     let poh_service = PohService::new(
         poh_recorder.clone(),
         &poh_config,

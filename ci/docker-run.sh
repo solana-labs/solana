@@ -83,6 +83,15 @@ ARGS+=(
   --env CRATES_IO_TOKEN
 )
 
+# sccache
+ARGS+=(
+  --env "RUSTC_WRAPPER=/home/.cargo/bin/sccache"
+  --env AWS_ACCESS_KEY_ID
+  --env AWS_SECRET_ACCESS_KEY
+  --env SCCACHE_BUCKET
+  --env SCCACHE_REGION
+)
+
 # Also propagate environment variables needed for codecov
 # https://docs.codecov.io/docs/testing-with-docker#section-codecov-inside-docker
 # We normalize CI to `1`; but codecov expects it to be `true` to detect Buildkite...

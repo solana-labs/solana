@@ -14,7 +14,7 @@ set -ex
 
 "$cargo" nightly fmt --all
 (cd programs/bpf && "$cargo" nightly fmt --all)
-(cd sdk/cargo-build-bpf/tests/crates/fail && "$cargo" nightly fmt --all)
-(cd sdk/cargo-build-bpf/tests/crates/noop && "$cargo" nightly fmt --all)
+(cd sdk/cargo-build-sbf/tests/crates/fail && "$cargo" nightly fmt --all)
+(cd sdk/cargo-build-sbf/tests/crates/noop && "$cargo" nightly fmt --all)
 (cd storage-bigtable/build-proto && "$cargo" nightly fmt --all)
 (cd web3.js/test/fixtures/noop-program && "$cargo" nightly fmt --all)

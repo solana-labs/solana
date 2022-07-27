@@ -143,7 +143,7 @@ bi = 2 ^ (R - ri) / ((2^R) - 1)
 | 4             | 4        |  6.67% |   | 3             | 3        | 14.29% |   |               |          |        |
 
 ### Payment of Bug Bounties:
-* Bounties are currently awarded on a rolling/weekly basis and paid out within 15 days upon receipt of an invoice.
+* Bounties are currently awarded on a rolling/weekly basis and paid out within 30 days upon receipt of an invoice.
 * The SOL/USD conversion rate used for payments is the market price of SOL (denominated in USD) at the end of the day the invoice is submitted by the researcher.
 * The reference for this price is the Closing Price given by Coingecko.com on that date given here: https://www.coingecko.com/en/coins/solana/historical_data/usd#panel
 * Bug bounties that are paid out in SOL are paid to stake accounts with a lockup expiring 12 months from the date of delivery of SOL.

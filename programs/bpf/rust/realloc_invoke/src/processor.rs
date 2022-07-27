@@ -74,6 +74,32 @@ fn process_instruction(
                 account.data_len()
             );
         }
+        INVOKE_REALLOC_TO_THEN_LOCAL_REALLOC_EXTEND => {
+            let (bytes, remaining_data) =
+                instruction_data[2..].split_at(std::mem::size_of::<usize>());
+            let new_len = usize::from_le_bytes(bytes.try_into().unwrap());
+            msg!("invoke realloc to {} byte(s)", new_len);
+            let realloc_to_ix = {
+                let mut instruction_data = vec![INVOKE_REALLOC_TO, 1];
+                instruction_data.extend_from_slice(&new_len.to_le_bytes());
+
+                Instruction::new_with_bytes(
+                    *invoke_program_id,
+                    &instruction_data,
+                    vec![
+                        AccountMeta::new(*account.key, false),
+                        AccountMeta::new_readonly(*invoke_program_id, false),
+                    ],
+                )
+            };
+            invoke(&realloc_to_ix, accounts)?;
+            assert_eq!(new_len, account.data_len());
+            let (bytes, _) = remaining_data.split_at(std::mem::size_of::<usize>());
+            let extend_len = usize::from_le_bytes(bytes.try_into().unwrap());
+            msg!("realloc extend {} byte(s)", extend_len);
+            account.realloc(new_len.saturating_add(extend_len), false)?;
+            assert_eq!(new_len.saturating_add(extend_len), account.data_len());
+        }
         INVOKE_REALLOC_MAX_TWICE => {
             msg!("invoke realloc max twice");
             invoke(

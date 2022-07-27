@@ -23,7 +23,10 @@ use {
     },
     solana_download_utils::download_snapshot_archive,
     solana_gossip::gossip_service::discover_cluster,
-    solana_ledger::{ancestor_iterator::AncestorIterator, blockstore::Blockstore},
+    solana_ledger::{
+        ancestor_iterator::AncestorIterator, bank_forks_utils, blockstore::Blockstore,
+        blockstore_processor::ProcessOptions,
+    },
     solana_local_cluster::{
         cluster::{Cluster, ClusterValidatorInfo},
         cluster_tests,
@@ -31,9 +34,11 @@ use {
         validator_configs::*,
     },
     solana_runtime::{
+        hardened_unpack::open_genesis_config,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
+        snapshot_config::SnapshotConfig,
         snapshot_package::SnapshotType,
-        snapshot_utils::{self, ArchiveFormat},
+        snapshot_utils::{self, ArchiveFormat, SnapshotVersion},
     },
     solana_sdk::{
         account::AccountSharedData,
@@ -42,6 +47,7 @@ use {
         commitment_config::CommitmentConfig,
         epoch_schedule::MINIMUM_SLOTS_PER_EPOCH,
         genesis_config::ClusterType,
+        hard_forks::HardForks,
         poh_config::PohConfig,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
@@ -57,7 +63,7 @@ use {
         path::Path,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc,
+            Arc, Mutex,
         },
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -1417,13 +1423,9 @@ fn test_snapshots_restart_validity() {
         .full_snapshot_archives_dir;
 
     // Set up the cluster with 1 snapshotting validator
-    let mut all_account_storage_dirs = vec![vec![]];
-
-    std::mem::swap(
-        &mut all_account_storage_dirs[0],
+    let mut all_account_storage_dirs = vec![std::mem::take(
         &mut snapshot_test_config.account_storage_dirs,
-    );
-
+    )];
     let mut config = ClusterConfig {
         node_stakes: vec![DEFAULT_NODE_STAKE],
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS,
@@ -1927,7 +1929,7 @@ fn do_test_future_tower(cluster_mode: ClusterMode) {
             purged_slot_before_restart,
         );
         let blockstore = open_blockstore(&val_a_ledger_path);
-        purge_slots(&blockstore, purged_slot_before_restart, 100);
+        purge_slots_with_count(&blockstore, purged_slot_before_restart, 100);
     }
 
     cluster.restart_node(
@@ -1977,6 +1979,59 @@ fn test_future_tower_master_only() {
 #[serial]
 fn test_future_tower_master_slave() {
     do_test_future_tower(ClusterMode::MasterSlave);
+}
+
+fn restart_whole_cluster_after_hard_fork(
+    cluster: &Arc<Mutex<LocalCluster>>,
+    validator_a_pubkey: Pubkey,
+    validator_b_pubkey: Pubkey,
+    mut validator_a_info: ClusterValidatorInfo,
+    validator_b_info: ClusterValidatorInfo,
+) {
+    // restart validator A first
+    let cluster_for_a = cluster.clone();
+    let val_a_ledger_path = validator_a_info.info.ledger_path.clone();
+
+    // Spawn a thread because wait_for_supermajority blocks in Validator::new()!
+    let thread = std::thread::spawn(move || {
+        let restart_context = cluster_for_a
+            .lock()
+            .unwrap()
+            .create_restart_context(&validator_a_pubkey, &mut validator_a_info);
+        let restarted_validator_info = LocalCluster::restart_node_with_context(
+            validator_a_info,
+            restart_context,
+            SocketAddrSpace::Unspecified,
+        );
+        cluster_for_a
+            .lock()
+            .unwrap()
+            .add_node(&validator_a_pubkey, restarted_validator_info);
+    });
+
+    // test validator A actually to wait for supermajority
+    let mut last_vote = None;
+    for _ in 0..10 {
+        sleep(Duration::from_millis(1000));
+
+        let (new_last_vote, _) =
+            last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
+        if let Some(last_vote) = last_vote {
+            assert_eq!(last_vote, new_last_vote);
+        } else {
+            last_vote = Some(new_last_vote);
+        }
+    }
+
+    // restart validator B normally
+    cluster.lock().unwrap().restart_node(
+        &validator_b_pubkey,
+        validator_b_info,
+        SocketAddrSpace::Unspecified,
+    );
+
+    // validator A should now start so join its thread here
+    thread.join().unwrap();
 }
 
 #[test]
@@ -2038,6 +2093,8 @@ fn test_hard_fork_invalidates_tower() {
     let mut validator_b_info = cluster.lock().unwrap().exit_node(&validator_b_pubkey);
 
     // setup hard fork at slot < a previously rooted slot!
+    // hard fork earlier than root is very unrealistic in the wild, but it's handy for
+    // persistent tower's lockout behavior...
     let hard_fork_slot = min_root - 5;
     let hard_fork_slots = Some(vec![hard_fork_slot]);
     let mut hard_forks = solana_sdk::hard_forks::HardForks::default();
@@ -2060,52 +2117,17 @@ fn test_hard_fork_invalidates_tower() {
     {
         let blockstore_a = open_blockstore(&validator_a_info.info.ledger_path);
         let blockstore_b = open_blockstore(&validator_b_info.info.ledger_path);
-        purge_slots(&blockstore_a, hard_fork_slot + 1, 100);
-        purge_slots(&blockstore_b, hard_fork_slot + 1, 100);
+        purge_slots_with_count(&blockstore_a, hard_fork_slot + 1, 100);
+        purge_slots_with_count(&blockstore_b, hard_fork_slot + 1, 100);
     }
 
-    // restart validator A first
-    let cluster_for_a = cluster.clone();
-    // Spawn a thread because wait_for_supermajority blocks in Validator::new()!
-    let thread = std::thread::spawn(move || {
-        let restart_context = cluster_for_a
-            .lock()
-            .unwrap()
-            .create_restart_context(&validator_a_pubkey, &mut validator_a_info);
-        let restarted_validator_info = LocalCluster::restart_node_with_context(
-            validator_a_info,
-            restart_context,
-            SocketAddrSpace::Unspecified,
-        );
-        cluster_for_a
-            .lock()
-            .unwrap()
-            .add_node(&validator_a_pubkey, restarted_validator_info);
-    });
-
-    // test validator A actually to wait for supermajority
-    let mut last_vote = None;
-    for _ in 0..10 {
-        sleep(Duration::from_millis(1000));
-
-        let (new_last_vote, _) =
-            last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
-        if let Some(last_vote) = last_vote {
-            assert_eq!(last_vote, new_last_vote);
-        } else {
-            last_vote = Some(new_last_vote);
-        }
-    }
-
-    // restart validator B normally
-    cluster.lock().unwrap().restart_node(
-        &validator_b_pubkey,
+    restart_whole_cluster_after_hard_fork(
+        &cluster,
+        validator_a_pubkey,
+        validator_b_pubkey,
+        validator_a_info,
         validator_b_info,
-        SocketAddrSpace::Unspecified,
     );
-
-    // validator A should now start so join its thread here
-    thread.join().unwrap();
 
     // new slots should be rooted after hard-fork cluster relaunch
     cluster
@@ -2118,6 +2140,224 @@ fn test_hard_fork_invalidates_tower() {
 #[serial]
 fn test_run_test_load_program_accounts_root() {
     run_test_load_program_accounts(CommitmentConfig::finalized());
+}
+
+fn create_simple_snapshot_config(ledger_path: &Path) -> SnapshotConfig {
+    SnapshotConfig {
+        full_snapshot_archives_dir: ledger_path.to_path_buf(),
+        bank_snapshots_dir: ledger_path.join("snapshot"),
+        ..SnapshotConfig::default()
+    }
+}
+
+fn create_snapshot_to_hard_fork(
+    blockstore: &Blockstore,
+    snapshot_slot: Slot,
+    hard_forks: Vec<Slot>,
+) {
+    let process_options = ProcessOptions {
+        halt_at_slot: Some(snapshot_slot),
+        new_hard_forks: Some(hard_forks),
+        poh_verify: false,
+        ..ProcessOptions::default()
+    };
+    let ledger_path = blockstore.ledger_path();
+    let genesis_config = open_genesis_config(ledger_path, u64::max_value());
+    let snapshot_config = Some(create_simple_snapshot_config(ledger_path));
+    let (bank_forks, ..) = bank_forks_utils::load(
+        &genesis_config,
+        blockstore,
+        vec![ledger_path.join("accounts")],
+        None,
+        snapshot_config.as_ref(),
+        process_options,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let bank = bank_forks.read().unwrap().get(snapshot_slot).unwrap();
+    let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+        ledger_path,
+        &bank,
+        Some(SnapshotVersion::default()),
+        ledger_path,
+        ledger_path,
+        ArchiveFormat::TarZstd,
+        1,
+        1,
+    )
+    .unwrap();
+    info!(
+        "Successfully created snapshot for slot {}, hash {}: {}",
+        bank.slot(),
+        bank.hash(),
+        full_snapshot_archive_info.path().display(),
+    );
+}
+
+#[test]
+#[serial]
+fn test_hard_fork_with_gap_in_roots() {
+    solana_logger::setup_with_default(RUST_LOG_FILTER);
+
+    // First set up the cluster with 2 nodes
+    let slots_per_epoch = 2048;
+    let node_stakes = vec![60, 40];
+
+    let validator_keys = vec![
+        "28bN3xyvrP4E8LwEgtLjhnkb7cY4amQb6DrYAbAYjgRV4GAGgkVM2K7wnxnAS7WDneuavza7x21MiafLu1HkwQt4",
+        "2saHBBoTkLMmttmPQP8KfBkcCw45S5cwtV3wTdGCscRC8uxdgvHxpHiWXKx4LvJjNJtnNcbSv5NdheokFFqnNDt8",
+    ]
+    .iter()
+    .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
+    .take(node_stakes.len())
+    .collect::<Vec<_>>();
+    let validators = validator_keys
+        .iter()
+        .map(|(kp, _)| kp.pubkey())
+        .collect::<Vec<_>>();
+
+    let validator_a_pubkey = validators[0];
+    let validator_b_pubkey = validators[1];
+
+    let validator_config = ValidatorConfig {
+        snapshot_config: Some(LocalCluster::create_dummy_load_only_snapshot_config()),
+        ..ValidatorConfig::default()
+    };
+    let mut config = ClusterConfig {
+        cluster_lamports: 100_000,
+        node_stakes: node_stakes.clone(),
+        validator_configs: make_identical_validator_configs(&validator_config, node_stakes.len()),
+        validator_keys: Some(validator_keys),
+        slots_per_epoch,
+        stakers_slot_offset: slots_per_epoch,
+        skip_warmup_slots: true,
+        ..ClusterConfig::default()
+    };
+    let cluster = std::sync::Arc::new(std::sync::Mutex::new(LocalCluster::new(
+        &mut config,
+        SocketAddrSpace::Unspecified,
+    )));
+
+    let val_a_ledger_path = cluster.lock().unwrap().ledger_path(&validator_a_pubkey);
+    let val_b_ledger_path = cluster.lock().unwrap().ledger_path(&validator_b_pubkey);
+
+    let min_last_vote = 45;
+    let min_root = 10;
+    loop {
+        sleep(Duration::from_millis(100));
+
+        if let Some((last_vote, _)) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey) {
+            if last_vote >= min_last_vote
+                && root_in_tower(&val_a_ledger_path, &validator_a_pubkey) > Some(min_root)
+            {
+                break;
+            }
+        }
+    }
+
+    // stop all nodes of the cluster
+    let mut validator_a_info = cluster.lock().unwrap().exit_node(&validator_a_pubkey);
+    let mut validator_b_info = cluster.lock().unwrap().exit_node(&validator_b_pubkey);
+
+    // hard fork slot is effectively a (possibly skipping) new root.
+    // assert that the precondition of validator a to test gap between
+    // blockstore and hard fork...
+    let hard_fork_slot = min_last_vote - 5;
+    assert!(hard_fork_slot > root_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap());
+
+    let hard_fork_slots = Some(vec![hard_fork_slot]);
+    let mut hard_forks = HardForks::default();
+    hard_forks.register(hard_fork_slot);
+
+    let expected_shred_version = solana_sdk::shred_version::compute_shred_version(
+        &cluster.lock().unwrap().genesis_config.hash(),
+        Some(&hard_forks),
+    );
+
+    // create hard-forked snapshot only for validator a, emulating the manual cluster restart
+    // procedure with `solana-ledger-tool create-snapshot`
+    let genesis_slot = 0;
+    {
+        let blockstore_a = Blockstore::open(&val_a_ledger_path).unwrap();
+        create_snapshot_to_hard_fork(&blockstore_a, hard_fork_slot, vec![hard_fork_slot]);
+
+        // Intentionally make solana-validator unbootable by replaying blocks from the genesis to
+        // ensure the hard-forked snapshot is used always.  Otherwise, we couldn't create a gap
+        // in the ledger roots column family reliably.
+        // There was a bug which caused the hard-forked snapshot at an unrooted slot to forget
+        // to root some slots (thus, creating a gap in roots, which shouldn't happen).
+        purge_slots_with_count(&blockstore_a, genesis_slot, 1);
+
+        let next_slot = genesis_slot + 1;
+        let mut meta = blockstore_a.meta(next_slot).unwrap().unwrap();
+        meta.unset_parent();
+        blockstore_a.put_meta(next_slot, &meta).unwrap();
+    }
+
+    // strictly speaking, new_hard_forks isn't needed for validator a.
+    // but when snapshot loading isn't working, you might see:
+    //   shred version mismatch: expected NNNN found: MMMM
+    //validator_a_info.config.new_hard_forks = hard_fork_slots.clone();
+
+    // effectively pass the --hard-fork parameter to validator b
+    validator_b_info.config.new_hard_forks = hard_fork_slots;
+
+    validator_a_info.config.wait_for_supermajority = Some(hard_fork_slot);
+    validator_a_info.config.expected_shred_version = Some(expected_shred_version);
+
+    validator_b_info.config.wait_for_supermajority = Some(hard_fork_slot);
+    validator_b_info.config.expected_shred_version = Some(expected_shred_version);
+
+    restart_whole_cluster_after_hard_fork(
+        &cluster,
+        validator_a_pubkey,
+        validator_b_pubkey,
+        validator_a_info,
+        validator_b_info,
+    );
+    // new slots should be rooted after hard-fork cluster relaunch
+    cluster
+        .lock()
+        .unwrap()
+        .check_for_new_roots(16, "hard fork", SocketAddrSpace::Unspecified);
+
+    // drop everything to open blockstores below
+    drop(cluster);
+
+    let (common_last_vote, common_root) = {
+        let (last_vote_a, _) = last_vote_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
+        let (last_vote_b, _) = last_vote_in_tower(&val_b_ledger_path, &validator_b_pubkey).unwrap();
+        let root_a = root_in_tower(&val_a_ledger_path, &validator_a_pubkey).unwrap();
+        let root_b = root_in_tower(&val_b_ledger_path, &validator_b_pubkey).unwrap();
+        (last_vote_a.min(last_vote_b), root_a.min(root_b))
+    };
+
+    let blockstore_a = Blockstore::open(&val_a_ledger_path).unwrap();
+    let blockstore_b = Blockstore::open(&val_b_ledger_path).unwrap();
+
+    // collect all slot/root parents
+    let mut slots_a = AncestorIterator::new(common_last_vote, &blockstore_a).collect::<Vec<_>>();
+    let mut roots_a = blockstore_a
+        .reversed_rooted_slot_iterator(common_root)
+        .unwrap()
+        .collect::<Vec<_>>();
+    // artifically restore the forcibly purged genesis only for the validator A just for the sake of
+    // the final assertions.
+    slots_a.push(genesis_slot);
+    roots_a.push(genesis_slot);
+
+    let slots_b = AncestorIterator::new(common_last_vote, &blockstore_b).collect::<Vec<_>>();
+    let roots_b = blockstore_b
+        .reversed_rooted_slot_iterator(common_root)
+        .unwrap()
+        .collect::<Vec<_>>();
+
+    // compare them all!
+    assert_eq!((&slots_a, &roots_a), (&slots_b, &roots_b));
+    assert_eq!(&slots_a[slots_a.len() - roots_a.len()..].to_vec(), &roots_a);
+    assert_eq!(&slots_b[slots_b.len() - roots_b.len()..].to_vec(), &roots_b);
 }
 
 #[test]

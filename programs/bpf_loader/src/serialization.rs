@@ -5,7 +5,7 @@ use {
     solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN},
     solana_sdk::{
         bpf_loader_deprecated,
-        entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE},
+        entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, NON_DUP_MARKER},
         instruction::InstructionError,
         pubkey::Pubkey,
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
@@ -14,10 +14,20 @@ use {
     std::{io::prelude::*, mem::size_of},
 };
 
+/// Maximum number of instruction accounts that can be serialized into the
+/// BPF VM.
+const MAX_INSTRUCTION_ACCOUNTS: u8 = NON_DUP_MARKER;
+
 pub fn serialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
+    should_cap_ix_accounts: bool,
 ) -> Result<(AlignedMemory, Vec<usize>), InstructionError> {
+    let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
+    if should_cap_ix_accounts && num_ix_accounts > usize::from(MAX_INSTRUCTION_ACCOUNTS) {
+        return Err(InstructionError::MaxAccountsExceeded);
+    }
+
     let is_loader_deprecated = *instruction_context
         .try_borrow_last_program_account(transaction_context)?
         .get_owner()
@@ -109,7 +119,7 @@ pub fn serialize_parameters_unaligned(
         } else {
             let borrowed_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
-            v.write_u8(std::u8::MAX)
+            v.write_u8(NON_DUP_MARKER)
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u8(borrowed_account.is_signer() as u8)
                 .map_err(|_| InstructionError::InvalidArgument)?;
@@ -164,18 +174,28 @@ pub fn deserialize_parameters_unaligned(
             start += size_of::<u8>(); // is_signer
             start += size_of::<u8>(); // is_writable
             start += size_of::<Pubkey>(); // key
-            let _ = borrowed_account.set_lamports(LittleEndian::read_u64(
+            let lamports = LittleEndian::read_u64(
                 buffer
                     .get(start..)
                     .ok_or(InstructionError::InvalidArgument)?,
-            ));
+            );
+            if borrowed_account.get_lamports() != lamports {
+                borrowed_account.set_lamports(lamports)?;
+            }
             start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
-            let _ = borrowed_account.set_data(
-                buffer
-                    .get(start..start + pre_len)
-                    .ok_or(InstructionError::InvalidArgument)?,
-            );
+            let data = buffer
+                .get(start..start + pre_len)
+                .ok_or(InstructionError::InvalidArgument)?;
+            // The redundant check helps to avoid the expensive data comparison if we can
+            match borrowed_account
+                .can_data_be_resized(data.len())
+                .and_then(|_| borrowed_account.can_data_be_changed())
+            {
+                Ok(()) => borrowed_account.set_data(data)?,
+                Err(err) if borrowed_account.get_data() != data => return Err(err),
+                _ => {}
+            }
             start += pre_len // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
@@ -205,7 +225,7 @@ pub fn serialize_parameters_aligned(
             size += size_of::<u8>() // is_signer
                 + size_of::<u8>() // is_writable
                 + size_of::<u8>() // executable
-                + 4 // padding to 128-bit aligned
+                + size_of::<u32>() // original_data_len
                 + size_of::<Pubkey>()  // key
                 + size_of::<Pubkey>() // owner
                 + size_of::<u64>()  // lamports
@@ -235,7 +255,7 @@ pub fn serialize_parameters_aligned(
         } else {
             let borrowed_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
-            v.write_u8(std::u8::MAX)
+            v.write_u8(NON_DUP_MARKER)
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_u8(borrowed_account.is_signer() as u8)
                 .map_err(|_| InstructionError::InvalidArgument)?;
@@ -300,19 +320,20 @@ pub fn deserialize_parameters_aligned(
             start += size_of::<u8>() // is_signer
                 + size_of::<u8>() // is_writable
                 + size_of::<u8>() // executable
-                + 4 // padding to 128-bit aligned
+                + size_of::<u32>() // original_data_len
                 + size_of::<Pubkey>(); // key
-            let _ = borrowed_account.set_owner(
-                buffer
-                    .get(start..start + size_of::<Pubkey>())
-                    .ok_or(InstructionError::InvalidArgument)?,
-            );
+            let owner = buffer
+                .get(start..start + size_of::<Pubkey>())
+                .ok_or(InstructionError::InvalidArgument)?;
             start += size_of::<Pubkey>(); // owner
-            let _ = borrowed_account.set_lamports(LittleEndian::read_u64(
+            let lamports = LittleEndian::read_u64(
                 buffer
                     .get(start..)
                     .ok_or(InstructionError::InvalidArgument)?,
-            ));
+            );
+            if borrowed_account.get_lamports() != lamports {
+                borrowed_account.set_lamports(lamports)?;
+            }
             start += size_of::<u64>(); // lamports
             let post_len = LittleEndian::read_u64(
                 buffer
@@ -320,21 +341,31 @@ pub fn deserialize_parameters_aligned(
                     .ok_or(InstructionError::InvalidArgument)?,
             ) as usize;
             start += size_of::<u64>(); // data length
-
             if post_len.saturating_sub(*pre_len) > MAX_PERMITTED_DATA_INCREASE
                 || post_len > MAX_PERMITTED_DATA_LENGTH as usize
             {
                 return Err(InstructionError::InvalidRealloc);
             }
             let data_end = start + post_len;
-            let _ = borrowed_account.set_data(
-                buffer
-                    .get(start..data_end)
-                    .ok_or(InstructionError::InvalidArgument)?,
-            );
+            let data = buffer
+                .get(start..data_end)
+                .ok_or(InstructionError::InvalidArgument)?;
+            // The redundant check helps to avoid the expensive data comparison if we can
+            match borrowed_account
+                .can_data_be_resized(data.len())
+                .and_then(|_| borrowed_account.can_data_be_changed())
+            {
+                Ok(()) => borrowed_account.set_data(data)?,
+                Err(err) if borrowed_account.get_data() != data => return Err(err),
+                _ => {}
+            }
             start += *pre_len + MAX_PERMITTED_DATA_INCREASE; // data
             start += (start as *const u8).align_offset(BPF_ALIGN_OF_U128);
             start += size_of::<u64>(); // rent_epoch
+            if borrowed_account.get_owner().to_bytes() != owner {
+                // Change the owner at the end so that we are allowed to change the lamports and data before
+                borrowed_account.set_owner(owner)?;
+            }
         }
     }
     Ok(())
@@ -351,6 +382,7 @@ mod tests {
             bpf_loader,
             entrypoint::deserialize,
             instruction::AccountMeta,
+            sysvar::rent::Rent,
         },
         std::{
             cell::RefCell,
@@ -358,6 +390,161 @@ mod tests {
             slice::{from_raw_parts, from_raw_parts_mut},
         },
     };
+
+    #[test]
+    fn test_serialize_parameters_with_many_accounts() {
+        struct TestCase {
+            num_ix_accounts: usize,
+            append_dup_account: bool,
+            should_cap_ix_accounts: bool,
+            expected_err: Option<InstructionError>,
+            name: &'static str,
+        }
+
+        for TestCase {
+            num_ix_accounts,
+            append_dup_account,
+            should_cap_ix_accounts,
+            expected_err,
+            name,
+        } in [
+            TestCase {
+                name: "serialize max accounts without cap",
+                num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
+                should_cap_ix_accounts: false,
+                append_dup_account: false,
+                expected_err: None,
+            },
+            TestCase {
+                name: "serialize max accounts and append dup without cap",
+                num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
+                should_cap_ix_accounts: false,
+                append_dup_account: true,
+                expected_err: None,
+            },
+            TestCase {
+                name: "serialize max accounts with cap",
+                num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
+                should_cap_ix_accounts: true,
+                append_dup_account: false,
+                expected_err: None,
+            },
+            TestCase {
+                name: "serialize too many accounts with cap",
+                num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS) + 1,
+                should_cap_ix_accounts: true,
+                append_dup_account: false,
+                expected_err: Some(InstructionError::MaxAccountsExceeded),
+            },
+            TestCase {
+                name: "serialize too many accounts and append dup with cap",
+                num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS),
+                should_cap_ix_accounts: true,
+                append_dup_account: true,
+                expected_err: Some(InstructionError::MaxAccountsExceeded),
+            },
+            // This test case breaks parameter deserialization and can be cleaned up
+            // when should_cap_ix_accounts is enabled.
+            //
+            // TestCase {
+            //     name: "serialize too many accounts and append dup without cap",
+            //     num_ix_accounts: usize::from(MAX_INSTRUCTION_ACCOUNTS) + 1,
+            //     should_cap_ix_accounts: false,
+            //     append_dup_account: true,
+            //     expected_err: None,
+            // },
+        ] {
+            let program_id = solana_sdk::pubkey::new_rand();
+            let mut transaction_accounts = vec![(
+                program_id,
+                AccountSharedData::from(Account {
+                    lamports: 0,
+                    data: vec![],
+                    owner: bpf_loader::id(),
+                    executable: true,
+                    rent_epoch: 0,
+                }),
+            )];
+
+            let instruction_account_keys: Vec<Pubkey> =
+                (0..num_ix_accounts).map(|_| Pubkey::new_unique()).collect();
+
+            for key in &instruction_account_keys {
+                transaction_accounts.push((
+                    *key,
+                    AccountSharedData::from(Account {
+                        lamports: 0,
+                        data: vec![],
+                        owner: program_id,
+                        executable: false,
+                        rent_epoch: 0,
+                    }),
+                ));
+            }
+
+            let mut instruction_account_metas: Vec<_> = instruction_account_keys
+                .iter()
+                .map(|key| AccountMeta::new_readonly(*key, false))
+                .collect();
+            if append_dup_account {
+                instruction_account_metas.push(instruction_account_metas.last().cloned().unwrap());
+            }
+
+            let program_indices = [0];
+            let instruction_accounts = prepare_mock_invoke_context(
+                transaction_accounts.clone(),
+                instruction_account_metas,
+                &program_indices,
+            )
+            .instruction_accounts;
+
+            let transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
+            let instruction_data = vec![];
+            let instruction_context = InstructionContext::new(
+                0,
+                0,
+                &program_indices,
+                &instruction_accounts,
+                &instruction_data,
+            );
+
+            let serialization_result = serialize_parameters(
+                &transaction_context,
+                &instruction_context,
+                should_cap_ix_accounts,
+            );
+            assert_eq!(
+                serialization_result.as_ref().err(),
+                expected_err.as_ref(),
+                "{} test case failed",
+                name
+            );
+            if expected_err.is_some() {
+                continue;
+            }
+
+            let (mut serialized, _account_lengths) = serialization_result.unwrap();
+            let (de_program_id, de_accounts, de_instruction_data) =
+                unsafe { deserialize(serialized.as_slice_mut().first_mut().unwrap() as *mut u8) };
+            assert_eq!(de_program_id, &program_id);
+            assert_eq!(de_instruction_data, &instruction_data);
+            for (index, account_info) in de_accounts.into_iter().enumerate() {
+                let ix_account = &instruction_accounts.get(index).unwrap();
+                assert_eq!(
+                    account_info.key,
+                    transaction_context
+                        .get_key_of_account_at_index(ix_account.index_in_transaction)
+                        .unwrap()
+                );
+                assert_eq!(account_info.owner, &program_id);
+                assert!(!account_info.executable);
+                assert!(account_info.data_is_empty());
+                assert!(!account_info.is_writable);
+                assert!(!account_info.is_signer);
+            }
+        }
+    }
 
     #[test]
     fn test_serialize_parameters() {
@@ -453,8 +640,12 @@ mod tests {
             instruction_accounts,
             &program_indices,
         );
-        let mut transaction_context =
-            TransactionContext::new(preparation.transaction_accounts, 1, 1);
+        let mut transaction_context = TransactionContext::new(
+            preparation.transaction_accounts,
+            Some(Rent::default()),
+            1,
+            1,
+        );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(
@@ -470,8 +661,12 @@ mod tests {
 
         // check serialize_parameters_aligned
 
-        let (mut serialized, account_lengths) =
-            serialize_parameters(invoke_context.transaction_context, instruction_context).unwrap();
+        let (mut serialized, account_lengths) = serialize_parameters(
+            invoke_context.transaction_context,
+            instruction_context,
+            true,
+        )
+        .unwrap();
 
         let (de_program_id, de_accounts, de_instruction_data) =
             unsafe { deserialize(serialized.as_slice_mut().first_mut().unwrap() as *mut u8) };
@@ -512,16 +707,6 @@ mod tests {
             );
         }
 
-        for index_in_transaction in 1..original_accounts.len() {
-            let mut account = invoke_context
-                .transaction_context
-                .get_account_at_index(index_in_transaction)
-                .unwrap()
-                .borrow_mut();
-            account.set_lamports(0);
-            account.set_data(vec![0; 0]);
-            account.set_owner(Pubkey::default());
-        }
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
@@ -545,16 +730,19 @@ mod tests {
             .unwrap()
             .1
             .set_owner(bpf_loader_deprecated::id());
-        let _ = invoke_context
+        invoke_context
             .transaction_context
-            .get_current_instruction_context()
+            .get_account_at_index(0)
             .unwrap()
-            .try_borrow_program_account(invoke_context.transaction_context, 0)
-            .unwrap()
-            .set_owner(bpf_loader_deprecated::id().as_ref());
+            .borrow_mut()
+            .set_owner(bpf_loader_deprecated::id());
 
-        let (mut serialized, account_lengths) =
-            serialize_parameters(invoke_context.transaction_context, instruction_context).unwrap();
+        let (mut serialized, account_lengths) = serialize_parameters(
+            invoke_context.transaction_context,
+            instruction_context,
+            true,
+        )
+        .unwrap();
 
         let (de_program_id, de_accounts, de_instruction_data) = unsafe {
             deserialize_unaligned(serialized.as_slice_mut().first_mut().unwrap() as *mut u8)
@@ -578,15 +766,6 @@ mod tests {
             assert_eq!(account.rent_epoch(), account_info.rent_epoch);
         }
 
-        for index_in_transaction in 1..original_accounts.len() {
-            let mut account = invoke_context
-                .transaction_context
-                .get_account_at_index(index_in_transaction)
-                .unwrap()
-                .borrow_mut();
-            account.set_lamports(0);
-            account.set_data(vec![0; 0]);
-        }
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
@@ -624,7 +803,7 @@ mod tests {
         for _ in 0..num_accounts {
             let dup_info = *(input.add(offset) as *const u8);
             offset += size_of::<u8>();
-            if dup_info == std::u8::MAX {
+            if dup_info == NON_DUP_MARKER {
                 #[allow(clippy::cast_ptr_alignment)]
                 let is_signer = *(input.add(offset) as *const u8) != 0;
                 offset += size_of::<u8>();

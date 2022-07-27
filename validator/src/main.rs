@@ -942,7 +942,7 @@ pub fn main() {
                 .long("contact-debug-interval")
                 .value_name("CONTACT_DEBUG_INTERVAL")
                 .takes_value(true)
-                .default_value("10000")
+                .default_value("120000")
                 .help("Milliseconds between printing contact debug from gossip."),
         )
         .arg(
@@ -1209,11 +1209,6 @@ pub fn main() {
                 .long("tpu-use-quic")
                 .takes_value(false)
                 .help("Use QUIC to send transactions."),
-        )
-        .arg(
-            Arg::with_name("enable_quic_servers")
-                .hidden(true)
-                .long("enable-quic-servers")
         )
         .arg(
             Arg::with_name("tpu_connection_pool_size")
@@ -1654,7 +1649,7 @@ pub fn main() {
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
-                .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory."),
+                .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk."),
         )
         .arg(
             Arg::with_name("disable_accounts_disk_index")
@@ -1767,6 +1762,14 @@ pub fn main() {
                 .takes_value(false)
                 .help("Allow contacting private ip addresses")
                 .hidden(true),
+        )
+        .arg(
+            Arg::with_name("log_messages_bytes_limit")
+                .long("log-messages-bytes-limit")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .value_name("BYTES")
+                .help("Maximum number of bytes written to the program log before truncation")
         )
         .after_help("The default subcommand is run")
         .subcommand(
@@ -2296,7 +2299,6 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
-    let enable_quic_servers = matches.is_present("enable_quic_servers");
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
@@ -2637,9 +2639,9 @@ pub fn main() {
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {
             bpf_jit: !matches.is_present("no_bpf_jit"),
+            log_messages_bytes_limit: value_of(&matches, "log_messages_bytes_limit"),
             ..RuntimeConfig::default()
         },
-        enable_quic_servers,
         ..ValidatorConfig::default()
     };
 
