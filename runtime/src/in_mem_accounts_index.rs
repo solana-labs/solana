@@ -243,7 +243,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // so, we have to load from disk first, then merge with in-mem
                     // right now we have a read lock on the in-mem idx, fwiw
                     if let Some(disk_entry) = self.load_from_disk(pubkey) {
-                        Self::merge_slot_lists(entry, disk_entry.0);
+                        Self::merge_slot_lists(entry, disk_entry.0, pubkey);
                     }
                     entry.clear_lazy_disk_load();
                     Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
@@ -266,7 +266,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     Entry::Occupied(occupied) => {
                         let entry = occupied.get();
                         if entry.lazy_disk_load() {
-                            Self::merge_slot_lists(entry, disk_entry.0);
+                            Self::merge_slot_lists(entry, disk_entry.0, occupied.key());
 
                             entry.clear_lazy_disk_load();
                             Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
@@ -290,9 +290,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
-    fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>) {
+    fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>, pubkey: &Pubkey) {
         in_mem.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
-        error!("merge_slot_list: {}", in_mem.log_rws());
 
         let mut i = 0;
         loop {
@@ -302,10 +301,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 i += 1;
                 if i % 100000 == 0 {
                     use log::*;
-                    error!("deadlocked");
+                    let lock = in_mem.slot_list.try_read();
+                    error!("haoran deadlocked, merge_slot_list: {}, read lock ok: {}, pubkey: {}", 
+                    in_mem.log_rws(),
+                lock.is_ok(),pubkey);
                 }
                 continue;
             }
+            error!("haoran merge_slot_list: {}", in_mem.log_rws());
             let mut slot_list = lock.unwrap();
 
             for (slot, new_entry) in disk.into_iter() {
@@ -342,7 +345,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let entry = occupied.get();
                     let key = occupied.key();
                     if let Some((disk_entry, _)) = self.load_from_disk(key) {
-                        Self::merge_slot_lists(entry, disk_entry);
+                        Self::merge_slot_lists(entry, disk_entry, key);
                     }
                     entry.clear_lazy_disk_load();
                     Self::update_stat(&self.stats().lazy_disk_index_lookup_clear_count, 1);
@@ -450,6 +453,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     other_slot,
                     reclaims,
                     reclaim,
+                    pubkey,
                 );
                 // age is incremented by caller
             } else {
@@ -472,6 +476,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     let found = matches!(entry, Entry::Occupied(_));
                     match entry {
                         Entry::Occupied(mut occupied) => {
+                            let k = *occupied.key();
                             let current = occupied.get_mut();
                             Self::lock_and_update_slot_list(
                                 current,
@@ -479,6 +484,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 other_slot,
                                 reclaims,
                                 reclaim,
+                                &k,
                             );
                             current.set_age(self.storage.future_age_to_flush());
                         }
@@ -528,6 +534,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                         other_slot,
                                         reclaims,
                                         reclaim,
+                                        vacant.key()
                                     );
                                     disk_entry
                                 } else {
@@ -573,9 +580,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         reclaim: UpsertReclaim,
+        pubkey: &Pubkey,
     ) {
         current.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
+
+        error!("haoran lock_and_update_slot_list: {}, pubkey: {}", current.log_rws(), pubkey);
         let mut slot_list = current.slot_list.write().unwrap();
+        error!("haoran lock_and_update_slot_list success: {}, pubkey: {}", current.log_rws(), pubkey);
         let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
             &mut slot_list,
@@ -629,6 +640,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 if matched_slot || Some(*cur_slot) == other_slot {
                     // make sure neither 'slot' nor 'other_slot' are in the slot list more than once
                     let matched_other_slot = !matched_slot;
+                    if found_slot && matched_slot || matched_other_slot && found_other_slot {
+
+                    error!("haoran {:?}, slot: {}, other_slot: {:?}",
+                    slot_list,
+                    slot,
+                    other_slot);
+                    }
                     assert!(
                         !(found_slot && matched_slot || matched_other_slot && found_other_slot),
                         "{:?}, slot: {}, other_slot: {:?}",
@@ -652,7 +670,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             reclaims.push(reclaim_item);
                         }
                         UpsertReclaim::PreviousSlotEntryWasCached => {
-                            assert!(is_cur_account_cached);
+                            if !is_cur_account_cached{
+                            error!("haoran not cached");
+                            }
+                                    assert!(is_cur_account_cached);
                         }
                     }
 
@@ -723,6 +744,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     None, // should be None because we don't expect a different slot # during index generation
                     &mut Vec::default(),
                     UpsertReclaim::PopulateReclaims, // this should be ignore?
+                    occupied.key()
                 );
                 (
                     true, /* found in mem */
@@ -757,6 +779,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             None,
                             &mut Vec::default(),
                             UpsertReclaim::PopulateReclaims,
+                            vacant.key(),
                         );
                         vacant.insert(disk_entry);
                         (
@@ -1239,7 +1262,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // check to see if needed to lazy disk index before flushing.
                             if v.lazy_disk_load() {
                                 if let Some((disk_entry, _)) = self.load_from_disk(k) {
-                                    Self::merge_slot_lists(&v, disk_entry);
+                                    Self::merge_slot_lists(&v, disk_entry, k);
                                 }
                                 v.clear_lazy_disk_load();
                                 Self::update_stat(
