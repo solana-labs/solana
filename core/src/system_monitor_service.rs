@@ -281,6 +281,7 @@ fn read_io_stats() -> Result<IoStats, String> {
         .arg("-x")
         .output()
         .map_err(|e| e.to_string())?;
+    warn!("stdout = {:?}", output.stdout);
     let mut reader_io = &output.stdout as &[u8];
     parse_io_stats(&mut reader_io)
 }
@@ -296,6 +297,7 @@ fn parse_io_stats(reader_io: &mut impl BufRead) -> Result<IoStats, String> {
         }
 
         let line = line.map_err(|e| e.to_string())?;
+        warn!("line {} = {:?}", line_number, line);
         let values: Vec<_> = line.split_ascii_whitespace().collect();
 
         if values.len() != 21 {
@@ -765,6 +767,8 @@ impl SystemMonitorService {
                     f64
                 ),
             )
+        } else {
+            warn!("read_io_stats returned err");
         }
     }
 
@@ -908,6 +912,12 @@ data" as &[u8];
         let mut mock_io = UNEXPECTED_DATA;
         let stats = parse_io_stats(&mut mock_io);
         assert!(stats.is_err());
+    }
+
+    #[test]
+    fn test_bw_temp() {
+        solana_logger::setup();
+        SystemMonitorService::report_io_stats();
     }
 
     #[test]

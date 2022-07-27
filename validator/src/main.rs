@@ -972,6 +972,11 @@ pub fn main() {
                 .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
+            Arg::with_name("no_os_io_stats_reporting")
+                .long("no-os-io-stats-reporting")
+                .help("Disable reporting of OS IO statistics.")
+        )
+        .arg(
             Arg::with_name("accounts-hash-interval-slots")
                 .long("accounts-hash-interval-slots")
                 .value_name("NUMBER")
