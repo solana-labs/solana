@@ -280,7 +280,7 @@ fn output_slot(
 
         let mut weight = 10_000_000;
         for i in 0..1000 {
-            error!("started!");
+            error!("started!: {}", i);
             for tx in txes.clone() {
                 tx_sender.send((Weight { ix: weight }, tx)).unwrap();
                 weight -= 1;
