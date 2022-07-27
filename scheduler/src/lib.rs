@@ -281,7 +281,8 @@ impl TaskQueue {
     #[inline(never)]
     fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
         //info!("TaskQueue::add(): {:?}", unique_weight);
-        assert!(self.map.insert(unique_weight, task).is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
+        let pre_existed = self.map.insert(unique_weight, task);
+        debug_assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
     #[inline(never)]
@@ -441,7 +442,6 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 contended_queue.add(unique_weight, next_task);
-                return None;
             }
         }
 
