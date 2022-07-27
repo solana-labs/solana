@@ -552,13 +552,13 @@ impl ScheduleStage {
         use crossbeam_channel::select;
 
         let mut maybe_ee = None;
-        // this trick is needed for conditional (Option<_>) send
-        // upstream this to crossbeam-channel...
         let (to_full, _r) = bounded(0);
 
         loop {
             info!("schedule_once!");
 
+            // this trick is needed for conditional (Option<_>) send
+            // upstream this to crossbeam-channel...
             let to_execute_substage_if_ready = maybe_ee.as_ref().map(|_| to_execute_substage).unwrap_or(&to_full);
 
             select! {

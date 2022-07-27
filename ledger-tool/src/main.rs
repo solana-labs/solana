@@ -245,8 +245,7 @@ fn output_slot(
     let mut address_book = AddressBook::default();
     let t1 = std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
         loop {
-            ScheduleStage::schedule_once(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, &pre_execute_env_sender, &post_execute_env_receiver, &post_schedule_env_sender);
-            std::thread::sleep(std::time::Duration::from_micros(50));
+            ScheduleStage::run(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, &pre_execute_env_sender, &post_execute_env_receiver, &post_schedule_env_sender);
         }
     }).unwrap();
     let t2 = std::thread::Builder::new().name("sol-execute".to_string()).spawn(move || {
