@@ -253,7 +253,7 @@ struct Bundle {
 
 #[derive(Debug)]
 pub struct Task {
-    pub tx: SanitizedTransaction, // actually should be Bundle
+    pub tx: Box<SanitizedTransaction>, // actually should be Bundle
 }
 
 // RunnableQueue, ContendedQueue?
@@ -309,7 +309,7 @@ fn attempt_lock_for_execution<'a>(
 pub struct ScheduleStage {}
 
 impl ScheduleStage {
-    fn push_to_queue((weight, tx): (Weight, SanitizedTransaction), runnable_queue: &mut TaskQueue) {
+    fn push_to_queue((weight, tx): (Weight, Box<SanitizedTransaction>), runnable_queue: &mut TaskQueue) {
         // manage randomness properly for future scheduling determinism
         let mut rng = rand::thread_rng();
 
