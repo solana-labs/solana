@@ -52,6 +52,7 @@ use {
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
+    solana_scheduler::{AddressBook, ScheduleStage, TaskQueue, Weight},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -89,8 +90,6 @@ use {
         time::{Duration, UNIX_EPOCH},
     },
 };
-
-use solana_scheduler::{AddressBook, ScheduleStage, Weight, TaskQueue};
 
 mod bigtable;
 mod ledger_path;
@@ -163,7 +162,8 @@ fn output_entry(
                     None,
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
-                ).unwrap();
+                )
+                .unwrap();
                 to_schedule_stage.push(Box::new(sanitized_tx));
                 /*
                 let tx_signature = transaction.signatures[0];
@@ -250,33 +250,52 @@ fn output_slot(
     let mut runnable_queue = TaskQueue::default();
     let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
-    let t1 = std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
-        loop {
-            ScheduleStage::run(&mut runnable_queue, &mut contended_queue, &mut address_book, &tx_receiver, &pre_execute_env_sender, &post_execute_env_receiver, &post_schedule_env_sender);
-        }
-    }).unwrap();
-    let t2 = std::thread::Builder::new().name("sol-execute".to_string()).spawn(move || {
-        let mut step = 0;
-        loop {
-            let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
-            info!("execute substage: #{} {:#?}", step, ee.task.tx.signature());
-            //std::thread::sleep(std::time::Duration::from_micros(50));
-            post_execute_env_sender.send(ee).unwrap();
-            step += 1;
-        }
-    }).unwrap();
-
-    let t3 = std::thread::Builder::new().name("sol-consumer".to_string()).spawn(move || {
-        let mut step = 0;
-        loop {
-            let ee = post_schedule_env_receiver.recv().unwrap();
-            info!("post schedule stage: #{} {:#?}", step, ee.task.tx.signature());
-            if step % 1966 == 0 {
-                error!("finished!: {}", step);
+    let t1 = std::thread::Builder::new()
+        .name("sol-scheduler".to_string())
+        .spawn(move || loop {
+            ScheduleStage::run(
+                &mut runnable_queue,
+                &mut contended_queue,
+                &mut address_book,
+                &tx_receiver,
+                &pre_execute_env_sender,
+                &post_execute_env_receiver,
+                &post_schedule_env_sender,
+            );
+        })
+        .unwrap();
+    let t2 = std::thread::Builder::new()
+        .name("sol-execute".to_string())
+        .spawn(move || {
+            let mut step = 0;
+            loop {
+                let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
+                info!("execute substage: #{} {:#?}", step, ee.task.tx.signature());
+                //std::thread::sleep(std::time::Duration::from_micros(50));
+                post_execute_env_sender.send(ee).unwrap();
+                step += 1;
             }
-            step += 1;
-        }
-    }).unwrap();
+        })
+        .unwrap();
+
+    let t3 = std::thread::Builder::new()
+        .name("sol-consumer".to_string())
+        .spawn(move || {
+            let mut step = 0;
+            loop {
+                let ee = post_schedule_env_receiver.recv().unwrap();
+                info!(
+                    "post schedule stage: #{} {:#?}",
+                    step,
+                    ee.task.tx.signature()
+                );
+                if step % 1966 == 0 {
+                    error!("finished!: {}", step);
+                }
+                step += 1;
+            }
+        })
+        .unwrap();
 
     if verbose_level >= 2 {
         let mut txes = Vec::new();
@@ -288,7 +307,7 @@ fn output_slot(
         for i in 0..1000 {
             error!("started!: {}", i);
             for tx in txes.clone() {
-                tx_sender.send((Weight{ix: weight}, tx)).unwrap();
+                tx_sender.send((Weight { ix: weight }, tx)).unwrap();
                 weight -= 1;
             }
         }
