@@ -1,5 +1,5 @@
 #[cfg(target_os = "linux")]
-use std::{fs::File, io::BufReader, process::Command};
+use std::{fs::File, io::BufReader};
 use {
     solana_sdk::timing::AtomicInterval,
     std::{
@@ -676,122 +676,122 @@ impl SystemMonitorService {
                 new_stats
                     .reads_completed
                     .saturating_sub(old_stats.reads_completed),
-                u64
+                i64
             ),
             (
                 "reads_merged",
                 new_stats
                     .reads_merged
                     .saturating_sub(old_stats.reads_merged),
-                u64
+                i64
             ),
             (
                 "sectors_read",
                 new_stats
                     .sectors_read
                     .saturating_sub(old_stats.sectors_read),
-                u64
+                i64
             ),
             (
                 "time_reading_ms",
                 new_stats
                     .time_reading_ms
                     .saturating_sub(old_stats.time_reading_ms),
-                u64
+                i64
             ),
             (
                 "writes_completed",
                 new_stats
                     .writes_completed
                     .saturating_sub(old_stats.writes_completed),
-                u64
+                i64
             ),
             (
                 "writes_merged",
                 new_stats
                     .writes_merged
                     .saturating_sub(old_stats.writes_merged),
-                u64
+                i64
             ),
             (
                 "sectors_written",
                 new_stats
                     .sectors_written
                     .saturating_sub(old_stats.sectors_written),
-                u64
+                i64
             ),
             (
                 "time_writing_ms",
                 new_stats
                     .time_writing_ms
                     .saturating_sub(old_stats.time_writing_ms),
-                u64
+                i64
             ),
             (
                 "io_in_progress",
                 new_stats
                     .io_in_progress
                     .saturating_sub(old_stats.io_in_progress),
-                u64
+                i64
             ),
             (
                 "time_io_ms",
                 new_stats.time_io_ms.saturating_sub(old_stats.time_io_ms),
-                u64
+                i64
             ),
             (
                 "time_io_weighted_ms",
                 new_stats
                     .time_io_weighted_ms
                     .saturating_sub(old_stats.time_io_weighted_ms),
-                u64
+                i64
             ),
             (
                 "discards_completed",
                 new_stats
                     .discards_completed
                     .saturating_sub(old_stats.discards_completed),
-                u64
+                i64
             ),
             (
                 "discards_merged",
                 new_stats
                     .discards_merged
                     .saturating_sub(old_stats.discards_merged),
-                u64
+                i64
             ),
             (
                 "sectors_discarded",
                 new_stats
                     .sectors_discarded
                     .saturating_sub(old_stats.sectors_discarded),
-                u64
+                i64
             ),
             (
                 "time_discarding",
                 new_stats
                     .time_discarding
                     .saturating_sub(old_stats.time_discarding),
-                u64
+                i64
             ),
             (
                 "flushes_completed",
                 new_stats
                     .flushes_completed
                     .saturating_sub(old_stats.flushes_completed),
-                u64
+                i64
             ),
             (
                 "time_flushing",
                 new_stats
                     .time_flushing
                     .saturating_sub(old_stats.time_flushing),
-                u64
+                i64
             ),
             (
                 "num_disks",
                 new_stats.num_disks.saturating_sub(old_stats.num_disks),
-                u64
+                i64
             ),
         )
     }
