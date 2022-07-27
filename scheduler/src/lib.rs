@@ -539,7 +539,7 @@ impl ScheduleStage {
         Self::push_to_queue(weighted_tx, runnable_queue)
     }
 
-    pub fn schedule_once(
+    pub fn run(
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -592,23 +592,6 @@ impl ScheduleStage {
             }
         }
     }
-
-    /*
-    pub fn run(
-        runnable_queue: &mut TaskQueue,
-        contended_queue: &mut TaskQueue,
-        address_book: &mut AddressBook,
-        from_previous_stage: crossbeam_channel::Receiver<(Weight, SanitizedTransaction)>,
-        to_execute_substage: crossbeam_channel::Sender<Option<ExecutionEnvironment>>, // ideally want to stop wrapping with Option<...>...
-        from_execute_substage: crossbeam_channel::Receiver<ExecutionEnvironment>,
-        to_next_stage: crossbeam_channel::Sender<ExecutionEnvironment>, // assume unbounded
-    ) {
-        let exit = true;
-        while exit {
-            Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_substage, &from_execute_substage, &to_next_stage);
-        }
-    }
-    */
 }
 
 struct ExecuteStage {
