@@ -341,7 +341,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn get_newly_u_u_w<'a>(
         address: &'a Pubkey,
-        address_book: &'a mut AddressBook,
+        address_book: &'a AddressBook,
     ) -> &'a std::collections::BTreeSet<usize> {
         &address_book
                 .map
@@ -352,7 +352,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn get_weight_from_contended(
-        address_book: &mut AddressBook,
+        address_book: &AddressBook,
     ) -> Option<UniqueWeight> {
         let mut heaviest_by_address: Option<UniqueWeight> = None;
         for address in address_book.newly_uncontended_addresses.iter() {
