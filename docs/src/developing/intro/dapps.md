@@ -1,15 +1,16 @@
 ---
 title: What is a dApp?
-description: "Decetralized applications, aka dApps, are the user facing applications of the Solana blockchain. They are written with languages like Javscript and Rust."
+description: "Decentralized applications, aka dApps, are the user facing applications of the Solana blockchain. They are written with languages like JavaScript and Rust."
+keywords: ""
 ---
 
-Decetralized applications, "_dApps_" for short, are the user facing applications that interact with the Solana blockchain. These applications are generally a combination of frontend code (like HTML and Javascript) as well as [Solana Programs](./programs.md) deployed on the blockchain itself.
+Decentralized applications, "_dApps_" for short, are the user facing applications that interact with the Solana blockchain. These applications are generally a combination of frontend code (like HTML and JavaScript) as well as [Solana Programs](./programs.md) deployed on the blockchain itself.
 
 Since Solana Programs are "_composable_" and callable by anyone, dApp developers are not required to build and deploy their own on-chain programs. In fact, they often use a combination of custom written code for their own [on-chain programs](./programs.md#on-chain-programs), [Native programs](../runtime-facilities/programs.md), and other programs from the [Solana Program Library](https://spl.solana.com).
 
 ## dApp Examples
 
-Decentralized apps are being used all across the Solana blockchain to accomplish different things. Some dApps are focused on decentralized finance (DeFi), empowering community governance through DAOs, or even enouraging people to get out and move their bodies.
+Decentralized apps are being used all across the Solana blockchain to accomplish different things. Some dApps are focused on decentralized finance (DeFi), empowering community governance through DAOs, or even encouraging people to get out and move their bodies.
 
 Some of the most commonly known Solana dApps include:
 
@@ -25,11 +26,11 @@ You can explore more of the [Solana community dApps](https://solana.com/ecosyste
 
 ## How to Build a dApp
 
-For the frontend, user facing portion of dApps, developers can use most modern Javascript frameworks that utilize the NPM registry for dependancy management. Including React, NextJS, Vue, Node, and more.
+For the frontend, user facing portion of dApps, developers can use most modern JavaScript frameworks that utilize the NPM registry for dependency management. Including React, NextJS, Vue, Node, and more.
 
 The blockchain deployable Solana programs are commonly created with the [Rust](https://www.rust-lang.org/) programming language. But can also be created with other low level languages that can be compiled with the BPF loader like C and C++.
 
-Due to it's developer convinience, the [Anchor framework](https://www.anchor-lang.com/) has emerged as the leading Rust based framework to develop on chain Solana programs. Anchor provides many tools and utilities for more rapidly developing Solana programs that operate on the [Sealevel runtime](https://medium.com/solana-labs/sealevel-parallel-processing-thousands-of-smart-contracts-d814b378192).
+Due to it's developer convenience, the [Anchor framework](https://www.anchor-lang.com/) has emerged as the leading Rust based framework to develop on chain Solana programs. Anchor provides many tools and utilities for more rapidly developing Solana programs that operate on the [Sealevel runtime](https://medium.com/solana-labs/sealevel-parallel-processing-thousands-of-smart-contracts-d814b378192).
 
 ## dApp Boilerplate with NPX
 
@@ -41,4 +42,4 @@ To quickly scaffold a Solana dApp with this tool, run the following command:
 npx create-solana-dapp
 ```
 
-> The [create-solana-dapp](https://www.npmjs.com/package/create-solana-dapp) packages is open source and avilable in both the NPM registry and it's [GitHub repo](https://github.com/solana-developers/create-solana-app).
+> The [create-solana-dapp](https://www.npmjs.com/package/create-solana-dapp) package is open source and available in both the NPM registry and it's [GitHub repo](https://github.com/solana-developers/create-solana-app).

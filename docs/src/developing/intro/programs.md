@@ -1,11 +1,12 @@
 ---
 title: What are Solana Programs?
 description: "A Solana Program, aka smart contract, is the executable code that interprets the instructions on the blockchain. There are two types: Native and On-Chain."
+keywords: ""
 ---
 
 Solana Programs, often referred to as "_smart contracts_" on other blockchains, are the executable code that interprets the instructions sent inside of each transaction on the blockchain. They can be deployed directly into the core of the network as [Native Programs](#native-programs), or published by anyone as [On Chain Programs](#on-chain-programs). Programs are the core building blocks of the network and handle everything from sending tokens between wallets, to accepting votes of a DAOs, to tracking ownership of NFTs.
 
-Both types of programs run on top of the [Sealevel runtime](https://medium.com/solana-labs/sealevel-parallel-processing-thousands-of-smart-contracts-d814b378192), which is Solana's _parrallel processing_ model that helps to enable the high transactions speeds of the blockchain.
+Both types of programs run on top of the [Sealevel runtime](https://medium.com/solana-labs/sealevel-parallel-processing-thousands-of-smart-contracts-d814b378192), which is Solana's _parallel processing_ model that helps to enable the high transactions speeds of the blockchain.
 
 ## Key points
 
@@ -25,7 +26,7 @@ The Solana blockchain has two types of programs:
 
 ### On chain programs
 
-These user programable programs, often referred to as "_smart contracts_" on other blockchains, are deployed directly to the blockchain for anyone to interact with and execute. Hence the name "on chain"!
+These user programmable programs, often referred to as "_smart contracts_" on other blockchains, are deployed directly to the blockchain for anyone to interact with and execute. Hence the name "on chain"!
 
 In effect, "on chain programs" are any program that is not baked directly into the Solana cluster's core code (like the native programs discussed below).
 
@@ -46,11 +47,11 @@ Similar to other "on-chain" programs in Solana, native programs can be called by
 
 ## Executable
 
-When a Solana program is deployed onto the network, it is marked as "executable" by the [BPF Loader Program](../runtime-facilities/programs.md#bpf-loader). This allows the Solana runtime to efficently and properly execute the compiled program code.
+When a Solana program is deployed onto the network, it is marked as "executable" by the [BPF Loader Program](../runtime-facilities/programs.md#bpf-loader). This allows the Solana runtime to efficiently and properly execute the compiled program code.
 
 ## Upgradable
 
-Unline other blockchains, Solana programs can be upgraded after they are deployed to the network.
+Unlike other blockchains, Solana programs can be upgraded after they are deployed to the network.
 
 Native programs can only be upgraded as part of cluster updates when new software releases are made.
 
