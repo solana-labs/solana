@@ -312,9 +312,9 @@ fn attempt_lock_for_execution<'a>(
         .readonly
         .iter()
         .map(|a| (a, RequestedUsage::Readonly));
-    let all_iter = writable_lock_iter.chain(readonly_lock_iter);
+    let chained_iter = writable_lock_iter.chain(readonly_lock_iter);
 
-    all_iter
+    chained_iter
         .map(|(a, usage)| address_book.attempt_lock_address(unique_weight, **a, usage))
         .collect::<Vec<_>>()
 }
