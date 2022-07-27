@@ -543,10 +543,10 @@ impl ScheduleStage {
                 send(maybe_ee.as_ref().map(|_| {
                     was_some = true;
                     to_execute_substage
-                }).unwrap_or(&s),
+                }).unwrap_or(&s), {
                     was_some = false;
                     maybe_ee
-                ) -> res => {
+                }) -> res => {
                     info!("send to execute: {}", was_some);
                     res.unwrap();
                     maybe_ee = None;
