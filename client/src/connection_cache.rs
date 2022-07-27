@@ -293,7 +293,7 @@ impl ConnectionCache {
         client_pubkey: &Pubkey,
     ) {
         self.maybe_staked_nodes = Some(staked_nodes.clone());
-        self.maybe_client_pubkey = Some(client_pubkey.clone());
+        self.maybe_client_pubkey = Some(*client_pubkey);
     }
 
     pub fn with_udp(connection_pool_size: usize) -> Self {
