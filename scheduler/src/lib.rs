@@ -369,7 +369,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(bool, UniqueWeight, Task)> {
         match (
-            Self::get_weight_from_contended(),
+            Self::get_weight_from_contended(address_book),
             runnable_queue.next_task_unique_weight(),
         ) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
