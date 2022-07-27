@@ -2,7 +2,6 @@ import React, { Children } from "react";
 import { useRouter } from "next/router";
 import cx from "classnames";
 import Link, { LinkProps } from "next/link";
-import { useCluster } from "src/providers/cluster";
 
 type NavLinkProps = React.PropsWithChildren<LinkProps> & {
   activeClassName?: string;
@@ -14,7 +13,6 @@ export const NavLink = ({
   ...props
 }: NavLinkProps) => {
   const { asPath } = useRouter();
-  const { cluster } = useCluster();
 
   const child = Children.only(children) as React.ReactElement;
   const childClassName = child.props.className || "";
