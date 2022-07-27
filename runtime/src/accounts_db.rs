@@ -9056,13 +9056,8 @@ pub mod tests {
                 bins,
                 bin_range,
                 &CalcAccountsHashConfig {
-                    use_bg_thread_pool: false,
                     check_hash,
-                    ancestors: None,
-                    use_write_cache: false,
-                    epoch_schedule: &EpochSchedule::default(),
-                    rent_collector: &RentCollector::default(),
-                    store_detailed_debug_info_on_failure: false,
+                    ..CalcAccountsHashConfig::default()
                 },
                 None,
             )
@@ -9445,15 +9440,7 @@ pub mod tests {
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
             .calculate_accounts_hash_without_index(
-                &CalcAccountsHashConfig {
-                    use_bg_thread_pool: false,
-                    check_hash: false,
-                    ancestors: None,
-                    use_write_cache: false,
-                    epoch_schedule: &EpochSchedule::default(),
-                    rent_collector: &RentCollector::default(),
-                    store_detailed_debug_info_on_failure: false,
-                },
+                &CalcAccountsHashConfig::default(),
                 &get_storage_refs(&storages),
                 HashStats::default(),
             )
@@ -9475,15 +9462,7 @@ pub mod tests {
         let db = AccountsDb::new(Vec::new(), &ClusterType::Development);
         let result = db
             .calculate_accounts_hash_without_index(
-                &CalcAccountsHashConfig {
-                    use_bg_thread_pool: false,
-                    check_hash: false,
-                    ancestors: None,
-                    use_write_cache: false,
-                    epoch_schedule: &EpochSchedule::default(),
-                    rent_collector: &RentCollector::default(),
-                    store_detailed_debug_info_on_failure: false,
-                },
+                &CalcAccountsHashConfig::default(),
                 &get_storage_refs(&storages),
                 HashStats::default(),
             )
@@ -9586,15 +9565,7 @@ pub mod tests {
 
         let result = accounts_db.scan_account_storage_no_bank(
             &CacheHashData::new(&accounts_hash_cache_path),
-            &CalcAccountsHashConfig {
-                use_bg_thread_pool: false,
-                check_hash: false,
-                ancestors: None,
-                use_write_cache: false,
-                epoch_schedule: &EpochSchedule::default(),
-                rent_collector: &RentCollector::default(),
-                store_detailed_debug_info_on_failure: false,
-            },
+            &CalcAccountsHashConfig::default(),
             &get_storage_refs(&storages),
             test_scan,
             &Range { start: 0, end: 1 },
@@ -11632,13 +11603,30 @@ pub mod tests {
                         use_bg_thread_pool: true, // is_startup used to be false
                         check_hash,
                         ancestors: Some(&ancestors),
-                        use_write_cache: false,
-                        epoch_schedule: &EpochSchedule::default(),
-                        rent_collector: &RentCollector::default(),
-                        store_detailed_debug_info_on_failure: false,
+                        ..CalcAccountsHashConfig::default()
                     },
                 )
                 .is_err());
+        }
+    }
+
+    // something we can get a ref to
+    lazy_static! {
+        pub static ref EPOCH_SCHEDULE: EpochSchedule = EpochSchedule::default();
+        pub static ref RENT_COLLECTOR: RentCollector = RentCollector::default();
+    }
+
+    impl<'a> CalcAccountsHashConfig<'a> {
+        fn default() -> Self {
+            Self {
+                use_bg_thread_pool: false,
+                check_hash: false,
+                ancestors: None,
+                use_write_cache: false,
+                epoch_schedule: &EPOCH_SCHEDULE,
+                rent_collector: &RENT_COLLECTOR,
+                store_detailed_debug_info_on_failure: false,
+            }
         }
     }
 
@@ -11665,10 +11653,7 @@ pub mod tests {
                     use_bg_thread_pool: true, // is_startup used to be false
                     check_hash,
                     ancestors: Some(&ancestors),
-                    use_write_cache: false,
-                    epoch_schedule: &EpochSchedule::default(),
-                    rent_collector: &RentCollector::default(),
-                    store_detailed_debug_info_on_failure: false,
+                    ..CalcAccountsHashConfig::default()
                 },
             )
             .unwrap(),
@@ -11679,10 +11664,7 @@ pub mod tests {
                     use_bg_thread_pool: true, // is_startup used to be false
                     check_hash,
                     ancestors: Some(&ancestors),
-                    use_write_cache: false,
-                    epoch_schedule: &EpochSchedule::default(),
-                    rent_collector: &RentCollector::default(),
-                    store_detailed_debug_info_on_failure: false,
+                    ..CalcAccountsHashConfig::default()
                 },
             )
             .unwrap(),
