@@ -276,11 +276,12 @@ pub fn verify_net_stats_access() -> Result<(), String> {
 #[cfg(target_os = "linux")]
 fn read_io_stats() -> Result<IoStats, String> {
     let output = Command::new("iostat")
-                .arg("-d")
-                .arg("-m")
-                .arg("-x")
-                .output()?;
-    let reader_io = output.stdout;
+        .arg("-d")
+        .arg("-m")
+        .arg("-x")
+        .output()
+        .map_err(|e| e.to_string())?;
+    let mut reader_io = &output.stdout as &[u8];
     parse_io_stats(&mut reader_io)
 }
 
@@ -321,13 +322,16 @@ fn parse_io_stats(reader_io: &mut impl BufRead) -> Result<IoStats, String> {
         stats.write_avg_req_sectors += values[12].parse::<f64>().map_err(|e| e.to_string())?;
         stats.discard_iops += values[13].parse::<f64>().map_err(|e| e.to_string())?;
         stats.discard_mbps += values[14].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.discard_req_merged_per_second += values[15].parse::<f64>().map_err(|e| e.to_string())?;
+        stats.discard_req_merged_per_second +=
+            values[15].parse::<f64>().map_err(|e| e.to_string())?;
         stats.discard_req_merged_percent += values[16].parse::<f64>().map_err(|e| e.to_string())?;
         stats.discard_avg_await_ms += values[17].parse::<f64>().map_err(|e| e.to_string())?;
         stats.discard_avg_req_sectors += values[18].parse::<f64>().map_err(|e| e.to_string())?;
         stats.avg_queue_length += values[19].parse::<f64>().map_err(|e| e.to_string())?;
         stats.utilization_percent_avg += values[20].parse::<f64>().map_err(|e| e.to_string())?;
-        stats.utilization_percent_max = stats.utilization_percent_max.max(values[20].parse::<f64>().map_err(|e| e.to_string())?);
+        stats.utilization_percent_max = stats
+            .utilization_percent_max
+            .max(values[20].parse::<f64>().map_err(|e| e.to_string())?);
     }
 
     if num_devices > 1.0 {
@@ -705,25 +709,61 @@ impl SystemMonitorService {
                 "io-stats",
                 ("read_iops", stats.read_iops, f64),
                 ("read_mbps", stats.read_mbps, f64),
-                ("read_req_merged_per_second", stats.read_req_merged_per_second, f64),
-                ("read_req_merged_percent", stats.read_req_merged_percent, f64),
+                (
+                    "read_req_merged_per_second",
+                    stats.read_req_merged_per_second,
+                    f64
+                ),
+                (
+                    "read_req_merged_percent",
+                    stats.read_req_merged_percent,
+                    f64
+                ),
                 ("read_avg_await_ms", stats.read_avg_await_ms, f64),
                 ("read_avg_req_sectors", stats.read_avg_req_sectors, f64),
                 ("write_iops", stats.write_iops, f64),
                 ("write_mbps", stats.write_mbps, f64),
-                ("write_req_merged_per_second", stats.write_req_merged_per_second, f64),
-                ("write_req_merged_percent", stats.write_req_merged_percent, f64),
+                (
+                    "write_req_merged_per_second",
+                    stats.write_req_merged_per_second,
+                    f64
+                ),
+                (
+                    "write_req_merged_percent",
+                    stats.write_req_merged_percent,
+                    f64
+                ),
                 ("write_avg_await_ms", stats.write_avg_await_ms, f64),
                 ("write_avg_req_sectors", stats.write_avg_req_sectors, f64),
                 ("discard_iops", stats.discard_iops, f64),
                 ("discard_mbps", stats.discard_mbps, f64),
-                ("discard_req_merged_per_second", stats.discard_req_merged_per_second, f64),
-                ("discard_req_merged_percent", stats.discard_req_merged_percent, f64),
+                (
+                    "discard_req_merged_per_second",
+                    stats.discard_req_merged_per_second,
+                    f64
+                ),
+                (
+                    "discard_req_merged_percent",
+                    stats.discard_req_merged_percent,
+                    f64
+                ),
                 ("discard_avg_await_ms", stats.discard_avg_await_ms, f64),
-                ("discard_avg_req_sectors", stats.discard_avg_req_sectors, f64),
+                (
+                    "discard_avg_req_sectors",
+                    stats.discard_avg_req_sectors,
+                    f64
+                ),
                 ("avg_queue_length", stats.avg_queue_length, f64),
-                ("utilization_percent_avg", stats.utilization_percent_avg, f64),
-                ("utilization_percent_max", stats.utilization_percent_max, f64),
+                (
+                    "utilization_percent_avg",
+                    stats.utilization_percent_avg,
+                    f64
+                ),
+                (
+                    "utilization_percent_max",
+                    stats.utilization_percent_max,
+                    f64
+                ),
             )
         }
     }
