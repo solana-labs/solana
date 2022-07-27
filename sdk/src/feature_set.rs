@@ -8,7 +8,7 @@
 //!   <https://spl.solana.com/feature-proposal#feature-proposal-life-cycle>
 //!
 //! 1. Generate a new keypair with `solana-keygen new --outfile feature.json --no-passphrase`
-//!    - Keypairs should be held by core contributors only. If you're a non-core contirbutor going
+//!    - Keypairs should be held by core contributors only. If you're a non-core contributor going
 //!      through these steps, the PR process will facilitate a keypair holder being picked. That
 //!      person will generate the keypair, provide pubkey for PR, and ultimately enable the feature.
 //! 2. Add a public module for the feature, specifying keypair pubkey as the id with
@@ -468,6 +468,14 @@ pub mod cap_bpf_program_instruction_accounts {
     solana_sdk::declare_id!("9k5ijzTbYPtjzu8wj2ErH9v45xecHzQ1x4PMYMMxFgdM");
 }
 
+pub mod loosen_cpi_size_restriction {
+    solana_sdk::declare_id!("GDH5TVdbTPUpRnXaRyQqiKUa7uZAbZ28Q2N9bhbKoMLm");
+}
+
+pub mod use_default_units_in_fee_calculation {
+    solana_sdk::declare_id!("8sKQrMQoUHtQSUP83SPG4ta2JDjSAiWs7t5aJ9uEd6To");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -579,6 +587,8 @@ lazy_static! {
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
+        (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
+        (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

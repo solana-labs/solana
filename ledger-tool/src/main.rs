@@ -399,8 +399,62 @@ fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug)]
+enum GraphVoteAccountMode {
+    Disabled,
+    LastOnly,
+    WithHistory,
+}
+
+impl GraphVoteAccountMode {
+    const DISABLED: &'static str = "disabled";
+    const LAST_ONLY: &'static str = "last-only";
+    const WITH_HISTORY: &'static str = "with-history";
+    const ALL_MODE_STRINGS: &'static [&'static str] =
+        &[Self::DISABLED, Self::LAST_ONLY, Self::WITH_HISTORY];
+
+    fn is_enabled(&self) -> bool {
+        !matches!(self, Self::Disabled)
+    }
+}
+
+impl AsRef<str> for GraphVoteAccountMode {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Disabled => Self::DISABLED,
+            Self::LastOnly => Self::LAST_ONLY,
+            Self::WithHistory => Self::WITH_HISTORY,
+        }
+    }
+}
+
+impl Default for GraphVoteAccountMode {
+    fn default() -> Self {
+        Self::Disabled
+    }
+}
+
+struct GraphVoteAccountModeError(String);
+
+impl FromStr for GraphVoteAccountMode {
+    type Err = GraphVoteAccountModeError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            Self::DISABLED => Ok(Self::Disabled),
+            Self::LAST_ONLY => Ok(Self::LastOnly),
+            Self::WITH_HISTORY => Ok(Self::WithHistory),
+            _ => Err(GraphVoteAccountModeError(s.to_string())),
+        }
+    }
+}
+
+struct GraphConfig {
+    include_all_votes: bool,
+    vote_account_mode: GraphVoteAccountMode,
+}
+
 #[allow(clippy::cognitive_complexity)]
-fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
+fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
     let frozen_banks = bank_forks.frozen_banks();
     let mut fork_slots: HashSet<_> = frozen_banks.keys().cloned().collect();
     for (_, bank) in frozen_banks {
@@ -521,7 +575,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
                         "1"
                     };
                     let link_label = if slot_distance > 1 {
-                        format!("label=\"{} slots\",color=red", slot_distance)
+                        format!("label=\"{} slots\",color=red", slot_distance - 1)
                     } else {
                         "color=blue".to_string()
                     };
@@ -551,36 +605,60 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
             validator_votes.remove(last_vote_slot);
         });
 
-        dot.push(format!(
-            r#"  "last vote {}"[shape=box,label="Latest validator vote: {}\nstake: {} SOL\nroot slot: {}\nvote history:\n{}"];"#,
-            node_pubkey,
-            node_pubkey,
-            lamports_to_sol(*stake),
-            vote_state.root_slot.unwrap_or(0),
-            vote_state
-                .votes
-                .iter()
-                .map(|vote| format!("slot {} (conf={})", vote.slot, vote.confirmation_count))
-                .collect::<Vec<_>>()
-                .join("\n")
-        ));
+        let maybe_styled_last_vote_slot = styled_slots.get(last_vote_slot);
+        if maybe_styled_last_vote_slot.is_none() {
+            if *last_vote_slot < lowest_last_vote_slot {
+                lowest_last_vote_slot = *last_vote_slot;
+                lowest_total_stake = *total_stake;
+            }
+            absent_votes += 1;
+            absent_stake += stake;
+        };
 
-        dot.push(format!(
-            r#"  "last vote {}" -> "{}" [style=dashed,label="latest vote"];"#,
-            node_pubkey,
-            if styled_slots.contains(last_vote_slot) {
-                last_vote_slot.to_string()
-            } else {
-                if *last_vote_slot < lowest_last_vote_slot {
-                    lowest_last_vote_slot = *last_vote_slot;
-                    lowest_total_stake = *total_stake;
-                }
-                absent_votes += 1;
-                absent_stake += stake;
+        if config.vote_account_mode.is_enabled() {
+            let vote_history =
+                if matches!(config.vote_account_mode, GraphVoteAccountMode::WithHistory) {
+                    format!(
+                        "vote history:\n{}",
+                        vote_state
+                            .votes
+                            .iter()
+                            .map(|vote| format!(
+                                "slot {} (conf={})",
+                                vote.slot, vote.confirmation_count
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    )
+                } else {
+                    format!(
+                        "last vote slot: {}",
+                        vote_state
+                            .votes
+                            .back()
+                            .map(|vote| vote.slot.to_string())
+                            .unwrap_or_else(|| "none".to_string())
+                    )
+                };
+            dot.push(format!(
+                r#"  "last vote {}"[shape=box,label="Latest validator vote: {}\nstake: {} SOL\nroot slot: {}\n{}"];"#,
+                node_pubkey,
+                node_pubkey,
+                lamports_to_sol(*stake),
+                vote_state.root_slot.unwrap_or(0),
+                vote_history,
+            ));
 
-                "...".to_string()
-            },
-        ));
+            dot.push(format!(
+                r#"  "last vote {}" -> "{}" [style=dashed,label="latest vote"];"#,
+                node_pubkey,
+                if let Some(styled_last_vote_slot) = maybe_styled_last_vote_slot {
+                    styled_last_vote_slot.to_string()
+                } else {
+                    "...".to_string()
+                },
+            ));
+        }
     }
 
     // Annotate the final "..." node with absent vote and stake information
@@ -594,7 +672,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
     }
 
     // Add for vote information from all banks.
-    if include_all_votes {
+    if config.include_all_votes {
         for (node_pubkey, validator_votes) in &all_votes {
             for (vote_slot, vote_state) in validator_votes {
                 dot.push(format!(
@@ -1166,6 +1244,7 @@ fn main() {
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
         .max(rent.minimum_balance(StakeState::size_of()))
         .to_string();
+    let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
     let matches = App::new(crate_name!())
@@ -1472,6 +1551,15 @@ fn main() {
                     .value_name("FILENAME")
                     .takes_value(true)
                     .help("Output file"),
+            )
+            .arg(
+                Arg::with_name("vote_account_mode")
+                    .long("vote-account-mode")
+                    .takes_value(true)
+                    .value_name("MODE")
+                    .default_value(default_graph_vote_account_mode.as_ref())
+                    .possible_values(GraphVoteAccountMode::ALL_MODE_STRINGS)
+                    .help("Specify if and how to graph vote accounts. Enabling will incur significant rendering overhead, especially `with-history`")
             )
         ).subcommand(
             SubCommand::with_name("create-snapshot")
@@ -2409,6 +2497,14 @@ fn main() {
             }
             ("graph", Some(arg_matches)) => {
                 let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
+                let graph_config = GraphConfig {
+                    include_all_votes: arg_matches.is_present("include_all_votes"),
+                    vote_account_mode: value_t_or_exit!(
+                        arg_matches,
+                        "vote_account_mode",
+                        GraphVoteAccountMode
+                    ),
+                };
 
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -2432,10 +2528,7 @@ fn main() {
                     incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
-                        let dot = graph_forks(
-                            &bank_forks.read().unwrap(),
-                            arg_matches.is_present("include_all_votes"),
-                        );
+                        let dot = graph_forks(&bank_forks.read().unwrap(), &graph_config);
 
                         let extension = Path::new(&output_file).extension();
                         let result = if extension == Some(OsStr::new("pdf")) {

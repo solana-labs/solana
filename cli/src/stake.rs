@@ -21,8 +21,9 @@ use {
         ArgConstant,
     },
     solana_cli_output::{
-        self, return_signers_with_config, CliEpochReward, CliStakeHistory, CliStakeHistoryEntry,
-        CliStakeState, CliStakeType, OutputFormat, ReturnSignersConfig,
+        self, display::BuildBalanceMessageConfig, return_signers_with_config, CliBalance,
+        CliEpochReward, CliStakeHistory, CliStakeHistoryEntry, CliStakeState, CliStakeType,
+        OutputFormat, ReturnSignersConfig,
     },
     solana_client::{
         blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
@@ -2528,11 +2529,19 @@ pub fn process_stake_minimum_delegation(
 ) -> ProcessResult {
     let stake_minimum_delegation =
         rpc_client.get_stake_minimum_delegation_with_commitment(config.commitment)?;
-    Ok(solana_cli_output::display::build_balance_message(
-        stake_minimum_delegation,
-        use_lamports_unit,
-        true,
-    ))
+
+    let stake_minimum_delegation_output = CliBalance {
+        lamports: stake_minimum_delegation,
+        config: BuildBalanceMessageConfig {
+            use_lamports_unit,
+            show_unit: true,
+            trim_trailing_zeros: true,
+        },
+    };
+
+    Ok(config
+        .output_format
+        .formatted_string(&stake_minimum_delegation_output))
 }
 
 #[cfg(test)]

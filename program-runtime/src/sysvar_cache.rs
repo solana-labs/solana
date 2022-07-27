@@ -3,7 +3,6 @@ use solana_sdk::sysvar::{fees::Fees, recent_blockhashes::RecentBlockhashes};
 use {
     crate::invoke_context::InvokeContext,
     solana_sdk::{
-        account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
         sysvar::{
@@ -111,60 +110,60 @@ impl SysvarCache {
         self.stake_history = Some(Arc::new(stake_history));
     }
 
-    pub fn fill_missing_entries<F: FnMut(&Pubkey) -> Option<AccountSharedData>>(
+    pub fn fill_missing_entries<F: FnMut(&Pubkey, &mut dyn FnMut(&[u8]))>(
         &mut self,
-        mut load_sysvar_account: F,
+        mut get_account_data: F,
     ) {
-        if self.get_clock().is_err() {
-            if let Some(clock) = load_sysvar_account(&Clock::id())
-                .and_then(|account| bincode::deserialize(account.data()).ok())
-            {
-                self.set_clock(clock);
-            }
+        if self.clock.is_none() {
+            get_account_data(&Clock::id(), &mut |data: &[u8]| {
+                if let Ok(clock) = bincode::deserialize(data) {
+                    self.set_clock(clock);
+                }
+            });
         }
-        if self.get_epoch_schedule().is_err() {
-            if let Some(epoch_schedule) = load_sysvar_account(&EpochSchedule::id())
-                .and_then(|account| bincode::deserialize(account.data()).ok())
-            {
-                self.set_epoch_schedule(epoch_schedule);
-            }
-        }
-        #[allow(deprecated)]
-        if self.get_fees().is_err() {
-            if let Some(fees) = load_sysvar_account(&Fees::id())
-                .and_then(|account| bincode::deserialize(account.data()).ok())
-            {
-                self.set_fees(fees);
-            }
-        }
-        if self.get_rent().is_err() {
-            if let Some(rent) = load_sysvar_account(&Rent::id())
-                .and_then(|account| bincode::deserialize(account.data()).ok())
-            {
-                self.set_rent(rent);
-            }
-        }
-        if self.get_slot_hashes().is_err() {
-            if let Some(slot_hashes) = load_sysvar_account(&SlotHashes::id())
-                .and_then(|account| bincode::deserialize(account.data()).ok())
-            {
-                self.set_slot_hashes(slot_hashes);
-            }
+        if self.epoch_schedule.is_none() {
+            get_account_data(&EpochSchedule::id(), &mut |data: &[u8]| {
+                if let Ok(epoch_schedule) = bincode::deserialize(data) {
+                    self.set_epoch_schedule(epoch_schedule);
+                }
+            });
         }
         #[allow(deprecated)]
-        if self.get_recent_blockhashes().is_err() {
-            if let Some(recent_blockhashes) = load_sysvar_account(&RecentBlockhashes::id())
-                .and_then(|account| bincode::deserialize(account.data()).ok())
-            {
-                self.set_recent_blockhashes(recent_blockhashes);
-            }
+        if self.fees.is_none() {
+            get_account_data(&Fees::id(), &mut |data: &[u8]| {
+                if let Ok(fees) = bincode::deserialize(data) {
+                    self.set_fees(fees);
+                }
+            });
         }
-        if self.get_stake_history().is_err() {
-            if let Some(stake_history) = load_sysvar_account(&StakeHistory::id())
-                .and_then(|account| bincode::deserialize(account.data()).ok())
-            {
-                self.set_stake_history(stake_history);
-            }
+        if self.rent.is_none() {
+            get_account_data(&Rent::id(), &mut |data: &[u8]| {
+                if let Ok(rent) = bincode::deserialize(data) {
+                    self.set_rent(rent);
+                }
+            });
+        }
+        if self.slot_hashes.is_none() {
+            get_account_data(&SlotHashes::id(), &mut |data: &[u8]| {
+                if let Ok(slot_hashes) = bincode::deserialize(data) {
+                    self.set_slot_hashes(slot_hashes);
+                }
+            });
+        }
+        #[allow(deprecated)]
+        if self.recent_blockhashes.is_none() {
+            get_account_data(&RecentBlockhashes::id(), &mut |data: &[u8]| {
+                if let Ok(recent_blockhashes) = bincode::deserialize(data) {
+                    self.set_recent_blockhashes(recent_blockhashes);
+                }
+            });
+        }
+        if self.stake_history.is_none() {
+            get_account_data(&StakeHistory::id(), &mut |data: &[u8]| {
+                if let Ok(stake_history) = bincode::deserialize(data) {
+                    self.set_stake_history(stake_history);
+                }
+            });
         }
     }
 

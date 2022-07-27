@@ -527,6 +527,14 @@ impl BankingStage {
             result
         };
 
+        // Iterates buffered packets from high priority to low, places each packet into
+        // forwarding account buckets by calling `forward_packet_batches_by_accounts.add_packet()`.
+        // Iteration stops as soon as `add_packet()` returns false when a packet fails to fit into
+        // buckets, ignoring remaining lower priority packets that could fit.
+        // The motivation of this is during bot spamming, buffer is likely to be filled with
+        // transactions have higher priority and write to same account(s), other lower priority
+        // transactions will not make into buffer, therefore it shall exit as soon as first
+        // transaction failed to fit in forwarding buckets.
         buffered_packet_batches.iter_desc(filter_forwardable_packet);
 
         inc_new_counter_info!(
@@ -571,7 +579,8 @@ impl BankingStage {
         };
 
         const INTERVAL_MS: u64 = 100;
-        const MAX_BYTES_PER_SECOND: usize = 10_000 * 1200;
+        // 12 MB outbound limit per second
+        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
         const MAX_BYTES_BUDGET: usize = MAX_BYTES_PER_INTERVAL * 5;
         data_budget.update(INTERVAL_MS, |bytes| {
@@ -717,18 +726,7 @@ impl BankingStage {
                             max_tx_ingestion_ns,
                         )
                     {
-                        let poh_recorder_lock_time = {
-                            let (_poh_recorder_locked, poh_recorder_lock_time) =
-                                measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
-
-                            reached_end_of_slot = true;
-                            poh_recorder_lock_time
-                        };
-
-                        slot_metrics_tracker
-                            .increment_consume_buffered_packets_poh_recorder_lock_us(
-                                poh_recorder_lock_time.as_us(),
-                            );
+                        reached_end_of_slot = true;
                     }
 
                     // The difference between all transactions passed to execution and the ones that
@@ -779,16 +777,7 @@ impl BankingStage {
                 } else {
                     // mark as end-of-slot to avoid aggressively lock poh for the remaining for
                     // packet batches in buffer
-                    let poh_recorder_lock_time = {
-                        let (_poh_recorder_locked, poh_recorder_lock_time) =
-                            measure!(poh_recorder.read().unwrap(), "poh_recorder.read");
-
-                        reached_end_of_slot = true;
-                        poh_recorder_lock_time
-                    };
-                    slot_metrics_tracker.increment_consume_buffered_packets_poh_recorder_lock_us(
-                        poh_recorder_lock_time.as_us(),
-                    );
+                    reached_end_of_slot = true;
 
                     packets_to_process
                 }

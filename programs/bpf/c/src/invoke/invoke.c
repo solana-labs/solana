@@ -18,8 +18,8 @@ static const uint8_t TEST_EMPTY_ACCOUNTS_SLICE = 5;
 static const uint8_t TEST_CAP_SEEDS = 6;
 static const uint8_t TEST_CAP_SIGNERS = 7;
 static const uint8_t TEST_ALLOC_ACCESS_VIOLATION = 8;
-static const uint8_t TEST_INSTRUCTION_DATA_TOO_LARGE = 9;
-static const uint8_t TEST_INSTRUCTION_META_TOO_LARGE = 10;
+static const uint8_t TEST_MAX_INSTRUCTION_DATA_LEN_EXCEEDED = 9;
+static const uint8_t TEST_MAX_INSTRUCTION_ACCOUNTS_EXCEEDED = 10;
 static const uint8_t TEST_RETURN_ERROR = 11;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER = 12;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 13;
@@ -31,6 +31,7 @@ static const uint8_t ADD_LAMPORTS = 18;
 static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 19;
 static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER = 20;
 static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE = 21;
+static const uint8_t TEST_MAX_ACCOUNT_INFOS_EXCEEDED = 22;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -76,7 +77,7 @@ uint64_t do_nested_invokes(uint64_t num_nested_invokes,
 }
 
 extern uint64_t entrypoint(const uint8_t *input) {
-  sol_log("Invoke C program");
+  sol_log("invoke C program");
 
   SolAccountInfo accounts[13];
   SolParameters params = (SolParameters){.ka = accounts};
@@ -480,13 +481,14 @@ extern uint64_t entrypoint(const uint8_t *input) {
                                  signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
     break;
   }
-  case TEST_INSTRUCTION_DATA_TOO_LARGE: {
-    sol_log("Test instruction data too large");
+  case TEST_MAX_INSTRUCTION_DATA_LEN_EXCEEDED: {
+    sol_log("Test max instruction data len exceeded");
     SolAccountMeta arguments[] = {};
-    uint8_t *data = sol_calloc(1500, 1);
+    uint64_t data_len = MAX_CPI_INSTRUCTION_DATA_LEN + 1;
+    uint8_t *data = sol_calloc(data_len, 1);
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
                                         arguments, SOL_ARRAY_SIZE(arguments),
-                                        data, 1500};
+                                        data, data_len};
     const SolSignerSeeds signers_seeds[] = {};
     sol_assert(SUCCESS == sol_invoke_signed(
                               &instruction, accounts, SOL_ARRAY_SIZE(accounts),
@@ -494,18 +496,35 @@ extern uint64_t entrypoint(const uint8_t *input) {
 
     break;
   }
-  case TEST_INSTRUCTION_META_TOO_LARGE: {
-    sol_log("Test instruction meta too large");
-    SolAccountMeta *arguments = sol_calloc(40, sizeof(SolAccountMeta));
-    sol_log_64(0, 0, 0, 0, (uint64_t)arguments);
+  case TEST_MAX_INSTRUCTION_ACCOUNTS_EXCEEDED: {
+    sol_log("Test max instruction accounts exceeded");
+    uint64_t accounts_len = MAX_CPI_INSTRUCTION_ACCOUNTS + 1;
+    SolAccountMeta *arguments = sol_calloc(accounts_len, sizeof(SolAccountMeta));
     sol_assert(0 != arguments);
     uint8_t data[] = {};
     const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
-                                        arguments, 40, data,
+                                        arguments, accounts_len, data,
                                         SOL_ARRAY_SIZE(data)};
     const SolSignerSeeds signers_seeds[] = {};
     sol_assert(SUCCESS == sol_invoke_signed(
                               &instruction, accounts, SOL_ARRAY_SIZE(accounts),
+                              signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
+
+    break;
+  }
+  case TEST_MAX_ACCOUNT_INFOS_EXCEEDED: {
+    sol_log("Test max account infos exceeded");
+    SolAccountMeta arguments[] = {};
+    uint64_t account_infos_len = MAX_CPI_ACCOUNT_INFOS + 1;
+    SolAccountInfo *account_infos = sol_calloc(account_infos_len, sizeof(SolAccountInfo));
+    sol_assert(0 != account_infos);
+    uint8_t data[] = {};
+    const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                        arguments, SOL_ARRAY_SIZE(arguments),
+                                        data, SOL_ARRAY_SIZE(data)};
+    const SolSignerSeeds signers_seeds[] = {};
+    sol_assert(SUCCESS == sol_invoke_signed(
+                              &instruction, account_infos, account_infos_len,
                               signers_seeds, SOL_ARRAY_SIZE(signers_seeds)));
 
     break;

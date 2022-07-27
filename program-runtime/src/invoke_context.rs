@@ -278,24 +278,22 @@ impl<'a> InvokeContext<'a> {
         builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
         let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.fill_missing_entries(|pubkey| {
-            (0..transaction_context.get_number_of_accounts()).find_map(|index| {
+        sysvar_cache.fill_missing_entries(|pubkey, callback| {
+            for index in 0..transaction_context.get_number_of_accounts() {
                 if transaction_context
                     .get_key_of_account_at_index(index)
                     .unwrap()
                     == pubkey
                 {
-                    Some(
+                    callback(
                         transaction_context
                             .get_account_at_index(index)
                             .unwrap()
                             .borrow()
-                            .clone(),
-                    )
-                } else {
-                    None
+                            .data(),
+                    );
                 }
-            })
+            }
         });
         Self::new(
             transaction_context,
