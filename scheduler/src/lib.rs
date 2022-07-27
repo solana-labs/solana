@@ -471,11 +471,11 @@ impl ScheduleStage {
         Self::apply_successful_lock_before_execution(address_book, unique_weight, &lock_attempts);
         // load account now from AccountsDb
 
-        ExecutionEnvironment {
+        Box::new(ExecutionEnvironment {
             lock_attempts,
             task,
             cu: rng.gen_range(0, 1000),
-        }
+        })
     }
 
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
