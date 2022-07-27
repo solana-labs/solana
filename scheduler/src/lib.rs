@@ -580,6 +580,7 @@ impl ScheduleStage {
         }*/
     }
 
+    /*
     pub fn run(
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
@@ -594,6 +595,7 @@ impl ScheduleStage {
             Self::schedule_once(runnable_queue, contended_queue, address_book, &from_previous_stage, &to_execute_substage, &from_execute_substage, &to_next_stage);
         }
     }
+    */
 }
 
 struct ExecuteStage {
