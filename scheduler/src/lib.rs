@@ -237,11 +237,11 @@ impl AddressBook {
     }
 }
 
-/*
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Weight {
     // naming: Sequence Ordering?
     pub ix: usize, // index in ledger entry?
+    // gas fee
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -253,9 +253,10 @@ pub struct UniqueWeight {
     //unique_key: Hash, // tie breaker? random noise? also for unique identification of txes?
                       // fee?
 }
-*/
+/*
 pub type Weight = usize;
 pub type UniqueWeight = usize;
+*/
 
 struct Bundle {
     // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
@@ -507,7 +508,7 @@ impl ScheduleStage {
         Box::new(ExecutionEnvironment {
             lock_attempts,
             task,
-            cu: rng.gen_range(0, 1000),
+            cu: rng.gen_range(3, 1000),
         })
     }
 
