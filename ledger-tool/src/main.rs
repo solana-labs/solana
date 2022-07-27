@@ -142,7 +142,7 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
-    to_schedule_stage: &mut Vec<(Weight, SanitizedTransaction)>,
+    to_schedule_stage: &mut Vec<(Weight, Box<SanitizedTransaction>)>,
 ) {
     match method {
         LedgerOutputMethod::Print => {
@@ -164,7 +164,7 @@ fn output_entry(
                     SimpleAddressLoader::Disabled,
                     true, // require_static_program_ids
                 ).unwrap();
-                to_schedule_stage.push(Box::new((Weight { ix: 1000000 - (entry_index * 1000 + transactions_index) }, sanitized_tx)));
+                to_schedule_stage.push((Weight { ix: 1000000 - (entry_index * 1000 + transactions_index) }, Box::new(sanitized_tx)));
                 /*
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
