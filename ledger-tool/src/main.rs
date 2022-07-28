@@ -300,8 +300,7 @@ fn output_slot(
     let t3 = std::thread::Builder::new()
         .name("sol-consumer".to_string())
         .spawn(move || {
-            let mut step = 0;
-            loop {
+            for step in 0.. {
                 let ee = post_schedule_env_receiver.recv().unwrap();
                 info!(
                     "post schedule stage: #{} {:#?}",
@@ -311,7 +310,6 @@ fn output_slot(
                 if step % 1966 == 0 {
                     error!("finished!: {}", step);
                 }
-                step += 1;
             }
         })
         .unwrap();
