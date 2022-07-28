@@ -242,7 +242,10 @@ fn output_slot(
         .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
         .parse::<usize>()
         .unwrap();
-    let lane_channel_factor = 10;
+    let lane_channel_factor = std::env::var("LANE_CHANNEL_FACTOR")
+        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
+        .parse::<usize>()
+        .unwrap();
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
 
@@ -260,6 +263,7 @@ fn output_slot(
         .name("sol-scheduler".to_string())
         .spawn(move || loop {
             ScheduleStage::run(
+                lane_count * lane_channel_factor,
                 &mut runnable_queue,
                 &mut contended_queue,
                 &mut address_book,
