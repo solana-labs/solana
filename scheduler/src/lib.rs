@@ -287,8 +287,8 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn remove_to_execute(&mut self, unique_weight: &UniqueWeight) -> Task {
-        self.tasks.remove(&unique_weight).unwrap()
+    fn entry_to_execute(&mut self, unique_weight: &UniqueWeight) -> Task {
+        self.tasks.entry(unique_weight)
     }
 
     #[inline(never)]
