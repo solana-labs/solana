@@ -280,10 +280,15 @@ pub struct TaskQueue {
 
 impl TaskQueue {
     #[inline(never)]
-    fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
+    fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: Task) {
         //info!("TaskQueue::add(): {:?}", unique_weight);
         let pre_existed = self.tasks.insert(unique_weight, task);
         debug_assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
+    }
+
+    #[inline(never)]
+    fn remove_to_execute(&mut self, unique_weight: &UniqueWeight) {
+        self.tasks.remove(&unique_weight).unwrap()
     }
 
     #[inline(never)]
@@ -397,7 +402,7 @@ impl ScheduleStage {
                 if weight_from_contended < weight_from_runnable {
                     runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
                 } else if weight_from_contended > weight_from_runnable {
-                    let task = contended_queue.map.remove(&weight_from_contended).unwrap();
+                    let task = contended_queue.remove_to_execute(&weight_from_contended);
                     Some((false, weight_from_contended, task))
                 } else {
                     unreachable!(
@@ -406,7 +411,7 @@ impl ScheduleStage {
                 }
             }
             (Some(weight_from_contended), None) => {
-                let task = contended_queue.map.remove(&weight_from_contended).unwrap();
+                let task = contended_queue.remove_to_execute(&weight_from_contended);
                 Some((false, weight_from_contended, task))
             }
             (None, Some(weight_from_runnable)) => {
