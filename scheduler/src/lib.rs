@@ -314,7 +314,7 @@ fn attempt_lock_for_execution<'a>(
     let ll = chained_iter
         .map(|(a, usage)| {
             let a = address_book.attempt_lock_address(from_runnable, unique_weight, **a, usage);
-            if all_succeeded_so_far && a == LockAttempt::Feature {
+            if all_succeeded_so_far && a == LockAttempt::Failed {
                 all_succeeded_so_far = false;
             }
             a
