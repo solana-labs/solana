@@ -407,7 +407,7 @@ impl ScheduleStage {
                     //Some((false, weight_from_contended, task))
                     match contended_queue.entry_to_execute(weight_from_contended) {
                         Entry::Occupied(mut entry) => {
-                            entry
+                            (false, entry)
                         }
                         _ => { panic!() }
                     }
