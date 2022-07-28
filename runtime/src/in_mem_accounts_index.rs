@@ -24,6 +24,7 @@ use {
             atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering},
             Arc, Mutex, RwLock, RwLockWriteGuard,
         },
+        thread,
     },
 };
 type K = Pubkey;
@@ -302,9 +303,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 if i % 100000 == 0 {
                     use log::*;
                     let lock = in_mem.slot_list.try_read();
-                    error!("haoran deadlocked, merge_slot_list: {}, read lock ok: {}, pubkey: {}", 
+                    error!("haoran deadlocked, merge_slot_list: {}, read lock ok: {}, pubkey: {}, thread_id: {:?}",
                     in_mem.log_rws(),
-                lock.is_ok(),pubkey);
+                lock.is_ok(), pubkey, thread::current().id());
                 }
                 continue;
             }
@@ -312,7 +313,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             let mut slot_list = lock.unwrap();
 
             for (slot, new_entry) in disk.into_iter() {
-                if !slot_list.iter().any(|(x,_)| x == &slot) {
+                if !slot_list.iter().any(|(x, _)| x == &slot) {
                     slot_list.push((slot, new_entry));
                 }
             }
@@ -466,7 +467,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         i += 1;
                         if i % 100000 == 0 {
                             use log::*;
-                            error!("deadlocked on {}", pubkey);
+                            error!(
+                                "deadlocked on {}, thread_id: {:?}",
+                                pubkey,
+                                thread::current().id()
+                            );
                         }
                         continue;
                     }
@@ -534,7 +539,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                         other_slot,
                                         reclaims,
                                         reclaim,
-                                        vacant.key()
+                                        vacant.key(),
                                     );
                                     disk_entry
                                 } else {
@@ -584,9 +589,17 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) {
         current.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
 
-        error!("haoran lock_and_update_slot_list: {}, pubkey: {}", current.log_rws(), pubkey);
+        error!(
+            "haoran lock_and_update_slot_list: {}, pubkey: {}",
+            current.log_rws(),
+            pubkey
+        );
         let mut slot_list = current.slot_list.write().unwrap();
-        error!("haoran lock_and_update_slot_list success: {}, pubkey: {}", current.log_rws(), pubkey);
+        error!(
+            "haoran lock_and_update_slot_list success: {}, pubkey: {}",
+            current.log_rws(),
+            pubkey
+        );
         let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
             &mut slot_list,
@@ -641,11 +654,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     // make sure neither 'slot' nor 'other_slot' are in the slot list more than once
                     let matched_other_slot = !matched_slot;
                     if found_slot && matched_slot || matched_other_slot && found_other_slot {
-
-                    error!("haoran {:?}, slot: {}, other_slot: {:?}",
-                    slot_list,
-                    slot,
-                    other_slot);
+                        error!(
+                            "haoran {:?}, slot: {}, other_slot: {:?}",
+                            slot_list, slot, other_slot
+                        );
                     }
                     assert!(
                         !(found_slot && matched_slot || matched_other_slot && found_other_slot),
@@ -670,10 +682,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             reclaims.push(reclaim_item);
                         }
                         UpsertReclaim::PreviousSlotEntryWasCached => {
-                            if !is_cur_account_cached{
-                            error!("haoran not cached");
+                            if !is_cur_account_cached {
+                                error!("haoran not cached");
                             }
-                                    assert!(is_cur_account_cached);
+                            assert!(is_cur_account_cached);
                         }
                     }
 
@@ -744,7 +756,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     None, // should be None because we don't expect a different slot # during index generation
                     &mut Vec::default(),
                     UpsertReclaim::PopulateReclaims, // this should be ignore?
-                    occupied.key()
+                    occupied.key(),
                 );
                 (
                     true, /* found in mem */
