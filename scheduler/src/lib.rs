@@ -297,7 +297,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn pop_next_task(&mut self) -> Option<(UniqueWeight, Task)> {
+    fn pop_next_task(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
         self.tasks.last_entry()
     }
 }
