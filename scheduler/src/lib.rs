@@ -395,11 +395,11 @@ impl ScheduleStage {
             Self::get_weight_from_contended(address_book),
             runnable_queue.heaviest_entry_to_execute(),
         ) {
-            (Some(weight_from_contended), Some(heaviest_entry)) => {
-                let weight_from_runnable = heaviest_entry.key();
+            (Some(weight_from_contended), Some(heaviest_runnable_entry)) => {
+                let weight_from_runnable = heaviest_runnable_entry.key();
 
                 if &weight_from_contended < weight_from_runnable {
-                    Some((Some(contended_queue), heaviest_entry))
+                    Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if &weight_from_contended > weight_from_runnable {
                     match contended_queue.entry_to_execute(weight_from_contended) {
                         Entry::Occupied(entry) => {
@@ -421,8 +421,8 @@ impl ScheduleStage {
                     Entry::Vacant(_entry) => { unreachable!() },
                 }
             }
-            (None, Some(heaviest_entry)) => {
-                Some((Some(contended_queue), heaviest_entry))
+            (None, Some(heaviest_runnable_entry)) => {
+                Some((Some(contended_queue), heaviest_runnable_entry))
             }
             (None, None) => None,
         }
