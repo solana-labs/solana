@@ -369,7 +369,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
+    fn get_weight_from_contended(address_book: &AddressBook) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
         let mut heaviest_by_address: Option<UniqueWeight> = None;
         //info!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for address in address_book.newly_uncontended_addresses.iter() {
