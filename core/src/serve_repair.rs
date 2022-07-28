@@ -16,12 +16,13 @@ use {
     solana_gossip::{
         cluster_info::{ClusterInfo, ClusterInfoError},
         contact_info::ContactInfo,
+        ping_pong::{self, PingCache, Pong},
         weighted_shuffle::WeightedShuffle,
     },
     solana_ledger::{
         ancestor_iterator::{AncestorIterator, AncestorIteratorWithHash},
         blockstore::Blockstore,
-        shred::{Nonce, Shred, SIZE_OF_NONCE},
+        shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
     },
     solana_metrics::inc_new_counter_debug,
     solana_perf::{
@@ -32,18 +33,22 @@ use {
     solana_sdk::{
         clock::Slot,
         feature_set::sign_repair_requests,
-        hash::Hash,
+        hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
-        pubkey::Pubkey,
-        signature::{Signature, Signer, SIGNATURE_BYTES},
+        pubkey::{Pubkey, PUBKEY_BYTES},
+        signature::{Signable, Signature, Signer, SIGNATURE_BYTES},
         signer::keypair::Keypair,
         stake_history::Epoch,
         timing::{duration_as_ms, timestamp},
     },
-    solana_streamer::streamer::{PacketBatchReceiver, PacketBatchSender},
+    solana_streamer::{
+        sendmmsg::{batch_send, SendPktsError},
+        socket::SocketAddrSpace,
+        streamer::{PacketBatchReceiver, PacketBatchSender},
+    },
     std::{
         collections::HashSet,
-        net::SocketAddr,
+        net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -68,6 +73,12 @@ pub const MAX_ANCESTOR_BYTES_IN_PACKET: usize =
     4 /*slot_hash length*/;
 pub const MAX_ANCESTOR_RESPONSES: usize =
     MAX_ANCESTOR_BYTES_IN_PACKET / std::mem::size_of::<SlotHash>();
+/// Number of bytes in the randomly generated token sent with ping messages.
+pub(crate) const REPAIR_PING_TOKEN_SIZE: usize = HASH_BYTES;
+pub const REPAIR_PING_CACHE_CAPACITY: usize = 65536;
+pub const REPAIR_PING_CACHE_TTL: Duration = Duration::from_secs(1280);
+pub(crate) const REPAIR_RESPONSE_SERIALIZED_PING_BYTES: usize =
+    4 /*enum discriminator*/ + PUBKEY_BYTES + REPAIR_PING_TOKEN_SIZE + SIGNATURE_BYTES;
 const SIGNED_REPAIR_TIME_WINDOW: Duration = Duration::from_secs(60 * 10); // 10 min
 
 #[cfg(test)]
@@ -165,7 +176,9 @@ struct ServeRepairStats {
     window_index: usize,
     highest_window_index: usize,
     orphan: usize,
+    pong: usize,
     ancestor_hashes: usize,
+    pings_required: usize,
     err_time_skew: usize,
     err_malformed: usize,
     err_sig_verify: usize,
@@ -193,6 +206,8 @@ impl RepairRequestHeader {
         }
     }
 }
+
+pub(crate) type Ping = ping_pong::Ping<[u8; REPAIR_PING_TOKEN_SIZE]>;
 
 /// Window protocol messages
 #[derive(Serialize, Deserialize, Debug)]
@@ -222,25 +237,15 @@ pub enum RepairProtocol {
         header: RepairRequestHeader,
         slot: Slot,
     },
+    Pong(ping_pong::Pong),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum RepairProtocolResponse {
+    Ping(Ping),
 }
 
 impl RepairProtocol {
-    fn slot(&self) -> Slot {
-        match self {
-            Self::LegacyWindowIndex(_, slot, _) => *slot,
-            Self::LegacyHighestWindowIndex(_, slot, _) => *slot,
-            Self::LegacyOrphan(_, slot) => *slot,
-            Self::LegacyWindowIndexWithNonce(_, slot, _, _) => *slot,
-            Self::LegacyHighestWindowIndexWithNonce(_, slot, _, _) => *slot,
-            Self::LegacyOrphanWithNonce(_, slot, _) => *slot,
-            Self::LegacyAncestorHashes(_, slot, _) => *slot,
-            Self::WindowIndex { slot, .. } => *slot,
-            Self::HighestWindowIndex { slot, .. } => *slot,
-            Self::Orphan { slot, .. } => *slot,
-            Self::AncestorHashes { slot, .. } => *slot,
-        }
-    }
-
     fn sender(&self) -> &Pubkey {
         match self {
             Self::LegacyWindowIndex(ci, _, _) => &ci.id,
@@ -250,6 +255,7 @@ impl RepairProtocol {
             Self::LegacyHighestWindowIndexWithNonce(ci, _, _, _) => &ci.id,
             Self::LegacyOrphanWithNonce(ci, _, _) => &ci.id,
             Self::LegacyAncestorHashes(ci, _, _) => &ci.id,
+            Self::Pong(pong) => pong.from(),
             Self::WindowIndex { header, .. } => &header.sender,
             Self::HighestWindowIndex { header, .. } => &header.sender,
             Self::Orphan { header, .. } => &header.sender,
@@ -257,7 +263,7 @@ impl RepairProtocol {
         }
     }
 
-    fn header(&self) -> Option<&RepairRequestHeader> {
+    fn supports_signature(&self) -> bool {
         match self {
             Self::LegacyWindowIndex(_, _, _)
             | Self::LegacyHighestWindowIndex(_, _, _)
@@ -265,16 +271,30 @@ impl RepairProtocol {
             | Self::LegacyWindowIndexWithNonce(_, _, _, _)
             | Self::LegacyHighestWindowIndexWithNonce(_, _, _, _)
             | Self::LegacyOrphanWithNonce(_, _, _)
-            | Self::LegacyAncestorHashes(_, _, _) => None,
-            Self::WindowIndex { header, .. }
-            | Self::HighestWindowIndex { header, .. }
-            | Self::Orphan { header, .. }
-            | Self::AncestorHashes { header, .. } => Some(header),
+            | Self::LegacyAncestorHashes(_, _, _) => false,
+            Self::Pong(_)
+            | Self::WindowIndex { .. }
+            | Self::HighestWindowIndex { .. }
+            | Self::Orphan { .. }
+            | Self::AncestorHashes { .. } => true,
         }
     }
 
-    fn supports_signature(&self) -> bool {
-        self.header().is_some()
+    fn requires_ping_check(&self) -> bool {
+        match self {
+            Self::LegacyWindowIndex(_, _, _)
+            | Self::LegacyHighestWindowIndex(_, _, _)
+            | Self::LegacyOrphan(_, _)
+            | Self::LegacyWindowIndexWithNonce(_, _, _, _)
+            | Self::LegacyHighestWindowIndexWithNonce(_, _, _, _)
+            | Self::LegacyOrphanWithNonce(_, _, _)
+            | Self::LegacyAncestorHashes(_, _, _)
+            | Self::Pong(_)
+            | Self::AncestorHashes { .. } => false,
+            Self::WindowIndex { .. } | Self::HighestWindowIndex { .. } | Self::Orphan { .. } => {
+                true
+            }
+        }
     }
 }
 
@@ -334,21 +354,14 @@ impl ServeRepair {
     }
 
     fn handle_repair(
-        me: &Arc<RwLock<Self>>,
         recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: Option<&Arc<Blockstore>>,
         request: RepairProtocol,
         stats: &mut ServeRepairStats,
+        ping_cache: &mut PingCache,
     ) -> Option<PacketBatch> {
         let now = Instant::now();
-
-        let my_id = me.read().unwrap().my_id();
-        if request.sender() == &my_id {
-            stats.self_repair += 1;
-            return None;
-        }
-
         let (res, label) = {
             match &request {
                 RepairProtocol::WindowIndex {
@@ -423,13 +436,16 @@ impl ServeRepair {
                         "AncestorHashes",
                     )
                 }
+                RepairProtocol::Pong(pong) => {
+                    stats.pong += 1;
+                    ping_cache.add(pong, *from_addr, Instant::now());
+                    (None, "Pong")
+                }
                 RepairProtocol::LegacyWindowIndex(_, _, _)
                 | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
                 | RepairProtocol::LegacyOrphan(_, _) => (None, "Unsupported repair type"),
             }
         };
-
-        trace!("{}: received repair request: {:?}", my_id, request);
         Self::report_time_spent(label, &now.elapsed(), "");
         res
     }
@@ -462,6 +478,7 @@ impl ServeRepair {
     /// Process messages from the network
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
+        ping_cache: &mut PingCache,
         recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
         requests_receiver: &PacketBatchReceiver,
@@ -492,6 +509,7 @@ impl ServeRepair {
         for reqs in reqs_v {
             Self::handle_packets(
                 obj,
+                ping_cache,
                 recycler,
                 blockstore,
                 reqs,
@@ -538,6 +556,8 @@ impl ServeRepair {
                 stats.ancestor_hashes,
                 i64
             ),
+            ("pong", stats.pong, i64),
+            ("pings_required", stats.pings_required, i64),
             ("err_time_skew", stats.err_time_skew, i64),
             ("err_malformed", stats.err_malformed, i64),
             ("err_sig_verify", stats.err_sig_verify, i64),
@@ -559,6 +579,8 @@ impl ServeRepair {
         const MAX_BYTES_PER_SECOND: usize = 12_000_000;
         const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
 
+        let mut ping_cache = PingCache::new(REPAIR_PING_CACHE_TTL, REPAIR_PING_CACHE_CAPACITY);
+
         let exit = exit.clone();
         let recycler = PacketBatchRecycler::default();
         Builder::new()
@@ -570,6 +592,7 @@ impl ServeRepair {
                 loop {
                     let result = Self::run_listen(
                         &me,
+                        &mut ping_cache,
                         &recycler,
                         blockstore.as_ref(),
                         &requests_receiver,
@@ -600,13 +623,28 @@ impl ServeRepair {
         request: &RepairProtocol,
         stats: &mut ServeRepairStats,
     ) -> bool {
-        match request.header() {
-            None => {
-                debug_assert!(false); // expecting only packets with headers
+        match request {
+            RepairProtocol::LegacyWindowIndex(_, _, _)
+            | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
+            | RepairProtocol::LegacyOrphan(_, _)
+            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
+            | RepairProtocol::LegacyAncestorHashes(_, _, _) => {
+                debug_assert!(false); // expecting only signed request types
                 stats.err_unsigned += 1;
                 return false;
             }
-            Some(header) => {
+            RepairProtocol::Pong(pong) => {
+                if !pong.verify() {
+                    stats.err_sig_verify += 1;
+                    return false;
+                }
+            }
+            RepairProtocol::WindowIndex { header, .. }
+            | RepairProtocol::HighestWindowIndex { header, .. }
+            | RepairProtocol::Orphan { header, .. }
+            | RepairProtocol::AncestorHashes { header, .. } => {
                 if &header.recipient != my_id {
                     stats.err_id_mismatch += 1;
                     return false;
@@ -643,8 +681,58 @@ impl ServeRepair {
         true
     }
 
+    fn check_ping_cache(
+        request: &RepairProtocol,
+        from_addr: &SocketAddr,
+        identity_keypair: &Keypair,
+        socket_addr_space: &SocketAddrSpace,
+        ping_cache: &mut PingCache,
+        pending_pings: &mut Vec<(SocketAddr, Ping)>,
+        stats: &mut ServeRepairStats,
+    ) -> bool {
+        if !ContactInfo::is_valid_address(from_addr, socket_addr_space) {
+            stats.err_malformed += 1;
+            return false;
+        }
+        let mut rng = rand::thread_rng();
+        let mut pingf = move || Ping::new_rand(&mut rng, identity_keypair).ok();
+        let (check, ping) =
+            ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf);
+        if let Some(ping) = ping {
+            pending_pings.push((*from_addr, ping));
+        }
+        if !check {
+            stats.pings_required += 1;
+        }
+        check
+    }
+
+    fn requires_signature_check(
+        request: &RepairProtocol,
+        root_bank: &Bank,
+        sign_repairs_epoch: Option<Epoch>,
+    ) -> bool {
+        match request {
+            RepairProtocol::LegacyWindowIndex(_, slot, _)
+            | RepairProtocol::LegacyHighestWindowIndex(_, slot, _)
+            | RepairProtocol::LegacyOrphan(_, slot)
+            | RepairProtocol::LegacyWindowIndexWithNonce(_, slot, _, _)
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, slot, _, _)
+            | RepairProtocol::LegacyOrphanWithNonce(_, slot, _)
+            | RepairProtocol::LegacyAncestorHashes(_, slot, _)
+            | RepairProtocol::WindowIndex { slot, .. }
+            | RepairProtocol::HighestWindowIndex { slot, .. }
+            | RepairProtocol::Orphan { slot, .. }
+            | RepairProtocol::AncestorHashes { slot, .. } => {
+                Self::should_sign_repair_request(*slot, root_bank, sign_repairs_epoch)
+            }
+            RepairProtocol::Pong(_) => true,
+        }
+    }
+
     fn handle_packets(
         me: &Arc<RwLock<Self>>,
+        ping_cache: &mut PingCache,
         recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
         packet_batch: PacketBatch,
@@ -653,8 +741,15 @@ impl ServeRepair {
         stats: &mut ServeRepairStats,
         data_budget: &DataBudget,
     ) {
-        let my_id = me.read().unwrap().my_id();
         let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
+        let (my_id, identity_keypair, socket_addr_space) = {
+            let me_r = me.read().unwrap();
+            let keypair = me_r.cluster_info.keypair().clone();
+            let id = me_r.my_id();
+            let socket_addr_space = *me_r.cluster_info.socket_addr_space();
+            (id, keypair, socket_addr_space)
+        };
+        let mut pending_pings = Vec::default();
 
         // iter over the packets
         for (i, packet) in packet_batch.iter().enumerate() {
@@ -666,9 +761,14 @@ impl ServeRepair {
                 }
             };
 
-            let require_signature =
-                Self::should_sign_repair_request(request.slot(), root_bank, sign_repairs_epoch);
-            if require_signature && !request.supports_signature() {
+            if request.sender() == &my_id {
+                stats.self_repair += 1;
+                continue;
+            }
+
+            let require_signature_check =
+                Self::requires_signature_check(&request, root_bank, sign_repairs_epoch);
+            if require_signature_check && !request.supports_signature() {
                 stats.err_unsigned += 1;
                 continue;
             }
@@ -679,12 +779,27 @@ impl ServeRepair {
             }
 
             let from_addr = packet.meta.socket_addr();
+            if request.requires_ping_check()
+                && !Self::check_ping_cache(
+                    &request,
+                    &from_addr,
+                    &identity_keypair,
+                    &socket_addr_space,
+                    ping_cache,
+                    &mut pending_pings,
+                    stats,
+                )
+            {
+                continue;
+            }
+
             stats.processed += 1;
-            let rsp =
-                match Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats) {
-                    None => continue,
-                    Some(rsp) => rsp,
-                };
+            let rsp = match Self::handle_repair(
+                recycler, &from_addr, blockstore, request, stats, ping_cache,
+            ) {
+                None => continue,
+                Some(rsp) => rsp,
+            };
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
             if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
@@ -695,6 +810,18 @@ impl ServeRepair {
                 stats.total_dropped_response_packets += num_response_packets;
                 break;
             }
+        }
+
+        if !pending_pings.is_empty() {
+            let packets: Vec<_> = pending_pings
+                .into_iter()
+                .filter_map(|(sockaddr, ping)| {
+                    let ping = RepairProtocolResponse::Ping(ping);
+                    Packet::from_data(Some(&sockaddr), ping).ok()
+                })
+                .collect();
+            let batch = PacketBatch::new(packets);
+            let _ = response_sender.send(batch);
         }
     }
 
@@ -884,6 +1011,49 @@ impl ServeRepair {
             }
         };
         Self::repair_proto_to_bytes(&request_proto, identity_keypair)
+    }
+
+    /// Distinguish and process `RepairProtocolResponse` ping packets ignoring
+    /// other packets in the batch.
+    pub(crate) fn handle_repair_response_pings(
+        repair_socket: &UdpSocket,
+        keypair: &Keypair,
+        packet_batch: &mut PacketBatch,
+        stats: &mut ShredFetchStats,
+    ) {
+        let mut pending_pongs = Vec::default();
+        for packet in packet_batch.iter_mut() {
+            if packet.meta.size != REPAIR_RESPONSE_SERIALIZED_PING_BYTES {
+                continue;
+            }
+            if let Ok(RepairProtocolResponse::Ping(ping)) = packet.deserialize_slice(..) {
+                packet.meta.set_discard(true);
+                if !ping.verify() {
+                    stats.ping_err_verify_count += 1;
+                    continue;
+                }
+                stats.ping_count += 1;
+                if let Ok(pong) = Pong::new(&ping, keypair) {
+                    let pong = RepairProtocol::Pong(pong);
+                    if let Ok(pong_bytes) = serialize(&pong) {
+                        let from_addr = packet.meta.socket_addr();
+                        pending_pongs.push((pong_bytes, from_addr));
+                    }
+                }
+            }
+        }
+        if !pending_pongs.is_empty() {
+            if let Err(SendPktsError::IoError(err, num_failed)) =
+                batch_send(repair_socket, &pending_pongs)
+            {
+                warn!(
+                    "batch_send failed to send {}/{} packets. First error: {:?}",
+                    num_failed,
+                    pending_pongs.len(),
+                    err
+                );
+            }
+        }
     }
 
     pub fn repair_proto_to_bytes(
