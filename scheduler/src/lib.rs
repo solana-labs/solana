@@ -309,10 +309,9 @@ fn attempt_lock_for_execution<'a>(
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
 ) -> (bool, Vec<LockAttempt>) {
-    use crate::RequestedUsage;
     // no short-cuircuit; we at least all need to add to the contended queue
-    let writable_lock_iter = locks.writable.iter().map(|address| (address, Writable));
-    let readonly_lock_iter = locks.readonly.iter().map(|address| (address, Readonly));
+    let writable_lock_iter = locks.writable.iter().map(|address| (address, RequestedUsage::Writable));
+    let readonly_lock_iter = locks.readonly.iter().map(|address| (address, RequestedUsage::Readonly));
     let chained_iter = writable_lock_iter.chain(readonly_lock_iter);
 
     let mut all_succeeded_so_far = true;
