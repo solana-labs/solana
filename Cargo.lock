@@ -5521,6 +5521,7 @@ dependencies = [
  "solana-ledger",
  "solana-logger 1.11.4",
  "solana-measure",
+ "solana-metrics",
  "solana-runtime",
  "solana-scheduler",
  "solana-sdk 1.11.4",

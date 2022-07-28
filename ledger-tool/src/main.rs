@@ -267,6 +267,7 @@ fn output_slot(
     let t2 = std::thread::Builder::new()
         .name("sol-execute".to_string())
         .spawn(move || {
+            use solana_metrics::datapoint_info;
             let current_thread_name = std::thread::current().name().unwrap().to_string();
             let mut step = 0;
 
