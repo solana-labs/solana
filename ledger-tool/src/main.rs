@@ -281,7 +281,6 @@ fn output_slot(
 
                 process_message_time.stop();
                 let duration_with_overhead = process_message_time.as_us();
-                post_execute_env_sender.send(ee).unwrap();
 
                 datapoint_info!(
                     "individual_tx_stats",
@@ -293,6 +292,7 @@ fn output_slot(
                     ("duration", duration_with_overhead, i64),
                     ("compute_units", ee.cu, i64),
                 );
+                post_execute_env_sender.send(ee).unwrap();
             }
         })
         .unwrap();
