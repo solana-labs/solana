@@ -287,12 +287,11 @@ fn output_slot(
                     for step in 0.. {
                         let ee = pre_execute_env_receiver.recv().unwrap();
 
-                        /*
                         let mut process_message_time = Measure::start("process_message_time");
 
                         let sig = ee.task.tx.signature().to_string();
                         trace!("execute substage: #{} {:#?}", step, &sig);
-                        //std::thread::sleep(std::time::Duration::from_micros(ee.cu.try_into().unwrap()));
+                        std::thread::sleep(std::time::Duration::from_micros(ee.cu.try_into().unwrap()));
 
                         process_message_time.stop();
                         let duration_with_overhead = process_message_time.as_us();
@@ -307,7 +306,7 @@ fn output_slot(
                             ("duration", duration_with_overhead, i64),
                             ("compute_units", ee.cu, i64),
                         );
-                        */
+
                         post_execute_env_sender.send(ee).unwrap();
                     }
                 })
