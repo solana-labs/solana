@@ -5632,6 +5632,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-metrics-reporter"
+version = "1.11.5"
+dependencies = [
+ "log",
+ "solana-logger 1.11.5",
+ "solana-metrics",
+ "solana-metrics-reporter-derive",
+]
+
+[[package]]
+name = "solana-metrics-reporter-derive"
+version = "1.11.5"
+dependencies = [
+ "proc-macro2 1.0.41",
+ "quote 1.0.18",
+ "syn 1.0.98",
+]
+
+[[package]]
 name = "solana-net-shaper"
 version = "1.11.5"
 dependencies = [

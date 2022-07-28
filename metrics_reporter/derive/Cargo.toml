@@ -1,0 +1,22 @@
+[package]
+name = "solana-metrics-reporter-derive"
+version = "1.11.5"
+description = "Solana Metrics Reporter Derive"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-metrics-reporter-derive"
+edition = "2021"
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "1.0"
+
+[lib]
+name = "solana_metrics_reporter_derive"
+proc_macro = true
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

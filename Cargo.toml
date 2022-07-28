@@ -40,6 +40,8 @@ members = [
     "merkle-root-bench",
     "merkle-tree",
     "metrics",
+    "metrics_reporter",
+    "metrics_reporter/derive",
     "net-shaper",
     "net-utils",
     "notifier",

@@ -1,0 +1,22 @@
+[package]
+name = "solana-metrics-reporter"
+version = "1.11.5"
+description = "Solana Metrics Reporter"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-metrics-reporter"
+edition = "2021"
+
+[dependencies]
+log = "0.4.17"
+solana-logger = { path = "../logger", version = "=1.11.5" }
+solana-metrics = { path = "../metrics", version = "1.11.5" }
+solana-metrics-reporter-derive = { path = "./derive", version = "=1.11.5" }
+
+[lib]
+name = "solana_metrics_reporter"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
