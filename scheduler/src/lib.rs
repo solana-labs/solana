@@ -180,7 +180,7 @@ impl AddressBook {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(*address) {
-            Entry::Vacant(entry) => unreachable!(),
+            Entry::Vacant(_entry) => unreachable!(),
             Entry::Occupied(mut entry) => {
                 let page = entry.get_mut();
                 page.contended_unique_weights.remove(unique_weight);
