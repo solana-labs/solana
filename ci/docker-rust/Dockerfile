@@ -3,7 +3,7 @@
 FROM rust:1.60.0
 
 # Add Google Protocol Buffers for Libra's metrics library.
-ENV PROTOC_VERSION 3.8.0
+ENV PROTOC_VERSION 21.4
 ENV PROTOC_ZIP protoc-$PROTOC_VERSION-linux-x86_64.zip
 
 RUN set -x \
@@ -42,7 +42,7 @@ RUN set -x \
  && cargo install wasm-pack \
  && rustc --version \
  && cargo --version \
- && curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP \
+ && curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v$PROTOC_VERSION/$PROTOC_ZIP \
  && unzip -o $PROTOC_ZIP -d /usr/local bin/protoc \
  && unzip -o $PROTOC_ZIP -d /usr/local include/* \
  && rm -f $PROTOC_ZIP
