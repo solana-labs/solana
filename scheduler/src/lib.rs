@@ -455,7 +455,7 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 if from_runnable {
-                    contended_queue.unwrap().add_to_schedule(*entry.key(), entry.remove());
+                    contended_queue.add_to_schedule(*entry.key(), entry.remove());
                 }
                 continue;
             }
