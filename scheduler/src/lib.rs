@@ -348,7 +348,7 @@ impl ScheduleStage {
         //    .unwrap();
         //tx.foo();
 
-        runnable_queue.add(
+        runnable_queue.add_to_schedule(
             UniqueWeight {
                 weight,
                 //unique_key: solana_sdk::hash::new_rand(&mut rng),
