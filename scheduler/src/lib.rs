@@ -450,11 +450,11 @@ impl ScheduleStage {
                     lock_attempts,
                     from_runnable,
                 );
-                contended_queue.add_to_schedule(unique_weight, next_task);
+                contended_queue.add_to_schedule(*unique_weight, next_task);
                 continue;
             }
 
-            return Some((unique_weight, next_task, lock_attempts));
+            return Some((*unique_weight, next_task, lock_attempts));
         }
 
         None
