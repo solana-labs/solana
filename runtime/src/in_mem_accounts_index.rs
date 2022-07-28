@@ -300,12 +300,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
             if lock.is_err() {
                 i += 1;
-                if i % 100000 == 0 {
+                if i % 100 == 0 {
                     use log::*;
                     let lock = in_mem.slot_list.try_read();
-                    error!("haoran deadlocked, merge_slot_list: {}, read lock ok: {}, pubkey: {}, thread_id: {:?}",
-                    in_mem.log_rws(),
-                lock.is_ok(), pubkey, thread::current().id());
+                    error!("haoran deadlocked, merge_slot_list: {}, read lock ok: {}, pubkey: {}, thread_id: {:?}", in_mem.log_rws(), lock.is_ok(), pubkey, thread::current().id());
+                    thread::sleep_ms(10);
                 }
                 continue;
             }
@@ -465,13 +464,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                     if lock.is_err() {
                         i += 1;
-                        if i % 100000 == 0 {
+                        if i % 100 == 0 {
                             use log::*;
                             error!(
                                 "deadlocked on {}, thread_id: {:?}",
                                 pubkey,
                                 thread::current().id()
                             );
+                            thread::sleep_ms(10);
                         }
                         continue;
                     }
