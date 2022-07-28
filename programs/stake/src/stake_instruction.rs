@@ -455,6 +455,20 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
+        // In order to prevent consensus issues, any new StakeInstruction variant added before the
+        // `add_get_minimum_delegation_instruction_to_stake_program` is activated needs to check
+        // the validity of the stake account by calling the `get_stake_account()` method outside
+        // its own feature gate, as per the following pattern:
+        //  ```
+        //  Ok(StakeInstruction::Variant) -> {
+        //      let mut me = get_stake_account()?;
+        //      if invoke_context
+        //         .feature_set
+        //         .is_active(&feature_set::stake_variant_feature::id()) { .. }
+        //  }
+        // ```
+        // TODO: Remove this comment when `add_get_minimum_delegation_instruction_to_stake_program`
+        // is cleaned up
         Err(err) => {
             if !invoke_context.feature_set.is_active(
                 &feature_set::add_get_minimum_delegation_instruction_to_stake_program::id(),
