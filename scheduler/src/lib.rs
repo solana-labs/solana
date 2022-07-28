@@ -433,14 +433,14 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (contended_queue, entry) in
-            Self::select_next_task(runnable_queue, contended_queue, address_book)
+        for (reborrowed_contended_queue, entry) in
+            Self::select_next_task(runnable_queue, reborrowed_contended_queue, address_book)
         {
             //let unique_weight = entry.key();
             let next_task = entry.get();
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
-            let from_runnable = contended_queue.is_some();
+            let from_runnable = reborrowed_contended_queue.is_some();
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
@@ -456,7 +456,7 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 if from_runnable {
-                    contended_queue.unwrap().add_to_schedule(*entry.key(), entry.remove());
+                    reborrowed_contended_queue.unwrap().add_to_schedule(*entry.key(), entry.remove());
                 }
                 continue;
             }
