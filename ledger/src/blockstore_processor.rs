@@ -708,6 +708,7 @@ pub struct ProcessOptions {
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
     pub runtime_config: RuntimeConfig,
+    pub on_halt_store_hash_raw_data_for_debug: bool,
 }
 
 pub fn test_process_blockstore(
@@ -1399,6 +1400,7 @@ fn load_frozen_forks(
     )?;
 
     let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
+    let on_halt_store_hash_raw_data_for_debug = opts.on_halt_store_hash_raw_data_for_debug;
     if bank_forks.read().unwrap().root() != halt_at_slot {
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
@@ -1540,6 +1542,7 @@ fn load_frozen_forks(
                     ignore_mismatch: true,
                     require_rooted_bank: false,
                     run_in_background: false,
+                    store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
                 });
                 break;
             }

@@ -6990,10 +6990,12 @@ impl AccountsDb {
             rent_collector,
             can_cached_slot_be_unflushed,
             false,
+            false,
         )
     }
 
     /// Only called from startup or test code.
+    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports_new(
         &self,
         slot: Slot,
@@ -7004,6 +7006,7 @@ impl AccountsDb {
         rent_collector: &RentCollector,
         can_cached_slot_be_unflushed: bool,
         ignore_mismatch: bool,
+        store_hash_raw_data_for_debug: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -7023,7 +7026,7 @@ impl AccountsDb {
                     use_write_cache: can_cached_slot_be_unflushed,
                     epoch_schedule,
                     rent_collector,
-                    store_detailed_debug_info_on_failure: false,
+                    store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
                     full_snapshot: None,
                 },
                 None,
