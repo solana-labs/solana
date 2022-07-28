@@ -298,7 +298,7 @@ impl TaskQueue {
 
     #[inline(never)]
     fn pop_next_task(&mut self) -> Option<(UniqueWeight, Task)> {
-        self.tasks.pop_last()
+        self.tasks.pop_last_entry()
     }
 }
 
