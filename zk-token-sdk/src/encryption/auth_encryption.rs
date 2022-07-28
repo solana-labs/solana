@@ -15,7 +15,7 @@ use {
         signature::Signature,
         signer::{Signer, SignerError},
     },
-    std::convert::TryInto,
+    std::{convert::TryInto, fmt},
     zeroize::Zeroize,
 };
 
@@ -126,6 +126,12 @@ impl AeCiphertext {
             nonce: *nonce,
             ciphertext: *ciphertext,
         })
+    }
+}
+
+impl fmt::Display for AeCiphertext {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", base64::encode(self.to_bytes()))
     }
 }
 

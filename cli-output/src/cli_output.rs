@@ -454,7 +454,7 @@ impl fmt::Display for CliValidators {
             "Credits",
             "Version",
             "Active Stake",
-            padding = padding + 1
+            padding = padding + 2
         ))
         .bold();
         writeln!(f, "{}", header)?;
@@ -2712,6 +2712,45 @@ impl fmt::Display for CliPingConfirmationStats {
 }
 impl QuietDisplay for CliPingConfirmationStats {}
 impl VerboseDisplay for CliPingConfirmationStats {}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CliBalance {
+    pub lamports: u64,
+    #[serde(skip)]
+    pub config: BuildBalanceMessageConfig,
+}
+
+impl QuietDisplay for CliBalance {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        let config = BuildBalanceMessageConfig {
+            show_unit: false,
+            trim_trailing_zeros: true,
+            ..self.config
+        };
+        let balance_message = build_balance_message_with_config(self.lamports, &config);
+        write!(w, "{}", balance_message)
+    }
+}
+
+impl VerboseDisplay for CliBalance {
+    fn write_str(&self, w: &mut dyn std::fmt::Write) -> std::fmt::Result {
+        let config = BuildBalanceMessageConfig {
+            show_unit: true,
+            trim_trailing_zeros: false,
+            ..self.config
+        };
+        let balance_message = build_balance_message_with_config(self.lamports, &config);
+        write!(w, "{}", balance_message)
+    }
+}
+
+impl fmt::Display for CliBalance {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let balance_message = build_balance_message_with_config(self.lamports, &self.config);
+        write!(f, "{}", balance_message)
+    }
+}
 
 #[cfg(test)]
 mod tests {

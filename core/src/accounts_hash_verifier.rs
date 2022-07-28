@@ -141,6 +141,7 @@ impl AccountsHashVerifier {
                     use_write_cache: false,
                     epoch_schedule: &accounts_package.epoch_schedule,
                     rent_collector: &accounts_package.rent_collector,
+                    store_detailed_debug_info_on_failure: false,
                 },
                 &sorted_storages,
                 timings,
@@ -161,6 +162,8 @@ impl AccountsHashVerifier {
                         use_write_cache: false,
                         epoch_schedule: &accounts_package.epoch_schedule,
                         rent_collector: &accounts_package.rent_collector,
+                        // now that we've failed, store off the failing contents that produced a bad capitalization
+                        store_detailed_debug_info_on_failure: true,
                     },
                     &sorted_storages,
                     HashStats::default(),

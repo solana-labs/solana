@@ -213,6 +213,7 @@ fn run_program(name: &str) -> u64 {
                 .transaction_context
                 .get_current_instruction_context()
                 .unwrap(),
+            true, // should_cap_ix_accounts
         )
         .unwrap();
 
@@ -230,17 +231,27 @@ fn run_program(name: &str) -> u64 {
         )
         .unwrap();
 
+        #[allow(unused_mut)]
         let mut verified_executable = VerifiedExecutable::<
             RequisiteVerifier,
             BpfError,
             ThisInstructionMeter,
         >::from_executable(executable)
         .unwrap();
-        verified_executable.jit_compile().unwrap();
+
+        let run_program_iterations = {
+            #[cfg(target_arch = "x86_64")]
+            {
+                verified_executable.jit_compile().unwrap();
+                2
+            }
+            #[cfg(not(target_arch = "x86_64"))]
+            1
+        };
 
         let mut instruction_count = 0;
         let mut tracer = None;
-        for i in 0..2 {
+        for i in 0..run_program_iterations {
             let transaction_context = &mut invoke_context.transaction_context;
             let instruction_context = transaction_context
                 .get_current_instruction_context()
@@ -336,7 +347,11 @@ fn run_program(name: &str) -> u64 {
 fn process_transaction_and_record_inner(
     bank: &Bank,
     tx: Transaction,
-) -> (Result<(), TransactionError>, Vec<Vec<CompiledInstruction>>) {
+) -> (
+    Result<(), TransactionError>,
+    Vec<Vec<CompiledInstruction>>,
+    Vec<String>,
+) {
     let signature = tx.signatures.get(0).unwrap().clone();
     let txs = vec![tx];
     let tx_batch = bank.prepare_batch_for_tests(txs);
@@ -346,7 +361,7 @@ fn process_transaction_and_record_inner(
             MAX_PROCESSING_AGE,
             false,
             true,
-            false,
+            true,
             false,
             &mut ExecuteTimings::default(),
             None,
@@ -356,15 +371,19 @@ fn process_transaction_and_record_inner(
         .fee_collection_results
         .swap_remove(0)
         .and_then(|_| bank.get_signature_status(&signature).unwrap());
-    let inner_instructions = results
+    let execution_details = results
         .execution_results
         .swap_remove(0)
         .details()
         .expect("tx should be executed")
-        .clone()
+        .clone();
+    let inner_instructions = execution_details
         .inner_instructions
         .expect("cpi recording should be enabled");
-    (result, inner_instructions)
+    let log_messages = execution_details
+        .log_messages
+        .expect("log recording should be enabled");
+    (result, inner_instructions, log_messages)
 }
 
 fn execute_transactions(
@@ -1053,7 +1072,8 @@ fn test_program_bpf_invoke_sanity() {
             message.clone(),
             bank.last_blockhash(),
         );
-        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let (result, inner_instructions, _log_messages) =
+            process_transaction_and_record_inner(&bank, tx);
         assert_eq!(result, Ok(()));
 
         let invoked_programs: Vec<Pubkey> = inner_instructions[0]
@@ -1119,7 +1139,10 @@ fn test_program_bpf_invoke_sanity() {
         // failure cases
 
         let do_invoke_failure_test_local =
-            |test: u8, expected_error: TransactionError, expected_invoked_programs: &[Pubkey]| {
+            |test: u8,
+             expected_error: TransactionError,
+             expected_invoked_programs: &[Pubkey],
+             expected_log_messages: Option<Vec<String>>| {
                 println!("Running failure test #{:?}", test);
                 let instruction_data = &[test, bump_seed1, bump_seed2, bump_seed3];
                 let signers = vec![
@@ -1135,85 +1158,141 @@ fn test_program_bpf_invoke_sanity() {
                 );
                 let message = Message::new(&[instruction], Some(&mint_pubkey));
                 let tx = Transaction::new(&signers, message.clone(), bank.last_blockhash());
-                let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+                let (result, inner_instructions, log_messages) =
+                    process_transaction_and_record_inner(&bank, tx);
                 let invoked_programs: Vec<Pubkey> = inner_instructions[0]
                     .iter()
                     .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
                     .collect();
                 assert_eq!(result, Err(expected_error));
                 assert_eq!(invoked_programs, expected_invoked_programs);
+                if let Some(expected_log_messages) = expected_log_messages {
+                    expected_log_messages
+                        .into_iter()
+                        .zip(log_messages)
+                        .for_each(|(expected_log_message, log_message)| {
+                            if expected_log_message != String::from("skip") {
+                                assert_eq!(log_message, expected_log_message);
+                            }
+                        });
+                }
             };
+
+        let program_lang = match program.0 {
+            Languages::Rust => "Rust",
+            Languages::C => "C",
+        };
 
         do_invoke_failure_test_local(
             TEST_PRIVILEGE_ESCALATION_SIGNER,
             TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
             &[invoked_program_id.clone()],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_PRIVILEGE_ESCALATION_WRITABLE,
             TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
             &[invoked_program_id.clone()],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_PPROGRAM_NOT_EXECUTABLE,
             TransactionError::InstructionError(0, InstructionError::AccountNotExecutable),
             &[],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_EMPTY_ACCOUNTS_SLICE,
             TransactionError::InstructionError(0, InstructionError::MissingAccount),
             &[],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_CAP_SEEDS,
             TransactionError::InstructionError(0, InstructionError::MaxSeedLengthExceeded),
             &[],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_CAP_SIGNERS,
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
+            None,
         );
 
         do_invoke_failure_test_local(
-            TEST_INSTRUCTION_DATA_TOO_LARGE,
+            TEST_MAX_INSTRUCTION_DATA_LEN_EXCEEDED,
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
+            Some(vec![
+                format!("Program {invoke_program_id} invoke [1]"),
+                format!("Program log: invoke {program_lang} program"),
+                "Program log: Test max instruction data len exceeded".into(),
+                "skip".into(), // don't compare compute consumption logs
+                "Program failed to complete: Invoked an instruction with data that is too large (10241 > 10240)".into(),
+                format!("Program {invoke_program_id} failed: Program failed to complete"),
+            ]),
         );
 
         do_invoke_failure_test_local(
-            TEST_INSTRUCTION_META_TOO_LARGE,
+            TEST_MAX_INSTRUCTION_ACCOUNTS_EXCEEDED,
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
+            Some(vec![
+                format!("Program {invoke_program_id} invoke [1]"),
+                format!("Program log: invoke {program_lang} program"),
+                "Program log: Test max instruction accounts exceeded".into(),
+                "skip".into(), // don't compare compute consumption logs
+                "Program failed to complete: Invoked an instruction with too many accounts (256 > 255)".into(),
+                format!("Program {invoke_program_id} failed: Program failed to complete"),
+            ]),
+        );
+
+        do_invoke_failure_test_local(
+            TEST_MAX_ACCOUNT_INFOS_EXCEEDED,
+            TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
+            &[],
+            Some(vec![
+                format!("Program {invoke_program_id} invoke [1]"),
+                format!("Program log: invoke {program_lang} program"),
+                "Program log: Test max account infos exceeded".into(),
+                "skip".into(), // don't compare compute consumption logs
+                "Program failed to complete: Invoked an instruction with too many account info's (65 > 64)".into(),
+                format!("Program {invoke_program_id} failed: Program failed to complete"),
+            ]),
         );
 
         do_invoke_failure_test_local(
             TEST_RETURN_ERROR,
             TransactionError::InstructionError(0, InstructionError::Custom(42)),
             &[invoked_program_id.clone()],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER,
             TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
             &[invoked_program_id.clone()],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE,
             TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
             &[invoked_program_id.clone()],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_WRITABLE_DEESCALATION_WRITABLE,
             TransactionError::InstructionError(0, InstructionError::ReadonlyDataModified),
             &[invoked_program_id.clone()],
+            None,
         );
 
         do_invoke_failure_test_local(
@@ -1226,36 +1305,42 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
             ],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_EXECUTABLE_LAMPORTS,
             TransactionError::InstructionError(0, InstructionError::ExecutableLamportChange),
             &[invoke_program_id.clone()],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_CALL_PRECOMPILE,
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_RETURN_DATA_TOO_LARGE,
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete),
             &[],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER,
             TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
             &[invoked_program_id.clone()],
+            None,
         );
 
         do_invoke_failure_test_local(
             TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE,
             TransactionError::InstructionError(0, InstructionError::PrivilegeEscalation),
             &[invoked_program_id.clone()],
+            None,
         );
 
         // Check resulting state
@@ -1296,7 +1381,8 @@ fn test_program_bpf_invoke_sanity() {
             message.clone(),
             bank.last_blockhash(),
         );
-        let (result, inner_instructions) = process_transaction_and_record_inner(&bank, tx);
+        let (result, inner_instructions, _log_messages) =
+            process_transaction_and_record_inner(&bank, tx);
         let invoked_programs: Vec<Pubkey> = inner_instructions[0]
             .iter()
             .map(|ix| message.account_keys[ix.program_id_index as usize].clone())
@@ -2031,7 +2117,7 @@ fn test_program_bpf_upgrade_and_invoke_in_same_tx() {
         message.clone(),
         bank.last_blockhash(),
     );
-    let (result, _) = process_transaction_and_record_inner(&bank, tx);
+    let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
     assert_eq!(
         result.unwrap_err(),
         TransactionError::InstructionError(2, InstructionError::ProgramFailedToComplete)
@@ -2404,7 +2490,7 @@ fn test_program_bpf_upgrade_self_via_cpi() {
         message.clone(),
         bank.last_blockhash(),
     );
-    let (result, _) = process_transaction_and_record_inner(&bank, tx);
+    let (result, _, _) = process_transaction_and_record_inner(&bank, tx);
     assert_eq!(
         result.unwrap_err(),
         TransactionError::InstructionError(2, InstructionError::ProgramFailedToComplete)
@@ -3693,6 +3779,7 @@ fn test_program_fees() {
         congestion_multiplier,
         &fee_structure,
         true,
+        true,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3713,6 +3800,7 @@ fn test_program_fees() {
         &sanitized_message,
         congestion_multiplier,
         &fee_structure,
+        true,
         true,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);

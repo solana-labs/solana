@@ -1,23 +1,6 @@
 #!/bin/bash -e
 
 #
-# Save target/ for the next CI build on this machine
-#
-if [[ -z $CARGO_TARGET_CACHE ]]; then
-  echo "+++ CARGO_TARGET_CACHE not defined" # pre-command should have defined it
-else
-  (
-    set -x
-    mkdir -p "$CARGO_TARGET_CACHE"
-    set -x
-    rsync -a --delete --link-dest="$PWD" target "$CARGO_TARGET_CACHE"
-    du -hs "$CARGO_TARGET_CACHE"
-    read -r cacheSizeInGB _ < <(du -s --block-size=1800000000 "$CARGO_TARGET_CACHE")
-    echo "--- ${cacheSizeInGB}GB: $CARGO_TARGET_CACHE"
-  )
-fi
-
-#
 # Add job_stats data point
 #
 if [[ -z $CI_BUILD_START ]]; then

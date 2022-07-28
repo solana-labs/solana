@@ -40,11 +40,10 @@ use {
         epoch_schedule::EpochSchedule,
         fee_calculator::{FeeCalculator, FeeRateGovernor},
         hash::Hash,
-        instruction::InstructionError,
         message::Message,
         pubkey::Pubkey,
         signature::Signature,
-        transaction::{self, uses_durable_nonce, Transaction, TransactionError},
+        transaction::{self, uses_durable_nonce, Transaction},
     },
     solana_transaction_status::{
         EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, TransactionStatus,
@@ -4523,40 +4522,66 @@ impl RpcClient {
     }
 
     /// Returns the stake minimum delegation, in lamports.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getStakeMinimumDelegation`] RPC method.
+    ///
+    /// [`getStakeMinimumDelegation`]: https://docs.solana.com/developing/clients/jsonrpc-api#getstakeminimumdelegation
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     nonblocking::rpc_client::RpcClient,
+    /// #     client_error::ClientError,
+    /// # };
+    /// # futures::executor::block_on(async {
+    /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// let stake_minimum_delegation = rpc_client.get_stake_minimum_delegation().await?;
+    /// #     Ok::<(), ClientError>(())
+    /// # })?;
+    /// # Ok::<(), ClientError>(())
+    /// ```
     pub async fn get_stake_minimum_delegation(&self) -> ClientResult<u64> {
-        let instruction = solana_sdk::stake::instruction::get_minimum_delegation();
-        let transaction = Transaction::new_with_payer(&[instruction], None);
-        let response = self.simulate_transaction(&transaction).await?;
-        let RpcTransactionReturnData {
-            program_id,
-            data: (data, encoding),
-        } = response
-            .value
-            .return_data
-            .ok_or_else(|| ClientErrorKind::Custom("return data was empty".to_string()))?;
-        if Pubkey::from_str(&program_id) != Ok(solana_sdk::stake::program::id()) {
-            return Err(TransactionError::InstructionError(
-                0,
-                InstructionError::IncorrectProgramId,
+        self.get_stake_minimum_delegation_with_commitment(self.commitment())
+            .await
+    }
+
+    /// Returns the stake minimum delegation, in lamports, based on the commitment level.
+    ///
+    /// # RPC Reference
+    ///
+    /// This method corresponds directly to the [`getStakeMinimumDelegation`] RPC method.
+    ///
+    /// [`getStakeMinimumDelegation`]: https://docs.solana.com/developing/clients/jsonrpc-api#getstakeminimumdelegation
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use solana_client::{
+    /// #     nonblocking::rpc_client::RpcClient,
+    /// #     client_error::ClientError,
+    /// # };
+    /// # use solana_sdk::commitment_config::CommitmentConfig;
+    /// # futures::executor::block_on(async {
+    /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
+    /// let stake_minimum_delegation = rpc_client.get_stake_minimum_delegation_with_commitment(CommitmentConfig::confirmed()).await?;
+    /// #     Ok::<(), ClientError>(())
+    /// # })?;
+    /// # Ok::<(), ClientError>(())
+    /// ```
+    pub async fn get_stake_minimum_delegation_with_commitment(
+        &self,
+        commitment_config: CommitmentConfig,
+    ) -> ClientResult<u64> {
+        Ok(self
+            .send::<Response<u64>>(
+                RpcRequest::GetStakeMinimumDelegation,
+                json!([self.maybe_map_commitment(commitment_config).await?]),
             )
-            .into());
-        }
-        if encoding != ReturnDataEncoding::Base64 {
-            return Err(
-                ClientErrorKind::Custom("return data encoding is invalid".to_string()).into(),
-            );
-        }
-        let data = base64::decode(data).map_err(|err| {
-            ClientErrorKind::Custom(format!("failed to decode return data: {}", err))
-        })?;
-        let minimum_delegation = u64::from_le_bytes(data.try_into().map_err(|data: Vec<u8>| {
-            ClientErrorKind::Custom(format!(
-                "return data cannot be represented as a u64: expected size: {}, actual size: {}",
-                std::mem::size_of::<u64>(),
-                data.len()
-            ))
-        })?);
-        Ok(minimum_delegation)
+            .await?
+            .value)
     }
 
     /// Request the transaction count.

@@ -34,7 +34,9 @@ use {
         account_utils::StateMut,
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         clock::{BankId, Slot, INITIAL_RENT_EPOCH},
-        feature_set::{self, add_set_compute_unit_price_ix, FeatureSet},
+        feature_set::{
+            self, add_set_compute_unit_price_ix, use_default_units_in_fee_calculation, FeatureSet,
+        },
         fee::FeeStructure,
         genesis_config::ClusterType,
         hash::Hash,
@@ -553,6 +555,7 @@ impl Accounts {
                             lamports_per_signature,
                             fee_structure,
                             feature_set.is_active(&add_set_compute_unit_price_ix::id()),
+                            feature_set.is_active(&use_default_units_in_fee_calculation::id()),
                         )
                     } else {
                         return (Err(TransactionError::BlockhashNotFound), None);
@@ -1549,8 +1552,7 @@ mod tests {
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.start));
         assert_eq!(0, idx.bin_calculator.bin_from_pubkey(&range2.end));
         accts.hold_range_in_memory(&range, true, &test_thread_pool());
-        idx.account_maps.iter().enumerate().for_each(|(_bin, map)| {
-            let map = map.read().unwrap();
+        idx.account_maps.iter().for_each(|map| {
             assert_eq!(
                 map.cache_ranges_held.read().unwrap().to_vec(),
                 vec![range.clone()]
@@ -1558,7 +1560,6 @@ mod tests {
         });
         accts.hold_range_in_memory(&range2, true, &test_thread_pool());
         idx.account_maps.iter().enumerate().for_each(|(bin, map)| {
-            let map = map.read().unwrap();
             let expected = if bin == 0 {
                 vec![range.clone(), range2_inclusive.clone()]
             } else {
@@ -1664,6 +1665,7 @@ mod tests {
             &SanitizedMessage::try_from(tx.message().clone()).unwrap(),
             lamports_per_signature,
             &FeeStructure::default(),
+            true,
             true,
         );
         assert_eq!(fee, lamports_per_signature);

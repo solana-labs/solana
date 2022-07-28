@@ -12,8 +12,8 @@ use {
     itertools::Itertools,
     log::*,
     quinn::{
-        ClientConfig, ConnectionError, Endpoint, EndpointConfig, IdleTimeout, NewConnection,
-        VarInt, WriteError,
+        ClientConfig, ConnectError, ConnectionError, Endpoint, EndpointConfig, IdleTimeout,
+        NewConnection, VarInt, WriteError,
     },
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
@@ -35,6 +35,7 @@ use {
         thread,
         time::Duration,
     },
+    thiserror::Error,
     tokio::{sync::RwLock, time::timeout},
 };
 
@@ -69,6 +70,16 @@ pub struct QuicClientCertificate {
 pub struct QuicLazyInitializedEndpoint {
     endpoint: RwLock<Option<Arc<Endpoint>>>,
     client_certificate: Arc<QuicClientCertificate>,
+}
+
+#[derive(Error, Debug)]
+pub enum QuicError {
+    #[error(transparent)]
+    WriteError(#[from] WriteError),
+    #[error(transparent)]
+    ConnectionError(#[from] ConnectionError),
+    #[error(transparent)]
+    ConnectError(#[from] ConnectError),
 }
 
 impl QuicLazyInitializedEndpoint {
@@ -163,13 +174,11 @@ impl QuicNewConnection {
         endpoint: Arc<QuicLazyInitializedEndpoint>,
         addr: SocketAddr,
         stats: &ClientStats,
-    ) -> Result<Self, WriteError> {
+    ) -> Result<Self, QuicError> {
         let mut make_connection_measure = Measure::start("make_connection_measure");
         let endpoint = endpoint.get_endpoint().await;
 
-        let connecting = endpoint
-            .connect(addr, "connect")
-            .expect("QuicNewConnection::make_connection endpoint.connect");
+        let connecting = endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         if let Ok(connecting_result) = timeout(
             Duration::from_millis(QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS),
@@ -208,11 +217,8 @@ impl QuicNewConnection {
         &mut self,
         addr: SocketAddr,
         stats: &ClientStats,
-    ) -> Result<Arc<NewConnection>, WriteError> {
-        let connecting = self
-            .endpoint
-            .connect(addr, "connect")
-            .expect("QuicNewConnection::make_connection_0rtt endpoint.connect");
+    ) -> Result<Arc<NewConnection>, QuicError> {
+        let connecting = self.endpoint.connect(addr, "connect")?;
         stats.total_connections.fetch_add(1, Ordering::Relaxed);
         let connection = match connecting.into_0rtt() {
             Ok((connection, zero_rtt)) => {
@@ -272,7 +278,7 @@ impl QuicClient {
     async fn _send_buffer_using_conn(
         data: &[u8],
         connection: &NewConnection,
-    ) -> Result<(), WriteError> {
+    ) -> Result<(), QuicError> {
         let mut send_stream = connection.connection.open_uni().await?;
 
         send_stream.write_all(data).await?;
@@ -287,7 +293,7 @@ impl QuicClient {
         data: &[u8],
         stats: &ClientStats,
         connection_stats: Arc<ConnectionCacheStats>,
-    ) -> Result<Arc<NewConnection>, WriteError> {
+    ) -> Result<Arc<NewConnection>, QuicError> {
         let mut connection_try_count = 0;
         let mut last_connection_id = 0;
         let mut last_error = None;
@@ -390,7 +396,7 @@ impl QuicClient {
                     return Ok(connection);
                 }
                 Err(err) => match err {
-                    WriteError::ConnectionLost(_) => {
+                    QuicError::ConnectionError(_) => {
                         last_error = Some(err);
                     }
                     _ => {
@@ -431,6 +437,21 @@ impl QuicClient {
         Ok(())
     }
 
+    fn compute_chunk_length(num_buffers_to_chunk: usize, num_chunks: usize) -> usize {
+        // The function is equivalent to checked div_ceil()
+        // Also, if num_chunks == 0 || num_buffers_per_chunk == 0, return 1
+        num_buffers_to_chunk
+            .checked_div(num_chunks)
+            .map_or(1, |value| {
+                if num_buffers_to_chunk.checked_rem(num_chunks).unwrap_or(0) != 0 {
+                    value.saturating_add(1)
+                } else {
+                    value
+                }
+            })
+            .max(1)
+    }
+
     pub async fn send_batch<T>(
         &self,
         buffers: &[T],
@@ -462,9 +483,9 @@ impl QuicClient {
         // by just getting a reference to the NewConnection once
         let connection_ref: &NewConnection = &connection;
 
-        let chunks = buffers[1..buffers.len()]
-            .iter()
-            .chunks(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS);
+        let chunk_len =
+            Self::compute_chunk_length(buffers.len() - 1, QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS);
+        let chunks = buffers[1..buffers.len()].iter().chunks(chunk_len);
 
         let futures: Vec<_> = chunks
             .into_iter()
@@ -564,5 +585,31 @@ impl TpuConnection for QuicTpuConnection {
             self.connection_stats.add_client_stats(&stats, 1, true);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::nonblocking::quic_client::QuicClient;
+
+    #[test]
+    fn test_transaction_batch_chunking() {
+        assert_eq!(QuicClient::compute_chunk_length(0, 0), 1);
+        assert_eq!(QuicClient::compute_chunk_length(10, 0), 1);
+        assert_eq!(QuicClient::compute_chunk_length(0, 10), 1);
+        assert_eq!(QuicClient::compute_chunk_length(usize::MAX, usize::MAX), 1);
+        assert_eq!(QuicClient::compute_chunk_length(10, usize::MAX), 1);
+        assert!(QuicClient::compute_chunk_length(usize::MAX, 10) == (usize::MAX / 10) + 1);
+        assert_eq!(QuicClient::compute_chunk_length(10, 1), 10);
+        assert_eq!(QuicClient::compute_chunk_length(10, 2), 5);
+        assert_eq!(QuicClient::compute_chunk_length(10, 3), 4);
+        assert_eq!(QuicClient::compute_chunk_length(10, 4), 3);
+        assert_eq!(QuicClient::compute_chunk_length(10, 5), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 6), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 7), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 8), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 9), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 10), 1);
+        assert_eq!(QuicClient::compute_chunk_length(10, 11), 1);
     }
 }

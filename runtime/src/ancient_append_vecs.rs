@@ -92,7 +92,8 @@ pub fn get_ancient_append_vec_capacity() -> u64 {
     use crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE;
     // smaller than max by a bit just in case
     // some functions add slop on allocation
-    MAXIMUM_APPEND_VEC_FILE_SIZE - 2048
+    // temporarily smaller to force ancient append vec operations to occur more often to flush out any bugs
+    MAXIMUM_APPEND_VEC_FILE_SIZE / 10 - 2048
 }
 
 /// true iff storage is ancient size and is almost completely full
@@ -202,7 +203,7 @@ pub mod tests {
     fn test_get_ancient_append_vec_capacity() {
         assert_eq!(
             get_ancient_append_vec_capacity(),
-            crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE - 2048
+            crate::append_vec::MAXIMUM_APPEND_VEC_FILE_SIZE / 10 - 2048
         );
     }
 

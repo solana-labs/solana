@@ -11,6 +11,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+  ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/21.4.7075529
 
 jobs:
   check_compilation:
@@ -54,13 +56,6 @@ jobs:
       - name: Install cargo-ndk
         if: ${{ matrix.platform == 'android' }}
         run: cargo install cargo-ndk
-      - name: Set NDK 21 as default
-        if: ${{ matrix.platform == 'android' }}
-        run: |
-          ANDROID_ROOT=/usr/local/lib/android
-          ANDROID_SDK_ROOT=${ANDROID_ROOT}/sdk
-          ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk-bundle
-          ln -sfn $ANDROID_SDK_ROOT/ndk/21.4.7075529 $ANDROID_NDK_ROOT
       - uses: actions-rs/cargo@v1
         if: ${{ matrix.platform == 'android' }}
         with:

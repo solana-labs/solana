@@ -48,7 +48,9 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     std::{
         collections::{HashMap, HashSet},
-        fs::{remove_dir_all, File},
+        ffi::OsStr,
+        fmt::Display,
+        fs::{self, remove_dir_all, File},
         io::Read,
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::{Path, PathBuf},
@@ -331,6 +333,41 @@ impl TestValidatorGenesis {
 
             self.add_account(address, account);
         }
+        self
+    }
+
+    pub fn add_accounts_from_directories<T, P>(&mut self, dirs: T) -> &mut Self
+    where
+        T: IntoIterator<Item = P>,
+        P: AsRef<Path> + Display,
+    {
+        let mut json_files: HashSet<String> = HashSet::new();
+        for dir in dirs {
+            let matched_files = fs::read_dir(&dir)
+                .unwrap_or_else(|err| {
+                    error!("Cannot read directory {}: {}", dir, err);
+                    solana_core::validator::abort();
+                })
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.is_file() && path.extension() == Some(OsStr::new("json")))
+                .map(|path| String::from(path.to_string_lossy()));
+
+            json_files.extend(matched_files);
+        }
+
+        debug!("account files found: {:?}", json_files);
+
+        let accounts: Vec<_> = json_files
+            .iter()
+            .map(|filename| AccountInfo {
+                address: None,
+                filename,
+            })
+            .collect();
+
+        self.add_accounts_from_json_files(&accounts);
+
         self
     }
 

@@ -54,6 +54,7 @@ gives a convenient interface for the RPC methods.
 - [getSlotLeader](jsonrpc-api.md#getslotleader)
 - [getSlotLeaders](jsonrpc-api.md#getslotleaders)
 - [getStakeActivation](jsonrpc-api.md#getstakeactivation)
+- [getStakeMinimumDelegation](jsonrpc-api.md#getstakeminimumdelegation)
 - [getSupply](jsonrpc-api.md#getsupply)
 - [getTokenAccountBalance](jsonrpc-api.md#gettokenaccountbalance)
 - [getTokenAccountsByDelegate](jsonrpc-api.md#gettokenaccountsbydelegate)
@@ -391,7 +392,7 @@ Returns identity and transaction information about a confirmed block in the ledg
   - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
   - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
-  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested block contains a transaction with a higher version, an error will be returned.
+  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested block contains a transaction with a higher version, an error will be returned. If this parameter is omitted, only legacy transactions will be returned, and a block containing any versioned transaction will prompt the error.
 
 #### Results:
 
@@ -1908,7 +1909,7 @@ Returns all accounts owned by the provided program Pubkey
   - `offset: <usize>` - offset into program account data to start comparison
   - `bytes: <string>` - data to match, as encoded string
   - `encoding: <string>` - encoding for filter `bytes` data, either "base58" or "base64". Data is limited in size to 128 or fewer decoded bytes.
-    **NEW: This field, and base64 support generally, is only available in solana-core v1.11.4 or newer. Please omit when querying nodes on earlier versions**
+    **NEW: This field, and base64 support generally, is only available in solana-core v1.11.5 or newer. Please omit when querying nodes on earlier versions**
 
 - `dataSize: <u64>` - compares the program account data length with the provided data size
 
@@ -2451,6 +2452,45 @@ Result:
 }
 ```
 
+### getStakeMinimumDelegation
+
+Returns the stake minimum delegation, in lamports.
+
+#### Parameters:
+
+- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+
+#### Results:
+
+The result will be an RpcResponse JSON object with `value` equal to:
+
+- `<u64>` - The stake minimum delegation, in lamports
+
+#### Example:
+
+Request:
+
+```bash
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0","id":1,"method":"getStakeMinimumDelegation"}
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "context": {
+      "slot": 501
+    },
+    "value": 1000000000
+  },
+  "id": 1
+}
+```
+
 ### getSupply
 
 Returns information about the current supply.
@@ -2883,7 +2923,7 @@ Returns transaction details for a confirmed transaction
   - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json".
     "jsonParsed" encoding attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
   - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
-  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned.
+  - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned. If this parameter is omitted, only legacy transactions will be returned, and any versioned transaction will prompt the error.
 
 #### Results:
 
@@ -3088,7 +3128,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 
 ```json
-{ "jsonrpc": "2.0", "result": { "solana-core": "1.11.4" }, "id": 1 }
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.11.5" }, "id": 1 }
 ```
 
 ### getVoteAccounts

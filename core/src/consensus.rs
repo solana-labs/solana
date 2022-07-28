@@ -87,11 +87,22 @@ impl SwitchForkDecision {
                 v,
                 *switch_proof_hash,
             )),
-            (SwitchForkDecision::SameFork, VoteTransaction::CompactVoteStateUpdate(_v)) => None,
+            (SwitchForkDecision::SameFork, VoteTransaction::CompactVoteStateUpdate(v)) => {
+                Some(vote_instruction::compact_update_vote_state(
+                    vote_account_pubkey,
+                    authorized_voter_pubkey,
+                    v,
+                ))
+            }
             (
-                SwitchForkDecision::SwitchProof(_switch_proof_hash),
-                VoteTransaction::CompactVoteStateUpdate(_v),
-            ) => None,
+                SwitchForkDecision::SwitchProof(switch_proof_hash),
+                VoteTransaction::CompactVoteStateUpdate(v),
+            ) => Some(vote_instruction::compact_update_vote_state_switch(
+                vote_account_pubkey,
+                authorized_voter_pubkey,
+                v,
+                *switch_proof_hash,
+            )),
         }
     }
 
@@ -114,12 +125,11 @@ pub type Stake = u64;
 pub type VotedStakes = HashMap<Slot, Stake>;
 pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 
-// lint warning "bank_weight is never read"
-#[allow(dead_code)]
 pub(crate) struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
-    pub bank_weight: u128,
+    #[allow(dead_code)]
+    bank_weight: u128,
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,

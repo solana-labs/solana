@@ -225,8 +225,9 @@ pub struct ConnectionCache {
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     connection_pool_size: usize,
-    tpu_udp_socket: Option<Arc<UdpSocket>>,
+    tpu_udp_socket: Arc<UdpSocket>,
     client_certificate: Arc<QuicClientCertificate>,
+    use_quic: bool,
 }
 
 /// Models the pool of connections
@@ -259,7 +260,7 @@ impl ConnectionCache {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
-            tpu_udp_socket: None,
+            use_quic: true,
             connection_pool_size,
             ..Self::default()
         }
@@ -282,17 +283,18 @@ impl ConnectionCache {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
+            use_quic: false,
             connection_pool_size,
             ..Self::default()
         }
     }
 
     pub fn use_quic(&self) -> bool {
-        matches!(self.tpu_udp_socket, None)
+        self.use_quic
     }
 
-    fn create_endpoint(&self) -> Option<Arc<QuicLazyInitializedEndpoint>> {
-        if self.use_quic() {
+    fn create_endpoint(&self, force_use_udp: bool) -> Option<Arc<QuicLazyInitializedEndpoint>> {
+        if self.use_quic() && !force_use_udp {
             Some(Arc::new(QuicLazyInitializedEndpoint::new(
                 self.client_certificate.clone(),
             )))
@@ -302,12 +304,13 @@ impl ConnectionCache {
     }
 
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
-    /// enough unsed connections in the connection pool for the specified address.
+    /// enough used connections in the connection pool for the specified address.
     /// Returns CreateConnectionResult.
     fn create_connection(
         &self,
         lock_timing_ms: &mut u64,
         addr: &SocketAddr,
+        force_use_udp: bool,
     ) -> CreateConnectionResult {
         let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
         let mut map = self.map.write().unwrap();
@@ -318,7 +321,7 @@ impl ConnectionCache {
 
         let (to_create_connection, endpoint) =
             map.get(addr)
-                .map_or((true, self.create_endpoint()), |pool| {
+                .map_or((true, self.create_endpoint(force_use_udp)), |pool| {
                     (
                         pool.need_new_connection(self.connection_pool_size),
                         pool.endpoint.clone(),
@@ -326,12 +329,13 @@ impl ConnectionCache {
                 });
 
         let (cache_hit, num_evictions, eviction_timing_ms) = if to_create_connection {
-            let connection = match &self.tpu_udp_socket {
-                Some(socket) => BaseTpuConnection::Udp(socket.clone()),
-                None => BaseTpuConnection::Quic(Arc::new(QuicClient::new(
+            let connection = if !self.use_quic() || force_use_udp {
+                BaseTpuConnection::Udp(self.tpu_udp_socket.clone())
+            } else {
+                BaseTpuConnection::Quic(Arc::new(QuicClient::new(
                     endpoint.as_ref().unwrap().clone(),
                     *addr,
-                ))),
+                )))
             };
 
             let connection = Arc::new(connection);
@@ -388,7 +392,12 @@ impl ConnectionCache {
 
         let port_offset = if self.use_quic() { QUIC_PORT_OFFSET } else { 0 };
 
-        let addr = SocketAddr::new(addr.ip(), addr.port() + port_offset);
+        let port = addr
+            .port()
+            .checked_add(port_offset)
+            .unwrap_or_else(|| addr.port());
+        let force_use_udp = port == addr.port();
+        let addr = SocketAddr::new(addr.ip(), port);
 
         let mut lock_timing_ms = get_connection_map_lock_measure.as_ms();
 
@@ -408,7 +417,7 @@ impl ConnectionCache {
                 if pool.need_new_connection(self.connection_pool_size) {
                     // create more connection and put it in the pool
                     drop(map);
-                    self.create_connection(&mut lock_timing_ms, &addr)
+                    self.create_connection(&mut lock_timing_ms, &addr, force_use_udp)
                 } else {
                     let connection = pool.borrow_connection();
                     CreateConnectionResult {
@@ -423,7 +432,7 @@ impl ConnectionCache {
             None => {
                 // Upgrade to write access by dropping read lock and acquire write lock
                 drop(map);
-                self.create_connection(&mut lock_timing_ms, &addr)
+                self.create_connection(&mut lock_timing_ms, &addr, force_use_udp)
             }
         };
         get_connection_map_measure.stop();
@@ -516,16 +525,15 @@ impl Default for ConnectionCache {
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            tpu_udp_socket: (!DEFAULT_TPU_USE_QUIC).then(|| {
-                Arc::new(
-                    solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-                        .expect("Unable to bind to UDP socket"),
-                )
-            }),
+            tpu_udp_socket: Arc::new(
+                solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                    .expect("Unable to bind to UDP socket"),
+            ),
             client_certificate: Arc::new(QuicClientCertificate {
                 certificates: certs,
                 key: priv_key,
             }),
+            use_quic: DEFAULT_TPU_USE_QUIC,
         }
     }
 }
@@ -596,7 +604,8 @@ mod tests {
         },
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
-        std::net::SocketAddr,
+        solana_sdk::quic::QUIC_PORT_OFFSET,
+        std::net::{IpAddr, Ipv4Addr, SocketAddr},
     };
 
     fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
@@ -650,5 +659,23 @@ mod tests {
         let map = connection_cache.map.read().unwrap();
         assert!(map.len() == MAX_CONNECTIONS);
         let _conn = map.get(&addr).expect("Address not found");
+    }
+
+    // Test that we can get_connection with a connection cache configured for quic
+    // on an address with a port that, if QUIC_PORT_OFFSET were added to it, it would overflow to
+    // an invalid port.
+    #[test]
+    fn test_overflow_address() {
+        let port = u16::MAX - QUIC_PORT_OFFSET + 1;
+        assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+        let connection_cache = ConnectionCache::new(1);
+
+        let conn = connection_cache.get_connection(&addr);
+        // We (intentionally) don't have an interface that allows us to distinguish between
+        // UDP and Quic connections, so check instead that the port is valid (non-zero)
+        // and is the same as the input port (falling back on UDP)
+        assert!(conn.tpu_addr().port() != 0);
+        assert!(conn.tpu_addr().port() == port);
     }
 }

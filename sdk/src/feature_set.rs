@@ -8,7 +8,7 @@
 //!   <https://spl.solana.com/feature-proposal#feature-proposal-life-cycle>
 //!
 //! 1. Generate a new keypair with `solana-keygen new --outfile feature.json --no-passphrase`
-//!    - Keypairs should be held by core contributors only. If you're a non-core contirbutor going
+//!    - Keypairs should be held by core contributors only. If you're a non-core contributor going
 //!      through these steps, the PR process will facilitate a keypair holder being picked. That
 //!      person will generate the keypair, provide pubkey for PR, and ultimately enable the feature.
 //! 2. Add a public module for the feature, specifying keypair pubkey as the id with
@@ -287,6 +287,10 @@ pub mod stake_deactivate_delinquent_instruction {
     solana_sdk::declare_id!("437r62HoAdUb63amq3D7ENnBLDhHT2xY8eFkLJYVKK4x");
 }
 
+pub mod stake_redelegate_instruction {
+    solana_sdk::declare_id!("3EPmAX94PvVJCjMeFfRFvj4avqCPL8vv3TGsZQg7ydMx");
+}
+
 pub mod vote_withdraw_authority_may_change_authorized_voter {
     solana_sdk::declare_id!("AVZS3ZsN4gi6Rkx2QUibYuSJG3S6QHib7xCYhG6vGJxU");
 }
@@ -464,6 +468,22 @@ pub mod prevent_crediting_accounts_that_end_rent_paying {
     solana_sdk::declare_id!("812kqX67odAp5NFwM8D2N24cku7WTm9CHUTFUXaDkWPn");
 }
 
+pub mod cap_bpf_program_instruction_accounts {
+    solana_sdk::declare_id!("9k5ijzTbYPtjzu8wj2ErH9v45xecHzQ1x4PMYMMxFgdM");
+}
+
+pub mod loosen_cpi_size_restriction {
+    solana_sdk::declare_id!("GDH5TVdbTPUpRnXaRyQqiKUa7uZAbZ28Q2N9bhbKoMLm");
+}
+
+pub mod use_default_units_in_fee_calculation {
+    solana_sdk::declare_id!("8sKQrMQoUHtQSUP83SPG4ta2JDjSAiWs7t5aJ9uEd6To");
+}
+
+pub mod compact_vote_state_updates {
+    solana_sdk::declare_id!("86HpNqzutEZwLcPxS6EHDcMNYWk6ikhteg9un7Y2PBKE");
+}
+
 pub mod concurrent_replay_of_forks {
     solana_sdk::declare_id!("9F2Dcu8xkBPKxiiy65XKPZYdCG3VZDpjDTuSmeYLozJe");
 }
@@ -574,10 +594,15 @@ lazy_static! {
         (nonce_must_be_advanceable::id(), "durable nonces must be advanceable"),
         (vote_authorize_with_seed::id(), "An instruction you can use to change a vote accounts authority when the current authority is a derived key #25860"),
         (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
+        (stake_redelegate_instruction::id(), "enable the redelegate stake instruction #26294"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (enable_bpf_loader_extend_program_data_ix::id(), "enable bpf upgradeable loader ExtendProgramData instruction #25234"),
         (enable_early_verification_of_account_modifications::id(), "enable early verification of account modifications #25899"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
+        (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
+        (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
+        (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
+        (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
         (concurrent_replay_of_forks::id(), "Allow slots from different forks to be replayed concurrently #26465"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]

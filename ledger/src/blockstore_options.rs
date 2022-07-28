@@ -1,4 +1,7 @@
-use rocksdb::{DBCompressionType as RocksCompressionType, DBRecoveryMode};
+use {
+    rocksdb::{DBCompressionType as RocksCompressionType, DBRecoveryMode},
+    std::path::Path,
+};
 
 pub struct BlockstoreOptions {
     // The access type of blockstore. Default: Primary
@@ -152,6 +155,38 @@ impl ShredStorageType {
             ShredStorageType::RocksLevel => BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
             ShredStorageType::RocksFifo(_) => BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
         }
+    }
+
+    /// Returns the ShredStorageType that is used under the specified
+    /// ledger_path.
+    ///
+    /// None will be returned if the ShredStorageType cannot be inferred.
+    pub fn from_ledger_path(
+        ledger_path: &Path,
+        fifo_shred_storage_size: u64,
+    ) -> Option<ShredStorageType> {
+        let mut result: Option<ShredStorageType> = None;
+
+        if Path::new(ledger_path)
+            .join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)
+            .exists()
+        {
+            result = Some(ShredStorageType::RocksLevel);
+        }
+
+        if Path::new(ledger_path)
+            .join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)
+            .exists()
+        {
+            if result.is_none() {
+                result = Some(ShredStorageType::RocksFifo(
+                    BlockstoreRocksFifoOptions::new(fifo_shred_storage_size),
+                ));
+            } else {
+                result = None;
+            }
+        }
+        result
     }
 }
 

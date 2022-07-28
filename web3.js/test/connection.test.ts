@@ -3804,6 +3804,10 @@ describe('Connection', function () {
   }
 
   if (process.env.TEST_LIVE) {
+    it('getStakeMinimumDelegation', async () => {
+      const {value} = await connection.getStakeMinimumDelegation();
+      expect(value).to.be.a('number');
+    });
     it('simulate transaction with message', async () => {
       connection._commitment = 'confirmed';
 

@@ -1,5 +1,5 @@
 #[cfg(target_os = "linux")]
-use std::{fs::File, io::BufReader, path::Path};
+use std::{fs::File, io::BufReader};
 use {
     solana_sdk::timing::AtomicInterval,
     std::{
@@ -26,6 +26,8 @@ const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
 const PROC_NET_SNMP_PATH: &str = "/proc/net/snmp";
+#[cfg(target_os = "linux")]
+const PROC_NET_DEV_PATH: &str = "/proc/net/dev";
 
 pub struct SystemMonitorService {
     thread_hdl: JoinHandle<()>,
@@ -33,14 +35,58 @@ pub struct SystemMonitorService {
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 struct UdpStats {
-    in_datagrams: usize,
-    no_ports: usize,
-    in_errors: usize,
-    out_datagrams: usize,
-    rcvbuf_errors: usize,
-    sndbuf_errors: usize,
-    in_csum_errors: usize,
-    ignored_multi: usize,
+    in_datagrams: u64,
+    no_ports: u64,
+    in_errors: u64,
+    out_datagrams: u64,
+    rcvbuf_errors: u64,
+    sndbuf_errors: u64,
+    in_csum_errors: u64,
+    ignored_multi: u64,
+}
+
+#[derive(Default)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+// These stats are aggregated across all network devices excluding the loopback interface.
+struct NetDevStats {
+    // Number of bytes received
+    rx_bytes: u64,
+    // Number of packets received
+    rx_packets: u64,
+    // Number of receive errors detected by device driver
+    rx_errs: u64,
+    // Number of receive packets dropped by the device driver (not included in error count)
+    rx_drops: u64,
+    // Number of receive FIFO buffer errors
+    rx_fifo: u64,
+    // Number of receive packet framing errors
+    rx_frame: u64,
+    // Number of compressed packets received
+    rx_compressed: u64,
+    // Number of multicast frames received by device driver
+    rx_multicast: u64,
+    // Number of bytes transmitted
+    tx_bytes: u64,
+    // Number of packets transmitted
+    tx_packets: u64,
+    // Number of transmit errors detected by device driver
+    tx_errs: u64,
+    // Number of transmit packets dropped by device driver
+    tx_drops: u64,
+    // Number of transmit FIFO buffer errors
+    tx_fifo: u64,
+    // Number of transmit collisions detected
+    tx_colls: u64,
+    // Number of transmit carrier losses detected by device driver
+    tx_carrier: u64,
+    // Number of compressed packets transmitted
+    tx_compressed: u64,
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+struct NetStats {
+    udp_stats: UdpStats,
+    net_dev_stats: NetDevStats,
 }
 
 struct CpuInfo {
@@ -51,7 +97,7 @@ struct CpuInfo {
 }
 
 impl UdpStats {
-    fn from_map(udp_stats: &HashMap<String, usize>) -> Self {
+    fn from_map(udp_stats: &HashMap<String, u64>) -> Self {
         Self {
             in_datagrams: *udp_stats.get("InDatagrams").unwrap_or(&0),
             no_ports: *udp_stats.get("NoPorts").unwrap_or(&0),
@@ -75,16 +121,27 @@ fn platform_id() -> String {
 }
 
 #[cfg(target_os = "linux")]
-fn read_udp_stats(file_path: impl AsRef<Path>) -> Result<UdpStats, String> {
-    let file = File::open(file_path).map_err(|e| e.to_string())?;
-    let mut reader = BufReader::new(file);
-    parse_udp_stats(&mut reader)
+fn read_net_stats() -> Result<NetStats, String> {
+    let file_path_snmp = PROC_NET_SNMP_PATH;
+    let file_snmp = File::open(file_path_snmp).map_err(|e| e.to_string())?;
+    let mut reader_snmp = BufReader::new(file_snmp);
+
+    let file_path_dev = PROC_NET_DEV_PATH;
+    let file_dev = File::open(file_path_dev).map_err(|e| e.to_string())?;
+    let mut reader_dev = BufReader::new(file_dev);
+
+    let udp_stats = parse_udp_stats(&mut reader_snmp)?;
+    let net_dev_stats = parse_net_dev_stats(&mut reader_dev)?;
+    Ok(NetStats {
+        udp_stats,
+        net_dev_stats,
+    })
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-fn parse_udp_stats(reader: &mut impl BufRead) -> Result<UdpStats, String> {
+fn parse_udp_stats(reader_snmp: &mut impl BufRead) -> Result<UdpStats, String> {
     let mut udp_lines = Vec::default();
-    for line in reader.lines() {
+    for line in reader_snmp.lines() {
         let line = line.map_err(|e| e.to_string())?;
         if line.starts_with("Udp:") {
             udp_lines.push(line);
@@ -104,24 +161,65 @@ fn parse_udp_stats(reader: &mut impl BufRead) -> Result<UdpStats, String> {
         .split_ascii_whitespace()
         .zip(udp_lines[1].split_ascii_whitespace())
         .collect();
-    let udp_stats: HashMap<String, usize> = pairs[1..]
+    let udp_stats: HashMap<String, u64> = pairs[1..]
         .iter()
-        .map(|(label, val)| (label.to_string(), val.parse::<usize>().unwrap()))
+        .map(|(label, val)| (label.to_string(), val.parse::<u64>().unwrap()))
         .collect();
 
     let stats = UdpStats::from_map(&udp_stats);
+    Ok(stats)
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_net_dev_stats(reader_dev: &mut impl BufRead) -> Result<NetDevStats, String> {
+    let mut stats = NetDevStats::default();
+    for (line_number, line) in reader_dev.lines().enumerate() {
+        if line_number < 2 {
+            // Skip first two lines with header information.
+            continue;
+        }
+
+        let line = line.map_err(|e| e.to_string())?;
+        let values: Vec<_> = line.split_ascii_whitespace().collect();
+
+        if values.len() != 17 {
+            return Err("parse error, expected exactly 17 stat elements".to_string());
+        }
+        if values[0] == "lo:" {
+            // Filter out the loopback network interface as we are only concerned with
+            // external traffic.
+            continue;
+        }
+
+        stats.rx_bytes += values[1].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_packets += values[2].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_errs += values[3].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_drops += values[4].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_fifo += values[5].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_frame += values[6].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_compressed += values[7].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.rx_multicast += values[8].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_bytes += values[9].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_packets += values[10].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_errs += values[11].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_drops += values[12].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_fifo += values[13].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_colls += values[14].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_carrier += values[15].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.tx_compressed += values[16].parse::<u64>().map_err(|e| e.to_string())?;
+    }
 
     Ok(stats)
 }
 
 #[cfg(target_os = "linux")]
-pub fn verify_udp_stats_access() -> Result<(), String> {
-    read_udp_stats(PROC_NET_SNMP_PATH)?;
+pub fn verify_net_stats_access() -> Result<(), String> {
+    read_net_stats()?;
     Ok(())
 }
 
 #[cfg(not(target_os = "linux"))]
-pub fn verify_udp_stats_access() -> Result<(), String> {
+pub fn verify_net_stats_access() -> Result<(), String> {
     Ok(())
 }
 
@@ -235,68 +333,164 @@ impl SystemMonitorService {
     }
 
     #[cfg(target_os = "linux")]
-    fn process_udp_stats(udp_stats: &mut Option<UdpStats>) {
-        match read_udp_stats(PROC_NET_SNMP_PATH) {
+    fn process_net_stats(net_stats: &mut Option<NetStats>) {
+        match read_net_stats() {
             Ok(new_stats) => {
-                if let Some(old_stats) = udp_stats {
-                    Self::report_udp_stats(old_stats, &new_stats);
+                if let Some(old_stats) = net_stats {
+                    Self::report_net_stats(old_stats, &new_stats);
                 }
-                *udp_stats = Some(new_stats);
+                *net_stats = Some(new_stats);
             }
-            Err(e) => warn!("read_udp_stats: {}", e),
+            Err(e) => warn!("read_net_stats: {}", e),
         }
     }
 
     #[cfg(not(target_os = "linux"))]
-    fn process_udp_stats(_udp_stats: &mut Option<UdpStats>) {}
+    fn process_net_stats(_net_stats: &mut Option<NetStats>) {}
 
     #[cfg(target_os = "linux")]
-    fn report_udp_stats(old_stats: &UdpStats, new_stats: &UdpStats) {
+    fn report_net_stats(old_stats: &NetStats, new_stats: &NetStats) {
         datapoint_info!(
             "net-stats-validator",
             (
                 "in_datagrams_delta",
-                new_stats.in_datagrams - old_stats.in_datagrams,
+                new_stats.udp_stats.in_datagrams - old_stats.udp_stats.in_datagrams,
                 i64
             ),
             (
                 "no_ports_delta",
-                new_stats.no_ports - old_stats.no_ports,
+                new_stats.udp_stats.no_ports - old_stats.udp_stats.no_ports,
                 i64
             ),
             (
                 "in_errors_delta",
-                new_stats.in_errors - old_stats.in_errors,
+                new_stats.udp_stats.in_errors - old_stats.udp_stats.in_errors,
                 i64
             ),
             (
                 "out_datagrams_delta",
-                new_stats.out_datagrams - old_stats.out_datagrams,
+                new_stats.udp_stats.out_datagrams - old_stats.udp_stats.out_datagrams,
                 i64
             ),
             (
                 "rcvbuf_errors_delta",
-                new_stats.rcvbuf_errors - old_stats.rcvbuf_errors,
+                new_stats.udp_stats.rcvbuf_errors - old_stats.udp_stats.rcvbuf_errors,
                 i64
             ),
             (
                 "sndbuf_errors_delta",
-                new_stats.sndbuf_errors - old_stats.sndbuf_errors,
+                new_stats.udp_stats.sndbuf_errors - old_stats.udp_stats.sndbuf_errors,
                 i64
             ),
             (
                 "in_csum_errors_delta",
-                new_stats.in_csum_errors - old_stats.in_csum_errors,
+                new_stats.udp_stats.in_csum_errors - old_stats.udp_stats.in_csum_errors,
                 i64
             ),
             (
                 "ignored_multi_delta",
-                new_stats.ignored_multi - old_stats.ignored_multi,
+                new_stats.udp_stats.ignored_multi - old_stats.udp_stats.ignored_multi,
                 i64
             ),
-            ("in_errors", new_stats.in_errors, i64),
-            ("rcvbuf_errors", new_stats.rcvbuf_errors, i64),
-            ("sndbuf_errors", new_stats.sndbuf_errors, i64),
+            ("in_errors", new_stats.udp_stats.in_errors, i64),
+            ("rcvbuf_errors", new_stats.udp_stats.rcvbuf_errors, i64),
+            ("sndbuf_errors", new_stats.udp_stats.sndbuf_errors, i64),
+            (
+                "rx_bytes_delta",
+                new_stats
+                    .net_dev_stats
+                    .rx_bytes
+                    .saturating_sub(old_stats.net_dev_stats.rx_bytes),
+                i64
+            ),
+            (
+                "rx_packets_delta",
+                new_stats
+                    .net_dev_stats
+                    .rx_packets
+                    .saturating_sub(old_stats.net_dev_stats.rx_packets),
+                i64
+            ),
+            (
+                "rx_errs_delta",
+                new_stats
+                    .net_dev_stats
+                    .rx_errs
+                    .saturating_sub(old_stats.net_dev_stats.rx_errs),
+                i64
+            ),
+            (
+                "rx_drops_delta",
+                new_stats
+                    .net_dev_stats
+                    .rx_drops
+                    .saturating_sub(old_stats.net_dev_stats.rx_drops),
+                i64
+            ),
+            (
+                "rx_fifo_delta",
+                new_stats
+                    .net_dev_stats
+                    .rx_fifo
+                    .saturating_sub(old_stats.net_dev_stats.rx_fifo),
+                i64
+            ),
+            (
+                "rx_frame_delta",
+                new_stats
+                    .net_dev_stats
+                    .rx_frame
+                    .saturating_sub(old_stats.net_dev_stats.rx_frame),
+                i64
+            ),
+            (
+                "tx_bytes_delta",
+                new_stats
+                    .net_dev_stats
+                    .tx_bytes
+                    .saturating_sub(old_stats.net_dev_stats.tx_bytes),
+                i64
+            ),
+            (
+                "tx_packets_delta",
+                new_stats
+                    .net_dev_stats
+                    .tx_packets
+                    .saturating_sub(old_stats.net_dev_stats.tx_packets),
+                i64
+            ),
+            (
+                "tx_errs_delta",
+                new_stats
+                    .net_dev_stats
+                    .tx_errs
+                    .saturating_sub(old_stats.net_dev_stats.tx_errs),
+                i64
+            ),
+            (
+                "tx_drops_delta",
+                new_stats
+                    .net_dev_stats
+                    .tx_drops
+                    .saturating_sub(old_stats.net_dev_stats.tx_drops),
+                i64
+            ),
+            (
+                "tx_fifo_delta",
+                new_stats
+                    .net_dev_stats
+                    .tx_fifo
+                    .saturating_sub(old_stats.net_dev_stats.tx_fifo),
+                i64
+            ),
+            (
+                "tx_colls_delta",
+                new_stats
+                    .net_dev_stats
+                    .tx_colls
+                    .saturating_sub(old_stats.net_dev_stats.tx_colls),
+                i64
+            ),
         );
     }
 
@@ -399,7 +593,7 @@ impl SystemMonitorService {
                     Self::check_os_network_limits();
                 }
                 if udp_timer.should_update(SAMPLE_INTERVAL_UDP_MS) {
-                    Self::process_udp_stats(&mut udp_stats);
+                    Self::process_net_stats(&mut udp_stats);
                 }
             }
             if report_os_memory_stats && mem_timer.should_update(SAMPLE_INTERVAL_MEM_MS) {
@@ -423,7 +617,7 @@ mod tests {
 
     #[test]
     fn test_parse_udp_stats() {
-        let mut mock_snmp =
+        const MOCK_SNMP: &[u8] =
 b"Ip: Forwarding DefaultTTL InReceives InHdrErrors InAddrErrors ForwDatagrams InUnknownProtos InDiscards InDelivers OutRequests OutDiscards OutNoRoutes ReasmTimeout ReasmReqds ReasmOKs ReasmFails FragOKs FragFails FragCreates
 Ip: 1 64 357 0 2 0 0 0 355 315 0 6 0 0 0 0 0 0 0
 Icmp: InMsgs InErrors InCsumErrors InDestUnreachs InTimeExcds InParmProbs InSrcQuenchs InRedirects InEchos InEchoReps InTimestamps InTimestampReps InAddrMasks InAddrMaskReps OutMsgs OutErrors OutDestUnreachs OutTimeExcds OutParmProbs OutSrcQuenchs OutRedirects OutEchos OutEchoReps OutTimestamps OutTimestampReps OutAddrMasks OutAddrMaskReps
@@ -436,12 +630,43 @@ Udp: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors InCsumE
 Udp: 27 7 0 30 0 0 0 0
 UdpLite: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors InCsumErrors IgnoredMulti
 UdpLite: 0 0 0 0 0 0 0 0" as &[u8];
+        const UNEXPECTED_DATA: &[u8] = b"unexpected data" as &[u8];
+
+        let mut mock_snmp = MOCK_SNMP;
         let stats = parse_udp_stats(&mut mock_snmp).unwrap();
         assert_eq!(stats.out_datagrams, 30);
         assert_eq!(stats.no_ports, 7);
 
-        let mut mock_snmp = b"unexpected data" as &[u8];
+        mock_snmp = UNEXPECTED_DATA;
         let stats = parse_udp_stats(&mut mock_snmp);
+        assert!(stats.is_err());
+    }
+
+    #[test]
+    fn test_parse_net_dev_stats() {
+        const MOCK_DEV: &[u8] =
+b"Inter-|   Receive                                                |  Transmit
+face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+lo: 50     1    0    0    0     0          0         0 100 2    1    0    0     0       0          0
+eno1: 100     1    0    0    0     0          0         0 200 3    2    0    0     0       0          0
+ens4: 400     4    0    1    0     0          0         0 250 5    0    0    0     0       0          0" as &[u8];
+        const UNEXPECTED_DATA: &[u8] = b"un
+expected
+data" as &[u8];
+
+        let mut mock_dev = MOCK_DEV;
+        let stats = parse_net_dev_stats(&mut mock_dev).unwrap();
+        assert_eq!(stats.rx_bytes, 500);
+        assert_eq!(stats.rx_packets, 5);
+        assert_eq!(stats.rx_errs, 0);
+        assert_eq!(stats.rx_drops, 1);
+        assert_eq!(stats.tx_bytes, 450);
+        assert_eq!(stats.tx_packets, 8);
+        assert_eq!(stats.tx_errs, 2);
+        assert_eq!(stats.tx_drops, 0);
+
+        let mut mock_dev = UNEXPECTED_DATA;
+        let stats = parse_net_dev_stats(&mut mock_dev);
         assert!(stats.is_err());
     }
 

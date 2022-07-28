@@ -22,7 +22,7 @@ use {
     log::*,
     rayon::prelude::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
-    solana_measure::measure::Measure,
+    solana_measure::{measure, measure::Measure},
     solana_sdk::{
         clock::{Epoch, Slot, UnixTimestamp},
         deserialize_utils::default_on_eof,
@@ -227,7 +227,22 @@ pub(crate) fn compare_two_serialized_banks(
     Ok(fields1 == fields2)
 }
 
-pub(crate) fn fields_from_streams<R>(
+pub(crate) fn fields_from_stream<R: Read>(
+    serde_style: SerdeStyle,
+    snapshot_stream: &mut BufReader<R>,
+) -> std::result::Result<
+    (
+        BankFieldsToDeserialize,
+        AccountsDbFields<SerializableAccountStorageEntry>,
+    ),
+    Error,
+> {
+    match serde_style {
+        SerdeStyle::Newer => newer::Context::deserialize_bank_fields(snapshot_stream),
+    }
+}
+
+pub(crate) fn fields_from_streams<R: Read>(
     serde_style: SerdeStyle,
     snapshot_streams: &mut SnapshotStreams<R>,
 ) -> std::result::Result<
@@ -236,37 +251,22 @@ pub(crate) fn fields_from_streams<R>(
         SnapshotAccountsDbFields<SerializableAccountStorageEntry>,
     ),
     Error,
->
-where
-    R: Read,
-{
-    let (
-        full_snapshot_bank_fields,
-        full_snapshot_accounts_db_fields,
-        incremental_snapshot_bank_fields,
-        incremental_snapshot_accounts_db_fields,
-    ) = match serde_style {
-        SerdeStyle::Newer => {
-            let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
-                newer::Context::deserialize_bank_fields(snapshot_streams.full_snapshot_stream)?;
-            let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
-                if let Some(ref mut incremental_snapshot_stream) =
-                    snapshot_streams.incremental_snapshot_stream
-                {
-                    let (bank_fields, accounts_db_fields) =
-                        newer::Context::deserialize_bank_fields(incremental_snapshot_stream)?;
-                    (Some(bank_fields), Some(accounts_db_fields))
-                } else {
-                    (None, None)
-                };
-            (
-                full_snapshot_bank_fields,
-                full_snapshot_accounts_db_fields,
-                incremental_snapshot_bank_fields,
-                incremental_snapshot_accounts_db_fields,
-            )
-        }
-    };
+> {
+    let (full_snapshot_bank_fields, full_snapshot_accounts_db_fields) =
+        fields_from_stream(serde_style, snapshot_streams.full_snapshot_stream)?;
+    let incremental_fields = snapshot_streams
+        .incremental_snapshot_stream
+        .as_mut()
+        .map(|stream| fields_from_stream(serde_style, stream))
+        .transpose()?;
+
+    // Option::unzip() not stabilized yet
+    let (incremental_snapshot_bank_fields, incremental_snapshot_accounts_db_fields) =
+        if let Some((bank_fields, accounts_fields)) = incremental_fields {
+            (Some(bank_fields), Some(accounts_fields))
+        } else {
+            (None, None)
+        };
 
     let snapshot_accounts_db_fields = SnapshotAccountsDbFields {
         full_snapshot_accounts_db_fields,
@@ -531,23 +531,142 @@ where
     Ok(bank)
 }
 
-fn reconstruct_single_storage<E>(
+fn reconstruct_single_storage(
     slot: &Slot,
     append_vec_path: &Path,
-    storage_entry: &E,
+    current_len: usize,
     append_vec_id: AppendVecId,
-    new_slot_storage: &mut HashMap<AppendVecId, Arc<AccountStorageEntry>>,
-) -> Result<(), Error>
+) -> io::Result<Arc<AccountStorageEntry>> {
+    let (accounts, num_accounts) = AppendVec::new_from_file(append_vec_path, current_len)?;
+    Ok(Arc::new(AccountStorageEntry::new_existing(
+        *slot,
+        append_vec_id,
+        accounts,
+        num_accounts,
+    )))
+}
+
+fn remap_append_vec_file(
+    slot: Slot,
+    old_append_vec_id: SerializedAppendVecId,
+    append_vec_path: &Path,
+    next_append_vec_id: &AtomicAppendVecId,
+    num_collisions: &AtomicUsize,
+) -> io::Result<(AppendVecId, PathBuf)> {
+    // Remap the AppendVec ID to handle any duplicate IDs that may previously existed
+    // due to full snapshots and incremental snapshots generated from different nodes
+    let (remapped_append_vec_id, remapped_append_vec_path) = loop {
+        let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
+        let remapped_file_name = AppendVec::file_name(slot, remapped_append_vec_id);
+        let remapped_append_vec_path = append_vec_path.parent().unwrap().join(&remapped_file_name);
+
+        // Break out of the loop in the following situations:
+        // 1. The new ID is the same as the original ID.  This means we do not need to
+        //    rename the file, since the ID is the "correct" one already.
+        // 2. There is not a file already at the new path.  This means it is safe to
+        //    rename the file to this new path.
+        //    **DEVELOPER NOTE:**  Keep this check last so that it can short-circuit if
+        //    possible.
+        if old_append_vec_id == remapped_append_vec_id as SerializedAppendVecId
+            || std::fs::metadata(&remapped_append_vec_path).is_err()
+        {
+            break (remapped_append_vec_id, remapped_append_vec_path);
+        }
+
+        // If we made it this far, a file exists at the new path.  Record the collision
+        // and try again.
+        num_collisions.fetch_add(1, Ordering::Relaxed);
+    };
+    // Only rename the file if the new ID is actually different from the original.
+    if old_append_vec_id != remapped_append_vec_id as SerializedAppendVecId {
+        std::fs::rename(append_vec_path, &remapped_append_vec_path)?;
+    }
+
+    Ok((remapped_append_vec_id, remapped_append_vec_path))
+}
+
+fn remap_and_reconstruct_single_storage(
+    slot: Slot,
+    old_append_vec_id: SerializedAppendVecId,
+    current_len: usize,
+    append_vec_path: &Path,
+    next_append_vec_id: &AtomicAppendVecId,
+    num_collisions: &AtomicUsize,
+) -> io::Result<Arc<AccountStorageEntry>> {
+    let (remapped_append_vec_id, remapped_append_vec_path) = remap_append_vec_file(
+        slot,
+        old_append_vec_id,
+        append_vec_path,
+        next_append_vec_id,
+        num_collisions,
+    )?;
+    let storage = reconstruct_single_storage(
+        &slot,
+        &remapped_append_vec_path,
+        current_len,
+        remapped_append_vec_id,
+    )?;
+    Ok(storage)
+}
+
+fn remap_and_reconstruct_slot_storage<E>(
+    slot: Slot,
+    slot_storage: &[E],
+    unpacked_append_vec_map: &UnpackedAppendVecMap,
+    next_append_vec_id: &AtomicAppendVecId,
+    num_collisions: &AtomicUsize,
+) -> Result<HashMap<AppendVecId, Arc<AccountStorageEntry>>, Error>
 where
     E: SerializableStorage,
 {
-    let (accounts, num_accounts) =
-        AppendVec::new_from_file(append_vec_path, storage_entry.current_len())?;
-    let u_storage_entry =
-        AccountStorageEntry::new_existing(*slot, append_vec_id, accounts, num_accounts);
+    slot_storage
+        .iter()
+        .map(|storage_entry| {
+            let file_name = AppendVec::file_name(slot, storage_entry.id());
+            let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("{} not found in unpacked append vecs", file_name),
+                )
+            })?;
 
-    new_slot_storage.insert(append_vec_id, Arc::new(u_storage_entry));
-    Ok(())
+            let new_storage_entry = remap_and_reconstruct_single_storage(
+                slot,
+                storage_entry.id(),
+                storage_entry.current_len(),
+                append_vec_path,
+                next_append_vec_id,
+                num_collisions,
+            )?;
+            Ok((new_storage_entry.append_vec_id(), new_storage_entry))
+        })
+        .collect::<Result<HashMap<AppendVecId, _>, Error>>()
+}
+
+fn remap_and_reconstruct_storages<E>(
+    snapshot_storages: Vec<(Slot, Vec<E>)>,
+    unpacked_append_vec_map: &UnpackedAppendVecMap,
+    next_append_vec_id: &AtomicAppendVecId,
+    num_collisions: &AtomicUsize,
+) -> Result<HashMap<Slot, HashMap<AppendVecId, Arc<AccountStorageEntry>>>, Error>
+where
+    E: SerializableStorage + std::marker::Sync,
+{
+    snapshot_storages
+        .into_par_iter()
+        .map(|(slot, slot_storage)| {
+            Ok((
+                *slot,
+                remap_and_reconstruct_slot_storage(
+                    *slot,
+                    slot_storage,
+                    unpacked_append_vec_map,
+                    next_append_vec_id,
+                    num_collisions,
+                )?,
+            ))
+        })
+        .collect::<Result<HashMap<Slot, _>, Error>>()
 }
 
 /// This struct contains side-info while reconstructing the accounts DB from fields.
@@ -609,64 +728,12 @@ where
     // Remap the deserialized AppendVec paths to point to correct local paths
     let num_collisions = AtomicUsize::new(0);
     let next_append_vec_id = AtomicAppendVecId::new(0);
-    let mut measure_remap = Measure::start("remap");
-    let mut storage = (0..snapshot_storages.len())
-        .into_par_iter()
-        .map(|i| {
-            let (slot, slot_storage) = &snapshot_storages[i];
-            let mut new_slot_storage = HashMap::new();
-            for storage_entry in slot_storage {
-                let file_name = AppendVec::file_name(*slot, storage_entry.id());
-
-                let append_vec_path = unpacked_append_vec_map.get(&file_name).ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::NotFound,
-                        format!("{} not found in unpacked append vecs", file_name),
-                    )
-                })?;
-
-                // Remap the AppendVec ID to handle any duplicate IDs that may previously existed
-                // due to full snapshots and incremental snapshots generated from different nodes
-                let (remapped_append_vec_id, remapped_append_vec_path) = loop {
-                    let remapped_append_vec_id = next_append_vec_id.fetch_add(1, Ordering::AcqRel);
-                    let remapped_file_name = AppendVec::file_name(*slot, remapped_append_vec_id);
-                    let remapped_append_vec_path =
-                        append_vec_path.parent().unwrap().join(&remapped_file_name);
-
-                    // Break out of the loop in the following situations:
-                    // 1. The new ID is the same as the original ID.  This means we do not need to
-                    //    rename the file, since the ID is the "correct" one already.
-                    // 2. There is not a file already at the new path.  This means it is safe to
-                    //    rename the file to this new path.
-                    //    **DEVELOPER NOTE:**  Keep this check last so that it can short-circuit if
-                    //    possible.
-                    if storage_entry.id() == remapped_append_vec_id as SerializedAppendVecId
-                        || std::fs::metadata(&remapped_append_vec_path).is_err()
-                    {
-                        break (remapped_append_vec_id, remapped_append_vec_path);
-                    }
-
-                    // If we made it this far, a file exists at the new path.  Record the collision
-                    // and try again.
-                    num_collisions.fetch_add(1, Ordering::Relaxed);
-                };
-                // Only rename the file if the new ID is actually different from the original.
-                if storage_entry.id() != remapped_append_vec_id as SerializedAppendVecId {
-                    std::fs::rename(append_vec_path, &remapped_append_vec_path)?;
-                }
-
-                reconstruct_single_storage(
-                    slot,
-                    &remapped_append_vec_path,
-                    storage_entry,
-                    remapped_append_vec_id,
-                    &mut new_slot_storage,
-                )?;
-            }
-            Ok((*slot, new_slot_storage))
-        })
-        .collect::<Result<HashMap<Slot, _>, Error>>()?;
-    measure_remap.stop();
+    let (mut storage, measure_remap) = measure!(remap_and_reconstruct_storages(
+        snapshot_storages,
+        &unpacked_append_vec_map,
+        &next_append_vec_id,
+        &num_collisions
+    )?);
 
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized

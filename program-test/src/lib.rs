@@ -9,6 +9,7 @@ use {
     log::*,
     solana_banks_client::start_client,
     solana_banks_server::banks_server::start_local_server,
+    solana_bpf_loader_program::serialization::serialize_parameters,
     solana_program_runtime::{
         compute_budget::ComputeBudget, ic_msg, invoke_context::ProcessInstructionWithContext,
         stable_log, timings::ExecuteTimings,
@@ -24,7 +25,7 @@ use {
         account::{Account, AccountSharedData, ReadableAccount},
         account_info::AccountInfo,
         clock::Slot,
-        entrypoint::{ProgramResult, SUCCESS},
+        entrypoint::{deserialize, ProgramResult, SUCCESS},
         feature_set::FEATURE_NAMES,
         fee_calculator::{FeeCalculator, FeeRateGovernor, DEFAULT_TARGET_LAMPORTS_PER_SIGNATURE},
         genesis_config::{ClusterType, GenesisConfig},
@@ -41,13 +42,12 @@ use {
     solana_vote_program::vote_state::{VoteState, VoteStateVersions},
     std::{
         cell::RefCell,
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         convert::TryFrom,
         fs::File,
         io::{self, Read},
         mem::transmute,
         path::{Path, PathBuf},
-        rc::Rc,
         sync::{
             atomic::{AtomicBool, Ordering},
             Arc, RwLock,
@@ -112,58 +112,20 @@ pub fn builtin_process_instruction(
     );
 
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
-    let deduplicated_indices: HashSet<usize> = instruction_account_indices.clone().collect();
+    let deduplicated_indices: HashSet<usize> = instruction_account_indices.collect();
 
-    // Create copies of the accounts
-    let mut account_copies = deduplicated_indices
-        .iter()
-        .map(|instruction_account_index| {
-            let borrowed_account = instruction_context
-                .try_borrow_instruction_account(transaction_context, *instruction_account_index)?;
-            Ok((
-                *borrowed_account.get_key(),
-                *borrowed_account.get_owner(),
-                borrowed_account.get_lamports(),
-                borrowed_account.get_data().to_vec(),
-            ))
-        })
-        .collect::<Result<Vec<_>, InstructionError>>()?;
+    // Serialize entrypoint parameters with BPF ABI
+    let (mut parameter_bytes, _account_lengths) = serialize_parameters(
+        invoke_context.transaction_context,
+        invoke_context
+            .transaction_context
+            .get_current_instruction_context()?,
+        true,
+    )?;
 
-    // Create shared references to account_copies
-    let account_refs: Vec<_> = account_copies
-        .iter_mut()
-        .map(|(key, owner, lamports, data)| {
-            (
-                key,
-                owner,
-                Rc::new(RefCell::new(lamports)),
-                Rc::new(RefCell::new(data.as_mut())),
-            )
-        })
-        .collect();
-
-    // Create AccountInfos
-    let account_infos = instruction_account_indices
-        .map(|instruction_account_index| {
-            let account_copy_index = deduplicated_indices
-                .iter()
-                .position(|index| *index == instruction_account_index)
-                .unwrap();
-            let (key, owner, lamports, data) = &account_refs[account_copy_index];
-            let borrowed_account = instruction_context
-                .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
-            Ok(AccountInfo {
-                key,
-                is_signer: borrowed_account.is_signer(),
-                is_writable: borrowed_account.is_writable(),
-                lamports: lamports.clone(),
-                data: data.clone(),
-                owner,
-                executable: borrowed_account.is_executable(),
-                rent_epoch: borrowed_account.get_rent_epoch(),
-            })
-        })
-        .collect::<Result<Vec<AccountInfo>, InstructionError>>()?;
+    // Deserialize data back into instruction params
+    let (program_id, account_infos, _input) =
+        unsafe { deserialize(&mut parameter_bytes.as_slice_mut()[0] as *mut u8) };
 
     // Execute the program
     process_instruction(program_id, &account_infos, instruction_data).map_err(|err| {
@@ -173,27 +135,35 @@ pub fn builtin_process_instruction(
     })?;
     stable_log::program_success(&log_collector, program_id);
 
+    // Lookup table for AccountInfo
+    let account_info_map: HashMap<_, _> = account_infos.into_iter().map(|a| (a.key, a)).collect();
+
+    // Re-fetch the instruction context. The previous reference may have been
+    // invalidated due to the `set_invoke_context` in a CPI.
+    let transaction_context = &invoke_context.transaction_context;
+    let instruction_context = transaction_context.get_current_instruction_context()?;
+
     // Commit AccountInfo changes back into KeyedAccounts
-    for (instruction_account_index, (_key, owner, lamports, data)) in deduplicated_indices
-        .into_iter()
-        .zip(account_copies.into_iter())
-    {
-        let mut borrowed_account = instruction_context
-            .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
-        if borrowed_account.get_lamports() != lamports {
-            borrowed_account.set_lamports(lamports)?;
-        }
-        // The redundant check helps to avoid the expensive data comparison if we can
-        match borrowed_account
-            .can_data_be_resized(data.len())
-            .and_then(|_| borrowed_account.can_data_be_changed())
-        {
-            Ok(()) => borrowed_account.set_data(&data)?,
-            Err(err) if borrowed_account.get_data() != data => return Err(err),
-            _ => {}
-        }
-        if borrowed_account.get_owner() != &owner {
-            borrowed_account.set_owner(owner.as_ref())?;
+    for i in deduplicated_indices.into_iter() {
+        let mut borrowed_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, i)?;
+        if borrowed_account.is_writable() {
+            if let Some(account_info) = account_info_map.get(borrowed_account.get_key()) {
+                if borrowed_account.get_lamports() != account_info.lamports() {
+                    borrowed_account.set_lamports(account_info.lamports())?;
+                }
+
+                if borrowed_account
+                    .can_data_be_resized(account_info.data_len())
+                    .is_ok()
+                    && borrowed_account.can_data_be_changed().is_ok()
+                {
+                    borrowed_account.set_data(&account_info.data.borrow())?;
+                }
+                if borrowed_account.get_owner() != account_info.owner {
+                    borrowed_account.set_owner(account_info.owner.as_ref())?;
+                }
+            }
         }
     }
 
@@ -276,6 +246,7 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
             .iter()
             .map(|seeds| Pubkey::create_program_address(seeds, caller).unwrap())
             .collect::<Vec<_>>();
+
         let (instruction_accounts, program_indices) = invoke_context
             .prepare_instruction(instruction, &signers)
             .unwrap();
@@ -363,8 +334,6 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 .unwrap();
             let account_info = &account_infos[account_info_index];
             **account_info.try_borrow_mut_lamports().unwrap() = borrowed_account.get_lamports();
-            let mut data = account_info.try_borrow_mut_data()?;
-            let new_data = borrowed_account.get_data();
             if account_info.owner != borrowed_account.get_owner() {
                 // TODO Figure out a better way to allow the System Program to set the account owner
                 #[allow(clippy::transmute_ptr_to_ptr)]
@@ -373,14 +342,17 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                     unsafe { transmute::<&Pubkey, &mut Pubkey>(account_info.owner) };
                 *account_info_mut = *borrowed_account.get_owner();
             }
-            // TODO: Figure out how to allow the System Program to resize the account data
-            assert!(
-                data.len() == new_data.len(),
-                "Account data resizing not supported yet: {} -> {}. \
-                    Consider making this test conditional on `#[cfg(feature = \"test-bpf\")]`",
-                data.len(),
-                new_data.len()
-            );
+
+            let new_data = borrowed_account.get_data();
+            let new_len = new_data.len();
+
+            // Resize account_info data (grow-only)
+            if account_info.data_len() < new_len {
+                account_info.realloc(new_len, false)?;
+            }
+
+            // Clone the data
+            let mut data = account_info.try_borrow_mut_data()?;
             data.clone_from_slice(new_data);
         }
 
