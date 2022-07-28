@@ -484,6 +484,10 @@ pub mod compact_vote_state_updates {
     solana_sdk::declare_id!("86HpNqzutEZwLcPxS6EHDcMNYWk6ikhteg9un7Y2PBKE");
 }
 
+pub mod sign_repair_requests {
+    solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -599,6 +603,7 @@ lazy_static! {
         (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
         (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
         (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
+        (sign_repair_requests::id(), "sign repair requests #TODO"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

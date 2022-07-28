@@ -1,9 +1,10 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-    crate::packet_hasher::PacketHasher,
+    crate::{packet_hasher::PacketHasher, serve_repair::ServeRepair},
     crossbeam_channel::{unbounded, Sender},
     lru::LruCache,
+    solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::shred::{should_discard_shred, ShredFetchStats},
     solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
     solana_runtime::bank_forks::BankForks,
@@ -33,6 +34,7 @@ impl ShredFetchStage {
         shred_version: u16,
         name: &'static str,
         flags: PacketFlags,
+        repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>)>,
     ) {
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
@@ -61,6 +63,18 @@ impl ShredFetchStage {
                 }
             }
             stats.shred_count += packet_batch.len();
+
+            if let Some((ref udp_socket, ref cluster_info)) = repair_context {
+                debug_assert_eq!(flags, PacketFlags::REPAIR);
+                let (ping_count, ping_err_verify_count) = ServeRepair::handle_repair_response_pings(
+                    udp_socket,
+                    cluster_info,
+                    &mut packet_batch,
+                );
+                stats.ping_count += ping_count;
+                stats.ping_err_verify_count += ping_err_verify_count;
+            }
+
             // Limit shreds to 2 epochs away.
             let max_slot = last_slot + 2 * slots_per_epoch;
             for packet in packet_batch.iter_mut() {
@@ -94,6 +108,7 @@ impl ShredFetchStage {
         shred_version: u16,
         name: &'static str,
         flags: PacketFlags,
+        repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>)>,
     ) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
         let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
@@ -111,7 +126,6 @@ impl ShredFetchStage {
                 )
             })
             .collect();
-
         let modifier_hdl = Builder::new()
             .name("solana-tvu-fetch-stage-packet-modifier".to_string())
             .spawn(move || {
@@ -122,6 +136,7 @@ impl ShredFetchStage {
                     shred_version,
                     name,
                     flags,
+                    repair_context,
                 )
             })
             .unwrap();
@@ -135,6 +150,7 @@ impl ShredFetchStage {
         sender: Sender<PacketBatch>,
         shred_version: u16,
         bank_forks: Arc<RwLock<BankForks>>,
+        cluster_info: Arc<ClusterInfo>,
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
@@ -148,6 +164,7 @@ impl ShredFetchStage {
             shred_version,
             "shred_fetch",
             PacketFlags::empty(),
+            None,
         );
 
         let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
@@ -159,10 +176,11 @@ impl ShredFetchStage {
             shred_version,
             "shred_fetch_tvu_forwards",
             PacketFlags::FORWARDED,
+            None,
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(
-            vec![repair_socket],
+            vec![repair_socket.clone()],
             exit,
             sender,
             recycler,
@@ -170,6 +188,7 @@ impl ShredFetchStage {
             shred_version,
             "shred_fetch_repair",
             PacketFlags::REPAIR,
+            Some((repair_socket, cluster_info)),
         );
 
         tvu_threads.extend(tvu_forwards_threads.into_iter());

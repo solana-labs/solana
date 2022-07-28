@@ -152,6 +152,7 @@ impl Tvu {
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
+            cluster_info.clone(),
             exit,
         );
 

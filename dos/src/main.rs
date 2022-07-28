@@ -49,7 +49,7 @@ use {
         rpc_client::RpcClient,
         tpu_connection::TpuConnection,
     },
-    solana_core::serve_repair::RepairProtocol,
+    solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
         contact_info::ContactInfo,
@@ -64,6 +64,7 @@ use {
         stake,
         system_instruction::{self, SystemInstruction},
         system_program,
+        timing::timestamp,
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -79,13 +80,6 @@ use {
 const SAMPLE_PERIOD_MS: usize = 10_000;
 fn compute_rate_per_second(count: usize) -> usize {
     (count * 1000) / SAMPLE_PERIOD_MS
-}
-
-fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
-    let source = thread_rng().gen_range(0, nodes.len());
-    let mut contact = nodes[source].clone();
-    contact.id = solana_sdk::pubkey::new_rand();
-    contact
 }
 
 /// Provide functionality to generate several types of transactions:
@@ -241,11 +235,11 @@ fn get_target(
     nodes: &[ContactInfo],
     mode: Mode,
     entrypoint_addr: SocketAddr,
-) -> Option<SocketAddr> {
+) -> Option<(Pubkey, SocketAddr)> {
     let mut target = None;
     if nodes.is_empty() {
         // skip-gossip case
-        target = Some(entrypoint_addr);
+        target = Some((solana_sdk::pubkey::new_rand(), entrypoint_addr));
     } else {
         info!("************ NODE ***********");
         for node in nodes {
@@ -257,13 +251,13 @@ fn get_target(
             if node.gossip == entrypoint_addr {
                 info!("{}", node.gossip);
                 target = match mode {
-                    Mode::Gossip => Some(node.gossip),
-                    Mode::Tvu => Some(node.tvu),
-                    Mode::TvuForwards => Some(node.tvu_forwards),
-                    Mode::Tpu => Some(node.tpu),
-                    Mode::TpuForwards => Some(node.tpu_forwards),
-                    Mode::Repair => Some(node.repair),
-                    Mode::ServeRepair => Some(node.serve_repair),
+                    Mode::Gossip => Some((node.id, node.gossip)),
+                    Mode::Tvu => Some((node.id, node.tvu)),
+                    Mode::TvuForwards => Some((node.id, node.tvu_forwards)),
+                    Mode::Tpu => Some((node.id, node.tpu)),
+                    Mode::TpuForwards => Some((node.id, node.tpu_forwards)),
+                    Mode::Repair => Some((node.id, node.repair)),
+                    Mode::ServeRepair => Some((node.id, node.serve_repair)),
                     Mode::Rpc => None,
                 };
                 break;
@@ -500,39 +494,47 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
     } else if params.data_type == DataType::Transaction
         && params.transaction_params.unique_transactions
     {
-        let target = target.expect("should have target");
-        info!("Targeting {}", target);
+        let (_, target_addr) = target.expect("should have target");
+        info!("Targeting {}", target_addr);
         run_dos_transactions(
-            target,
+            target_addr,
             iterations,
             client,
             params.transaction_params,
             params.tpu_use_quic,
         );
     } else {
-        let target = target.expect("should have target");
-        info!("Targeting {}", target);
+        let (target_id, target_addr) = target.expect("should have target");
+        info!("Targeting {}", target_addr);
         let mut data = match params.data_type {
             DataType::RepairHighest => {
                 let slot = 100;
-                let req =
-                    RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-                bincode::serialize(&req).unwrap()
+                let keypair = Keypair::new();
+                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+                let req = RepairProtocol::WindowIndex {
+                    header,
+                    slot,
+                    shred_index: 0,
+                };
+                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
             }
             DataType::RepairShred => {
                 let slot = 100;
-                let req = RepairProtocol::HighestWindowIndexWithNonce(
-                    get_repair_contact(nodes),
+                let keypair = Keypair::new();
+                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+                let req = RepairProtocol::HighestWindowIndex {
+                    header,
                     slot,
-                    0,
-                    0,
-                );
-                bincode::serialize(&req).unwrap()
+                    shred_index: 0,
+                };
+                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
             }
             DataType::RepairOrphan => {
                 let slot = 100;
-                let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
-                bincode::serialize(&req).unwrap()
+                let keypair = Keypair::new();
+                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+                let req = RepairProtocol::Orphan { header, slot };
+                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
             }
             DataType::Random => {
                 vec![0; params.data_size]
@@ -574,7 +576,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             if params.data_type == DataType::Random {
                 thread_rng().fill(&mut data[..]);
             }
-            let res = socket.send_to(&data, target);
+            let res = socket.send_to(&data, target_addr);
             if res.is_err() {
                 error_count += 1;
             }
