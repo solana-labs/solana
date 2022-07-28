@@ -275,29 +275,25 @@ pub struct Task {
 // RunnableQueue, ContendedQueue?
 #[derive(Default)]
 pub struct TaskQueue {
-    map: std::collections::BTreeMap<UniqueWeight, Task>,
-}
-
-struct ContendedQueue {
-    map: std::collections::BTreeMap<UniqueWeight, Task>,
+    tasks: std::collections::BTreeMap<UniqueWeight, Task>,
 }
 
 impl TaskQueue {
     #[inline(never)]
     fn add(&mut self, unique_weight: UniqueWeight, task: Task) {
         //info!("TaskQueue::add(): {:?}", unique_weight);
-        let pre_existed = self.map.insert(unique_weight, task);
+        let pre_existed = self.tasks.insert(unique_weight, task);
         debug_assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
     #[inline(never)]
     fn next_task_unique_weight(&self) -> Option<UniqueWeight> {
-        self.map.last_key_value().map(|e| e.0.clone())
+        self.tasks.last_key_value().map(|e| e.0.clone())
     }
 
     #[inline(never)]
     fn pop_next_task(&mut self) -> Option<(UniqueWeight, Task)> {
-        self.map.pop_last()
+        self.tasks.pop_last()
     }
 }
 
