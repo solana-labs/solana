@@ -308,14 +308,29 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 }
                 continue;
             }
-            error!("haoran merge_slot_list: {}", in_mem.log_rws());
+
+            error!(
+                "haoran merge_slot_list: {}, pk: {}",
+                in_mem.log_rws(),
+                pubkey
+            );
             let mut slot_list = lock.unwrap();
 
+            let mut added = 0;
             for (slot, new_entry) in disk.into_iter() {
                 if !slot_list.iter().any(|(x, _)| x == &slot) {
                     slot_list.push((slot, new_entry));
+                    added += 1;
                 }
             }
+
+            error!(
+                "haoran merge_slot_list complete: {}, pk: {}, added: {}, len: {}",
+                in_mem.log_rws(),
+                pubkey,
+                added,
+                slot_list.len()
+            );
 
             in_mem.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:296");
             break;

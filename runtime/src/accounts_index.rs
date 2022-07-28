@@ -296,24 +296,39 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         let k = format!("{}:{:?}", s, thread::current().id());
         let mut m = self.slot_list_readers.write().unwrap();
 
-        assert!(m.contains(&k));
-        let v = m.entry(k).or_insert(0);
-        *v -= 1;
+        if !m.contains(&k) {
+            panic!("pop_slot_reader that did not exist! {}", k);
+        } else {
+            let v = m.entry(k).or_insert(0);
+            if *v < 1 {
+                panic!("pop_slot_reader no count {}", v);
+            } else {
+                *v -= 1;
+            }
+        }
     }
 
     pub fn push_slot_list_writer(&self, s: &str) {
         let k = format!("{}:{:?}", s, thread::current().id());
         let mut m = self.slot_list_writers.write().unwrap();
-        let v = m.entry(k).or_insert(1);
+        let v = m.entry(k).or_insert(0);
         *v += 1;
     }
 
     pub fn pop_slot_list_writer(&self, s: &str) {
         let k = format!("{}:{:?}", s, thread::current().id());
         let mut m = self.slot_list_writers.write().unwrap();
-        assert!(m.contains(&k));
-        let v = m.entry(k).or_insert(1);
-        *v -= 1;
+
+        if !m.contains(&k) {
+            panic!("pop slot_writer that did not exist! {}", k);
+        } else {
+            let v = m.entry(k).or_insert(0);
+            if *v < 1 {
+                panic!("pop_slot_reader no count {}", v);
+            } else {
+                *v -= 1;
+            }
+        }
     }
 
     pub fn log_rws(&self) -> String {
