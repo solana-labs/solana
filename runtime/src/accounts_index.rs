@@ -324,7 +324,7 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         } else {
             let v = m.entry(k).or_insert(0);
             if *v < 1 {
-                panic!("pop_slot_reader no count {}", v);
+                panic!("pop_slot_writer no count {}", v);
             } else {
                 *v -= 1;
             }
