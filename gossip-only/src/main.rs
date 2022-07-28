@@ -115,15 +115,15 @@ fn parse_matches() -> ArgMatches<'static> {
         //         .validator(is_port)
         //         .help("Gossip port number for the node"),
         // )
-        // .arg(
-        //     clap::Arg::with_name("gossip_host")
-        //         .long("gossip-host")
-        //         .value_name("HOST")
-        //         .takes_value(true)
-        //         .validator(solana_net_utils::is_host)
-        //         .help("Gossip DNS name or IP address for the node to advertise in gossip \
-        //                [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
-        // )
+        .arg(
+            Arg::with_name("gossip_host")
+                .long("gossip-host")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .help("Gossip DNS name or IP address for the node to advertise in gossip \
+                       [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+        )
         // .arg(
         //     Arg::with_name("timeout")
         //         .long("timeout")
@@ -150,6 +150,31 @@ fn parse_matches() -> ArgMatches<'static> {
 //         })
 //     })
 // }
+
+fn parse_gossip_host(matches: &ArgMatches, entrypoint_addr: Option<SocketAddr>) -> IpAddr {
+    matches
+        .value_of("gossip_host")
+        .map(|gossip_host| {
+            solana_net_utils::parse_host(gossip_host).unwrap_or_else(|e| {
+                eprintln!("failed to parse gossip-host: {}", e);
+                exit(1);
+            })
+        })
+        .unwrap_or_else(|| {
+            if let Some(entrypoint_addr) = entrypoint_addr {
+                solana_net_utils::get_public_ip_addr(&entrypoint_addr).unwrap_or_else(|err| {
+                    eprintln!(
+                        "Failed to contact cluster entrypoint {}: {}",
+                        entrypoint_addr, err
+                    );
+                    exit(1);
+                })
+            } else {
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
+            }
+        })
+}
+
 
 pub fn main() {
     solana_logger::setup_with_default("info");
@@ -284,7 +309,8 @@ pub fn main() {
     });
 
     let mut gossip_threads: Vec<GossipService> = Vec::new();
-    let gossip_host = entrypoint_addrs[0].ip();
+    let gossip_host = parse_gossip_host(matches, entrypoint_addr);
+    // let gossip_host = entrypoint_addrs[0].ip();
     let gossip_addr = SocketAddr::new(
         gossip_host,
         solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
