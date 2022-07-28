@@ -236,6 +236,25 @@ impl RentDebit {
     }
 }
 
+/// Incremental snapshots only calculate their accounts hash based on the account changes WITHIN the incremental slot range.
+/// So, we need to keep track of the full snapshot expected accounts hash results.
+/// We also need to keep track of the hash and capitalization specific to the incremental snapshot slot range.
+/// The capitalization we calculate for the incremental slot will NOT be consistent with the bank's capitalization.
+/// It is not feasible to calculate a capitalization delta that is correct given just incremental slots account data and the full snapshot's capitalization.
+#[derive(Serialize, Deserialize, AbiExample, Clone, Debug, Default, PartialEq, Eq)]
+pub struct BankIncrementalSnapshotPersistence {
+    /// slot of full snapshot
+    pub full_slot: Slot,
+    /// accounts hash from the full snapshot
+    pub full_hash: Hash,
+    /// capitalization from the full snapshot
+    pub full_capitalization: u64,
+    /// hash of the accounts in the incremental snapshot slot range, including zero-lamport accounts
+    pub incremental_hash: Hash,
+    /// capitalization of the accounts in the incremental snapshot slot range
+    pub incremental_capitalization: u64,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RentDebits(HashMap<Pubkey, RentDebit>);
 impl RentDebits {
@@ -976,6 +995,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
+    pub(crate) incremental_snapshot_hash: Option<BankIncrementalSnapshotPersistence>,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -1083,6 +1103,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_on_chain: _,
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
+            incremental_snapshot_hash: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this ParitalEq is accordingly updated.
@@ -1336,6 +1357,8 @@ pub struct Bank {
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
+
+    pub incremental_snapshot_hash: Option<BankIncrementalSnapshotPersistence>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1466,6 +1489,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
+            incremental_snapshot_hash: None,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
@@ -1765,6 +1789,7 @@ impl Bank {
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
+            incremental_snapshot_hash: None,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc,
             status_cache,
@@ -2126,6 +2151,7 @@ impl Bank {
         }
         let feature_set = new();
         let mut bank = Self {
+            incremental_snapshot_hash: fields.incremental_snapshot_hash,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: bank_rc,
             status_cache: new(),
