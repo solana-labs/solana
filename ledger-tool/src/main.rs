@@ -334,7 +334,7 @@ fn output_slot(
             }
         }
         t1.join().unwrap();
-        t2.join().unwrap();
+        handles.into_iter().for_each(|t| t.join().unwrap());
         t3.join().unwrap();
 
         output_slot_rewards(blockstore, slot, method);
