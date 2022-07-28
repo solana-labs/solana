@@ -596,9 +596,6 @@ impl ScheduleStage {
                         trace!("recv from previous");
                         let weighted_tx = weighted_tx.unwrap();
                         Self::register_runnable_task(weighted_tx, runnable_queue);
-                        if maybe_ee.is_none() {
-                            maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-                        }
                     }
                     send(to_execute_substage, ee) -> res => {
                         trace!("send to execute");
@@ -611,10 +608,6 @@ impl ScheduleStage {
 
                         Self::commit_result(&mut processed_execution_environment, address_book);
 
-                        if maybe_ee.is_none() {
-                            maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-                        }
-
                         // async-ly propagate the result to rpc subsystems
                         // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                         to_next_stage.send(processed_execution_environment).unwrap();
@@ -626,9 +619,7 @@ impl ScheduleStage {
                         trace!("recv from previous");
                         let weighted_tx = weighted_tx.unwrap();
                         Self::register_runnable_task(weighted_tx, runnable_queue);
-                        if maybe_ee.is_none() {
-                            maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-                        }
+                        maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                     }
                     recv(from_execute_substage) -> processed_execution_environment => {
                         trace!("recv from execute");
@@ -636,9 +627,7 @@ impl ScheduleStage {
 
                         Self::commit_result(&mut processed_execution_environment, address_book);
 
-                        if maybe_ee.is_none() {
-                            maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-                        }
+                        maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
 
                         // async-ly propagate the result to rpc subsystems
                         // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
