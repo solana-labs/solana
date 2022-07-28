@@ -264,7 +264,8 @@ fn output_slot(
             );
         })
         .unwrap();
-    let handles = (0..10).map(|thx| {
+    let lane_count = std::env::var("EXECUTION_LANE_COUNT").unwrap_or(format!("{}", std::thread::available_parallelism().unwrap())).parse().unwrap();
+    let handles = (0..lane_count).map(|thx| {
         let pre_execute_env_receiver = pre_execute_env_receiver.clone();
         let post_execute_env_sender = post_execute_env_sender.clone();
         let t2 = std::thread::Builder::new()
