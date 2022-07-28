@@ -422,7 +422,8 @@ pub fn main() {
             let exit_gossip = Arc::new(AtomicBool::new(false));
             let gossip_service = GossipService::new(
                 &cluster_info,
-                Some(bank_forks.clone()),
+                // Some(bank_forks.clone()),
+                None,
                 node.sockets.gossip,
                 None,
                 true, //should check dup instance
