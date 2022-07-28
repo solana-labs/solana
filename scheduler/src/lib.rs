@@ -315,17 +315,17 @@ fn attempt_lock_for_execution<'a>(
     let chained_iter = writable_lock_iter.chain(readonly_lock_iter);
 
     let mut all_succeeded_so_far = true;
-    let ll = chained_iter
-        .map(|(a, usage)| {
-            let a = address_book.attempt_lock_address(from_runnable, unique_weight, **a, usage);
-            if all_succeeded_so_far && a.is_failed() {
+    let lock_attempts = chained_iter
+        .map(|(&&address, usage)| {
+            let attempt = address_book.attempt_lock_address(from_runnable, unique_weight, address, usage);
+            if all_succeeded_so_far && attempt.is_failed() {
                 all_succeeded_so_far = false;
             }
-            a
+            attempt
         })
         .collect::<Vec<_>>();
 
-    (all_succeeded_so_far, ll)
+    (all_succeeded_so_far, lock_attempts)
 }
 
 pub struct ScheduleStage {}
