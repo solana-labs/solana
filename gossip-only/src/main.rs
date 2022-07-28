@@ -12,7 +12,6 @@ use {
         cluster_info::{ClusterInfo, Node},
         contact_info::ContactInfo,
         gossip_service::GossipService,
-        // gossip_service::discover,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_runtime::{
@@ -55,14 +54,6 @@ fn parse_matches() -> ArgMatches<'static> {
     App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
-        // .setting(AppSettings::SubcommandRequiredElseHelp)
-        // .arg(
-        //     Arg::with_name("allow_private_addr")
-        //         .long("allow-private-addr")
-        //         .takes_value(false)
-        //         .help("Allow contacting private ip addresses")
-        //         .hidden(true),
-        // )
         .arg(
             Arg::with_name("shred_version")
                 .long("shred-version")
@@ -124,14 +115,6 @@ fn parse_matches() -> ArgMatches<'static> {
                 .help("Gossip DNS name or IP address for the node to advertise in gossip \
                        [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
         )
-        // .arg(
-        //     Arg::with_name("timeout")
-        //         .long("timeout")
-        //         .value_name("SECONDS")
-        //         .takes_value(true)
-        //         .default_value("15")
-        //         .help("Timeout in seconds"),
-        // )
         .arg(
             Arg::with_name("bootstrap")
                 .long("bootstrap")
@@ -209,23 +192,8 @@ pub fn main() {
         exit(0);
     }
 
-    // let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
-    // let entrypoint_addr = parse_entrypoint(matches);
-    // let timeout = value_t_or_exit!(matches, "timeout", u64);
     let shred_version =
         value_t!(matches, "shred_version", u16).unwrap_or_else(|_| DEFAULT_SHRED_VERSION);
-
-    // let (_all_peers, validators) = discover(
-    //     None, // keypair
-    //     entrypoint_addr.as_ref(),
-    //     Some(1), // num_nodes
-    //     Duration::from_secs(timeout),
-    //     None,                     // find_node_by_pubkey
-    //     entrypoint_addr.as_ref(), // find_node_by_gossip_addr
-    //     None,                     // my_gossip_addr
-    //     shred_version,
-    //     socket_addr_space,
-    // )?;
 
     // Read keys from file and spin up gossip nodes
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
@@ -311,7 +279,6 @@ pub fn main() {
     let mut gossip_threads: Vec<GossipService> = Vec::new();
     let entrypoint_addr = parse_entrypoint(&matches);
     let gossip_host = parse_gossip_host(&matches, entrypoint_addr);
-    // let gossip_host = entrypoint_addrs[0].ip();
     let gossip_addr = SocketAddr::new(
         gossip_host,
         value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
