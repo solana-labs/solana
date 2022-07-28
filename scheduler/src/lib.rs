@@ -297,7 +297,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn pop_next_task(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
+    fn last_entry_to_execute(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
         self.tasks.last_entry()
     }
 }
@@ -402,7 +402,7 @@ impl ScheduleStage {
         ) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
                 if weight_from_contended < weight_from_runnable {
-                    runnable_queue.pop_next_task().map(|e| (Some(contended_queue), e))
+                    runnable_queue.last_entry_to_execute().map(|e| (Some(contended_queue), e))
                 } else if weight_from_contended > weight_from_runnable {
                     match contended_queue.entry_to_execute(weight_from_contended) {
                         Entry::Occupied(entry) => {
@@ -425,7 +425,7 @@ impl ScheduleStage {
                 }
             }
             (None, Some(weight_from_runnable)) => {
-                runnable_queue.pop_next_task().map(|e| (Some(contended_queue), e))
+                runnable_queue.last_entry_to_execute().map(|e| (Some(contended_queue), e))
             }
             (None, None) => None,
         }
