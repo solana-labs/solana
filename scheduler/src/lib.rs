@@ -404,7 +404,12 @@ impl ScheduleStage {
                 } else if weight_from_contended > weight_from_runnable {
                     //let task = contended_queue.remove_to_execute(&weight_from_contended);
                     //Some((false, weight_from_contended, task))
-                    contended_queue.entry_to_execute(weight_from_contended)
+                    match contended_queue.entry_to_execute(weight_from_contended) {
+                        Entry::Occupied(mut entry) => {
+                            entry
+                        }
+                        _ => { panic!() }
+                    }
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
