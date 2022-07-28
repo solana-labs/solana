@@ -240,7 +240,7 @@ fn output_slot(
     // this should be target number of saturated cpu cores
     let lane_count = std::env::var("EXECUTION_LANE_COUNT")
         .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
-        .parse()
+        .parse::<usize>()
         .unwrap();
     let lane_channel_factor = 10;
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
