@@ -292,11 +292,6 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn next_task_unique_weight(&self) -> Option<UniqueWeight> {
-        self.tasks.last_key_value().map(|e| e.0.clone())
-    }
-
-    #[inline(never)]
     fn last_entry_to_execute(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
         self.tasks.last_entry()
     }
@@ -398,9 +393,11 @@ impl ScheduleStage {
 
         match (
             Self::get_weight_from_contended(address_book),
-            runnable_queue.next_task_unique_weight(),
+            runnable_queue.last_entry_to_execute(),
         ) {
-            (Some(weight_from_contended), Some(weight_from_runnable)) => {
+            (Some(weight_from_contended), Some(last_entry)) => {
+                let weight_from_runnable = last_entry.key();
+
                 if weight_from_contended < weight_from_runnable {
                     runnable_queue.last_entry_to_execute().map(|e| (Some(contended_queue), e))
                 } else if weight_from_contended > weight_from_runnable {
