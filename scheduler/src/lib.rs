@@ -450,7 +450,10 @@ impl ScheduleStage {
                     lock_attempts,
                     from_runnable,
                 );
-                contended_queue.add_to_schedule(*unique_weight, next_task);
+                if from_runnable {
+                    let next_task = entry.remove();
+                    contended_queue.add_to_schedule(*unique_weight, next_task);
+                }
                 continue;
             }
 
