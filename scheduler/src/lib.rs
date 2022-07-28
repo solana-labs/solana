@@ -394,6 +394,8 @@ impl ScheduleStage {
         contended_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(Option<&'a mut TaskQueue>, std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, Task>)> {
+        use std::collections::btree_map::Entry;
+
         match (
             Self::get_weight_from_contended(address_book),
             runnable_queue.next_task_unique_weight(),
@@ -402,7 +404,6 @@ impl ScheduleStage {
                 if weight_from_contended < weight_from_runnable {
                     runnable_queue.pop_next_task().map(|e| (Some(contended_queue), e))
                 } else if weight_from_contended > weight_from_runnable {
-                    use std::collections::btree_map::Entry;
                     match contended_queue.entry_to_execute(weight_from_contended) {
                         Entry::Occupied(mut entry) => {
                             Some((None, entry))
@@ -416,9 +417,12 @@ impl ScheduleStage {
                 }
             }
             (Some(weight_from_contended), None) => {
-                //let task = contended_queue.remove_to_execute(&weight_from_contended);
-                //Some((false, weight_from_contended, task))
-                panic!();
+                match contended_queue.entry_to_execute(weight_from_contended) {
+                    Entry::Occupied(mut entry) => {
+                        Some((None, entry))
+                    },
+                    Entry::Vacant(_entry) => { unreachable!() },
+                }
             }
             (None, Some(weight_from_runnable)) => {
                 runnable_queue.pop_next_task().map(|e| (Some(contended_queue), e))
