@@ -392,10 +392,21 @@ impl ScheduleStage {
         use std::collections::btree_map::Entry;
 
         match (
-            Self::get_weight_from_contended(address_book),
             runnable_queue.heaviest_entry_to_execute(),
+            Self::get_weight_from_contended(address_book),
         ) {
-            (Some(weight_from_contended), Some(heaviest_runnable_entry)) => {
+            (Some(heaviest_runnable_entry), None) => {
+                Some((Some(contended_queue), heaviest_runnable_entry))
+            },
+            (None, Some(weight_from_contended)) => {
+                match contended_queue.entry_to_execute(weight_from_contended) {
+                    Entry::Occupied(entry) => {
+                        Some((None, entry))
+                    },
+                    Entry::Vacant(_entry) => { unreachable!() },
+                }
+            },
+            (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
 
                 if &weight_from_contended < weight_from_runnable {
@@ -412,18 +423,7 @@ impl ScheduleStage {
                         "identical unique weights shouldn't exist in both runnable and contended"
                     )
                 }
-            }
-            (Some(weight_from_contended), None) => {
-                match contended_queue.entry_to_execute(weight_from_contended) {
-                    Entry::Occupied(entry) => {
-                        Some((None, entry))
-                    },
-                    Entry::Vacant(_entry) => { unreachable!() },
-                }
-            }
-            (None, Some(heaviest_runnable_entry)) => {
-                Some((Some(contended_queue), heaviest_runnable_entry))
-            }
+            },
             (None, None) => None,
         }
     }
