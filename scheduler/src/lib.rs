@@ -412,9 +412,7 @@ impl ScheduleStage {
             (None, Some(weight_from_contended)) => {
                 match contended_queue.entry_to_execute(weight_from_contended) {
                     Entry::Occupied(entry) => Some((None, entry)),
-                    Entry::Vacant(_entry) => {
-                        unreachable!()
-                    }
+                    Entry::Vacant(_entry) => unreachable!(),
                 }
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
@@ -425,9 +423,7 @@ impl ScheduleStage {
                 } else if &weight_from_contended > weight_from_runnable {
                     match contended_queue.entry_to_execute(weight_from_contended) {
                         Entry::Occupied(entry) => Some((None, entry)),
-                        Entry::Vacant(_entry) => {
-                            unreachable!()
-                        }
+                        Entry::Vacant(_entry) => unreachable!(),
                     }
                 } else {
                     unreachable!(
