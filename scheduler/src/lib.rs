@@ -590,14 +590,14 @@ impl ScheduleStage {
         loop {
             trace!("schedule_once!");
 
-            if let Some(ee) = maybe_ee {
+            if maybe_ee.is_some() {
                 select! {
                     recv(from_previous_stage) -> weighted_tx => {
                         trace!("recv from previous");
                         let weighted_tx = weighted_tx.unwrap();
                         Self::register_runnable_task(weighted_tx, runnable_queue);
                     }
-                    send(to_execute_substage, ee) -> res => {
+                    send(to_execute_substage, maybe_ee.unwrap()) -> res => {
                         trace!("send to execute");
                         res.unwrap();
                         maybe_ee = None;
