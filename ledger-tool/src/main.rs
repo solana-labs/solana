@@ -280,7 +280,7 @@ fn output_slot(
                     let current_thread_name = std::thread::current().name().unwrap().to_string();
 
                     for step in 0.. {
-                        let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
+                        let ee = pre_execute_env_receiver.recv().unwrap();
 
                         /*
                         let mut process_message_time = Measure::start("process_message_time");
