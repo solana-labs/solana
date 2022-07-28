@@ -405,7 +405,7 @@ impl ScheduleStage {
                     runnable_queue.pop_next_task().map(|e| (Some(contended_queue), e))
                 } else if weight_from_contended > weight_from_runnable {
                     match contended_queue.entry_to_execute(weight_from_contended) {
-                        Entry::Occupied(mut entry) => {
+                        Entry::Occupied(entry) => {
                             Some((None, entry))
                         },
                         Entry::Vacant(_entry) => { unreachable!() },
@@ -418,7 +418,7 @@ impl ScheduleStage {
             }
             (Some(weight_from_contended), None) => {
                 match contended_queue.entry_to_execute(weight_from_contended) {
-                    Entry::Occupied(mut entry) => {
+                    Entry::Occupied(entry) => {
                         Some((None, entry))
                     },
                     Entry::Vacant(_entry) => { unreachable!() },
