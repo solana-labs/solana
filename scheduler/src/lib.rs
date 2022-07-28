@@ -337,7 +337,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
     ) {
         // manage randomness properly for future scheduling determinism
-        let mut rng = rand::thread_rng();
+        //let mut rng = rand::thread_rng();
 
         //let ix = 23;
         //let tx = bank
@@ -371,21 +371,19 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
-        let mut heaviest_by_address: Option<UniqueWeight> = None;
+        let mut heaviest_weight: UniqueWeight = UniqueWeight::default();
+
         //info!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = Self::get_newly_u_u_w(address, &address_book);
-            if let Some(&uw) = newly_uncontended_unique_weights.last() {
-                if let Some(c) = heaviest_by_address {
-                    if uw > c {
-                        heaviest_by_address = Some(uw);
-                    }
-                } else {
-                    heaviest_by_address = Some(uw);
+            if let Some(&weight) = newly_uncontended_unique_weights.last() {
+                if weight > heaviest_weight {
+                    heaviest_weight = weight;
                 }
             }
         }
-        heaviest_by_address
+
+        heaviest_weight
     }
 
     #[inline(never)]
