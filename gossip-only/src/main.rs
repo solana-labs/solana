@@ -11,6 +11,7 @@ use {
         cluster_info::{ClusterInfo, Node},
         contact_info::ContactInfo,
         gossip_service::GossipService,
+        gossip_service::discover,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_runtime::{
@@ -53,6 +54,14 @@ fn parse_matches() -> ArgMatches<'static> {
     App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .arg(
+            Arg::with_name("allow_private_addr")
+                .long("allow-private-addr")
+                .takes_value(false)
+                .help("Allow contacting private ip addresses")
+                .hidden(true),
+        )
         .arg(
             Arg::with_name("shred_version")
                 .long("shred-version")
@@ -97,7 +106,41 @@ fn parse_matches() -> ArgMatches<'static> {
                 .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this entrypoint"),
         )
+        .arg(
+            clap::Arg::with_name("gossip_port")
+                .long("gossip-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .validator(is_port)
+                .help("Gossip port number for the node"),
+        )
+        .arg(
+            clap::Arg::with_name("gossip_host")
+                .long("gossip-host")
+                .value_name("HOST")
+                .takes_value(true)
+                .validator(solana_net_utils::is_host)
+                .help("Gossip DNS name or IP address for the node to advertise in gossip \
+                       [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+        )
+        .arg(
+            Arg::with_name("timeout")
+                .long("timeout")
+                .value_name("SECONDS")
+                .takes_value(true)
+                .default_value("15")
+                .help("Timeout in seconds"),
+        )
         .get_matches()
+}
+
+fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
+    matches.value_of("entrypoint").map(|entrypoint| {
+        solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
+            eprintln!("failed to parse entrypoint address: {}", e);
+            exit(1);
+        })
+    })
 }
 
 pub fn main() {
@@ -133,6 +176,24 @@ pub fn main() {
         exit(0);
     }
 
+    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
+    let entrypoint_addr = parse_entrypoint(matches);
+    let timeout = value_t_or_exit!(matches, "timeout", u64);
+    let shred_version =
+        value_t!(matches, "shred_version", u16).unwrap_or_else(|_| DEFAULT_SHRED_VERSION);
+
+    let (_all_peers, validators) = discover(
+        None, // keypair
+        entrypoint_addr.as_ref(),
+        Some(1), // num_nodes
+        Duration::from_secs(timeout),
+        None,                     // find_node_by_pubkey
+        entrypoint_addr.as_ref(), // find_node_by_gossip_addr
+        None,                     // my_gossip_addr
+        shred_version,
+        socket_addr_space,
+    )?;
+
     // Read keys from file and spin up gossip nodes
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
     let cluster_lamports = DEFAULT_CLUSTER_LAMPORTS;
@@ -144,8 +205,7 @@ pub fn main() {
     let dynamic_port_range = solana_net_utils::parse_port_range(default_dynamic_port_range)
         .expect("invalid dynamic_port_range");
 
-    let shred_version =
-        value_t!(matches, "shred_version", u16).unwrap_or_else(|_| DEFAULT_SHRED_VERSION);
+
 
     //Entrypoint to join Gossip Cluster
     let entrypoint_addrs = values_t!(matches, "entrypoint", String)
