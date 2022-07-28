@@ -4677,6 +4677,7 @@ version = "1.11.4"
 dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
+ "itertools",
  "log",
  "rayon",
  "serde_json",

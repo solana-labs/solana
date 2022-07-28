@@ -32,6 +32,7 @@ solana-sdk = { path = "../sdk", version = "=1.11.4" }
 solana-streamer = { path = "../streamer", version = "=1.11.4" }
 solana-version = { path = "../version", version = "=1.11.4" }
 thiserror = "1.0"
+itertools = "0.10.3"
 
 [dev-dependencies]
 serial_test = "0.8.0"
