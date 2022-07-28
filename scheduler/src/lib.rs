@@ -141,30 +141,26 @@ impl AddressBook {
                         page.current_usage = CurrentUsage::renew(requested_usage);
                         LockAttempt::success(address, requested_usage)
                     }
-                    CurrentUsage::Readonly(ref mut count) => {
-                        match &requested_usage {
-                            RequestedUsage::Readonly => {
-                                *count += 1;
-                                LockAttempt::success(address, requested_usage)
-                            }
-                            RequestedUsage::Writable => {
-                                if from_runnable {
-                                    Self::remember_new_contended_unique_weight(page, unique_weight);
-                                }
-                                LockAttempt::failure(address, requested_usage)
-                            }
+                    CurrentUsage::Readonly(ref mut count) => match &requested_usage {
+                        RequestedUsage::Readonly => {
+                            *count += 1;
+                            LockAttempt::success(address, requested_usage)
                         }
-                    }
-                    CurrentUsage::Writable => {
-                        match &requested_usage {
-                            RequestedUsage::Readonly | RequestedUsage::Writable => {
-                                if from_runnable {
-                                    Self::remember_new_contended_unique_weight(page, unique_weight);
-                                }
-                                LockAttempt::failure(address, requested_usage)
+                        RequestedUsage::Writable => {
+                            if from_runnable {
+                                Self::remember_new_contended_unique_weight(page, unique_weight);
                             }
+                            LockAttempt::failure(address, requested_usage)
                         }
-                    }
+                    },
+                    CurrentUsage::Writable => match &requested_usage {
+                        RequestedUsage::Readonly | RequestedUsage::Writable => {
+                            if from_runnable {
+                                Self::remember_new_contended_unique_weight(page, unique_weight);
+                            }
+                            LockAttempt::failure(address, requested_usage)
+                        }
+                    },
                 }
             }
         }
@@ -287,12 +283,17 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn entry_to_execute(&mut self, unique_weight: UniqueWeight) -> std::collections::btree_map::Entry<'_, UniqueWeight, Task> {
+    fn entry_to_execute(
+        &mut self,
+        unique_weight: UniqueWeight,
+    ) -> std::collections::btree_map::Entry<'_, UniqueWeight, Task> {
         self.tasks.entry(unique_weight)
     }
 
     #[inline(never)]
-    fn heaviest_entry_to_execute(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
+    fn heaviest_entry_to_execute(
+        &mut self,
+    ) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
         self.tasks.last_entry()
     }
 }
@@ -306,14 +307,21 @@ fn attempt_lock_for_execution<'a>(
     locks: &'a TransactionAccountLocks,
 ) -> (bool, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
-    let writable_lock_iter = locks.writable.iter().map(|address| (address, RequestedUsage::Writable));
-    let readonly_lock_iter = locks.readonly.iter().map(|address| (address, RequestedUsage::Readonly));
+    let writable_lock_iter = locks
+        .writable
+        .iter()
+        .map(|address| (address, RequestedUsage::Writable));
+    let readonly_lock_iter = locks
+        .readonly
+        .iter()
+        .map(|address| (address, RequestedUsage::Readonly));
     let chained_iter = writable_lock_iter.chain(readonly_lock_iter);
 
     let mut all_succeeded_so_far = true;
     let lock_attempts = chained_iter
         .map(|(&&address, usage)| {
-            let attempt = address_book.attempt_lock_address(from_runnable, unique_weight, address, usage);
+            let attempt =
+                address_book.attempt_lock_address(from_runnable, unique_weight, address, usage);
             if all_succeeded_so_far && attempt.is_failed() {
                 all_succeeded_so_far = false;
             }
@@ -388,7 +396,10 @@ impl ScheduleStage {
         runnable_queue: &'a mut TaskQueue,
         contended_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
-    ) -> Option<(Option<&'a mut TaskQueue>, std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, Task>)> {
+    ) -> Option<(
+        Option<&'a mut TaskQueue>,
+        std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, Task>,
+    )> {
         use std::collections::btree_map::Entry;
 
         match (
@@ -397,15 +408,15 @@ impl ScheduleStage {
         ) {
             (Some(heaviest_runnable_entry), None) => {
                 Some((Some(contended_queue), heaviest_runnable_entry))
-            },
+            }
             (None, Some(weight_from_contended)) => {
                 match contended_queue.entry_to_execute(weight_from_contended) {
-                    Entry::Occupied(entry) => {
-                        Some((None, entry))
-                    },
-                    Entry::Vacant(_entry) => { unreachable!() },
+                    Entry::Occupied(entry) => Some((None, entry)),
+                    Entry::Vacant(_entry) => {
+                        unreachable!()
+                    }
                 }
-            },
+            }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
 
@@ -413,17 +424,17 @@ impl ScheduleStage {
                     Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if &weight_from_contended > weight_from_runnable {
                     match contended_queue.entry_to_execute(weight_from_contended) {
-                        Entry::Occupied(entry) => {
-                            Some((None, entry))
-                        },
-                        Entry::Vacant(_entry) => { unreachable!() },
+                        Entry::Occupied(entry) => Some((None, entry)),
+                        Entry::Vacant(_entry) => {
+                            unreachable!()
+                        }
                     }
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
                     )
                 }
-            },
+            }
             (None, None) => None,
         }
     }
@@ -446,8 +457,13 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (is_success, lock_attempts) =
-                attempt_lock_for_execution(from_runnable, address_book, &entry.key(), &message_hash, &locks);
+            let (is_success, lock_attempts) = attempt_lock_for_execution(
+                from_runnable,
+                address_book,
+                &entry.key(),
+                &message_hash,
+                &locks,
+            );
 
             if !is_success {
                 //info!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
@@ -457,7 +473,9 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 if from_runnable {
-                    reborrowed_contended_queue.unwrap().add_to_schedule(*entry.key(), entry.remove());
+                    reborrowed_contended_queue
+                        .unwrap()
+                        .add_to_schedule(*entry.key(), entry.remove());
                 }
                 continue;
             }
