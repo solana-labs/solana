@@ -20,7 +20,7 @@ use {
 pub struct ExecutionEnvironment {
     lock_attempts: Vec<LockAttempt>,
     //accounts: Vec<i8>,
-    cu: usize,
+    pub cu: usize,
     pub task: Task,
 }
 
