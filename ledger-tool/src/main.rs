@@ -300,7 +300,7 @@ fn output_slot(
             })
             .unwrap();
         t2
-    }.collect::<Vec<_>>();
+    }).collect::<Vec<_>>();
 
     let t3 = std::thread::Builder::new()
         .name("sol-consumer".to_string())
