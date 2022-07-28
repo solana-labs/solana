@@ -429,7 +429,7 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (from_runnable, unique_weight, next_task) in
+        for (from_runnable, entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             let message_hash = next_task.tx.message_hash();
