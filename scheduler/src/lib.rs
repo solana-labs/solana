@@ -400,7 +400,7 @@ impl ScheduleStage {
         ) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
                 if weight_from_contended < weight_from_runnable {
-                    runnable_queue.pop_next_task().map(|e| (contended_queue, true e))
+                    runnable_queue.pop_next_task().map(|e| (contended_queue, true, e))
                 } else if weight_from_contended > weight_from_runnable {
                     use std::collections::btree_map::Entry;
                     match contended_queue.entry_to_execute(weight_from_contended) {
