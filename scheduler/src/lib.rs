@@ -292,7 +292,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn last_entry_to_execute(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
+    fn heaviest_entry_to_execute(&mut self) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
         self.tasks.last_entry()
     }
 }
@@ -393,13 +393,13 @@ impl ScheduleStage {
 
         match (
             Self::get_weight_from_contended(address_book),
-            runnable_queue.last_entry_to_execute(),
+            runnable_queue.heaviest_entry_to_execute(),
         ) {
-            (Some(weight_from_contended), Some(last_entry)) => {
-                let weight_from_runnable = last_entry.key();
+            (Some(weight_from_contended), Some(heaviest_entry)) => {
+                let weight_from_runnable = heaviest_entry.key();
 
                 if &weight_from_contended < weight_from_runnable {
-                    Some((Some(contended_queue), last_entry))
+                    Some((Some(contended_queue), heaviest_entry))
                 } else if &weight_from_contended > weight_from_runnable {
                     match contended_queue.entry_to_execute(weight_from_contended) {
                         Entry::Occupied(entry) => {
@@ -421,8 +421,8 @@ impl ScheduleStage {
                     Entry::Vacant(_entry) => { unreachable!() },
                 }
             }
-            (None, Some(last_entry)) => {
-                Some((Some(contended_queue), last_entry))
+            (None, Some(heaviest_entry)) => {
+                Some((Some(contended_queue), heaviest_entry))
             }
             (None, None) => None,
         }
