@@ -37,6 +37,7 @@ use {
             atomic::{AtomicBool, AtomicU64, AtomicU8, AtomicUsize, Ordering},
             Arc, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
         },
+        thread,
     },
     thiserror::Error,
 };
@@ -285,28 +286,33 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn push_slot_list_reader(&self, s: &str) {
+        let k = format!("{}:{:?}", s, thread::current().id());
         let mut m = self.slot_list_readers.write().unwrap();
-        let v = m.entry(s.to_string()).or_insert(0);
+        let v = m.entry(k).or_insert(0);
         *v += 1;
     }
 
     pub fn pop_slot_list_reader(&self, s: &str) {
+        let k = format!("{}:{:?}", s, thread::current().id());
         let mut m = self.slot_list_readers.write().unwrap();
-        assert!(m.contains(&s.to_string()));
-        let v = m.entry(s.to_string()).or_insert(0);
+
+        assert!(m.contains(&k));
+        let v = m.entry(k).or_insert(0);
         *v -= 1;
     }
 
     pub fn push_slot_list_writer(&self, s: &str) {
+        let k = format!("{}:{:?}", s, thread::current().id());
         let mut m = self.slot_list_writers.write().unwrap();
-        let v = m.entry(s.to_string()).or_insert(1);
+        let v = m.entry(k).or_insert(1);
         *v += 1;
     }
 
     pub fn pop_slot_list_writer(&self, s: &str) {
+        let k = format!("{}:{:?}", s, thread::current().id());
         let mut m = self.slot_list_writers.write().unwrap();
-        assert!(m.contains(&s.to_string()));
-        let v = m.entry(s.to_string()).or_insert(1);
+        assert!(m.contains(&k));
+        let v = m.entry(k).or_insert(1);
         *v -= 1;
     }
 
