@@ -130,7 +130,7 @@ impl Drop for Finalizer {
 }
 
 struct ReplaySlotFromBlockstore {
-    slot_is_dead: bool,
+    is_slot_dead: bool,
     bank_slot: Slot,
     replay_result: Option<Result<usize /* tx count */, BlockstoreProcessorError>>,
 }
@@ -2240,7 +2240,7 @@ impl ReplayStage {
                 .map(|bank_slot| {
                     let bank_slot = *bank_slot;
                     let mut replay_result = ReplaySlotFromBlockstore {
-                        slot_is_dead: false,
+                        is_slot_dead: false,
                         bank_slot,
                         replay_result: None,
                     };
@@ -2258,13 +2258,12 @@ impl ReplayStage {
                     {
                         // If the fork was marked as dead, don't replay it
                         debug!("bank_slot {:?} is marked dead", bank_slot);
-                        replay_result.slot_is_dead = true;
+                        replay_result.is_slot_dead = true;
                         return replay_result;
                     }
 
                     let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
                     let parent_slot = bank.parent_slot();
-                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(bank);
                     let (num_blocks_on_fork, num_dropped_blocks_on_fork) = {
                         let stats = progress_lock
                             .get(&parent_slot)
@@ -2275,6 +2274,7 @@ impl ReplayStage {
                             stats.num_dropped_blocks_on_fork + new_dropped_blocks;
                         (num_blocks_on_fork, num_dropped_blocks_on_fork)
                     };
+                    let prev_leader_slot = progress_lock.get_bank_prev_leader_slot(bank);
 
                     let bank_progress = progress_lock.entry(bank.slot()).or_insert_with(|| {
                         ForkProgress::new_from_bank(
@@ -2335,7 +2335,7 @@ impl ReplayStage {
         bank_slot: Slot,
     ) -> ReplaySlotFromBlockstore {
         let mut replay_result = ReplaySlotFromBlockstore {
-            slot_is_dead: false,
+            is_slot_dead: false,
             bank_slot,
             replay_result: None,
         };
@@ -2344,7 +2344,7 @@ impl ReplayStage {
         if progress.get(&bank_slot).map(|p| p.is_dead).unwrap_or(false) {
             // If the fork was marked as dead, don't replay it
             debug!("bank_slot {:?} is marked dead", bank_slot);
-            replay_result.slot_is_dead = true;
+            replay_result.is_slot_dead = true;
         } else {
             let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
             let parent_slot = bank.parent_slot();
@@ -2419,7 +2419,7 @@ impl ReplayStage {
         let mut tx_count = 0;
         let mut execute_timings = ExecuteTimings::default();
         for replay_result in replay_result_vec {
-            if replay_result.slot_is_dead {
+            if replay_result.is_slot_dead {
                 continue;
             }
 
