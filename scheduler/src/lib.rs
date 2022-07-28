@@ -49,6 +49,10 @@ impl LockAttempt {
         self.is_success
     }
 
+    fn is_failed(&self) -> bool {
+        !self.is_success()
+    }
+
     fn success(address: Pubkey, requested_usage: RequestedUsage) -> Self {
         Self {
             address,
@@ -314,7 +318,7 @@ fn attempt_lock_for_execution<'a>(
     let ll = chained_iter
         .map(|(a, usage)| {
             let a = address_book.attempt_lock_address(from_runnable, unique_weight, **a, usage);
-            if all_succeeded_so_far && a.is_success {
+            if all_succeeded_so_far && a.is_failed() {
                 all_succeeded_so_far = false;
             }
             a
