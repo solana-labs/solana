@@ -1,8 +1,7 @@
 use {
     crate::{
-        block_min_prioritization_fee::*,
-        block_min_prioritization_fee_cache_query::BlockMinPrioritizationFeeCacheQuery,
-        block_min_prioritization_fee_cache_update::BlockMinPrioritizationFeeCacheUpdate,
+        prioritization_fee::*, prioritization_fee_cache_query::PrioritizationFeeCacheQuery,
+        prioritization_fee_cache_update::PrioritizationFeeCacheUpdate,
     },
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
@@ -10,15 +9,15 @@ use {
     std::collections::HashMap,
 };
 
-/// The maximum number of blocks to keep in `BlockMinPrioritizationFeeCache`; States from
+/// The maximum number of blocks to keep in `PrioritizationFeeCache`; States from
 /// up to 150 recent blocks should be sufficient to estimate minimal prioritization fee to
 /// land transactions to current block.
-const NUMBER_OF_RECENT_BLOCKS: usize = 150;
+const MAX_NUM_RECENT_BLOCKS: usize = 150;
 
-/// Holds up to NUMBER_OF_RECENT_BLOCKS recent block's min prioritization fee for block,
+/// Holds up to MAX_NUM_RECENT_BLOCKS recent block's min prioritization fee for block,
 /// and for each writable accounts per block.
-pub struct BlockMinPrioritizationFeeCache {
-    cache: HashMap<Slot, BlockMinPrioritizationFee>,
+pub struct PrioritizationFeeCache {
+    cache: HashMap<Slot, PrioritizationFee>,
     // metrics counts
     successful_transaction_update_count: u64,
     fail_get_transaction_priority_details_count: u64,
@@ -26,15 +25,15 @@ pub struct BlockMinPrioritizationFeeCache {
     fail_finalize_block_not_found: u64,
 }
 
-impl Default for BlockMinPrioritizationFeeCache {
+impl Default for PrioritizationFeeCache {
     fn default() -> Self {
-        Self::new(NUMBER_OF_RECENT_BLOCKS)
+        Self::new(MAX_NUM_RECENT_BLOCKS)
     }
 }
 
-impl BlockMinPrioritizationFeeCache {
+impl PrioritizationFeeCache {
     pub fn new(capacity: usize) -> Self {
-        BlockMinPrioritizationFeeCache {
+        PrioritizationFeeCache {
             cache: HashMap::with_capacity(capacity),
             //            ..default()
             successful_transaction_update_count: 0,
@@ -44,42 +43,36 @@ impl BlockMinPrioritizationFeeCache {
         }
     }
 
-    fn get_block_min_prioritization_fee(&self, slot: &Slot) -> Option<&BlockMinPrioritizationFee> {
+    fn get_prioritization_fee(&self, slot: &Slot) -> Option<&PrioritizationFee> {
         self.cache.get(slot)
     }
 
-    fn get_mut_block_min_prioritization_fee(
-        &mut self,
-        slot: &Slot,
-    ) -> Option<&mut BlockMinPrioritizationFee> {
+    fn get_mut_prioritization_fee(&mut self, slot: &Slot) -> Option<&mut PrioritizationFee> {
         self.cache.get_mut(slot)
     }
 
-    fn get_or_add_mut_block_min_prioritization_fee(
-        &mut self,
-        slot: &Slot,
-    ) -> &mut BlockMinPrioritizationFee {
+    fn get_or_add_mut_prioritization_fee(&mut self, slot: &Slot) -> &mut PrioritizationFee {
         self.cache
             .entry(*slot)
-            .or_insert_with(BlockMinPrioritizationFee::default)
+            .or_insert_with(PrioritizationFee::default)
     }
 
     fn report_metrics_for_slot(&mut self, slot: Slot) {
         // report current min fees for slot
-        if let Some(block) = self.get_block_min_prioritization_fee(&slot) {
+        if let Some(block) = self.get_prioritization_fee(&slot) {
             datapoint_info!(
-                "block_min_prioritization_fee",
+                "block_prioritization_fee",
                 ("slot", slot as i64, i64),
                 ("entity", "block", String),
                 (
                     "min_prioritization_fee",
-                    block.get_block_fee().unwrap_or(0) as i64,
+                    block.get_min_transaction_fee().unwrap_or(0) as i64,
                     i64
                 ),
             );
-            for (account_key, fee) in block.get_account_fees() {
+            for (account_key, fee) in block.get_writable_account_fees() {
                 datapoint_info!(
-                    "block_min_prioritization_fee",
+                    "block_prioritization_fee",
                     ("slot", slot as i64, i64),
                     ("entity", account_key.to_string(), String),
                     ("min_prioritization_fee", *fee as i64, i64),
@@ -89,35 +82,23 @@ impl BlockMinPrioritizationFeeCache {
         // report and reset counter
         {
             datapoint_info!(
-                "block_min_prioritization_fee_counters",
+                "block_prioritization_fee_counters",
                 ("slot", slot as i64, i64),
                 (
                     "successful_transaction_update_count",
                     self.successful_transaction_update_count as i64,
                     i64
                 ),
-            );
-            datapoint_info!(
-                "block_min_prioritization_fee_counters",
-                ("slot", slot as i64, i64),
                 (
                     "fail_get_transaction_priority_details_count",
                     self.fail_get_transaction_priority_details_count as i64,
                     i64
                 ),
-            );
-            datapoint_info!(
-                "block_min_prioritization_fee_counters",
-                ("slot", slot as i64, i64),
                 (
                     "fail_get_transaction_account_locks_count",
                     self.fail_get_transaction_account_locks_count as i64,
                     i64
                 ),
-            );
-            datapoint_info!(
-                "block_min_prioritization_fee_counters",
-                ("slot", slot as i64, i64),
                 (
                     "fail_finalize_block_not_found",
                     self.fail_finalize_block_not_found as i64,
@@ -132,7 +113,7 @@ impl BlockMinPrioritizationFeeCache {
     }
 }
 
-impl BlockMinPrioritizationFeeCacheUpdate for BlockMinPrioritizationFeeCache {
+impl PrioritizationFeeCacheUpdate for PrioritizationFeeCache {
     /// Update block's min prioritization fee with `txs`,
     /// Returns updated min prioritization fee for `slot`
     fn update_transactions<'a>(
@@ -140,28 +121,28 @@ impl BlockMinPrioritizationFeeCacheUpdate for BlockMinPrioritizationFeeCache {
         slot: Slot,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
     ) -> Option<u64> {
-        let updated_block_min_fee: Option<u64>;
+        let updated_min_fee: Option<u64>;
 
         let mut successful_transaction_update_count: u64 = 0;
         let mut fail_get_transaction_priority_details_count: u64 = 0;
         let mut fail_get_transaction_account_locks_count: u64 = 0;
 
         {
-            let block = self.get_or_add_mut_block_min_prioritization_fee(&slot);
+            let block_prioritization_fee = self.get_or_add_mut_prioritization_fee(&slot);
 
             for sanitized_tx in txs {
-                match block.update_for_transaction(sanitized_tx) {
-                    Err(BlockMinPrioritizationFeeError::FailGetTransactionPriorityDetails) => {
+                match block_prioritization_fee.update(sanitized_tx) {
+                    Err(PrioritizationFeeError::FailGetTransactionPriorityDetails) => {
                         saturating_add_assign!(fail_get_transaction_priority_details_count, 1)
                     }
-                    Err(BlockMinPrioritizationFeeError::FailGetTransactionAccountLocks) => {
+                    Err(PrioritizationFeeError::FailGetTransactionAccountLocks) => {
                         saturating_add_assign!(fail_get_transaction_account_locks_count, 1)
                     }
                     _ => saturating_add_assign!(successful_transaction_update_count, 1),
                 }
             }
 
-            updated_block_min_fee = block.get_block_fee();
+            updated_min_fee = block_prioritization_fee.get_min_transaction_fee();
         }
 
         saturating_add_assign!(
@@ -177,14 +158,14 @@ impl BlockMinPrioritizationFeeCacheUpdate for BlockMinPrioritizationFeeCache {
             fail_get_transaction_account_locks_count
         );
 
-        updated_block_min_fee
+        updated_min_fee
     }
 
     /// bank is completely replayed from blockstore, prune irrelevant accounts to save space,
     /// its fee stats can be made available to queries
     fn finalize_block(&mut self, slot: Slot) {
-        if let Some(block) = self.get_mut_block_min_prioritization_fee(&slot) {
-            block.prune_irrelevant_accounts();
+        if let Some(block) = self.get_mut_prioritization_fee(&slot) {
+            block.prune_irrelevant_writable_accounts();
             let _ = block.mark_block_completed();
         } else {
             saturating_add_assign!(self.fail_finalize_block_not_found, 1);
@@ -194,27 +175,25 @@ impl BlockMinPrioritizationFeeCacheUpdate for BlockMinPrioritizationFeeCache {
     }
 }
 
-impl BlockMinPrioritizationFeeCacheQuery for BlockMinPrioritizationFeeCache {
+impl PrioritizationFeeCacheQuery for PrioritizationFeeCache {
     /// Returns number of blocks that have finalized min fees collection
     fn available_block_count(&self) -> usize {
         self.cache
             .iter()
-            .filter(|(_slot, block_min_prioritization_fee)| {
-                block_min_prioritization_fee.is_finalized()
-            })
+            .filter(|(_slot, min_prioritization_fee)| min_prioritization_fee.is_finalized())
             .count()
     }
 
     /// Query block minimum fees from finalized blocks in cache,
     /// Returns a vector of fee; call site can use it to produce
     /// average, or top 5% etc.
-    fn get_block_min_prioritization_fees(&self) -> Vec<u64> {
+    fn get_prioritization_fees(&self) -> Vec<u64> {
         self.cache
             .iter()
-            .filter_map(|(_slot, block_min_prioritization_fee)| {
-                block_min_prioritization_fee
+            .filter_map(|(_slot, min_prioritization_fee)| {
+                min_prioritization_fee
                     .is_finalized()
-                    .then(|| block_min_prioritization_fee.get_block_fee())
+                    .then(|| min_prioritization_fee.get_min_transaction_fee())
             })
             .flatten()
             .collect()
@@ -223,13 +202,13 @@ impl BlockMinPrioritizationFeeCacheQuery for BlockMinPrioritizationFeeCache {
     /// Query given account minimum fees from finalized blocks in cache,
     /// Returns a vector of fee; call site can use it to produce
     /// average, or top 5% etc.
-    fn get_account_min_prioritization_fees(&self, account_key: &Pubkey) -> Vec<u64> {
+    fn get_account_prioritization_fees(&self, account_key: &Pubkey) -> Vec<u64> {
         self.cache
             .iter()
-            .filter_map(|(_slot, block_min_prioritization_fee)| {
-                block_min_prioritization_fee
+            .filter_map(|(_slot, min_prioritization_fee)| {
+                min_prioritization_fee
                     .is_finalized()
-                    .then(|| block_min_prioritization_fee.get_account_fee(account_key))
+                    .then(|| min_prioritization_fee.get_writable_account_fee(account_key))
             })
             .flatten()
             .collect()
@@ -263,7 +242,7 @@ mod tests {
     }
 
     #[test]
-    fn test_block_min_prioritization_fee_cache_update() {
+    fn test_prioritization_fee_cache_update() {
         solana_logger::setup();
         let write_account_a = Pubkey::new_unique();
         let write_account_b = Pubkey::new_unique();
@@ -286,64 +265,61 @@ mod tests {
 
         let slot = 1;
 
-        let mut block_min_prioritization_fee_cache = BlockMinPrioritizationFeeCache::default();
+        let mut prioritization_fee_cache = PrioritizationFeeCache::default();
         assert_eq!(
             2,
-            block_min_prioritization_fee_cache
+            prioritization_fee_cache
                 .update_transactions(slot, txs.iter())
                 .unwrap()
         );
 
         // assert block min fee and account a, b, c fee accordingly
         {
-            let block_min_fee = block_min_prioritization_fee_cache
-                .get_block_min_prioritization_fee(&slot)
+            let fee = prioritization_fee_cache
+                .get_prioritization_fee(&slot)
                 .unwrap();
-            assert_eq!(2, block_min_fee.get_block_fee().unwrap());
-            assert_eq!(2, block_min_fee.get_account_fee(&write_account_a).unwrap());
-            assert_eq!(5, block_min_fee.get_account_fee(&write_account_b).unwrap());
-            assert_eq!(2, block_min_fee.get_account_fee(&write_account_c).unwrap());
+            assert_eq!(2, fee.get_min_transaction_fee().unwrap());
+            assert_eq!(2, fee.get_writable_account_fee(&write_account_a).unwrap());
+            assert_eq!(5, fee.get_writable_account_fee(&write_account_b).unwrap());
+            assert_eq!(2, fee.get_writable_account_fee(&write_account_c).unwrap());
             // assert unknown account d fee
-            assert!(block_min_fee
-                .get_account_fee(&Pubkey::new_unique())
+            assert!(fee
+                .get_writable_account_fee(&Pubkey::new_unique())
                 .is_none());
             // assert unknown slot
-            assert!(block_min_prioritization_fee_cache
-                .get_block_min_prioritization_fee(&100)
+            assert!(prioritization_fee_cache
+                .get_prioritization_fee(&100)
                 .is_none());
         }
 
         // assert after prune, account a and c should be removed from cache to save space
         {
-            block_min_prioritization_fee_cache.finalize_block(slot);
-            let block_min_fee = block_min_prioritization_fee_cache
-                .get_block_min_prioritization_fee(&slot)
+            prioritization_fee_cache.finalize_block(slot);
+            let fee = prioritization_fee_cache
+                .get_prioritization_fee(&slot)
                 .unwrap();
-            assert_eq!(2, block_min_fee.get_block_fee().unwrap());
-            assert!(block_min_fee.get_account_fee(&write_account_a).is_none());
-            assert_eq!(5, block_min_fee.get_account_fee(&write_account_b).unwrap());
-            assert!(block_min_fee.get_account_fee(&write_account_c).is_none());
+            assert_eq!(2, fee.get_min_transaction_fee().unwrap());
+            assert!(fee.get_writable_account_fee(&write_account_a).is_none());
+            assert_eq!(5, fee.get_writable_account_fee(&write_account_b).unwrap());
+            assert!(fee.get_writable_account_fee(&write_account_c).is_none());
         }
     }
 
     #[test]
     fn test_available_block_count() {
-        let mut block_min_prioritization_fee_cache = BlockMinPrioritizationFeeCache::default();
+        let mut prioritization_fee_cache = PrioritizationFeeCache::default();
 
-        assert!(block_min_prioritization_fee_cache
-            .get_or_add_mut_block_min_prioritization_fee(&1)
+        assert!(prioritization_fee_cache
+            .get_or_add_mut_prioritization_fee(&1)
             .mark_block_completed()
             .is_ok());
-        assert!(block_min_prioritization_fee_cache
-            .get_or_add_mut_block_min_prioritization_fee(&2)
+        assert!(prioritization_fee_cache
+            .get_or_add_mut_prioritization_fee(&2)
             .mark_block_completed()
             .is_ok());
-        block_min_prioritization_fee_cache.get_or_add_mut_block_min_prioritization_fee(&3);
+        prioritization_fee_cache.get_or_add_mut_prioritization_fee(&3);
 
-        assert_eq!(
-            2,
-            block_min_prioritization_fee_cache.available_block_count()
-        );
+        assert_eq!(2, prioritization_fee_cache.available_block_count());
     }
 
     fn assert_vec_eq(expected: &mut Vec<u64>, actual: &mut Vec<u64>) {
@@ -353,17 +329,17 @@ mod tests {
     }
 
     #[test]
-    fn test_get_block_min_prioritization_fees() {
+    fn test_get_prioritization_fee() {
         solana_logger::setup();
         let write_account_a = Pubkey::new_unique();
         let write_account_b = Pubkey::new_unique();
         let write_account_c = Pubkey::new_unique();
 
-        let mut block_min_prioritization_fee_cache = BlockMinPrioritizationFeeCache::default();
+        let mut prioritization_fee_cache = PrioritizationFeeCache::default();
 
         // Assert no min fee from empty cache
-        assert!(block_min_prioritization_fee_cache
-            .get_block_min_prioritization_fees()
+        assert!(prioritization_fee_cache
+            .get_prioritization_fees()
             .is_empty());
 
         // Assert after add one transaction for slot 1
@@ -375,20 +351,17 @@ mod tests {
             )];
             assert_eq!(
                 5,
-                block_min_prioritization_fee_cache
+                prioritization_fee_cache
                     .update_transactions(1, txs.iter())
                     .unwrap()
             );
             // before block is marked as completed
-            assert!(block_min_prioritization_fee_cache
-                .get_block_min_prioritization_fees()
+            assert!(prioritization_fee_cache
+                .get_prioritization_fees()
                 .is_empty());
             // after block is completed
-            block_min_prioritization_fee_cache.finalize_block(1);
-            assert_eq!(
-                vec![5],
-                block_min_prioritization_fee_cache.get_block_min_prioritization_fees()
-            );
+            prioritization_fee_cache.finalize_block(1);
+            assert_eq!(vec![5], prioritization_fee_cache.get_prioritization_fees());
         }
 
         // Assert after add one transaction for slot 2
@@ -400,20 +373,17 @@ mod tests {
             )];
             assert_eq!(
                 9,
-                block_min_prioritization_fee_cache
+                prioritization_fee_cache
                     .update_transactions(2, txs.iter())
                     .unwrap()
             );
             // before block is marked as completed
-            assert_eq!(
-                vec![5],
-                block_min_prioritization_fee_cache.get_block_min_prioritization_fees()
-            );
+            assert_eq!(vec![5], prioritization_fee_cache.get_prioritization_fees());
             // after block is completed
-            block_min_prioritization_fee_cache.finalize_block(2);
+            prioritization_fee_cache.finalize_block(2);
             assert_vec_eq(
                 &mut vec![5, 9],
-                &mut block_min_prioritization_fee_cache.get_block_min_prioritization_fees(),
+                &mut prioritization_fee_cache.get_prioritization_fees(),
             );
         }
 
@@ -426,42 +396,42 @@ mod tests {
             )];
             assert_eq!(
                 2,
-                block_min_prioritization_fee_cache
+                prioritization_fee_cache
                     .update_transactions(3, txs.iter())
                     .unwrap()
             );
             // before block is marked as completed
             assert_vec_eq(
                 &mut vec![5, 9],
-                &mut block_min_prioritization_fee_cache.get_block_min_prioritization_fees(),
+                &mut prioritization_fee_cache.get_prioritization_fees(),
             );
             // after block is completed
-            block_min_prioritization_fee_cache.finalize_block(3);
+            prioritization_fee_cache.finalize_block(3);
             assert_vec_eq(
                 &mut vec![5, 9, 2],
-                &mut block_min_prioritization_fee_cache.get_block_min_prioritization_fees(),
+                &mut prioritization_fee_cache.get_prioritization_fees(),
             );
         }
     }
 
     #[test]
-    fn test_get_account_min_prioritization_fees() {
+    fn test_get_account_prioritization_fees() {
         solana_logger::setup();
         let write_account_a = Pubkey::new_unique();
         let write_account_b = Pubkey::new_unique();
         let write_account_c = Pubkey::new_unique();
 
-        let mut block_min_prioritization_fee_cache = BlockMinPrioritizationFeeCache::default();
+        let mut prioritization_fee_cache = PrioritizationFeeCache::default();
 
         // Assert no min fee from empty cache
-        assert!(block_min_prioritization_fee_cache
-            .get_account_min_prioritization_fees(&write_account_a)
+        assert!(prioritization_fee_cache
+            .get_account_prioritization_fees(&write_account_a)
             .is_empty());
-        assert!(block_min_prioritization_fee_cache
-            .get_account_min_prioritization_fees(&write_account_b)
+        assert!(prioritization_fee_cache
+            .get_account_prioritization_fees(&write_account_b)
             .is_empty());
-        assert!(block_min_prioritization_fee_cache
-            .get_account_min_prioritization_fees(&write_account_c)
+        assert!(prioritization_fee_cache
+            .get_account_prioritization_fees(&write_account_c)
             .is_empty());
 
         // Assert after add one transaction for slot 1
@@ -474,31 +444,29 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            block_min_prioritization_fee_cache.update_transactions(1, txs.iter());
+            prioritization_fee_cache.update_transactions(1, txs.iter());
             // before block is marked as completed
-            assert!(block_min_prioritization_fee_cache
-                .get_account_min_prioritization_fees(&write_account_a)
+            assert!(prioritization_fee_cache
+                .get_account_prioritization_fees(&write_account_a)
                 .is_empty());
-            assert!(block_min_prioritization_fee_cache
-                .get_account_min_prioritization_fees(&write_account_b)
+            assert!(prioritization_fee_cache
+                .get_account_prioritization_fees(&write_account_b)
                 .is_empty());
-            assert!(block_min_prioritization_fee_cache
-                .get_account_min_prioritization_fees(&write_account_c)
+            assert!(prioritization_fee_cache
+                .get_account_prioritization_fees(&write_account_c)
                 .is_empty());
             // after block is completed
-            block_min_prioritization_fee_cache.finalize_block(1);
+            prioritization_fee_cache.finalize_block(1);
             assert_eq!(
                 vec![5],
-                block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_a)
+                prioritization_fee_cache.get_account_prioritization_fees(&write_account_a)
             );
             assert_eq!(
                 vec![5],
-                block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_b)
+                prioritization_fee_cache.get_account_prioritization_fees(&write_account_b)
             );
-            assert!(block_min_prioritization_fee_cache
-                .get_account_min_prioritization_fees(&write_account_c)
+            assert!(prioritization_fee_cache
+                .get_account_prioritization_fees(&write_account_c)
                 .is_empty());
         }
 
@@ -512,37 +480,32 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            block_min_prioritization_fee_cache.update_transactions(2, txs.iter());
+            prioritization_fee_cache.update_transactions(2, txs.iter());
             // before block is marked as completed
             assert_eq!(
                 vec![5],
-                block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_a)
+                prioritization_fee_cache.get_account_prioritization_fees(&write_account_a)
             );
             assert_eq!(
                 vec![5],
-                block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_b)
+                prioritization_fee_cache.get_account_prioritization_fees(&write_account_b)
             );
-            assert!(block_min_prioritization_fee_cache
-                .get_account_min_prioritization_fees(&write_account_c)
+            assert!(prioritization_fee_cache
+                .get_account_prioritization_fees(&write_account_c)
                 .is_empty());
             // after block is completed
-            block_min_prioritization_fee_cache.finalize_block(2);
+            prioritization_fee_cache.finalize_block(2);
             assert_eq!(
                 vec![5],
-                block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_a)
+                prioritization_fee_cache.get_account_prioritization_fees(&write_account_a)
             );
             assert_vec_eq(
                 &mut vec![5, 9],
-                &mut block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_b),
+                &mut prioritization_fee_cache.get_account_prioritization_fees(&write_account_b),
             );
             assert_eq!(
                 vec![9],
-                block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_c)
+                prioritization_fee_cache.get_account_prioritization_fees(&write_account_c)
             );
         }
 
@@ -556,39 +519,33 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            block_min_prioritization_fee_cache.update_transactions(3, txs.iter());
+            prioritization_fee_cache.update_transactions(3, txs.iter());
             // before block is marked as completed
             assert_eq!(
                 vec![5],
-                block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_a)
+                prioritization_fee_cache.get_account_prioritization_fees(&write_account_a)
             );
             assert_vec_eq(
                 &mut vec![5, 9],
-                &mut block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_b),
+                &mut prioritization_fee_cache.get_account_prioritization_fees(&write_account_b),
             );
             assert_eq!(
                 vec![9],
-                block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_c)
+                prioritization_fee_cache.get_account_prioritization_fees(&write_account_c)
             );
             // after block is completed
-            block_min_prioritization_fee_cache.finalize_block(3);
+            prioritization_fee_cache.finalize_block(3);
             assert_vec_eq(
                 &mut vec![5, 2],
-                &mut block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_a),
+                &mut prioritization_fee_cache.get_account_prioritization_fees(&write_account_a),
             );
             assert_vec_eq(
                 &mut vec![5, 9],
-                &mut block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_b),
+                &mut prioritization_fee_cache.get_account_prioritization_fees(&write_account_b),
             );
             assert_vec_eq(
                 &mut vec![9, 2],
-                &mut block_min_prioritization_fee_cache
-                    .get_account_min_prioritization_fees(&write_account_c),
+                &mut prioritization_fee_cache.get_account_prioritization_fees(&write_account_c),
             );
         }
     }

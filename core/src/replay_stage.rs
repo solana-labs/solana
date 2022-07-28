@@ -56,9 +56,9 @@ use {
         accounts_background_service::AbsRequestSender,
         bank::{Bank, NewBankOptions},
         bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
-        block_min_prioritization_fee_cache::BlockMinPrioritizationFeeCache,
-        block_min_prioritization_fee_cache_update::BlockMinPrioritizationFeeCacheUpdate,
         commitment::BlockCommitmentCache,
+        prioritization_fee_cache::PrioritizationFeeCache,
+        prioritization_fee_cache_update::PrioritizationFeeCacheUpdate,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
@@ -399,7 +399,7 @@ impl ReplayStage {
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         log_messages_bytes_limit: Option<usize>,
-        block_min_prioritization_fee_cache: Arc<RwLock<BlockMinPrioritizationFeeCache>>,
+        prioritization_fee_cache: Arc<RwLock<PrioritizationFeeCache>>,
     ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
             let tower = process_blockstore.process_to_create_tower()?;
@@ -532,7 +532,7 @@ impl ReplayStage {
                         block_metadata_notifier.clone(),
                         &mut replay_timing,
                         log_messages_bytes_limit,
-                        &block_min_prioritization_fee_cache,
+                        &prioritization_fee_cache,
                     );
                     replay_active_banks_time.stop();
 
@@ -1717,7 +1717,7 @@ impl ReplayStage {
         replay_vote_sender: &ReplayVoteSender,
         verify_recyclers: &VerifyRecyclers,
         log_messages_bytes_limit: Option<usize>,
-        block_min_prioritization_fee_cache: &RwLock<BlockMinPrioritizationFeeCache>,
+        prioritization_fee_cache: &RwLock<PrioritizationFeeCache>,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let mut w_replay_stats = replay_stats.write().unwrap();
         let mut w_replay_progress = replay_progress.write().unwrap();
@@ -1737,7 +1737,7 @@ impl ReplayStage {
             verify_recyclers,
             false,
             log_messages_bytes_limit,
-            block_min_prioritization_fee_cache,
+            prioritization_fee_cache,
         )?;
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
@@ -2234,7 +2234,7 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
         active_bank_slots: &[Slot],
-        block_min_prioritization_fee_cache: &RwLock<BlockMinPrioritizationFeeCache>,
+        prioritization_fee_cache: &RwLock<PrioritizationFeeCache>,
     ) -> Vec<ReplaySlotFromBlockstore> {
         // Make mutable shared structures thread safe.
         let progress = RwLock::new(progress);
@@ -2310,7 +2310,7 @@ impl ReplayStage {
                             &replay_vote_sender.clone(),
                             &verify_recyclers.clone(),
                             log_messages_bytes_limit,
-                            block_min_prioritization_fee_cache,
+                            prioritization_fee_cache,
                         );
                         replay_blockstore_time.stop();
                         replay_result.replay_result = Some(blockstore_result);
@@ -2390,7 +2390,7 @@ impl ReplayStage {
                     &replay_vote_sender.clone(),
                     &verify_recyclers.clone(),
                     log_messages_bytes_limit,
-                    block_min_prioritization_fee_cache,
+                    prioritization_fee_cache,
                 );
                 replay_blockstore_time.stop();
                 replay_result.replay_result = Some(blockstore_result);
@@ -2490,7 +2490,7 @@ impl ReplayStage {
                     });
 
                 // finalize block's min prioritization fee cache for this bank
-                block_min_prioritization_fee_cache
+                prioritization_fee_cache
                     .write()
                     .unwrap()
                     .finalize_block(bank.slot());
@@ -4189,7 +4189,7 @@ pub(crate) mod tests {
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
                 None,
-                &RwLock::new(BlockMinPrioritizationFeeCache::new(0usize)),
+                &RwLock::new(PrioritizationFeeCache::new(0usize)),
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(

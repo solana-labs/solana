@@ -42,9 +42,8 @@ use {
     },
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank_forks::BankForks,
-        block_min_prioritization_fee_cache::BlockMinPrioritizationFeeCache,
         commitment::BlockCommitmentCache, cost_model::CostModel,
-        vote_sender_types::ReplayVoteSender,
+        prioritization_fee_cache::PrioritizationFeeCache, vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     std::{
@@ -130,7 +129,7 @@ impl Tvu {
         accounts_background_request_sender: AbsRequestSender,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
-        block_min_prioritization_fee_cache: &Arc<RwLock<BlockMinPrioritizationFeeCache>>,
+        prioritization_fee_cache: &Arc<RwLock<PrioritizationFeeCache>>,
     ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
@@ -290,7 +289,7 @@ impl Tvu {
             drop_bank_sender,
             block_metadata_notifier,
             log_messages_bytes_limit,
-            block_min_prioritization_fee_cache.clone(),
+            prioritization_fee_cache.clone(),
         )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
@@ -404,8 +403,8 @@ pub mod tests {
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
-        let _ignored_block_min_prioritization_fee_cache =
-            Arc::new(RwLock::new(BlockMinPrioritizationFeeCache::new(0usize)));
+        let _ignored_prioritization_fee_cache =
+            Arc::new(RwLock::new(PrioritizationFeeCache::new(0usize)));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -455,7 +454,7 @@ pub mod tests {
             AbsRequestSender::default(),
             None,
             &Arc::new(ConnectionCache::default()),
-            &_ignored_block_min_prioritization_fee_cache,
+            &_ignored_prioritization_fee_cache,
         )
         .expect("assume success");
         exit.store(true, Ordering::Relaxed);
