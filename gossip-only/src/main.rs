@@ -30,7 +30,7 @@ use {
         env,
         fs::{self, File},
         io::Write,
-        net::{IpAddr, SocketAddr},
+        net::{IpAddr, Ipv4Addr, SocketAddr},
         path::Path,
         process::exit,
         str::FromStr,
@@ -142,14 +142,14 @@ fn parse_matches() -> ArgMatches<'static> {
         .get_matches()
 }
 
-// fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
-//     matches.value_of("entrypoint").map(|entrypoint| {
-//         solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
-//             eprintln!("failed to parse entrypoint address: {}", e);
-//             exit(1);
-//         })
-//     })
-// }
+fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
+    matches.value_of("entrypoint").map(|entrypoint| {
+        solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
+            eprintln!("failed to parse entrypoint address: {}", e);
+            exit(1);
+        })
+    })
+}
 
 fn parse_gossip_host(matches: &ArgMatches, entrypoint_addr: Option<SocketAddr>) -> IpAddr {
     matches
@@ -309,6 +309,7 @@ pub fn main() {
     });
 
     let mut gossip_threads: Vec<GossipService> = Vec::new();
+    let entrypoint_addr = parse_entrypoint(matches);
     let gossip_host = parse_gossip_host(matches, entrypoint_addr);
     // let gossip_host = entrypoint_addrs[0].ip();
     let gossip_addr = SocketAddr::new(
