@@ -894,7 +894,7 @@ pub fn process_blockstore_from_root(
             if bank_slots.len() > 1 { "s" } else { "" },
             bank_slots.iter().map(|slot| slot.to_string()).join(", "),
         );
-        assert!(bank_forks.active_banks().is_empty());
+        assert!(bank_forks.active_bank_slots().is_empty());
     }
 
     Ok(())

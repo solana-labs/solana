@@ -7507,6 +7507,11 @@ impl Bank {
             .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id())
     }
 
+    pub fn concurrent_replay_of_forks(&self) -> bool {
+        self.feature_set
+            .is_active(&feature_set::concurrent_replay_of_forks::id())
+    }
+
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
         self.cost_tracker.read()
     }
