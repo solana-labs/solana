@@ -422,7 +422,7 @@ impl ScheduleStage {
                 }
             }
             (None, Some(weight_from_runnable)) => {
-                runnable_queue.last_entry_to_execute().map(|e| (Some(contended_queue), e))
+                panic!()//runnable_queue.last_entry_to_execute().map(|e| (Some(contended_queue), e))
             }
             (None, None) => None,
         }
