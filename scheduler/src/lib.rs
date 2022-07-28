@@ -393,19 +393,19 @@ impl ScheduleStage {
         runnable_queue: &'a mut TaskQueue,
         contended_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
-    ) -> Option<(Option<&'a mut TaskQueue>, std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, Task>)> {
+    ) -> Option<(&'a mut TaskQueue, std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, Task>)> {
         match (
             Self::get_weight_from_contended(address_book),
             runnable_queue.next_task_unique_weight(),
         ) {
             (Some(weight_from_contended), Some(weight_from_runnable)) => {
                 if weight_from_contended < weight_from_runnable {
-                    runnable_queue.pop_next_task().map(|e| (Some(contended_queue), e))
+                    runnable_queue.pop_next_task().map(|e| (contended_queue, true e))
                 } else if weight_from_contended > weight_from_runnable {
                     use std::collections::btree_map::Entry;
                     match contended_queue.entry_to_execute(weight_from_contended) {
                         Entry::Occupied(mut entry) => {
-                            Some((None, entry))
+                            Some((contended_queue, false, entry))
                         },
                         Entry::Vacant(_entry) => { unreachable!() },
                     }
@@ -421,7 +421,7 @@ impl ScheduleStage {
                 panic!();
             }
             (None, Some(weight_from_runnable)) => {
-                runnable_queue.pop_next_task().map(|e| (Some(contended_queue), e))
+                runnable_queue.pop_next_task().map(|e| (contended_queue, true, e))
             }
             (None, None) => None,
         }
@@ -433,14 +433,13 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (maybe_contended_queue, entry) in
+        for (contended_queue, from_runnable, entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             //let unique_weight = entry.key();
             let next_task = entry.get();
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
-            let from_runnable = maybe_contended_queue.is_some();
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
@@ -456,7 +455,7 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 if from_runnable {
-                    maybe_contended_queue.unwrap().add_to_schedule(*entry.key(), entry.remove());
+                    contended_queue.unwrap().add_to_schedule(*entry.key(), entry.remove());
                 }
                 continue;
             }
