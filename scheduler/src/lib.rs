@@ -291,8 +291,8 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn next_task_unique_weight(&self) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
-        self.map.last_entry()
+    fn next_task_unique_weight(&self) -> Option<UniqueWeight> {
+        self.map.last_key_value().map(|e| e.0.clone())
     }
 
     #[inline(never)]
@@ -369,7 +369,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn get_weight_from_contended(address_book: &AddressBook) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
+    fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
         let mut heaviest_by_address: Option<UniqueWeight> = None;
         //info!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for address in address_book.newly_uncontended_addresses.iter() {
