@@ -99,6 +99,10 @@ impl PrioritizationFee {
         self.min_writable_account_fees.iter()
     }
 
+    pub fn get_writable_accounts_count(&self) -> usize {
+        self.min_writable_account_fees.len()
+    }
+
     pub fn is_finalized(&self) -> bool {
         self.is_finalized
     }
