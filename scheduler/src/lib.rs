@@ -371,18 +371,20 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
-        let mut heaviest_weight: UniqueWeight = UniqueWeight::default();
-
+        let mut heaviest_weight: Option<UniqueWeight> = None;
         //info!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = Self::get_newly_u_u_w(address, &address_book);
             if let Some(&weight) = newly_uncontended_unique_weights.last() {
-                if weight > heaviest_weight {
-                    heaviest_weight = weight;
+                if let Some(heaviest_weight) = heaviest_weight {
+                    if weight > heaviest_weight {
+                        heaviest_weight = Some(weight);
+                    }
+                } else {
+                    heaviest_weight = Some(weight);
                 }
             }
         }
-
         heaviest_weight
     }
 
