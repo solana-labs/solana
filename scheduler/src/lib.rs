@@ -277,7 +277,7 @@ pub struct TaskQueue {
 impl TaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: Task) {
-        //info!("TaskQueue::add(): {:?}", unique_weight);
+        //trace!("TaskQueue::add(): {:?}", unique_weight);
         let pre_existed = self.tasks.insert(unique_weight, task);
         debug_assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
@@ -375,7 +375,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
         let mut heaviest_weight: Option<UniqueWeight> = None;
-        //info!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
+        //trace!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = Self::get_newly_u_u_w(address, &address_book);
             if let Some(&weight) = newly_uncontended_unique_weights.last() {
@@ -461,7 +461,7 @@ impl ScheduleStage {
             );
 
             if !is_success {
-                //info!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
+                //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
                     lock_attempts,
@@ -590,7 +590,7 @@ impl ScheduleStage {
         let (to_full, _r) = bounded(0);
 
         loop {
-            info!("schedule_once!");
+            trace!("schedule_once!");
 
             // this trick is needed for conditional (Option<_>) send
             // upstream this to crossbeam-channel...
@@ -601,7 +601,7 @@ impl ScheduleStage {
 
             select! {
                 recv(from_previous_stage) -> weighted_tx => {
-                    info!("recv from previous");
+                    trace!("recv from previous");
                     let weighted_tx = weighted_tx.unwrap();
                     Self::register_runnable_task(weighted_tx, runnable_queue);
                     if maybe_ee.is_none() {
@@ -609,12 +609,12 @@ impl ScheduleStage {
                     }
                 }
                 send(to_execute_substage_if_ready, maybe_ee) -> res => {
-                    info!("send to execute");
+                    trace!("send to execute");
                     res.unwrap();
                     maybe_ee = None;
                 }
                 recv(from_execute_substage) -> processed_execution_environment => {
-                    info!("recv from execute");
+                    trace!("recv from execute");
                     let mut processed_execution_environment = processed_execution_environment.unwrap();
 
                     Self::commit_result(&mut processed_execution_environment, address_book);

@@ -285,7 +285,7 @@ fn output_slot(
                         let mut process_message_time = Measure::start("process_message_time");
 
                         let sig = ee.task.tx.signature().to_string();
-                        info!("execute substage: #{} {:#?}", step, &sig);
+                        trace!("execute substage: #{} {:#?}", step, &sig);
                         //std::thread::sleep(std::time::Duration::from_micros(ee.cu.try_into().unwrap()));
 
                         process_message_time.stop();
@@ -314,7 +314,7 @@ fn output_slot(
         .spawn(move || {
             for step in 0.. {
                 let ee = post_schedule_env_receiver.recv().unwrap();
-                info!(
+                trace!(
                     "post schedule stage: #{} {:#?}",
                     step,
                     ee.task.tx.signature()
