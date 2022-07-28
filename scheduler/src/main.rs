@@ -49,7 +49,8 @@ fn main() {
         }
     }).unwrap();
 
-    let mut joins = (0..thread_count)
+    let lane_count = std::env::var("EXECUTION_LANE_COUNT").unwrap_or(format!("{}", std::thread::available_parallelism().unwrap())).parse().unwrap();
+    let mut joins = (0..lane_count)
         .map(|thx| {
             let s = s.clone();
             let r2 = r2.clone();
