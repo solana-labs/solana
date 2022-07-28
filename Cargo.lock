@@ -5064,6 +5064,7 @@ dependencies = [
  "solana-logger 1.11.5",
  "solana-measure",
  "solana-metrics",
+ "solana-metrics-reporter",
  "solana-net-utils",
  "solana-perf",
  "solana-poh",

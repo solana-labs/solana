@@ -3,6 +3,7 @@ use {
     solana_ledger::{
         leader_schedule_cache::LeaderScheduleCache, shred, sigverify_shreds::verify_shreds_gpu,
     },
+    solana_metrics_reporter::MetricsReporter,
     solana_perf::{self, packet::PacketBatch, recycler_cache::RecyclerCache},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
@@ -184,7 +185,10 @@ impl<T> From<SendError<T>> for Error {
     }
 }
 
+#[derive(MetricsReporter)]
+#[report_name("shred_sigverify")]
 struct ShredSigVerifyStats {
+    #[report_ignore]
     since: Instant,
     num_iters: usize,
     num_packets: usize,
@@ -213,15 +217,7 @@ impl ShredSigVerifyStats {
         if self.since.elapsed() <= Self::METRICS_SUBMIT_CADENCE {
             return;
         }
-        datapoint_info!(
-            "shred_sigverify",
-            ("num_iters", self.num_iters, i64),
-            ("num_packets", self.num_packets, i64),
-            ("num_discards_pre", self.num_discards_pre, i64),
-            ("num_discards_post", self.num_discards_post, i64),
-            ("num_retransmit_shreds", self.num_retransmit_shreds, i64),
-            ("elapsed_micros", self.elapsed_micros, i64),
-        );
+        self.report();
         *self = Self::new(Instant::now());
     }
 }
