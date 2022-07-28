@@ -585,6 +585,8 @@ impl ScheduleStage {
     ) {
         use crossbeam_channel::select;
 
+        let mut maybe_ee = None;
+
         loop {
             trace!("schedule_once!");
 
