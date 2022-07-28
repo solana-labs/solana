@@ -4,16 +4,16 @@ description: "Rent: the small fee Solana accounts incur to store data on the blo
 keywords: ""
 ---
 
-The small fee every Solana Account (or Program) to store data on the blockchain is called "*rent*". This *time and space* based fee is required to keep an account, and its therfore its data, alive on the blockchain since [clusters](../../cluster/overview.md) must actively maintain this data.
+The small fee every Solana Account (or Program) to store data on the blockchain is called "*rent*". This *time and space* based fee is required to keep an account, and its therefore its data, alive on the blockchain since [clusters](../../cluster/overview.md) must actively maintain this data.
 
 Rent can be "*collected*" in two primary ways:
 
-- when certain [specified conditions](#collecting-rent) occur that interact with the specific data in an account 
+- when certain [specified conditions](#collecting-rent) occur that interact with the specific data in an account
 - or, not collected at all when an account is [rent exempt](#rent-exempt)
 
 When an Account no longer has enough LAMPORTS to pay its rent, it will be removed from the network in a process known as [Garbage Collection](#garbage-collection).
 
-> **Note:** Rent is different from [transactions fees](../../transaction_fees.md). Rent is paid (or held in an Account) to keep data stored on the Solana  blockchain. Where as transaction fees are paid to process [instructions](../developing/../programming-model/transactions.md#instructions) on the network.
+> **Note:** Rent is different from [transactions fees](../../transaction_fees.md). Rent is paid (or held in an Account) to keep data stored on the Solana blockchain. Where as transaction fees are paid to process [instructions](../developing/../programming-model/transactions.md#instructions) on the network.
 
 ### Rent rate
 
@@ -23,7 +23,7 @@ Currently, the rent rate is a static amount and stored in the the [Rent sysvar](
 
 ## Rent exempt
 
-Accounts that maintain a minimum LAMPORT balance greater than 2 years worth of rent payments are considered "*rent exempt*" and will not incur a rent collection. 
+Accounts that maintain a minimum LAMPORT balance greater than 2 years worth of rent payments are considered "*rent exempt*" and will not incur a rent collection.
 
 > At the time of writing this, new Accounts and Programs **are required** to be initialized with enough LAMPORTS to become rent-exempt. The RPC endpoints have the ability to calculate this [estimated rent exempt balance](../clients/jsonrpc-api.md#getminimumbalanceforrentexemption) and is recommended to be used.
 
