@@ -393,7 +393,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-    ) -> Option<(bool, UniqueWeight, Task)> {
+    ) -> Option<(bool, std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>)> {
         match (
             Self::get_weight_from_contended(address_book),
             runnable_queue.next_task_unique_weight(),
