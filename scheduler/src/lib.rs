@@ -434,7 +434,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
         for (reborrowed_contended_queue, entry) in
-            Self::select_next_task(runnable_queue, reborrowed_contended_queue, address_book)
+            Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             //let unique_weight = entry.key();
             let next_task = entry.get();
