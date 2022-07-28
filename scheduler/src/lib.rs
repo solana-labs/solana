@@ -432,7 +432,7 @@ impl ScheduleStage {
         for (from_runnable, entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
-            let unique_weight = entry.key();
+            //let unique_weight = entry.key();
             let next_task = entry.get();
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
@@ -441,7 +441,7 @@ impl ScheduleStage {
             // detection?
 
             let (is_success, lock_attempts) =
-                attempt_lock_for_execution(from_runnable, address_book, &unique_weight, &message_hash, &locks);
+                attempt_lock_for_execution(from_runnable, address_book, &entry.key(), &message_hash, &locks);
 
             if !is_success {
                 //info!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
@@ -451,14 +451,12 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 if from_runnable {
-                    let next_task = entry.remove();
-                    contended_queue.add_to_schedule(*unique_weight, next_task);
+                    contended_queue.add_to_schedule(*entry.key(), entry.remove());
                 }
                 continue;
             }
 
-            let next_task = entry.remove();
-            return Some((*unique_weight, next_task, lock_attempts));
+            return Some(entry.key(), entry.remove(), lock_attempts));
         }
 
         None
