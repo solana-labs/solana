@@ -167,7 +167,7 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn remember_new_contended_unique_weight(page: usize, unique_weight: &UniqueWeight) {
+    fn remember_new_contended_unique_weight(page: &mut Page, unique_weight: &UniqueWeight) {
         page.contended_unique_weights.insert(*unique_weight);
     }
 
