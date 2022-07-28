@@ -376,8 +376,8 @@ impl ScheduleStage {
         for address in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = Self::get_newly_u_u_w(address, &address_book);
             if let Some(&weight) = newly_uncontended_unique_weights.last() {
-                if let Some(heaviest_weight) = heaviest_weight {
-                    if weight > heaviest_weight {
+                if let Some(current_heaviest_weight) = heaviest_weight {
+                    if weight > current_heaviest_weight {
                         heaviest_weight = Some(weight);
                     }
                 } else {
