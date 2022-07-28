@@ -136,10 +136,10 @@ impl AddressBook {
                         page.current_usage = CurrentUsage::renew(requested_usage);
                         LockAttempt::success(address, requested_usage)
                     }
-                    CurrentUsage::Readonly(ref mut current_count) => {
+                    CurrentUsage::Readonly(ref mut count) => {
                         match &requested_usage {
                             RequestedUsage::Readonly => {
-                                *current_count += 1;
+                                *count += 1;
                                 LockAttempt::success(address, requested_usage)
                             }
                             RequestedUsage::Writable => {
@@ -195,18 +195,17 @@ impl AddressBook {
                 let mut page = entry.get_mut();
 
                 match &mut page.current_usage {
-                    CurrentUsage::Readonly(ref mut current_count) => {
+                    CurrentUsage::Readonly(ref mut count) =>
                         match &attempt.requested_usage {
                             RequestedUsage::Readonly => {
-                                if *current_count == SOLE_USE_COUNT {
+                                if *count == SOLE_USE_COUNT {
                                     newly_uncontended = true;
                                 } else {
-                                    *current_count -= 1;
+                                    *count -= 1;
                                 }
                             }
                             RequestedUsage::Writable => unreachable!(),
                         }
-                    }
                     CurrentUsage::Writable => match &attempt.requested_usage {
                         RequestedUsage::Writable => {
                             newly_uncontended = true;
