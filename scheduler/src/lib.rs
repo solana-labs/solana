@@ -402,8 +402,9 @@ impl ScheduleStage {
                 if weight_from_contended < weight_from_runnable {
                     runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
                 } else if weight_from_contended > weight_from_runnable {
-                    let task = contended_queue.remove_to_execute(&weight_from_contended);
-                    Some((false, weight_from_contended, task))
+                    //let task = contended_queue.remove_to_execute(&weight_from_contended);
+                    //Some((false, weight_from_contended, task))
+                    panic!();
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
@@ -411,8 +412,9 @@ impl ScheduleStage {
                 }
             }
             (Some(weight_from_contended), None) => {
-                let task = contended_queue.remove_to_execute(&weight_from_contended);
-                Some((false, weight_from_contended, task))
+                //let task = contended_queue.remove_to_execute(&weight_from_contended);
+                //Some((false, weight_from_contended, task))
+                panic!();
             }
             (None, Some(weight_from_runnable)) => {
                 runnable_queue.pop_next_task().map(|(uw, t)| (true, uw, t))
