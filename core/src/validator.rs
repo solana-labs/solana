@@ -880,7 +880,10 @@ impl Validator {
             Some(stats_reporter_sender.clone()),
             &exit,
         );
-        let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
+        let serve_repair = Arc::new(RwLock::new(ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks.clone(),
+        )));
         let serve_repair_service = ServeRepairService::new(
             &serve_repair,
             Some(blockstore.clone()),
