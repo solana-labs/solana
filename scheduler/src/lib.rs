@@ -399,7 +399,7 @@ impl ScheduleStage {
                 let weight_from_runnable = last_entry.key();
 
                 if &weight_from_contended < weight_from_runnable {
-                    (Some(contended_queue), last_entry)
+                    Some((contended_queue, last_entry))
                 } else if &weight_from_contended > weight_from_runnable {
                     match contended_queue.entry_to_execute(weight_from_contended) {
                         Entry::Occupied(entry) => {
