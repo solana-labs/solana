@@ -1,5 +1,6 @@
 use {
     crate::prioritization_fee::*,
+    solana_measure::measure,
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
     },
@@ -11,15 +12,110 @@ use {
 /// land transactions to current block.
 const MAX_NUM_RECENT_BLOCKS: usize = 150;
 
+#[derive(Debug, Default)]
+struct PrioritizationFeeCacheMetrics {
+    // Count of transactions that successfully updated each slot's prioritization fee cache.
+    successful_transaction_update_count: u64,
+
+    // Count of writable accounts has min prioritization fee in this slot
+    total_writable_accounts_count: u64,
+
+    // Count of writeable accounts those min prioritization fee is higher than min transaction fee
+    // in this slot.
+    relevant_writable_accounts_count: u64,
+
+    // Count of transactions that failed to get their priority details.
+    fail_get_transaction_priority_details_count: u64,
+
+    // Count of transactions that failed to get their account locks.
+    fail_get_transaction_account_locks_count: u64,
+
+    // Count of occurrences when bank is frozen yet prioritization fee cache does not have records
+    // for the bank. Something must be very wrong if this happens.
+    fail_finalize_block_not_found: u64,
+
+    // Accumulated time spent on tracking prioritization fee for each slot.
+    total_update_elapsed_us: u64,
+}
+
+impl PrioritizationFeeCacheMetrics {
+    fn increment_successful_transaction_update_count(&mut self, val: u64) {
+        saturating_add_assign!(self.successful_transaction_update_count, val);
+    }
+
+    fn increment_total_writable_accounts_count(&mut self, val: u64) {
+        saturating_add_assign!(self.total_writable_accounts_count, val);
+    }
+
+    fn increment_relevant_writable_accounts_count(&mut self, val: u64) {
+        saturating_add_assign!(self.relevant_writable_accounts_count, val);
+    }
+
+    fn increment_fail_get_transaction_priority_details_count(&mut self, val: u64) {
+        saturating_add_assign!(self.fail_get_transaction_priority_details_count, val);
+    }
+
+    fn increment_fail_get_transaction_account_locks_count(&mut self, val: u64) {
+        saturating_add_assign!(self.fail_get_transaction_account_locks_count, val);
+    }
+
+    fn increment_fail_finalize_block_not_found(&mut self, val: u64) {
+        saturating_add_assign!(self.fail_finalize_block_not_found, val);
+    }
+
+    fn increment_total_update_elapsed_us(&mut self, val: u64) {
+        saturating_add_assign!(self.total_update_elapsed_us, val);
+    }
+
+    fn report(&mut self, slot: Slot) {
+        datapoint_info!(
+            "block_prioritization_fee_counters",
+            ("slot", slot as i64, i64),
+            (
+                "successful_transaction_update_count",
+                self.successful_transaction_update_count as i64,
+                i64
+            ),
+            (
+                "total_writable_accounts_count",
+                self.total_writable_accounts_count as i64,
+                i64
+            ),
+            (
+                "relevant_writable_accounts_count",
+                self.relevant_writable_accounts_count as i64,
+                i64
+            ),
+            (
+                "fail_get_transaction_priority_details_count",
+                self.fail_get_transaction_priority_details_count as i64,
+                i64
+            ),
+            (
+                "fail_get_transaction_account_locks_count",
+                self.fail_get_transaction_account_locks_count as i64,
+                i64
+            ),
+            (
+                "fail_finalize_block_not_found",
+                self.fail_finalize_block_not_found as i64,
+                i64
+            ),
+            (
+                "total_update_elapsed_us",
+                self.total_update_elapsed_us as i64,
+                i64
+            ),
+        );
+        *self = PrioritizationFeeCacheMetrics::default();
+    }
+}
+
 /// Holds up to MAX_NUM_RECENT_BLOCKS recent block's min prioritization fee for block,
 /// and for each writable accounts per block.
 pub struct PrioritizationFeeCache {
     cache: HashMap<Slot, PrioritizationFee>,
-    // metrics counts
-    successful_transaction_update_count: u64,
-    fail_get_transaction_priority_details_count: u64,
-    fail_get_transaction_account_locks_count: u64,
-    fail_finalize_block_not_found: u64,
+    metrics: PrioritizationFeeCacheMetrics,
 }
 
 impl Default for PrioritizationFeeCache {
@@ -32,11 +128,7 @@ impl PrioritizationFeeCache {
     pub fn new(capacity: usize) -> Self {
         PrioritizationFeeCache {
             cache: HashMap::with_capacity(capacity),
-            //            ..default()
-            successful_transaction_update_count: 0,
-            fail_get_transaction_priority_details_count: 0,
-            fail_get_transaction_account_locks_count: 0,
-            fail_finalize_block_not_found: 0,
+            metrics: PrioritizationFeeCacheMetrics::default(),
         }
     }
 
@@ -54,61 +146,6 @@ impl PrioritizationFeeCache {
             .or_insert_with(PrioritizationFee::default)
     }
 
-    fn report_metrics_for_slot(&mut self, slot: Slot) {
-        // report current min fees for slot
-        if let Some(block) = self.get_prioritization_fee(&slot) {
-            datapoint_info!(
-                "block_prioritization_fee",
-                ("slot", slot as i64, i64),
-                ("entity", "block", String),
-                (
-                    "min_prioritization_fee",
-                    block.get_min_transaction_fee().unwrap_or(0) as i64,
-                    i64
-                ),
-            );
-            for (account_key, fee) in block.get_writable_account_fees() {
-                datapoint_info!(
-                    "block_prioritization_fee",
-                    ("slot", slot as i64, i64),
-                    ("entity", account_key.to_string(), String),
-                    ("min_prioritization_fee", *fee as i64, i64),
-                );
-            }
-        }
-        // report and reset counter
-        {
-            datapoint_info!(
-                "block_prioritization_fee_counters",
-                ("slot", slot as i64, i64),
-                (
-                    "successful_transaction_update_count",
-                    self.successful_transaction_update_count as i64,
-                    i64
-                ),
-                (
-                    "fail_get_transaction_priority_details_count",
-                    self.fail_get_transaction_priority_details_count as i64,
-                    i64
-                ),
-                (
-                    "fail_get_transaction_account_locks_count",
-                    self.fail_get_transaction_account_locks_count as i64,
-                    i64
-                ),
-                (
-                    "fail_finalize_block_not_found",
-                    self.fail_finalize_block_not_found as i64,
-                    i64
-                ),
-            );
-            self.successful_transaction_update_count = 0;
-            self.fail_get_transaction_priority_details_count = 0;
-            self.fail_get_transaction_account_locks_count = 0;
-            self.fail_finalize_block_not_found = 0;
-        }
-    }
-
     /// Update block's min prioritization fee with `txs`,
     /// Returns updated min prioritization fee for `slot`
     pub fn update_transactions<'a>(
@@ -116,42 +153,42 @@ impl PrioritizationFeeCache {
         slot: Slot,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
     ) -> Option<u64> {
-        let updated_min_fee: Option<u64>;
-
         let mut successful_transaction_update_count: u64 = 0;
         let mut fail_get_transaction_priority_details_count: u64 = 0;
         let mut fail_get_transaction_account_locks_count: u64 = 0;
 
-        {
-            let block_prioritization_fee = self.get_or_add_mut_prioritization_fee(&slot);
+        let (updated_min_fee, cache_update_time) = measure!(
+            {
+                let block_prioritization_fee = self.get_or_add_mut_prioritization_fee(&slot);
 
-            for sanitized_tx in txs {
-                match block_prioritization_fee.update(sanitized_tx) {
-                    Err(PrioritizationFeeError::FailGetTransactionPriorityDetails) => {
-                        saturating_add_assign!(fail_get_transaction_priority_details_count, 1)
+                for sanitized_tx in txs {
+                    match block_prioritization_fee.update(sanitized_tx) {
+                        Err(PrioritizationFeeError::FailGetTransactionPriorityDetails) => {
+                            saturating_add_assign!(fail_get_transaction_priority_details_count, 1)
+                        }
+                        Err(PrioritizationFeeError::FailGetTransactionAccountLocks) => {
+                            saturating_add_assign!(fail_get_transaction_account_locks_count, 1)
+                        }
+                        _ => saturating_add_assign!(successful_transaction_update_count, 1),
                     }
-                    Err(PrioritizationFeeError::FailGetTransactionAccountLocks) => {
-                        saturating_add_assign!(fail_get_transaction_account_locks_count, 1)
-                    }
-                    _ => saturating_add_assign!(successful_transaction_update_count, 1),
                 }
-            }
+                block_prioritization_fee.get_min_transaction_fee()
+            },
+            "cache_update"
+        );
 
-            updated_min_fee = block_prioritization_fee.get_min_transaction_fee();
-        }
-
-        saturating_add_assign!(
-            self.successful_transaction_update_count,
-            successful_transaction_update_count
-        );
-        saturating_add_assign!(
-            self.fail_get_transaction_priority_details_count,
-            fail_get_transaction_priority_details_count
-        );
-        saturating_add_assign!(
-            self.fail_get_transaction_account_locks_count,
-            fail_get_transaction_account_locks_count
-        );
+        self.metrics
+            .increment_successful_transaction_update_count(successful_transaction_update_count);
+        self.metrics
+            .increment_fail_get_transaction_priority_details_count(
+                fail_get_transaction_priority_details_count,
+            );
+        self.metrics
+            .increment_fail_get_transaction_account_locks_count(
+                fail_get_transaction_account_locks_count,
+            );
+        self.metrics
+            .increment_total_update_elapsed_us(cache_update_time.as_us());
 
         updated_min_fee
     }
@@ -159,14 +196,46 @@ impl PrioritizationFeeCache {
     /// bank is completely replayed from blockstore, prune irrelevant accounts to save space,
     /// its fee stats can be made available to queries
     pub fn finalize_block(&mut self, slot: Slot) {
-        if let Some(block) = self.get_mut_prioritization_fee(&slot) {
-            block.prune_irrelevant_writable_accounts();
-            let _ = block.mark_block_completed();
+        let mut pre_writable_accounts_count: usize = 0;
+        let mut post_writable_accounts_count: usize = 0;
+
+        if let Some(prioritization_fee) = self.get_mut_prioritization_fee(&slot) {
+            pre_writable_accounts_count = prioritization_fee.get_writable_accounts_count();
+            prioritization_fee.prune_irrelevant_writable_accounts();
+            post_writable_accounts_count = prioritization_fee.get_writable_accounts_count();
+            let _ = prioritization_fee.mark_block_completed();
         } else {
-            saturating_add_assign!(self.fail_finalize_block_not_found, 1);
+            self.metrics.increment_fail_finalize_block_not_found(1);
         }
 
-        self.report_metrics_for_slot(slot);
+        self.metrics.increment_total_writable_accounts_count(pre_writable_accounts_count as u64);
+        self.metrics.increment_relevant_writable_accounts_count(post_writable_accounts_count as u64);
+        self.metrics.report(slot);
+
+        // report current min fees for slot, including min_transaction_fee and top 10
+        // min_writable_account_fees
+        if let Some(prioritization_fee) = self.get_prioritization_fee(&slot) {
+            datapoint_info!(
+                "block_prioritization_fee",
+                ("slot", slot as i64, i64),
+                ("entity", "block", String),
+                (
+                    "min_prioritization_fee",
+                    prioritization_fee.get_min_transaction_fee().unwrap_or(0) as i64,
+                    i64
+                ),
+            );
+            let mut accounts_fees: Vec<_> = prioritization_fee.get_writable_account_fees().collect();
+            accounts_fees.sort_by(|lh, rh| rh.1.cmp(lh.1));
+            for (account_key, fee) in accounts_fees.iter().take(10) {
+                datapoint_info!(
+                    "block_prioritization_fee",
+                    ("slot", slot as i64, i64),
+                    ("entity", account_key.to_string(), String),
+                    ("min_prioritization_fee", **fee as i64, i64),
+                );
+            }
+        }
     }
 
     /// Returns number of blocks that have finalized min fees collection
