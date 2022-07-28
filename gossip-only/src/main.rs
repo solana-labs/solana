@@ -107,14 +107,14 @@ fn parse_matches() -> ArgMatches<'static> {
                 .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this entrypoint"),
         )
-        // .arg(
-        //     clap::Arg::with_name("gossip_port")
-        //         .long("gossip-port")
-        //         .value_name("PORT")
-        //         .takes_value(true)
-        //         .validator(is_port)
-        //         .help("Gossip port number for the node"),
-        // )
+        .arg(
+            clap::Arg::with_name("gossip_port")
+                .long("gossip-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .validator(is_port)
+                .help("Gossip port number for the node"),
+        )
         .arg(
             Arg::with_name("gossip_host")
                 .long("gossip-host")
@@ -314,12 +314,13 @@ pub fn main() {
     // let gossip_host = entrypoint_addrs[0].ip();
     let gossip_addr = SocketAddr::new(
         gossip_host,
-        solana_net_utils::find_available_port_in_range(bind_address, (0, 1)).unwrap_or_else(
-            |err| {
-                eprintln!("Unable to find an available gossip port: {}", err);
-                exit(1);
-            },
-        ),
+        value_t!(matches, "gossip_port", u16).unwrap_or_else(|_| {
+            solana_net_utils::find_available_port_in_range(
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                (0, 1),
+            )
+            .expect("unable to find an available gossip port")
+        }),
     );
 
     //set entrypoints for gossip
