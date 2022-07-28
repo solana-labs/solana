@@ -269,9 +269,8 @@ fn output_slot(
         .spawn(move || {
             use solana_metrics::datapoint_info;
             let current_thread_name = std::thread::current().name().unwrap().to_string();
-            let mut step = 0;
 
-            loop {
+            for step in [..] {
                 let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
 
                 let mut process_message_time = Measure::start("process_message_time");
@@ -284,6 +283,7 @@ fn output_slot(
 
                 process_message_time.stop();
                 let duration_with_overhead = process_message_time.as_us();
+                post_execute_env_sender.send(ee).unwrap();
 
                 datapoint_info!(
                     "individual_tx_stats",
@@ -295,8 +295,6 @@ fn output_slot(
                     ("duration", duration_with_overhead, i64),
                     ("compute_units", ee.cu, i64),
                 );
-                post_execute_env_sender.send(ee).unwrap();
-                step += 1;
             }
         })
         .unwrap();
