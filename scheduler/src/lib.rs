@@ -456,7 +456,7 @@ impl ScheduleStage {
                 continue;
             }
 
-            return Some((entry.key(), entry.remove(), lock_attempts));
+            return Some((*entry.key(), entry.remove(), lock_attempts));
         }
 
         None
