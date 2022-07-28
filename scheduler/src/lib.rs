@@ -113,6 +113,7 @@ impl AddressBook {
     #[inline(never)]
     fn attempt_lock_address(
         &mut self,
+        from_runnable: bool,
         unique_weight: &UniqueWeight,
         address: Pubkey,
         requested_usage: RequestedUsage,
@@ -143,8 +144,9 @@ impl AddressBook {
                                 LockAttempt::success(address, requested_usage)
                             }
                             RequestedUsage::Writable => {
-                                // skip insert if existing
-                                page.contended_unique_weights.insert(*unique_weight);
+                                if from_runnable {
+                                    Self::remember_new_contended_unique_weight(page, unique_weight);
+                                }
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
@@ -152,8 +154,9 @@ impl AddressBook {
                     CurrentUsage::Writable => {
                         match &requested_usage {
                             RequestedUsage::Readonly | RequestedUsage::Writable => {
-                                // skip insert if existing
-                                page.contended_unique_weights.insert(*unique_weight);
+                                if from_runnable {
+                                    Self::remember_new_contended_unique_weight(page, unique_weight);
+                                }
                                 LockAttempt::failure(address, requested_usage)
                             }
                         }
@@ -161,6 +164,11 @@ impl AddressBook {
                 }
             }
         }
+    }
+
+    #[inline(never)]
+    fn remember_new_contended_unique_weight(page: usize, unique_weight: &UniqueWeight) {
+        page.contended_unique_weights.insert(*unique_weight);
     }
 
     #[inline(never)]
@@ -291,6 +299,7 @@ impl TaskQueue {
 
 #[inline(never)]
 fn attempt_lock_for_execution<'a>(
+    from_runnable: bool,
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
@@ -302,7 +311,7 @@ fn attempt_lock_for_execution<'a>(
     let chained_iter = writable_lock_iter.chain(readonly_lock_iter);
 
     chained_iter
-        .map(|(a, usage)| address_book.attempt_lock_address(unique_weight, **a, usage))
+        .map(|(a, usage)| address_book.attempt_lock_address(from_runnable, unique_weight, **a, usage))
         .collect::<Vec<_>>()
 }
 
@@ -414,7 +423,7 @@ impl ScheduleStage {
             // detection?
 
             let lock_attempts =
-                attempt_lock_for_execution(address_book, &unique_weight, &message_hash, &locks);
+                attempt_lock_for_execution(from_runnable, address_book, &unique_weight, &message_hash, &locks);
             let is_success = lock_attempts.iter().all(|g| g.is_success());
 
             if !is_success {
