@@ -309,8 +309,8 @@ pub fn main() {
     });
 
     let mut gossip_threads: Vec<GossipService> = Vec::new();
-    let entrypoint_addr = parse_entrypoint(matches);
-    let gossip_host = parse_gossip_host(matches, entrypoint_addr);
+    let entrypoint_addr = parse_entrypoint(&matches);
+    let gossip_host = parse_gossip_host(&matches, entrypoint_addr);
     // let gossip_host = entrypoint_addrs[0].ip();
     let gossip_addr = SocketAddr::new(
         gossip_host,
