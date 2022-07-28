@@ -352,14 +352,14 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
     }
 
     pub fn ref_count(&self) -> RefCount {
-        self.ref_count.load(Ordering::Relaxed)
+        self.ref_count.load(Ordering::Acquire)
     }
 
     pub fn add_un_ref(&self, add: bool) {
         if add {
-            self.ref_count.fetch_add(1, Ordering::Relaxed);
+            self.ref_count.fetch_add(1, Ordering::Release);
         } else {
-            self.ref_count.fetch_sub(1, Ordering::Relaxed);
+            self.ref_count.fetch_sub(1, Ordering::Release);
         }
         self.set_dirty(true);
     }
