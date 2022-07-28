@@ -605,15 +605,17 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         current.push_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
 
         error!(
-            "haoran lock_and_update_slot_list: {}, pubkey: {}",
+            "haoran lock_and_update_slot_list: {}, pubkey: {}, {:?}",
             current.log_rws(),
-            pubkey
+            pubkey,
+            thread::current().id(),
         );
         let mut slot_list = current.slot_list.write().unwrap();
         error!(
-            "haoran lock_and_update_slot_list success: {}, pubkey: {}",
+            "haoran lock_and_update_slot_list success: {}, pubkey: {}, {:?}",
             current.log_rws(),
-            pubkey
+            pubkey,
+            thread::current().id(),
         );
         let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
