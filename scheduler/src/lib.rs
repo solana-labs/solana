@@ -444,7 +444,6 @@ impl ScheduleStage {
         for (reborrowed_contended_queue, entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
-            //let unique_weight = entry.key();
             let next_task = entry.get();
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
