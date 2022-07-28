@@ -238,7 +238,12 @@ fn output_slot(
     let (tx_sender, tx_receiver) = crossbeam_channel::bounded(10_000);
 
     // this should be target number of saturated cpu cores
-    let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(8);
+    let lane_count = std::env::var("EXECUTION_LANE_COUNT")
+        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
+        .parse()
+        .unwrap();
+    let lane_channel_factor = 10;
+    let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
 
     // this channel should be okay to be unbounded, really?
     let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
@@ -263,10 +268,6 @@ fn output_slot(
                 &post_schedule_env_sender,
             );
         })
-        .unwrap();
-    let lane_count = std::env::var("EXECUTION_LANE_COUNT")
-        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
-        .parse()
         .unwrap();
     let handles = (0..lane_count)
         .map(|thx| {
