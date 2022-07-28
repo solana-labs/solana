@@ -304,15 +304,24 @@ fn attempt_lock_for_execution<'a>(
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     locks: &'a TransactionAccountLocks,
-) -> Vec<LockAttempt> {
+) -> (bool, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let writable_lock_iter = locks.writable.iter().map(|a| (a, RequestedUsage::Writable));
     let readonly_lock_iter = locks.readonly.iter().map(|a| (a, RequestedUsage::Readonly));
     let chained_iter = writable_lock_iter.chain(readonly_lock_iter);
 
-    chained_iter
-        .map(|(a, usage)| address_book.attempt_lock_address(from_runnable, unique_weight, **a, usage))
-        .collect::<Vec<_>>()
+    let mut all_succeeded_so_far = true;
+    let ll = chained_iter
+        .map(|(a, usage)| {
+            let a = address_book.attempt_lock_address(from_runnable, unique_weight, **a, usage);
+            if all_succeeded_so_far && a == LockAttempt::Feature {
+                all_succeeded_so_far = false;
+            }
+            a
+        })
+        .collect::<Vec<_>>();
+
+    (all_succeeded_so_far, ll)
 }
 
 pub struct ScheduleStage {}
@@ -422,9 +431,8 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let lock_attempts =
+            let (is_success, lock_attempts) =
                 attempt_lock_for_execution(from_runnable, address_book, &unique_weight, &message_hash, &locks);
-            let is_success = lock_attempts.iter().all(|g| g.is_success());
 
             if !is_success {
                 //info!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
