@@ -270,7 +270,7 @@ fn output_slot(
             use solana_metrics::datapoint_info;
             let current_thread_name = std::thread::current().name().unwrap().to_string();
 
-            for step in [..].iter() {
+            for step in 0.. {
                 let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
 
                 let mut process_message_time = Measure::start("process_message_time");
