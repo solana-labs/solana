@@ -264,38 +264,43 @@ fn output_slot(
             );
         })
         .unwrap();
-    let t2 = std::thread::Builder::new()
-        .name("sol-execute".to_string())
-        .spawn(move || {
-            use solana_metrics::datapoint_info;
-            let current_thread_name = std::thread::current().name().unwrap().to_string();
+    let handles = (0..10).map(|thx| {
+        let pre_execute_env_receiver = pre_execute_env_receiver.clone();
+        let post_execute_env_sender = post_execute_env_sender.clone();
+        let t2 = std::thread::Builder::new()
+            .name(format!("blockstore_processor_{}", thx))
+            .spawn(move || {
+                use solana_metrics::datapoint_info;
+                let current_thread_name = std::thread::current().name().unwrap().to_string();
 
-            for step in 0.. {
-                let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
+                for step in 0.. {
+                    let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
 
-                let mut process_message_time = Measure::start("process_message_time");
+                    let mut process_message_time = Measure::start("process_message_time");
 
-                let sig = ee.task.tx.signature().to_string();
-                info!("execute substage: #{} {:#?}", step, &sig);
-                std::thread::sleep(std::time::Duration::from_micros(ee.cu.try_into().unwrap()));
+                    let sig = ee.task.tx.signature().to_string();
+                    info!("execute substage: #{} {:#?}", step, &sig);
+                    std::thread::sleep(std::time::Duration::from_micros(ee.cu.try_into().unwrap()));
 
-                process_message_time.stop();
-                let duration_with_overhead = process_message_time.as_us();
+                    process_message_time.stop();
+                    let duration_with_overhead = process_message_time.as_us();
 
-                datapoint_info!(
-                    "individual_tx_stats",
-                    ("slot", 33333, i64),
-                    ("thread", current_thread_name, String),
-                    ("signature", &sig, String),
-                    ("account_locks_in_json", "{}", String),
-                    ("status", "Ok", String),
-                    ("duration", duration_with_overhead, i64),
-                    ("compute_units", ee.cu, i64),
-                );
-                post_execute_env_sender.send(ee).unwrap();
-            }
-        })
-        .unwrap();
+                    datapoint_info!(
+                        "individual_tx_stats",
+                        ("slot", 33333, i64),
+                        ("thread", current_thread_name, String),
+                        ("signature", &sig, String),
+                        ("account_locks_in_json", "{}", String),
+                        ("status", "Ok", String),
+                        ("duration", duration_with_overhead, i64),
+                        ("compute_units", ee.cu, i64),
+                    );
+                    post_execute_env_sender.send(ee).unwrap();
+                }
+            })
+            .unwrap();
+        t2
+    }.collect::<Vec<_>>();
 
     let t3 = std::thread::Builder::new()
         .name("sol-consumer".to_string())
