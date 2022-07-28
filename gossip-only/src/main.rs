@@ -2,8 +2,9 @@
 #[cfg(not(target_env = "msvc"))]
 use {
     clap::{
-        crate_description, crate_name, value_t, value_t_or_exit, values_t, App, Arg, ArgMatches,
+        crate_description, crate_name, value_t, value_t_or_exit, values_t, App, Arg, ArgMatches, AppSettings,
     },
+    solana_clap_utils::input_validators::is_port,
     crossbeam_channel::unbounded,
     log::*,
     solana_core::gen_keys::GenKeys,
@@ -11,7 +12,7 @@ use {
         cluster_info::{ClusterInfo, Node},
         contact_info::ContactInfo,
         gossip_service::GossipService,
-        gossip_service::discover,
+        // gossip_service::discover,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_runtime::{
@@ -54,14 +55,14 @@ fn parse_matches() -> ArgMatches<'static> {
     App::new(crate_name!())
         .about(crate_description!())
         .version(solana_version::version!())
-        .setting(AppSettings::SubcommandRequiredElseHelp)
-        .arg(
-            Arg::with_name("allow_private_addr")
-                .long("allow-private-addr")
-                .takes_value(false)
-                .help("Allow contacting private ip addresses")
-                .hidden(true),
-        )
+        // .setting(AppSettings::SubcommandRequiredElseHelp)
+        // .arg(
+        //     Arg::with_name("allow_private_addr")
+        //         .long("allow-private-addr")
+        //         .takes_value(false)
+        //         .help("Allow contacting private ip addresses")
+        //         .hidden(true),
+        // )
         .arg(
             Arg::with_name("shred_version")
                 .long("shred-version")
@@ -106,42 +107,49 @@ fn parse_matches() -> ArgMatches<'static> {
                 .validator(solana_net_utils::is_host_port)
                 .help("Rendezvous with the cluster at this entrypoint"),
         )
+        // .arg(
+        //     clap::Arg::with_name("gossip_port")
+        //         .long("gossip-port")
+        //         .value_name("PORT")
+        //         .takes_value(true)
+        //         .validator(is_port)
+        //         .help("Gossip port number for the node"),
+        // )
+        // .arg(
+        //     clap::Arg::with_name("gossip_host")
+        //         .long("gossip-host")
+        //         .value_name("HOST")
+        //         .takes_value(true)
+        //         .validator(solana_net_utils::is_host)
+        //         .help("Gossip DNS name or IP address for the node to advertise in gossip \
+        //                [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
+        // )
+        // .arg(
+        //     Arg::with_name("timeout")
+        //         .long("timeout")
+        //         .value_name("SECONDS")
+        //         .takes_value(true)
+        //         .default_value("15")
+        //         .help("Timeout in seconds"),
+        // )
         .arg(
-            clap::Arg::with_name("gossip_port")
-                .long("gossip-port")
-                .value_name("PORT")
-                .takes_value(true)
-                .validator(is_port)
-                .help("Gossip port number for the node"),
-        )
-        .arg(
-            clap::Arg::with_name("gossip_host")
-                .long("gossip-host")
-                .value_name("HOST")
-                .takes_value(true)
-                .validator(solana_net_utils::is_host)
-                .help("Gossip DNS name or IP address for the node to advertise in gossip \
-                       [default: ask --entrypoint, or 127.0.0.1 when --entrypoint is not provided]"),
-        )
-        .arg(
-            Arg::with_name("timeout")
-                .long("timeout")
-                .value_name("SECONDS")
-                .takes_value(true)
-                .default_value("15")
-                .help("Timeout in seconds"),
+            Arg::with_name("bootstrap")
+                .long("bootstrap")
+                .value_name("BOOTSTRAP")
+                .takes_value(false)
+                .help("set to run bootstrap validator"),
         )
         .get_matches()
 }
 
-fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
-    matches.value_of("entrypoint").map(|entrypoint| {
-        solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
-            eprintln!("failed to parse entrypoint address: {}", e);
-            exit(1);
-        })
-    })
-}
+// fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
+//     matches.value_of("entrypoint").map(|entrypoint| {
+//         solana_net_utils::parse_host_port(entrypoint).unwrap_or_else(|e| {
+//             eprintln!("failed to parse entrypoint address: {}", e);
+//             exit(1);
+//         })
+//     })
+// }
 
 pub fn main() {
     solana_logger::setup_with_default("info");
@@ -176,23 +184,23 @@ pub fn main() {
         exit(0);
     }
 
-    let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
-    let entrypoint_addr = parse_entrypoint(matches);
-    let timeout = value_t_or_exit!(matches, "timeout", u64);
+    // let socket_addr_space = SocketAddrSpace::new(matches.is_present("allow_private_addr"));
+    // let entrypoint_addr = parse_entrypoint(matches);
+    // let timeout = value_t_or_exit!(matches, "timeout", u64);
     let shred_version =
         value_t!(matches, "shred_version", u16).unwrap_or_else(|_| DEFAULT_SHRED_VERSION);
 
-    let (_all_peers, validators) = discover(
-        None, // keypair
-        entrypoint_addr.as_ref(),
-        Some(1), // num_nodes
-        Duration::from_secs(timeout),
-        None,                     // find_node_by_pubkey
-        entrypoint_addr.as_ref(), // find_node_by_gossip_addr
-        None,                     // my_gossip_addr
-        shred_version,
-        socket_addr_space,
-    )?;
+    // let (_all_peers, validators) = discover(
+    //     None, // keypair
+    //     entrypoint_addr.as_ref(),
+    //     Some(1), // num_nodes
+    //     Duration::from_secs(timeout),
+    //     None,                     // find_node_by_pubkey
+    //     entrypoint_addr.as_ref(), // find_node_by_gossip_addr
+    //     None,                     // my_gossip_addr
+    //     shred_version,
+    //     socket_addr_space,
+    // )?;
 
     // Read keys from file and spin up gossip nodes
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
@@ -293,17 +301,19 @@ pub fn main() {
         .map(ContactInfo::new_gossip_entry_point)
         .collect::<Vec<_>>();
 
-    // Loop through nodes, spin up a leader first, then have all others join leader
-    for i in 0..num_nodes {
+
+    let is_bootstrap = matches.is_present("bootstrap");
+    //Run bootstrapi gossip-node
+    if is_bootstrap {
         //create new node with external ip
         let mut node = Node::new_with_external_ip(
-            &node_keys[i].pubkey(),
+            &node_keys[0].pubkey(),
             &gossip_addr,
             dynamic_port_range,
             bind_address,
             None,
         );
-        let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[i].to_bytes()).unwrap());
+        let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[0].to_bytes()).unwrap());
         node.info.shred_version = shred_version;
 
         let cluster_info =
@@ -343,7 +353,61 @@ pub fn main() {
         );
 
         gossip_threads.push(gossip_service);
+    } else {
+        // Loop through nodes, spin up a leader first, then have all others join leader
+        for i in 0..num_nodes {
+            //create new node with external ip
+            let mut node = Node::new_with_external_ip(
+                &node_keys[i+1].pubkey(),
+                &gossip_addr,
+                dynamic_port_range,
+                bind_address,
+                None,
+            );
+            let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[i+1].to_bytes()).unwrap());
+            node.info.shred_version = shred_version;
+
+            let cluster_info =
+                ClusterInfo::new(node.info.clone(), my_keypair.clone(), socket_addr_space);
+
+            cluster_info.set_entrypoints(cluster_entrypoints.clone());
+            let cluster_info = Arc::new(cluster_info);
+
+            //Generate new bank and bank forks
+            let bank0 = Bank::new_with_paths_for_tests(
+                genesis_config,
+                vec![ledger_path.clone()],
+                None,
+                None,
+                AccountSecondaryIndexes::default(),
+                false,
+                accounts_db::AccountShrinkThreshold::default(),
+                false,
+                None,
+            );
+            bank0.freeze();
+            let bank_forks = BankForks::new(bank0);
+            let bank_forks = Arc::new(RwLock::new(bank_forks));
+
+            let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
+
+            // Run Gossip
+            let exit_gossip = Arc::new(AtomicBool::new(false));
+            let gossip_service = GossipService::new(
+                &cluster_info,
+                Some(bank_forks.clone()),
+                node.sockets.gossip,
+                None,
+                true, //should check dup instance
+                Some(stats_reporter_sender.clone()),
+                &exit_gossip,
+            );
+
+            gossip_threads.push(gossip_service);
+        }
     }
+
+    
     for thread in gossip_threads {
         thread.join().unwrap();
     }
