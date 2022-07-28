@@ -292,7 +292,7 @@ impl TaskQueue {
 
     #[inline(never)]
     fn next_task_unique_weight(&self) -> Option<UniqueWeight> {
-        self.map.last_key_value().map(|e| e.0.clone())
+        self.map.last_entry()
     }
 
     #[inline(never)]
