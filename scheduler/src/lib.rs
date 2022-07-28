@@ -287,7 +287,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn entry_to_execute(&mut self, unique_weight: UniqueWeight) -> Task {
+    fn entry_to_execute(&mut self, unique_weight: UniqueWeight) -> std::collections::btree_map::Entry<'_, UniqueWeight, Task> {
         self.tasks.entry(unique_weight)
     }
 
