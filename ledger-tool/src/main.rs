@@ -300,7 +300,7 @@ fn output_slot(
     let t3 = std::thread::Builder::new()
         .name("sol-consumer".to_string())
         .spawn(move || {
-            for step in .. {
+            for step in 0.. {
                 let ee = post_schedule_env_receiver.recv().unwrap();
                 info!(
                     "post schedule stage: #{} {:#?}",
