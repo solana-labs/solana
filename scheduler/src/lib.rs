@@ -195,17 +195,16 @@ impl AddressBook {
                 let mut page = entry.get_mut();
 
                 match &mut page.current_usage {
-                    CurrentUsage::Readonly(ref mut count) =>
-                        match &attempt.requested_usage {
-                            RequestedUsage::Readonly => {
-                                if *count == SOLE_USE_COUNT {
-                                    newly_uncontended = true;
-                                } else {
-                                    *count -= 1;
-                                }
+                    CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
+                        RequestedUsage::Readonly => {
+                            if *count == SOLE_USE_COUNT {
+                                newly_uncontended = true;
+                            } else {
+                                *count -= 1;
                             }
-                            RequestedUsage::Writable => unreachable!(),
                         }
+                        RequestedUsage::Writable => unreachable!(),
+                    },
                     CurrentUsage::Writable => match &attempt.requested_usage {
                         RequestedUsage::Writable => {
                             newly_uncontended = true;
