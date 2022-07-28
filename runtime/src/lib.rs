@@ -49,8 +49,6 @@ pub mod non_circulating_supply;
 mod nonce_keyed_account;
 pub mod prioritization_fee;
 pub mod prioritization_fee_cache;
-pub mod prioritization_fee_cache_query;
-pub mod prioritization_fee_cache_update;
 mod pubkey_bins;
 mod read_only_accounts_cache;
 pub mod rent_collector;

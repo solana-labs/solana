@@ -1,8 +1,5 @@
 use {
-    crate::{
-        prioritization_fee::*, prioritization_fee_cache_query::PrioritizationFeeCacheQuery,
-        prioritization_fee_cache_update::PrioritizationFeeCacheUpdate,
-    },
+    crate::prioritization_fee::*,
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
     },
@@ -111,12 +108,10 @@ impl PrioritizationFeeCache {
             self.fail_finalize_block_not_found = 0;
         }
     }
-}
 
-impl PrioritizationFeeCacheUpdate for PrioritizationFeeCache {
     /// Update block's min prioritization fee with `txs`,
     /// Returns updated min prioritization fee for `slot`
-    fn update_transactions<'a>(
+    pub fn update_transactions<'a>(
         &mut self,
         slot: Slot,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
@@ -163,7 +158,7 @@ impl PrioritizationFeeCacheUpdate for PrioritizationFeeCache {
 
     /// bank is completely replayed from blockstore, prune irrelevant accounts to save space,
     /// its fee stats can be made available to queries
-    fn finalize_block(&mut self, slot: Slot) {
+    pub fn finalize_block(&mut self, slot: Slot) {
         if let Some(block) = self.get_mut_prioritization_fee(&slot) {
             block.prune_irrelevant_writable_accounts();
             let _ = block.mark_block_completed();
@@ -173,11 +168,9 @@ impl PrioritizationFeeCacheUpdate for PrioritizationFeeCache {
 
         self.report_metrics_for_slot(slot);
     }
-}
 
-impl PrioritizationFeeCacheQuery for PrioritizationFeeCache {
     /// Returns number of blocks that have finalized min fees collection
-    fn available_block_count(&self) -> usize {
+    pub fn available_block_count(&self) -> usize {
         self.cache
             .iter()
             .filter(|(_slot, min_prioritization_fee)| min_prioritization_fee.is_finalized())
@@ -187,7 +180,7 @@ impl PrioritizationFeeCacheQuery for PrioritizationFeeCache {
     /// Query block minimum fees from finalized blocks in cache,
     /// Returns a vector of fee; call site can use it to produce
     /// average, or top 5% etc.
-    fn get_prioritization_fees(&self) -> Vec<u64> {
+    pub fn get_prioritization_fees(&self) -> Vec<u64> {
         self.cache
             .iter()
             .filter_map(|(_slot, min_prioritization_fee)| {
@@ -202,7 +195,7 @@ impl PrioritizationFeeCacheQuery for PrioritizationFeeCache {
     /// Query given account minimum fees from finalized blocks in cache,
     /// Returns a vector of fee; call site can use it to produce
     /// average, or top 5% etc.
-    fn get_account_prioritization_fees(&self, account_key: &Pubkey) -> Vec<u64> {
+    pub fn get_account_prioritization_fees(&self, account_key: &Pubkey) -> Vec<u64> {
         self.cache
             .iter()
             .filter_map(|(_slot, min_prioritization_fee)| {

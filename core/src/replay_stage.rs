@@ -58,7 +58,6 @@ use {
         bank_forks::{BankForks, MAX_ROOT_DISTANCE_FOR_VOTE_ONLY},
         commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
-        prioritization_fee_cache_update::PrioritizationFeeCacheUpdate,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{

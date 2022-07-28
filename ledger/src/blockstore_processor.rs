@@ -32,7 +32,6 @@ use {
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         prioritization_fee_cache::PrioritizationFeeCache,
-        prioritization_fee_cache_update::PrioritizationFeeCacheUpdate,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
