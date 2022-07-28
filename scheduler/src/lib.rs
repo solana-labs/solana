@@ -457,6 +457,7 @@ impl ScheduleStage {
                 continue;
             }
 
+            let next_task = entry.remove();
             return Some((*unique_weight, next_task, lock_attempts));
         }
 
