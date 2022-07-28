@@ -282,6 +282,7 @@ fn output_slot(
                     for step in 0.. {
                         let ee = pre_execute_env_receiver.recv().unwrap().unwrap();
 
+                        /*
                         let mut process_message_time = Measure::start("process_message_time");
 
                         let sig = ee.task.tx.signature().to_string();
@@ -301,6 +302,7 @@ fn output_slot(
                             ("duration", duration_with_overhead, i64),
                             ("compute_units", ee.cu, i64),
                         );
+                        */
                         post_execute_env_sender.send(ee).unwrap();
                     }
                 })
