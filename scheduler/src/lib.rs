@@ -182,7 +182,7 @@ impl AddressBook {
         match self.map.entry(*address) {
             Entry::Vacant(entry) => unreachable!(),
             Entry::Occupied(mut entry) => {
-                let mut page = entry.get_mut();
+                let page = entry.get_mut();
                 page.contended_unique_weights.remove(unique_weight);
             }
         }
@@ -421,8 +421,8 @@ impl ScheduleStage {
                     Entry::Vacant(_entry) => { unreachable!() },
                 }
             }
-            (None, Some(weight_from_runnable)) => {
-                panic!()//runnable_queue.last_entry_to_execute().map(|e| (Some(contended_queue), e))
+            (None, Some(last_entry)) => {
+                Some((Some(contended_queue), last_entry))
             }
             (None, None) => None,
         }
