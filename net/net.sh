@@ -29,7 +29,7 @@ usage() {
 EOM
 )
   cat <<EOF
-usage: $0 [start|stop|restart|sanity] [command-specific options]
+usage: $0 [start|stop|restart|sanity|gossip-deploy] [command-specific options]
 
 Operate a configured testnet
 

@@ -31,20 +31,20 @@ cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 10 --ent
 
 ### Node 1 (bootstrap node):
 ```
-cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 1 --entrypoint <my-vnet-ip>:<vnet-port-to-run-on> --bootstrap --gossip-host <my-vnet-ip>
+cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 1 --entrypoint <my-vnet-ip>:<vnet-port-to-run-on> --bootstrap --gossip-host <my-vnet-ip> --gossip-port <my-vnet-gossip-port>
 ```
 
 Example:
 ```
-cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 1 --entrypoint 10.138.0.141:8000 --bootstrap --gossip-host 10.138.0.141
+cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 1 --entrypoint 10.138.0.141:8000 --bootstrap --gossip-host 10.138.0.141 --gossip-port 8001 
 ```
 
 ### Nodes 2-N:
 ```
-cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 1 --entrypoint <bootstrap-vnet-ip>:<bootstrap-vnet-port> --gossip-host <mt-vnet-ip>
+cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 1 --entrypoint <bootstrap-vnet-ip>:<bootstrap-vnet-port> --gossip-host <my-vnet-ip> --gossip-port <my-vnet-gossip-port>
 ```
 
 Example:
 ```
-cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 1 --entrypoint 10.138.0.141:8000 --gossip-host 10.138.0.133
+cargo run --bin gossip-only -- --account-file accounts.yaml --num-nodes 1 --entrypoint 10.138.0.141:8000 --gossip-host 10.138.0.133 --gossip-port 8001
 ```

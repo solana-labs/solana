@@ -131,8 +131,12 @@ cat >> ~/solana/on-reboot <<EOF
   fi
 EOF
 
+  echo "greg - case - bootstrap or validator"
+
+
   case $nodeType in
   bootstrap-validator)
+    echo "greg - in bootstrap-validator"
     set -x
     if [[ $skipSetup != true ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
@@ -176,6 +180,7 @@ EOF
         setupValidatorKeypair validator-identity-"$i"
       done
       setupValidatorKeypair blockstreamer-identity
+      echo "greg - in bootstrap-validator - 1"
 
       lamports_per_signature="42"
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
@@ -213,6 +218,7 @@ EOF
       fi
       # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
       args+=($genesisOptions)
+      echo "greg - in bootstrap-validator - 2"
 
       if [[ -f net/keypairs/faucet.json ]]; then
         export FAUCET_KEYPAIR=net/keypairs/faucet.json
@@ -239,6 +245,11 @@ EOF
           )
         done
       fi
+
+      echo "greg - bootstrap - entrypoint IP: $entrypointIp"
+      # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --bootstrap --gossip-host $entrypointIp --gossip-port 8001 &
+      gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint 10.138.0.48:9001 --bootstrap --gossip-host 10.138.0.48 --gossip-port 9001 &
+
 
       multinode-demo/setup.sh "${args[@]}"
 
@@ -301,6 +312,10 @@ cat >> ~/solana/on-reboot <<EOF
 EOF
     ~/solana/on-reboot
 
+    # echo "greg - bootstrap - entrypoint IP: $entrypointIp"
+    # # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --bootstrap --gossip-host $entrypointIp --gossip-port 8001 &
+    # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint 10.138.0.48:8001 --bootstrap --gossip-host 10.138.0.48 --gossip-port 8001 &
+
     if $waitForNodeInit; then
       net/remote/remote-node-wait-init.sh 600
     fi
@@ -337,12 +352,13 @@ EOF
     fi
 
     echo "greg - running write keys - 2 "
-    # args=(
-    #   --entrypoint "$entrypointIp:8001"
-    #   --gossip-port 8001
-    #   --rpc-port 8899
-    #   --expected-shred-version "$(cat "$SOLANA_CONFIG_DIR"/shred-version)"
-    # )
+
+    args=(
+      --entrypoint "$entrypointIp:8001"
+      --gossip-port 8001
+      --rpc-port 8899
+      --expected-shred-version "$(cat "$SOLANA_CONFIG_DIR"/shred-version)"
+    )
     args=(
       --write-keys
       --num-keys 10
@@ -350,15 +366,20 @@ EOF
     )
     gossip-only "${args[@]}"
 
-    echo "greg - run gossip"
-    args=(
-      --account-file gossip-only/src/accounts.yaml
-      --num-nodes 1
-      --entrypoint "$entrypointIp:8001"
-      # --gossip-port 8001
-    )
+    # echo "greg - bootstrap - entrypoint IP: $entrypointIp"
+    # # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --gossip-host 10.138.0.63 --gossip-port 8001 &
+    # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint 10.138.0.48:8001 --gossip-host 10.138.0.63 --gossip-port 8001 &
 
-    gossip-only "${args[@]}"
+
+    # echo "greg - run gossip"
+    # args=(
+    #   --account-file gossip-only/src/accounts.yaml
+    #   --num-nodes 1
+    #   --entrypoint "$entrypointIp:8001"
+    #   # --gossip-port 8001
+    # )
+
+    # gossip-only "${args[@]}"
 
     args=(
       --entrypoint "$entrypointIp:8001"
@@ -380,109 +401,113 @@ EOF
     fi
     
 
-#     if [[ ! -f "$SOLANA_CONFIG_DIR"/validator-identity.json ]]; then
-#       solana-keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/validator-identity.json
-#     fi
-#     args+=(--identity "$SOLANA_CONFIG_DIR"/validator-identity.json)
-#     if [[ ! -f "$SOLANA_CONFIG_DIR"/vote-account.json ]]; then
-#       solana-keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/vote-account.json
-#     fi
-#     args+=(--vote-account "$SOLANA_CONFIG_DIR"/vote-account.json)
+    if [[ ! -f "$SOLANA_CONFIG_DIR"/validator-identity.json ]]; then
+      solana-keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/validator-identity.json
+    fi
+    args+=(--identity "$SOLANA_CONFIG_DIR"/validator-identity.json)
+    if [[ ! -f "$SOLANA_CONFIG_DIR"/vote-account.json ]]; then
+      solana-keygen new --no-passphrase -so "$SOLANA_CONFIG_DIR"/vote-account.json
+    fi
+    args+=(--vote-account "$SOLANA_CONFIG_DIR"/vote-account.json)
 
-#     if [[ $airdropsEnabled != true ]]; then
-#       args+=(--no-airdrop)
-#     else
-#       args+=(--rpc-faucet-address "$entrypointIp:9900")
-#     fi
+    if [[ $airdropsEnabled != true ]]; then
+      args+=(--no-airdrop)
+    else
+      args+=(--rpc-faucet-address "$entrypointIp:9900")
+    fi
 
-#     if [[ -r "$SOLANA_CONFIG_DIR"/bank-hash ]]; then
-#       args+=(--expected-bank-hash "$(cat "$SOLANA_CONFIG_DIR"/bank-hash)")
-#     fi
+    if [[ -r "$SOLANA_CONFIG_DIR"/bank-hash ]]; then
+      args+=(--expected-bank-hash "$(cat "$SOLANA_CONFIG_DIR"/bank-hash)")
+    fi
 
 #   echo "greg - running write keys - 1 "
 #   gossip-only --account-file gossip-only/src/accounts.yaml --write-keys --num-keys 10
 
-#     set -x
-#     # Add the faucet keypair to validators for convenient access from tools
-#     # like bench-tps and add to blocktreamers to run a faucet
-#     scp "$entrypointIp":~/solana/config/faucet.json "$SOLANA_CONFIG_DIR"/
-#     if [[ $nodeType = blockstreamer ]]; then
-#       # Run another faucet with the same keypair on the blockstreamer node.
-#       # Typically the blockstreamer node has a static IP/DNS name for hosting
-#       # the blockexplorer web app, and is a location that somebody would expect
-#       # to be able to airdrop from
-#       if [[ $airdropsEnabled = true ]]; then
-# cat >> ~/solana/on-reboot <<EOF
-#         multinode-demo/faucet.sh > faucet.log 2>&1 &
-# EOF
-#       fi
+    set -x
+    # Add the faucet keypair to validators for convenient access from tools
+    # like bench-tps and add to blocktreamers to run a faucet
+    scp "$entrypointIp":~/solana/config/faucet.json "$SOLANA_CONFIG_DIR"/
+    if [[ $nodeType = blockstreamer ]]; then
+      # Run another faucet with the same keypair on the blockstreamer node.
+      # Typically the blockstreamer node has a static IP/DNS name for hosting
+      # the blockexplorer web app, and is a location that somebody would expect
+      # to be able to airdrop from
+      if [[ $airdropsEnabled = true ]]; then
+cat >> ~/solana/on-reboot <<EOF
+        multinode-demo/faucet.sh > faucet.log 2>&1 &
+EOF
+      fi
 
-#       # Grab the TLS cert generated by /certbot-restore.sh
-#       if [[ -f /.cert.pem ]]; then
-#         sudo install -o $UID -m 400 /.cert.pem /.key.pem .
-#         ls -l .cert.pem .key.pem
-#       fi
-#     fi
+      # Grab the TLS cert generated by /certbot-restore.sh
+      if [[ -f /.cert.pem ]]; then
+        sudo install -o $UID -m 400 /.cert.pem /.key.pem .
+        ls -l .cert.pem .key.pem
+      fi
+    fi
 
-#     args+=(--init-complete-file "$initCompleteFile")
-#     # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
-#     args+=($extraNodeArgs)
+    args+=(--init-complete-file "$initCompleteFile")
+    # shellcheck disable=SC2206 # Don't want to double quote $extraNodeArgs
+    args+=($extraNodeArgs)
 
-#     maybeSkipAccountsCreation=
-#     if [[ $nodeIndex -le $extraPrimordialStakes ]]; then
-#       maybeSkipAccountsCreation="export SKIP_ACCOUNTS_CREATION=1"
-#     fi
+    maybeSkipAccountsCreation=
+    if [[ $nodeIndex -le $extraPrimordialStakes ]]; then
+      maybeSkipAccountsCreation="export SKIP_ACCOUNTS_CREATION=1"
+    fi
 
-#     if [[ "$tmpfsAccounts" = "true" ]]; then
-#       args+=(--accounts /mnt/solana-accounts)
-#     fi
+    if [[ "$tmpfsAccounts" = "true" ]]; then
+      args+=(--accounts /mnt/solana-accounts)
+    fi
 
-#     if $maybeFullRpc; then
-#       args+=(--enable-rpc-transaction-history)
-#       args+=(--enable-extended-tx-metadata-storage)
-#     fi
+    if $maybeFullRpc; then
+      args+=(--enable-rpc-transaction-history)
+      args+=(--enable-extended-tx-metadata-storage)
+    fi
 
-# cat >> ~/solana/on-reboot <<EOF
-#     $maybeSkipAccountsCreation
-#     nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
-#     pid=\$!
-#     oom_score_adj "\$pid" 1000
-#     disown
-# EOF
-#     ~/solana/on-reboot
+cat >> ~/solana/on-reboot <<EOF
+    $maybeSkipAccountsCreation
+    nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
+    pid=\$!
+    oom_score_adj "\$pid" 1000
+    disown
+EOF
+    ~/solana/on-reboot
 
-#     if $waitForNodeInit; then
-#       net/remote/remote-node-wait-init.sh 600
-#     fi
+    if $waitForNodeInit; then
+      net/remote/remote-node-wait-init.sh 600
+    fi
 
-#     if [[ $skipSetup != true && $nodeType != blockstreamer && -z $maybeSkipAccountsCreation ]]; then
-#       # Wait for the validator to catch up to the bootstrap validator before
-#       # delegating stake to it
-#       solana --url http://"$entrypointIp":8899 catchup config/validator-identity.json
+    if [[ $skipSetup != true && $nodeType != blockstreamer && -z $maybeSkipAccountsCreation ]]; then
+      # Wait for the validator to catch up to the bootstrap validator before
+      # delegating stake to it
+      solana --url http://"$entrypointIp":8899 catchup config/validator-identity.json
 
-#       args=(
-#         --url http://"$entrypointIp":8899
-#       )
-#       if [[ $airdropsEnabled != true ]]; then
-#         args+=(--no-airdrop)
-#       fi
-#       if [[ -f config/validator-identity.json ]]; then
-#         args+=(--keypair config/validator-identity.json)
-#       fi
+      args=(
+        --url http://"$entrypointIp":8899
+      )
+      if [[ $airdropsEnabled != true ]]; then
+        args+=(--no-airdrop)
+      fi
+      if [[ -f config/validator-identity.json ]]; then
+        args+=(--keypair config/validator-identity.json)
+      fi
 
-#       # echo "greg - running write keys"
-#       # gossip-only --account-file gossip-only/src/accounts.yaml --write-keys --num-keys 10
+      # echo "greg - running write keys"
+      # gossip-only --account-file gossip-only/src/accounts.yaml --write-keys --num-keys 10
 
 
-#       if [[ ${extraPrimordialStakes} -eq 0 ]]; then
-#         echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
-#         multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
-#                                          --stake-account "$SOLANA_CONFIG_DIR"/stake-account.json \
-#                                          "${args[@]}" "$internalNodesStakeLamports"
-#       else
-#         echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"
-#       fi
-#     fi
+      if [[ ${extraPrimordialStakes} -eq 0 ]]; then
+        echo "greg - validator - entrypoint IP: $entrypointIp"
+        # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --gossip-host 10.138.0.63 --gossip-port 8001 &
+        gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint 10.138.0.48:9001 --gossip-host 10.138.0.63 --gossip-port 9001 &
+
+        echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
+        multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
+                                         --stake-account "$SOLANA_CONFIG_DIR"/stake-account.json \
+                                         "${args[@]}" "$internalNodesStakeLamports"
+      else
+        echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"
+      fi
+    fi
     ;;
   *)
     echo "Error: unknown node type: $nodeType"

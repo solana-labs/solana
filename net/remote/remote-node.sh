@@ -299,6 +299,7 @@ cat >> ~/solana/on-reboot <<EOF
 EOF
     ~/solana/on-reboot
 
+    echo "greg - remote-node.sh - 1"
     if $waitForNodeInit; then
       net/remote/remote-node-wait-init.sh 600
     fi
@@ -420,6 +421,7 @@ cat >> ~/solana/on-reboot <<EOF
 EOF
     ~/solana/on-reboot
 
+    echo "greg - remote-node.sh - 2"
     if $waitForNodeInit; then
       net/remote/remote-node-wait-init.sh 600
     fi
