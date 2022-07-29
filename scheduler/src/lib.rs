@@ -333,8 +333,8 @@ fn attempt_lock_for_execution<'a>(
 }
 
 enum Incoming {
-    FromPrevious(Weight, Box<SanitizedTransaction>),
-    FromExecute(Box<ExecutionEnvironment>),
+    FromPrevious((Weight, Box<SanitizedTransaction>)),
+    FromExecute((Box<ExecutionEnvironment>)),
 }
 
 pub struct ScheduleStage {}
@@ -597,74 +597,37 @@ impl ScheduleStage {
         loop {
             trace!("schedule_once!");
 
-            if maybe_ee.is_some() {
-                if depth < max_depth {
-                    select! {
-                        recv(from_previous_stage) -> weighted_tx => {
+            let i = incoming.receive().unwrap();
+            match i {
+                Incoming::FromPrevious(weighted_tx) => {
                             trace!("recv from previous");
-                            let weighted_tx = weighted_tx.unwrap();
-                            Self::register_runnable_task(weighted_tx, runnable_queue);
-                        }
-                        send(to_execute_substage, maybe_ee.unwrap()) -> res => {
+                    Self::register_runnable_task(weighted_tx, runnable_queue)
+                    if depth < max_depth {
+                        maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                        if let Some(ee) = maybe_ee {
                             trace!("send to execute");
-                            res.unwrap();
+                            to_execute_substage.send(ee).unwrap();
                             depth += 1;
-
-                            maybe_ee = None;
-                        }
-                        recv(from_execute_substage) -> processed_execution_environment => {
-                            trace!("recv from execute");
-                            let mut processed_execution_environment = processed_execution_environment.unwrap();
-                            depth -= 1;
-
-                            Self::commit_result(&mut processed_execution_environment, address_book);
-
-                            // async-ly propagate the result to rpc subsystems
-                            // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
-                            to_next_stage.send(processed_execution_environment).unwrap();
                         }
                     }
-                } else {
-                    select! {
-                        recv(from_previous_stage) -> weighted_tx => {
-                            trace!("recv from previous");
-                            let weighted_tx = weighted_tx.unwrap();
-                            Self::register_runnable_task(weighted_tx, runnable_queue);
-                        }
-                        recv(from_execute_substage) -> processed_execution_environment => {
-                            trace!("recv from execute");
-                            let mut processed_execution_environment = processed_execution_environment.unwrap();
-                            depth -= 1;
+                },
+                Incoming::FromExecute(processed_execution_environment) => {
+                    trace!("recv from execute");
+                    depth -= 1;
+                    Self::commit_result(&mut processed_execution_environment, address_book);
 
-                            Self::commit_result(&mut processed_execution_environment, address_book);
-
-                            // async-ly propagate the result to rpc subsystems
-                            // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
-                            to_next_stage.send(processed_execution_environment).unwrap();
-                        }
-                    }
-                }
-            } else {
-                select! {
-                    recv(from_previous_stage) -> weighted_tx => {
-                        trace!("recv from previous");
-                        let weighted_tx = weighted_tx.unwrap();
-                        Self::register_runnable_task(weighted_tx, runnable_queue);
+                    if depth < max_depth {
                         maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                        if let Some(ee) = maybe_ee {
+                            trace!("send to execute");
+                            to_execute_substage.send(ee).unwrap();
+                            depth += 1;
+                        }
                     }
-                    recv(from_execute_substage) -> processed_execution_environment => {
-                        trace!("recv from execute");
-                        let mut processed_execution_environment = processed_execution_environment.unwrap();
-                        depth -= 1;
 
-                        Self::commit_result(&mut processed_execution_environment, address_book);
-
-                        maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-
-                        // async-ly propagate the result to rpc subsystems
-                        // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
-                        to_next_stage.send(processed_execution_environment).unwrap();
-                    }
+                    // async-ly propagate the result to rpc subsystems
+                    // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
+                    to_next_stage.send(processed_execution_environment).unwrap();
                 }
             }
         }
