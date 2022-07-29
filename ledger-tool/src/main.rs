@@ -235,7 +235,7 @@ fn output_slot(
     }
 
     // basically, this controls the maximum size of task queue, so unbounded isn't nice
-    let (tx_sender, tx_receiver) = crossbeam_channel::unbounded();
+    let (muxed_sender, muxed_receiver) = crossbeam_channel::unbounded();
 
     // this should be target number of saturated cpu cores
     let lane_count = std::env::var("EXECUTION_LANE_COUNT")
@@ -265,7 +265,7 @@ fn output_slot(
                 &mut runnable_queue,
                 &mut contended_queue,
                 &mut address_book,
-                &tx_receiver,
+                &muxed_receiver,
                 &pre_execute_env_sender,
                 &post_schedule_env_sender,
             );
@@ -274,7 +274,6 @@ fn output_slot(
     let handles = (0..lane_count)
         .map(|thx| {
             let pre_execute_env_receiver = pre_execute_env_receiver.clone();
-            let post_execute_env_sender = post_execute_env_sender.clone();
             let t2 = std::thread::Builder::new()
                 .name(format!("blockstore_processor_{}", thx))
                 .spawn(move || {
@@ -304,7 +303,7 @@ fn output_slot(
                             ("compute_units", ee.cu, i64),
                         );
 
-                        post_execute_env_sender.send(solana_scheduler::Incoming::FromExecute(ee)).unwrap();
+                        muxed_sender.send(solana_scheduler::Incoming::FromExecute(ee)).unwrap();
                     }
                 })
                 .unwrap();
@@ -343,7 +342,7 @@ fn output_slot(
             error!("started!: {}", i);
             for tx in txes.clone() {
                 if depth.load(Ordering::Relaxed) < 10_000 {
-                    tx_sender.send(solana_scheduler::Incoming::FromPrevious((Weight { ix: weight }, tx))).unwrap();
+                    muxed_sender.send(solana_scheduler::Incoming::FromPrevious((Weight { ix: weight }, tx))).unwrap();
                     depth.fetch_add(1, Ordering::Relaxed);
                     weight -= 1;
                 } else {
