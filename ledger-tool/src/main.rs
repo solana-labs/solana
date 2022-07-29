@@ -346,13 +346,13 @@ fn output_slot(
         for i in 0..1000 {
             error!("started!: {}", i);
             for tx in txes.clone() {
-                if depth.load(Ordering::Relaxed) < 10_000 {
-                    muxed_sender.send(solana_scheduler::Incoming::FromPrevious((Weight { ix: weight }, tx))).unwrap();
-                    depth.fetch_add(1, Ordering::Relaxed);
-                    weight -= 1;
-                } else {
+                while depth.load(Ordering::Relaxed) > 10_000 {
                     std::thread::sleep(std::time::Duration::from_micros(10));
                 }
+
+                muxed_sender.send(solana_scheduler::Incoming::FromPrevious((Weight { ix: weight }, tx))).unwrap();
+                depth.fetch_add(1, Ordering::Relaxed);
+                weight -= 1;
             }
         }
         t1.join().unwrap();
