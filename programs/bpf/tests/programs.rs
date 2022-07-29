@@ -1629,8 +1629,8 @@ fn assert_instruction_count() {
             ("noop++", 5),
             ("relative_call", 210),
             ("return_data", 980),
-            ("sanity", 2378),
-            ("sanity++", 2278),
+            ("sanity", 2379),
+            ("sanity++", 2279),
             ("secp256k1_recover", 25383),
             ("sha", 1355),
             ("struct_pass", 108),
@@ -1640,21 +1640,21 @@ fn assert_instruction_count() {
     #[cfg(feature = "bpf_rust")]
     {
         programs.extend_from_slice(&[
-            ("solana_bpf_rust_128bit", 584),
-            ("solana_bpf_rust_alloc", 4581),
-            ("solana_bpf_rust_custom_heap", 469),
+            ("solana_bpf_rust_128bit", 580),
+            ("solana_bpf_rust_alloc", 5060),
+            ("solana_bpf_rust_custom_heap", 509),
             ("solana_bpf_rust_dep_crate", 2),
-            ("solana_bpf_rust_external_spend", 338),
+            ("solana_bpf_rust_external_spend", 378),
             ("solana_bpf_rust_iter", 108),
             ("solana_bpf_rust_many_args", 1289),
-            ("solana_bpf_rust_mem", 2118),
-            ("solana_bpf_rust_membuiltins", 1539),
-            ("solana_bpf_rust_noop", 326),
+            ("solana_bpf_rust_mem", 2158),
+            ("solana_bpf_rust_membuiltins", 1541),
+            ("solana_bpf_rust_noop", 366),
             ("solana_bpf_rust_param_passing", 146),
-            ("solana_bpf_rust_rand", 429),
-            ("solana_bpf_rust_sanity", 52290),
+            ("solana_bpf_rust_rand", 469),
+            ("solana_bpf_rust_sanity", 52054),
             ("solana_bpf_rust_secp256k1_recover", 25707),
-            ("solana_bpf_rust_sha", 25265),
+            ("solana_bpf_rust_sha", 24081),
         ]);
     }
 
