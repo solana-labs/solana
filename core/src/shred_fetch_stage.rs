@@ -137,12 +137,9 @@ impl ShredFetchStage {
         let modifier_hdl = Builder::new()
             .name("solana-tvu-fetch-stage-packet-modifier".to_string())
             .spawn(move || {
-                let repair_context = repair_context.as_ref().map(|(socket, cluster_info)| {
-                    (
-                        <&UdpSocket>::from(socket),
-                        <&ClusterInfo>::from(cluster_info),
-                    )
-                });
+                let repair_context = repair_context
+                    .as_ref()
+                    .map(|(socket, cluster_info)| (socket.as_ref(), cluster_info.as_ref()));
                 Self::modify_packets(
                     packet_receiver,
                     sender,
@@ -178,7 +175,7 @@ impl ShredFetchStage {
             shred_version,
             "shred_fetch",
             PacketFlags::empty(),
-            None,
+            None, // repair_context
         );
 
         let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
@@ -190,7 +187,7 @@ impl ShredFetchStage {
             shred_version,
             "shred_fetch_tvu_forwards",
             PacketFlags::FORWARDED,
-            None,
+            None, // repair_context
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(

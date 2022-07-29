@@ -219,6 +219,7 @@ pub enum RepairProtocol {
     LegacyHighestWindowIndexWithNonce(ContactInfo, Slot, u64, Nonce),
     LegacyOrphanWithNonce(ContactInfo, Slot, Nonce),
     LegacyAncestorHashes(ContactInfo, Slot, Nonce),
+    Pong(ping_pong::Pong),
     WindowIndex {
         header: RepairRequestHeader,
         slot: Slot,
@@ -237,11 +238,10 @@ pub enum RepairProtocol {
         header: RepairRequestHeader,
         slot: Slot,
     },
-    Pong(ping_pong::Pong),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum RepairProtocolResponse {
+enum RepairResponse {
     Ping(Ping),
 }
 
@@ -457,14 +457,14 @@ impl ServeRepair {
         }
     }
 
-    pub fn sign_repair_requests_activated_epoch(root_bank: &Bank) -> Option<Epoch> {
+    pub(crate) fn sign_repair_requests_activated_epoch(root_bank: &Bank) -> Option<Epoch> {
         root_bank
             .feature_set
             .activated_slot(&sign_repair_requests::id())
             .map(|slot| root_bank.epoch_schedule().get_epoch(slot))
     }
 
-    pub fn should_sign_repair_request(
+    pub(crate) fn should_sign_repair_request(
         slot: Slot,
         root_bank: &Bank,
         sign_repairs_epoch: Option<Epoch>,
@@ -742,13 +742,13 @@ impl ServeRepair {
         data_budget: &DataBudget,
     ) {
         let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
-        let (my_id, identity_keypair, socket_addr_space) = {
+        let (identity_keypair, socket_addr_space) = {
             let me_r = me.read().unwrap();
             let keypair = me_r.cluster_info.keypair().clone();
-            let id = me_r.my_id();
             let socket_addr_space = *me_r.cluster_info.socket_addr_space();
-            (id, keypair, socket_addr_space)
+            (keypair, socket_addr_space)
         };
+        let my_id = identity_keypair.pubkey();
         let mut pending_pings = Vec::default();
 
         // iter over the packets
@@ -816,7 +816,7 @@ impl ServeRepair {
             let packets: Vec<_> = pending_pings
                 .into_iter()
                 .filter_map(|(sockaddr, ping)| {
-                    let ping = RepairProtocolResponse::Ping(ping);
+                    let ping = RepairResponse::Ping(ping);
                     Packet::from_data(Some(&sockaddr), ping).ok()
                 })
                 .collect();
@@ -1013,8 +1013,8 @@ impl ServeRepair {
         Self::repair_proto_to_bytes(&request_proto, identity_keypair)
     }
 
-    /// Distinguish and process `RepairProtocolResponse` ping packets ignoring
-    /// other packets in the batch.
+    /// Distinguish and process `RepairResponse` ping packets ignoring other
+    /// packets in the batch.
     pub(crate) fn handle_repair_response_pings(
         repair_socket: &UdpSocket,
         keypair: &Keypair,
@@ -1026,7 +1026,7 @@ impl ServeRepair {
             if packet.meta.size != REPAIR_RESPONSE_SERIALIZED_PING_BYTES {
                 continue;
             }
-            if let Ok(RepairProtocolResponse::Ping(ping)) = packet.deserialize_slice(..) {
+            if let Ok(RepairResponse::Ping(ping)) = packet.deserialize_slice(..) {
                 packet.meta.set_discard(true);
                 if !ping.verify() {
                     stats.ping_err_verify_count += 1;
@@ -1251,6 +1251,16 @@ mod tests {
         solana_streamer::socket::SocketAddrSpace,
         std::io::Cursor,
     };
+
+    #[test]
+    fn test_serialized_ping_size() {
+        let mut rng = rand::thread_rng();
+        let keypair = Keypair::new();
+        let ping = Ping::new_rand(&mut rng, &keypair).unwrap();
+        let ping = RepairResponse::Ping(ping);
+        let pkt = Packet::from_data(None, ping).unwrap();
+        assert_eq!(pkt.meta.size, REPAIR_RESPONSE_SERIALIZED_PING_BYTES);
+    }
 
     #[test]
     fn test_serialize_deserialize_signed_request() {
