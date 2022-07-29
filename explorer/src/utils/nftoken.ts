@@ -66,10 +66,26 @@ export namespace NftokenFetcher {
     const metadata_urls = parsed_accounts.map((a) => a.metadata_url);
     const metadataMap = await getMetadataMap({ urls: metadata_urls });
 
-    return parsed_accounts.map((account) => ({
+    const nfts = parsed_accounts.map((account) => ({
       ...account,
       ...metadataMap.get(account.metadata_url),
     }));
+    nfts.sort();
+    return nfts.sort((a, b) => {
+      if (a.name && b.name) {
+        return a.name < b.name ? -1 : 1;
+      }
+
+      if (a.name) {
+        return 1;
+      }
+
+      if (b.name) {
+        return -1;
+      }
+
+      return a.address < b.address ? 1 : -1;
+    });
   };
 
   export const getMetadata = async ({
