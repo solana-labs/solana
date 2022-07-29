@@ -235,7 +235,7 @@ fn output_slot(
     }
 
     // basically, this controls the maximum size of task queue, so unbounded isn't nice
-    let (tx_sender, tx_receiver) = crossbeam_channel::bounded(10_000);
+    let (tx_sender, tx_receiver) = crossbeam_channel::unbounded()
 
     // this should be target number of saturated cpu cores
     let lane_count = std::env::var("EXECUTION_LANE_COUNT")
@@ -249,8 +249,6 @@ fn output_slot(
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
 
-    // this channel should be okay to be unbounded, really?
-    let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
 
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
     //let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
@@ -269,7 +267,6 @@ fn output_slot(
                 &mut address_book,
                 &tx_receiver,
                 &pre_execute_env_sender,
-                &post_execute_env_receiver,
                 &post_schedule_env_sender,
             );
         })
@@ -307,7 +304,7 @@ fn output_slot(
                             ("compute_units", ee.cu, i64),
                         );
 
-                        post_execute_env_sender.send(ee).unwrap();
+                        post_execute_env_sender.send(Incoming::FromExecute(ee)).unwrap();
                     }
                 })
                 .unwrap();
@@ -315,11 +312,14 @@ fn output_slot(
         })
         .collect::<Vec<_>>();
 
+    let depth = std::atomics::AtomicUsize::default();
+
     let t3 = std::thread::Builder::new()
         .name("sol-consumer".to_string())
         .spawn(move || {
             for step in 0.. {
                 let ee = post_schedule_env_receiver.recv().unwrap();
+                depth.fetch_sub(1, Ordering::Relaxed);
                 trace!(
                     "post schedule stage: #{} {:#?}",
                     step,
@@ -342,8 +342,13 @@ fn output_slot(
         for i in 0..1000 {
             error!("started!: {}", i);
             for tx in txes.clone() {
-                tx_sender.send((Weight { ix: weight }, tx)).unwrap();
-                weight -= 1;
+                if depth.load(Ordering::Relaxed) < 10_000 {
+                    tx_sender.send(Incoming::FromPrevious((Weight { ix: weight }, tx))).unwrap();
+                    depth.fetch_add(1, Ordering::Relaxed);
+                    weight -= 1;
+                } else {
+                    std::thread::sleep(std::time::Duration::from_micros(10));
+                }
             }
         }
         t1.join().unwrap();
