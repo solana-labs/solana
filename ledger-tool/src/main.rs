@@ -304,7 +304,7 @@ fn output_slot(
                             ("compute_units", ee.cu, i64),
                         );
 
-                        post_execute_env_sender.send(Incoming::FromExecute(ee)).unwrap();
+                        post_execute_env_sender.send(solana_scheduler::Incoming::FromExecute(ee)).unwrap();
                     }
                 })
                 .unwrap();
@@ -343,7 +343,7 @@ fn output_slot(
             error!("started!: {}", i);
             for tx in txes.clone() {
                 if depth.load(Ordering::Relaxed) < 10_000 {
-                    tx_sender.send(Incoming::FromPrevious((Weight { ix: weight }, tx))).unwrap();
+                    tx_sender.send(solana_scheduler::Incoming::FromPrevious((Weight { ix: weight }, tx))).unwrap();
                     depth.fetch_add(1, Ordering::Relaxed);
                     weight -= 1;
                 } else {
