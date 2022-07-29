@@ -83,7 +83,7 @@ echo "greg - args to run: ${args[@]}"
 
 
 
-$program "${args[@]}" &
+gossip-only "${args[@]}" &
 pid=$!
 echo "pid: $pid"
 
