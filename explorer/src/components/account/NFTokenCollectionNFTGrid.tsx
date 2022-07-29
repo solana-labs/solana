@@ -25,12 +25,9 @@ export function NFTokenCollectionNFTGrid({
       </div>
 
       <div className="py-4">
-        {!nfts && <div className={"px-4"}>Loading...</div>}
-        {nfts && nfts.length === 0 && (
-          <div className={"px-4"}>No NFTs Found</div>
-        )}
+        {nfts.length === 0 && <div className={"px-4"}>No NFTs Found</div>}
 
-        {nfts && nfts.length > 0 && (
+        {nfts.length > 0 && (
           <div
             style={{
               display: "grid",
@@ -41,6 +38,7 @@ export function NFTokenCollectionNFTGrid({
           >
             {nfts.map((nft) => (
               <div
+                key={nft.address}
                 style={{
                   display: "flex",
                   flexDirection: "column",

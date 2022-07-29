@@ -41,7 +41,7 @@ import { useAnchorProgram } from "providers/anchor";
 import { CacheEntry, FetchStatus } from "providers/cache";
 import { ClusterStatus, useCluster } from "providers/cluster";
 import { useTokenRegistry } from "providers/mints/token-registry";
-import React from "react";
+import React, { Suspense } from "react";
 import { NavLink, Redirect, useLocation } from "react-router-dom";
 import { clusterPath } from "utils/url";
 import { NFTokenAccountHeader } from "../components/account/NFTokenAccountHeader";
@@ -455,7 +455,11 @@ function MoreSection({
         />
       )}
       {tab === "nftoken-collection-nfts" && (
-        <NFTokenCollectionNFTGrid collection={account.pubkey.toBase58()} />
+        <Suspense
+          fallback={<LoadingCard message="Loading NFTs for collection." />}
+        >
+          <NFTokenCollectionNFTGrid collection={account.pubkey.toBase58()} />
+        </Suspense>
       )}
       {tab === "attributes" && (
         <MetaplexNFTAttributesCard

@@ -6,7 +6,7 @@ import {
   useAccountInfo,
   useFetchAccountInfo,
 } from "providers/accounts";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import {
   parseNFTokenCollectionAccount,
   parseNFTokenNFTAccount,
@@ -251,7 +251,9 @@ const CollectionCard = ({
         <tr>
           <td>Number NFTs</td>
           <td className="text-lg-end">
-            <NumNfts collection={collection.address} />
+            <Suspense fallback={<div>Loading..</div>}>
+              <NumNfts collection={collection.address} />
+            </Suspense>
           </td>
         </tr>
       </TableCardBody>
@@ -261,5 +263,5 @@ const CollectionCard = ({
 
 const NumNfts = ({ collection }: { collection: string }) => {
   const { data: nfts } = useCollectionNfts({ collectionAddress: collection });
-  return <div>{nfts?.length ?? "Loading"}</div>;
+  return <div>{nfts.length}</div>;
 };

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import { Account } from "../../providers/accounts";
 import {
   parseNFTokenCollectionAccount,
@@ -13,12 +13,20 @@ export function NFTokenAccountHeader({ account }: { account: Account }) {
   const nft = parseNFTokenNFTAccount(account);
 
   if (nft) {
-    return <NFTokenNFTHeader nft={nft} />;
+    return (
+      <Suspense fallback={<div>Loading...</div>}>
+        <NFTokenNFTHeader nft={nft} />
+      </Suspense>
+    );
   }
 
   const collection = parseNFTokenCollectionAccount(account);
   if (collection) {
-    return <NFTokenCollectionHeader collection={collection} />;
+    return (
+      <Suspense fallback={<div>Loading...</div>}>
+        <NFTokenCollectionHeader collection={collection} />
+      </Suspense>
+    );
   }
 
   return (

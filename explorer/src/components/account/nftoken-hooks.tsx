@@ -3,6 +3,17 @@ import { useCluster } from "../../providers/cluster";
 import { NftokenFetcher } from "../../utils/nftoken";
 import { NftokenTypes } from "../../utils/nftoken-types";
 
+const getCollectionNftsFetcher = async (
+  _method: string,
+  collectionAddress: string,
+  url: string
+) => {
+  return await NftokenFetcher.getNftsInCollection({
+    collection: collectionAddress,
+    rpcUrl: url,
+  });
+};
+
 export const useCollectionNfts = ({
   collectionAddress,
 }: {
@@ -10,19 +21,22 @@ export const useCollectionNfts = ({
 }): {
   // We can be confident that data will be nonnull even if the request fails,
   // if we defined fallbackData in the config.
-  data?: NftokenTypes.NftInfo[];
+  data: NftokenTypes.NftInfo[];
   error: any;
   mutate: SWRResponse<NftokenTypes.NftInfo[], never>["mutate"];
 } => {
   const { url } = useCluster();
-  const swrKey = [collectionAddress, "getNftsInCollection", url];
-  const { data, error, mutate } = useSWR(swrKey, async () => {
-    return await NftokenFetcher.getNftsInCollection({
-      collection: collectionAddress,
-      rpcUrl: url,
-    });
+
+  const swrKey = ["getNftsInCollection", collectionAddress, url];
+  const { data, error, mutate } = useSWR(swrKey, getCollectionNftsFetcher, {
+    suspense: true,
   });
-  return { data, error, mutate };
+  // Not nullable since we use suspense
+  return { data: data!, error, mutate };
+};
+
+const getMetadataFetcher = async (metadataUrl: string) => {
+  return await NftokenFetcher.getMetadata({ url: metadataUrl });
 };
 
 export const useNftokenMetadata = (
@@ -33,8 +47,9 @@ export const useNftokenMetadata = (
   mutate: SWRResponse<NftokenTypes.Metadata | null, never>["mutate"];
 } => {
   const swrKey = [metadataUrl];
-  const { data, error, mutate } = useSWR(swrKey, async () => {
-    return await NftokenFetcher.getMetadata({ url: metadataUrl });
+  const { data, error, mutate } = useSWR(swrKey, getMetadataFetcher, {
+    suspense: true,
   });
+  // Not nullable since we use suspense
   return { data: data!, error, mutate };
 };
