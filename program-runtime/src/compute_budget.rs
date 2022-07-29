@@ -126,6 +126,7 @@ impl ComputeBudget {
     pub fn process_instructions<'a>(
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
+        default_units_per_instruction: bool,
         support_set_compute_unit_price_ix: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
@@ -220,15 +221,18 @@ impl ComputeBudget {
             self.heap_size = Some(bytes as usize);
         }
 
-        self.compute_unit_limit = updated_compute_unit_limit
-            .or_else(|| {
+        self.compute_unit_limit = if default_units_per_instruction {
+            updated_compute_unit_limit.or_else(|| {
                 Some(
                     (num_non_compute_budget_instructions as u32)
                         .saturating_mul(DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT),
                 )
             })
-            .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
-            .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
+        } else {
+            updated_compute_unit_limit
+        }
+        .unwrap_or(MAX_COMPUTE_UNIT_LIMIT)
+        .min(MAX_COMPUTE_UNIT_LIMIT) as u64;
 
         Ok(prioritization_fee
             .map(|fee_type| PrioritizationFeeDetails::new(fee_type, self.compute_unit_limit))
@@ -271,8 +275,11 @@ mod tests {
                 Hash::default(),
             ));
             let mut compute_budget = ComputeBudget::default();
-            let result = compute_budget
-                .process_instructions(tx.message().program_instructions_iter(), $type_change);
+            let result = compute_budget.process_instructions(
+                tx.message().program_instructions_iter(),
+                true,
+                $type_change,
+            );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);
         };

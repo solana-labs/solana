@@ -1,6 +1,6 @@
 [package]
 name = "solana-vote-program"
-version = "1.11.4"
+version = "1.11.5"
 description = "Solana Vote program"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -16,15 +16,15 @@ num-derive = "0.3"
 num-traits = "0.2"
 serde = "1.0.138"
 serde_derive = "1.0.103"
-solana-frozen-abi = { path = "../../frozen-abi", version = "=1.11.4" }
-solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.11.4" }
-solana-metrics = { path = "../../metrics", version = "=1.11.4" }
-solana-program-runtime = { path = "../../program-runtime", version = "=1.11.4" }
-solana-sdk = { path = "../../sdk", version = "=1.11.4" }
+solana-frozen-abi = { path = "../../frozen-abi", version = "=1.11.5" }
+solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.11.5" }
+solana-metrics = { path = "../../metrics", version = "=1.11.5" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.11.5" }
+solana-sdk = { path = "../../sdk", version = "=1.11.5" }
 thiserror = "1.0"
 
 [dev-dependencies]
-solana-logger = { path = "../../logger", version = "=1.11.4" }
+solana-logger = { path = "../../logger", version = "=1.11.5" }
 
 [build-dependencies]
 rustc_version = "0.4"

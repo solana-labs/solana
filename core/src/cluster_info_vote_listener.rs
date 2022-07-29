@@ -194,7 +194,7 @@ const VOTE_PROCESSING_REPORT_INTERVAL_MS: u64 = 1_000;
 
 impl VoteProcessingTiming {
     fn reset(&mut self) {
-        self.gossip_slot_confirming_time_us = 0;
+        self.gossip_txn_processing_time_us = 0;
         self.gossip_slot_confirming_time_us = 0;
     }
 
@@ -391,10 +391,16 @@ impl ClusterInfoVoteListener {
                 .read()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
+            let feature_set = poh_recorder
+                .read()
+                .unwrap()
+                .bank()
+                .map(|bank| bank.feature_set.clone());
 
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 would_be_leader,
+                feature_set,
             ) {
                 match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected)

@@ -444,6 +444,24 @@ export type GetBalanceConfig = {
 };
 
 /**
+ * Configuration object for changing `getBlock` query behavior
+ */
+export type GetBlockConfig = {
+  /** The level of finality desired */
+  commitment?: Finality;
+  /** The max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned */
+  maxSupportedTransactionVersion?: number;
+};
+
+/**
+ * Configuration object for changing `getStakeMinimumDelegation` query behavior
+ */
+export type GetStakeMinimumDelegationConfig = {
+  /** The level of commitment desired */
+  commitment?: Commitment;
+};
+
+/**
  * Configuration object for changing `getBlockHeight` query behavior
  */
 export type GetBlockHeightConfig = {
@@ -503,6 +521,16 @@ export type GetSlotLeaderConfig = {
   commitment?: Commitment;
   /** The minimum slot that the request can be evaluated at */
   minContextSlot?: number;
+};
+
+/**
+ * Configuration object for changing `getTransaction` query behavior
+ */
+export type GetTransactionConfig = {
+  /** The level of finality desired */
+  commitment?: Finality;
+  /** The max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned */
+  maxSupportedTransactionVersion?: number;
 };
 
 /**
@@ -3592,11 +3620,14 @@ export class Connection {
    */
   async getBlock(
     slot: number,
-    opts?: {commitment?: Finality},
+    rawConfig?: GetBlockConfig,
   ): Promise<BlockResponse | null> {
+    const {commitment, config} = extractCommitmentFromConfig(rawConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [slot],
-      opts && opts.commitment,
+      commitment as Finality,
+      undefined /* encoding */,
+      config,
     );
     const unsafeRes = await this._rpcRequest('getBlock', args);
     const res = create(unsafeRes, GetBlockRpcResult);
@@ -3684,11 +3715,14 @@ export class Connection {
    */
   async getTransaction(
     signature: string,
-    opts?: {commitment?: Finality},
+    rawConfig?: GetTransactionConfig,
   ): Promise<TransactionResponse | null> {
+    const {commitment, config} = extractCommitmentFromConfig(rawConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [signature],
-      opts && opts.commitment,
+      commitment as Finality,
+      undefined /* encoding */,
+      config,
     );
     const unsafeRes = await this._rpcRequest('getTransaction', args);
     const res = create(unsafeRes, GetTransactionRpcResult);
@@ -3713,12 +3747,15 @@ export class Connection {
    */
   async getParsedTransaction(
     signature: TransactionSignature,
-    commitment?: Finality,
+    commitmentOrConfig?: GetTransactionConfig | Finality,
   ): Promise<ParsedConfirmedTransaction | null> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [signature],
-      commitment,
+      commitment as Finality,
       'jsonParsed',
+      config,
     );
     const unsafeRes = await this._rpcRequest('getTransaction', args);
     const res = create(unsafeRes, GetParsedTransactionRpcResult);
@@ -3733,13 +3770,16 @@ export class Connection {
    */
   async getParsedTransactions(
     signatures: TransactionSignature[],
-    commitment?: Finality,
+    commitmentOrConfig?: GetTransactionConfig | Finality,
   ): Promise<(ParsedConfirmedTransaction | null)[]> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const batch = signatures.map(signature => {
       const args = this._buildArgsAtLeastConfirmed(
         [signature],
-        commitment,
+        commitment as Finality,
         'jsonParsed',
+        config,
       );
       return {
         methodName: 'getTransaction',
@@ -3765,10 +3805,17 @@ export class Connection {
    */
   async getTransactions(
     signatures: TransactionSignature[],
-    commitment?: Finality,
+    commitmentOrConfig?: GetTransactionConfig | Finality,
   ): Promise<(TransactionResponse | null)[]> {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const batch = signatures.map(signature => {
-      const args = this._buildArgsAtLeastConfirmed([signature], commitment);
+      const args = this._buildArgsAtLeastConfirmed(
+        [signature],
+        commitment as Finality,
+        undefined /* encoding */,
+        config,
+      );
       return {
         methodName: 'getTransaction',
         args,
@@ -4279,6 +4326,25 @@ export class Connection {
   }
 
   /**
+   * get the stake minimum delegation
+   */
+  async getStakeMinimumDelegation(
+    config?: GetStakeMinimumDelegationConfig,
+  ): Promise<RpcResponseAndContext<number>> {
+    const {commitment, config: configArg} = extractCommitmentFromConfig(config);
+    const args = this._buildArgs([], commitment, 'base64', configArg);
+    const unsafeRes = await this._rpcRequest('getStakeMinimumDelegation', args);
+    const res = create(unsafeRes, jsonRpcResultAndContext(number()));
+    if ('error' in res) {
+      throw new SolanaJSONRPCError(
+        res.error,
+        `failed to get stake minimum delegation`,
+      );
+    }
+    return res.result;
+  }
+
+  /**
    * Simulate a transaction
    */
   async simulateTransaction(
@@ -4511,6 +4577,10 @@ export class Connection {
   _wsOnClose(code: number) {
     this._rpcWebSocketConnected = false;
     this._rpcWebSocketGeneration++;
+    if (this._rpcWebSocketIdleTimeout) {
+      clearTimeout(this._rpcWebSocketIdleTimeout);
+      this._rpcWebSocketIdleTimeout = null;
+    }
     if (this._rpcWebSocketHeartbeat) {
       clearInterval(this._rpcWebSocketHeartbeat);
       this._rpcWebSocketHeartbeat = null;

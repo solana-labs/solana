@@ -16,8 +16,7 @@ use {
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         feature_set::{
-            cap_accounts_data_len, enable_early_verification_of_account_modifications,
-            record_instruction_in_transaction_context_push, FeatureSet,
+            cap_accounts_data_len, enable_early_verification_of_account_modifications, FeatureSet,
         },
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
@@ -25,9 +24,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         saturating_add_assign,
-        transaction_context::{
-            InstructionAccount, InstructionContext, TransactionAccount, TransactionContext,
-        },
+        transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
     },
     std::{
         alloc::Layout,
@@ -281,24 +278,22 @@ impl<'a> InvokeContext<'a> {
         builtin_programs: &'a [BuiltinProgram],
     ) -> Self {
         let mut sysvar_cache = SysvarCache::default();
-        sysvar_cache.fill_missing_entries(|pubkey| {
-            (0..transaction_context.get_number_of_accounts()).find_map(|index| {
+        sysvar_cache.fill_missing_entries(|pubkey, callback| {
+            for index in 0..transaction_context.get_number_of_accounts() {
                 if transaction_context
                     .get_key_of_account_at_index(index)
                     .unwrap()
                     == pubkey
                 {
-                    Some(
+                    callback(
                         transaction_context
                             .get_account_at_index(index)
                             .unwrap()
                             .borrow()
-                            .clone(),
-                    )
-                } else {
-                    None
+                            .data(),
+                    );
                 }
-            })
+            }
         });
         Self::new(
             transaction_context,
@@ -322,17 +317,6 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
-        if !self
-            .feature_set
-            .is_active(&record_instruction_in_transaction_context_push::id())
-            && self
-                .transaction_context
-                .get_instruction_context_stack_height()
-                > self.compute_budget.max_invoke_depth
-        {
-            return Err(InstructionError::CallDepth);
-        }
-
         let program_id = self.transaction_context.get_key_of_account_at_index(
             *program_indices
                 .last()
@@ -437,13 +421,8 @@ impl<'a> InvokeContext<'a> {
             }),
         ));
         self.syscall_context.push(None);
-        self.transaction_context.push(
-            program_indices,
-            instruction_accounts,
-            instruction_data,
-            self.feature_set
-                .is_active(&record_instruction_in_transaction_context_push::id()),
-        )
+        self.transaction_context
+            .push(program_indices, instruction_accounts, instruction_data)
     }
 
     /// Pop a stack frame from the invocation stack
@@ -836,41 +815,23 @@ impl<'a> InvokeContext<'a> {
             .transaction_context
             .get_instruction_context_stack_height();
         let is_top_level_instruction = nesting_level == 0;
-        if !is_top_level_instruction {
-            if !self
+        if !is_top_level_instruction
+            && !self
                 .feature_set
                 .is_active(&enable_early_verification_of_account_modifications::id())
-            {
-                // Verify the calling program hasn't misbehaved
-                let mut verify_caller_time = Measure::start("verify_caller_time");
-                let verify_caller_result = self.verify_and_update(instruction_accounts, true);
-                verify_caller_time.stop();
-                saturating_add_assign!(
-                    timings
-                        .execute_accessories
-                        .process_instructions
-                        .verify_caller_us,
-                    verify_caller_time.as_us()
-                );
-                verify_caller_result?;
-            }
-
-            if !self
-                .feature_set
-                .is_active(&record_instruction_in_transaction_context_push::id())
-            {
-                let instruction_accounts_lamport_sum = self
-                    .transaction_context
-                    .instruction_accounts_lamport_sum(instruction_accounts)?;
-                self.transaction_context
-                    .record_instruction(InstructionContext::new(
-                        nesting_level,
-                        instruction_accounts_lamport_sum,
-                        program_indices,
-                        instruction_accounts,
-                        instruction_data,
-                    ));
-            }
+        {
+            // Verify the calling program hasn't misbehaved
+            let mut verify_caller_time = Measure::start("verify_caller_time");
+            let verify_caller_result = self.verify_and_update(instruction_accounts, true);
+            verify_caller_time.stop();
+            saturating_add_assign!(
+                timings
+                    .execute_accessories
+                    .process_instructions
+                    .verify_caller_us,
+                verify_caller_time.as_us()
+            );
+            verify_caller_result?;
         }
 
         self.push(instruction_accounts, program_indices, instruction_data)?;

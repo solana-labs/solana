@@ -188,8 +188,8 @@ pub struct ForkProgress {
     pub is_dead: bool,
     pub fork_stats: ForkStats,
     pub propagated_stats: PropagatedStats,
-    pub replay_stats: ReplaySlotStats,
-    pub replay_progress: ConfirmationProgress,
+    pub replay_stats: Arc<RwLock<ReplaySlotStats>>,
+    pub replay_progress: Arc<RwLock<ConfirmationProgress>>,
     pub retransmit_info: RetransmitInfo,
     // Note `num_blocks_on_fork` and `num_dropped_blocks_on_fork` only
     // count new blocks replayed since last restart, which won't include
@@ -235,8 +235,8 @@ impl ForkProgress {
         Self {
             is_dead: false,
             fork_stats: ForkStats::default(),
-            replay_stats: ReplaySlotStats::default(),
-            replay_progress: ConfirmationProgress::new(last_entry),
+            replay_stats: Arc::new(RwLock::new(ReplaySlotStats::default())),
+            replay_progress: Arc::new(RwLock::new(ConfirmationProgress::new(last_entry))),
             num_blocks_on_fork,
             num_dropped_blocks_on_fork,
             propagated_stats: PropagatedStats {

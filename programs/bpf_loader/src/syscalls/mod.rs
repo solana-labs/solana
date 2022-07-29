@@ -33,7 +33,7 @@ use {
         blake3, bpf_loader, bpf_loader_deprecated, bpf_loader_upgradeable,
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
-            blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
+            self, blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
             curve25519_syscall_enabled, disable_fees_sysvar,
             enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
             limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
@@ -110,6 +110,18 @@ pub enum SyscallError {
     TooManySlices,
     #[error("InvalidLength")]
     InvalidLength,
+    #[error("Invoked an instruction with data that is too large ({data_len} > {max_data_len})")]
+    MaxInstructionDataLenExceeded { data_len: u64, max_data_len: u64 },
+    #[error("Invoked an instruction with too many accounts ({num_accounts} > {max_accounts})")]
+    MaxInstructionAccountsExceeded {
+        num_accounts: u64,
+        max_accounts: u64,
+    },
+    #[error("Invoked an instruction with too many account info's ({num_account_infos} > {max_account_infos})")]
+    MaxInstructionAccountInfosExceeded {
+        num_account_infos: u64,
+        max_account_infos: u64,
+    },
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {

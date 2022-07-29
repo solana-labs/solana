@@ -263,15 +263,21 @@ pub struct QuicClient {
     connection: Arc<Mutex<Option<QuicNewConnection>>>,
     addr: SocketAddr,
     stats: Arc<ClientStats>,
+    num_chunks: usize,
 }
 
 impl QuicClient {
-    pub fn new(endpoint: Arc<QuicLazyInitializedEndpoint>, addr: SocketAddr) -> Self {
+    pub fn new(
+        endpoint: Arc<QuicLazyInitializedEndpoint>,
+        addr: SocketAddr,
+        num_chunks: usize,
+    ) -> Self {
         Self {
             endpoint,
             connection: Arc::new(Mutex::new(None)),
             addr,
             stats: Arc::new(ClientStats::default()),
+            num_chunks,
         }
     }
 
@@ -437,6 +443,21 @@ impl QuicClient {
         Ok(())
     }
 
+    fn compute_chunk_length(num_buffers_to_chunk: usize, num_chunks: usize) -> usize {
+        // The function is equivalent to checked div_ceil()
+        // Also, if num_chunks == 0 || num_buffers_to_chunk == 0, return 1
+        num_buffers_to_chunk
+            .checked_div(num_chunks)
+            .map_or(1, |value| {
+                if num_buffers_to_chunk.checked_rem(num_chunks).unwrap_or(0) != 0 {
+                    value.saturating_add(1)
+                } else {
+                    value
+                }
+            })
+            .max(1)
+    }
+
     pub async fn send_batch<T>(
         &self,
         buffers: &[T],
@@ -468,9 +489,8 @@ impl QuicClient {
         // by just getting a reference to the NewConnection once
         let connection_ref: &NewConnection = &connection;
 
-        let chunks = buffers[1..buffers.len()]
-            .iter()
-            .chunks(QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS);
+        let chunk_len = Self::compute_chunk_length(buffers.len() - 1, self.num_chunks);
+        let chunks = buffers[1..buffers.len()].iter().chunks(chunk_len);
 
         let futures: Vec<_> = chunks
             .into_iter()
@@ -513,7 +533,11 @@ impl QuicTpuConnection {
         addr: SocketAddr,
         connection_stats: Arc<ConnectionCacheStats>,
     ) -> Self {
-        let client = Arc::new(QuicClient::new(endpoint, addr));
+        let client = Arc::new(QuicClient::new(
+            endpoint,
+            addr,
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS,
+        ));
         Self::new_with_client(client, connection_stats)
     }
 
@@ -570,5 +594,31 @@ impl TpuConnection for QuicTpuConnection {
             self.connection_stats.add_client_stats(&stats, 1, true);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::nonblocking::quic_client::QuicClient;
+
+    #[test]
+    fn test_transaction_batch_chunking() {
+        assert_eq!(QuicClient::compute_chunk_length(0, 0), 1);
+        assert_eq!(QuicClient::compute_chunk_length(10, 0), 1);
+        assert_eq!(QuicClient::compute_chunk_length(0, 10), 1);
+        assert_eq!(QuicClient::compute_chunk_length(usize::MAX, usize::MAX), 1);
+        assert_eq!(QuicClient::compute_chunk_length(10, usize::MAX), 1);
+        assert!(QuicClient::compute_chunk_length(usize::MAX, 10) == (usize::MAX / 10) + 1);
+        assert_eq!(QuicClient::compute_chunk_length(10, 1), 10);
+        assert_eq!(QuicClient::compute_chunk_length(10, 2), 5);
+        assert_eq!(QuicClient::compute_chunk_length(10, 3), 4);
+        assert_eq!(QuicClient::compute_chunk_length(10, 4), 3);
+        assert_eq!(QuicClient::compute_chunk_length(10, 5), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 6), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 7), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 8), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 9), 2);
+        assert_eq!(QuicClient::compute_chunk_length(10, 10), 1);
+        assert_eq!(QuicClient::compute_chunk_length(10, 11), 1);
     }
 }
