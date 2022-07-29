@@ -281,31 +281,31 @@ fn output_slot(
                 .spawn(move || {
                     use solana_metrics::datapoint_info;
                     let current_thread_name = std::thread::current().name().unwrap().to_string();
+                    let send_metrics = std::env::var("SEND_METRICS").is_ok();
 
                     for step in 0.. {
                         let ee = pre_execute_env_receiver.recv().unwrap();
 
-                        /*
-                        let mut process_message_time = Measure::start("process_message_time");
+                        if send_metrics {
+                            let mut process_message_time = Measure::start("process_message_time");
+                            let sig = ee.task.tx.signature().to_string();
+                            trace!("execute substage: #{} {:#?}", step, &sig);
+                            std::thread::sleep(std::time::Duration::from_micros(ee.cu.try_into().unwrap()));
 
-                        let sig = ee.task.tx.signature().to_string();
-                        trace!("execute substage: #{} {:#?}", step, &sig);
-                        std::thread::sleep(std::time::Duration::from_micros(ee.cu.try_into().unwrap()));
+                            process_message_time.stop();
+                            let duration_with_overhead = process_message_time.as_us();
 
-                        process_message_time.stop();
-                        let duration_with_overhead = process_message_time.as_us();
-
-                        datapoint_info!(
-                            "individual_tx_stats",
-                            ("slot", 33333, i64),
-                            ("thread", current_thread_name, String),
-                            ("signature", &sig, String),
-                            ("account_locks_in_json", "{}", String),
-                            ("status", "Ok", String),
-                            ("duration", duration_with_overhead, i64),
-                            ("compute_units", ee.cu, i64),
-                        );
-                        */
+                            datapoint_info!(
+                                "individual_tx_stats",
+                                ("slot", 33333, i64),
+                                ("thread", current_thread_name, String),
+                                ("signature", &sig, String),
+                                ("account_locks_in_json", "{}", String),
+                                ("status", "Ok", String),
+                                ("duration", duration_with_overhead, i64),
+                                ("compute_units", ee.cu, i64),
+                            );
+                        }
 
                         muxed_sender.send(solana_scheduler::Incoming::FromExecute(ee)).unwrap();
                     }
