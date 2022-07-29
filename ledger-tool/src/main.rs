@@ -311,7 +311,7 @@ fn output_slot(
         })
         .collect::<Vec<_>>();
 
-    let depth = std::atomics::AtomicUsize::default();
+    let depth = std::sync::atomic::AtomicUsize::default();
 
     let t3 = std::thread::Builder::new()
         .name("sol-consumer".to_string())
