@@ -1289,7 +1289,9 @@ impl Accounts {
                     );
 
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
-                        if account.rent_epoch() == INITIAL_RENT_EPOCH {
+                        if !preserve_rent_epoch_for_rent_exempt_accounts
+                            && account.rent_epoch() == INITIAL_RENT_EPOCH
+                        {
                             let rent = rent_collector
                                 .collect_from_created_account(
                                     address,
