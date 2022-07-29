@@ -1025,6 +1025,16 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
+    #[cfg(test)]
+    fn mark_account_entry_dirty_lazy_for_test(&self) {
+        let map = self.map_internal.read().unwrap();
+
+        for (_k, v) in map.iter() {
+            v.set_dirty(true);
+            v.set_lazy_disk_load();
+        }
+    }
+
     /// scan loop
     /// holds read lock
     /// identifies items which are dirty and items to evict
@@ -1133,6 +1143,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         let current_age = self.storage.current_age();
         let iterate_for_age = self.get_should_age(current_age);
         let startup = self.storage.get_startup();
+
         if !iterate_for_age && !startup {
             // no need to age, so no need to flush this bucket
             // but, at startup we want to evict from buckets as fast as possible if any items exist
@@ -1187,13 +1198,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                 continue;
                             }
                         }
+
                         // if we are evicting it, then we need to update disk if we're dirty
                         if v.clear_dirty() {
                             // check to see if needed to lazy disk index before flushing.
                             if v.lazy_disk_load() {
                                 if let Some((disk_entry, _)) = self.load_from_disk(k) {
                                     // 'slot_list' could hold a read lock to the slot list in 'v',
-                                    // which will cause a deadlock. So release the lock frist
+                                    // which might cause a deadlock. So release the lock first
                                     // before merging with disk_entry.
                                     slot_list = None;
                                     Self::merge_slot_lists(&v, disk_entry);
@@ -1489,6 +1501,7 @@ mod tests {
         super::*,
         crate::accounts_index::{AccountsIndexConfig, IndexLimitMb, BINS_FOR_TESTING},
         itertools::Itertools,
+        solana_sdk::signature::{Keypair, Signer},
         std::thread,
     };
 
@@ -1498,6 +1511,15 @@ mod tests {
             &Some(AccountsIndexConfig::default()),
             1,
         ));
+        let bin = 0;
+        InMemAccountsIndex::new(&holder, bin)
+    }
+
+    fn new_for_test_flush<T: IndexValue>() -> InMemAccountsIndex<T> {
+        let mut cfg = AccountsIndexConfig::default();
+        cfg.index_limit_mb = IndexLimitMb::Limit(0);
+
+        let holder = Arc::new(BucketMapHolder::new(BINS_FOR_TESTING, &Some(cfg), 1));
         let bin = 0;
         InMemAccountsIndex::new(&holder, bin)
     }
@@ -1946,11 +1968,36 @@ mod tests {
 
     #[test]
     fn test_flush_merge() {
-        let bucket = new_for_test::<f64>();
-        let active = AtomicBool::new(false);
-        let flush_guard = FlushGuard::lock(&active).unwrap();
+        for _i in 0..5 {
+            let bucket = new_for_test_flush::<f64>();
+            let active = AtomicBool::new(false);
+            let flush_guard = FlushGuard::lock(&active).unwrap();
 
-        bucket.flush_internal(&flush_guard, true);
+            let key = Keypair::new();
+            let slot = 0;
+            let account_info = 1.0;
+
+            for _j in 0..5 {
+                let new_entry =
+                    PreAllocatedAccountMapEntry::new(slot, account_info, &bucket.storage, false);
+                bucket.upsert(
+                    &key.pubkey(),
+                    new_entry,
+                    None,
+                    &mut SlotList::default(),
+                    UpsertReclaim::PopulateReclaims,
+                );
+
+                bucket.mark_account_entry_dirty_lazy_for_test();
+                bucket.set_has_aged(5, true);
+
+                let disk = bucket.bucket.as_ref().unwrap();
+                let r = disk.try_write(&key.pubkey(), (&[(1, 1.0)], 1));
+
+                bucket.flush_internal(&flush_guard, true);
+                bucket.storage.startup.store(true, Ordering::Release);
+            }
+        }
     }
 
     /// Stress test parallel merge slot lists with 20 threads

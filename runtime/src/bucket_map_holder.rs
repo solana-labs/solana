@@ -52,7 +52,7 @@ pub struct BucketMapHolder<T: IndexValue> {
     /// with less thread count limitations. LRU and access patterns are not important. Freeing memory
     /// and writing to disk in parallel are.
     /// Note startup is an optimization and is not required for correctness.
-    startup: AtomicBool,
+    pub(crate) startup: AtomicBool,
 }
 
 impl<T: IndexValue> Debug for BucketMapHolder<T> {
