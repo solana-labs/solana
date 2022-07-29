@@ -1192,6 +1192,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // check to see if needed to lazy disk index before flushing.
                             if v.lazy_disk_load() {
                                 if let Some((disk_entry, _)) = self.load_from_disk(k) {
+                                    // 'slot_list' could hold a read lock to the slot list in 'v',
+                                    // which will cause a deadlock. So release the lock frist
+                                    // before merging with disk_entry.
+                                    slot_list = None;
                                     Self::merge_slot_lists(&v, disk_entry);
                                 }
                                 v.clear_lazy_disk_load();
