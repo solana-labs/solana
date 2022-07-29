@@ -613,13 +613,15 @@ impl ScheduleStage {
                 }
             }
 
-            if depth < max_depth {
+            while depth < max_depth {
                 let maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
                     depth += 1;
 
                     to_execute_substage.send(ee).unwrap();
+                } else {
+                    break;
                 }
             }
         }
