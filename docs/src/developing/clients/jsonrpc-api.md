@@ -3357,7 +3357,7 @@ submission.
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (_slow_, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
   - `maxRetries: <usize>` - (optional) Maximum number of times for the RPC node to retry sending the transaction to the leader.
     If this parameter not provided, the RPC node will retry the transaction until it is finalized or until the blockhash expires.
-  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
+  - (optional) `minContextSlot: <number>` - set the minimum slot at which to perform preflight transaction checks.
 
 #### Results:
 
