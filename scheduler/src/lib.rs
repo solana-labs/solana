@@ -584,9 +584,8 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from_previous_stage: &crossbeam_channel::Receiver<(Weight, Box<SanitizedTransaction>)>,
+        from: &crossbeam_channel::Receiver<Incoming>,
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
-        from_execute_substage: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
         to_next_stage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>, // assume nonblocking
     ) {
         use crossbeam_channel::select;
