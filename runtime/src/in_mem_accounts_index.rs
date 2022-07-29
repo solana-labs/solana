@@ -289,7 +289,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
-    fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>) {
+    pub(crate) fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>) {
         let mut slot_list = in_mem.slot_list.write().unwrap();
 
         for (slot, new_entry) in disk.into_iter() {
@@ -1489,6 +1489,7 @@ mod tests {
         super::*,
         crate::accounts_index::{AccountsIndexConfig, IndexLimitMb, BINS_FOR_TESTING},
         itertools::Itertools,
+        std::thread,
     };
 
     fn new_for_test<T: IndexValue>() -> InMemAccountsIndex<T> {
@@ -1941,5 +1942,38 @@ mod tests {
 
         // After the FlushGuard is dropped, the flag will be cleared.
         assert!(!flushing_active.load(Ordering::Acquire));
+    }
+
+    /// Stress test parallel merge slot lists with 20 threads
+    #[test]
+    fn test_parallel_merge() {
+        let mut threads = vec![];
+
+        let l = Arc::new(AccountMapEntryInner::new(
+            vec![],
+            1,
+            AccountMapEntryMeta::default(),
+        ));
+
+        for _j in 1..20 {
+            let l = Arc::clone(&l);
+            threads.push(thread::spawn(move || {
+                let mut i = 1u64;
+                loop {
+                    // todo
+                    let l2 = vec![(i, i)];
+                    InMemAccountsIndex::merge_slot_lists(&l, l2);
+                    i += 1;
+
+                    if i > 5000 {
+                        break;
+                    }
+                }
+            }))
+        }
+
+        for t in threads {
+            t.join().unwrap();
+        }
     }
 }
