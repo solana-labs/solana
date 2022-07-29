@@ -332,7 +332,7 @@ fn attempt_lock_for_execution<'a>(
     (all_succeeded_so_far, lock_attempts)
 }
 
-enum Incoming {
+pub enum Incoming {
     FromPrevious((Weight, Box<SanitizedTransaction>)),
     FromExecute((Box<ExecutionEnvironment>)),
 }
