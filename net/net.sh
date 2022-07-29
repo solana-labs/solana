@@ -298,7 +298,7 @@ startBootstrapLeader() {
     deployBootstrapValidator "$ipAddress"
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh \
+      "./solana/net/remote/remote-gossip-node.sh \
          $deployMethod \
          bootstrap-validator \
          $entrypointIp \

@@ -248,7 +248,7 @@ EOF
 
       echo "greg - bootstrap - entrypoint IP: $entrypointIp"
       # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --bootstrap --gossip-host $entrypointIp --gossip-port 8001 &
-      gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint 10.138.0.48:9001 --bootstrap --gossip-host 10.138.0.48 --gossip-port 9001 &
+      nohup gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:9001 --bootstrap --gossip-host $entrypointIp --gossip-port 9001 &> /dev/null &
 
 
       multinode-demo/setup.sh "${args[@]}"
@@ -498,7 +498,7 @@ EOF
       if [[ ${extraPrimordialStakes} -eq 0 ]]; then
         echo "greg - validator - entrypoint IP: $entrypointIp"
         # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --gossip-host 10.138.0.63 --gossip-port 8001 &
-        gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint 10.138.0.48:9001 --gossip-host 10.138.0.63 --gossip-port 9001 &
+        nohup gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:9001 --gossip-host 10.138.0.63 --gossip-port 9001  &
 
         echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
         multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
