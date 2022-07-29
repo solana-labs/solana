@@ -15,7 +15,7 @@ export const useCollectionNfts = ({
   mutate: SWRResponse<NftokenTypes.NftInfo[], never>["mutate"];
 } => {
   const { url } = useCluster();
-  const swrKey = [collectionAddress, "getNftsInCollection"];
+  const swrKey = [collectionAddress, "getNftsInCollection", url];
   const { data, error, mutate } = useSWR(swrKey, async () => {
     return await NftokenFetcher.getNftsInCollection({
       collection: collectionAddress,

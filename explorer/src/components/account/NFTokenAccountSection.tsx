@@ -108,9 +108,9 @@ const CollectionInfo = ({
   const collectionAccount = useAccountInfo(collection);
   const fetchInfo = useFetchAccountInfo();
 
-  const collectionParsed = parseNFTokenCollectionAccount(
-    collectionAccount?.data
-  );
+  const collectionParsed = collectionAccount?.data
+    ? parseNFTokenCollectionAccount(collectionAccount.data)
+    : null;
   const { data: metadata } = useNftokenMetadata(
     collectionParsed?.metadata_url ?? null
   );

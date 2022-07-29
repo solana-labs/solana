@@ -1,5 +1,4 @@
 import React from "react";
-import "bootstrap/dist/js/bootstrap.min.js";
 import {
   NFTData,
   useFetchAccountInfo,

@@ -1,4 +1,3 @@
-import "bootstrap/dist/js/bootstrap.min.js";
 import React from "react";
 import { Account } from "../../providers/accounts";
 import {

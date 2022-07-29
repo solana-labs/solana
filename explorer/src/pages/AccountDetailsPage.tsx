@@ -206,7 +206,7 @@ export function AccountHeader({
     );
   }
 
-  const nftokenNFT = isNFTokenAccount(account);
+  const nftokenNFT = account && isNFTokenAccount(account);
   if (nftokenNFT && account) {
     return <NFTokenAccountHeader account={account} />;
   }
@@ -519,7 +519,7 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
     tabs.push(...TABS_LOOKUP[`${programTypeKey}:metaplexNFT`]);
   }
 
-  const isNFToken = isNFTokenAccount(account);
+  const isNFToken = account && isNFTokenAccount(account);
   if (isNFToken) {
     const collection = parseNFTokenCollectionAccount(account);
     if (collection) {
