@@ -596,7 +596,7 @@ impl ScheduleStage {
         loop {
             trace!("schedule_once!");
 
-            let i = incoming.receive().unwrap();
+            let i = from.receive().unwrap();
             match i {
                 Incoming::FromPrevious(weighted_tx) => {
                     trace!("recv from previous");
