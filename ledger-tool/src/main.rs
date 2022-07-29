@@ -316,9 +316,10 @@ fn output_slot(
     let t3 = std::thread::Builder::new()
         .name("sol-consumer".to_string())
         .spawn(move || {
+            let d = depth.clone();
             for step in 0.. {
                 let ee = post_schedule_env_receiver.recv().unwrap();
-                depth.fetch_sub(1, Ordering::Relaxed);
+                d.fetch_sub(1, Ordering::Relaxed);
                 trace!(
                     "post schedule stage: #{} {:#?}",
                     step,
