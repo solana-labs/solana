@@ -12,4 +12,4 @@ version = "1.11.5"
 [workspace]
 
 [dependencies]
-tonic-build = "0.7.0"
+tonic-build = "0.8.0"

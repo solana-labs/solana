@@ -22,8 +22,8 @@ http = "0.2.8"
 hyper = "0.14.20"
 hyper-proxy = "0.9.1"
 log = "0.4.17"
-prost = "0.10.4"
-prost-types = "0.10.0"
+prost = "0.11.0"
+prost-types = "0.11.0"
 serde = "1.0.138"
 serde_derive = "1.0.103"
 smpl_jwt = "0.7.1"
@@ -33,7 +33,7 @@ solana-storage-proto = { path = "../storage-proto", version = "=1.11.5" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.5" }
 thiserror = "1.0"
 tokio = "~1.14.1"
-tonic = { version = "0.7.2", features = ["tls", "transport"] }
+tonic = { version = "0.8.0", features = ["tls", "transport"] }
 zstd = "0.11.2"
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly
