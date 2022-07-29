@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 bzip2 = "0.4.3"
-cargo_metadata = "0.14.2"
+cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo", "env"] }
 log = { version = "0.4.14", features = ["std"] }
 regex = "1.5.6"

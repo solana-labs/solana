@@ -9,7 +9,7 @@ use {
         stakes::{serde_stakes_enum_compat, StakesEnum},
     },
     solana_measure::measure::Measure,
-    solana_sdk::stake::state::Delegation,
+    solana_sdk::{deserialize_utils::ignore_eof_error, stake::state::Delegation},
     std::{cell::RefCell, collections::HashSet, sync::RwLock},
 };
 
@@ -310,11 +310,7 @@ impl<'a> TypeContext<'a> for Context {
             deserialize_from::<_, DeserializableVersionedBank>(&mut stream)?.into();
         let accounts_db_fields = Self::deserialize_accounts_db_fields(stream)?;
         // Process extra fields
-        let lamports_per_signature: u64 = match deserialize_from(stream) {
-            Err(err) if err.to_string() == "io error: unexpected end of file" => Ok(0),
-            Err(err) if err.to_string() == "io error: failed to fill whole buffer" => Ok(0),
-            result => result,
-        }?;
+        let lamports_per_signature = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.fee_rate_governor = bank_fields
             .fee_rate_governor
             .clone_with_lamports_per_signature(lamports_per_signature);
