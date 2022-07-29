@@ -2819,6 +2819,18 @@ dependencies = [
 [[package]]
 name = "pbkdf2"
 version = "0.10.1"
+<<<<<<< HEAD
+=======
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "271779f35b581956db91a3e55737327a03aa051e90b1c47aeb189508533adfd7"
+dependencies = [
+ "digest 0.10.3",
+]
+
+[[package]]
+name = "pbkdf2"
+version = "0.11.0"
+>>>>>>> 9d31b1d29 (Parse ConfidentialTransaction extensions (#26820))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "271779f35b581956db91a3e55737327a03aa051e90b1c47aeb189508533adfd7"
 dependencies = [
@@ -4801,7 +4813,11 @@ dependencies = [
  "lazy_static",
  "log",
  "memmap2",
+<<<<<<< HEAD
  "rustc_version 0.4.0",
+=======
+ "rustc_version",
+>>>>>>> 9d31b1d29 (Parse ConfidentialTransaction extensions (#26820))
  "serde",
  "serde_bytes",
  "serde_derive",
@@ -5127,7 +5143,11 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.0",
  "rand 0.7.3",
+<<<<<<< HEAD
  "rustc_version 0.4.0",
+=======
+ "rustc_version",
+>>>>>>> 9d31b1d29 (Parse ConfidentialTransaction extensions (#26820))
  "rustversion",
  "serde",
  "serde_bytes",
@@ -5768,6 +5788,7 @@ dependencies = [
 
 [[package]]
 name = "solana-zk-token-sdk"
+<<<<<<< HEAD
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74b149253f9ed1afb68b3161b53b62b637d0dd7a3b328dffdc8bb5878d48358e"
@@ -5800,6 +5821,10 @@ dependencies = [
 name = "solana-zk-token-sdk"
 version = "1.10.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+=======
+version = "1.10.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+>>>>>>> 9d31b1d29 (Parse ConfidentialTransaction extensions (#26820))
 checksum = "410ee53a26ac91098c289c983863535d4fbb6604b229ae1159503f48fa4fc90f"
 dependencies = [
  "aes-gcm-siv",
@@ -5927,6 +5952,7 @@ dependencies = [
  "num-traits",
  "num_enum",
  "solana-program 1.10.33",
+<<<<<<< HEAD
  "thiserror",
 ]
 
@@ -5945,14 +5971,16 @@ dependencies = [
  "solana-zk-token-sdk 0.8.1",
  "spl-memo",
  "spl-token",
+=======
+>>>>>>> 9d31b1d29 (Parse ConfidentialTransaction extensions (#26820))
  "thiserror",
 ]
 
 [[package]]
 name = "spl-token-2022"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e684f055853cf11bdc9cd3301da1a3238bc95d25c9e563fd67533c2314900eab"
+checksum = "f0a97cbf60b91b610c846ccf8eecca96d92a24a19ffbf9fe06cd0c84e76ec45e"
 dependencies = [
  "arrayref",
  "bytemuck",
