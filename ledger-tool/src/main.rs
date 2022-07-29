@@ -349,7 +349,7 @@ fn output_slot(
                     depth.fetch_add(1, Ordering::Relaxed);
                     weight -= 1;
                 } else {
-                    std::thread::sleep(std::time::Duration::from_micros(10));
+                    //std::thread::sleep(std::time::Duration::from_micros(10));
                 }
             }
         }
