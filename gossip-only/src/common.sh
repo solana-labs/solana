@@ -10,7 +10,7 @@
 # shellcheck source=src/common.sh
 echo "greg - in gossip-only common.sh script"
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"/net/common.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. || exit 1; pwd)"/net/common.sh
 
 echo ""
 
