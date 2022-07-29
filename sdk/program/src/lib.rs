@@ -28,7 +28,7 @@
 //! [serialization]: #serialization
 //! [np]: #native-programs
 //! [cpi]: #cross-program-instruction-execution
-//! [sysvar]: #sysvars
+//! [sysvar]: crate::sysvar
 //!
 //! Idiomatic examples of `solana-program` usage can be found in
 //! [the Solana Program Library][spl].
@@ -466,89 +466,6 @@
 //!   - Invokable by programs? yes
 //!
 //! [lut]: https://docs.solana.com/proposals/transactions-v2
-//!
-//! # Sysvars
-//!
-//! Sysvars are special accounts that contain dynamically-updated data about
-//! the network cluster, the blockchain history, and the executing transaction.
-//!
-//! The program IDs for sysvars are defined in the [`sysvar`] module, and simple
-//! sysvars implement the [`Sysvar::get`] method, which loads a sysvar directly
-//! from the runtime, as in this example that logs the `clock` sysvar:
-//!
-//! [`Sysvar::get`]: sysvar::Sysvar::get
-//!
-//! ```
-//! use solana_program::{
-//!     account_info::AccountInfo,
-//!     clock,
-//!     entrypoint::ProgramResult,
-//!     msg,
-//!     pubkey::Pubkey,
-//!     sysvar::Sysvar,
-//! };
-//!
-//! fn process_instruction(
-//!     program_id: &Pubkey,
-//!     accounts: &[AccountInfo],
-//!     instruction_data: &[u8],
-//! ) -> ProgramResult {
-//!     let clock = clock::Clock::get()?;
-//!     msg!("clock: {:#?}", clock);
-//!     Ok(())
-//! }
-//! ```
-//!
-//! Since Solana sysvars are accounts, if the `AccountInfo` is provided to the
-//! program, then the program can deserialize the sysvar with
-//! [`Sysvar::from_account_info`] to access its data, as in this example that
-//! again logs the [`clock`][clk] sysvar.
-//!
-//! [`Sysvar::from_account_info`]: sysvar::Sysvar::from_account_info
-//! [clk]: sysvar::clock
-//!
-//! ```
-//! use solana_program::{
-//!     account_info::{next_account_info, AccountInfo},
-//!     clock,
-//!     entrypoint::ProgramResult,
-//!     msg,
-//!     pubkey::Pubkey,
-//!     sysvar::Sysvar,
-//! };
-//!
-//! fn process_instruction(
-//!     program_id: &Pubkey,
-//!     accounts: &[AccountInfo],
-//!     instruction_data: &[u8],
-//! ) -> ProgramResult {
-//!     let account_info_iter = &mut accounts.iter();
-//!     let clock_account = next_account_info(account_info_iter)?;
-//!     let clock = clock::Clock::from_account_info(&clock_account)?;
-//!     msg!("clock: {:#?}", clock);
-//!     Ok(())
-//! }
-//! ```
-//!
-//! When possible, programs should prefer to call `Sysvar::get` instead of
-//! deserializing with `Sysvar::from_account_info`, as the latter imposes extra
-//! overhead of deserialization while also requiring the sysvar account address
-//! be passed to the program, wasting the limited space available to
-//! transactions. Deserializing sysvars that can instead be retrieved with
-//! `Sysvar::get` should be only be considered for compatibility with older
-//! programs that pass around sysvar accounts.
-//!
-//! Some sysvars are too large to deserialize within a program, and
-//! `Sysvar::from_account_info` returns an error. Some sysvars are too large
-//! to deserialize within a program, and attempting to will exhaust the
-//! program's compute budget. Some sysvars do not implement `Sysvar::get` and
-//! return an error. Some sysvars have custom deserializers that do not
-//! implement the `Sysvar` trait. These cases are documented in the modules for
-//! individual sysvars.
-//!
-//! For more details see the Solana [documentation on sysvars][sysvardoc].
-//!
-//! [sysvardoc]: https://docs.solana.com/developing/runtime-facilities/sysvars
 
 #![allow(incomplete_features)]
 #![cfg_attr(RUSTC_WITH_SPECIALIZATION, feature(specialization))]

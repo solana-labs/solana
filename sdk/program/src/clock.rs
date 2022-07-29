@@ -1,20 +1,45 @@
 //! Information about the network's clock, ticks, slots, etc.
+//!
+//! Time in Solana is marked primily by _slots_, which occur approximately every
+//! 400 milliseconds, and are numbered sequentially. For every slot a leader is
+//! chosen from the validator set, and that leader is expected to produce a new
+//! block, though sometimes leaders may fail to do so. Blocks can be identified
+//! by their slot number, and some slots do not contain a block.
+//!
+//! An approximation of the passage of real-world time can be calculated by
+//! multiplying a number of slots by [`SLOT_MS`], which is a constant target
+//! time for the network to produce slots. Note though that this method suffers
+//! a variable amount of drift, as the network does not produce slots at exactly
+//! the target rate, and the greater number of slots being calculated for, the
+//! greater the drift. Epochs can not be used this way as they contain variable
+//! numbers of slots.
+//!
+//! The network's current view of the real-world time can always be accessed via
+//! [`Clock::unix_timestamp`], which is produced by an [oracle derived from the
+//! validator set][oracle].
+//!
+//! [oracle]: https://docs.solana.com/implemented-proposals/validator-timestamp-oracle
 
 use {
     crate::{clone_zeroed, copy_field},
     std::mem::MaybeUninit,
 };
 
-// The default tick rate that the cluster attempts to achieve.  Note that the actual tick
-// rate at any given time should be expected to drift
+/// The default tick rate that the cluster attempts to achieve (160 per second).
+///
+/// Note that the actual tick rate at any given time should be expected to drift.
 pub const DEFAULT_TICKS_PER_SECOND: u64 = 160;
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(MS_PER_TICK, 6);
+
+/// The number of milliseconds per tick (6).
 pub const MS_PER_TICK: u64 = 1000 / DEFAULT_TICKS_PER_SECOND;
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(SLOT_MS, 400);
+
+/// The duration of a slot (400 milliseconds).
 pub const SLOT_MS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
 
 // At 160 ticks/s, 64 ticks per slot implies that leader rotation and voting will happen
@@ -41,7 +66,10 @@ pub const TICKS_PER_DAY: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY;
 
 #[cfg(test)]
 static_assertions::const_assert_eq!(DEFAULT_SLOTS_PER_EPOCH, 432_000);
-// 1 Epoch ~= 2 days
+
+/// The number of slots per epoch after initial network warmup.
+///
+/// 1 Epoch ~= 2 days.
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 2 * TICKS_PER_DAY / DEFAULT_TICKS_PER_SLOT;
 
 // leader schedule is governed by this
@@ -52,12 +80,14 @@ static_assertions::const_assert_eq!(DEFAULT_MS_PER_SLOT, 400);
 pub const DEFAULT_MS_PER_SLOT: u64 = 1_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
 pub const DEFAULT_S_PER_SLOT: f64 = DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64;
 
-/// The time window of recent block hash values that the bank will track the signatures
-/// of over. Once the bank discards a block hash, it will reject any transactions that use
-/// that `recent_blockhash` in a transaction. Lowering this value reduces memory consumption,
-/// but requires clients to update its `recent_blockhash` more frequently. Raising the value
-/// lengthens the time a client must wait to be certain a missing transaction will
-/// not be processed by the network.
+/// The time window of recent block hash values that the bank will track the
+/// signatures of over.
+///
+/// Once the bank discards a block hash, it will reject any transactions that
+/// use that `recent_blockhash` in a transaction. Lowering this value reduces
+/// memory consumption, but requires clients to update its `recent_blockhash`
+/// more frequently. Raising the value lengthens the time a client must wait to
+/// be certain a missing transaction will not be processed by the network.
 pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;
 
 #[cfg(test)]
@@ -78,52 +108,61 @@ pub const MAX_TRANSACTION_FORWARDING_DELAY_GPU: usize = 2;
 /// More delay is expected if CUDA is not enabled (as signature verification takes longer)
 pub const MAX_TRANSACTION_FORWARDING_DELAY: usize = 6;
 
-/// Slot is a unit of time given to a leader for encoding,
-///  is some some number of Ticks long.
+/// The unit of time given to a leader for encoding a block.
+///
+/// It is some some number of _ticks_ long.
 pub type Slot = u64;
 
-/// Uniquely distinguishes every version of a slot, even if the
-/// slot number is the same, i.e. duplicate slots
+/// Uniquely distinguishes every version of a slot.
+///
+/// The `BankId` is unique even if the slot number of two different slots is the
+/// same. This can happen in the case of e.g. duplicate slots.
 pub type BankId = u64;
 
-/// Epoch is a unit of time a given leader schedule is honored,
-///  some number of Slots.
+/// The unit of time a given leader schedule is honored.
+///
+/// It lasts for some number of [`Slot`]s.
 pub type Epoch = u64;
 
 pub const GENESIS_EPOCH: Epoch = 0;
 // must be sync with Account::rent_epoch::default()
 pub const INITIAL_RENT_EPOCH: Epoch = 0;
 
-/// SlotIndex is an index to the slots of a epoch
+/// An index to the slots of a epoch.
 pub type SlotIndex = u64;
 
-/// SlotCount is the number of slots in a epoch
+/// The number of slots in a epoch.
 pub type SlotCount = u64;
 
-/// UnixTimestamp is an approximate measure of real-world time,
-/// expressed as Unix time (ie. seconds since the Unix epoch)
+/// An approximate measure of real-world time.
+///
+/// Expressed as Unix time (i.e. seconds since the Unix epoch).
 pub type UnixTimestamp = i64;
 
-/// Clock represents network time.  Members of Clock start from 0 upon
-///  network boot.  The best way to map Clock to wallclock time is to use
-///  current Slot, as Epochs vary in duration (they start short and grow
-///  as the network progresses).
+/// A representation of network time.
 ///
+/// All members of `Clock` start from 0 upon network boot.
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub struct Clock {
-    /// the current network/bank Slot
+    /// The current network/bank `Slot`.
     pub slot: Slot,
-    /// the timestamp of the first Slot in this Epoch
+    /// The timestamp of the first `Slot` in this `Epoch`.
     pub epoch_start_timestamp: UnixTimestamp,
-    /// the bank Epoch
+    /// The bank `Epoch`.
     pub epoch: Epoch,
-    /// the future Epoch for which the leader schedule has
-    ///  most recently been calculated
+    /// The future `Epoch` for which the leader schedule has
+    /// most recently been calculated.
     pub leader_schedule_epoch: Epoch,
-    /// originally computed from genesis creation time and network time
-    /// in slots (drifty); corrected using validator timestamp oracle as of
-    /// timestamp_correction and timestamp_bounding features
+    /// The approximate real world time of the current slot.
+    ///
+    /// This value was originally computed from genesis creation time and
+    /// network time in slots, incurring a lot of drift. Following activation of
+    /// the [`timestamp_correction` and `timestamp_bounding`][tsc] features it
+    /// is calculated using a [validator timestamp oracle][oracle].
+    ///
+    /// [tsc]: https://docs.solana.com/implemented-proposals/bank-timestamp-correction
+    /// [oracle]: https://docs.solana.com/implemented-proposals/validator-timestamp-oracle
     pub unix_timestamp: UnixTimestamp,
 }
 

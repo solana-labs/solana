@@ -1,23 +1,37 @@
 //! Configuration for epochs and slots.
+//!
+//! Epochs mark a period of time composed of _slots_, for which a particular
+//! [leader schedule][ls] is in effect. The epoch schedule determines the length
+//! of epochs, and the timing of the next leader schedule selection.
+//!
+//! [ls]: https://docs.solana.com/cluster/leader-rotation#leader-schedule-rotation
+//!
+//! The epoch schedule does not change during the life of a blockchain,
+//! though the length of an epoch does &mdash; during the initial launch of
+//! the chain there is a "warmup" period, where epochs are short, with subsequent
+//! epochs increasing in slots until they last for [`DEFAULT_SLOTS_PER_EPOCH`].
 
-/// 1 Epoch = 400 * 8192 ms ~= 55 minutes
 pub use crate::clock::{Epoch, Slot, DEFAULT_SLOTS_PER_EPOCH};
 use {
     crate::{clone_zeroed, copy_field},
     std::mem::MaybeUninit,
 };
 
-/// The number of slots before an epoch starts to calculate the leader schedule.
-///  Default is an entire epoch, i.e. leader schedule for epoch X is calculated at
-///  the beginning of epoch X - 1.
+/// The default number of slots before an epoch starts to calculate the leader schedule.
+///
+/// The default is an entire epoch, i.e. leader schedule for epoch X is calculated at
+/// the beginning of epoch X - 1.
 pub const DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET: u64 = DEFAULT_SLOTS_PER_EPOCH;
 
 /// The maximum number of slots before an epoch starts to calculate the leader schedule.
-///  Default is an entire epoch, i.e. leader schedule for epoch X is calculated at
-///  the beginning of epoch X - 1.
+///
+/// Default is an entire epoch, i.e. leader schedule for epoch X is calculated at
+/// the beginning of epoch X - 1.
 pub const MAX_LEADER_SCHEDULE_EPOCH_OFFSET: u64 = 3;
 
-/// based on MAX_LOCKOUT_HISTORY from vote_program
+/// The minimum number of slots per epoch during the warmup period.
+///
+/// Based on `MAX_LOCKOUT_HISTORY` from `vote_program`.
 pub const MINIMUM_SLOTS_PER_EPOCH: u64 = 32;
 
 #[repr(C)]
@@ -28,16 +42,20 @@ pub struct EpochSchedule {
     pub slots_per_epoch: u64,
 
     /// A number of slots before beginning of an epoch to calculate
-    ///  a leader schedule for that epoch
+    /// a leader schedule for that epoch.
     pub leader_schedule_slot_offset: u64,
 
-    /// whether epochs start short and grow
+    /// Whether epochs start short and grow.
     pub warmup: bool,
 
-    /// basically: log2(slots_per_epoch) - log2(MINIMUM_SLOTS_PER_EPOCH)
+    /// The first epoch after the warmup period.
+    ///
+    /// Basically: `log2(slots_per_epoch) - log2(MINIMUM_SLOTS_PER_EPOCH)`.
     pub first_normal_epoch: Epoch,
 
-    /// basically: MINIMUM_SLOTS_PER_EPOCH * (2.pow(first_normal_epoch) - 1)
+    /// The first slot after the warmup period.
+    ///
+    /// Basically: `MINIMUM_SLOTS_PER_EPOCH * (2.pow(first_normal_epoch) - 1)`.
     pub first_normal_slot: Slot,
 }
 
