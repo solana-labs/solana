@@ -482,7 +482,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         if i % 100 == 0 {
                             use log::*;
                             error!(
-                                "deadlocked on {}, thread_id: {:?}",
+                                "upsert deadlocked on {}, thread_id: {:?}",
                                 pubkey,
                                 thread::current().id()
                             );
@@ -626,6 +626,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             reclaims,
             reclaim,
         );
+        drop(slot_list);
         current.pop_slot_list_writer("runtime/src/in_mem_accounts_index.rs:549");
         if addref {
             current.add_un_ref(true);
