@@ -600,34 +600,26 @@ impl ScheduleStage {
             let i = incoming.receive().unwrap();
             match i {
                 Incoming::FromPrevious(weighted_tx) => {
-                            trace!("recv from previous");
-                    Self::register_runnable_task(weighted_tx, runnable_queue)
-                    if depth < max_depth {
-                        maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-                        if let Some(ee) = maybe_ee {
-                            trace!("send to execute");
-                            to_execute_substage.send(ee).unwrap();
-                            depth += 1;
-                        }
-                    }
+                    trace!("recv from previous");
+                    Self::register_runnable_task(weighted_tx, runnable_queue);
                 },
                 Incoming::FromExecute(processed_execution_environment) => {
                     trace!("recv from execute");
                     depth -= 1;
                     Self::commit_result(&mut processed_execution_environment, address_book);
 
-                    if depth < max_depth {
-                        maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-                        if let Some(ee) = maybe_ee {
-                            trace!("send to execute");
-                            to_execute_substage.send(ee).unwrap();
-                            depth += 1;
-                        }
-                    }
-
                     // async-ly propagate the result to rpc subsystems
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap();
+                }
+            }
+
+            if depth < max_depth {
+                maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                if let Some(ee) = maybe_ee {
+                    trace!("send to execute");
+                    to_execute_substage.send(ee).unwrap();
+                    depth += 1;
                 }
             }
         }
