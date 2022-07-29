@@ -73,6 +73,15 @@ ln -sfT validator.log.\$now validator.log
 EOF
 chmod +x ~/solana/on-reboot
 
+cat > ~/solana/gossip-only-run <<EOF
+#!/usr/bin/env bash
+cd ~/solana
+
+now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+ln -sfT validator.log.\$now validator.log
+EOF
+chmod +x ~/solana/gossip-only-run
+
 GPU_CUDA_OK=false
 GPU_FAIL_IF_NONE=false
 case "$gpuMode" in
@@ -129,6 +138,14 @@ cat >> ~/solana/on-reboot <<EOF
     echo "Expected GPU, found none!"
     export SOLANA_GPU_MISSING=1
   fi
+EOF
+
+cat >> ~/solana/gossip-only-run <<EOF
+  PATH="$HOME"/.cargo/bin:"$PATH"
+  export USE_INSTALL=1
+
+  sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+  echo \$! > sys-tuner.pid
 EOF
 
   echo "greg - case - bootstrap or validator"
@@ -192,64 +209,59 @@ EOF
         fi
       done
 
-      for i in $(seq 0 $((numBenchTpsClients-1))); do
-        # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
-        solana-bench-tps --write-client-keys config/bench-tps"$i".yml \
-          --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
-        # Skip first line, as it contains header
-        tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
-        echo "" >> config/client-accounts.yml
-      done
-      if [[ -f $externalPrimordialAccountsFile ]]; then
-        cat "$externalPrimordialAccountsFile" >> config/validator-balances.yml
-      fi
-      if [[ -f config/validator-balances.yml ]]; then
-        genesisOptions+=" --primordial-accounts-file config/validator-balances.yml"
-      fi
-      if [[ -f config/client-accounts.yml ]]; then
-        genesisOptions+=" --primordial-accounts-file config/client-accounts.yml"
-      fi
+      # for i in $(seq 0 $((numBenchTpsClients-1))); do
+      #   # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
+      #   solana-bench-tps --write-client-keys config/bench-tps"$i".yml \
+      #     --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
+      #   # Skip first line, as it contains header
+      #   tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
+      #   echo "" >> config/client-accounts.yml
+      # done
+      # if [[ -f $externalPrimordialAccountsFile ]]; then
+      #   cat "$externalPrimordialAccountsFile" >> config/validator-balances.yml
+      # fi
+      # if [[ -f config/validator-balances.yml ]]; then
+      #   genesisOptions+=" --primordial-accounts-file config/validator-balances.yml"
+      # fi
+      # if [[ -f config/client-accounts.yml ]]; then
+      #   genesisOptions+=" --primordial-accounts-file config/client-accounts.yml"
+      # fi
 
-      if [[ -n $internalNodesStakeLamports ]]; then
-        args+=(--bootstrap-validator-stake-lamports "$internalNodesStakeLamports")
-      fi
-      if [[ -n $internalNodesLamports ]]; then
-        args+=(--bootstrap-validator-lamports "$internalNodesLamports")
-      fi
-      # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
-      args+=($genesisOptions)
-      echo "greg - in bootstrap-validator - 2"
+      # if [[ -n $internalNodesStakeLamports ]]; then
+      #   args+=(--bootstrap-validator-stake-lamports "$internalNodesStakeLamports")
+      # fi
+      # if [[ -n $internalNodesLamports ]]; then
+      #   args+=(--bootstrap-validator-lamports "$internalNodesLamports")
+      # fi
+      # # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
+      # args+=($genesisOptions)
+      # echo "greg - in bootstrap-validator - 2"
 
-      if [[ -f net/keypairs/faucet.json ]]; then
-        export FAUCET_KEYPAIR=net/keypairs/faucet.json
-      fi
-      if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
-        export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
-      fi
-      if [[ -f net/keypairs/bootstrap-validator-stake.json ]]; then
-        export BOOTSTRAP_VALIDATOR_STAKE_KEYPAIR=net/keypairs/bootstrap-validator-stake.json
-      fi
-      if [[ -f net/keypairs/bootstrap-validator-vote.json ]]; then
-        export BOOTSTRAP_VALIDATOR_VOTE_KEYPAIR=net/keypairs/bootstrap-validator-vote.json
-      fi
-      echo "remote-node.sh: Primordial stakes: $extraPrimordialStakes"
-      if [[ "$extraPrimordialStakes" -gt 0 ]]; then
-        if [[ "$extraPrimordialStakes" -gt "$numNodes" ]]; then
-          echo "warning: extraPrimordialStakes($extraPrimordialStakes) clamped to numNodes($numNodes)"
-          extraPrimordialStakes=$numNodes
-        fi
-        for i in $(seq "$extraPrimordialStakes"); do
-          args+=(--bootstrap-validator "$(solana-keygen pubkey "config/validator-identity-$i.json")"
-                                       "$(solana-keygen pubkey "config/validator-vote-$i.json")"
-                                       "$(solana-keygen pubkey "config/validator-stake-$i.json")"
-          )
-        done
-      fi
-
-      echo "greg - bootstrap - entrypoint IP: $entrypointIp"
-      # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --bootstrap --gossip-host $entrypointIp --gossip-port 8001 &
-      nohup gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:9001 --bootstrap --gossip-host $entrypointIp --gossip-port 9001 &> /dev/null &
-
+      # if [[ -f net/keypairs/faucet.json ]]; then
+      #   export FAUCET_KEYPAIR=net/keypairs/faucet.json
+      # fi
+      # if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
+      #   export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
+      # fi
+      # if [[ -f net/keypairs/bootstrap-validator-stake.json ]]; then
+      #   export BOOTSTRAP_VALIDATOR_STAKE_KEYPAIR=net/keypairs/bootstrap-validator-stake.json
+      # fi
+      # if [[ -f net/keypairs/bootstrap-validator-vote.json ]]; then
+      #   export BOOTSTRAP_VALIDATOR_VOTE_KEYPAIR=net/keypairs/bootstrap-validator-vote.json
+      # fi
+      # echo "remote-node.sh: Primordial stakes: $extraPrimordialStakes"
+      # if [[ "$extraPrimordialStakes" -gt 0 ]]; then
+      #   if [[ "$extraPrimordialStakes" -gt "$numNodes" ]]; then
+      #     echo "warning: extraPrimordialStakes($extraPrimordialStakes) clamped to numNodes($numNodes)"
+      #     extraPrimordialStakes=$numNodes
+      #   fi
+      #   for i in $(seq "$extraPrimordialStakes"); do
+      #     args+=(--bootstrap-validator "$(solana-keygen pubkey "config/validator-identity-$i.json")"
+      #                                  "$(solana-keygen pubkey "config/validator-vote-$i.json")"
+      #                                  "$(solana-keygen pubkey "config/validator-stake-$i.json")"
+      #     )
+      #   done
+      # fi
 
       multinode-demo/setup.sh "${args[@]}"
 
@@ -319,6 +331,21 @@ EOF
     if $waitForNodeInit; then
       net/remote/remote-node-wait-init.sh 600
     fi
+
+    echo "greg - bootstrap - entrypoint IP: $entrypointIp"
+    gossipOnlyPort=9001
+    args=(
+      --account-file gossip-only/src/accounts.yaml
+      --bootstrap
+      --num-nodes 1
+      --entrypoint $entrypointIp:$gossipOnlyPort
+      --gossip-host "$entrypointIp"
+      --gossip-port $gossipOnlyPort
+    )
+    # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --bootstrap --gossip-host $entrypointIp --gossip-port 8001 &
+    nohup gossip-only "${args[@]}" &> /dev/null &
+    # nohup gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:9001 --bootstrap --gossip-host $entrypointIp --gossip-port 9001 &> /dev/null &
+
 
     ;;
   validator|blockstreamer)
@@ -493,20 +520,44 @@ EOF
 
       # echo "greg - running write keys"
       # gossip-only --account-file gossip-only/src/accounts.yaml --write-keys --num-keys 10
+      echo "greg - validator - entrypoint IP: $entrypointIp"
+      chmod +x gossip-only/src/gossip-only.sh
+
+      gossipOnlyPort=9001
+      args=(
+        --account-file gossip-only/src/accounts.yaml
+        --num-nodes 1
+        --entrypoint $entrypointIp:$gossipOnlyPort
+        --gossip-host $(hostname -i)
+        --gossip-port $gossipOnlyPort
+      )
+
+cat >> ~/solana/gossip-only-run <<EOF
+    nohup gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator.log.\$now 2>&1 &
+    disown
+EOF
+    ~/solana/gossip-only-run
 
 
-      if [[ ${extraPrimordialStakes} -eq 0 ]]; then
-        echo "greg - validator - entrypoint IP: $entrypointIp"
-        # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --gossip-host 10.138.0.63 --gossip-port 8001 &
-        nohup gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:9001 --gossip-host 10.138.0.63 --gossip-port 9001  &
+      # gossipOnlyPort=9001
+      # args=(
+      #   --account-file gossip-only/src/accounts.yaml
+      #   --num-nodes 1
+      #   --entrypoint $entrypointIp:$gossipOnlyPort
+      #   --gossip-host $(hostname -i)
+      #   --gossip-port $gossipOnlyPort
+      # )
 
-        echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
-        multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
-                                         --stake-account "$SOLANA_CONFIG_DIR"/stake-account.json \
-                                         "${args[@]}" "$internalNodesStakeLamports"
-      else
-        echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"
-      fi
+      # nohup gossip-only "${args[@]}" & disown #// &> /dev/null &
+
+      # if [[ ${extraPrimordialStakes} -eq 0 ]]; then
+      #   echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
+      #   multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
+      #                                    --stake-account "$SOLANA_CONFIG_DIR"/stake-account.json \
+      #                                    "${args[@]}" "$internalNodesStakeLamports"
+      # else
+      #   echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"
+      # fi
     fi
     ;;
   *)
