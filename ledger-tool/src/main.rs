@@ -235,7 +235,7 @@ fn output_slot(
     }
 
     // basically, this controls the maximum size of task queue, so unbounded isn't nice
-    let (tx_sender, tx_receiver) = crossbeam_channel::unbounded()
+    let (tx_sender, tx_receiver) = crossbeam_channel::unbounded();
 
     // this should be target number of saturated cpu cores
     let lane_count = std::env::var("EXECUTION_LANE_COUNT")
