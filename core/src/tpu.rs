@@ -100,6 +100,7 @@ impl Tpu {
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
         enable_quic_servers: bool,
+        staked_nodes: &Arc<RwLock<StakedNodes>>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -127,7 +128,6 @@ impl Tpu {
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
         );
 
-        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
             exit.clone(),
             cluster_info.clone(),
@@ -181,7 +181,7 @@ impl Tpu {
                 forwarded_packet_sender,
                 exit.clone(),
                 MAX_QUIC_CONNECTIONS_PER_PEER,
-                staked_nodes,
+                staked_nodes.clone(),
                 MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
                 0, // Prevent unstaked nodes from forwarding transactions
                 stats,
