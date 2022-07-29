@@ -7,8 +7,12 @@
 # shellcheck disable=2034
 #
 
-# shellcheck source=net/common.sh
+# shellcheck source=src/common.sh
+echo "greg - in gossip-only common.sh script"
+
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. || exit 1; pwd)"/src/common.sh
+
+echo ""
 
 prebuild=
 if [[ $1 = "--prebuild" ]]; then
