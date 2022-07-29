@@ -315,13 +315,13 @@ fn output_slot(
 
     let depth = Arc::new(std::sync::atomic::AtomicUsize::default());
 
-    let d = depth.clone();
+    //let d = depth.clone();
     let t3 = std::thread::Builder::new()
         .name("sol-consumer".to_string())
         .spawn(move || {
             for step in 0.. {
                 let ee = post_schedule_env_receiver.recv().unwrap();
-                d.fetch_sub(1, Ordering::Relaxed);
+                //d.fetch_sub(1, Ordering::Relaxed);
                 trace!(
                     "post schedule stage: #{} {:#?}",
                     step,
