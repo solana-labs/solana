@@ -12,4 +12,5 @@ version = "1.11.5"
 [workspace]
 
 [dependencies]
+protobuf-src = "1.0.5"
 tonic-build = "0.8.0"
