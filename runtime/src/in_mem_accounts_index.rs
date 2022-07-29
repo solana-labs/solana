@@ -289,7 +289,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// the idx has been told to update in_mem. But, we haven't checked disk yet to see if there is already an entry for the pubkey.
     /// Now, we know there is something on disk, so we need to merge disk into what was done in memory.
-    pub(crate) fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>) {
+    fn merge_slot_lists(in_mem: &AccountMapEntryInner<T>, disk: SlotList<T>) {
         let mut slot_list = in_mem.slot_list.write().unwrap();
 
         for (slot, new_entry) in disk.into_iter() {
@@ -1944,6 +1944,15 @@ mod tests {
         assert!(!flushing_active.load(Ordering::Acquire));
     }
 
+    #[test]
+    fn test_flush_merge() {
+        let bucket = new_for_test::<f64>();
+        let active = AtomicBool::new(false);
+        let flush_guard = FlushGuard::lock(&active).unwrap();
+
+        bucket.flush_internal(&flush_guard, true);
+    }
+
     /// Stress test parallel merge slot lists with 20 threads
     #[test]
     fn test_parallel_merge() {
@@ -1960,7 +1969,6 @@ mod tests {
             threads.push(thread::spawn(move || {
                 let mut i = 1u64;
                 loop {
-                    // todo
                     let l2 = vec![(i, i)];
                     InMemAccountsIndex::merge_slot_lists(&l, l2);
                     i += 1;
