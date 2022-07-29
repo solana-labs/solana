@@ -1292,6 +1292,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             // check to see if needed to lazy disk index before flushing.
                             if v.lazy_disk_load() {
                                 if let Some((disk_entry, _)) = self.load_from_disk(k) {
+                                    if slot_list.is_some() {
+                                        error!("haoran this was a hang before");
+                                    }
+                                    // 'slot_list' could hold a read lock to the slot list in 'v'
+                                    slot_list = None;
                                     Self::merge_slot_lists(&v, disk_entry, k);
                                 }
                                 v.clear_lazy_disk_load();
