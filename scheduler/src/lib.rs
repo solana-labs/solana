@@ -590,7 +590,6 @@ impl ScheduleStage {
     ) {
         use crossbeam_channel::select;
 
-        let mut maybe_ee = None;
         let mut depth = 0;
 
         loop {
@@ -600,13 +599,14 @@ impl ScheduleStage {
             match i {
                 Incoming::FromPrevious(weighted_tx) => {
                     trace!("recv from previous");
+
                     Self::register_runnable_task(weighted_tx, runnable_queue);
                 },
                 Incoming::FromExecute(mut processed_execution_environment) => {
                     trace!("recv from execute");
                     depth -= 1;
-                    Self::commit_result(&mut processed_execution_environment, address_book);
 
+                    Self::commit_result(&mut processed_execution_environment, address_book);
                     // async-ly propagate the result to rpc subsystems
                     // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap();
@@ -617,8 +617,9 @@ impl ScheduleStage {
                 maybe_ee = Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
-                    to_execute_substage.send(ee).unwrap();
                     depth += 1;
+
+                    to_execute_substage.send(ee).unwrap();
                 }
             }
         }
