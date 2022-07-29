@@ -602,7 +602,7 @@ impl ScheduleStage {
                     trace!("recv from previous");
                     Self::register_runnable_task(weighted_tx, runnable_queue);
                 },
-                Incoming::FromExecute(processed_execution_environment) => {
+                Incoming::FromExecute(mut processed_execution_environment) => {
                     trace!("recv from execute");
                     depth -= 1;
                     Self::commit_result(&mut processed_execution_environment, address_book);
