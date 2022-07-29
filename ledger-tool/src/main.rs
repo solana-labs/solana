@@ -249,7 +249,6 @@ fn output_slot(
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::bounded(lane_count * lane_channel_factor);
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
 
-
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
     //let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
     //
@@ -290,7 +289,9 @@ fn output_slot(
                             let mut process_message_time = Measure::start("process_message_time");
                             let sig = ee.task.tx.signature().to_string();
                             trace!("execute substage: #{} {:#?}", step, &sig);
-                            std::thread::sleep(std::time::Duration::from_micros(ee.cu.try_into().unwrap()));
+                            std::thread::sleep(std::time::Duration::from_micros(
+                                ee.cu.try_into().unwrap(),
+                            ));
 
                             process_message_time.stop();
                             let duration_with_overhead = process_message_time.as_us();
@@ -307,7 +308,9 @@ fn output_slot(
                             );
                         }
 
-                        muxed_sender.send(solana_scheduler::Incoming::FromExecute(ee)).unwrap();
+                        muxed_sender
+                            .send(solana_scheduler::Incoming::FromExecute(ee))
+                            .unwrap();
                     }
                 })
                 .unwrap();
@@ -350,7 +353,12 @@ fn output_slot(
                     std::thread::sleep(std::time::Duration::from_micros(10));
                 }
 
-                muxed_sender.send(solana_scheduler::Incoming::FromPrevious((Weight { ix: weight }, tx))).unwrap();
+                muxed_sender
+                    .send(solana_scheduler::Incoming::FromPrevious((
+                        Weight { ix: weight },
+                        tx,
+                    )))
+                    .unwrap();
                 depth.fetch_add(1, Ordering::Relaxed);
                 weight -= 1;
             }
