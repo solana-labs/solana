@@ -130,7 +130,7 @@ pub fn withdraw_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync
     let to_withdraw: Vec<NonceWithdrawSigners> = authority_keypairs
         .iter()
         .zip(nonce_keypairs.iter())
-        .map(|x| NonceWithdrawSigners(x.0, x.1))
+        .map(|x| NonceWithdrawSigners(x.0, x.1.pubkey()))
         .collect();
 
     to_withdraw.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
@@ -437,7 +437,8 @@ impl<'a> NonceTransactions<'a> for NonceCreateContainer<'a> {
     }
 }
 
-struct NonceWithdrawSigners<'a>(&'a Keypair, &'a Keypair);
+// Only Pubkey is required for nonce because it doesn't sign withdraw account transaction
+struct NonceWithdrawSigners<'a>(&'a Keypair, Pubkey);
 type NonceWithdrawChunk<'a> = [NonceWithdrawSigners<'a>];
 type NonceWithdrawContainer<'a> = Vec<(NonceWithdrawSigners<'a>, Transaction)>;
 
@@ -468,11 +469,11 @@ impl<'a> NonceWithdrawTransactions<'a> for NonceWithdrawContainer<'a> {
             to_withdraw,
             |kp| -> (NonceWithdrawSigners<'a>, Transaction) {
                 let authority = kp.0;
-                let nonce: &Keypair = kp.1;
-                let nonce_balance = client.get_balance(&nonce.pubkey()).unwrap();
+                let nonce_pubkey: Pubkey = kp.1;
+                let nonce_balance = client.get_balance(&nonce_pubkey).unwrap();
                 let instructions = vec![
                     system_instruction::withdraw_nonce_account(
-                        &nonce.pubkey(),
+                        &nonce_pubkey,
                         &authority.pubkey(),
                         &authority.pubkey(),
                         nonce_balance,
@@ -480,7 +481,7 @@ impl<'a> NonceWithdrawTransactions<'a> for NonceWithdrawContainer<'a> {
                     1
                 ];
                 (
-                    NonceWithdrawSigners(authority, nonce),
+                    NonceWithdrawSigners(authority, nonce_pubkey),
                     Transaction::new_with_payer(&instructions, Some(&authority.pubkey())),
                 )
             },
