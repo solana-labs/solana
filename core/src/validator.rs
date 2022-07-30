@@ -770,7 +770,7 @@ impl Validator {
 
         // block min prioritization fee cache should be readable by RPC, and writable by validator
         // (for now, by replay stage)
-        let prioritization_fee_cache = Arc::new(RwLock::new(PrioritizationFeeCache::default()));
+        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
 
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
