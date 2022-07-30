@@ -399,7 +399,7 @@ impl ReplayStage {
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         log_messages_bytes_limit: Option<usize>,
-        prioritization_fee_cache: Arc<RwLock<PrioritizationFeeCache>>,
+        prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
             let tower = process_blockstore.process_to_create_tower()?;
@@ -1719,7 +1719,7 @@ impl ReplayStage {
         replay_vote_sender: &ReplayVoteSender,
         verify_recyclers: &VerifyRecyclers,
         log_messages_bytes_limit: Option<usize>,
-        prioritization_fee_cache: &RwLock<PrioritizationFeeCache>,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let mut w_replay_stats = replay_stats.write().unwrap();
         let mut w_replay_progress = replay_progress.write().unwrap();
@@ -2242,7 +2242,7 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
         active_bank_slots: &[Slot],
-        prioritization_fee_cache: &RwLock<PrioritizationFeeCache>,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) -> Vec<ReplaySlotFromBlockstore> {
         // Make mutable shared structures thread safe.
         let progress = RwLock::new(progress);
@@ -2498,10 +2498,7 @@ impl ReplayStage {
                     });
 
                 // finalize block's min prioritization fee cache for this bank
-                prioritization_fee_cache
-                    .write()
-                    .unwrap()
-                    .finalize_priority_fee(bank.slot());
+                prioritization_fee_cache.finalize_priority_fee(bank.slot());
 
                 assert_ne!(bank.hash(), Hash::default());
                 // Needs to be updated before `check_slot_agrees_with_cluster()` so that
@@ -4176,7 +4173,7 @@ pub(crate) mod tests {
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
                 None,
-                &RwLock::new(PrioritizationFeeCache::new(0usize)),
+                &PrioritizationFeeCache::new(0usize),
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(
