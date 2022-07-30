@@ -989,13 +989,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     /// return true if 'entry' should be evicted from the in-mem index
-    fn should_evict_from_mem<'a>(
-        &self,
+    fn should_evict_from_mem<'a, 'b>(
         current_age: Age,
         entry: &'a AccountMapEntry<T>,
         startup: bool,
         update_stats: bool,
         exceeds_budget: bool,
+        stat: &'b BucketMapHolderStats,
     ) -> (bool, Option<std::sync::RwLockReadGuard<'a, SlotList<T>>>) {
         // this could be tunable dynamically based on memory pressure
         // we could look at more ages or we could throw out more items we are choosing to keep in the cache
@@ -1008,14 +1008,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 let slot_list = entry.slot_list.read().unwrap();
                 if slot_list.len() != 1 {
                     if update_stats {
-                        Self::update_stat(&self.stats().held_in_mem_slot_list_len, 1);
+                        Self::update_stat(&stat.held_in_mem_slot_list_len, 1);
                     }
                     (false, None) // keep 0 and > 1 slot lists in mem. They will be cleaned or shrunk soon.
                 } else {
                     // keep items with slot lists that contained cached items
                     let evict = !slot_list.iter().any(|(_, info)| info.is_cached());
                     if !evict && update_stats {
-                        Self::update_stat(&self.stats().held_in_mem_slot_list_cached, 1);
+                        Self::update_stat(&stat.held_in_mem_slot_list_cached, 1);
                     }
                     (evict, if evict { Some(slot_list) } else { None })
                 }
@@ -1140,6 +1140,24 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
     /// synchronize the in-mem index with the disk index
     fn flush_internal(&self, flush_guard: &FlushGuard, can_advance_age: bool) {
+        self.flush_internal_impl(flush_guard, can_advance_age, Self::should_evict_from_mem);
+    }
+
+    fn flush_internal_impl<F>(
+        &self,
+        flush_guard: &FlushGuard,
+        can_advance_age: bool,
+        check_evict_fn: F,
+    ) where
+        F: for<'a, 'b> Fn(
+            Age,
+            &'a AccountMapEntry<T>,
+            bool,
+            bool,
+            bool,
+            &'b BucketMapHolderStats,
+        ) -> (bool, Option<std::sync::RwLockReadGuard<'a, SlotList<T>>>),
+    {
         let current_age = self.storage.current_age();
         let iterate_for_age = self.get_should_age(current_age);
         let startup = self.storage.get_startup();
@@ -1181,13 +1199,24 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         let mut slot_list = None;
                         if !is_random {
                             let mut mse = Measure::start("flush_should_evict");
-                            let (evict_for_age, slot_list_temp) = self.should_evict_from_mem(
+                            // let (evict_for_age, slot_list_temp) = Self::should_evict_from_mem(
+                            //     current_age,
+                            //     &v,
+                            //     startup,
+                            //     true,
+                            //     exceeds_budget,
+                            //     self.stats(),
+                            // );
+
+                            let (evict_for_age, slot_list_temp) = check_evict_fn(
                                 current_age,
                                 &v,
                                 startup,
                                 true,
                                 exceeds_budget,
+                                self.stats(),
                             );
+
                             slot_list = slot_list_temp;
                             mse.stop();
                             flush_should_evict_us += mse.as_us();
@@ -1207,6 +1236,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                     // 'slot_list' could hold a read lock to the slot list in 'v',
                                     // which might cause a deadlock. So release the lock first
                                     // before merging with disk_entry.
+                                    println!("{:?}", slot_list);
                                     slot_list = None;
                                     Self::merge_slot_lists(&v, disk_entry);
                                 }
@@ -1555,124 +1585,124 @@ mod tests {
 
         // exceeded budget
         assert!(
-            bucket
-                .should_evict_from_mem(
-                    current_age,
-                    &Arc::new(AccountMapEntryInner::new(
-                        vec![],
-                        ref_count,
-                        AccountMapEntryMeta::default()
-                    )),
-                    startup,
-                    false,
-                    true,
-                )
-                .0
+            InMemAccountsIndex::<u64>::should_evict_from_mem(
+                current_age,
+                &Arc::new(AccountMapEntryInner::new(
+                    vec![],
+                    ref_count,
+                    AccountMapEntryMeta::default()
+                )),
+                startup,
+                false,
+                true,
+                bucket.stats(),
+            )
+            .0
         );
         // empty slot list
         assert!(
-            !bucket
-                .should_evict_from_mem(
-                    current_age,
-                    &Arc::new(AccountMapEntryInner::new(
-                        vec![],
-                        ref_count,
-                        AccountMapEntryMeta::default()
-                    )),
-                    startup,
-                    false,
-                    false,
-                )
-                .0
+            !InMemAccountsIndex::<u64>::should_evict_from_mem(
+                current_age,
+                &Arc::new(AccountMapEntryInner::new(
+                    vec![],
+                    ref_count,
+                    AccountMapEntryMeta::default()
+                )),
+                startup,
+                false,
+                false,
+                bucket.stats(),
+            )
+            .0
         );
         // 1 element slot list
         assert!(
-            bucket
-                .should_evict_from_mem(
-                    current_age,
-                    &one_element_slot_list_entry,
-                    startup,
-                    false,
-                    false,
-                )
-                .0
+            InMemAccountsIndex::<u64>::should_evict_from_mem(
+                current_age,
+                &one_element_slot_list_entry,
+                startup,
+                false,
+                false,
+                bucket.stats(),
+            )
+            .0
         );
         // 2 element slot list
         assert!(
-            !bucket
-                .should_evict_from_mem(
-                    current_age,
-                    &Arc::new(AccountMapEntryInner::new(
-                        vec![(0, 0), (1, 1)],
-                        ref_count,
-                        AccountMapEntryMeta::default()
-                    )),
-                    startup,
-                    false,
-                    false,
-                )
-                .0
+            !InMemAccountsIndex::<u64>::should_evict_from_mem(
+                current_age,
+                &Arc::new(AccountMapEntryInner::new(
+                    vec![(0, 0), (1, 1)],
+                    ref_count,
+                    AccountMapEntryMeta::default()
+                )),
+                startup,
+                false,
+                false,
+                bucket.stats(),
+            )
+            .0
         );
 
         {
             let bucket = new_for_test::<f64>();
             // 1 element slot list with a CACHED item - f64 acts like cached
             assert!(
-                !bucket
-                    .should_evict_from_mem(
-                        current_age,
-                        &Arc::new(AccountMapEntryInner::new(
-                            vec![(0, 0.0)],
-                            ref_count,
-                            AccountMapEntryMeta::default()
-                        )),
-                        startup,
-                        false,
-                        false,
-                    )
-                    .0
+                !InMemAccountsIndex::<f64>::should_evict_from_mem(
+                    current_age,
+                    &Arc::new(AccountMapEntryInner::new(
+                        vec![(0, 0.0)],
+                        ref_count,
+                        AccountMapEntryMeta::default()
+                    )),
+                    startup,
+                    false,
+                    false,
+                    bucket.stats(),
+                )
+                .0
             );
         }
 
         // 1 element slot list, age is now
         assert!(
-            bucket
-                .should_evict_from_mem(
-                    current_age,
-                    &one_element_slot_list_entry,
-                    startup,
-                    false,
-                    false,
-                )
-                .0
+            InMemAccountsIndex::<u64>::should_evict_from_mem(
+                current_age,
+                &one_element_slot_list_entry,
+                startup,
+                false,
+                false,
+                bucket.stats(),
+            )
+            .0
         );
 
         // 1 element slot list, but not current age
         current_age = 1;
         assert!(
-            !bucket
-                .should_evict_from_mem(
-                    current_age,
-                    &one_element_slot_list_entry,
-                    startup,
-                    false,
-                    false,
-                )
-                .0
+            !InMemAccountsIndex::<u64>::should_evict_from_mem(
+                current_age,
+                &one_element_slot_list_entry,
+                startup,
+                false,
+                false,
+                bucket.stats(),
+            )
+            .0
         );
 
         // 1 element slot list, but at startup and age not current
         startup = true;
         assert!(
-            bucket
-                .should_evict_from_mem(
-                    current_age,
-                    &one_element_slot_list_entry,
-                    startup,
-                    false,
-                    false,
-                )
-                .0
+            InMemAccountsIndex::<u64>::should_evict_from_mem(
+                current_age,
+                &one_element_slot_list_entry,
+                startup,
+                false,
+                false,
+                bucket.stats(),
+            )
+            .0
         );
     }
 
@@ -1992,7 +2022,7 @@ mod tests {
                 bucket.set_has_aged(5, true);
 
                 let disk = bucket.bucket.as_ref().unwrap();
-                let r = disk.try_write(&key.pubkey(), (&[(1, 1.0)], 1));
+                let _r = disk.try_write(&key.pubkey(), (&[(1, 1.0)], 1));
 
                 bucket.flush_internal(&flush_guard, true);
                 bucket.storage.startup.store(true, Ordering::Release);
