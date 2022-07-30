@@ -224,14 +224,14 @@ impl From<extension::confidential_transfer::ConfidentialTransferMint>
             authority: confidential_transfer_mint.authority.to_string(),
             auto_approve_new_accounts: confidential_transfer_mint.auto_approve_new_accounts.into(),
             auditor_encryption_pubkey: format!(
-                "{}",
+                "{:?}",
                 confidential_transfer_mint.auditor_encryption_pubkey
             ),
             withdraw_withheld_authority_encryption_pubkey: format!(
-                "{}",
+                "{:?}",
                 confidential_transfer_mint.withdraw_withheld_authority_encryption_pubkey
             ),
-            withheld_amount: format!("{}", confidential_transfer_mint.withheld_amount),
+            withheld_amount: format!("{:?}", confidential_transfer_mint.withheld_amount),
         }
     }
 }
@@ -261,12 +261,12 @@ impl From<extension::confidential_transfer::ConfidentialTransferAccount>
     ) -> Self {
         Self {
             approved: confidential_transfer_account.approved.into(),
-            encryption_pubkey: format!("{}", confidential_transfer_account.encryption_pubkey),
-            pending_balance_lo: format!("{}", confidential_transfer_account.pending_balance_lo),
-            pending_balance_hi: format!("{}", confidential_transfer_account.pending_balance_hi),
-            available_balance: format!("{}", confidential_transfer_account.available_balance),
+            encryption_pubkey: format!("{:?}", confidential_transfer_account.encryption_pubkey),
+            pending_balance_lo: format!("{:?}", confidential_transfer_account.pending_balance_lo),
+            pending_balance_hi: format!("{:?}", confidential_transfer_account.pending_balance_hi),
+            available_balance: format!("{:?}", confidential_transfer_account.available_balance),
             decryptable_available_balance: format!(
-                "{}",
+                "{:?}",
                 confidential_transfer_account.decryptable_available_balance
             ),
             allow_balance_credits: confidential_transfer_account.allow_balance_credits.into(),
@@ -282,7 +282,7 @@ impl From<extension::confidential_transfer::ConfidentialTransferAccount>
             actual_pending_balance_credit_counter: confidential_transfer_account
                 .actual_pending_balance_credit_counter
                 .into(),
-            withheld_amount: format!("{}", confidential_transfer_account.withheld_amount),
+            withheld_amount: format!("{:?}", confidential_transfer_account.withheld_amount),
         }
     }
 }
