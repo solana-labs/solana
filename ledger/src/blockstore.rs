@@ -420,6 +420,38 @@ impl Blockstore {
         self.no_compaction = no_compaction;
     }
 
+    /// Fully compact all the ledger columns.  The resulting Blockstore
+    /// will contain one sst file for each column family.
+    ///
+    /// Note that depending on the size of the blockstore, the entire
+    /// background compaction might take a long time to finish and will
+    /// temporarily require more disk space.
+    ///
+    /// In usual cases, you might only want to do this when you're switching
+    /// between different compaction styles or try to create a single
+    /// sst file from a healthy blockstore to replace a corrupted sst file.
+    pub fn fully_compact_all_columns(&self) {
+        self.meta_cf.fully_compact();
+        self.dead_slots_cf.fully_compact();
+        self.duplicate_slots_cf.fully_compact();
+        self.erasure_meta_cf.fully_compact();
+        self.orphans_cf.fully_compact();
+        self.index_cf.fully_compact();
+        self.data_shred_cf.fully_compact();
+        self.code_shred_cf.fully_compact();
+        self.transaction_status_cf.fully_compact();
+        self.address_signatures_cf.fully_compact();
+        self.transaction_memos_cf.fully_compact();
+        self.transaction_status_index_cf.fully_compact();
+        self.rewards_cf.fully_compact();
+        self.blocktime_cf.fully_compact();
+        self.perf_samples_cf.fully_compact();
+        self.block_height_cf.fully_compact();
+        self.program_costs_cf.fully_compact();
+        self.bank_hash_cf.fully_compact();
+        self.optimistic_slots_cf.fully_compact();
+    }
+
     /// Deletes the blockstore at the specified path.
     ///
     /// Note that if the `ledger_path` has multiple rocksdb instances, this

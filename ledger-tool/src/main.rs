@@ -1421,6 +1421,12 @@ fn main() {
                     .takes_value(true)
                     .help("Target db"),
             )
+            .arg(
+                Arg::with_name("fully_compact_target")
+                    .long("fully-compact-target")
+                    .help("Fully compact the target db. The resulting db will have \
+                           one sst file per column family."),
+            )
         )
         .subcommand(
             SubCommand::with_name("slot")
@@ -2120,6 +2126,9 @@ fn main() {
                             warn!("error inserting shreds for slot {}", slot);
                         }
                     }
+                }
+                if arg_matches.is_present("fully_compact_target") {
+                    target.fully_compact_all_columns();
                 }
             }
             ("genesis", Some(arg_matches)) => {

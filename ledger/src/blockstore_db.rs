@@ -19,8 +19,8 @@ use {
         self,
         compaction_filter::CompactionFilter,
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
-        properties as RocksProperties, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision,
-        DBCompactionStyle, DBIterator, DBRawIterator, FifoCompactOptions,
+        properties as RocksProperties, ColumnFamily, ColumnFamilyDescriptor, CompactOptions,
+        CompactionDecision, DBCompactionStyle, DBIterator, DBRawIterator, FifoCompactOptions,
         IteratorMode as RocksIteratorMode, LiveFile, Options, WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
@@ -1210,6 +1210,20 @@ where
         let to = Some(C::key(C::as_index(to)));
         self.backend.db.compact_range_cf(cf, from, to);
         Ok(true)
+    }
+
+    /// Compact the entire column family into one single file.
+    pub fn fully_compact(&self) {
+        let mut compact_options = CompactOptions::default();
+        compact_options.set_target_level(0);
+        compact_options.set_change_level(true);
+
+        self.backend.db.compact_range_cf_opt(
+            self.handle(),
+            None::<&str>,
+            None::<&str>,
+            &compact_options,
+        );
     }
 
     #[inline]
