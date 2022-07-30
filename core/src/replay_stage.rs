@@ -2501,7 +2501,7 @@ impl ReplayStage {
                 prioritization_fee_cache
                     .write()
                     .unwrap()
-                    .finalize_block(bank.slot());
+                    .finalize_priority_fee(bank.slot());
 
                 assert_ne!(bank.hash(), Hash::default());
                 // Needs to be updated before `check_slot_agrees_with_cluster()` so that
