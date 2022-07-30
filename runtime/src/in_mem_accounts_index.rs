@@ -1025,6 +1025,20 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
+    /// An always evict fn for testing
+    #[cfg(test)]
+    fn always_evict_for_test<'a, 'b>(
+        _current_age: Age,
+        entry: &'a AccountMapEntry<T>,
+        _startup: bool,
+        _update_stats: bool,
+        _exceeds_budget: bool,
+        _stat: &'b BucketMapHolderStats,
+    ) -> (bool, Option<std::sync::RwLockReadGuard<'a, SlotList<T>>>) {
+        let slot_list = entry.slot_list.read().unwrap();
+        (true, Some(slot_list))
+    }
+
     #[cfg(test)]
     fn mark_account_entry_dirty_lazy_for_test(&self) {
         let map = self.map_internal.read().unwrap();
@@ -1199,15 +1213,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         let mut slot_list = None;
                         if !is_random {
                             let mut mse = Measure::start("flush_should_evict");
-                            // let (evict_for_age, slot_list_temp) = Self::should_evict_from_mem(
-                            //     current_age,
-                            //     &v,
-                            //     startup,
-                            //     true,
-                            //     exceeds_budget,
-                            //     self.stats(),
-                            // );
-
                             let (evict_for_age, slot_list_temp) = check_evict_fn(
                                 current_age,
                                 &v,
@@ -1236,7 +1241,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                     // 'slot_list' could hold a read lock to the slot list in 'v',
                                     // which might cause a deadlock. So release the lock first
                                     // before merging with disk_entry.
-                                    println!("{:?}", slot_list);
                                     slot_list = None;
                                     Self::merge_slot_lists(&v, disk_entry);
                                 }
@@ -1996,6 +2000,8 @@ mod tests {
         assert!(!flushing_active.load(Ordering::Acquire));
     }
 
+    /// A test to cover the deadlock, which had happened for lazy load entries
+    /// during flush in kin simulation.
     #[test]
     fn test_flush_merge() {
         for _i in 0..5 {
@@ -2024,7 +2030,11 @@ mod tests {
                 let disk = bucket.bucket.as_ref().unwrap();
                 let _r = disk.try_write(&key.pubkey(), (&[(1, 1.0)], 1));
 
-                bucket.flush_internal(&flush_guard, true);
+                bucket.flush_internal_impl(
+                    &flush_guard,
+                    true,
+                    InMemAccountsIndex::<f64>::always_evict_for_test,
+                );
                 bucket.storage.startup.store(true, Ordering::Release);
             }
         }
