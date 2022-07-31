@@ -5116,7 +5116,7 @@ dependencies = [
  "solana-faucet",
  "solana-gossip",
  "solana-local-cluster",
- "solana-logger",
+ "solana-logger 1.11.5",
  "solana-measure",
  "solana-net-utils",
  "solana-perf",
