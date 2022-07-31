@@ -102,3 +102,8 @@ Voting subcommittee (A1,B1) confirms the last slot `X` of its
 epoch, (A2,B1) take over on the same epoch. B1 must root `X`, or B1
 has committed a threshold switch violation. Since B1 is primary,
 it can only use its own votes for a switching proof.
+
+### Block producers
+
+All block producing validators even those outside of the subcommittee
+schedule should follow the primary subcomittee fork weight.
