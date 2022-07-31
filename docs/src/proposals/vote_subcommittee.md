@@ -20,10 +20,11 @@ at least 1/3+ honest nodes are present in the subcommittee, then
 faulty forks will not get finality, and network will be able to
 continue.
 
-## Detailed Solution The following sections provide more details
-of the design.
+## Detailed Solution
 
-## Definitions
+The following sections provide more details of the design.
+
+### Definitions
 
 * Voting Subcommittee: the set of nodes currently voting on blocks
 
