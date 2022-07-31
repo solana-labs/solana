@@ -61,7 +61,8 @@ rooted by the following subcommittee.
 Voting Subcommittee is scheduled for a voting epoch, and is composed
 of 2 subcommittees, A and B, scheduled in a staggered rotation.
 
-``` A1 A1 A2 A2 A3
+``` 
+A1 A1 A2 A2 A3
    B1 B1 B2 B2
 ```
 
@@ -81,7 +82,8 @@ threshold proof.
 
 ### Safety
 
-``` A1 A1 A2 A2 A3
+```
+A1 A1 A2 A2 A3
    B1 B1 B2 B2
 ```
 
