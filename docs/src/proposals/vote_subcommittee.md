@@ -36,8 +36,11 @@ is scheduled for its second epoch.
 * secondary subcommittee: The half of the voting subcommittee that
 is scheduled for its first epoch.
 
-* rotation block: The block in the previous epoch that was rooted
-by 2/3+ of both primary and secondary super-majorities.
+* rotation block: The last block in the previous epoch that was
+rooted by 2/3+ of both primary and secondary super-majorities.
+
+* rotation seed: The seed used to generate the random sample of nodes.
+It's computed as `slow_hash(rotation block bank_hash)`
 
 * random sample: 200 nodes picked with a stake weighed shuffle.
 Assuming 1/3 are faulty, probability of 133 or greater faulty nodes
@@ -71,9 +74,8 @@ For it's second epoch, it is considered **primary**.
 
 For a new secondary subcommittee to start, it must start with a
 block that is a descendant of a **rotation block** that was confirmed
-by both super-majorities in the previous epoch. The seed to derive
-the new secondary subcommittee is `slow_hash(bank_hash super-majority
-block)`.
+by both super-majorities in the previous epoch. The **rotation seed**
+is used to derive the new secondary subcommittee
 
 ### Threshold Switching
 
