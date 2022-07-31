@@ -103,7 +103,7 @@ impl ComputeBudget {
             max_invoke_depth: 4,
             sha256_base_cost: 85,
             sha256_byte_cost: 1,
-            keccak_permutation_cost: 85,
+            keccak_permutation_cost: 3,
             sha256_max_slices: 20_000,
             max_call_depth: 64,
             stack_frame_size: 4_096,
