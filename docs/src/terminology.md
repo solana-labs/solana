@@ -189,12 +189,6 @@ A [program](#program) with the ability to interpret the binary encoding of other
 
 The duration of time for which a [validator](#validator) is unable to [vote](#ledger-vote) on another [fork](#fork).
 
-## message
-
-The structured contents of a [transaction](#transaction). Generally containing a header, array of account addresses, recent [blockhash](#blockhash), and an array of [instructions](#instruction).
-
-Learn more about the [message formatting](./developing/programming-model/transactions.md#message-format) inside of transactions here.
-
 ## native token
 
 The [token](#token) used to track work done by [nodes](#node) in a cluster.
