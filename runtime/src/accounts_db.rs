@@ -6496,7 +6496,8 @@ impl AccountsDb {
                     return scanner.scanning_complete();
                 }
 
-                let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data();
+                let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data()
+                    || config.store_detailed_debug_info_on_failure;
 
                 // if we're using the write cache, then we can't rely on cached append vecs since the append vecs may not include every account
                 // Single cached slots get cached and full chunks get cached.
