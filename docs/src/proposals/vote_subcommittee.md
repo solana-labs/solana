@@ -42,13 +42,9 @@ rooted by 2/3+ of both primary and secondary super-majorities.
 * rotation seed: The seed used to generate the random sample of nodes.
 It's computed as `slow_hash(rotation block bank_hash)`
 
-* random sample: 200 nodes picked with a stake weighed shuffle.
-Assuming 1/3 are faulty, probability of 133 or greater faulty nodes
-is 1:10^20
 
 * `slow_hash`: repeated sha256 for rounds equal to 1ms on modern
-sha-ni hardware. 10^20 * 1ms / 1 billion cores ~= 10^9 years
-
+sha-ni hardware.
 
 ### Safety Violations
 
@@ -75,7 +71,17 @@ For it's second epoch, it is considered **primary**.
 For a new secondary subcommittee to start, it must start with a
 block that is a descendant of a **rotation block** that was confirmed
 by both super-majorities in the previous epoch. The **rotation seed**
-is used to derive the new secondary subcommittee
+is used to derive the new secondary subcommittee.
+
+### Subcommittee Selection
+
+A stake weighted shuffle from the **rotation seed** is used to pick
+the next secondary subcommittee. A slow hash is necessary to ensure
+that grinding the **rotation block** bankhash is not practical. A
+random sample of 200 nodes picked with a stake weighed shuffle.
+Assuming 1/3 are faulty, probability of 133 or greater faulty nodes
+is 1:10^20. A 1ms hash would require grinding for 10^9 years with
+1 billion cores.
 
 ### Threshold Switching
 
