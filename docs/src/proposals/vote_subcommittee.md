@@ -106,4 +106,4 @@ it can only use its own votes for a switching proof.
 ### Block producers
 
 All block producing validators even those outside of the subcommittee
-schedule should follow the primary subcomittee fork weight.
+schedule should follow the primary subcommittee fork weight.
