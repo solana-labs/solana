@@ -109,6 +109,10 @@ impl Pong {
         };
         Ok(pong)
     }
+
+    pub fn from(&self) -> &Pubkey {
+        &self.from
+    }
 }
 
 impl Sanitize for Pong {
