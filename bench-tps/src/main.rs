@@ -1,4 +1,6 @@
 #![allow(clippy::integer_arithmetic)]
+
+use solana_bench_tps::bench_tps_client::BenchTpsClient;
 use {
     clap::value_t,
     log::*,
@@ -87,29 +89,18 @@ fn main() {
 
     info!("Connecting to the cluster");
 
-    match external_client_type {
-        ExternalClientType::RpcClient => {
-            let client = Arc::new(RpcClient::new_with_commitment(
-                json_rpc_url.to_string(),
-                CommitmentConfig::confirmed(),
-            ));
-            let keypairs = get_keypairs(
-                client.clone(),
-                id,
-                keypair_count,
-                *num_lamports_per_account,
-                client_ids_and_stake_file,
-                *read_from_client_file,
-            );
-            do_bench_tps(client, cli_config, keypairs);
-        }
+    let client: Arc<dyn BenchTpsClient + Send + Sync> = match external_client_type {
+        ExternalClientType::RpcClient => Arc::new(RpcClient::new_with_commitment(
+            json_rpc_url.to_string(),
+            CommitmentConfig::confirmed(),
+        )),
         ExternalClientType::ThinClient => {
             let connection_cache = match use_quic {
                 true => Arc::new(ConnectionCache::new(*tpu_connection_pool_size)),
                 false => Arc::new(ConnectionCache::with_udp(*tpu_connection_pool_size)),
             };
 
-            let client = if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
+            if let Ok(rpc_addr) = value_t!(matches, "rpc_addr", String) {
                 let rpc = rpc_addr.parse().unwrap_or_else(|e| {
                     eprintln!("RPC address should parse as socketaddr {:?}", e);
                     exit(1);
@@ -122,7 +113,7 @@ fn main() {
                         exit(1);
                     });
 
-                ThinClient::new(rpc, tpu, connection_cache)
+                Arc::new(ThinClient::new(rpc, tpu, connection_cache))
             } else {
                 let nodes =
                     discover_cluster(entrypoint_addr, *num_nodes, SocketAddrSpace::Unspecified)
@@ -140,7 +131,7 @@ fn main() {
                         );
                         exit(1);
                     }
-                    client
+                    Arc::new(client)
                 } else if let Some(target_node) = target_node {
                     info!("Searching for target_node: {:?}", target_node);
                     let mut target_client = None;
@@ -154,24 +145,18 @@ fn main() {
                             break;
                         }
                     }
-                    target_client.unwrap_or_else(|| {
+                    Arc::new(target_client.unwrap_or_else(|| {
                         eprintln!("Target node {} not found", target_node);
                         exit(1);
-                    })
+                    }))
                 } else {
-                    get_client(&nodes, &SocketAddrSpace::Unspecified, connection_cache)
+                    Arc::new(get_client(
+                        &nodes,
+                        &SocketAddrSpace::Unspecified,
+                        connection_cache,
+                    ))
                 }
-            };
-            let client = Arc::new(client);
-            let keypairs = get_keypairs(
-                client.clone(),
-                id,
-                keypair_count,
-                *num_lamports_per_account,
-                client_ids_and_stake_file,
-                *read_from_client_file,
-            );
-            do_bench_tps(client, cli_config, keypairs);
+            }
         }
         ExternalClientType::TpuClient => {
             let rpc_client = Arc::new(RpcClient::new_with_commitment(
@@ -183,7 +168,7 @@ fn main() {
                 false => ConnectionCache::with_udp(*tpu_connection_pool_size),
             };
 
-            let client = Arc::new(
+            Arc::new(
                 TpuClient::new_with_connection_cache(
                     rpc_client,
                     websocket_url,
@@ -194,16 +179,16 @@ fn main() {
                     eprintln!("Could not create TpuClient {:?}", err);
                     exit(1);
                 }),
-            );
-            let keypairs = get_keypairs(
-                client.clone(),
-                id,
-                keypair_count,
-                *num_lamports_per_account,
-                client_ids_and_stake_file,
-                *read_from_client_file,
-            );
-            do_bench_tps(client, cli_config, keypairs);
+            )
         }
-    }
+    };
+    let keypairs = get_keypairs(
+        client.clone(),
+        id,
+        keypair_count,
+        *num_lamports_per_account,
+        client_ids_and_stake_file,
+        *read_from_client_file,
+    );
+    do_bench_tps(client, cli_config, keypairs);
 }

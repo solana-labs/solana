@@ -18,7 +18,7 @@ pub fn get_keypairs<T>(
     read_from_client_file: bool,
 ) -> Vec<Keypair>
 where
-    T: 'static + BenchTpsClient + Send + Sync,
+    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     if read_from_client_file {
         let path = Path::new(client_ids_and_stake_file);
