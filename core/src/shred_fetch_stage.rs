@@ -1,10 +1,15 @@
 //! The `shred_fetch_stage` pulls shreds from UDP sockets and sends it to a channel.
 
 use {
-    crate::packet_hasher::PacketHasher,
+    crate::{packet_hasher::PacketHasher, serve_repair::ServeRepair},
     crossbeam_channel::{unbounded, Sender},
     lru::LruCache,
+<<<<<<< HEAD
     solana_ledger::shred::{get_shred_slot_index_type, ShredFetchStats},
+=======
+    solana_gossip::cluster_info::ClusterInfo,
+    solana_ledger::shred::{should_discard_shred, ShredFetchStats},
+>>>>>>> 857be1e23 (sign repair requests (#26833))
     solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler, PacketFlags},
     solana_runtime::bank_forks::BankForks,
     solana_sdk::clock::{Slot, DEFAULT_MS_PER_SLOT},
@@ -64,13 +69,22 @@ impl ShredFetchStage {
         sendr: Sender<Vec<PacketBatch>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         name: &'static str,
+<<<<<<< HEAD
         modify: F,
     ) where
         F: Fn(&mut Packet),
     {
+=======
+        flags: PacketFlags,
+        repair_context: Option<(&UdpSocket, &ClusterInfo)>,
+    ) {
+>>>>>>> 857be1e23 (sign repair requests (#26833))
         const STATS_SUBMIT_CADENCE: Duration = Duration::from_secs(1);
         let mut shreds_received = LruCache::new(DEFAULT_LRU_SIZE);
         let mut last_updated = Instant::now();
+        let mut keypair = repair_context
+            .as_ref()
+            .map(|(_, cluster_info)| cluster_info.keypair().clone());
 
         // In the case of bank_forks=None, setup to accept any slot range
         let mut last_root = 0;
@@ -93,10 +107,34 @@ impl ShredFetchStage {
                     let root_bank = bank_forks_r.root_bank();
                     slots_per_epoch = root_bank.get_slots_in_epoch(root_bank.epoch());
                 }
+                keypair = repair_context
+                    .as_ref()
+                    .map(|(_, cluster_info)| cluster_info.keypair().clone());
             }
             stats.shred_count += packet_batch.len();
+<<<<<<< HEAD
             packet_batch.iter_mut().for_each(|packet| {
                 Self::process_packet(
+=======
+
+            if let Some((udp_socket, _)) = repair_context {
+                debug_assert_eq!(flags, PacketFlags::REPAIR);
+                debug_assert!(keypair.is_some());
+                if let Some(ref keypair) = keypair {
+                    ServeRepair::handle_repair_response_pings(
+                        udp_socket,
+                        keypair,
+                        &mut packet_batch,
+                        &mut stats,
+                    );
+                }
+            }
+
+            // Limit shreds to 2 epochs away.
+            let max_slot = last_slot + 2 * slots_per_epoch;
+            for packet in packet_batch.iter_mut() {
+                if should_discard_packet(
+>>>>>>> 857be1e23 (sign repair requests (#26833))
                     packet,
                     &mut shreds_received,
                     &mut stats,
@@ -121,11 +159,17 @@ impl ShredFetchStage {
         recycler: PacketBatchRecycler,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
         name: &'static str,
+<<<<<<< HEAD
         modify: F,
     ) -> (Vec<JoinHandle<()>>, JoinHandle<()>)
     where
         F: Fn(&mut Packet) + Send + 'static,
     {
+=======
+        flags: PacketFlags,
+        repair_context: Option<(Arc<UdpSocket>, Arc<ClusterInfo>)>,
+    ) -> (Vec<JoinHandle<()>>, JoinHandle<()>) {
+>>>>>>> 857be1e23 (sign repair requests (#26833))
         let (packet_sender, packet_receiver) = unbounded();
         let streamers = sockets
             .into_iter()
@@ -142,10 +186,26 @@ impl ShredFetchStage {
                 )
             })
             .collect();
-
         let modifier_hdl = Builder::new()
             .name("solana-tvu-fetch-stage-packet-modifier".to_string())
+<<<<<<< HEAD
             .spawn(move || Self::modify_packets(packet_receiver, sender, bank_forks, name, modify))
+=======
+            .spawn(move || {
+                let repair_context = repair_context
+                    .as_ref()
+                    .map(|(socket, cluster_info)| (socket.as_ref(), cluster_info.as_ref()));
+                Self::modify_packets(
+                    packet_receiver,
+                    sender,
+                    &bank_forks,
+                    shred_version,
+                    name,
+                    flags,
+                    repair_context,
+                )
+            })
+>>>>>>> 857be1e23 (sign repair requests (#26833))
             .unwrap();
         (streamers, modifier_hdl)
     }
@@ -154,8 +214,15 @@ impl ShredFetchStage {
         sockets: Vec<Arc<UdpSocket>>,
         forward_sockets: Vec<Arc<UdpSocket>>,
         repair_socket: Arc<UdpSocket>,
+<<<<<<< HEAD
         sender: &Sender<Vec<PacketBatch>>,
         bank_forks: Option<Arc<RwLock<BankForks>>>,
+=======
+        sender: Sender<PacketBatch>,
+        shred_version: u16,
+        bank_forks: Arc<RwLock<BankForks>>,
+        cluster_info: Arc<ClusterInfo>,
+>>>>>>> 857be1e23 (sign repair requests (#26833))
         exit: &Arc<AtomicBool>,
     ) -> Self {
         let recycler = PacketBatchRecycler::warmed(100, 1024);
@@ -167,7 +234,12 @@ impl ShredFetchStage {
             recycler.clone(),
             bank_forks.clone(),
             "shred_fetch",
+<<<<<<< HEAD
             |_| {},
+=======
+            PacketFlags::empty(),
+            None, // repair_context
+>>>>>>> 857be1e23 (sign repair requests (#26833))
         );
 
         let (tvu_forwards_threads, fwd_thread_hdl) = Self::packet_modifier(
@@ -177,17 +249,27 @@ impl ShredFetchStage {
             recycler.clone(),
             bank_forks.clone(),
             "shred_fetch_tvu_forwards",
+<<<<<<< HEAD
             |p| p.meta.flags.insert(PacketFlags::FORWARDED),
+=======
+            PacketFlags::FORWARDED,
+            None, // repair_context
+>>>>>>> 857be1e23 (sign repair requests (#26833))
         );
 
         let (repair_receiver, repair_handler) = Self::packet_modifier(
-            vec![repair_socket],
+            vec![repair_socket.clone()],
             exit,
             sender.clone(),
             recycler,
             bank_forks,
             "shred_fetch_repair",
+<<<<<<< HEAD
             |p| p.meta.flags.insert(PacketFlags::REPAIR),
+=======
+            PacketFlags::REPAIR,
+            Some((repair_socket, cluster_info)),
+>>>>>>> 857be1e23 (sign repair requests (#26833))
         );
 
         tvu_threads.extend(tvu_forwards_threads.into_iter());

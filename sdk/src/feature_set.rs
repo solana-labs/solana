@@ -411,6 +411,37 @@ pub mod prevent_crediting_accounts_that_end_rent_paying {
     solana_sdk::declare_id!("812kqX67odAp5NFwM8D2N24cku7WTm9CHUTFUXaDkWPn");
 }
 
+<<<<<<< HEAD
+=======
+pub mod cap_bpf_program_instruction_accounts {
+    solana_sdk::declare_id!("9k5ijzTbYPtjzu8wj2ErH9v45xecHzQ1x4PMYMMxFgdM");
+}
+
+pub mod loosen_cpi_size_restriction {
+    solana_sdk::declare_id!("GDH5TVdbTPUpRnXaRyQqiKUa7uZAbZ28Q2N9bhbKoMLm");
+}
+
+pub mod use_default_units_in_fee_calculation {
+    solana_sdk::declare_id!("8sKQrMQoUHtQSUP83SPG4ta2JDjSAiWs7t5aJ9uEd6To");
+}
+
+pub mod compact_vote_state_updates {
+    solana_sdk::declare_id!("86HpNqzutEZwLcPxS6EHDcMNYWk6ikhteg9un7Y2PBKE");
+}
+
+pub mod sign_repair_requests {
+    solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
+}
+
+pub mod concurrent_replay_of_forks {
+    solana_sdk::declare_id!("9F2Dcu8xkBPKxiiy65XKPZYdCG3VZDpjDTuSmeYLozJe");
+}
+
+pub mod incremental_snapshot_only_incremental_hash_calculation {
+    solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
+}
+
+>>>>>>> 857be1e23 (sign repair requests (#26833))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -508,6 +539,16 @@ lazy_static! {
         (cap_accounts_data_size_per_block::id(), "cap the accounts data size per block #25517"),
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
+<<<<<<< HEAD
+=======
+        (cap_bpf_program_instruction_accounts::id(), "enforce max number of accounts per bpf program instruction #26628"),
+        (loosen_cpi_size_restriction::id(), "loosen cpi size restrictions #26641"),
+        (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
+        (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
+        (sign_repair_requests::id(), "sign repair requests #26834"),
+        (concurrent_replay_of_forks::id(), "Allow slots from different forks to be replayed concurrently #26465"),
+        (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
+>>>>>>> 857be1e23 (sign repair requests (#26833))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
