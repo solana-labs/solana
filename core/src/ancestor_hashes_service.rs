@@ -940,7 +940,7 @@ mod test {
                 None,
             );
             let t_listen = responder_serve_repair.listen(
-                Some(blockstore),
+                blockstore,
                 requests_receiver,
                 response_sender,
                 exit.clone(),

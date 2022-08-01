@@ -21,7 +21,7 @@ pub struct ServeRepairService {
 impl ServeRepairService {
     pub fn new(
         serve_repair: ServeRepair,
-        blockstore: Option<Arc<Blockstore>>,
+        blockstore: Arc<Blockstore>,
         serve_repair_socket: UdpSocket,
         socket_addr_space: SocketAddrSpace,
         stats_reporter_sender: Sender<Box<dyn FnOnce() + Send>>,
