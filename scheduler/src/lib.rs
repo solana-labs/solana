@@ -113,7 +113,7 @@ impl Page {
     }
 }
 
-type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
+type AddressBookMap = std::collections::HashMap<Pubkey, Page>;
 
 // needs ttl mechanism and prune
 #[derive(Default)]
