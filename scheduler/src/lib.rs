@@ -176,7 +176,7 @@ impl AddressBook {
         use std::collections::btree_map::Entry;
 
         match self.book.entry(*address) {
-            Entry::Vacant(_entry) => unreachable!(),
+            Entry::Vacant(_book_entry) => unreachable!(),
             Entry::Occupied(mut entry) => {
                 let page = entry.get_mut();
                 page.contended_unique_weights.remove(unique_weight);
@@ -199,8 +199,8 @@ impl AddressBook {
         let mut still_queued = false;
 
         match self.book.entry(attempt.address) {
-            Entry::Occupied(mut entry) => {
-                let mut page = entry.get_mut();
+            Entry::Occupied(mut book_entry) => {
+                let mut page = book_entry.get_mut();
 
                 match &mut page.current_usage {
                     CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
@@ -229,7 +229,7 @@ impl AddressBook {
                     }
                 }
             }
-            Entry::Vacant(_entry) => {
+            Entry::Vacant(_book_entry) => {
                 unreachable!()
             }
         }
@@ -416,8 +416,8 @@ impl ScheduleStage {
             }
             (None, Some(weight_from_contended)) => {
                 match contended_queue.entry_to_execute(weight_from_contended) {
-                    Entry::Occupied(entry) => Some((None, entry)),
-                    Entry::Vacant(_entry) => unreachable!(),
+                    Entry::Occupied(queue_entry) => Some((None, queue_entry)),
+                    Entry::Vacant(_queue_entry) => unreachable!(),
                 }
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
@@ -427,8 +427,8 @@ impl ScheduleStage {
                     Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if &weight_from_contended > weight_from_runnable {
                     match contended_queue.entry_to_execute(weight_from_contended) {
-                        Entry::Occupied(entry) => Some((None, entry)),
-                        Entry::Vacant(_entry) => unreachable!(),
+                        Entry::Occupied(queue_entry) => Some((None, queue_entry)),
+                        Entry::Vacant(_queue_entry) => unreachable!(),
                     }
                 } else {
                     unreachable!(
@@ -446,11 +446,11 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (reborrowed_contended_queue, entry) in
+        for (reborrowed_contended_queue, query_entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             let from_runnable = reborrowed_contended_queue.is_some();
-            let next_task = entry.get();
+            let next_task = query_entry.get();
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
@@ -460,7 +460,7 @@ impl ScheduleStage {
             let (is_success, lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
                 address_book,
-                &entry.key(),
+                &query_entry.key(),
                 &message_hash,
                 &locks,
             );
@@ -475,12 +475,12 @@ impl ScheduleStage {
                 if from_runnable {
                     reborrowed_contended_queue
                         .unwrap()
-                        .add_to_schedule(*entry.key(), entry.remove());
+                        .add_to_schedule(*query_entry.key(), query_entry.remove());
                 }
                 continue;
             }
 
-            return Some((*entry.key(), entry.remove(), lock_attempts));
+            return Some((*query_entry.key(), query_entry.remove(), lock_attempts));
         }
 
         None
