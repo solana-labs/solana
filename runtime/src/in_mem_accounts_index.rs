@@ -1550,8 +1550,10 @@ mod tests {
     }
 
     fn new_for_test_flush<T: IndexValue>() -> InMemAccountsIndex<T> {
-        let mut cfg = AccountsIndexConfig::default();
-        cfg.index_limit_mb = IndexLimitMb::Limit(0);
+        let cfg = AccountsIndexConfig {
+            index_limit_mb: IndexLimitMb::Limit(0),
+            ..AccountsIndexConfig::default()
+        };
 
         let holder = Arc::new(BucketMapHolder::new(BINS_FOR_TESTING, &Some(cfg), 1));
         let bin = 0;
