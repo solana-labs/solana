@@ -137,7 +137,7 @@ impl AddressBook {
                 book_entry.insert(Page::new(CurrentUsage::renew(requested_usage)));
                 LockAttempt::success(address, requested_usage)
             }
-            Entry::Occupied(mut book_entry) => {
+            AddressBookMapEntry::Occupied(mut book_entry) => {
                 let mut page = book_entry.get_mut();
 
                 match &mut page.current_usage {
