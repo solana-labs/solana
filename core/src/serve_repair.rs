@@ -1027,11 +1027,17 @@ impl ServeRepair {
                 continue;
             }
             if let Ok(RepairResponse::Ping(ping)) = packet.deserialize_slice(..) {
-                packet.meta.set_discard(true);
                 if !ping.verify() {
+                    // Do _not_ set `discard` to allow shred processing to attempt to
+                    // handle the packet.
+                    // Ping error count may include false posities for shreds of size
+                    // `REPAIR_RESPONSE_SERIALIZED_PING_BYTES` whose first 4 bytes
+                    // match `RepairResponse` discriminator (these 4 bytes overlap
+                    // with the shred signature field).
                     stats.ping_err_verify_count += 1;
                     continue;
                 }
+                packet.meta.set_discard(true);
                 stats.ping_count += 1;
                 if let Ok(pong) = Pong::new(&ping, keypair) {
                     let pong = RepairProtocol::Pong(pong);
