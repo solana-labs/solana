@@ -883,17 +883,14 @@ impl Validator {
             Some(stats_reporter_sender.clone()),
             &exit,
         );
-        let serve_repair = Arc::new(RwLock::new(ServeRepair::new(
-            cluster_info.clone(),
-            bank_forks.clone(),
-        )));
+        let serve_repair = ServeRepair::new(cluster_info.clone(), bank_forks.clone());
         let serve_repair_service = ServeRepairService::new(
-            &serve_repair,
+            serve_repair,
             Some(blockstore.clone()),
             node.sockets.serve_repair,
             socket_addr_space,
             stats_reporter_sender,
-            &exit,
+            exit.clone(),
         );
 
         let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(

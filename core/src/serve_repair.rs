@@ -477,7 +477,7 @@ impl ServeRepair {
 
     /// Process messages from the network
     fn run_listen(
-        obj: &Arc<RwLock<Self>>,
+        &self,
         ping_cache: &mut PingCache,
         recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
@@ -505,10 +505,9 @@ impl ServeRepair {
         stats.dropped_requests += dropped_requests;
         stats.total_requests += total_requests;
 
-        let root_bank = obj.read().unwrap().bank_forks.read().unwrap().root_bank();
+        let root_bank = self.bank_forks.read().unwrap().root_bank();
         for reqs in reqs_v {
-            Self::handle_packets(
-                obj,
+            self.handle_packets(
                 ping_cache,
                 recycler,
                 blockstore,
@@ -522,9 +521,9 @@ impl ServeRepair {
         Ok(())
     }
 
-    fn report_reset_stats(me: &Arc<RwLock<Self>>, stats: &mut ServeRepairStats) {
+    fn report_reset_stats(&self, stats: &mut ServeRepairStats) {
         if stats.self_repair > 0 {
-            let my_id = me.read().unwrap().cluster_info.id();
+            let my_id = self.cluster_info.id();
             warn!(
                 "{}: Ignored received repair requests from ME: {}",
                 my_id, stats.self_repair,
@@ -569,11 +568,11 @@ impl ServeRepair {
     }
 
     pub fn listen(
-        me: Arc<RwLock<Self>>,
+        self,
         blockstore: Option<Arc<Blockstore>>,
         requests_receiver: PacketBatchReceiver,
         response_sender: PacketBatchSender,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         const INTERVAL_MS: u64 = 1000;
         const MAX_BYTES_PER_SECOND: usize = 12_000_000;
@@ -581,7 +580,6 @@ impl ServeRepair {
 
         let mut ping_cache = PingCache::new(REPAIR_PING_CACHE_TTL, REPAIR_PING_CACHE_CAPACITY);
 
-        let exit = exit.clone();
         let recycler = PacketBatchRecycler::default();
         Builder::new()
             .name("solana-repair-listen".to_string())
@@ -590,8 +588,7 @@ impl ServeRepair {
                 let mut stats = ServeRepairStats::default();
                 let data_budget = DataBudget::default();
                 loop {
-                    let result = Self::run_listen(
-                        &me,
+                    let result = self.run_listen(
                         &mut ping_cache,
                         &recycler,
                         blockstore.as_ref(),
@@ -608,7 +605,7 @@ impl ServeRepair {
                         return;
                     }
                     if last_print.elapsed().as_secs() > 2 {
-                        Self::report_reset_stats(&me, &mut stats);
+                        self.report_reset_stats(&mut stats);
                         last_print = Instant::now();
                     }
                     data_budget.update(INTERVAL_MS, |_bytes| MAX_BYTES_PER_INTERVAL);
@@ -731,7 +728,7 @@ impl ServeRepair {
     }
 
     fn handle_packets(
-        me: &Arc<RwLock<Self>>,
+        &self,
         ping_cache: &mut PingCache,
         recycler: &PacketBatchRecycler,
         blockstore: Option<&Arc<Blockstore>>,
@@ -742,12 +739,8 @@ impl ServeRepair {
         data_budget: &DataBudget,
     ) {
         let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
-        let (identity_keypair, socket_addr_space) = {
-            let me_r = me.read().unwrap();
-            let keypair = me_r.cluster_info.keypair().clone();
-            let socket_addr_space = *me_r.cluster_info.socket_addr_space();
-            (keypair, socket_addr_space)
-        };
+        let identity_keypair = self.cluster_info.keypair().clone();
+        let socket_addr_space = *self.cluster_info.socket_addr_space();
         let my_id = identity_keypair.pubkey();
         let mut pending_pings = Vec::default();
 
