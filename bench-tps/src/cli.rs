@@ -290,10 +290,10 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Submit transactions with a TpuClient")
         )
         .arg(
-            Arg::with_name("tpu_use_quic")
-                .long("tpu-use-quic")
+            Arg::with_name("tpu_disable_quic")
+                .long("tpu-disable-quic")
                 .takes_value(false)
-                .help("Submit transactions via QUIC; only affects ThinClient (default) \
+                .help("Do not submit transactions via QUIC; only affects ThinClient (default) \
                     or TpuClient sends"),
         )
         .arg(
@@ -348,8 +348,8 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         args.external_client_type = ExternalClientType::RpcClient;
     }
 
-    if matches.is_present("tpu_use_quic") {
-        args.use_quic = true;
+    if matches.is_present("tpu_disable_quic") {
+        args.use_quic = false;
     }
 
     if let Some(v) = matches.value_of("tpu_connection_pool_size") {
