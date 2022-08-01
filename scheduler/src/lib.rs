@@ -155,7 +155,6 @@ impl AddressBook {
                             if from_runnable {
                                 Self::remember_new_address_contention(page, unique_weight);
                             }
-
                             LockAttempt::failure(address, requested_usage)
                         }
                     },
@@ -164,7 +163,6 @@ impl AddressBook {
                             if from_runnable {
                                 Self::remember_new_address_contention(page, unique_weight);
                             }
-
                             LockAttempt::failure(address, requested_usage)
                         }
                     },
@@ -455,11 +453,11 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (reborrowed_contended_queue, query_entry) in
+        for (reborrowed_contended_queue, queue_entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             let from_runnable = reborrowed_contended_queue.is_some();
-            let next_task = query_entry.get();
+            let next_task = queue_entry.get();
             let message_hash = next_task.tx.message_hash();
             let locks = next_task.tx.get_account_locks().unwrap();
 
@@ -469,7 +467,7 @@ impl ScheduleStage {
             let (is_success, lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
                 address_book,
-                &query_entry.key(),
+                &queue_entry.key(),
                 &message_hash,
                 &locks,
             );
@@ -484,22 +482,30 @@ impl ScheduleStage {
                 if from_runnable {
                     reborrowed_contended_queue
                         .unwrap()
-                        .add_to_schedule(*query_entry.key(), query_entry.remove());
+                        .add_to_schedule(*queue_entry.key(), queue_entry.remove());
                     // maybe run lightweight prune logic on contended_queue here.
                 }
                 continue;
             }
 
-            return Some((*query_entry.key(), query_entry.remove(), lock_attempts));
+            let unique_weight = *queue_entry.key();
+            Self::apply_successful_lock_before_execution(
+                address_book,
+                &unique_weight,
+                &lock_attempts,
+            );
+            let task = queue_entry.remove();
+            return Some((unique_weight, task, lock_attempts));
         }
 
         None
     }
 
     #[inline(never)]
+    // naming: relock_before_execution() / update_address_book() / update_uncontended_addresses()?
     fn apply_successful_lock_before_execution(
         address_book: &mut AddressBook,
-        unique_weight: UniqueWeight,
+        unique_weight: &UniqueWeight,
         lock_attempts: &Vec<LockAttempt>,
     ) {
         for l in lock_attempts {
@@ -549,8 +555,6 @@ impl ScheduleStage {
         lock_attempts: Vec<LockAttempt>,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
-        // relock_before_execution() / update_address_book() / update_uncontended_addresses()?
-        Self::apply_successful_lock_before_execution(address_book, unique_weight, &lock_attempts);
         // load account now from AccountsDb
 
         Box::new(ExecutionEnvironment {
