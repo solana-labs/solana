@@ -204,7 +204,7 @@ impl AddressBook {
         let mut still_queued = false;
 
         match self.book.entry(attempt.address) {
-            AddressBookMap::Entry::Occupied(mut book_entry) => {
+            <AddressBookMap as Trait>::Entry::Occupied(mut book_entry) => {
                 let mut page = book_entry.get_mut();
 
                 match &mut page.current_usage {
