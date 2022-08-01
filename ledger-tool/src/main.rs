@@ -234,7 +234,6 @@ fn output_slot(
         }
     }
 
-    // basically, this controls the maximum size of task queue, so unbounded isn't nice
     let (muxed_sender, muxed_receiver) = crossbeam_channel::unbounded();
 
     // this should be target number of saturated cpu cores

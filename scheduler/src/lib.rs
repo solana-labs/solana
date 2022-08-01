@@ -590,7 +590,7 @@ impl ScheduleStage {
     }
 
     pub fn run(
-        max_depth: usize,
+        max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -600,7 +600,7 @@ impl ScheduleStage {
     ) {
         use crossbeam_channel::select;
 
-        let mut depth = 0;
+        let mut executing_queue_count = 0;
 
         loop {
             trace!("schedule_once!");
@@ -614,7 +614,7 @@ impl ScheduleStage {
                 }
                 Incoming::FromExecute(mut processed_execution_environment) => {
                     trace!("recv from execute");
-                    depth -= 1;
+                    executing_queue_count -= 1;
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
                     // async-ly propagate the result to rpc subsystems
@@ -623,12 +623,12 @@ impl ScheduleStage {
                 }
             }
 
-            while depth < max_depth {
+            while executing_queue_count < max_executing_queue_count {
                 let maybe_ee =
                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
-                    depth += 1;
+                    executing_queue_count += 1;
 
                     to_execute_substage.send(ee).unwrap();
                 } else {
