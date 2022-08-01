@@ -474,6 +474,7 @@ impl ScheduleStage {
                     reborrowed_contended_queue
                         .unwrap()
                         .add_to_schedule(*query_entry.key(), query_entry.remove());
+                    // maybe run lightweight prune logic on contended_queue here.
                 }
                 continue;
             }
