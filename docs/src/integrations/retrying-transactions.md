@@ -101,7 +101,7 @@ When it comes to submitting transactions, the `sendTransaction` RPC method is th
 Response
 
 - `transaction id`: `string` - First transaction signature embedded in the transaction, as base-58 encoded string. This transaction id can be used with [getSignatureStatuses](https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses) to poll for status updates.
-  :::
+:::
 
 ## Customizing Rebroadcast Logic
 
