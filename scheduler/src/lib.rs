@@ -113,7 +113,7 @@ impl Page {
     }
 }
 
-type AddressBookMap = std::collections::HashMap<Pubkey, Page>;
+type AddressBookMap = std::collections::BtreeMap<Pubkey, Page>;
 
 // needs ttl mechanism and prune
 #[derive(Default)]
@@ -204,7 +204,7 @@ impl AddressBook {
         let mut still_queued = false;
 
         match self.book.entry(attempt.address) {
-            Entry::Occupied(mut book_entry) => {
+            AddressBook:::Entry::Occupied(mut book_entry) => {
                 let mut page = book_entry.get_mut();
 
                 match &mut page.current_usage {
