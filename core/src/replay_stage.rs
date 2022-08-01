@@ -2349,6 +2349,7 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
         bank_slot: Slot,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) -> ReplaySlotFromBlockstore {
         let mut replay_result = ReplaySlotFromBlockstore {
             is_slot_dead: false,
@@ -2430,6 +2431,7 @@ impl ReplayStage {
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         replay_result_vec: &[ReplaySlotFromBlockstore],
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) -> bool {
         // TODO: See if processing of blockstore replay results and bank completion can be made thread safe.
         let mut did_complete_bank = false;
@@ -2497,7 +2499,7 @@ impl ReplayStage {
                         warn!("cost_update_sender failed sending bank stats: {:?}", err)
                     });
 
-                // finalize block's min prioritization fee cache for this bank
+                // finalize block's minimum prioritization fee cache for this bank
                 prioritization_fee_cache.finalize_priority_fee(bank.slot());
 
                 assert_ne!(bank.hash(), Hash::default());
@@ -2618,6 +2620,7 @@ impl ReplayStage {
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
         replay_slots_concurrently: bool,
+        prioritization_fee_cache: &PrioritizationFeeCache,
     ) -> bool /* completed a bank */ {
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
         let num_active_banks = active_bank_slots.len();
@@ -2640,6 +2643,7 @@ impl ReplayStage {
                     replay_timing,
                     log_messages_bytes_limit,
                     &active_bank_slots,
+                    prioritization_fee_cache,
                 )
             } else {
                 active_bank_slots
@@ -2657,6 +2661,7 @@ impl ReplayStage {
                             replay_timing,
                             log_messages_bytes_limit,
                             *bank_slot,
+                            prioritization_fee_cache,
                         )
                     })
                     .collect()
@@ -2683,6 +2688,7 @@ impl ReplayStage {
                 ancestor_hashes_replay_update_sender,
                 block_metadata_notifier,
                 &replay_result_vec,
+                prioritization_fee_cache,
             )
         } else {
             false
@@ -4173,7 +4179,7 @@ pub(crate) mod tests {
                 &replay_vote_sender,
                 &VerifyRecyclers::default(),
                 None,
-                &PrioritizationFeeCache::new(0usize),
+                &PrioritizationFeeCache::new(0u64),
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(

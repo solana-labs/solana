@@ -517,7 +517,7 @@ pub fn process_entries_for_tests(
             })
             .collect();
 
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0usize);
+    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
     let result = process_entries_with_callback(
         bank,
         &mut replay_entries,
@@ -960,7 +960,7 @@ fn confirm_full_slot(
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
-    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0usize);
+    let _ignored_prioritization_fee_cache = PrioritizationFeeCache::new(0u64);
 
     confirm_slot(
         blockstore,
@@ -4074,7 +4074,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
-            &PrioritizationFeeCache::new(0usize),
+            &PrioritizationFeeCache::new(0u64),
         )
     }
 
@@ -4218,7 +4218,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
-            &PrioritizationFeeCache::new(0usize),
+            &PrioritizationFeeCache::new(0u64),
         )
         .unwrap();
         assert_eq!(progress.num_txs, 2);
@@ -4264,7 +4264,7 @@ pub mod tests {
             None,
             &VerifyRecyclers::default(),
             None,
-            &PrioritizationFeeCache::new(0usize),
+            &PrioritizationFeeCache::new(0u64),
         )
         .unwrap();
         assert_eq!(progress.num_txs, 5);
