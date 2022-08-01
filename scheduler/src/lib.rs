@@ -118,6 +118,7 @@ type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
 // needs ttl mechanism and prune
 #[derive(Default)]
 pub struct AddressBook {
+    type A = u32;
     book: AddressBookMap,
     newly_uncontended_addresses: std::collections::BTreeSet<Pubkey>,
 }
