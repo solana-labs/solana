@@ -419,7 +419,7 @@ impl ScheduleStage {
                 Some((Some(contended_queue), heaviest_runnable_entry))
             }
             (None, Some(weight_from_contended)) => {
-                Some((None, entry_to_execute(weight_from_contended)))
+                Some((None, contended_queue.entry_to_execute(weight_from_contended)))
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
@@ -427,7 +427,7 @@ impl ScheduleStage {
                 if weight_from_runnable > &weight_from_contended {
                     Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if &weight_from_contended > weight_from_runnable {
-                    Some((None, entry_to_execute(weight_from_contended)))
+                    Some((None, contended_queue.entry_to_execute(weight_from_contended)))
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
