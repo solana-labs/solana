@@ -152,21 +152,25 @@ impl AddressBook {
                             LockAttempt::success(address, requested_usage)
                         }
                         RequestedUsage::Writable => {
+                            if from_runnable {
+                                Self::remember_new_address_contention(page, unique_weight);
+                            }
+
                             LockAttempt::failure(address, requested_usage)
                         }
                     },
                     CurrentUsage::Writable => match &requested_usage {
                         RequestedUsage::Readonly | RequestedUsage::Writable => {
+                            if from_runnable {
+                                Self::remember_new_address_contention(page, unique_weight);
+                            }
+
                             LockAttempt::failure(address, requested_usage)
                         }
                     },
                 }
             }
         };
-
-        if from_runnable && attempt.is_failed() {
-            Self::remember_new_address_contention(page, unique_weight);
-        }
 
         attempt
     }
