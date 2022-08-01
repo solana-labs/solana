@@ -132,10 +132,8 @@ impl AddressBook {
         address: Pubkey,
         requested_usage: RequestedUsage,
     ) -> LockAttempt {
-        use std::collections::btree_map::Entry;
-
         match self.book.entry(address) {
-            Entry::Vacant(book_entry) => {
+            AddressBookMapEntry::Vacant(book_entry) => {
                 book_entry.insert(Page::new(CurrentUsage::renew(requested_usage)));
                 LockAttempt::success(address, requested_usage)
             }
