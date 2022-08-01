@@ -900,10 +900,8 @@ mod test {
                 Arc::new(Keypair::new()),
                 SocketAddrSpace::Unspecified,
             );
-            let responder_serve_repair = Arc::new(RwLock::new(ServeRepair::new(
-                Arc::new(cluster_info),
-                vote_simulator.bank_forks,
-            )));
+            let responder_serve_repair =
+                ServeRepair::new(Arc::new(cluster_info), vote_simulator.bank_forks);
 
             // Set up thread to give us responses
             let ledger_path = get_tmp_ledger_path!();
@@ -941,12 +939,11 @@ mod test {
                 false,
                 None,
             );
-            let t_listen = ServeRepair::listen(
-                responder_serve_repair,
+            let t_listen = responder_serve_repair.listen(
                 Some(blockstore),
                 requests_receiver,
                 response_sender,
-                &exit,
+                exit.clone(),
             );
 
             Self {
