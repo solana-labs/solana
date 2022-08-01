@@ -287,6 +287,8 @@ impl TaskQueue {
         &mut self,
         unique_weight: UniqueWeight,
     ) -> std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task> {
+        use std::collections::btree_map::Entry;
+
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
             Entry::Occupied(queue_entry) => Some((None, queue_entry)),
@@ -409,8 +411,6 @@ impl ScheduleStage {
         Option<&'a mut TaskQueue>,
         std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, Task>,
     )> {
-        use std::collections::btree_map::Entry;
-
         match (
             runnable_queue.heaviest_entry_to_execute(),
             Self::get_weight_from_contended(address_book),
