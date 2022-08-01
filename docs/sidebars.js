@@ -80,9 +80,12 @@ module.exports = {
       },
       "developing/test-validator",
       "developing/backwards-compatibility",
-      "developing/plugins/geyser-plugins"
+      "developing/plugins/geyser-plugins",
     ],
-    Integrating: ["integrations/exchange"],
+    Integrating: [
+      "integrations/exchange",
+      "integrations/retrying-transactions",
+    ],
     Validating: [
       "running-validator",
       "running-validator/validator-reqs",
