@@ -86,8 +86,9 @@ is 1:10^20. A 1ms hash would require grinding for 10^9 years with
 
 ### Threshold Switching
 
-Secondary subcommittee is can use the primary's votes as a switching
-threshold proof.
+Secondary subcommittee can use the primary's votes as a switching
+threshold proof. The primary can only use its own votes for switching
+proofs.
 
 ### Safety
 
