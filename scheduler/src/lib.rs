@@ -113,14 +113,15 @@ impl Page {
     }
 }
 
-type AddressBookMap = std::collections::HashMap<Pubkey, Page>;
-type AddressBookMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
+type AddressMap = std::collections::HashMap<Pubkey, Page>;
+type AddressSet = std::collections::HashSet<Pubkey>;
+type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 
 // needs ttl mechanism and prune
 #[derive(Default)]
 pub struct AddressBook {
-    book: AddressBookMap,
-    newly_uncontended_addresses: std::collections::BTreeSet<Pubkey>,
+    book: AddressMap,
+    newly_uncontended_addresses: AddressSet,
 }
 
 impl AddressBook {
@@ -133,11 +134,11 @@ impl AddressBook {
         requested_usage: RequestedUsage,
     ) -> LockAttempt {
         match self.book.entry(address) {
-            AddressBookMapEntry::Vacant(book_entry) => {
+            AddressMapEntry::Vacant(book_entry) => {
                 book_entry.insert(Page::new(CurrentUsage::renew(requested_usage)));
                 LockAttempt::success(address, requested_usage)
             }
-            AddressBookMapEntry::Occupied(mut book_entry) => {
+            AddressMapEntry::Occupied(mut book_entry) => {
                 let mut page = book_entry.get_mut();
 
                 match &mut page.current_usage {
@@ -178,8 +179,8 @@ impl AddressBook {
     #[inline(never)]
     fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
         match self.book.entry(*address) {
-            AddressBookMapEntry::Vacant(_book_entry) => unreachable!(),
-            AddressBookMapEntry::Occupied(mut entry) => {
+            AddressMapEntry::Vacant(_book_entry) => unreachable!(),
+            AddressMapEntry::Occupied(mut entry) => {
                 let page = entry.get_mut();
                 page.contended_unique_weights.remove(unique_weight);
             }
@@ -200,7 +201,7 @@ impl AddressBook {
         let mut still_queued = false;
 
         match self.book.entry(attempt.address) {
-            AddressBookMapEntry::Occupied(mut book_entry) => {
+            AddressMapEntry::Occupied(mut book_entry) => {
                 let mut page = book_entry.get_mut();
 
                 match &mut page.current_usage {
@@ -230,7 +231,7 @@ impl AddressBook {
                     }
                 }
             }
-            AddressBookMapEntry::Vacant(_book_entry) => {
+            AddressMapEntry::Vacant(_book_entry) => {
                 unreachable!()
             }
         }
