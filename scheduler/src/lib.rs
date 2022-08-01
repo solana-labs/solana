@@ -177,11 +177,9 @@ impl AddressBook {
 
     #[inline(never)]
     fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
-        use std::collections::btree_map::Entry;
-
         match self.book.entry(*address) {
-            Entry::Vacant(_book_entry) => unreachable!(),
-            Entry::Occupied(mut entry) => {
+            AddressBookMapEntry::Vacant(_book_entry) => unreachable!(),
+            AddressBookMapEntry::Occupied(mut entry) => {
                 let page = entry.get_mut();
                 page.contended_unique_weights.remove(unique_weight);
             }
@@ -198,7 +196,6 @@ impl AddressBook {
     fn unlock(&mut self, attempt: &LockAttempt) -> bool {
         debug_assert!(attempt.is_success());
 
-        use std::collections::btree_map::Entry;
         let mut newly_uncontended = false;
         let mut still_queued = false;
 
