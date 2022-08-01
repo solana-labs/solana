@@ -30,6 +30,7 @@ pub mod bucket_map_holder_stats;
 pub mod builtins;
 pub mod cache_hash_data;
 pub mod cache_hash_data_stats;
+mod cached_executors;
 pub mod commitment;
 pub mod contains;
 pub mod cost_model;
