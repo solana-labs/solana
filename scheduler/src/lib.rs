@@ -340,7 +340,7 @@ fn attempt_lock_for_execution<'a>(
 
 pub enum Incoming {
     FromPrevious((Weight, Box<SanitizedTransaction>)),
-    FromExecute((Box<ExecutionEnvironment>)),
+    FromExecute(Box<ExecutionEnvironment>),
 }
 
 pub struct ScheduleStage {}
