@@ -104,6 +104,15 @@ struct Page {
     //loaded account
 }
 
+impl Page {
+    fn new(current_usage: CurrentUsage) -> Self {
+        Self {
+            current_usage,
+            contended_unique_weights: Default::default(),
+        }
+    }
+}
+
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
 
 // needs ttl mechanism and prune
@@ -124,13 +133,9 @@ impl AddressBook {
     ) -> LockAttempt {
         use std::collections::btree_map::Entry;
 
-        match self.book.entry(address) {
-            // unconditional success if it's initial access
+        let attempt = match self.book.entry(address) {
             Entry::Vacant(book_entry) => {
-                book_entry.insert(Page {
-                    current_usage: CurrentUsage::renew(requested_usage),
-                    contended_unique_weights: Default::default(),
-                });
+                book_entry.insert(Page::new(CurrentUsage::renew(requested_usage)));
                 LockAttempt::success(address, requested_usage)
             }
             Entry::Occupied(mut book_entry) => {
@@ -147,23 +152,23 @@ impl AddressBook {
                             LockAttempt::success(address, requested_usage)
                         }
                         RequestedUsage::Writable => {
-                            if from_runnable {
-                                Self::remember_new_address_contention(page, unique_weight);
-                            }
                             LockAttempt::failure(address, requested_usage)
                         }
                     },
                     CurrentUsage::Writable => match &requested_usage {
                         RequestedUsage::Readonly | RequestedUsage::Writable => {
-                            if from_runnable {
-                                Self::remember_new_address_contention(page, unique_weight);
-                            }
                             LockAttempt::failure(address, requested_usage)
                         }
                     },
                 }
             }
         }
+
+        if from_runnable && attempt.is_failed() {
+            Self::remember_new_address_contention(page, unique_weight);
+        }
+
+        attempt
     }
 
     #[inline(never)]
