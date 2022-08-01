@@ -214,6 +214,7 @@ pub enum CliCommand {
         nonce_authority: SignerIndex,
         memo: Option<String>,
         fee_payer: SignerIndex,
+        redelegation_stake_account_pubkey: Option<Pubkey>,
     },
     SplitStake {
         stake_account_pubkey: Pubkey,
@@ -683,6 +684,9 @@ pub fn parse_command(
         ("delegate-stake", Some(matches)) => {
             parse_stake_delegate_stake(matches, default_signer, wallet_manager)
         }
+        ("redelegate-stake", Some(matches)) => {
+            parse_stake_delegate_stake(matches, default_signer, wallet_manager)
+        }
         ("withdraw-stake", Some(matches)) => {
             parse_stake_withdraw_stake(matches, default_signer, wallet_manager)
         }
@@ -1136,6 +1140,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_authority,
             memo,
             fee_payer,
+            redelegation_stake_account_pubkey,
         } => process_delegate_stake(
             &rpc_client,
             config,
@@ -1150,6 +1155,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             memo.as_ref(),
             *fee_payer,
+            redelegation_stake_account_pubkey.as_ref(),
         ),
         CliCommand::SplitStake {
             stake_account_pubkey,

@@ -98,7 +98,7 @@ use {
         timing::timestamp,
     },
     solana_send_transaction_service::send_transaction_service,
-    solana_streamer::socket::SocketAddrSpace,
+    solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
     solana_vote_program::vote_state::VoteState,
     std::{
         collections::{HashMap, HashSet},
@@ -757,12 +757,15 @@ impl Validator {
         };
         let poh_recorder = Arc::new(RwLock::new(poh_recorder));
 
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+
         let connection_cache = match use_quic {
             true => {
                 let mut connection_cache = ConnectionCache::new(tpu_connection_pool_size);
                 connection_cache
                     .update_client_certificate(&identity_keypair, node.info.gossip.ip())
                     .expect("Failed to update QUIC client certificates");
+                connection_cache.set_staked_nodes(&staked_nodes, &identity_keypair.pubkey());
                 Arc::new(connection_cache)
             }
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
@@ -880,7 +883,10 @@ impl Validator {
             Some(stats_reporter_sender.clone()),
             &exit,
         );
-        let serve_repair = Arc::new(RwLock::new(ServeRepair::new(cluster_info.clone())));
+        let serve_repair = Arc::new(RwLock::new(ServeRepair::new(
+            cluster_info.clone(),
+            bank_forks.clone(),
+        )));
         let serve_repair_service = ServeRepairService::new(
             &serve_repair,
             Some(blockstore.clone()),
@@ -1025,6 +1031,7 @@ impl Validator {
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
             config.enable_quic_servers,
+            &staked_nodes,
         );
 
         datapoint_info!(

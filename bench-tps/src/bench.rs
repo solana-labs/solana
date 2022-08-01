@@ -924,5 +924,6 @@ mod tests {
                 rent
             );
         }
+        withdraw_durable_nonce_accounts(client, &authority_keypairs, &nonce_keypairs)
     }
 }

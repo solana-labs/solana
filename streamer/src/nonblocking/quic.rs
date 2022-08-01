@@ -159,10 +159,10 @@ fn get_connection_stake(
         })
 }
 
-fn compute_max_allowed_uni_streams(
+pub fn compute_max_allowed_uni_streams(
     peer_type: ConnectionPeerType,
     peer_stake: u64,
-    staked_nodes: Arc<RwLock<StakedNodes>>,
+    total_stake: u64,
 ) -> usize {
     if peer_stake == 0 {
         // Treat stake = 0 as unstaked
@@ -170,13 +170,11 @@ fn compute_max_allowed_uni_streams(
     } else {
         match peer_type {
             ConnectionPeerType::Staked => {
-                let staked_nodes = staked_nodes.read().unwrap();
-
                 // No checked math for f64 type. So let's explicitly check for 0 here
-                if staked_nodes.total_stake == 0 {
+                if total_stake == 0 {
                     QUIC_MIN_STAKED_CONCURRENT_STREAMS
                 } else {
-                    (((peer_stake as f64 / staked_nodes.total_stake as f64)
+                    (((peer_stake as f64 / total_stake as f64)
                         * QUIC_TOTAL_STAKED_CONCURRENT_STREAMS as f64)
                         as usize)
                         .max(QUIC_MIN_STAKED_CONCURRENT_STREAMS)
@@ -264,17 +262,19 @@ async fn setup_connection(
 
             if let Some((mut connection_table_l, stake)) = table_and_stake {
                 let table_type = connection_table_l.peer_type;
-                let max_uni_streams = VarInt::from_u64(compute_max_allowed_uni_streams(
-                    table_type,
-                    stake,
-                    staked_nodes.clone(),
-                ) as u64);
+                let total_stake = staked_nodes.read().map_or(0, |stakes| stakes.total_stake);
+                drop(staked_nodes);
+
+                let max_uni_streams =
+                    VarInt::from_u64(
+                        compute_max_allowed_uni_streams(table_type, stake, total_stake) as u64,
+                    );
 
                 debug!(
                     "Peer type: {:?}, stake {}, total stake {}, max streams {}",
                     table_type,
                     stake,
-                    staked_nodes.read().unwrap().total_stake,
+                    total_stake,
                     max_uni_streams.unwrap().into_inner()
                 );
 
@@ -558,7 +558,7 @@ impl Drop for ConnectionEntry {
 }
 
 #[derive(Copy, Clone, Debug)]
-enum ConnectionPeerType {
+pub enum ConnectionPeerType {
     Unstaked,
     Staked,
 }
@@ -1406,58 +1406,52 @@ pub mod test {
 
     #[test]
     fn test_max_allowed_uni_streams() {
-        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 0, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 0, 0),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 10, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 10, 0),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 0, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 0, 0),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, 0),
             QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
-        staked_nodes.write().unwrap().total_stake = 10000;
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1000, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1000, 10000),
             (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (10_f64)) as usize
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 100, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 100, 10000),
             (QUIC_TOTAL_STAKED_CONCURRENT_STREAMS / (100_f64)) as usize
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 10, 10000),
             QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 1, 10000),
             QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 0, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Staked, 0, 10000),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(
-                ConnectionPeerType::Unstaked,
-                1000,
-                staked_nodes.clone()
-            ),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 1000, 10000),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 1, staked_nodes.clone()),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 1, 10000),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
         assert_eq!(
-            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 0, staked_nodes),
+            compute_max_allowed_uni_streams(ConnectionPeerType::Unstaked, 0, 10000),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
     }
