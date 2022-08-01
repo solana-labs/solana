@@ -4368,20 +4368,40 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
         load_hint: LoadHint,
+        remove_from_read_only_cache: bool,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load(ancestors, pubkey, None, load_hint)
+        self.do_load(
+            ancestors,
+            pubkey,
+            None,
+            load_hint,
+            remove_from_read_only_cache,
+        )
     }
 
     pub fn load_account_into_read_cache(&self, ancestors: &Ancestors, pubkey: &Pubkey) {
-        self.do_load_with_populate_read_cache(ancestors, pubkey, None, LoadHint::Unspecified, true);
+        self.do_load_with_populate_read_cache(
+            ancestors,
+            pubkey,
+            None,
+            LoadHint::Unspecified,
+            true,
+            false,
+        );
     }
 
     pub fn load_with_fixed_root(
         &self,
         ancestors: &Ancestors,
         pubkey: &Pubkey,
+        remove_from_read_only_cache: bool,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, LoadHint::FixedMaxRoot)
+        self.load(
+            ancestors,
+            pubkey,
+            LoadHint::FixedMaxRoot,
+            remove_from_read_only_cache,
+        )
     }
 
     pub fn load_without_fixed_root(
@@ -4389,7 +4409,7 @@ impl AccountsDb {
         ancestors: &Ancestors,
         pubkey: &Pubkey,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.load(ancestors, pubkey, LoadHint::Unspecified)
+        self.load(ancestors, pubkey, LoadHint::Unspecified, false)
     }
 
     fn read_index_for_accessor_or_load_slow<'a>(
@@ -4708,8 +4728,16 @@ impl AccountsDb {
         pubkey: &Pubkey,
         max_root: Option<Slot>,
         load_hint: LoadHint,
+        remove_from_read_only_cache: bool,
     ) -> Option<(AccountSharedData, Slot)> {
-        self.do_load_with_populate_read_cache(ancestors, pubkey, max_root, load_hint, false)
+        self.do_load_with_populate_read_cache(
+            ancestors,
+            pubkey,
+            max_root,
+            load_hint,
+            false,
+            remove_from_read_only_cache,
+        )
     }
 
     /// if 'load_into_read_cache_only', then return value is meaningless.
@@ -4721,6 +4749,7 @@ impl AccountsDb {
         max_root: Option<Slot>,
         load_hint: LoadHint,
         load_into_read_cache_only: bool,
+        remove_from_read_only_cache: bool,
     ) -> Option<(AccountSharedData, Slot)> {
         #[cfg(not(test))]
         assert!(max_root.is_none());
@@ -4733,7 +4762,11 @@ impl AccountsDb {
             let in_write_cache = storage_location.is_cached();
             if !load_into_read_cache_only {
                 if !in_write_cache {
-                    let result = self.read_only_accounts_cache.load(*pubkey, slot);
+                    let result = if remove_from_read_only_cache {
+                        self.read_only_accounts_cache.remove(*pubkey, slot)
+                    } else {
+                        self.read_only_accounts_cache.load(*pubkey, slot)
+                    };
                     if let Some(account) = result {
                         return Some((account, slot));
                     }
@@ -4776,8 +4809,10 @@ impl AccountsDb {
             However, by the assumption for contradiction above ,  'A' has already been updated in 'S' which means '(S, A)'
             must exist in the write cache, which is a contradiction.
             */
-            self.read_only_accounts_cache
-                .store(*pubkey, slot, account.clone());
+            if !remove_from_read_only_cache {
+                self.read_only_accounts_cache
+                    .store(*pubkey, slot, account.clone());
+            }
         }
         Some((account, slot))
     }
@@ -13542,13 +13577,13 @@ pub mod tests {
 
         assert_eq!(db.read_only_accounts_cache.cache_len(), 0);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .load_with_fixed_root(&Ancestors::default(), &account_key, false)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 1);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .load_with_fixed_root(&Ancestors::default(), &account_key, false)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 1);
@@ -13556,7 +13591,7 @@ pub mod tests {
         db.store_cached((2, &[(&account_key, &zero_lamport_account)][..]), None);
         assert_eq!(db.read_only_accounts_cache.cache_len(), 1);
         let account = db
-            .load_with_fixed_root(&Ancestors::default(), &account_key)
+            .load_with_fixed_root(&Ancestors::default(), &account_key, false)
             .map(|(account, _)| account)
             .unwrap();
         assert_eq!(account.lamports(), 0);
@@ -13592,6 +13627,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                false,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), 0);
@@ -13607,7 +13643,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &account_key,
                 Some(0),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                false,
             )
             .is_none());
     }
@@ -13691,7 +13728,8 @@ pub mod tests {
                 &Ancestors::default(),
                 &zero_lamport_account_key,
                 max_root,
-                load_hint
+                load_hint,
+                false,
             )
             .unwrap()
             .0
@@ -13820,6 +13858,7 @@ pub mod tests {
                 &account_key,
                 Some(0),
                 LoadHint::Unspecified,
+                false,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), zero_lamport_account.lamports());
@@ -13833,6 +13872,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                false,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -13847,6 +13887,7 @@ pub mod tests {
                 &account_key,
                 Some(max_scan_root),
                 LoadHint::Unspecified,
+                false,
             )
             .unwrap();
         assert_eq!(account.0.lamports(), slot1_account.lamports());
@@ -13859,7 +13900,8 @@ pub mod tests {
                 &scan_ancestors,
                 &account_key,
                 Some(max_scan_root),
-                LoadHint::Unspecified
+                LoadHint::Unspecified,
+                false,
             )
             .is_none());
     }
@@ -14023,7 +14065,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    false,
                 )
                 .is_some());
         }
@@ -14051,7 +14094,8 @@ pub mod tests {
                     &Ancestors::default(),
                     key,
                     Some(last_dead_slot),
-                    LoadHint::Unspecified
+                    LoadHint::Unspecified,
+                    false,
                 )
                 .is_none());
         }
@@ -14584,7 +14628,9 @@ pub mod tests {
                         .store(thread_rng().gen_range(0, 10) as u64, Ordering::Relaxed);
 
                     // Load should never be unable to find this key
-                    let loaded_account = db.do_load(&ancestors, &pubkey, None, load_hint).unwrap();
+                    let loaded_account = db
+                        .do_load(&ancestors, &pubkey, None, load_hint, false)
+                        .unwrap();
                     // slot + 1 == account.lamports because of the account-cache-flush thread
                     assert_eq!(
                         loaded_account.0.lamports(),
@@ -14939,7 +14985,8 @@ pub mod tests {
                     .load(
                         &Ancestors::from(vec![(*slot, 0)]),
                         &account_in_slot,
-                        LoadHint::FixedMaxRoot
+                        LoadHint::FixedMaxRoot,
+                        false,
                     )
                     .is_some());
                 // Clear for next iteration so that `assert!(self.storage.get_slot_stores(purged_slot).is_none());`

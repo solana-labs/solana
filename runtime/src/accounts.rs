@@ -286,7 +286,7 @@ impl Accounts {
                             (account_override.clone(), 0)
                         } else {
                             self.accounts_db
-                                .load_with_fixed_root(ancestors, key)
+                                .load_with_fixed_root(ancestors, key, true)
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
@@ -335,9 +335,12 @@ impl Accounts {
                                     programdata_address,
                                 }) = account.state()
                                 {
-                                    if let Some((programdata_account, _)) = self
-                                        .accounts_db
-                                        .load_with_fixed_root(ancestors, &programdata_address)
+                                    if let Some((programdata_account, _)) =
+                                        self.accounts_db.load_with_fixed_root(
+                                            ancestors,
+                                            &programdata_address,
+                                            false,
+                                        )
                                     {
                                         account_deps
                                             .push((programdata_address, programdata_account));
@@ -469,20 +472,21 @@ impl Accounts {
             }
             depth += 1;
 
-            program_account_index = match self
-                .accounts_db
-                .load_with_fixed_root(ancestors, &program_id)
-            {
-                Some((program_account, _)) => {
-                    let account_index = accounts.len();
-                    accounts.push((program_id, program_account));
-                    account_index
-                }
-                None => {
-                    error_counters.account_not_found += 1;
-                    return Err(TransactionError::ProgramAccountNotFound);
-                }
-            };
+            program_account_index =
+                match self
+                    .accounts_db
+                    .load_with_fixed_root(ancestors, &program_id, false)
+                {
+                    Some((program_account, _)) => {
+                        let account_index = accounts.len();
+                        accounts.push((program_id, program_account));
+                        account_index
+                    }
+                    None => {
+                        error_counters.account_not_found += 1;
+                        return Err(TransactionError::ProgramAccountNotFound);
+                    }
+                };
             let program = &accounts[program_account_index].1;
             if !program.executable() {
                 error_counters.invalid_program_for_execution += 1;
@@ -498,10 +502,11 @@ impl Accounts {
                     programdata_address,
                 }) = program.state()
                 {
-                    let programdata_account_index = match self
-                        .accounts_db
-                        .load_with_fixed_root(ancestors, &programdata_address)
-                    {
+                    let programdata_account_index = match self.accounts_db.load_with_fixed_root(
+                        ancestors,
+                        &programdata_address,
+                        false,
+                    ) {
                         Some((programdata_account, _)) => {
                             let account_index = accounts.len();
                             accounts.push((programdata_address, programdata_account));
@@ -601,7 +606,7 @@ impl Accounts {
     ) -> std::result::Result<LoadedAddresses, AddressLookupError> {
         let table_account = self
             .accounts_db
-            .load_with_fixed_root(ancestors, &address_table_lookup.account_key)
+            .load_with_fixed_root(ancestors, &address_table_lookup.account_key, false)
             .map(|(account, _rent)| account)
             .ok_or(AddressLookupError::LookupTableAccountNotFound)?;
 
@@ -645,7 +650,7 @@ impl Accounts {
         pubkey: &Pubkey,
         load_hint: LoadHint,
     ) -> Option<(AccountSharedData, Slot)> {
-        let (account, slot) = self.accounts_db.load(ancestors, pubkey, load_hint)?;
+        let (account, slot) = self.accounts_db.load(ancestors, pubkey, load_hint, false)?;
         Self::filter_zero_lamport_account(account, slot)
     }
 
