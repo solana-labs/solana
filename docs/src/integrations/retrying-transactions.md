@@ -8,14 +8,15 @@ On some occasions, a seemingly valid transaction may be dropped before it is inc
 
 ## Facts
 
-```
+:::note
 Fact Sheet
+
 - RPC nodes will attempt to rebroadcast transactions using a generic algorithm
 - Application developers can implement their own custom rebroadcasting logic
 - Developers should take advantage of the `maxRetries` parameter on the `sendTransaction` JSON-RPC method
 - Developers should enable preflight checks to raise errors before transactions are submitted
 - Before re-signing any transaction, it is **very important** to ensure that the initial transaction’s blockhash has expired
-```
+  :::
 
 ## The Journey of a Transaction
 
@@ -86,18 +87,21 @@ While RPC nodes will attempt to rebroadcast transactions, the algorithm they emp
 
 When it comes to submitting transactions, the `sendTransaction` RPC method is the primary tool available to developers. `sendTransaction` is only responsible for relaying a transaction from a client to an RPC node. If the node receives the transaction, `sendTransaction` will return the transaction id that can be used to track the transaction. A successful response does not indicate whether the transaction will be processed or finalized by the cluster.
 
-```
-Request Parameters
+:::note
+
+### Request Parameters
+
 - `transaction`: `string` - fully-signed Transaction, as encoded string
 - (optional) `configuration object`: `object`
-    - `skipPreflight`: `boolean` - if true, skip the preflight transaction checks (default: false)
-    - (optional) `preflightCommitment`: `string` - [Commitment](https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment) level to use for preflight simulations against the bank slot (default: "finalized").
-    - (optional) `encoding`: `string` - Encoding used for the transaction data. Either "base58" (slow), or "base64". (default: "base58").
-    - (optional) `maxRetries`: `usize` - Maximum number of times for the RPC node to retry sending the transaction to the leader. If this parameter is not provided, the RPC node will retry the transaction until it is finalized or until the blockhash expires.
+  - `skipPreflight`: `boolean` - if true, skip the preflight transaction checks (default: false)
+  - (optional) `preflightCommitment`: `string` - [Commitment](https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment) level to use for preflight simulations against the bank slot (default: "finalized").
+  - (optional) `encoding`: `string` - Encoding used for the transaction data. Either "base58" (slow), or "base64". (default: "base58").
+  - (optional) `maxRetries`: `usize` - Maximum number of times for the RPC node to retry sending the transaction to the leader. If this parameter is not provided, the RPC node will retry the transaction until it is finalized or until the blockhash expires.
 
 Response
+
 - `transaction id`: `string` - First transaction signature embedded in the transaction, as base-58 encoded string. This transaction id can be used with [getSignatureStatuses](https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses) to poll for status updates.
-```
+  :::
 
 ## Customizing Rebroadcast Logic
 
