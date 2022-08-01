@@ -133,7 +133,7 @@ impl AddressBook {
     ) -> LockAttempt {
         use std::collections::btree_map::Entry;
 
-        let attempt = match self.book.entry(address) {
+        match self.book.entry(address) {
             Entry::Vacant(book_entry) => {
                 book_entry.insert(Page::new(CurrentUsage::renew(requested_usage)));
                 LockAttempt::success(address, requested_usage)
@@ -170,9 +170,7 @@ impl AddressBook {
                     },
                 }
             }
-        };
-
-        attempt
+        }
     }
 
     #[inline(never)]
