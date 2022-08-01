@@ -291,7 +291,7 @@ impl TaskQueue {
 
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
-            Entry::Occupied(queue_entry) => Some((None, queue_entry)),
+            Entry::Occupied(queue_entry) => queue_entry,
             Entry::Vacant(_queue_entry) => unreachable!(),
         }
     }
@@ -419,7 +419,7 @@ impl ScheduleStage {
                 Some((Some(contended_queue), heaviest_runnable_entry))
             }
             (None, Some(weight_from_contended)) => {
-                entry_to_execute(weight_from_contended)
+                Some((None, entry_to_execute(weight_from_contended)))
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
@@ -427,7 +427,7 @@ impl ScheduleStage {
                 if weight_from_runnable > &weight_from_contended {
                     Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if &weight_from_contended > weight_from_runnable {
-                    entry_to_execute(weight_from_contended)
+                    Some((None, entry_to_execute(weight_from_contended)))
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
