@@ -148,7 +148,7 @@ impl AddressBook {
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
-                                Self::remember_new_contended_unique_weight(page, unique_weight);
+                                Self::remember_new_address_contention(page, unique_weight);
                             }
                             LockAttempt::failure(address, requested_usage)
                         }
@@ -156,7 +156,7 @@ impl AddressBook {
                     CurrentUsage::Writable => match &requested_usage {
                         RequestedUsage::Readonly | RequestedUsage::Writable => {
                             if from_runnable {
-                                Self::remember_new_contended_unique_weight(page, unique_weight);
+                                Self::remember_new_address_contention(page, unique_weight);
                             }
                             LockAttempt::failure(address, requested_usage)
                         }
@@ -167,12 +167,12 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn remember_new_contended_unique_weight(page: &mut Page, unique_weight: &UniqueWeight) {
+    fn remember_new_address_contention(page: &mut Page, unique_weight: &UniqueWeight) {
         page.contended_unique_weights.insert(*unique_weight);
     }
 
     #[inline(never)]
-    fn remove_contended_unique_weight(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
+    fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
         use std::collections::btree_map::Entry;
 
         match self.map.entry(*address) {
@@ -494,7 +494,7 @@ impl ScheduleStage {
     ) {
         for l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
-            address_book.remove_contended_unique_weight(&unique_weight, &l.address);
+            address_book.forget_address_contention(&unique_weight, &l.address);
 
             // revert because now contended again
             address_book.newly_uncontended_addresses.remove(&l.address);
