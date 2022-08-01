@@ -16,7 +16,7 @@ Fact Sheet
 - Developers should take advantage of the `maxRetries` parameter on the `sendTransaction` JSON-RPC method
 - Developers should enable preflight checks to raise errors before transactions are submitted
 - Before re-signing any transaction, it is **very important** to ensure that the initial transaction’s blockhash has expired
-  :::
+:::
 
 ## The Journey of a Transaction
 
