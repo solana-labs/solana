@@ -22,6 +22,7 @@ Fact Sheet
 ### How Clients Submit Transactions
 
 In Solana, there is no concept of a mempool. All transactions, whether they are initiated programmatically or by an end-user, are efficiently routed to leaders so that they can be processed into a block. There are two main ways in which a transaction can be sent to leaders:
+
 1. By proxy via an RPC server and the [sendTransaction](https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction) JSON-RPC method
 2. Directly to leaders via a [TPU Client](https://docs.rs/solana-client/1.7.3/solana_client/tpu_client/index.html)
 
@@ -35,9 +36,10 @@ The vast majority of end-users will submit transactions via an RPC server. When 
 
 After an RPC node receives a transaction via `sendTransaction`, it will convert the transaction into a [UDP](https://en.wikipedia.org/wiki/User_Datagram_Protocol) packet before forwarding it to the relevant leaders. UDP allows validators to quickly communicate with one another, but does not provide any guarantees regarding transaction delivery.
 
-Because Solana’s leader schedule is known in advance of every [epoch](https://docs.solana.com/terminology#epoch) (~2 days), an RPC node will broadcast its transaction directly to the current and next leaders. This is in contrast to other gossip protocols such as Ethereum that propagate transactions randomly and broadly across the entire network.  By default, RPC nodes will try to forward transactions to leaders every two seconds until either the transaction is finalized or the transaction’s blockhash expires (150 blocks or ~1 minute 19 seconds as of the time of this writing). If the outstanding rebroadcast queue size is greater than [10,000 transactions](https://github.com/solana-labs/solana/blob/bfbbc53dac93b3a5c6be9b4b65f679fdb13e41d9/send-transaction-service/src/send_transaction_service.rs#L20), newly submitted transactions are dropped.  There are command-line [arguments](https://github.com/solana-labs/solana/blob/bfbbc53dac93b3a5c6be9b4b65f679fdb13e41d9/validator/src/main.rs#L1172) that RPC operators can adjust to change the default behavior of this retry logic.
+Because Solana’s leader schedule is known in advance of every [epoch](https://docs.solana.com/terminology#epoch) (~2 days), an RPC node will broadcast its transaction directly to the current and next leaders. This is in contrast to other gossip protocols such as Ethereum that propagate transactions randomly and broadly across the entire network. By default, RPC nodes will try to forward transactions to leaders every two seconds until either the transaction is finalized or the transaction’s blockhash expires (150 blocks or ~1 minute 19 seconds as of the time of this writing). If the outstanding rebroadcast queue size is greater than [10,000 transactions](https://github.com/solana-labs/solana/blob/bfbbc53dac93b3a5c6be9b4b65f679fdb13e41d9/send-transaction-service/src/send_transaction_service.rs#L20), newly submitted transactions are dropped. There are command-line [arguments](https://github.com/solana-labs/solana/blob/bfbbc53dac93b3a5c6be9b4b65f679fdb13e41d9/validator/src/main.rs#L1172) that RPC operators can adjust to change the default behavior of this retry logic.
 
-When an RPC node broadcasts a transaction, it will attempt to forward the transaction to a leader’s [Transaction Processing Unit (TPU)](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/core/src/validator.rs#L867). The TPU processes transactions in five distinct phases: 
+When an RPC node broadcasts a transaction, it will attempt to forward the transaction to a leader’s [Transaction Processing Unit (TPU)](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/core/src/validator.rs#L867). The TPU processes transactions in five distinct phases:
+
 - [Fetch Stage](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/core/src/fetch_stage.rs#L21)
 - [SigVerify Stage](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/core/src/tpu.rs#L91)
 - [Banking Stage](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/core/src/banking_stage.rs#L249)
@@ -47,9 +49,10 @@ When an RPC node broadcasts a transaction, it will attempt to forward the transa
 ![TPU Overview](/img/rt-tpu-jito-labs.png)
 
 Of these five phases, the Fetch Stage is responsible for receiving transactions. Within the Fetch Stage, validators will categorize incoming transactions according to three ports:
+
 - [tpu](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/gossip/src/contact_info.rs#L27) handles regular transactions such as token transfers, NFT mints, and program instructions
 - [tpu_vote](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/gossip/src/contact_info.rs#L31) focuses exclusively on voting transactions
-- [tpu_forwards](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/gossip/src/contact_info.rs#L29) forwards unprocessed packets to the next leader if the current leader is unable to process all transactions 
+- [tpu_forwards](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/gossip/src/contact_info.rs#L29) forwards unprocessed packets to the next leader if the current leader is unable to process all transactions
 
 For more information on the TPU, please refer to [this excellent writeup by Jito Labs](https://jito-labs.medium.com/solana-validator-101-transaction-processing-90bcdc271143).
 
@@ -65,7 +68,7 @@ There are also two lesser known reasons why a transaction may be dropped before 
 
 ![Dropped via RPC Pool](/img/rt-dropped-via-rpc-pool.png)
 
-Temporarily network forks can also result in dropped transactions. If a validator is slow to replay its blocks within the Banking Stage, it may end up creating a minority fork. When a client builds a transaction, it’s possible for the transaction to reference a `recentBlockhash` that only exists on the minority fork.  After the transaction is submitted, the cluster can then switch away from its minority fork before the transaction is processed. In this scenario, the transaction is dropped due to the blockhash not being found.
+Temporarily network forks can also result in dropped transactions. If a validator is slow to replay its blocks within the Banking Stage, it may end up creating a minority fork. When a client builds a transaction, it’s possible for the transaction to reference a `recentBlockhash` that only exists on the minority fork. After the transaction is submitted, the cluster can then switch away from its minority fork before the transaction is processed. In this scenario, the transaction is dropped due to the blockhash not being found.
 
 ![Dropped due to Minority Fork (Before Processed)](/img/rt-dropped-minority-fork-pre-process.png)
 
@@ -86,7 +89,7 @@ When it comes to submitting transactions, the `sendTransaction` RPC method is th
 ```
 Request Parameters
 - `transaction`: `string` - fully-signed Transaction, as encoded string
-- (optional) `configuration object`: `object` 
+- (optional) `configuration object`: `object`
     - `skipPreflight`: `boolean` - if true, skip the preflight transaction checks (default: false)
     - (optional) `preflightCommitment`: `string` - [Commitment](https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment) level to use for preflight simulations against the bank slot (default: "finalized").
     - (optional) `encoding`: `string` - Encoding used for the transaction data. Either "base58" (slow), or "base64". (default: "base58").
@@ -100,7 +103,7 @@ Response
 
 In order to develop their own rebroadcasting logic, developers should take advantage of `sendTransaction`’s `maxRetries` parameter. If provided, `maxRetries` will override an RPC node’s default retry logic, allowing developers to manually control the retry process [within reasonable bounds](https://github.com/solana-labs/solana/blob/98707baec2385a4f7114d2167ef6dfb1406f954f/validator/src/main.rs#L1258-L1274).
 
-A common pattern for manually retrying transactions involves temporarily storing the `lastValidBlockHeight` that comes from [getLatestBlockhash](https://docs.solana.com/developing/clients/jsonrpc-api#getlatestblockhash). Once stashed, an application can then [poll the cluster’s blockheight](https://docs.solana.com/developing/clients/jsonrpc-api#getblockheight) and manually retry the transaction at an appropriate interval. In times of network congestion, it’s advantageous to set `maxRetries` to 0 and manually rebroadcast via a custom algorithm. While some applications may employ an [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff) algorithm, others such as [Mango](https://www.mango.markets/) opt to [continuously resubmit](https://github.com/blockworks-foundation/mango-ui/blob/b6abfc6c13b71fc17ebbe766f50b8215fa1ec54f/src/utils/send.tsx#L713) transactions at a constant interval until some timeout has occurred. 
+A common pattern for manually retrying transactions involves temporarily storing the `lastValidBlockHeight` that comes from [getLatestBlockhash](https://docs.solana.com/developing/clients/jsonrpc-api#getlatestblockhash). Once stashed, an application can then [poll the cluster’s blockheight](https://docs.solana.com/developing/clients/jsonrpc-api#getblockheight) and manually retry the transaction at an appropriate interval. In times of network congestion, it’s advantageous to set `maxRetries` to 0 and manually rebroadcast via a custom algorithm. While some applications may employ an [exponential backoff](https://en.wikipedia.org/wiki/Exponential_backoff) algorithm, others such as [Mango](https://www.mango.markets/) opt to [continuously resubmit](https://github.com/blockworks-foundation/mango-ui/blob/b6abfc6c13b71fc17ebbe766f50b8215fa1ec54f/src/utils/send.tsx#L713) transactions at a constant interval until some timeout has occurred.
 
 ```ts
 import {
@@ -124,7 +127,7 @@ const sleep = async (ms: number) => {
 
   const airdropSignature = await connection.requestAirdrop(
     payer.publicKey,
-    LAMPORTS_PER_SOL
+    LAMPORTS_PER_SOL,
   );
 
   await connection.confirmTransaction(airdropSignature);
@@ -141,7 +144,7 @@ const sleep = async (ms: number) => {
       fromPubkey: payer.publicKey,
       toPubkey: toAccount,
       lamports: 1000000,
-    })
+    }),
   );
   const message = transaction.serializeMessage();
   const signature = nacl.sign.detached(message, payer.secretKey);
@@ -166,6 +169,7 @@ If an application has access to RPC nodes behind a load balancer, it can also ch
 ### The Cost of Skipping Preflight
 
 By default, `sendTransaction` will perform three preflight checks prior to submitting a transaction. Specifically, `sendTransaction` will:
+
 - Verify that all signatures are valid
 - Check that the referenced blockhash is within the last 150 blocks
 - Simulate the transaction against the bank slot specified by the `preflightCommitment`
