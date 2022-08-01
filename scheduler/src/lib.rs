@@ -489,7 +489,7 @@ impl ScheduleStage {
             }
 
             let unique_weight = *queue_entry.key();
-            Self::apply_successful_lock_before_execution(
+            Self::finalize_successful_lock_before_execution(
                 address_book,
                 &unique_weight,
                 &lock_attempts,
@@ -503,7 +503,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     // naming: relock_before_execution() / update_address_book() / update_uncontended_addresses()?
-    fn apply_successful_lock_before_execution(
+    fn finalize_successful_lock_before_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &Vec<LockAttempt>,
