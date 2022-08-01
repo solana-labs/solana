@@ -1269,6 +1269,32 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_shred_as_ping() {
+        let data_buf = vec![7u8, 44]; // REPAIR_RESPONSE_SERIALIZED_PING_BYTES - SIZE_OF_DATA_SHRED_HEADERS
+        let keypair = Keypair::new();
+        let mut shred = Shred::new_from_data(
+            123, // slot
+            456, // index
+            111, // parent_offset
+            &data_buf,
+            ShredFlags::empty(), //ShredFlags::LAST_SHRED_IN_SLOT,
+            222, // reference_tick
+            333, // version
+            444, // fec_set_index
+        );
+        shred.sign(&keypair);
+        let mut pkt = Packet::default();
+        shred.copy_to_packet(&mut pkt);
+        pkt.meta.size = REPAIR_RESPONSE_SERIALIZED_PING_BYTES;
+        let res = pkt.deserialize_slice::<RepairResponse, _>(..);
+        if let Ok(RepairResponse::Ping(ping)) = res {
+            assert!(!ping.verify());
+        } else {
+            assert!(res.is_err());
+        }
+    }
+
+    #[test]
     fn test_serialize_deserialize_signed_request() {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
         let bank = Bank::new_for_tests(&genesis_config);
