@@ -1277,7 +1277,7 @@ mod tests {
             456, // index
             111, // parent_offset
             &data_buf,
-            ShredFlags::empty(), //ShredFlags::LAST_SHRED_IN_SLOT,
+            ShredFlags::empty(),
             222, // reference_tick
             333, // version
             444, // fec_set_index
