@@ -114,7 +114,7 @@ impl Page {
 }
 
 type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
-type AddressBookEntry = std::collections::btree_map::Entry;
+type AddressBookMapEntry<K, V> = std::collections::btree_map::Entry<K, V>;
 
 // needs ttl mechanism and prune
 #[derive(Default)]
