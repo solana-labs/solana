@@ -203,7 +203,7 @@ impl AddressBook {
         let mut still_queued = false;
 
         match self.book.entry(attempt.address) {
-            Entry::Occupied(mut book_entry) => {
+            AddressBookMapEntry::Occupied(mut book_entry) => {
                 let mut page = book_entry.get_mut();
 
                 match &mut page.current_usage {
@@ -233,7 +233,7 @@ impl AddressBook {
                     }
                 }
             }
-            Entry::Vacant(_book_entry) => {
+            AddressBookMapEntry::Vacant(_book_entry) => {
                 unreachable!()
             }
         }
