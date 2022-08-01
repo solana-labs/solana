@@ -49,17 +49,21 @@ sha-ni hardware.
 
 ### Safety Violations
 
-An Optimistic Confirmation violation occurs if a subcommittee
+An Optimistic Confirmation violation occurs if a voting subcommittee
 optimistically confirms a slot that wasn't rooted by the following
-subcommittee.
+voting subcommittee.
 
 A Safety violation occurs if a subcommittee roots a slot that wasn't
 rooted by the following subcommittee.
 
+All full nodes including RPCs should halt as soon as a safety
+violation is detected.
+
 ### Subcommittee Rotation
 
-Voting Subcommittee is scheduled for a voting epoch, and is composed
-of 2 subcommittees, A and B, scheduled in a staggered rotation.
+Voting Subcommittee is scheduled for a voting epoch, and is itself
+composed of 2 subcommittees, primary and secondary, scheduled for
+two epochs each in a staggered rotation.
 
 ```
 A1 A1 A2 A2 A3
@@ -67,7 +71,7 @@ A1 A1 A2 A2 A3
 ```
 
 The first epoch the subcommittee runs, it is considered **secondary**.
-For it's second epoch, it is considered **primary**.
+On the second epoch, it is considered **primary**.
 
 For a new secondary subcommittee to start, it must start with a
 block that is a descendant of a **rotation block** that was confirmed
@@ -89,6 +93,18 @@ is 1:10^20. A 1ms hash would require grinding for 10^9 years with
 Secondary subcommittee can use the primary's votes as a switching
 threshold proof. The primary can only use its own votes for switching
 proofs.
+
+When secondary uses to switch forks using the primary votes, the
+fork that its switching from must be from the secondary epoch.
+
+```
+A1 A1 A2 A2 A3
+   B1 B1 B2 B2
+```
+
+Last block of epoch (A1,B1), X, A1 OC confirmed slot X. B1 since
+it was locked out did not. On the next slot, X+1, B1 is now primary.
+B1 may use votes from A1 on slot X to switch forks.
 
 ### Safety
 
