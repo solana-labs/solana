@@ -162,7 +162,7 @@ impl AddressBook {
                     },
                 }
             }
-        }
+        };
 
         if from_runnable && attempt.is_failed() {
             Self::remember_new_address_contention(page, unique_weight);
