@@ -109,7 +109,7 @@ type AddressBookMap = std::collections::BTreeMap<Pubkey, Page>;
 // needs ttl mechanism and prune
 #[derive(Default)]
 pub struct AddressBook {
-    map: AddressBookMap,
+    book: AddressBookMap,
     newly_uncontended_addresses: std::collections::BTreeSet<Pubkey>,
 }
 
@@ -124,17 +124,17 @@ impl AddressBook {
     ) -> LockAttempt {
         use std::collections::btree_map::Entry;
 
-        match self.map.entry(address) {
+        match self.book.entry(address) {
             // unconditional success if it's initial access
-            Entry::Vacant(entry) => {
-                entry.insert(Page {
+            Entry::Vacant(book_entry) => {
+                book_entry.insert(Page {
                     current_usage: CurrentUsage::renew(requested_usage),
                     contended_unique_weights: Default::default(),
                 });
                 LockAttempt::success(address, requested_usage)
             }
-            Entry::Occupied(mut entry) => {
-                let mut page = entry.get_mut();
+            Entry::Occupied(mut book_entry) => {
+                let mut page = book_entry.get_mut();
 
                 match &mut page.current_usage {
                     CurrentUsage::Unused => {
@@ -175,7 +175,7 @@ impl AddressBook {
     fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
         use std::collections::btree_map::Entry;
 
-        match self.map.entry(*address) {
+        match self.book.entry(*address) {
             Entry::Vacant(_entry) => unreachable!(),
             Entry::Occupied(mut entry) => {
                 let page = entry.get_mut();
@@ -198,7 +198,7 @@ impl AddressBook {
         let mut newly_uncontended = false;
         let mut still_queued = false;
 
-        match self.map.entry(attempt.address) {
+        match self.book.entry(attempt.address) {
             Entry::Occupied(mut entry) => {
                 let mut page = entry.get_mut();
 
@@ -371,7 +371,7 @@ impl ScheduleStage {
         address_book: &'a AddressBook,
     ) -> &'a std::collections::BTreeSet<UniqueWeight> {
         &address_book
-            .map
+            .book
             .get(address)
             .unwrap()
             .contended_unique_weights
