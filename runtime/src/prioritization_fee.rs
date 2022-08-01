@@ -6,20 +6,20 @@ use {
 
 pub enum PrioritizationFeeError {
     // Not able to get account locks from sanitized transaction, which is required to update block
-    // min fees.
+    // minimum fees.
     FailGetTransactionAccountLocks,
 
     // Not able to read priority details, including compute-unit price, from transaction.
-    // Compute-unit price is required to update block min fees.
+    // Compute-unit price is required to update block minimum fees.
     FailGetTransactionPriorityDetails,
 
     // Block is already finalized, trying to finalize it again is usually unexpected
     BlockIsAlreadyFinalized,
 }
 
-/// Block min prioritization fee stats, includes the min prioritization fee of transactions in a
-/// block; and min fee for each writable accounts of all transactions in block. The only relevant
-/// write account min fees are those greater than block min fee, because the min fee needed to land
+/// Block minimum prioritization fee stats, includes the minimum prioritization fee of transactions in a
+/// block; and minimum fee for each writable accounts of all transactions in block. The only relevant
+/// write account minimum fees are those greater than block minimum fee, because the minimum fee needed to land
 /// a transaction is determined by Max( min_transaction_fee, min_writable_account_fees(key), ...)
 #[derive(Debug)]
 pub struct PrioritizationFee {
@@ -29,7 +29,7 @@ pub struct PrioritizationFee {
     // The minimum prioritization fee of each writable account in transactions in this block.
     min_writable_account_fees: HashMap<Pubkey, u64>,
 
-    // Default to `false`, set to `true` when a block is completed, therefore the min fees recorded
+    // Default to `false`, set to `true` when a block is completed, therefore the minimum fees recorded
     // are finalized, and can be made available for use (e.g., RPC query)
     is_finalized: bool,
 }
@@ -45,7 +45,7 @@ impl Default for PrioritizationFee {
 }
 
 impl PrioritizationFee {
-    /// Use `sanitized_tx` to update self for min transaction fee in the block and min fee for each writable account.
+    /// Use `sanitized_tx` to update self for minimum transaction fee in the block and minimum fee for each writable account.
     pub fn update(
         &mut self,
         sanitized_tx: &SanitizedTransaction,
@@ -72,7 +72,7 @@ impl PrioritizationFee {
         Ok(())
     }
 
-    /// Accounts that have min fees lesser or equal to the min fee in the block are redundant, they are
+    /// Accounts that have minimum fees lesser or equal to the minimum fee in the block are redundant, they are
     /// removed to reduce memory footprint.
     pub fn prune_irrelevant_writable_accounts(&mut self) {
         self.min_writable_account_fees
