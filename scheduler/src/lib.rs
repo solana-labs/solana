@@ -128,9 +128,9 @@ impl AddressBook {
     ) -> LockAttempt {
         let LockAttempt {address, requested_usage, is_success} = attempt;
 
-        match self.book.entry(address) {
+        match self.book.entry(*address) {
             AddressMapEntry::Vacant(book_entry) => {
-                book_entry.insert(Page::new(CurrentUsage::renew(requested_usage)));
+                book_entry.insert(Page::new(CurrentUsage::renew(*requested_usage)));
                 // success; do nothing
             }
             AddressMapEntry::Occupied(mut book_entry) => {
