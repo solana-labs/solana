@@ -454,6 +454,7 @@ EOF
       echo "greg - validator - entrypoint IP: $entrypointIp"
       chmod +x gossip-only/src/gossip-only.sh
 
+      gossipOnlyPort=9001
       args=(
         --account-file gossip-only/src/accounts.yaml
         --num-nodes 1
@@ -466,7 +467,6 @@ cat >> ~/solana/gossip-only-run <<EOF
     disown
 EOF
     ~/solana/gossip-only-run
-
     fi
     ;;
   *)
