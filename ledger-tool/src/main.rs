@@ -142,6 +142,7 @@ fn output_entry(
     entry_index: usize,
     entry: Entry,
     to_schedule_stage: &mut Vec<Box<SanitizedTransaction>>,
+    skip_voting: bool,
 ) {
     match method {
         LedgerOutputMethod::Print => {
@@ -164,7 +165,9 @@ fn output_entry(
                     true, // require_static_program_ids
                 )
                 .unwrap();
-                to_schedule_stage.push(Box::new(sanitized_tx));
+                if !skip_voting || !solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
+                    to_schedule_stage.push(Box::new(sanitized_tx));
+                }
                 /*
                 let tx_signature = transaction.signatures[0];
                 let tx_status_meta = blockstore
@@ -343,20 +346,15 @@ fn output_slot(
 
     if verbose_level >= 2 {
         let mut txes = Vec::new();
+        let skip_voting = std::env::var("SKIP_VOTING").is_ok();
         for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry, &mut txes);
+            output_entry(blockstore, method, slot, entry_index, entry, &mut txes, skip_voting);
         }
 
         let mut weight = 10_000_000;
-        let mut post_filtering = 0;
-        let skip_voting = std::env::var("SKIP_VOTING").is_ok();
-        for i in 0..1000 {
-            error!("started!: {} {}", i, post_filtering);
-            post_filtering = 0;
+        for i in 0..10000 {
+            error!("started!: {} {}", i, txes.len());
             for tx in txes.clone() {
-                if skip_voting && solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
-                    continue;
-                }
                 while depth.load(Ordering::Relaxed) > 10_000 {
                     std::thread::sleep(std::time::Duration::from_micros(10));
                 }
@@ -369,7 +367,6 @@ fn output_slot(
                     .unwrap();
                 depth.fetch_add(1, Ordering::Relaxed);
                 weight -= 1;
-                post_filtering += 1;
             }
         }
         t1.join().unwrap();
