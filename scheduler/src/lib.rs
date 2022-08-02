@@ -470,6 +470,7 @@ impl ScheduleStage {
                 continue;
             }
 
+            let unique_weight = *queue_entry.key();
             Self::finalize_successful_lock_before_execution(
                 address_book,
                 &unique_weight,
