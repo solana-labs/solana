@@ -6530,7 +6530,7 @@ impl AccountsDb {
                             amod.hash(&mut hasher);
                         }
                     }
-                    if load_from_cache && eligible_for_caching {
+                    if load_from_cache {
                         // we have a hash value for all the storages in this slot
                         // so, build a file name:
                         let hash = hasher.finish();
@@ -6539,14 +6539,15 @@ impl AccountsDb {
                             start, end, bin_range.start, bin_range.end, hash
                         );
                         let mut retval = scanner.get_accum();
-                        if cache_hash_data
-                            .load(
-                                &Path::new(&file_name),
-                                &mut retval,
-                                start_bin_index,
-                                bin_calculator,
-                            )
-                            .is_ok()
+                        if eligible_for_caching
+                            && cache_hash_data
+                                .load(
+                                    &Path::new(&file_name),
+                                    &mut retval,
+                                    start_bin_index,
+                                    bin_calculator,
+                                )
+                                .is_ok()
                         {
                             return retval;
                         }
