@@ -209,60 +209,6 @@ EOF
         fi
       done
 
-      # for i in $(seq 0 $((numBenchTpsClients-1))); do
-      #   # shellcheck disable=SC2086 # Do not want to quote $benchTpsExtraArgs
-      #   solana-bench-tps --write-client-keys config/bench-tps"$i".yml \
-      #     --target-lamports-per-signature "$lamports_per_signature" $benchTpsExtraArgs
-      #   # Skip first line, as it contains header
-      #   tail -n +2 -q config/bench-tps"$i".yml >> config/client-accounts.yml
-      #   echo "" >> config/client-accounts.yml
-      # done
-      # if [[ -f $externalPrimordialAccountsFile ]]; then
-      #   cat "$externalPrimordialAccountsFile" >> config/validator-balances.yml
-      # fi
-      # if [[ -f config/validator-balances.yml ]]; then
-      #   genesisOptions+=" --primordial-accounts-file config/validator-balances.yml"
-      # fi
-      # if [[ -f config/client-accounts.yml ]]; then
-      #   genesisOptions+=" --primordial-accounts-file config/client-accounts.yml"
-      # fi
-
-      # if [[ -n $internalNodesStakeLamports ]]; then
-      #   args+=(--bootstrap-validator-stake-lamports "$internalNodesStakeLamports")
-      # fi
-      # if [[ -n $internalNodesLamports ]]; then
-      #   args+=(--bootstrap-validator-lamports "$internalNodesLamports")
-      # fi
-      # # shellcheck disable=SC2206 # Do not want to quote $genesisOptions
-      # args+=($genesisOptions)
-      # echo "greg - in bootstrap-validator - 2"
-
-      # if [[ -f net/keypairs/faucet.json ]]; then
-      #   export FAUCET_KEYPAIR=net/keypairs/faucet.json
-      # fi
-      # if [[ -f net/keypairs/bootstrap-validator-identity.json ]]; then
-      #   export BOOTSTRAP_VALIDATOR_IDENTITY_KEYPAIR=net/keypairs/bootstrap-validator-identity.json
-      # fi
-      # if [[ -f net/keypairs/bootstrap-validator-stake.json ]]; then
-      #   export BOOTSTRAP_VALIDATOR_STAKE_KEYPAIR=net/keypairs/bootstrap-validator-stake.json
-      # fi
-      # if [[ -f net/keypairs/bootstrap-validator-vote.json ]]; then
-      #   export BOOTSTRAP_VALIDATOR_VOTE_KEYPAIR=net/keypairs/bootstrap-validator-vote.json
-      # fi
-      # echo "remote-node.sh: Primordial stakes: $extraPrimordialStakes"
-      # if [[ "$extraPrimordialStakes" -gt 0 ]]; then
-      #   if [[ "$extraPrimordialStakes" -gt "$numNodes" ]]; then
-      #     echo "warning: extraPrimordialStakes($extraPrimordialStakes) clamped to numNodes($numNodes)"
-      #     extraPrimordialStakes=$numNodes
-      #   fi
-      #   for i in $(seq "$extraPrimordialStakes"); do
-      #     args+=(--bootstrap-validator "$(solana-keygen pubkey "config/validator-identity-$i.json")"
-      #                                  "$(solana-keygen pubkey "config/validator-vote-$i.json")"
-      #                                  "$(solana-keygen pubkey "config/validator-stake-$i.json")"
-      #     )
-      #   done
-      # fi
-
       multinode-demo/setup.sh "${args[@]}"
 
       maybeWaitForSupermajority=
@@ -393,21 +339,6 @@ EOF
     )
     gossip-only "${args[@]}"
 
-    # echo "greg - bootstrap - entrypoint IP: $entrypointIp"
-    # # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint $entrypointIp:8001 --gossip-host 10.138.0.63 --gossip-port 8001 &
-    # gossip-only --account-file gossip-only/src/accounts.yaml --num-nodes 1 --entrypoint 10.138.0.48:8001 --gossip-host 10.138.0.63 --gossip-port 8001 &
-
-
-    # echo "greg - run gossip"
-    # args=(
-    #   --account-file gossip-only/src/accounts.yaml
-    #   --num-nodes 1
-    #   --entrypoint "$entrypointIp:8001"
-    #   # --gossip-port 8001
-    # )
-
-    # gossip-only "${args[@]}"
-
     args=(
       --entrypoint "$entrypointIp:8001"
       --gossip-port 8001
@@ -523,13 +454,11 @@ EOF
       echo "greg - validator - entrypoint IP: $entrypointIp"
       chmod +x gossip-only/src/gossip-only.sh
 
-      gossipOnlyPort=9001
       args=(
         --account-file gossip-only/src/accounts.yaml
         --num-nodes 1
         --entrypoint $entrypointIp:$gossipOnlyPort
         --gossip-host $(hostname -i)
-        --gossip-port $gossipOnlyPort
       )
 
 cat >> ~/solana/gossip-only-run <<EOF
@@ -538,26 +467,6 @@ cat >> ~/solana/gossip-only-run <<EOF
 EOF
     ~/solana/gossip-only-run
 
-
-      # gossipOnlyPort=9001
-      # args=(
-      #   --account-file gossip-only/src/accounts.yaml
-      #   --num-nodes 1
-      #   --entrypoint $entrypointIp:$gossipOnlyPort
-      #   --gossip-host $(hostname -i)
-      #   --gossip-port $gossipOnlyPort
-      # )
-
-      # nohup gossip-only "${args[@]}" & disown #// &> /dev/null &
-
-      # if [[ ${extraPrimordialStakes} -eq 0 ]]; then
-      #   echo "0 Primordial stakes, staking with $internalNodesStakeLamports"
-      #   multinode-demo/delegate-stake.sh --vote-account "$SOLANA_CONFIG_DIR"/vote-account.json \
-      #                                    --stake-account "$SOLANA_CONFIG_DIR"/stake-account.json \
-      #                                    "${args[@]}" "$internalNodesStakeLamports"
-      # else
-      #   echo "Skipping staking with extra stakes: ${extraPrimordialStakes}"
-      # fi
     fi
     ;;
   *)
