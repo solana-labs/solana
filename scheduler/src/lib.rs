@@ -84,7 +84,7 @@ impl CurrentUsage {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum RequestedUsage {
+pub enum RequestedUsage {
     Readonly,
     Writable,
 }
