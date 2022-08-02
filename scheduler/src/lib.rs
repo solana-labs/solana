@@ -131,7 +131,7 @@ impl AddressBook {
         match self.book.entry(*address) {
             AddressMapEntry::Vacant(book_entry) => {
                 book_entry.insert(Page::new(CurrentUsage::renew(*requested_usage)));
-                // success; do nothing
+                *is_success = true;
             }
             AddressMapEntry::Occupied(mut book_entry) => {
                 let mut page = book_entry.get_mut();
@@ -139,12 +139,12 @@ impl AddressBook {
                 match &mut page.current_usage {
                     CurrentUsage::Unused => {
                         page.current_usage = CurrentUsage::renew(*requested_usage);
-                        // success; do nothing
+                        *is_success = true;
                     }
                     CurrentUsage::Readonly(ref mut count) => match requested_usage {
                         RequestedUsage::Readonly => {
                             *count += 1;
-                            // success; do nothing
+                            *is_success = true;
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
