@@ -319,7 +319,7 @@ fn attempt_lock_for_execution<'a>(
         }
     }
 
-    (all_succeeded_so_far, lock_attempts)
+    (all_succeeded_so_far, placeholder_attempts)
 }
 
 // multiplexed to reduce the futex syscal per tx down to minimum and to make the schduler to
