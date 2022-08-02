@@ -307,7 +307,7 @@ fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
-    placeholder_attempts: Vec<LockAttempt>,
+    mut placeholder_attempts: Vec<LockAttempt>,
 ) -> (bool, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut all_succeeded_so_far = true;
