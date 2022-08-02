@@ -1205,6 +1205,14 @@ pub fn main() {
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
         )
         .arg(
+            Arg::with_name("tpu_use_quic")
+            .long("tpu-use-quic")
+            .takes_value(false)
+            .hidden(true)
+            .conflicts_with("tpu_disable_quic")
+            .help("Use QUIC to send transactions."),
+        )
+        .arg(
             Arg::with_name("tpu_disable_quic")
                 .long("tpu-disable-quic")
                 .takes_value(false)
