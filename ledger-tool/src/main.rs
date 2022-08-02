@@ -168,7 +168,7 @@ fn output_entry(
                 if !skip_voting
                     || !solana_runtime::vote_parser::is_simple_vote_transaction(&sanitized_tx)
                 {
-                    let locks = next_task.tx.get_account_locks().unwrap();
+                    let locks = sanitized_tx.get_account_locks().unwrap();
                     let writable_lock_iter = locks
                         .writable
                         .iter();
