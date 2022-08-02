@@ -176,7 +176,7 @@ fn output_entry(
                         .readonly
                         .iter();
                     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
-                    to_schedule_stage.push(Box::new(sanitized_tx));
+                    to_schedule_stage.push(Box::new((sanitized_tx, locks)));
                 }
                 /*
                 let tx_signature = transaction.signatures[0];
