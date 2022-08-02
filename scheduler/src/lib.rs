@@ -307,12 +307,12 @@ fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
-    locks: Vec<LockAttempt>,
+    placeholder_attempts: Vec<LockAttempt>,
 ) -> (bool, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut all_succeeded_so_far = true;
 
-    for lock in locks.iter_mut() {
+    for attempt in placeholder_attempts.iter_mut() {
         address_book.attempt_lock_address(from_runnable, unique_weight, lock);
         if all_succeeded_so_far && attempt.is_failed() {
             all_succeeded_so_far = false;
