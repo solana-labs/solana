@@ -269,7 +269,7 @@ struct Bundle {
 
 #[derive(Debug)]
 pub struct Task {
-    pub tx: Box<SanitizedTransaction>, // actually should be Bundle
+    pub tx: Box<(SanitizedTransaction, Vec<Pubkey>)>, // actually should be Bundle
 }
 
 // RunnableQueue, ContendedQueue?
