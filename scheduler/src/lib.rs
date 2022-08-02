@@ -447,7 +447,7 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (is_success, populated_lock_attempts) = attempt_lock_for_execution(
+            let (is_success, mut populated_lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
                 address_book,
                 &unique_weight,
