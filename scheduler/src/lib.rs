@@ -441,7 +441,7 @@ impl ScheduleStage {
             let from_runnable = reborrowed_contended_queue.is_some();
             let next_task = queue_entry.get_mut();
             let message_hash = next_task.tx.0.message_hash();
-            let placeholder_lock_attempts = std::mem::take(next_task.tx.1);
+            let placeholder_lock_attempts = std::mem::take(&mut next_task.tx.1);
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
