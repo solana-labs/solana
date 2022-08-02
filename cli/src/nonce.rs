@@ -404,7 +404,7 @@ pub fn process_authorize_nonce_account(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     new_authority: &Pubkey,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -415,7 +415,7 @@ pub fn process_authorize_nonce_account(
         new_authority,
     )]
     .with_memo(memo)
-    .with_compute_unit_price(*compute_unit_price);
+    .with_compute_unit_price(compute_unit_price);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, latest_blockhash)?;
@@ -451,7 +451,7 @@ pub fn process_create_nonce_account(
     nonce_authority: Option<Pubkey>,
     memo: Option<&String>,
     amount: SpendAmount,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let nonce_account_pubkey = config.signers[nonce_account].pubkey();
     let nonce_account_address = if let Some(ref seed) = seed {
@@ -478,7 +478,7 @@ pub fn process_create_nonce_account(
                 lamports,
             )
             .with_memo(memo)
-            .with_compute_unit_price(*compute_unit_price)
+            .with_compute_unit_price(compute_unit_price)
         } else {
             create_nonce_account(
                 &config.signers[0].pubkey(),
@@ -487,7 +487,7 @@ pub fn process_create_nonce_account(
                 lamports,
             )
             .with_memo(memo)
-            .with_compute_unit_price(*compute_unit_price)
+            .with_compute_unit_price(compute_unit_price)
         };
         Message::new(&ixs, Some(&config.signers[0].pubkey()))
     };
@@ -583,7 +583,7 @@ pub fn process_new_nonce(
     nonce_account: &Pubkey,
     nonce_authority: SignerIndex,
     memo: Option<&String>,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
@@ -604,7 +604,7 @@ pub fn process_new_nonce(
         &nonce_authority.pubkey(),
     )]
     .with_memo(memo)
-    .with_compute_unit_price(*compute_unit_price);
+    .with_compute_unit_price(compute_unit_price);
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
@@ -670,7 +670,7 @@ pub fn process_withdraw_from_nonce_account(
     memo: Option<&String>,
     destination_account_pubkey: &Pubkey,
     lamports: u64,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
 
@@ -682,7 +682,7 @@ pub fn process_withdraw_from_nonce_account(
         lamports,
     )]
     .with_memo(memo)
-    .with_compute_unit_price(*compute_unit_price);
+    .with_compute_unit_price(compute_unit_price);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, latest_blockhash)?;
@@ -714,12 +714,12 @@ pub(crate) fn process_upgrade_nonce_account(
     config: &CliConfig,
     nonce_account: Pubkey,
     memo: Option<&String>,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let latest_blockhash = rpc_client.get_latest_blockhash()?;
     let ixs = vec![upgrade_nonce_account(nonce_account)]
         .with_memo(memo)
-        .with_compute_unit_price(*compute_unit_price);
+        .with_compute_unit_price(compute_unit_price);
     let message = Message::new(&ixs, Some(&config.signers[0].pubkey()));
     let mut tx = Transaction::new_unsigned(message);
     tx.try_sign(&config.signers, latest_blockhash)?;

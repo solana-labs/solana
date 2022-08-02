@@ -676,7 +676,7 @@ pub fn process_transfer(
     fee_payer: SignerIndex,
     derived_address_seed: Option<String>,
     derived_address_program_id: Option<&Pubkey>,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let from = config.signers[from];
     let mut from_pubkey = from.pubkey();
@@ -721,11 +721,11 @@ pub fn process_transfer(
                 lamports,
             )]
             .with_memo(memo)
-            .with_compute_unit_price(*compute_unit_price)
+            .with_compute_unit_price(compute_unit_price)
         } else {
             vec![system_instruction::transfer(&from_pubkey, to, lamports)]
                 .with_memo(memo)
-                .with_compute_unit_price(*compute_unit_price)
+                .with_compute_unit_price(compute_unit_price)
         };
 
         if let Some(nonce_account) = &nonce_account {

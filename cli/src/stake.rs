@@ -1312,7 +1312,7 @@ pub fn process_create_stake_account(
     memo: Option<&String>,
     fee_payer: SignerIndex,
     from: SignerIndex,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let stake_account = config.signers[stake_account];
     let stake_account_address = if let Some(seed) = seed {
@@ -1370,7 +1370,7 @@ pub fn process_create_stake_account(
             ),
         }
         .with_memo(memo)
-        .with_compute_unit_price(*compute_unit_price);
+        .with_compute_unit_price(compute_unit_price);
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
                 ixs,
@@ -1462,7 +1462,7 @@ pub fn process_stake_authorize(
     memo: Option<&String>,
     fee_payer: SignerIndex,
     no_wait: bool,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let mut ixs = Vec::new();
     let custodian = custodian.map(|index| config.signers[index]);
@@ -1531,7 +1531,7 @@ pub fn process_stake_authorize(
     }
     ixs = ixs
         .with_memo(memo)
-        .with_compute_unit_price(*compute_unit_price);
+        .with_compute_unit_price(compute_unit_price);
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
@@ -1599,7 +1599,7 @@ pub fn process_deactivate_stake_account(
     memo: Option<&String>,
     seed: Option<&String>,
     fee_payer: SignerIndex,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
@@ -1679,7 +1679,7 @@ pub fn process_deactivate_stake_account(
         stake_instruction::deactivate_stake(&stake_account_address, &stake_authority.pubkey())
     }]
     .with_memo(memo)
-    .with_compute_unit_price(*compute_unit_price);
+    .with_compute_unit_price(compute_unit_price);
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -1743,7 +1743,7 @@ pub fn process_withdraw_stake(
     memo: Option<&String>,
     seed: Option<&String>,
     fee_payer: SignerIndex,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let withdraw_authority = config.signers[withdraw_authority];
     let custodian = custodian.map(|index| config.signers[index]);
@@ -1768,7 +1768,7 @@ pub fn process_withdraw_stake(
             custodian.map(|signer| signer.pubkey()).as_ref(),
         )]
         .with_memo(memo)
-        .with_compute_unit_price(*compute_unit_price);
+        .with_compute_unit_price(compute_unit_price);
 
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
@@ -1841,7 +1841,7 @@ pub fn process_split_stake(
     split_stake_account_seed: &Option<String>,
     lamports: u64,
     fee_payer: SignerIndex,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let split_stake_account = config.signers[split_stake_account];
     let fee_payer = config.signers[fee_payer];
@@ -1915,7 +1915,7 @@ pub fn process_split_stake(
             seed,
         )
         .with_memo(memo)
-        .with_compute_unit_price(*compute_unit_price)
+        .with_compute_unit_price(compute_unit_price)
     } else {
         stake_instruction::split(
             stake_account_pubkey,
@@ -1924,7 +1924,7 @@ pub fn process_split_stake(
             &split_stake_account_address,
         )
         .with_memo(memo)
-        .with_compute_unit_price(*compute_unit_price)
+        .with_compute_unit_price(compute_unit_price)
     };
 
     let nonce_authority = config.signers[nonce_authority];
@@ -1985,7 +1985,7 @@ pub fn process_merge_stake(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let fee_payer = config.signers[fee_payer];
 
@@ -2032,7 +2032,7 @@ pub fn process_merge_stake(
         &stake_authority.pubkey(),
     )
     .with_memo(memo)
-    .with_compute_unit_price(*compute_unit_price);
+    .with_compute_unit_price(compute_unit_price);
 
     let nonce_authority = config.signers[nonce_authority];
 
@@ -2097,7 +2097,7 @@ pub fn process_stake_set_lockup(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
     let custodian = config.signers[custodian];
@@ -2108,7 +2108,7 @@ pub fn process_stake_set_lockup(
         stake_instruction::set_lockup(stake_account_pubkey, lockup, &custodian.pubkey())
     }]
     .with_memo(memo)
-    .with_compute_unit_price(*compute_unit_price);
+    .with_compute_unit_price(compute_unit_price);
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
@@ -2508,7 +2508,7 @@ pub fn process_delegate_stake(
     memo: Option<&String>,
     fee_payer: SignerIndex,
     redelegation_stake_account_pubkey: Option<&Pubkey>,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
@@ -2597,7 +2597,7 @@ pub fn process_delegate_stake(
         )]
     }
     .with_memo(memo)
-    .with_compute_unit_price(*compute_unit_price);
+    .with_compute_unit_price(compute_unit_price);
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
