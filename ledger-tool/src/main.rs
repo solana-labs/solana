@@ -348,7 +348,7 @@ fn output_slot(
         for i in 0..1000 {
             error!("started!: {}", i);
             for tx in txes.clone() {
-                if solana_runtime::vote_parser::is_simple_vote_transaction(tx) {
+                if solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
                     continue;
                 }
                 while depth.load(Ordering::Relaxed) > 10_000 {
