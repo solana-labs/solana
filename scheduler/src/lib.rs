@@ -150,7 +150,7 @@ impl AddressBook {
                             if from_runnable {
                                 Self::remember_address_contention(page, unique_weight);
                             }
-                            is_success = false;
+                            *is_success = false;
                         }
                     },
                     CurrentUsage::Writable => match &requested_usage {
@@ -158,7 +158,7 @@ impl AddressBook {
                             if from_runnable {
                                 Self::remember_address_contention(page, unique_weight);
                             }
-                            is_success = false;
+                            *is_success = false;
                         }
                     },
                 }
