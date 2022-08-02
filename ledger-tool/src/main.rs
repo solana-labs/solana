@@ -141,7 +141,7 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
-    to_schedule_stage: &mut Vec<Box<SanitizedTransaction>>,
+    to_schedule_stage: &mut Vec<Box<(SanitizedTransaction, Vec<Pubkey>)>>,
     skip_voting: bool,
 ) {
     match method {
