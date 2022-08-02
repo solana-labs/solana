@@ -138,10 +138,10 @@ impl AddressBook {
 
                 match &mut page.current_usage {
                     CurrentUsage::Unused => {
-                        page.current_usage = CurrentUsage::renew(requested_usage);
+                        page.current_usage = CurrentUsage::renew(*requested_usage);
                         // success; do nothing
                     }
-                    CurrentUsage::Readonly(ref mut count) => match &requested_usage {
+                    CurrentUsage::Readonly(ref mut count) => match requested_usage {
                         RequestedUsage::Readonly => {
                             *count += 1;
                             // success; do nothing
@@ -153,7 +153,7 @@ impl AddressBook {
                             *is_success = false;
                         }
                     },
-                    CurrentUsage::Writable => match &requested_usage {
+                    CurrentUsage::Writable => match requested_usage {
                         RequestedUsage::Readonly | RequestedUsage::Writable => {
                             if from_runnable {
                                 Self::remember_address_contention(page, unique_weight);
