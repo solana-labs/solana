@@ -348,6 +348,9 @@ fn output_slot(
         for i in 0..1000 {
             error!("started!: {}", i);
             for tx in txes.clone() {
+                if is_simple_vote_transaction(tx) {
+                    continue;
+                }
                 while depth.load(Ordering::Relaxed) > 10_000 {
                     std::thread::sleep(std::time::Duration::from_micros(10));
                 }
