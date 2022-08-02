@@ -439,7 +439,6 @@ impl ScheduleStage {
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             let from_runnable = reborrowed_contended_queue.is_some();
-            let unique_weight = *queue_entry.key();
             let next_task = queue_entry.get();
             let message_hash = next_task.tx.0.message_hash();
             let placeholder_lock_attempts = next_task.tx.1.clone();
@@ -450,7 +449,7 @@ impl ScheduleStage {
             let (is_success, lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
                 address_book,
-                &unique_weight,
+                &queue_entry.key(),
                 &message_hash,
                 placeholder_lock_attempts,
             );
