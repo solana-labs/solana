@@ -60,22 +60,6 @@ impl LockAttempt {
             requested_usage,
         }
     }
-
-    fn success(address: Pubkey, requested_usage: RequestedUsage) -> Self {
-        Self {
-            address,
-            is_success: true,
-            requested_usage,
-        }
-    }
-
-    fn failure(address: Pubkey, requested_usage: RequestedUsage) -> Self {
-        Self {
-            address,
-            is_success: false,
-            requested_usage,
-        }
-    }
 }
 
 type UsageCount = usize;
@@ -140,13 +124,14 @@ impl AddressBook {
         &mut self,
         from_runnable: bool,
         unique_weight: &UniqueWeight,
-        address: Pubkey,
-        requested_usage: RequestedUsage,
+        attempt: &mut LockAttempt,
     ) -> LockAttempt {
+        let LockAttempt {address, requested_usage, is_success} = attempt;
+
         match self.book.entry(address) {
             AddressMapEntry::Vacant(book_entry) => {
                 book_entry.insert(Page::new(CurrentUsage::renew(requested_usage)));
-                LockAttempt::success(address, requested_usage)
+                // success; do nothing
             }
             AddressMapEntry::Occupied(mut book_entry) => {
                 let mut page = book_entry.get_mut();
@@ -154,18 +139,18 @@ impl AddressBook {
                 match &mut page.current_usage {
                     CurrentUsage::Unused => {
                         page.current_usage = CurrentUsage::renew(requested_usage);
-                        LockAttempt::success(address, requested_usage)
+                        // success; do nothing
                     }
                     CurrentUsage::Readonly(ref mut count) => match &requested_usage {
                         RequestedUsage::Readonly => {
                             *count += 1;
-                            LockAttempt::success(address, requested_usage)
+                            // success; do nothing
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
                                 Self::remember_address_contention(page, unique_weight);
                             }
-                            LockAttempt::failure(address, requested_usage)
+                            is_success = false;
                         }
                     },
                     CurrentUsage::Writable => match &requested_usage {
@@ -173,7 +158,7 @@ impl AddressBook {
                             if from_runnable {
                                 Self::remember_address_contention(page, unique_weight);
                             }
-                            LockAttempt::failure(address, requested_usage)
+                            is_success = false;
                         }
                     },
                 }
@@ -322,21 +307,16 @@ fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
-    locks: &Vec<Pubkey>,
+    locks: Vec<LockAttempt>,
 ) -> (bool, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
 
-    let mut all_succeeded_so_far = true;
-    let lock_attempts = locks.iter()
-        .map(|(&&address, usage)| {
-            let attempt =
-                address_book.attempt_lock_address(from_runnable, unique_weight, address, usage);
-            if all_succeeded_so_far && attempt.is_failed() {
-                all_succeeded_so_far = false;
-            }
-            attempt
-        })
-        .collect::<Vec<_>>();
+    for lock in locks.iter_mut() {
+        address_book.attempt_lock_address(from_runnable, unique_weight, lock);
+        if all_succeeded_so_far && attempt.is_failed() {
+            all_succeeded_so_far = false;
+        }
+    }
 
     (all_succeeded_so_far, lock_attempts)
 }
