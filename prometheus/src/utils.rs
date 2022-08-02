@@ -83,6 +83,13 @@ impl<'a> Metric<'a> {
         self.labels.push((label_key, label_value));
         self
     }
+
+    pub fn with_optional_label(self, label_key: &'a str, label_value: Option<String>) -> Metric<'a> {
+        if let Some(label_value) = label_value {
+            return self.with_label(label_key, label_value);
+        }
+        self
+    }
 }
 
 pub fn write_metric<W: Write>(out: &mut W, family: &MetricFamily) -> io::Result<()> {
