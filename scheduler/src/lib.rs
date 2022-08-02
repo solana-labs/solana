@@ -435,7 +435,7 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (reborrowed_contended_queue, queue_entry) in
+        for (reborrowed_contended_queue, mut queue_entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             let from_runnable = reborrowed_contended_queue.is_some();
