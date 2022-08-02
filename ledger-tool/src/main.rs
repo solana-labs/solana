@@ -171,14 +171,11 @@ fn output_entry(
                     let locks = sanitized_tx.get_account_locks().unwrap();
                     let writable_lock_iter = locks
                         .writable
-                        .iter()
-                        .map(|p| *p);
+                        .iter();
                     let readonly_lock_iter = locks
                         .readonly
-                        .iter()
-                        .copied()
-                        .map(|p| *p);
-                    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+                        .iter();
+                    let locks = writable_lock_iter.chain(readonly_lock_iter).copied().collect::<Vec<_>>();
                     to_schedule_stage.push(Box::new((sanitized_tx, locks)));
                 }
                 /*
