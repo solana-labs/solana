@@ -345,8 +345,10 @@ fn output_slot(
         }
 
         let mut weight = 10_000_000;
+        let mut non_voting = 0;
         for i in 0..1000 {
-            error!("started!: {}", i);
+            error!("started!: {} {}", i, non_voting);
+            non_voting = 0;
             for tx in txes.clone() {
                 if solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
                     continue;
@@ -363,6 +365,7 @@ fn output_slot(
                     .unwrap();
                 depth.fetch_add(1, Ordering::Relaxed);
                 weight -= 1;
+                non_voting += 1;
             }
         }
         t1.join().unwrap();
