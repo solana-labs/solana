@@ -165,7 +165,9 @@ fn output_entry(
                     true, // require_static_program_ids
                 )
                 .unwrap();
-                if !skip_voting || !solana_runtime::vote_parser::is_simple_vote_transaction(&sanitized_tx) {
+                if !skip_voting
+                    || !solana_runtime::vote_parser::is_simple_vote_transaction(&sanitized_tx)
+                {
                     to_schedule_stage.push(Box::new(sanitized_tx));
                 }
                 /*
@@ -348,7 +350,15 @@ fn output_slot(
         let mut txes = Vec::new();
         let skip_voting = std::env::var("SKIP_VOTING").is_ok();
         for (entry_index, entry) in entries.into_iter().enumerate() {
-            output_entry(blockstore, method, slot, entry_index, entry, &mut txes, skip_voting);
+            output_entry(
+                blockstore,
+                method,
+                slot,
+                entry_index,
+                entry,
+                &mut txes,
+                skip_voting,
+            );
         }
 
         let mut weight = 10_000_000;
