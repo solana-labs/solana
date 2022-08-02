@@ -172,13 +172,13 @@ fn output_entry(
                     let writable_lock_iter = locks
                         .writable
                         .iter()
-                        .map(|p| **p);
+                        .map(|p| *p);
                     let readonly_lock_iter = locks
                         .readonly
                         .iter()
                         .copied()
-                        .map(|p| **p);
-                    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+                        .map(|p| *p);
+                    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<Pubkey>>();
                     to_schedule_stage.push(Box::new((sanitized_tx, locks)));
                 }
                 /*
