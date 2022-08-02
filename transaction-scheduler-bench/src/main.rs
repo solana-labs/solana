@@ -3,7 +3,10 @@ use {
     crossbeam_channel::{select, Receiver, Sender},
     log::info,
     rand::Rng,
-    solana_core::transaction_priority_details::GetTransactionPriorityDetails,
+    solana_core::{
+        transaction_priority_details::GetTransactionPriorityDetails,
+        transaction_scheduler::TransactionScheduler,
+    },
     solana_measure::measure,
     solana_perf::packet::{Packet, PacketBatch},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -78,22 +81,6 @@ struct Args {
 type TransactionMessage = Box<SanitizedTransaction>;
 type CompletedTransactionMessage = (usize, TransactionMessage); // thread index and transaction message
 type TransactionBatchMessage = Vec<TransactionMessage>;
-
-/// Dummy scheduler that you should replace with your own implementation
-struct TransactionScheduler;
-
-impl TransactionScheduler {
-    pub fn spawn_scheduler(
-        _packet_batch_receiver: Receiver<Vec<PacketBatch>>,
-        _transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
-        _completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
-        _bank_forks: Arc<RwLock<BankForks>>,
-        _max_batch_size: usize,
-        _exit: Arc<AtomicBool>,
-    ) -> JoinHandle<()> {
-        todo!()
-    }
-}
 
 #[derive(Debug, Default)]
 struct TransactionSchedulerBenchMetrics {
