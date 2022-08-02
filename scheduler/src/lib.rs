@@ -566,6 +566,10 @@ impl ScheduleStage {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         // do par()-ly?
         Self::unlock_after_execution(address_book, lock_attempts);
+        // block-wide qos validation will be done here
+        // if error risen..:
+        //   drop the tx for banking
+        //   mark as dead for replaying
 
         // par()-ly clone updated Accounts into address book
     }
