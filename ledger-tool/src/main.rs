@@ -52,7 +52,7 @@ use {
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
-    solana_scheduler::{AddressBook, ScheduleStage, TaskQueue, Weight},
+    solana_scheduler::{AddressBook, ScheduleStage, TaskQueue, Weight, LockAttempt},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
@@ -177,7 +177,7 @@ fn output_entry(
                         .readonly
                         .iter()
                         .map(|address| LockAttempt::new(*address, RequestedUsage::Readonly));
-                    let locks = writable_lock_iter.chain(readonly_lock_iter).copied().map(|p| *p).collect::<Vec<_>>();
+                    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
                     to_schedule_stage.push(Box::new((sanitized_tx, locks)));
                 }
                 /*
