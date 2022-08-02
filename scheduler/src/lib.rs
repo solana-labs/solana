@@ -439,7 +439,7 @@ impl ScheduleStage {
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             let from_runnable = reborrowed_contended_queue.is_some();
-            let next_task = queue_entry.get();
+            let mut next_task = queue_entry.get();
             let message_hash = next_task.tx.0.message_hash();
             let placeholder_lock_attempts = std::mem::take(&mut next_task.tx.1);
 
