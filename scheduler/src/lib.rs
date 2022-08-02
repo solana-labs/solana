@@ -314,21 +314,12 @@ fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
-    locks: &'a TransactionAccountLocks,
+    locks: &Vec<Pubkey>,
 ) -> (bool, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
-    let writable_lock_iter = locks
-        .writable
-        .iter()
-        .map(|address| (address, RequestedUsage::Writable));
-    let readonly_lock_iter = locks
-        .readonly
-        .iter()
-        .map(|address| (address, RequestedUsage::Readonly));
-    let chained_iter = writable_lock_iter.chain(readonly_lock_iter);
 
     let mut all_succeeded_so_far = true;
-    let lock_attempts = chained_iter
+    let lock_attempts = locks.iter()
         .map(|(&&address, usage)| {
             let attempt =
                 address_book.attempt_lock_address(from_runnable, unique_weight, address, usage);
