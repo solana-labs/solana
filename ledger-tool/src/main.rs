@@ -171,12 +171,10 @@ fn output_entry(
                     let locks = next_task.tx.get_account_locks().unwrap();
                     let writable_lock_iter = locks
                         .writable
-                        .iter()
-                        .map(|address| (address, RequestedUsage::Writable));
+                        .iter();
                     let readonly_lock_iter = locks
                         .readonly
-                        .iter()
-                        .map(|address| (address, RequestedUsage::Readonly));
+                        .iter();
                     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
                     to_schedule_stage.push(Box::new(sanitized_tx));
                 }
