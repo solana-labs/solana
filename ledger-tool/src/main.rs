@@ -304,7 +304,7 @@ fn output_slot(
 
                         if send_metrics {
                             let mut process_message_time = Measure::start("process_message_time");
-                            let sig = ee.task.tx.signature().to_string();
+                            let sig = ee.task.tx.0.signature().to_string();
                             trace!("execute substage: #{} {:#?}", step, &sig);
                             std::thread::sleep(std::time::Duration::from_micros(
                                 ee.cu.try_into().unwrap(),
