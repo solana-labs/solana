@@ -155,7 +155,7 @@ impl AddressBook {
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
-                                Self::remember_new_address_contention(page, unique_weight);
+                                Self::remember_address_contention(page, unique_weight);
                             }
                             LockAttempt::failure(address, requested_usage)
                         }
@@ -163,7 +163,7 @@ impl AddressBook {
                     CurrentUsage::Writable => match &requested_usage {
                         RequestedUsage::Readonly | RequestedUsage::Writable => {
                             if from_runnable {
-                                Self::remember_new_address_contention(page, unique_weight);
+                                Self::remember_address_contention(page, unique_weight);
                             }
                             LockAttempt::failure(address, requested_usage)
                         }
@@ -174,7 +174,7 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn remember_new_address_contention(page: &mut Page, unique_weight: &UniqueWeight) {
+    fn remember_address_contention(page: &mut Page, unique_weight: &UniqueWeight) {
         page.contended_unique_weights.insert(*unique_weight);
     }
 
