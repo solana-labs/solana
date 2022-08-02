@@ -52,7 +52,7 @@ use {
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN, SUPPORTED_ARCHIVE_COMPRESSION,
         },
     },
-    solana_scheduler::{AddressBook, ScheduleStage, TaskQueue, Weight, LockAttempt},
+    solana_scheduler::{AddressBook, ScheduleStage, TaskQueue, Weight, LockAttempt, RequestedUsage},
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         account_utils::StateMut,
