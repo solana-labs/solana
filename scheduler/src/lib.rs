@@ -568,8 +568,9 @@ impl ScheduleStage {
         Self::unlock_after_execution(address_book, lock_attempts);
         // block-wide qos validation will be done here
         // if error risen..:
-        //   drop the tx for banking
-        //   mark as dead for replaying
+        //   don't commit the tx for banking and potentially finish scheduling at block max cu
+        //   limit
+        //   mark the block as dead for replaying
 
         // par()-ly clone updated Accounts into address book
     }
