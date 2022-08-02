@@ -37,7 +37,7 @@ impl ExecutionEnvironment {
     //}
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LockAttempt {
     address: Pubkey,
     is_success: bool,
