@@ -7715,6 +7715,10 @@ pub(crate) mod tests {
             .accounts
             .remove(&feature_set::require_rent_exempt_accounts::id())
             .unwrap();
+        genesis_config
+            .accounts
+            .remove(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id())
+            .unwrap();
 
         genesis_config.epoch_schedule = EpochSchedule::custom(
             MINIMUM_SLOTS_PER_EPOCH,
