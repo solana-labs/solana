@@ -16,7 +16,7 @@ chrono = { version = "0.4.11", features = ["serde"] }
 clap = "2.33.0"
 console = "0.15.0"
 humantime = "2.0.1"
-indicatif = "0.16.2"
+indicatif = "0.17.0"
 pretty-hex = "0.3.0"
 semver = "1.0.10"
 serde = "1.0.138"
