@@ -435,18 +435,18 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        for (reborrowed_contended_queue, queue_entry) in
+        for (reborrowed_contended_queue, mut queue_entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
             let from_runnable = reborrowed_contended_queue.is_some();
-            let next_task = queue_entry.get();
+            let next_task = queue_entry.get_mut();
             let message_hash = next_task.tx.0.message_hash();
-            let placeholder_lock_attempts = next_task.tx.1.clone();
+            let placeholder_lock_attempts = std::mem::take(next_task.tx.1);
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (is_success, lock_attempts) = attempt_lock_for_execution(
+            let (is_success, populated_lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
                 address_book,
                 &queue_entry.key(),
@@ -458,10 +458,11 @@ impl ScheduleStage {
                 //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
-                    lock_attempts,
+                    &populated_lock_attempts,
                     from_runnable,
                 );
                 if from_runnable {
+                    std::mem::swap(next_task.tx.1, populated_lock_attempts);
                     reborrowed_contended_queue
                         .unwrap()
                         .add_to_schedule(*queue_entry.key(), queue_entry.remove());
@@ -474,10 +475,10 @@ impl ScheduleStage {
             Self::finalize_successful_lock_before_execution(
                 address_book,
                 &unique_weight,
-                &lock_attempts,
+                &populated_lock_attempts,
             );
             let task = queue_entry.remove();
-            return Some((unique_weight, task, lock_attempts));
+            return Some((unique_weight, task, populated_lock_attempts));
         }
 
         None
@@ -502,7 +503,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn ensure_unlock_for_failed_execution(
         address_book: &mut AddressBook,
-        lock_attempts: Vec<LockAttempt>,
+        lock_attempts: &Vec<LockAttempt>,
         from_runnable: bool,
     ) {
         for l in lock_attempts {
