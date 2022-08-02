@@ -178,7 +178,7 @@ fn output_entry(
                         .iter()
                         .copied()
                         .map(|p| *p);
-                    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<Pubkey>>();
+                    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
                     to_schedule_stage.push(Box::new((sanitized_tx, locks)));
                 }
                 /*
