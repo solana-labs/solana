@@ -696,6 +696,7 @@ struct CleanKeyTimings {
     dirty_store_processing_us: u64,
     delta_key_count: u64,
     dirty_pubkeys_count: u64,
+    oldest_dirty_slot: Slot,
 }
 
 /// Persistent storage structure holding the accounts
@@ -2446,7 +2447,9 @@ impl AccountsDb {
         });
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
-        for (_slot, store) in dirty_stores {
+        timings.oldest_dirty_slot = max_slot.saturating_add(1);
+        for (slot, store) in dirty_stores {
+            timings.oldest_dirty_slot = std::cmp::min(timings.oldest_dirty_slot, slot);
             store.accounts.account_iter().for_each(|account| {
                 pubkeys.insert(account.meta.pubkey);
             });
@@ -2774,6 +2777,7 @@ impl AccountsDb {
                 key_timings.collect_delta_keys_us,
                 i64
             ),
+            ("oldest_dirty_slot", key_timings.oldest_dirty_slot, i64),
             (
                 "dirty_store_processing_us",
                 key_timings.dirty_store_processing_us,
