@@ -50,8 +50,8 @@ fn get_retransmit_peers_deterministic(
             0,
         );
         let (_root_distance, _neighbors, _children) = cluster_nodes.get_retransmit_peers(
-            *slot_leader,
-            &shred,
+            slot_leader,
+            &shred.id(),
             root_bank,
             solana_gossip::cluster_info::DATA_PLANE_FANOUT,
         );

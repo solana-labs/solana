@@ -367,7 +367,7 @@ fn test_slot_hash_expiry() {
         // Get rid of any slots past common_ancestor_slot
         info!("Removing extra slots from B's blockstore");
         let blockstore = open_blockstore(&b_ledger_path);
-        purge_slots(&blockstore, common_ancestor_slot + 1, 100);
+        purge_slots_with_count(&blockstore, common_ancestor_slot + 1, 100);
     }
 
     info!(

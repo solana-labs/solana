@@ -1,4 +1,5 @@
 export * from './account';
+export * from './address-lookup-table-program';
 export * from './blockhash';
 export * from './bpf-loader-deprecated';
 export * from './bpf-loader';

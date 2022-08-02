@@ -16,7 +16,7 @@ use {
     },
     solana_sdk::{
         account::AccountSharedData, bpf_loader, instruction::AccountMeta, pubkey::Pubkey,
-        transaction_context::TransactionContext,
+        sysvar::rent::Rent, transaction_context::TransactionContext,
     },
     std::{
         fmt::{Debug, Formatter},
@@ -216,7 +216,12 @@ native machine code before execting it in the virtual machine.",
     let program_indices = [0, 1];
     let preparation =
         prepare_mock_invoke_context(transaction_accounts, instruction_accounts, &program_indices);
-    let mut transaction_context = TransactionContext::new(preparation.transaction_accounts, 1, 1);
+    let mut transaction_context = TransactionContext::new(
+        preparation.transaction_accounts,
+        Some(Rent::default()),
+        1,
+        1,
+    );
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
         .push(
@@ -231,6 +236,7 @@ native machine code before execting it in the virtual machine.",
             .transaction_context
             .get_current_instruction_context()
             .unwrap(),
+        true, // should_cap_ix_accounts
     )
     .unwrap();
     let compute_meter = invoke_context.get_compute_meter();
@@ -298,24 +304,6 @@ native machine code before execting it in the virtual machine.",
     };
     let duration = Instant::now() - start_time;
 
-    let output = Output {
-        result: format!("{:?}", result),
-        instruction_count: vm.get_total_instruction_count(),
-        execution_time: duration,
-    };
-    match matches.value_of("output_format") {
-        Some("json") => {
-            println!("{}", serde_json::to_string_pretty(&output).unwrap());
-        }
-        Some("json-compact") => {
-            println!("{}", serde_json::to_string(&output).unwrap());
-        }
-        _ => {
-            println!("Program output:");
-            println!("{:?}", output);
-        }
-    }
-
     if matches.is_present("trace") {
         eprintln!("Trace is saved in trace.out");
         let mut file = File::create("trace.out").unwrap();
@@ -333,6 +321,33 @@ native machine code before execting it in the virtual machine.",
             .visualize_graphically(&mut file, Some(&dynamic_analysis))
             .unwrap();
     }
+
+    let instruction_count = vm.get_total_instruction_count();
+    drop(vm);
+
+    let output = Output {
+        result: format!("{:?}", result),
+        instruction_count,
+        execution_time: duration,
+        log: invoke_context
+            .get_log_collector()
+            .unwrap()
+            .borrow()
+            .get_recorded_content()
+            .to_vec(),
+    };
+    match matches.value_of("output_format") {
+        Some("json") => {
+            println!("{}", serde_json::to_string_pretty(&output).unwrap());
+        }
+        Some("json-compact") => {
+            println!("{}", serde_json::to_string(&output).unwrap());
+        }
+        _ => {
+            println!("Program output:");
+            println!("{:?}", output);
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -340,6 +355,7 @@ struct Output {
     result: String,
     instruction_count: u64,
     execution_time: Duration,
+    log: Vec<String>,
 }
 
 impl Debug for Output {
@@ -347,6 +363,9 @@ impl Debug for Output {
         writeln!(f, "Result: {}", self.result)?;
         writeln!(f, "Instruction Count: {}", self.instruction_count)?;
         writeln!(f, "Execution time: {} us", self.execution_time.as_micros())?;
+        for line in &self.log {
+            writeln!(f, "{}", line)?;
+        }
         Ok(())
     }
 }

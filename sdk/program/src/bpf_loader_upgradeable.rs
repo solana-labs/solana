@@ -300,6 +300,27 @@ pub fn close_any(
     Instruction::new_with_bincode(id(), &UpgradeableLoaderInstruction::Close, metas)
 }
 
+/// Returns the instruction required to extend the size of a program data account
+pub fn extend_program_data(
+    program_data_address: &Pubkey,
+    payer_address: Option<&Pubkey>,
+    additional_bytes: u32,
+) -> Instruction {
+    let mut metas = vec![AccountMeta::new(*program_data_address, false)];
+    if let Some(payer_address) = payer_address {
+        metas.push(AccountMeta::new_readonly(
+            crate::system_program::id(),
+            false,
+        ));
+        metas.push(AccountMeta::new(*payer_address, true));
+    }
+    Instruction::new_with_bincode(
+        id(),
+        &UpgradeableLoaderInstruction::ExtendProgramData { additional_bytes },
+        metas,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use {super::*, bincode::serialized_size};

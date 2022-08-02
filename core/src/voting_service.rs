@@ -7,7 +7,7 @@ use {
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{clock::Slot, transaction::Transaction},
     std::{
-        sync::{Arc, Mutex, RwLock},
+        sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
     },
 };
@@ -41,7 +41,7 @@ impl VotingService {
     pub fn new(
         vote_receiver: Receiver<VoteOp>,
         cluster_info: Arc<ClusterInfo>,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
         tower_storage: Arc<dyn TowerStorage>,
         bank_forks: Arc<RwLock<BankForks>>,
     ) -> Self {
@@ -66,7 +66,7 @@ impl VotingService {
 
     pub fn handle_vote(
         cluster_info: &ClusterInfo,
-        poh_recorder: &Mutex<PohRecorder>,
+        poh_recorder: &RwLock<PohRecorder>,
         tower_storage: &dyn TowerStorage,
         vote_op: VoteOp,
         send_to_tpu_vote_port: bool,

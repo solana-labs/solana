@@ -4,7 +4,10 @@ use {
         lamports::LamportsError,
         pubkey::Pubkey,
     },
-    serde::ser::{Serialize, Serializer},
+    serde::{
+        ser::{Serialize, Serializer},
+        Deserialize,
+    },
     solana_program::{account_info::AccountInfo, debug_account_data::*, sysvar::Sysvar},
     std::{
         cell::{Ref, RefCell},
@@ -94,7 +97,8 @@ impl Serialize for AccountSharedData {
 /// An Account with data that is stored on chain
 /// This will be the in-memory representation of the 'Account' struct data.
 /// The existing 'Account' structure cannot easily change due to downstream projects.
-#[derive(PartialEq, Eq, Clone, Default, AbiExample)]
+#[derive(PartialEq, Eq, Clone, Default, AbiExample, Deserialize)]
+#[serde(from = "Account")]
 pub struct AccountSharedData {
     /// lamports in the account
     lamports: u64,

@@ -7,7 +7,8 @@ use {
     solana_runtime::{
         account_info::AccountInfo,
         accounts_index::{
-            AccountSecondaryIndexes, AccountsIndex, ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
+            AccountSecondaryIndexes, AccountsIndex, UpsertReclaim,
+            ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS,
         },
     },
     solana_sdk::{account::AccountSharedData, pubkey},
@@ -33,7 +34,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
                 &AccountSecondaryIndexes::default(),
                 AccountInfo::default(),
                 &mut reclaims,
-                false,
+                UpsertReclaim::PopulateReclaims,
             );
         }
     }
@@ -51,7 +52,7 @@ fn bench_accounts_index(bencher: &mut Bencher) {
                 &AccountSecondaryIndexes::default(),
                 AccountInfo::default(),
                 &mut reclaims,
-                false,
+                UpsertReclaim::PopulateReclaims,
             );
             reclaims.clear();
         }

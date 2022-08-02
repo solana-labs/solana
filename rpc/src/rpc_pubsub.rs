@@ -24,7 +24,7 @@ use {
         },
         rpc_response::{
             Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
-            RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
+            RpcSignatureResult, RpcVersionInfo, RpcVote, SlotInfo, SlotUpdate,
         },
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature},
@@ -348,6 +348,10 @@ mod internal {
         // Unsubscribe from slot notification subscription.
         #[rpc(name = "rootUnsubscribe")]
         fn root_unsubscribe(&self, id: SubscriptionId) -> Result<bool>;
+
+        // Get the current solana version running on the node
+        #[rpc(name = "getVersion")]
+        fn get_version(&self) -> Result<RpcVersionInfo>;
     }
 }
 
@@ -575,6 +579,14 @@ impl RpcSolPubSubInternal for RpcSolPubSubImpl {
 
     fn root_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         self.unsubscribe(id)
+    }
+
+    fn get_version(&self) -> Result<RpcVersionInfo> {
+        let version = solana_version::Version::default();
+        Ok(RpcVersionInfo {
+            solana_core: version.to_string(),
+            feature_set: Some(version.feature_set),
+        })
     }
 }
 
@@ -1369,5 +1381,22 @@ mod tests {
 
         assert!(rpc.vote_unsubscribe(42.into()).is_err());
         assert!(rpc.vote_unsubscribe(sub_id).is_ok());
+    }
+
+    #[test]
+    fn test_get_version() {
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank = Bank::new_for_tests(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let rpc_subscriptions = Arc::new(RpcSubscriptions::default_with_bank_forks(
+            max_complete_transaction_status_slot,
+            bank_forks,
+        ));
+        let (rpc, _receiver) = rpc_pubsub_service::test_connection(&rpc_subscriptions);
+        let version = rpc.get_version().unwrap();
+        let expected_version = solana_version::Version::default();
+        assert_eq!(version.to_string(), expected_version.to_string());
+        assert_eq!(version.feature_set.unwrap(), expected_version.feature_set);
     }
 }

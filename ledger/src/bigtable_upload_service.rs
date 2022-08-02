@@ -112,6 +112,9 @@ impl BigTableUploadService {
                 Err(err) => {
                     warn!("bigtable: upload_confirmed_blocks: {}", err);
                     std::thread::sleep(std::time::Duration::from_secs(2));
+                    if start_slot == 0 {
+                        start_slot = blockstore.get_first_available_block().unwrap_or_default();
+                    }
                 }
             }
         }

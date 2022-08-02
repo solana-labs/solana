@@ -284,7 +284,7 @@ pub(crate) mod tests {
         super::*,
         rand::Rng,
         solana_entry::entry::Entry,
-        solana_ledger::shred::Shredder,
+        solana_ledger::shred::{ProcessShredsStats, Shredder},
         solana_sdk::{
             hash,
             signature::{Keypair, Signer},
@@ -342,6 +342,7 @@ pub(crate) mod tests {
             true, // is_last_in_slot
             next_shred_index,
             next_shred_index, // next_code_index
+            &mut ProcessShredsStats::default(),
         );
         data_shreds.swap_remove(0)
     }

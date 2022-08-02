@@ -40,7 +40,7 @@ use {
         pubkey::Pubkey,
         signature::Signature,
         slot_hashes,
-        timing::timestamp,
+        timing::AtomicInterval,
         transaction::Transaction,
     },
     std::{
@@ -48,7 +48,7 @@ use {
         iter::repeat,
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex, RwLock,
+            Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
         time::{Duration, Instant},
@@ -204,16 +204,25 @@ impl BankSendVotesStats {
 struct VoteProcessingTiming {
     gossip_txn_processing_time_us: u64,
     gossip_slot_confirming_time_us: u64,
-    last_report: u64,
+    last_report: AtomicInterval,
 }
 
+const VOTE_PROCESSING_REPORT_INTERVAL_MS: u64 = 1_000;
+
 impl VoteProcessingTiming {
+    fn reset(&mut self) {
+        self.gossip_txn_processing_time_us = 0;
+        self.gossip_slot_confirming_time_us = 0;
+    }
+
     fn update(&mut self, vote_txn_processing_time_us: u64, vote_slot_confirming_time_us: u64) {
         self.gossip_txn_processing_time_us += vote_txn_processing_time_us;
         self.gossip_slot_confirming_time_us += vote_slot_confirming_time_us;
-        let now = timestamp();
-        let elapsed_ms = now - self.last_report;
-        if elapsed_ms > 1000 {
+
+        if self
+            .last_report
+            .should_update(VOTE_PROCESSING_REPORT_INTERVAL_MS)
+        {
             datapoint_info!(
                 "vote-processing-timing",
                 (
@@ -227,8 +236,7 @@ impl VoteProcessingTiming {
                     i64
                 ),
             );
-            *self = VoteProcessingTiming::default();
-            self.last_report = now;
+            self.reset();
         }
     }
 }
@@ -243,7 +251,7 @@ impl ClusterInfoVoteListener {
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
         verified_packets_sender: BankingPacketSender,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
         vote_tracker: Arc<VoteTracker>,
         bank_forks: Arc<RwLock<BankForks>>,
         subscriptions: Arc<RpcSubscriptions>,
@@ -384,7 +392,7 @@ impl ClusterInfoVoteListener {
     fn bank_send_loop(
         exit: Arc<AtomicBool>,
         verified_vote_label_packets_receiver: VerifiedLabelVotePacketsReceiver,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
         verified_packets_sender: &BankingPacketSender,
     ) -> Result<()> {
         let mut verified_vote_packets = VerifiedVotePackets::default();
@@ -397,13 +405,19 @@ impl ClusterInfoVoteListener {
             }
 
             let would_be_leader = poh_recorder
-                .lock()
+                .read()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
+            let feature_set = poh_recorder
+                .read()
+                .unwrap()
+                .bank()
+                .map(|bank| bank.feature_set.clone());
 
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 would_be_leader,
+                feature_set,
             ) {
                 match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected)
@@ -418,7 +432,7 @@ impl ClusterInfoVoteListener {
                 // Always set this to avoid taking the poh lock too often
                 time_since_lock = Instant::now();
                 // We will take this lock at most once every `BANK_SEND_VOTES_LOOP_SLEEP_MS`
-                let current_working_bank = poh_recorder.lock().unwrap().bank();
+                let current_working_bank = poh_recorder.read().unwrap().bank();
                 if let Some(current_working_bank) = current_working_bank {
                     Self::check_for_leader_bank_and_send_votes(
                         &mut bank_vote_sender_state_option,
@@ -668,10 +682,7 @@ impl ClusterInfoVoteListener {
             // 2) We do not know the hash of the earlier slot
             if slot == last_vote_slot {
                 let vote_accounts = epoch_stakes.stakes().vote_accounts();
-                let stake = vote_accounts
-                    .get(vote_pubkey)
-                    .map(|(stake, _)| *stake)
-                    .unwrap_or_default();
+                let stake = vote_accounts.get_delegated_stake(vote_pubkey);
                 let total_stake = epoch_stakes.total_stake();
 
                 // Fast track processing of the last slot in a vote transactions
@@ -872,9 +883,7 @@ impl ClusterInfoVoteListener {
 
     fn sum_stake(sum: &mut u64, epoch_stakes: Option<&EpochStakes>, pubkey: &Pubkey) {
         if let Some(stakes) = epoch_stakes {
-            if let Some(vote_account) = stakes.stakes().vote_accounts().get(pubkey) {
-                *sum += vote_account.0;
-            }
+            *sum += stakes.stakes().vote_accounts().get_delegated_stake(pubkey)
         }
     }
 }

@@ -135,17 +135,21 @@ pub fn load_bank_forks(
         }
 
         info!("Processing ledger from genesis");
-        (
-            blockstore_processor::process_blockstore_for_bank_0(
-                genesis_config,
-                blockstore,
-                account_paths,
-                process_options,
-                cache_block_meta_sender,
-                accounts_update_notifier,
-            ),
-            None,
-        )
+        let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
+            genesis_config,
+            blockstore,
+            account_paths,
+            process_options,
+            cache_block_meta_sender,
+            accounts_update_notifier,
+        );
+        bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .set_startup_verification_complete();
+
+        (bank_forks, None)
     };
 
     let mut leader_schedule_cache =

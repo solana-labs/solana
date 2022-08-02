@@ -5,6 +5,7 @@ use {
         nonblocking::{
             pubsub_client::{PubsubClient, PubsubClientError},
             rpc_client::RpcClient,
+            tpu_connection::TpuConnection,
         },
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         rpc_response::SlotUpdate,
@@ -13,10 +14,9 @@ use {
             LeaderTpuCache, LeaderTpuCacheUpdateInfo, RecentLeaderSlots, TpuClientConfig,
             MAX_FANOUT_SLOTS, SEND_TRANSACTION_INTERVAL, TRANSACTION_RESEND_INTERVAL,
         },
-        tpu_connection::TpuConnection,
     },
     bincode::serialize,
-    futures_util::stream::StreamExt,
+    futures_util::{future::join_all, stream::StreamExt},
     log::*,
     solana_sdk::{
         clock::Slot,
@@ -68,6 +68,15 @@ pub struct TpuClient {
     connection_cache: Arc<ConnectionCache>,
 }
 
+async fn send_wire_transaction_to_addr(
+    connection_cache: &ConnectionCache,
+    addr: &SocketAddr,
+    wire_transaction: Vec<u8>,
+) -> TransportResult<()> {
+    let conn = connection_cache.get_nonblocking_connection(addr);
+    conn.send_wire_transaction(wire_transaction.clone()).await
+}
+
 impl TpuClient {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -94,17 +103,28 @@ impl TpuClient {
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
     async fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
+        let leaders = self
+            .leader_tpu_service
+            .leader_tpu_sockets(self.fanout_slots);
+        let futures = leaders
+            .iter()
+            .map(|addr| {
+                send_wire_transaction_to_addr(
+                    &self.connection_cache,
+                    addr,
+                    wire_transaction.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let results: Vec<TransportResult<()>> = join_all(futures).await;
+
         let mut last_error: Option<TransportError> = None;
         let mut some_success = false;
-        for tpu_address in self
-            .leader_tpu_service
-            .leader_tpu_sockets(self.fanout_slots)
-        {
-            let conn = self.connection_cache.get_connection(&tpu_address);
-            // Fake async
-            let result = conn.send_wire_transaction_async(wire_transaction.clone());
-            if let Err(err) = result {
-                last_error = Some(err);
+        for result in results {
+            if let Err(e) = result {
+                if last_error.is_none() {
+                    last_error = Some(e);
+                }
             } else {
                 some_success = true;
             }

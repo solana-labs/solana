@@ -2,10 +2,7 @@
 #![allow(clippy::integer_arithmetic)]
 use {
     crate::{
-        declare_deprecated_sysvar_id,
-        fee_calculator::FeeCalculator,
-        hash::{hash, Hash},
-        sysvar::Sysvar,
+        declare_deprecated_sysvar_id, fee_calculator::FeeCalculator, hash::Hash, sysvar::Sysvar,
     },
     std::{cmp::Ordering, collections::BinaryHeap, iter::FromIterator, ops::Deref},
 };
@@ -143,22 +140,6 @@ impl Deref for RecentBlockhashes {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-pub fn create_test_recent_blockhashes(start: usize) -> RecentBlockhashes {
-    let blocks: Vec<_> = (start..start + MAX_ENTRIES)
-        .map(|i| {
-            (
-                i as u64,
-                hash(&bincode::serialize(&i).unwrap()),
-                i as u64 * 100,
-            )
-        })
-        .collect();
-    blocks
-        .iter()
-        .map(|(i, hash, lamports_per_signature)| IterItem(*i, hash, *lamports_per_signature))
-        .collect()
 }
 
 #[cfg(test)]

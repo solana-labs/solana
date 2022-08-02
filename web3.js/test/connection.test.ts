@@ -3154,29 +3154,41 @@ describe('Connection', function () {
     expect(supply.nonCirculatingAccounts.length).to.eq(0);
   });
 
-  it('get performance samples', async () => {
-    await mockRpcResponse({
-      method: 'getRecentPerformanceSamples',
-      params: [],
-      value: [
-        {
-          slot: 1234,
-          numTransactions: 1000,
-          numSlots: 60,
-          samplePeriodSecs: 60,
-        },
-      ],
-    });
+  [undefined, 'confirmed' as Commitment].forEach(function (commitment) {
+    describe(
+      "when the connection's default commitment is `" + commitment + '`',
+      () => {
+        let connectionWithCommitment: Connection;
+        beforeEach(() => {
+          connectionWithCommitment = new Connection(url, commitment);
+        });
+        it('get performance samples', async () => {
+          await mockRpcResponse({
+            method: 'getRecentPerformanceSamples',
+            params: [],
+            value: [
+              {
+                slot: 1234,
+                numTransactions: 1000,
+                numSlots: 60,
+                samplePeriodSecs: 60,
+              },
+            ],
+          });
 
-    const perfSamples = await connection.getRecentPerformanceSamples();
-    expect(Array.isArray(perfSamples)).to.be.true;
+          const perfSamples =
+            await connectionWithCommitment.getRecentPerformanceSamples();
+          expect(Array.isArray(perfSamples)).to.be.true;
 
-    if (perfSamples.length > 0) {
-      expect(perfSamples[0].slot).to.be.greaterThan(0);
-      expect(perfSamples[0].numTransactions).to.be.greaterThan(0);
-      expect(perfSamples[0].numSlots).to.be.greaterThan(0);
-      expect(perfSamples[0].samplePeriodSecs).to.be.greaterThan(0);
-    }
+          if (perfSamples.length > 0) {
+            expect(perfSamples[0].slot).to.be.greaterThan(0);
+            expect(perfSamples[0].numTransactions).to.be.greaterThan(0);
+            expect(perfSamples[0].numSlots).to.be.greaterThan(0);
+            expect(perfSamples[0].samplePeriodSecs).to.be.greaterThan(0);
+          }
+        });
+      },
+    );
   });
 
   it('get performance samples limit too high', async () => {
@@ -3744,7 +3756,58 @@ describe('Connection', function () {
     verifySignatureStatus(response, expectedErr);
   });
 
+  if (mockServer) {
+    it('returnData on simulateTransaction', async () => {
+      const tx = new Transaction();
+      tx.feePayer = Keypair.generate().publicKey;
+
+      const getLatestBlockhashResponse = {
+        method: 'getLatestBlockhash',
+        params: [],
+        value: {
+          blockhash: 'CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR',
+          feeCalculator: {
+            lamportsPerSignature: 5000,
+          },
+          lastValidBlockHeight: 51,
+        },
+        withContext: true,
+      };
+      const simulateTransactionResponse = {
+        method: 'simulateTransaction',
+        params: [],
+        value: {
+          err: null,
+          accounts: null,
+          logs: [
+            'Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri invoke [1]',
+            'Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri consumed 2366 of 1400000 compute units',
+            'Program return: 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri KgAAAAAAAAA=',
+            'Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success',
+          ],
+          returnData: {
+            data: ['KgAAAAAAAAA==', 'base64'],
+            programId: '83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri',
+          },
+          unitsConsumed: 2366,
+        },
+        withContext: true,
+      };
+      await mockRpcResponse(getLatestBlockhashResponse);
+      await mockRpcResponse(simulateTransactionResponse);
+      const response = (await connection.simulateTransaction(tx)).value;
+      expect(response.returnData).to.eql({
+        data: ['KgAAAAAAAAA==', 'base64'],
+        programId: '83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri',
+      });
+    });
+  }
+
   if (process.env.TEST_LIVE) {
+    it('getStakeMinimumDelegation', async () => {
+      const {value} = await connection.getStakeMinimumDelegation();
+      expect(value).to.be.a('number');
+    });
     it('simulate transaction with message', async () => {
       connection._commitment = 'confirmed';
 

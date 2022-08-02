@@ -107,7 +107,7 @@ impl BankForks {
             .collect()
     }
 
-    pub fn active_banks(&self) -> Vec<Slot> {
+    pub fn active_bank_slots(&self) -> Vec<Slot> {
         self.banks
             .iter()
             .filter(|(_, v)| !v.is_frozen())
@@ -278,19 +278,27 @@ impl BankForks {
                 {
                     let snapshot_root_bank = self.root_bank();
                     let root_slot = snapshot_root_bank.slot();
-                    if let Err(e) =
-                        accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
-                            snapshot_root_bank,
-                            // Save off the status cache because these may get pruned
-                            // if another `set_root()` is called before the snapshots package
-                            // can be generated
-                            status_cache_slot_deltas: bank.src.slot_deltas(&bank.src.roots()),
-                        })
-                    {
-                        warn!(
-                            "Error sending snapshot request for bank: {}, err: {:?}",
-                            root_slot, e
-                        );
+                    if snapshot_root_bank.is_startup_verification_complete() {
+                        // Save off the status cache because these may get pruned if another
+                        // `set_root()` is called before the snapshots package can be generated
+                        let status_cache_slot_deltas = snapshot_root_bank
+                            .status_cache
+                            .read()
+                            .unwrap()
+                            .root_slot_deltas();
+                        if let Err(e) = accounts_background_request_sender.send_snapshot_request(
+                            SnapshotRequest {
+                                snapshot_root_bank,
+                                status_cache_slot_deltas,
+                            },
+                        ) {
+                            warn!(
+                                "Error sending snapshot request for bank: {}, err: {:?}",
+                                root_slot, e
+                            );
+                        }
+                    } else {
+                        info!("Not sending snapshot request for bank: {}, startup verification is incomplete", root_slot);
                     }
                 }
                 snapshot_time.stop();
@@ -627,7 +635,7 @@ mod tests {
         let mut bank_forks = BankForks::new(bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
-        assert_eq!(bank_forks.active_banks(), vec![1]);
+        assert_eq!(bank_forks.active_bank_slots(), vec![1]);
     }
 
     #[test]

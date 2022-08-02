@@ -9,7 +9,7 @@ use {
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
-            Arc, Mutex,
+            Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
         time::Duration,
@@ -28,7 +28,7 @@ impl WarmQuicCacheService {
     pub fn new(
         connection_cache: Arc<ConnectionCache>,
         cluster_info: Arc<ClusterInfo>,
-        poh_recorder: Arc<Mutex<PohRecorder>>,
+        poh_recorder: Arc<RwLock<PohRecorder>>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
@@ -38,7 +38,7 @@ impl WarmQuicCacheService {
                 let mut maybe_last_leader = None;
                 while !exit.load(Ordering::Relaxed) {
                     let leader_pubkey =  poh_recorder
-                        .lock()
+                        .read()
                         .unwrap()
                         .leader_after_n_slots((CACHE_OFFSET_SLOT + slot_jitter) as u64);
                     if let Some(leader_pubkey) = leader_pubkey {

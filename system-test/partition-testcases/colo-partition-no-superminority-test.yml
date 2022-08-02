@@ -18,4 +18,4 @@ steps:
       BOOTSTRAP_VALIDATOR_MAX_STAKE_THRESHOLD: 33
       TEST_TYPE: "partition"
     agents:
-      - "queue=colo-deploy"
+      queue: "colo-deploy"

@@ -218,7 +218,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
         );
@@ -250,7 +250,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Ok(()),
         );
@@ -276,7 +276,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::InvalidInstructionData),
         );
@@ -298,7 +298,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -333,7 +333,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -404,7 +404,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer1_pubkey,
@@ -426,7 +426,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -469,7 +469,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -500,7 +500,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -536,7 +536,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -570,7 +570,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: false,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -614,7 +614,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -660,7 +660,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -694,7 +694,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -742,7 +742,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -767,7 +767,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,
@@ -793,7 +793,7 @@ mod tests {
             vec![AccountMeta {
                 pubkey: config_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             }],
             Err(InstructionError::MissingRequiredSignature),
         );
@@ -840,7 +840,7 @@ mod tests {
                 AccountMeta {
                     pubkey: config_pubkey,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
                 AccountMeta {
                     pubkey: signer0_pubkey,

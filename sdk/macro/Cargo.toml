@@ -1,6 +1,6 @@
 [package]
 name = "solana-sdk-macro"
-version = "1.11.1"
+version = "1.11.5"
 description = "Solana SDK Macro"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -17,7 +17,7 @@ bs58 = "0.4.0"
 proc-macro2 = "1.0.19"
 quote = "1.0"
 syn = { version = "1.0", features = ["full", "extra-traits"] }
-rustversion = "1.0.3"
+rustversion = "1.0.7"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

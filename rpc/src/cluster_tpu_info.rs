@@ -6,19 +6,19 @@ use {
     std::{
         collections::HashMap,
         net::SocketAddr,
-        sync::{Arc, Mutex},
+        sync::{Arc, RwLock},
     },
 };
 
 #[derive(Clone)]
 pub struct ClusterTpuInfo {
     cluster_info: Arc<ClusterInfo>,
-    poh_recorder: Arc<Mutex<PohRecorder>>,
+    poh_recorder: Arc<RwLock<PohRecorder>>,
     recent_peers: HashMap<Pubkey, SocketAddr>,
 }
 
 impl ClusterTpuInfo {
-    pub fn new(cluster_info: Arc<ClusterInfo>, poh_recorder: Arc<Mutex<PohRecorder>>) -> Self {
+    pub fn new(cluster_info: Arc<ClusterInfo>, poh_recorder: Arc<RwLock<PohRecorder>>) -> Self {
         Self {
             cluster_info,
             poh_recorder,
@@ -38,7 +38,7 @@ impl TpuInfo for ClusterTpuInfo {
     }
 
     fn get_leader_tpus(&self, max_count: u64) -> Vec<&SocketAddr> {
-        let recorder = self.poh_recorder.lock().unwrap();
+        let recorder = self.poh_recorder.read().unwrap();
         let leaders: Vec<_> = (0..max_count)
             .filter_map(|i| recorder.leader_after_n_slots(i * NUM_CONSECUTIVE_LEADER_SLOTS))
             .collect();
@@ -141,7 +141,7 @@ mod test {
             .collect();
             let leader_info = ClusterTpuInfo {
                 cluster_info,
-                poh_recorder: Arc::new(Mutex::new(poh_recorder)),
+                poh_recorder: Arc::new(RwLock::new(poh_recorder)),
                 recent_peers: recent_peers.clone(),
             };
 

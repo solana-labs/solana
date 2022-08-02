@@ -1,7 +1,7 @@
 [package]
 name = "solana-bpf-programs"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.11.1"
+version = "1.11.5"
 documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"
 readme = "README.md"
@@ -26,19 +26,19 @@ itertools = "0.10.1"
 log = "0.4.11"
 miow = "0.3.6"
 net2 = "0.2.37"
-solana-bpf-rust-invoke = { path = "rust/invoke", version = "=1.11.1"}
-solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.11.1"}
-solana-bpf-rust-realloc = { path = "rust/realloc", version = "=1.11.1"}
-solana-bpf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.11.1"}
-solana-cli-output = { path = "../../cli-output", version = "=1.11.1" }
-solana-logger = { path = "../../logger", version = "=1.11.1" }
-solana-measure = { path = "../../measure", version = "=1.11.1" }
+solana-account-decoder = { path = "../../account-decoder", version = "=1.11.5" }
+solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.11.5" }
+solana-bpf-rust-invoke = { path = "rust/invoke", version = "=1.11.5" }
+solana-bpf-rust-realloc = { path = "rust/realloc", version = "=1.11.5" }
+solana-bpf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.11.5" }
+solana-cli-output = { path = "../../cli-output", version = "=1.11.5" }
+solana-logger = { path = "../../logger", version = "=1.11.5" }
+solana-measure = { path = "../../measure", version = "=1.11.5" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.11.5" }
+solana-runtime = { path = "../../runtime", version = "=1.11.5" }
+solana-sdk = { path = "../../sdk", version = "=1.11.5" }
+solana-transaction-status = { path = "../../transaction-status", version = "=1.11.5" }
 solana_rbpf = "=0.2.31"
-solana-runtime = { path = "../../runtime", version = "=1.11.1" }
-solana-program-runtime = { path = "../../program-runtime", version = "=1.11.1" }
-solana-sdk = { path = "../../sdk", version = "=1.11.1" }
-solana-transaction-status = { path = "../../transaction-status", version = "=1.11.1" }
-solana-account-decoder = { path = "../../account-decoder", version = "=1.11.1" }
 
 [[bench]]
 name = "bpf_loader"
@@ -56,10 +56,9 @@ members = [
     "rust/deprecated_loader",
     "rust/dup_accounts",
     "rust/error_handling",
-    "rust/log_data",
     "rust/external_spend",
-    "rust/get_minimum_delegation",
     "rust/finalize",
+    "rust/get_minimum_delegation",
     "rust/inner_instruction_alignment_check",
     "rust/instruction_introspection",
     "rust/invoke",
@@ -68,6 +67,7 @@ members = [
     "rust/invoke_and_return",
     "rust/invoked",
     "rust/iter",
+    "rust/log_data",
     "rust/many_args",
     "rust/many_args_dep",
     "rust/mem",
@@ -79,8 +79,8 @@ members = [
     "rust/rand",
     "rust/realloc",
     "rust/realloc_invoke",
-    "rust/ro_modify",
     "rust/ro_account_modify",
+    "rust/ro_modify",
     "rust/sanity",
     "rust/secp256k1_recover",
     "rust/sha",
@@ -92,7 +92,6 @@ members = [
     "rust/sysvar",
     "rust/upgradeable",
     "rust/upgraded",
-    "rust/zk_token_elgamal",
 ]
 
 [package.metadata.docs.rs]

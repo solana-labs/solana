@@ -87,6 +87,22 @@ impl SwitchForkDecision {
                 v,
                 *switch_proof_hash,
             )),
+            (SwitchForkDecision::SameFork, VoteTransaction::CompactVoteStateUpdate(v)) => {
+                Some(vote_instruction::compact_update_vote_state(
+                    vote_account_pubkey,
+                    authorized_voter_pubkey,
+                    v,
+                ))
+            }
+            (
+                SwitchForkDecision::SwitchProof(switch_proof_hash),
+                VoteTransaction::CompactVoteStateUpdate(v),
+            ) => Some(vote_instruction::compact_update_vote_state_switch(
+                vote_account_pubkey,
+                authorized_voter_pubkey,
+                v,
+                *switch_proof_hash,
+            )),
         }
     }
 
@@ -109,12 +125,11 @@ pub type Stake = u64;
 pub type VotedStakes = HashMap<Slot, Stake>;
 pub type PubkeyVotes = Vec<(Pubkey, Slot)>;
 
-// lint warning "bank_weight is never read"
-#[allow(dead_code)]
 pub(crate) struct ComputedBankState {
     pub voted_stakes: VotedStakes,
     pub total_stake: Stake,
-    pub bank_weight: u128,
+    #[allow(dead_code)]
+    bank_weight: u128,
     // Tree of intervals of lockouts of the form [slot, slot + slot.lockout],
     // keyed by end of the range
     pub lockout_intervals: LockoutIntervals,
@@ -154,7 +169,7 @@ impl TowerVersions {
     }
 }
 
-#[frozen_abi(digest = "BfeSJNsfQeX6JU7dmezv1s1aSvR5SoyxKRRZ4ubTh2mt")]
+#[frozen_abi(digest = "8Y9r3XAwXwmrVGMCyTuy4Kbdotnt1V6N8J6NEniBFD9x")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct Tower {
     pub node_pubkey: Pubkey,
@@ -438,7 +453,7 @@ impl Tower {
     }
 
     pub fn last_voted_slot_in_bank(bank: &Bank, vote_account_pubkey: &Pubkey) -> Option<Slot> {
-        let (_stake, vote_account) = bank.get_vote_account(vote_account_pubkey)?;
+        let vote_account = bank.get_vote_account(vote_account_pubkey)?;
         let vote_state = vote_account.vote_state();
         vote_state.as_ref().ok()?.last_voted_slot()
     }
@@ -1072,7 +1087,7 @@ impl Tower {
         if let Some(last_voted_slot) = self.last_voted_slot() {
             if tower_root <= replayed_root {
                 // Normally, we goes into this clause with possible help of
-                // reconcile_blockstore_roots_with_tower()
+                // reconcile_blockstore_roots_with_external_source()
                 if slot_history.check(last_voted_slot) == Check::TooOld {
                     // We could try hard to anchor with other older votes, but opt to simplify the
                     // following logic
@@ -1239,7 +1254,7 @@ impl Tower {
         root: Slot,
         bank: &Bank,
     ) {
-        if let Some((_stake, vote_account)) = bank.get_vote_account(vote_account_pubkey) {
+        if let Some(vote_account) = bank.get_vote_account(vote_account_pubkey) {
             self.vote_state = vote_account
                 .vote_state()
                 .as_ref()
@@ -1320,45 +1335,77 @@ impl TowerError {
     }
 }
 
+#[derive(Debug)]
+pub enum ExternalRootSource {
+    Tower(Slot),
+    HardFork(Slot),
+}
+
+impl ExternalRootSource {
+    fn root(&self) -> Slot {
+        match self {
+            ExternalRootSource::Tower(slot) => *slot,
+            ExternalRootSource::HardFork(slot) => *slot,
+        }
+    }
+}
+
 // Given an untimely crash, tower may have roots that are not reflected in blockstore,
 // or the reverse of this.
 // That's because we don't impose any ordering guarantee or any kind of write barriers
 // between tower (plain old POSIX fs calls) and blockstore (through RocksDB), when
 // `ReplayState::handle_votable_bank()` saves tower before setting blockstore roots.
-pub fn reconcile_blockstore_roots_with_tower(
-    tower: &Tower,
+pub fn reconcile_blockstore_roots_with_external_source(
+    external_source: ExternalRootSource,
     blockstore: &Blockstore,
+    // blockstore.last_root() might have been updated already.
+    // so take a &mut param both to input (and output iff we update root)
+    last_blockstore_root: &mut Slot,
 ) -> blockstore_db::Result<()> {
-    let tower_root = tower.root();
-    let last_blockstore_root = blockstore.last_root();
-    if last_blockstore_root < tower_root {
-        // Ensure tower_root itself to exist and be marked as rooted in the blockstore
+    let external_root = external_source.root();
+    if *last_blockstore_root < external_root {
+        // Ensure external_root itself to exist and be marked as rooted in the blockstore
         // in addition to its ancestors.
-        let new_roots: Vec<_> = AncestorIterator::new_inclusive(tower_root, blockstore)
-            .take_while(|current| match current.cmp(&last_blockstore_root) {
+        let new_roots: Vec<_> = AncestorIterator::new_inclusive(external_root, blockstore)
+            .take_while(|current| match current.cmp(last_blockstore_root) {
                 Ordering::Greater => true,
                 Ordering::Equal => false,
                 Ordering::Less => panic!(
-                    "couldn't find a last_blockstore_root upwards from: {}!?",
-                    tower_root
+                    "last_blockstore_root({}) is skipped while traversing \
+                     blockstore (currently at {}) from external root ({:?})!?",
+                    last_blockstore_root, current, external_source,
                 ),
             })
             .collect();
         if !new_roots.is_empty() {
             info!(
-                "Reconciling slots as root based on tower root: {:?} ({}..{}) ",
-                new_roots, tower_root, last_blockstore_root
+                "Reconciling slots as root based on external root: {:?} (external: {:?}, blockstore: {})",
+                new_roots, external_source, last_blockstore_root
             );
-            blockstore.set_roots(new_roots.iter())?;
+
+            // Unfortunately, we can't supply duplicate-confirmed hashes,
+            // because it can't be guaranteed to be able to replay these slots
+            // under this code-path's limited condition (i.e.  those shreds
+            // might not be available, etc...) also correctly overcoming this
+            // limitation is hard...
+            blockstore.mark_slots_as_if_rooted_normally_at_startup(
+                new_roots.into_iter().map(|root| (root, None)).collect(),
+                false,
+            )?;
+
+            // Update the caller-managed state of last root in blockstore.
+            // Repeated calls of this function should result in a no-op for
+            // the range of `new_roots`.
+            *last_blockstore_root = blockstore.last_root();
         } else {
             // This indicates we're in bad state; but still don't panic here.
             // That's because we might have a chance of recovering properly with
             // newer snapshot.
             warn!(
-                "Couldn't find any ancestor slots from tower root ({}) \
+                "Couldn't find any ancestor slots from external source ({:?}) \
                  towards blockstore root ({}); blockstore pruned or only \
-                 tower moved into new ledger?",
-                tower_root, last_blockstore_root,
+                 tower moved into new ledger or just hard fork?",
+                external_source, last_blockstore_root,
             );
         }
     }
@@ -2034,7 +2081,7 @@ pub mod test {
             .unwrap()
             .get_vote_account(&vote_pubkey)
             .unwrap();
-        let state = observed.1.vote_state();
+        let state = observed.vote_state();
         info!("observed tower: {:#?}", state.as_ref().unwrap().votes);
 
         let num_slots_to_try = 200;
@@ -2814,7 +2861,12 @@ pub mod test {
 
             let mut tower = Tower::default();
             tower.vote_state.root_slot = Some(4);
-            reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
+            reconcile_blockstore_roots_with_external_source(
+                ExternalRootSource::Tower(tower.root()),
+                &blockstore,
+                &mut blockstore.last_root(),
+            )
+            .unwrap();
 
             assert!(!blockstore.is_root(0));
             assert!(blockstore.is_root(1));
@@ -2825,7 +2877,9 @@ pub mod test {
     }
 
     #[test]
-    #[should_panic(expected = "couldn't find a last_blockstore_root upwards from: 4!?")]
+    #[should_panic(expected = "last_blockstore_root(3) is skipped while \
+                               traversing blockstore (currently at 1) from \
+                               external root (Tower(4))!?")]
     fn test_reconcile_blockstore_roots_with_tower_panic_no_common_root() {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
@@ -2846,7 +2900,12 @@ pub mod test {
 
             let mut tower = Tower::default();
             tower.vote_state.root_slot = Some(4);
-            reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
+            reconcile_blockstore_roots_with_external_source(
+                ExternalRootSource::Tower(tower.root()),
+                &blockstore,
+                &mut blockstore.last_root(),
+            )
+            .unwrap();
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
     }
@@ -2869,7 +2928,12 @@ pub mod test {
             let mut tower = Tower::default();
             tower.vote_state.root_slot = Some(4);
             assert_eq!(blockstore.last_root(), 0);
-            reconcile_blockstore_roots_with_tower(&tower, &blockstore).unwrap();
+            reconcile_blockstore_roots_with_external_source(
+                ExternalRootSource::Tower(tower.root()),
+                &blockstore,
+                &mut blockstore.last_root(),
+            )
+            .unwrap();
             assert_eq!(blockstore.last_root(), 0);
         }
         Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");

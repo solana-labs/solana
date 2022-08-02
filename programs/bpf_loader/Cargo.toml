@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-loader-program"
-version = "1.11.1"
+version = "1.11.5"
 description = "Solana BPF loader"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,17 +14,17 @@ bincode = "1.3.3"
 byteorder = "1.4.3"
 libsecp256k1 = "0.6.0"
 log = "0.4.17"
-solana-measure = { path = "../../measure", version = "=1.11.1" }
-solana-metrics = { path = "../../metrics", version = "=1.11.1" }
-solana-program-runtime = { path = "../../program-runtime", version = "=1.11.1" }
-solana-sdk = { path = "../../sdk", version = "=1.11.1" }
-solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.11.1" }
+solana-measure = { path = "../../measure", version = "=1.11.5" }
+solana-metrics = { path = "../../metrics", version = "=1.11.5" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.11.5" }
+solana-sdk = { path = "../../sdk", version = "=1.11.5" }
+solana-zk-token-sdk = { path = "../../zk-token-sdk", version = "=1.11.5" }
 solana_rbpf = "=0.2.31"
 thiserror = "1.0"
 
 [dev-dependencies]
 rand = "0.7.3"
-solana-runtime = { path = "../../runtime", version = "=1.11.1" }
+solana-runtime = { path = "../../runtime", version = "=1.11.5" }
 
 [lib]
 crate-type = ["lib"]

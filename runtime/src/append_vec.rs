@@ -198,6 +198,7 @@ impl Drop for AppendVec {
                 // disabled due to many false positive warnings while running tests.
                 // blocked by rpc's upgrade to jsonrpc v17
                 //error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
+                inc_new_counter_info!("append_vec_drop_fail", 1);
             }
         }
     }
@@ -320,32 +321,7 @@ impl AppendVec {
     }
 
     pub fn new_from_file<P: AsRef<Path>>(path: P, current_len: usize) -> io::Result<(Self, usize)> {
-        let data = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(false)
-            .open(&path)?;
-
-        let file_size = std::fs::metadata(&path)?.len();
-        AppendVec::sanitize_len_and_size(current_len, file_size as usize)?;
-
-        let map = unsafe {
-            let result = MmapMut::map_mut(&data);
-            if result.is_err() {
-                // for vm.max_map_count, error is: {code: 12, kind: Other, message: "Cannot allocate memory"}
-                info!("memory map error: {:?}. This may be because vm.max_map_count is not set correctly.", result);
-            }
-            result?
-        };
-
-        let new = AppendVec {
-            path: path.as_ref().to_path_buf(),
-            map,
-            append_lock: Mutex::new(()),
-            current_len: AtomicUsize::new(current_len),
-            file_size,
-            remove_on_drop: true,
-        };
+        let new = Self::new_from_file_unchecked(path, current_len)?;
 
         let (sanitized, num_accounts) = new.sanitize_layout_and_length();
         if !sanitized {
@@ -356,6 +332,39 @@ impl AppendVec {
         }
 
         Ok((new, num_accounts))
+    }
+
+    /// Creates an appendvec from file without performing sanitize checks or counting the number of accounts
+    pub fn new_from_file_unchecked<P: AsRef<Path>>(
+        path: P,
+        current_len: usize,
+    ) -> io::Result<Self> {
+        let file_size = std::fs::metadata(&path)?.len();
+        Self::sanitize_len_and_size(current_len, file_size as usize)?;
+
+        let data = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(false)
+            .open(&path)?;
+
+        let map = unsafe {
+            let result = MmapMut::map_mut(&data);
+            if result.is_err() {
+                // for vm.max_map_count, error is: {code: 12, kind: Other, message: "Cannot allocate memory"}
+                info!("memory map error: {:?}. This may be because vm.max_map_count is not set correctly.", result);
+            }
+            result?
+        };
+
+        Ok(AppendVec {
+            path: path.as_ref().to_path_buf(),
+            map,
+            append_lock: Mutex::new(()),
+            current_len: AtomicUsize::new(current_len),
+            file_size,
+            remove_on_drop: true,
+        })
     }
 
     fn sanitize_layout_and_length(&self) -> (bool, usize) {
@@ -481,7 +490,12 @@ impl AppendVec {
         self.path.clone()
     }
 
-    /// Return account metadata for each account, starting from `offset`.
+    /// Return iterator for account metadata
+    pub fn account_iter(&self) -> AppendVecAccountsIter {
+        AppendVecAccountsIter::new(self)
+    }
+
+    /// Return a vector of account metadata for each account, starting from `offset`.
     pub fn accounts(&self, mut offset: usize) -> Vec<StoredAccountMeta> {
         let mut accounts = vec![];
         while let Some((account, next)) = self.get_account(offset) {
@@ -879,15 +893,21 @@ pub mod tests {
         let accounts = av.accounts(0);
         let account = accounts.first().unwrap();
 
+        // upper 7-bits are not 0, so sanitization should fail
+        assert!(!account.sanitize_executable());
+
         // we can observe crafted value by ref
         {
             let executable_bool: &bool = &account.account_meta.executable;
             // Depending on use, *executable_bool can be truthy or falsy due to direct memory manipulation
             // assert_eq! thinks *executable_bool is equal to false but the if condition thinks it's not, contradictorily.
             assert!(!*executable_bool);
-            const FALSE: bool = false; // keep clippy happy
-            if *executable_bool == FALSE {
-                panic!("This didn't occur if this test passed.");
+            #[cfg(not(target_arch = "aarch64"))]
+            {
+                const FALSE: bool = false; // keep clippy happy
+                if *executable_bool == FALSE {
+                    panic!("This didn't occur if this test passed.");
+                }
             }
             assert_eq!(*account.ref_executable_byte(), crafted_executable);
         }

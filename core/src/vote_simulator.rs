@@ -105,7 +105,7 @@ impl VoteSimulator {
                     let vote_account = new_bank
                         .get_vote_account(&keypairs.vote_keypair.pubkey())
                         .unwrap();
-                    let state = vote_account.1.vote_state();
+                    let state = vote_account.vote_state();
                     assert!(state
                         .as_ref()
                         .unwrap()

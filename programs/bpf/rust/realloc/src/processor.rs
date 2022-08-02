@@ -41,6 +41,16 @@ fn process_instruction(
             account.realloc(new_len, false)?;
             assert_eq!(new_len, account.data_len());
         }
+        REALLOC_EXTEND_AND_UNDO => {
+            let pre_len = account.data_len();
+            let (bytes, _) = instruction_data[2..].split_at(std::mem::size_of::<usize>());
+            let new_len = pre_len.saturating_add(usize::from_le_bytes(bytes.try_into().unwrap()));
+            msg!("realloc extend by {}", new_len);
+            account.realloc(new_len, false)?;
+            msg!("undo realloc");
+            account.realloc(pre_len, false)?;
+            assert_eq!(pre_len, account.data_len());
+        }
         REALLOC_EXTEND_AND_FILL => {
             let pre_len = account.data_len();
             let fill = instruction_data[2];

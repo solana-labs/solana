@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-cli"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.11.1"
+version = "1.11.5"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -22,34 +22,34 @@ humantime = "2.0.1"
 log = "0.4.17"
 num-traits = "0.2"
 pretty-hex = "0.3.0"
-reqwest = { version = "0.11.10", default-features = false, features = ["blocking", "rustls-tls", "json"] }
-semver = "1.0.9"
-serde = "1.0.137"
+reqwest = { version = "0.11.11", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+semver = "1.0.10"
+serde = "1.0.138"
 serde_derive = "1.0.103"
 serde_json = "1.0.81"
-solana-account-decoder = { path = "../account-decoder", version = "=1.11.1" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.1" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.1" }
-solana-cli-config = { path = "../cli-config", version = "=1.11.1" }
-solana-cli-output = { path = "../cli-output", version = "=1.11.1" }
-solana-client = { path = "../client", version = "=1.11.1" }
-solana-config-program = { path = "../programs/config", version = "=1.11.1" }
-solana-faucet = { path = "../faucet", version = "=1.11.1" }
-solana-logger = { path = "../logger", version = "=1.11.1" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.11.1" }
-solana-remote-wallet = { path = "../remote-wallet", version = "=1.11.1" }
-solana-sdk = { path = "../sdk", version = "=1.11.1" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.1" }
-solana-version = { path = "../version", version = "=1.11.1" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.1" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.11.5" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.5" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.11.5" }
+solana-cli-config = { path = "../cli-config", version = "=1.11.5" }
+solana-cli-output = { path = "../cli-output", version = "=1.11.5" }
+solana-client = { path = "../client", version = "=1.11.5" }
+solana-config-program = { path = "../programs/config", version = "=1.11.5" }
+solana-faucet = { path = "../faucet", version = "=1.11.5" }
+solana-logger = { path = "../logger", version = "=1.11.5" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.11.5" }
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.11.5" }
+solana-sdk = { path = "../sdk", version = "=1.11.5" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.11.5" }
+solana-version = { path = "../version", version = "=1.11.5" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.5" }
 solana_rbpf = "=0.2.31"
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0.31"
 tiny-bip39 = "0.8.2"
 
 [dev-dependencies]
-solana-streamer = { path = "../streamer", version = "=1.11.1" }
-solana-test-validator = { path = "../test-validator", version = "=1.11.1" }
+solana-streamer = { path = "../streamer", version = "=1.11.5" }
+solana-test-validator = { path = "../test-validator", version = "=1.11.5" }
 tempfile = "3.3.0"
 
 [[bin]]

@@ -555,3 +555,9 @@ impl<O: AbiEnumVisitor, E: AbiEnumVisitor> AbiEnumVisitor for Result<O, E> {
         digester.create_child()
     }
 }
+
+impl<T: AbiExample> AbiExample for once_cell::sync::OnceCell<T> {
+    fn example() -> Self {
+        Self::with_value(T::example())
+    }
+}

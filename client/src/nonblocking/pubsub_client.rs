@@ -6,9 +6,10 @@ use {
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
             RpcTransactionLogsFilter,
         },
+        rpc_filter::maybe_map_filters,
         rpc_response::{
             Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
-            RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
+            RpcSignatureResult, RpcVersionInfo, RpcVote, SlotInfo, SlotUpdate,
         },
     },
     futures_util::{
@@ -25,7 +26,7 @@ use {
     thiserror::Error,
     tokio::{
         net::TcpStream,
-        sync::{mpsc, oneshot},
+        sync::{mpsc, oneshot, RwLock},
         task::JoinHandle,
         time::{sleep, Duration},
     },
@@ -62,6 +63,9 @@ pub enum PubsubClientError {
 
     #[error("subscribe failed: {reason}")]
     SubscribeFailed { reason: String, message: String },
+
+    #[error("request failed: {reason}")]
+    RequestFailed { reason: String, message: String },
 }
 
 type UnsubscribeFn = Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>;
@@ -69,11 +73,18 @@ type SubscribeResponseMsg =
     Result<(mpsc::UnboundedReceiver<Value>, UnsubscribeFn), PubsubClientError>;
 type SubscribeRequestMsg = (String, Value, oneshot::Sender<SubscribeResponseMsg>);
 type SubscribeResult<'a, T> = PubsubClientResult<(BoxStream<'a, T>, UnsubscribeFn)>;
+type RequestMsg = (
+    String,
+    Value,
+    oneshot::Sender<Result<Value, PubsubClientError>>,
+);
 
 #[derive(Debug)]
 pub struct PubsubClient {
     subscribe_tx: mpsc::UnboundedSender<SubscribeRequestMsg>,
+    request_tx: mpsc::UnboundedSender<RequestMsg>,
     shutdown_tx: oneshot::Sender<()>,
+    node_version: RwLock<Option<semver::Version>>,
     ws: JoinHandle<PubsubClientResult>,
 }
 
@@ -85,18 +96,57 @@ impl PubsubClient {
             .map_err(PubsubClientError::ConnectionError)?;
 
         let (subscribe_tx, subscribe_rx) = mpsc::unbounded_channel();
+        let (request_tx, request_rx) = mpsc::unbounded_channel();
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
         Ok(Self {
             subscribe_tx,
+            request_tx,
             shutdown_tx,
-            ws: tokio::spawn(PubsubClient::run_ws(ws, subscribe_rx, shutdown_rx)),
+            node_version: RwLock::new(None),
+            ws: tokio::spawn(PubsubClient::run_ws(
+                ws,
+                subscribe_rx,
+                request_rx,
+                shutdown_rx,
+            )),
         })
     }
 
     pub async fn shutdown(self) -> PubsubClientResult {
         let _ = self.shutdown_tx.send(());
         self.ws.await.unwrap() // WS future should not be cancelled or panicked
+    }
+
+    async fn get_node_version(&self) -> PubsubClientResult<semver::Version> {
+        let r_node_version = self.node_version.read().await;
+        if let Some(version) = &*r_node_version {
+            Ok(version.clone())
+        } else {
+            drop(r_node_version);
+            let mut w_node_version = self.node_version.write().await;
+            let node_version = self.get_version().await?;
+            *w_node_version = Some(node_version.clone());
+            Ok(node_version)
+        }
+    }
+
+    async fn get_version(&self) -> PubsubClientResult<semver::Version> {
+        let (response_tx, response_rx) = oneshot::channel();
+        self.request_tx
+            .send(("getVersion".to_string(), Value::Null, response_tx))
+            .map_err(|err| PubsubClientError::ConnectionClosed(err.to_string()))?;
+        let result = response_rx
+            .await
+            .map_err(|err| PubsubClientError::ConnectionClosed(err.to_string()))??;
+        let node_version: RpcVersionInfo = serde_json::from_value(result)?;
+        let node_version = semver::Version::parse(&node_version.solana_core).map_err(|e| {
+            PubsubClientError::RequestFailed {
+                reason: format!("failed to parse cluster version: {}", e),
+                message: "getVersion".to_string(),
+            }
+        })?;
+        Ok(node_version)
     }
 
     async fn subscribe<'a, T>(&self, operation: &str, params: Value) -> SubscribeResult<'a, T>
@@ -147,8 +197,22 @@ impl PubsubClient {
     pub async fn program_subscribe(
         &self,
         pubkey: &Pubkey,
-        config: Option<RpcProgramAccountsConfig>,
+        mut config: Option<RpcProgramAccountsConfig>,
     ) -> SubscribeResult<'_, RpcResponse<RpcKeyedAccount>> {
+        if let Some(ref mut config) = config {
+            if let Some(ref mut filters) = config.filters {
+                let node_version = self.get_node_version().await.ok();
+                // If node does not support the pubsub `getVersion` method, assume version is old
+                // and filters should be mapped (node_version.is_none()).
+                maybe_map_filters(node_version, filters).map_err(|e| {
+                    PubsubClientError::RequestFailed {
+                        reason: e,
+                        message: "maybe_map_filters".to_string(),
+                    }
+                })?;
+            }
+        }
+
         let params = json!([pubkey.to_string(), config]);
         self.subscribe("program", params).await
     }
@@ -181,12 +245,14 @@ impl PubsubClient {
     async fn run_ws(
         mut ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
         mut subscribe_rx: mpsc::UnboundedReceiver<SubscribeRequestMsg>,
+        mut request_rx: mpsc::UnboundedReceiver<RequestMsg>,
         mut shutdown_rx: oneshot::Receiver<()>,
     ) -> PubsubClientResult {
         let mut request_id: u64 = 0;
 
         let mut requests_subscribe = BTreeMap::new();
         let mut requests_unsubscribe = BTreeMap::<u64, oneshot::Sender<()>>::new();
+        let mut other_requests = BTreeMap::new();
         let mut subscriptions = BTreeMap::new();
         let (unsubscribe_tx, mut unsubscribe_rx) = mpsc::unbounded_channel();
 
@@ -220,6 +286,13 @@ impl PubsubClient {
                     ws.send(Message::Text(text)).await?;
                     requests_unsubscribe.insert(request_id, response_tx);
                 },
+                // Read message for other requests
+                Some((method, params, response_tx)) = request_rx.recv() => {
+                    request_id += 1;
+                    let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
+                    ws.send(Message::Text(text)).await?;
+                    other_requests.insert(request_id, response_tx);
+                }
                 // Read incoming WebSocket message
                 next_msg = ws.next() => {
                     let msg = match next_msg {
@@ -264,7 +337,21 @@ impl PubsubClient {
                             }
                         });
 
-                        if let Some(response_tx) = requests_unsubscribe.remove(&id) {
+                        if let Some(response_tx) = other_requests.remove(&id) {
+                            match err {
+                                Some(reason) => {
+                                    let _ = response_tx.send(Err(PubsubClientError::RequestFailed { reason, message: text.clone()}));
+                                },
+                                None => {
+                                    let json_result = json.get("result").ok_or_else(|| {
+                                        PubsubClientError::RequestFailed { reason: "missing `result` field".into(), message: text.clone() }
+                                    })?;
+                                    if response_tx.send(Ok(json_result.clone())).is_err() {
+                                        break;
+                                    }
+                                }
+                            }
+                        } else if let Some(response_tx) = requests_unsubscribe.remove(&id) {
                             let _ = response_tx.send(()); // do not care if receiver is closed
                         } else if let Some((operation, response_tx)) = requests_subscribe.remove(&id) {
                             match err {

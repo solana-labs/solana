@@ -241,7 +241,7 @@ impl SanitizedMessage {
     }
 
     /// If the message uses a durable nonce, return the pubkey of the nonce account
-    pub fn get_durable_nonce(&self, nonce_must_be_writable: bool) -> Option<&Pubkey> {
+    pub fn get_durable_nonce(&self) -> Option<&Pubkey> {
         self.instructions()
             .get(NONCED_TX_MARKER_IX_INDEX as usize)
             .filter(
@@ -259,7 +259,7 @@ impl SanitizedMessage {
             .and_then(|ix| {
                 ix.accounts.first().and_then(|idx| {
                     let idx = *idx as usize;
-                    if nonce_must_be_writable && !self.is_writable(idx) {
+                    if !self.is_writable(idx) {
                         None
                     } else {
                         self.account_keys().get(idx)

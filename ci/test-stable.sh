@@ -69,7 +69,23 @@ test-stable-bpf)
       "$cargo_test_bpf" --bpf-sdk ../../../../sdk/bpf
       popd
     fi
-  done
+  done |& tee cargo.log
+  # Save the output of cargo building the bpf tests so we can analyze
+  # the number of redundant rebuilds of dependency crates. The
+  # expected number of solana-program crate compilations is 4. There
+  # should be 3 builds of solana-program while 128bit crate is
+  # built. These compilations are not redundant because the crate is
+  # built for different target each time. An additional compilation of
+  # solana-program is performed when simulation crate is built. This
+  # last compiled solana-program is of different version, normally the
+  # latest mainbeta release version.
+  solana_program_count=$(grep -c 'solana-program v' cargo.log)
+  rm -f cargo.log
+  if ((solana_program_count > 10)); then
+      echo "Regression of build redundancy ${solana_program_count}."
+      echo "Review dependency features that trigger redundant rebuilds of solana-program."
+      exit 1
+  fi
 
   # bpf-tools version
   "$cargo_build_bpf" -V
@@ -83,7 +99,7 @@ test-stable-bpf)
 
   bpf_dump_archive="bpf-dumps.tar.bz2"
   rm -f "$bpf_dump_archive"
-  tar cjvf "$bpf_dump_archive" "${bpf_target_path}"/{deploy/*.txt,sbf-solana-solana/release/*.so}
+  tar cjvf "$bpf_dump_archive" "${bpf_target_path}"/{deploy/*.txt,bpfel-unknown-unknown/release/*.so}
   exit 0
   ;;
 test-stable-perf)

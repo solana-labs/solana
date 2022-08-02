@@ -1,6 +1,6 @@
 [package]
 name = "solana-cargo-build-bpf"
-version = "1.11.1"
+version = "1.11.5"
 description = "Compile a local package and all of its dependencies using the Solana SBF SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,9 +10,9 @@ edition = "2021"
 publish = false
 
 [dependencies]
-cargo_metadata = "0.14.2"
+cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo", "env"] }
-solana-sdk = { path = "..", version = "=1.11.1" }
+solana-sdk = { path = "..", version = "=1.11.5" }
 
 [features]
 program = []

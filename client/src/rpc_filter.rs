@@ -129,16 +129,37 @@ pub enum MemcmpEncodedBytes {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(into = "RpcMemcmp", from = "RpcMemcmp")]
 pub struct Memcmp {
     /// Data offset to begin match
     pub offset: usize,
     /// Bytes, encoded with specified encoding, or default Binary
     pub bytes: MemcmpEncodedBytes,
     /// Optional encoding specification
+    #[deprecated(
+        since = "1.11.2",
+        note = "Field has no server-side effect. Specify encoding with `MemcmpEncodedBytes` variant instead."
+    )]
     pub encoding: Option<MemcmpEncoding>,
 }
 
 impl Memcmp {
+    pub fn new_raw_bytes(offset: usize, bytes: Vec<u8>) -> Self {
+        Self {
+            offset,
+            bytes: MemcmpEncodedBytes::Bytes(bytes),
+            encoding: None,
+        }
+    }
+
+    pub fn new_base58_encoded(offset: usize, bytes: &[u8]) -> Self {
+        Self {
+            offset,
+            bytes: MemcmpEncodedBytes::Base58(bs58::encode(bytes).into_string()),
+            encoding: None,
+        }
+    }
+
     pub fn bytes(&self) -> Option<Cow<Vec<u8>>> {
         use MemcmpEncodedBytes::*;
         match &self.bytes {
@@ -162,6 +183,104 @@ impl Memcmp {
             None => false,
         }
     }
+}
+
+// Internal struct to hold Memcmp filter data as either encoded String or raw Bytes
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
+enum DataType {
+    Encoded(String),
+    Raw(Vec<u8>),
+}
+
+// Internal struct used to specify explicit Base58 and Base64 encoding
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum RpcMemcmpEncoding {
+    Base58,
+    Base64,
+    // This variant exists only to preserve backward compatibility with generic `Memcmp` serde
+    #[serde(other)]
+    Binary,
+}
+
+// Internal struct to enable Memcmp filters with explicit Base58 and Base64 encoding. The From
+// implementations emulate `#[serde(tag = "encoding", content = "bytes")]` for
+// `MemcmpEncodedBytes`. On the next major version, all these internal elements should be removed
+// and replaced with adjacent tagging of `MemcmpEncodedBytes`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+struct RpcMemcmp {
+    offset: usize,
+    bytes: DataType,
+    encoding: Option<RpcMemcmpEncoding>,
+}
+
+impl From<Memcmp> for RpcMemcmp {
+    fn from(memcmp: Memcmp) -> RpcMemcmp {
+        let (bytes, encoding) = match memcmp.bytes {
+            MemcmpEncodedBytes::Binary(string) => {
+                (DataType::Encoded(string), Some(RpcMemcmpEncoding::Binary))
+            }
+            MemcmpEncodedBytes::Base58(string) => {
+                (DataType::Encoded(string), Some(RpcMemcmpEncoding::Base58))
+            }
+            MemcmpEncodedBytes::Base64(string) => {
+                (DataType::Encoded(string), Some(RpcMemcmpEncoding::Base64))
+            }
+            MemcmpEncodedBytes::Bytes(vector) => (DataType::Raw(vector), None),
+        };
+        RpcMemcmp {
+            offset: memcmp.offset,
+            bytes,
+            encoding,
+        }
+    }
+}
+
+impl From<RpcMemcmp> for Memcmp {
+    fn from(memcmp: RpcMemcmp) -> Memcmp {
+        let encoding = memcmp.encoding.unwrap_or(RpcMemcmpEncoding::Binary);
+        let bytes = match (encoding, memcmp.bytes) {
+            (RpcMemcmpEncoding::Binary, DataType::Encoded(string))
+            | (RpcMemcmpEncoding::Base58, DataType::Encoded(string)) => {
+                MemcmpEncodedBytes::Base58(string)
+            }
+            (RpcMemcmpEncoding::Binary, DataType::Raw(vector)) => MemcmpEncodedBytes::Bytes(vector),
+            (RpcMemcmpEncoding::Base64, DataType::Encoded(string)) => {
+                MemcmpEncodedBytes::Base64(string)
+            }
+            _ => unreachable!(),
+        };
+        Memcmp {
+            offset: memcmp.offset,
+            bytes,
+            encoding: None,
+        }
+    }
+}
+
+pub(crate) fn maybe_map_filters(
+    node_version: Option<semver::Version>,
+    filters: &mut [RpcFilterType],
+) -> Result<(), String> {
+    if node_version.is_none() || node_version.unwrap() < semver::Version::new(1, 11, 2) {
+        for filter in filters.iter_mut() {
+            if let RpcFilterType::Memcmp(memcmp) = filter {
+                match &memcmp.bytes {
+                    MemcmpEncodedBytes::Base58(string) => {
+                        memcmp.bytes = MemcmpEncodedBytes::Binary(string.clone());
+                    }
+                    MemcmpEncodedBytes::Base64(_) => {
+                        return Err("RPC node on old version does not support base64 \
+                            encoding for memcmp filters"
+                            .to_string());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

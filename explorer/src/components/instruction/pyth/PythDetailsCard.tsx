@@ -87,6 +87,14 @@ export function PythDetailsCard(props: {
             {...props}
           />
         );
+
+      case "UpdatePriceNoFailOnError":
+        return (
+          <UpdatePriceDetailsCard
+            info={PythInstruction.decodeUpdatePriceNoFailOnError(ix)}
+            {...props}
+          />
+        );
       case "AggregatePrice":
         return (
           <AggregatePriceDetailsCard

@@ -36,6 +36,9 @@ pub const HEAP_START_ADDRESS: u64 = 0x300000000;
 /// Length of the heap memory region used for program heap.
 pub const HEAP_LENGTH: usize = 32 * 1024;
 
+/// Value used to indicate that a serialized account is not a duplicate
+pub const NON_DUP_MARKER: u8 = u8::MAX;
+
 /// Declare the program entry point and set up global handlers.
 ///
 /// This macro emits the common boilerplate necessary to begin program
@@ -283,7 +286,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
     for _ in 0..num_accounts {
         let dup_info = *(input.add(offset) as *const u8);
         offset += size_of::<u8>();
-        if dup_info == std::u8::MAX {
+        if dup_info == NON_DUP_MARKER {
             #[allow(clippy::cast_ptr_alignment)]
             let is_signer = *(input.add(offset) as *const u8) != 0;
             offset += size_of::<u8>();
@@ -296,7 +299,11 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             let executable = *(input.add(offset) as *const u8) != 0;
             offset += size_of::<u8>();
 
-            offset += size_of::<u32>(); // padding to u64
+            // The original data length is stored here because these 4 bytes were
+            // originally only used for padding and served as a good location to
+            // track the original size of the account data in a compatible way.
+            let original_data_len_offset = offset;
+            offset += size_of::<u32>();
 
             let key: &Pubkey = &*(input.add(offset) as *const Pubkey);
             offset += size_of::<Pubkey>();
@@ -311,6 +318,10 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
             #[allow(clippy::cast_ptr_alignment)]
             let data_len = *(input.add(offset) as *const u64) as usize;
             offset += size_of::<u64>();
+
+            // Store the original data length for detecting invalid reallocations and
+            // requires that MAX_PERMITTED_DATA_LENGTH fits in a u32
+            *(input.add(original_data_len_offset) as *mut u32) = data_len as u32;
 
             let data = Rc::new(RefCell::new({
                 from_raw_parts_mut(input.add(offset), data_len)

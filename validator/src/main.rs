@@ -66,7 +66,7 @@ use {
         commitment_config::CommitmentConfig,
         hash::Hash,
         pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::{read_keypair, Keypair, Signer},
     },
     solana_send_transaction_service::send_transaction_service::{
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
@@ -942,7 +942,7 @@ pub fn main() {
                 .long("contact-debug-interval")
                 .value_name("CONTACT_DEBUG_INTERVAL")
                 .takes_value(true)
-                .default_value("10000")
+                .default_value("120000")
                 .help("Milliseconds between printing contact debug from gossip."),
         )
         .arg(
@@ -1209,6 +1209,12 @@ pub fn main() {
                 .long("tpu-use-quic")
                 .takes_value(false)
                 .help("Use QUIC to send transactions."),
+        )
+        .arg(
+            Arg::with_name("disable_quic_servers")
+                .long("disable-quic-servers")
+                .takes_value(false)
+                .help("Disable QUIC TPU servers"),
         )
         .arg(
             Arg::with_name("enable_quic_servers")
@@ -1654,7 +1660,7 @@ pub fn main() {
                 .value_name("MEGABYTES")
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
-                .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk. If missing, the entire index is stored in memory."),
+                .help("How much memory the accounts index can consume. If this is exceeded, some account index entries will be stored on disk."),
         )
         .arg(
             Arg::with_name("disable_accounts_disk_index")
@@ -1768,6 +1774,14 @@ pub fn main() {
                 .help("Allow contacting private ip addresses")
                 .hidden(true),
         )
+        .arg(
+            Arg::with_name("log_messages_bytes_limit")
+                .long("log-messages-bytes-limit")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .value_name("BYTES")
+                .help("Maximum number of bytes written to the program log before truncation")
+        )
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -1822,9 +1836,11 @@ pub fn main() {
                     Arg::with_name("authorized_voter_keypair")
                         .index(1)
                         .value_name("KEYPAIR")
+                        .required(false)
                         .takes_value(true)
                         .validator(is_keypair)
-                        .help("Keypair of the authorized voter to add"),
+                        .help("Path to keypair of the authorized voter to add \
+                               [default: read JSON keypair from stdin]"),
                 )
                 .after_help("Note: the new authorized voter only applies to the \
                              currently running validator instance")
@@ -1867,9 +1883,11 @@ pub fn main() {
                 Arg::with_name("identity")
                     .index(1)
                     .value_name("KEYPAIR")
+                    .required(false)
                     .takes_value(true)
                     .validator(is_keypair)
-                    .help("Validator identity keypair")
+                    .help("Path to validator identity keypair \
+                           [default: read JSON keypair from stdin]")
             )
             .arg(
                 clap::Arg::with_name("require_tower")
@@ -1938,36 +1956,64 @@ pub fn main() {
         ("authorized-voter", Some(authorized_voter_subcommand_matches)) => {
             match authorized_voter_subcommand_matches.subcommand() {
                 ("add", Some(subcommand_matches)) => {
-                    let authorized_voter_keypair =
-                        value_t_or_exit!(subcommand_matches, "authorized_voter_keypair", String);
+                    if let Some(authorized_voter_keypair) =
+                        value_t!(subcommand_matches, "authorized_voter_keypair", String).ok()
+                    {
+                        let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
+                            .unwrap_or_else(|err| {
+                                println!(
+                                    "Unable to access path: {}: {:?}",
+                                    authorized_voter_keypair, err
+                                );
+                                exit(1);
+                            });
+                        println!(
+                            "Adding authorized voter path: {}",
+                            authorized_voter_keypair.display()
+                        );
 
-                    let authorized_voter_keypair = fs::canonicalize(&authorized_voter_keypair)
-                        .unwrap_or_else(|err| {
-                            println!(
-                                "Unable to access path: {}: {:?}",
-                                authorized_voter_keypair, err
-                            );
-                            exit(1);
-                        });
-                    println!(
-                        "Adding authorized voter: {}",
-                        authorized_voter_keypair.display()
-                    );
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async move {
+                                admin_client
+                                    .await?
+                                    .add_authorized_voter(
+                                        authorized_voter_keypair.display().to_string(),
+                                    )
+                                    .await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("addAuthorizedVoter request failed: {}", err);
+                                exit(1);
+                            });
+                    } else {
+                        let mut stdin = std::io::stdin();
+                        let authorized_voter_keypair =
+                            read_keypair(&mut stdin).unwrap_or_else(|err| {
+                                println!("Unable to read JSON keypair from stdin: {:?}", err);
+                                exit(1);
+                            });
+                        println!(
+                            "Adding authorized voter: {}",
+                            authorized_voter_keypair.pubkey()
+                        );
 
-                    let admin_client = admin_rpc_service::connect(&ledger_path);
-                    admin_rpc_service::runtime()
-                        .block_on(async move {
-                            admin_client
-                                .await?
-                                .add_authorized_voter(
-                                    authorized_voter_keypair.display().to_string(),
-                                )
-                                .await
-                        })
-                        .unwrap_or_else(|err| {
-                            println!("addAuthorizedVoter request failed: {}", err);
-                            exit(1);
-                        });
+                        let admin_client = admin_rpc_service::connect(&ledger_path);
+                        admin_rpc_service::runtime()
+                            .block_on(async move {
+                                admin_client
+                                    .await?
+                                    .add_authorized_voter_from_bytes(Vec::from(
+                                        authorized_voter_keypair.to_bytes(),
+                                    ))
+                                    .await
+                            })
+                            .unwrap_or_else(|err| {
+                                println!("addAuthorizedVoterFromBytes request failed: {}", err);
+                                exit(1);
+                            });
+                    }
+
                     return;
                 }
                 ("remove-all", _) => {
@@ -2049,26 +2095,54 @@ pub fn main() {
         }
         ("set-identity", Some(subcommand_matches)) => {
             let require_tower = subcommand_matches.is_present("require_tower");
-            let identity_keypair = value_t_or_exit!(subcommand_matches, "identity", String);
 
-            let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
-                println!("Unable to access path: {}: {:?}", identity_keypair, err);
-                exit(1);
-            });
-            println!("Validator identity: {}", identity_keypair.display());
-
-            let admin_client = admin_rpc_service::connect(&ledger_path);
-            admin_rpc_service::runtime()
-                .block_on(async move {
-                    admin_client
-                        .await?
-                        .set_identity(identity_keypair.display().to_string(), require_tower)
-                        .await
-                })
-                .unwrap_or_else(|err| {
-                    println!("setIdentity request failed: {}", err);
+            if let Some(identity_keypair) = value_t!(subcommand_matches, "identity", String).ok() {
+                let identity_keypair = fs::canonicalize(&identity_keypair).unwrap_or_else(|err| {
+                    println!("Unable to access path: {}: {:?}", identity_keypair, err);
                     exit(1);
                 });
+                println!(
+                    "New validator identity path: {}",
+                    identity_keypair.display()
+                );
+
+                let admin_client = admin_rpc_service::connect(&ledger_path);
+                admin_rpc_service::runtime()
+                    .block_on(async move {
+                        admin_client
+                            .await?
+                            .set_identity(identity_keypair.display().to_string(), require_tower)
+                            .await
+                    })
+                    .unwrap_or_else(|err| {
+                        println!("setIdentity request failed: {}", err);
+                        exit(1);
+                    });
+            } else {
+                let mut stdin = std::io::stdin();
+                let identity_keypair = read_keypair(&mut stdin).unwrap_or_else(|err| {
+                    println!("Unable to read JSON keypair from stdin: {:?}", err);
+                    exit(1);
+                });
+                println!("New validator identity: {}", identity_keypair.pubkey());
+
+                let admin_client = admin_rpc_service::connect(&ledger_path);
+                admin_rpc_service::runtime()
+                    .block_on(async move {
+                        admin_client
+                            .await?
+                            .set_identity_from_bytes(
+                                Vec::from(identity_keypair.to_bytes()),
+                                require_tower,
+                            )
+                            .await
+                    })
+                    .unwrap_or_else(|err| {
+                        println!("setIdentityFromBytes request failed: {}", err);
+                        exit(1);
+                    });
+            };
+
             return;
         }
         ("set-log-filter", Some(subcommand_matches)) => {
@@ -2236,7 +2310,7 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
-    let enable_quic_servers = matches.is_present("enable_quic_servers");
+    let enable_quic_servers = !matches.is_present("disable_quic_servers");
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
@@ -2401,6 +2475,10 @@ pub fn main() {
             launch args to use --enable-extended-tx-metadata-storage and remove \
             --enable-cpi-and-log-storage"
         );
+    }
+
+    if matches.is_present("enable_quic_servers") {
+        warn!("--enable-quic-servers is now the default behavior. This flag is deprecated and can be removed from the launch args");
     }
 
     let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
@@ -2577,6 +2655,7 @@ pub fn main() {
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {
             bpf_jit: !matches.is_present("no_bpf_jit"),
+            log_messages_bytes_limit: value_of(&matches, "log_messages_bytes_limit"),
             ..RuntimeConfig::default()
         },
         enable_quic_servers,

@@ -4,8 +4,8 @@ use {
     crate::{
         id,
         vote_state::{
-            Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs,
-            VoteInit, VoteState, VoteStateUpdate,
+            CompactVoteStateUpdate, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
+            VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate,
         },
     },
     serde_derive::{Deserialize, Serialize},
@@ -102,6 +102,20 @@ pub enum VoteInstruction {
     ///   0. `[Write]` Vote account to vote with
     ///   1. `[SIGNER]` Vote authority
     UpdateVoteStateSwitch(VoteStateUpdate, Hash),
+
+    /// Update the onchain vote state for the signer.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    CompactUpdateVoteState(CompactVoteStateUpdate),
+
+    /// Update the onchain vote state for the signer along with a switching proof.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    CompactUpdateVoteStateSwitch(CompactVoteStateUpdate, Hash),
 
     /// Given that the current Voter or Withdrawer authority is a derived key,
     /// this instruction allows someone who can sign for that derived key's
@@ -366,6 +380,41 @@ pub fn update_vote_state_switch(
     Instruction::new_with_bincode(
         id(),
         &VoteInstruction::UpdateVoteStateSwitch(vote_state_update, proof_hash),
+        account_metas,
+    )
+}
+
+pub fn compact_update_vote_state(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    compact_vote_state_update: CompactVoteStateUpdate,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::CompactUpdateVoteState(compact_vote_state_update),
+        account_metas,
+    )
+}
+
+pub fn compact_update_vote_state_switch(
+    vote_pubkey: &Pubkey,
+    authorized_voter_pubkey: &Pubkey,
+    vote_state_update: CompactVoteStateUpdate,
+    proof_hash: Hash,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*vote_pubkey, false),
+        AccountMeta::new_readonly(*authorized_voter_pubkey, true),
+    ];
+
+    Instruction::new_with_bincode(
+        id(),
+        &VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, proof_hash),
         account_metas,
     )
 }

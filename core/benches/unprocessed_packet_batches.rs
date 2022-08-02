@@ -5,10 +5,19 @@ extern crate test;
 
 use {
     rand::distributions::{Distribution, Uniform},
-    solana_core::unprocessed_packet_batches::*,
+    solana_core::{
+        banking_stage::*, forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
+        unprocessed_packet_batches::*,
+    },
     solana_measure::measure::Measure,
     solana_perf::packet::{Packet, PacketBatch},
+    solana_runtime::{
+        bank::Bank,
+        bank_forks::BankForks,
+        genesis_utils::{create_genesis_config, GenesisConfigInfo},
+    },
     solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
+    std::sync::{Arc, RwLock},
     test::Bencher,
 };
 
@@ -172,5 +181,80 @@ fn bench_unprocessed_packet_batches_randomized_beyond_limit(bencher: &mut Benche
 
     bencher.iter(|| {
         insert_packet_batches(buffer_capacity, batch_count, packet_per_batch_count, true);
+    });
+}
+
+fn build_bank_forks_for_test() -> Arc<RwLock<BankForks>> {
+    let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+    let bank = Bank::new_for_tests(&genesis_config);
+    let bank_forks = BankForks::new(bank);
+    Arc::new(RwLock::new(bank_forks))
+}
+
+fn buffer_iter_desc_and_forward(
+    buffer_max_size: usize,
+    batch_count: usize,
+    packet_per_batch_count: usize,
+    randomize: bool,
+) {
+    solana_logger::setup();
+    let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(buffer_max_size);
+
+    // fill buffer
+    {
+        let mut timer = Measure::start("fill_buffer");
+        (0..batch_count).for_each(|_| {
+            let (packet_batch, packet_indexes) = if randomize {
+                build_randomized_packet_batch(packet_per_batch_count)
+            } else {
+                build_packet_batch(packet_per_batch_count)
+            };
+            let deserialized_packets = deserialize_packets(&packet_batch, &packet_indexes);
+            unprocessed_packet_batches.insert_batch(deserialized_packets);
+        });
+        timer.stop();
+        log::info!(
+            "inserted {} batch, elapsed {}",
+            buffer_max_size,
+            timer.as_us()
+        );
+    }
+
+    // forward whole buffer
+    {
+        let mut timer = Measure::start("forward_time");
+        let mut forward_packet_batches_by_accounts =
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(
+                build_bank_forks_for_test().read().unwrap().root_bank(),
+            );
+        // iter_desc buffer
+        let filter_forwarding_results = BankingStage::filter_valid_packets_for_forwarding(
+            &mut unprocessed_packet_batches,
+            &mut forward_packet_batches_by_accounts,
+        );
+        timer.stop();
+
+        let batched_filter_forwarding_results: usize = forward_packet_batches_by_accounts
+            .iter_batches()
+            .map(|forward_batch| forward_batch.len())
+            .sum();
+        log::info!(
+            "filter_forwarding_results {:?}, batched_forwardable packets {}, elapsed {}",
+            filter_forwarding_results,
+            batched_filter_forwarding_results,
+            timer.as_us()
+        );
+    }
+}
+
+#[bench]
+#[ignore]
+fn bench_forwarding_unprocessed_packet_batches(bencher: &mut Bencher) {
+    let batch_count = 1_000;
+    let packet_per_batch_count = 64;
+    let buffer_capacity = batch_count * packet_per_batch_count;
+
+    bencher.iter(|| {
+        buffer_iter_desc_and_forward(buffer_capacity, batch_count, packet_per_batch_count, true);
     });
 }

@@ -3,7 +3,8 @@
 use {
     crate::{
         feature_set::{
-            libsecp256k1_0_5_upgrade_enabled, libsecp256k1_fail_on_bad_count, FeatureSet,
+            libsecp256k1_0_5_upgrade_enabled, libsecp256k1_fail_on_bad_count,
+            libsecp256k1_fail_on_bad_count2, FeatureSet,
         },
         instruction::Instruction,
         precompiles::PrecompileError,
@@ -109,7 +110,10 @@ pub fn verify(
         return Err(PrecompileError::InvalidInstructionDataSize);
     }
     let count = data[0] as usize;
-    if feature_set.is_active(&libsecp256k1_fail_on_bad_count::id()) && count == 0 && data.len() > 1
+    if (feature_set.is_active(&libsecp256k1_fail_on_bad_count::id())
+        || feature_set.is_active(&libsecp256k1_fail_on_bad_count2::id()))
+        && count == 0
+        && data.len() > 1
     {
         // count is zero but the instruction data indicates that is probably not
         // correct, fail the instruction to catch probable invalid secp256k1

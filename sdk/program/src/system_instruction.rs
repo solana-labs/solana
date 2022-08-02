@@ -139,8 +139,17 @@ pub fn instruction_to_nonce_error(
     }
 }
 
-/// maximum permitted size of data: 10 MB
+/// Maximum permitted size of data: 10 MiB
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
+
+// SBF program entrypoint assumes that the max account data length
+// will fit inside a u32. If this constant no longer fits in a u32,
+// the entrypoint deserialization code in the SDK must be updated.
+#[cfg(test)]
+static_assertions::const_assert!(MAX_PERMITTED_DATA_LENGTH <= u32::MAX as u64);
+
+#[cfg(test)]
+static_assertions::const_assert_eq!(MAX_PERMITTED_DATA_LENGTH, 10_485_760);
 
 #[frozen_abi(digest = "5e22s2kFu9Do77hdcCyxyhuKHD8ThAB6Q6dNaLTCjL5M")]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, AbiExample, AbiEnumVisitor)]

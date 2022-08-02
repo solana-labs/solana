@@ -1,6 +1,6 @@
 [package]
 name = "solana-frozen-abi-macro"
-version = "1.11.1"
+version = "1.11.5"
 description = "Solana Frozen ABI Macro"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -15,7 +15,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = { version = "1.0", features = ["full", "extra-traits"] }
+syn = { version = "1.0", features = ["full", "extra-traits", "visit-mut"] }
 
 [build-dependencies]
 rustc_version = "0.4"

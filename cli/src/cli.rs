@@ -214,6 +214,7 @@ pub enum CliCommand {
         nonce_authority: SignerIndex,
         memo: Option<String>,
         fee_payer: SignerIndex,
+        redelegation_stake_account_pubkey: Option<Pubkey>,
     },
     SplitStake {
         stake_account_pubkey: Pubkey,
@@ -415,6 +416,9 @@ pub enum CliCommand {
         fee_payer: SignerIndex,
         derived_address_seed: Option<String>,
         derived_address_program_id: Option<Pubkey>,
+    },
+    StakeMinimumDelegation {
+        use_lamports_unit: bool,
     },
 }
 
@@ -680,6 +684,9 @@ pub fn parse_command(
         ("delegate-stake", Some(matches)) => {
             parse_stake_delegate_stake(matches, default_signer, wallet_manager)
         }
+        ("redelegate-stake", Some(matches)) => {
+            parse_stake_delegate_stake(matches, default_signer, wallet_manager)
+        }
         ("withdraw-stake", Some(matches)) => {
             parse_stake_withdraw_stake(matches, default_signer, wallet_manager)
         }
@@ -706,6 +713,7 @@ pub fn parse_command(
         }
         ("stake-account", Some(matches)) => parse_show_stake_account(matches, wallet_manager),
         ("stake-history", Some(matches)) => parse_show_stake_history(matches),
+        ("stake-minimum-delegation", Some(matches)) => parse_stake_minimum_delegation(matches),
         // Validator Info Commands
         ("validator-info", Some(matches)) => match matches.subcommand() {
             ("publish", Some(matches)) => {
@@ -1132,6 +1140,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             nonce_authority,
             memo,
             fee_payer,
+            redelegation_stake_account_pubkey,
         } => process_delegate_stake(
             &rpc_client,
             config,
@@ -1146,6 +1155,7 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             *nonce_authority,
             memo.as_ref(),
             *fee_payer,
+            redelegation_stake_account_pubkey.as_ref(),
         ),
         CliCommand::SplitStake {
             stake_account_pubkey,
@@ -1301,6 +1311,9 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             seed.as_ref(),
             *fee_payer,
         ),
+        CliCommand::StakeMinimumDelegation { use_lamports_unit } => {
+            process_stake_minimum_delegation(&rpc_client, config, *use_lamports_unit)
+        }
 
         // Validator Info Commands
 
@@ -1923,7 +1936,7 @@ mod tests {
         assert_eq!(
             parse_command(&test_resolve_signer, &default_signer, &mut None).unwrap(),
             CliCommandInfo {
-                command: CliCommand::ResolveSigner(Some(keypair_file.clone())),
+                command: CliCommand::ResolveSigner(Some(keypair_file)),
                 signers: vec![],
             }
         );

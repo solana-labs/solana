@@ -16,4 +16,4 @@ steps:
       CONSENSUS_TIMEOUT: 60
       CUSTOM_SCRIPT: "system-test/restart-testcases/restart_test_automation.sh"
     agents:
-      - "queue=gce-deploy"
+      queue: "gce-deploy"

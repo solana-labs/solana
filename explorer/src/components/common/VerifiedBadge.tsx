@@ -11,7 +11,7 @@ export function VerifiedBadge({
     return (
       <h3 className="mb-0">
         <a
-          className="c-pointer badge bg-success-soft rank"
+          className="c-pointer badge bg-info-soft rank"
           href={verifiableBuild.url}
           target="_blank"
           rel="noreferrer"

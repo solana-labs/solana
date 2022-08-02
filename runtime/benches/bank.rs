@@ -119,6 +119,7 @@ fn async_bencher(bank: &Arc<Bank>, bank_client: &BankClient, transactions: &[Tra
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn do_bench_transactions(
     bencher: &mut Bencher,
     bench_work: &dyn Fn(&Arc<Bank>, &BankClient, &[Transaction]),

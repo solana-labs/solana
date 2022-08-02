@@ -35,7 +35,7 @@ fn main() {
         store.capacity(),
         num_accounts,
     );
-    for account in store.accounts(0) {
+    for account in store.account_iter() {
         info!(
             "  account: {:?} version: {} data: {} hash: {:?}",
             account.meta.pubkey, account.meta.write_version, account.meta.data_len, account.hash

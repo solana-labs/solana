@@ -4,7 +4,7 @@ use {
     itertools::Itertools,
     solana_entry::entry::Entry,
     solana_gossip::cluster_info::DATA_PLANE_FANOUT,
-    solana_ledger::shred::Shredder,
+    solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{
         hash::Hash,
         signature::{Keypair, Signature, Signer},
@@ -163,6 +163,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             last_tick_height == bank.max_tick_height() && last_entries.is_none(),
             self.next_shred_index,
             self.next_code_index,
+            &mut ProcessShredsStats::default(),
         );
 
         self.next_shred_index += data_shreds.len() as u32;
@@ -177,6 +178,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     true,
                     self.next_shred_index,
                     self.next_code_index,
+                    &mut ProcessShredsStats::default(),
                 );
                 // Don't mark the last shred as last so that validators won't
                 // know that they've gotten all the shreds, and will continue
@@ -187,6 +189,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
                     true,
                     self.next_shred_index,
                     self.next_code_index,
+                    &mut ProcessShredsStats::default(),
                 );
                 let sigs: Vec<_> = partition_last_data_shred
                     .iter()
@@ -300,7 +303,12 @@ impl BroadcastRun for BroadcastDuplicatesRun {
             .iter()
             .filter_map(|shred| {
                 let addr = cluster_nodes
-                    .get_broadcast_addrs(shred, &root_bank, DATA_PLANE_FANOUT, socket_addr_space)
+                    .get_broadcast_addrs(
+                        &shred.id(),
+                        &root_bank,
+                        DATA_PLANE_FANOUT,
+                        socket_addr_space,
+                    )
                     .first()
                     .copied()?;
                 let node = nodes.iter().find(|node| node.tvu == addr)?;

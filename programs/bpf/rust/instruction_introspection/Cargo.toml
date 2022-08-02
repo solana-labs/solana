@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-instruction-introspection"
-version = "1.11.1"
+version = "1.11.5"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,7 +10,7 @@ documentation = "https://docs.rs/solana-bpf-rust-instruction-introspection"
 edition = "2021"
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.11.1" }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.5" }
 
 [lib]
 crate-type = ["cdylib"]

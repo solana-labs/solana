@@ -1006,14 +1006,14 @@ mod tests {
 
     #[test]
     fn test_check_nonce_account() {
-        let durable_nonce =
-            DurableNonce::from_blockhash(&Hash::default(), /*separate_domains:*/ true);
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::default());
         let blockhash = *durable_nonce.as_hash();
         let nonce_pubkey = solana_sdk::pubkey::new_rand();
-        let data = Versions::new(
-            State::Initialized(nonce::state::Data::new(nonce_pubkey, durable_nonce, 0)),
-            true, // separate_domains
-        );
+        let data = Versions::new(State::Initialized(nonce::state::Data::new(
+            nonce_pubkey,
+            durable_nonce,
+            0,
+        )));
         let valid = Account::new_data(1, &data, &system_program::ID);
         assert!(check_nonce_account(&valid.unwrap(), &nonce_pubkey, &blockhash).is_ok());
 
@@ -1031,16 +1031,12 @@ mod tests {
             assert_eq!(err, Error::InvalidAccountData,);
         }
 
-        let invalid_durable_nonce =
-            DurableNonce::from_blockhash(&hash(b"invalid"), /*separate_domains:*/ true);
-        let data = Versions::new(
-            State::Initialized(nonce::state::Data::new(
-                nonce_pubkey,
-                invalid_durable_nonce,
-                0,
-            )),
-            true, // separate_domains
-        );
+        let invalid_durable_nonce = DurableNonce::from_blockhash(&hash(b"invalid"));
+        let data = Versions::new(State::Initialized(nonce::state::Data::new(
+            nonce_pubkey,
+            invalid_durable_nonce,
+            0,
+        )));
         let invalid_hash = Account::new_data(1, &data, &system_program::ID).unwrap();
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_hash, &nonce_pubkey, &blockhash).unwrap_err()
@@ -1055,14 +1051,11 @@ mod tests {
         }
 
         let new_nonce_authority = solana_sdk::pubkey::new_rand();
-        let data = Versions::new(
-            State::Initialized(nonce::state::Data::new(
-                new_nonce_authority,
-                durable_nonce,
-                0,
-            )),
-            true, // separate_domains
-        );
+        let data = Versions::new(State::Initialized(nonce::state::Data::new(
+            new_nonce_authority,
+            durable_nonce,
+            0,
+        )));
         let invalid_authority = Account::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_authority.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
@@ -1076,7 +1069,7 @@ mod tests {
             );
         }
 
-        let data = Versions::new(State::Uninitialized, /*separate_domains:*/ true);
+        let data = Versions::new(State::Uninitialized);
         let invalid_state = Account::new_data(1, &data, &system_program::ID);
         if let CliError::InvalidNonce(err) =
             check_nonce_account(&invalid_state.unwrap(), &nonce_pubkey, &blockhash).unwrap_err()
@@ -1087,8 +1080,7 @@ mod tests {
 
     #[test]
     fn test_account_identity_ok() {
-        let nonce_account =
-            nonce_account::create_account(1, /*separate_domains:*/ true).into_inner();
+        let nonce_account = nonce_account::create_account(1).into_inner();
         assert_eq!(account_identity_ok(&nonce_account), Ok(()));
 
         let system_account = Account::new(1, 0, &system_program::id());
@@ -1107,18 +1099,13 @@ mod tests {
 
     #[test]
     fn test_state_from_account() {
-        let mut nonce_account =
-            nonce_account::create_account(1, /*separate_domains:*/ true).into_inner();
+        let mut nonce_account = nonce_account::create_account(1).into_inner();
         assert_eq!(state_from_account(&nonce_account), Ok(State::Uninitialized));
 
-        let durable_nonce =
-            DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]), /*separate_domains:*/ true);
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]));
         let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), durable_nonce, 42);
         nonce_account
-            .set_state(&Versions::new(
-                State::Initialized(data.clone()),
-                true, // separate_domains
-            ))
+            .set_state(&Versions::new(State::Initialized(data.clone())))
             .unwrap();
         assert_eq!(
             state_from_account(&nonce_account),
@@ -1134,8 +1121,7 @@ mod tests {
 
     #[test]
     fn test_data_from_helpers() {
-        let mut nonce_account =
-            nonce_account::create_account(1, /*separate_domains:*/ true).into_inner();
+        let mut nonce_account = nonce_account::create_account(1).into_inner();
         let state = state_from_account(&nonce_account).unwrap();
         assert_eq!(
             data_from_state(&state),
@@ -1146,14 +1132,10 @@ mod tests {
             Err(Error::InvalidStateForOperation)
         );
 
-        let durable_nonce =
-            DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]), /*separate_domains:*/ true);
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[42u8; 32]));
         let data = nonce::state::Data::new(Pubkey::new(&[1u8; 32]), durable_nonce, 42);
         nonce_account
-            .set_state(&Versions::new(
-                State::Initialized(data.clone()),
-                true, // separate_domains
-            ))
+            .set_state(&Versions::new(State::Initialized(data.clone())))
             .unwrap();
         let state = state_from_account(&nonce_account).unwrap();
         assert_eq!(data_from_state(&state), Ok(&data));

@@ -23,7 +23,10 @@
 
 This is the Solana Javascript API built on the Solana [JSON RPC API](https://docs.solana.com/apps/jsonrpc-api)
 
-[Latest API Documentation](https://solana-labs.github.io/solana-web3.js/)
+## Documentation and examples
+
+ - [The Solana Cookbook](https://solanacookbook.com/) has extensive task-based documentation using this library.
+ - For more detail on individual functions, see the [latest API Documentation](https://solana-labs.github.io/solana-web3.js/)
 
 ## Installation
 
@@ -84,16 +87,6 @@ console.log(solanaWeb3);
 console.log(solanaWeb3);
 ```
 
-## Examples
-
-Example scripts for the web3.js repo and native programs:
-
-- [Web3 Examples](https://github.com/solana-labs/solana/tree/master/web3.js/examples)
-
-Example scripts for the Solana Program Library:
-
-- [Token Program Examples](https://github.com/solana-labs/solana-program-library/tree/master/token/js/examples)
-
 ## Flow Support (Discontinued)
 
 Flow types are no longer supported in new releases. The last release with Flow support is v1.37.2 and its
@@ -115,6 +108,10 @@ and [npmjs.com](https://www.npmjs.com/package/@solana/web3.js)
 Each Github release features a tarball containing API documentation and a
 minified version of the module suitable for direct use in a browser environment
 (`<script>` tag)
+
+## Contributing
+
+If you have an issue to report or would like to contribute a pull request, please do so against the monorepo at https://github.com/solana-labs/solana. We are not able to merge pull requests into the mirror repo https://github.com/solana-labs/solana-web3.js and issues filed there may go unnoticed.
 
 ## Disclaimer
 

@@ -68,6 +68,7 @@ export async function sendAndConfirmRawTransaction(
   const sendOptions = options && {
     skipPreflight: options.skipPreflight,
     preflightCommitment: options.preflightCommitment || options.commitment,
+    minContextSlot: options.minContextSlot,
   };
 
   const signature = await connection.sendRawTransaction(

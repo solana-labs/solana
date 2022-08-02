@@ -416,8 +416,7 @@ mod tests {
             .get_blockhash_and_fee_calculator(&rpc_client, CommitmentConfig::default())
             .is_err());
 
-        let durable_nonce =
-            DurableNonce::from_blockhash(&Hash::new(&[2u8; 32]), /*separate_domains:*/ true);
+        let durable_nonce = DurableNonce::from_blockhash(&Hash::new(&[2u8; 32]));
         let nonce_blockhash = *durable_nonce.as_hash();
         let nonce_fee_calc = FeeCalculator::new(4242);
         let data = nonce::state::Data {
@@ -427,10 +426,7 @@ mod tests {
         };
         let nonce_account = Account::new_data_with_space(
             42,
-            &nonce::state::Versions::new(
-                nonce::State::Initialized(data),
-                true, // separate_domains
-            ),
+            &nonce::state::Versions::new(nonce::State::Initialized(data)),
             nonce::State::size(),
             &system_program::id(),
         )

@@ -30,6 +30,8 @@ pub struct ProcessShredsStats {
 pub struct ShredFetchStats {
     pub index_overrun: usize,
     pub shred_count: usize,
+    pub ping_count: usize,
+    pub ping_err_verify_count: usize,
     pub(crate) index_bad_deserialize: usize,
     pub(crate) index_out_of_bounds: usize,
     pub(crate) slot_bad_deserialize: usize,
@@ -37,6 +39,7 @@ pub struct ShredFetchStats {
     pub slot_out_of_range: usize,
     pub(crate) bad_shred_type: usize,
     pub shred_version_mismatch: usize,
+    pub(crate) bad_parent_offset: usize,
     since: Option<Instant>,
 }
 
@@ -114,6 +117,8 @@ impl ShredFetchStats {
             name,
             ("index_overrun", self.index_overrun, i64),
             ("shred_count", self.shred_count, i64),
+            ("ping_count", self.ping_count, i64),
+            ("ping_err_verify_count", self.ping_err_verify_count, i64),
             ("slot_bad_deserialize", self.slot_bad_deserialize, i64),
             ("index_bad_deserialize", self.index_bad_deserialize, i64),
             ("index_out_of_bounds", self.index_out_of_bounds, i64),
@@ -121,6 +126,7 @@ impl ShredFetchStats {
             ("duplicate_shred", self.duplicate_shred, i64),
             ("bad_shred_type", self.bad_shred_type, i64),
             ("shred_version_mismatch", self.shred_version_mismatch, i64),
+            ("bad_parent_offset", self.bad_parent_offset, i64),
         );
         *self = Self {
             since: Some(Instant::now()),

@@ -58,6 +58,11 @@ windows)
     git config core.symlinks true
     find . -type l -delete
     git reset --hard
+    # The Windows build fails without resolver = "2", but including it in Cargo.toml causes
+    # other problems (see PR #26555 and Issue #22603). This adds resolver = "2" to
+    # Cargo.toml before building. Since the build environment does not persist the changes
+    # are discarded after the build and do not interfere with non-Windows builds.
+    echo 'resolver = "2"' >> Cargo.toml
   )
   ;;
 *)
@@ -149,24 +154,5 @@ for file in "${TARBALL_BASENAME}"-$TARGET.tar.bz2 "${TARBALL_BASENAME}"-$TARGET.
     appveyor PushArtifact "$file" -FileName "$CHANNEL_OR_TAG"/"$file"
   fi
 done
-
-
-# Create install wrapper for release.solana.com
-if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
-  echo "Skipping publishing install wrapper"
-elif [[ -n $BUILDKITE ]]; then
-  cat > release.solana.com-install <<EOF
-SOLANA_RELEASE=$CHANNEL_OR_TAG
-SOLANA_INSTALL_INIT_ARGS=$CHANNEL_OR_TAG
-SOLANA_DOWNLOAD_ROOT=https://release.solana.com
-EOF
-  echo release.solana.com-install
-  cat install/solana-install-init.sh >> release.solana.com-install
-
-  echo --- AWS S3 Store: "install"
-  $DRYRUN upload-s3-artifact "/solana/release.solana.com-install" "s3://release.solana.com/$CHANNEL_OR_TAG/install"
-  echo Published to:
-  $DRYRUN ci/format-url.sh https://release.solana.com/"$CHANNEL_OR_TAG"/install
-fi
 
 echo --- ok

@@ -20,4 +20,4 @@ steps:
       PARTITION_ITERATION_COUNT: 5
       TEST_TYPE: "partition"
     agents:
-      - "queue=gce-deploy"
+      queue: "gce-deploy"

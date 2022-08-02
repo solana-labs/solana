@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-geyser-plugin-manager"
 description = "The Solana Geyser plugin manager."
-version = "1.11.1"
+version = "1.11.5"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -16,13 +16,13 @@ json5 = "0.4.1"
 libloading = "0.7.3"
 log = "0.4.17"
 serde_json = "1.0.81"
-solana-geyser-plugin-interface = { path = "../geyser-plugin-interface", version = "=1.11.1" }
-solana-measure = { path = "../measure", version = "=1.11.1" }
-solana-metrics = { path = "../metrics", version = "=1.11.1" }
-solana-rpc = { path = "../rpc", version = "=1.11.1" }
-solana-runtime = { path = "../runtime", version = "=1.11.1" }
-solana-sdk = { path = "../sdk", version = "=1.11.1" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.1" }
+solana-geyser-plugin-interface = { path = "../geyser-plugin-interface", version = "=1.11.5" }
+solana-measure = { path = "../measure", version = "=1.11.5" }
+solana-metrics = { path = "../metrics", version = "=1.11.5" }
+solana-rpc = { path = "../rpc", version = "=1.11.5" }
+solana-runtime = { path = "../runtime", version = "=1.11.5" }
+solana-sdk = { path = "../sdk", version = "=1.11.5" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.11.5" }
 thiserror = "1.0.31"
 
 [package.metadata.docs.rs]

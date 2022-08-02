@@ -16,6 +16,7 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         rent::Rent,
+        short_vec,
         slot_hashes::SlotHash,
         sysvar::clock::Clock,
         transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
@@ -41,11 +42,12 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 // Offset of VoteState::prior_voters, for determining initialization status without deserialization
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
-#[frozen_abi(digest = "6LBwH5w3WyAWZhsM3KTG9QZP7nYBhcC61K33kHR6gMAD")]
+#[frozen_abi(digest = "EYPXjH9Zn2vLzxyjHejkRkoTh4Tg4sirvb4FX9ye25qF")]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
 pub enum VoteTransaction {
     Vote(Vote),
     VoteStateUpdate(VoteStateUpdate),
+    CompactVoteStateUpdate(CompactVoteStateUpdate),
 }
 
 impl VoteTransaction {
@@ -53,6 +55,9 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.slots.clone(),
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.slots(),
+            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
+                compact_state_update.slots()
+            }
         }
     }
 
@@ -62,6 +67,9 @@ impl VoteTransaction {
             VoteTransaction::VoteStateUpdate(vote_state_update) => {
                 vote_state_update.lockouts[i].slot
             }
+            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
+                compact_state_update.slots()[i]
+            }
         }
     }
 
@@ -69,6 +77,11 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.slots.len(),
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.lockouts.len(),
+            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
+                1 + compact_state_update.lockouts_32.len()
+                    + compact_state_update.lockouts_16.len()
+                    + compact_state_update.lockouts_8.len()
+            }
         }
     }
 
@@ -78,6 +91,7 @@ impl VoteTransaction {
             VoteTransaction::VoteStateUpdate(vote_state_update) => {
                 vote_state_update.lockouts.is_empty()
             }
+            VoteTransaction::CompactVoteStateUpdate(_) => false,
         }
     }
 
@@ -85,6 +99,9 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.hash,
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.hash,
+            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
+                compact_state_update.hash
+            }
         }
     }
 
@@ -92,6 +109,9 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.timestamp,
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp,
+            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
+                compact_state_update.timestamp
+            }
         }
     }
 
@@ -99,6 +119,9 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.timestamp = ts,
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp = ts,
+            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
+                compact_state_update.timestamp = ts
+            }
         }
     }
 
@@ -107,6 +130,9 @@ impl VoteTransaction {
             VoteTransaction::Vote(vote) => vote.slots.last().copied(),
             VoteTransaction::VoteStateUpdate(vote_state_update) => {
                 Some(vote_state_update.lockouts.back()?.slot)
+            }
+            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
+                compact_state_update.slots().last().copied()
             }
         }
     }
@@ -125,6 +151,12 @@ impl From<Vote> for VoteTransaction {
 impl From<VoteStateUpdate> for VoteTransaction {
     fn from(vote_state_update: VoteStateUpdate) -> Self {
         VoteTransaction::VoteStateUpdate(vote_state_update)
+    }
+}
+
+impl From<CompactVoteStateUpdate> for VoteTransaction {
+    fn from(compact_state_update: CompactVoteStateUpdate) -> Self {
+        VoteTransaction::CompactVoteStateUpdate(compact_state_update)
     }
 }
 
@@ -180,6 +212,28 @@ impl Lockout {
     }
 }
 
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
+pub struct CompactLockout<T: Sized> {
+    // Offset to the next vote, 0 if this is the last vote in the tower
+    pub offset: T,
+    // Confirmation count, guarenteed to be < 32
+    pub confirmation_count: u8,
+}
+
+impl<T> CompactLockout<T> {
+    pub fn new(offset: T) -> Self {
+        Self {
+            offset,
+            confirmation_count: 1,
+        }
+    }
+
+    // The number of slots for which this vote is locked
+    pub fn lockout(&self) -> u64 {
+        (INITIAL_LOCKOUT as u64).pow(self.confirmation_count.into())
+    }
+}
+
 #[frozen_abi(digest = "BctadFJjUKbvPJzr6TszbX6rBfQUNSRKpKKngkzgXgeY")]
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
 pub struct VoteStateUpdate {
@@ -223,6 +277,193 @@ impl VoteStateUpdate {
 
     pub fn slots(&self) -> Vec<Slot> {
         self.lockouts.iter().map(|lockout| lockout.slot).collect()
+    }
+}
+
+/// Ignoring overhead, in a full `VoteStateUpdate` the lockouts take up
+/// 31 * (64 + 32) = 2976 bits.
+///
+/// In this schema we separate the votes into 3 separate lockout structures
+/// and store offsets rather than slot number, allowing us to use smaller fields.
+///
+/// In a full `CompactVoteStateUpdate` the lockouts take up
+/// 64 + (32 + 8) * 16 + (16 + 8) * 8 + (8 + 8) * 6 = 992 bits
+/// allowing us to greatly reduce block size.
+#[frozen_abi(digest = "C8ZrdXqqF3VxgsoCxnqNaYJggV6rr9PC3rtmVudJFmqG")]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone, AbiExample)]
+pub struct CompactVoteStateUpdate {
+    /// The proposed root, u64::MAX if there is no root
+    pub root: Slot,
+    /// The offset from the root (or 0 if no root) to the first vote
+    pub root_to_first_vote_offset: u64,
+    /// Part of the proposed tower, votes with confirmation_count > 15
+    #[serde(with = "short_vec")]
+    pub lockouts_32: Vec<CompactLockout<u32>>,
+    /// Part of the proposed tower, votes with 15 >= confirmation_count > 7
+    #[serde(with = "short_vec")]
+    pub lockouts_16: Vec<CompactLockout<u16>>,
+    /// Part of the proposed tower, votes with 7 >= confirmation_count
+    #[serde(with = "short_vec")]
+    pub lockouts_8: Vec<CompactLockout<u8>>,
+
+    /// Signature of the bank's state at the last slot
+    pub hash: Hash,
+    /// Processing timestamp of last slot
+    pub timestamp: Option<UnixTimestamp>,
+}
+
+impl From<Vec<(Slot, u32)>> for CompactVoteStateUpdate {
+    fn from(recent_slots: Vec<(Slot, u32)>) -> Self {
+        let lockouts: VecDeque<Lockout> = recent_slots
+            .into_iter()
+            .map(|(slot, confirmation_count)| Lockout {
+                slot,
+                confirmation_count,
+            })
+            .collect();
+        Self::new(lockouts, None, Hash::default())
+    }
+}
+
+impl CompactVoteStateUpdate {
+    pub fn new(mut lockouts: VecDeque<Lockout>, root: Option<Slot>, hash: Hash) -> Self {
+        if lockouts.is_empty() {
+            return Self::default();
+        }
+        let mut cur_slot = root.unwrap_or(0u64);
+        let mut cur_confirmation_count = 0;
+        let offset = lockouts
+            .pop_front()
+            .map(
+                |Lockout {
+                     slot,
+                     confirmation_count,
+                 }| {
+                    assert!(confirmation_count < 32);
+
+                    let offset = slot - cur_slot;
+                    cur_slot = slot;
+                    cur_confirmation_count = confirmation_count;
+                    offset
+                },
+            )
+            .expect("Tower should not be empty");
+        let mut lockouts_32 = Vec::new();
+        let mut lockouts_16 = Vec::new();
+        let mut lockouts_8 = Vec::new();
+
+        for Lockout {
+            slot,
+            confirmation_count,
+        } in lockouts
+        {
+            assert!(confirmation_count < 32);
+            let offset = slot - cur_slot;
+            if cur_confirmation_count > 15 {
+                lockouts_32.push(CompactLockout {
+                    offset: offset.try_into().unwrap(),
+                    confirmation_count: cur_confirmation_count.try_into().unwrap(),
+                });
+            } else if cur_confirmation_count > 7 {
+                lockouts_16.push(CompactLockout {
+                    offset: offset.try_into().unwrap(),
+                    confirmation_count: cur_confirmation_count.try_into().unwrap(),
+                });
+            } else {
+                lockouts_8.push(CompactLockout {
+                    offset: offset.try_into().unwrap(),
+                    confirmation_count: cur_confirmation_count.try_into().unwrap(),
+                })
+            }
+
+            cur_slot = slot;
+            cur_confirmation_count = confirmation_count;
+        }
+        // Last vote should be at the top of tower, so we don't have to explicitly store it
+        assert!(cur_confirmation_count == 1);
+        Self {
+            root: root.unwrap_or(u64::MAX),
+            root_to_first_vote_offset: offset,
+            lockouts_32,
+            lockouts_16,
+            lockouts_8,
+            hash,
+            timestamp: None,
+        }
+    }
+
+    pub fn root(&self) -> Option<Slot> {
+        if self.root == u64::MAX {
+            None
+        } else {
+            Some(self.root)
+        }
+    }
+
+    pub fn slots(&self) -> Vec<Slot> {
+        std::iter::once(self.root_to_first_vote_offset)
+            .chain(self.lockouts_32.iter().map(|lockout| lockout.offset.into()))
+            .chain(self.lockouts_16.iter().map(|lockout| lockout.offset.into()))
+            .chain(self.lockouts_8.iter().map(|lockout| lockout.offset.into()))
+            .scan(self.root().unwrap_or(0), |prev_slot, offset| {
+                let slot = *prev_slot + offset;
+                *prev_slot = slot;
+                Some(slot)
+            })
+            .collect()
+    }
+}
+
+impl From<CompactVoteStateUpdate> for VoteStateUpdate {
+    fn from(vote_state_update: CompactVoteStateUpdate) -> Self {
+        let lockouts = vote_state_update
+            .lockouts_32
+            .iter()
+            .map(|lockout| (lockout.offset.into(), lockout.confirmation_count))
+            .chain(
+                vote_state_update
+                    .lockouts_16
+                    .iter()
+                    .map(|lockout| (lockout.offset.into(), lockout.confirmation_count)),
+            )
+            .chain(
+                vote_state_update
+                    .lockouts_8
+                    .iter()
+                    .map(|lockout| (lockout.offset.into(), lockout.confirmation_count)),
+            )
+            .chain(
+                // To pick up the last element
+                std::iter::once((0, 1)),
+            )
+            .scan(
+                vote_state_update.root().unwrap_or(0) + vote_state_update.root_to_first_vote_offset,
+                |slot, (offset, confirmation_count): (u64, u8)| {
+                    let cur_slot = *slot;
+                    *slot += offset;
+                    Some(Lockout {
+                        slot: cur_slot,
+                        confirmation_count: confirmation_count.into(),
+                    })
+                },
+            )
+            .collect();
+        Self {
+            lockouts,
+            root: vote_state_update.root(),
+            hash: vote_state_update.hash,
+            timestamp: vote_state_update.timestamp,
+        }
+    }
+}
+
+impl From<VoteStateUpdate> for CompactVoteStateUpdate {
+    fn from(vote_state_update: VoteStateUpdate) -> Self {
+        CompactVoteStateUpdate::new(
+            vote_state_update.lockouts,
+            vote_state_update.root,
+            vote_state_update.hash,
+        )
     }
 }
 
@@ -1306,7 +1547,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     lamports: u64,
     to_account_index: usize,
     signers: &HashSet<Pubkey, S>,
-    rent_sysvar: Option<&Rent>,
+    rent_sysvar: &Rent,
     clock: Option<&Clock>,
 ) -> Result<(), InstructionError> {
     let mut vote_account = instruction_context
@@ -1336,13 +1577,13 @@ pub fn withdraw<S: std::hash::BuildHasher>(
 
         if reject_active_vote_account_close {
             datapoint_debug!("vote-account-close", ("reject-active", 1, i64));
-            return Err(InstructionError::ActiveVoteAccountClose);
+            return Err(VoteError::ActiveVoteAccountClose.into());
         } else {
             // Deinitialize upon zero-balance
             datapoint_debug!("vote-account-close", ("allow", 1, i64));
             vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
         }
-    } else if let Some(rent_sysvar) = rent_sysvar {
+    } else {
         let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.get_data().len());
         if remaining_balance < min_rent_exempt_balance {
             return Err(InstructionError::InsufficientFunds);
@@ -3556,5 +3797,73 @@ mod tests {
                 .check_update_vote_state_slots_are_valid(&mut vote_state_update, &slot_hashes),
             Err(VoteError::SlotHashMismatch),
         );
+    }
+
+    #[test]
+    fn test_compact_vote_state_update_parity() {
+        let mut vote_state_update = VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (7, 1)]);
+        vote_state_update.hash = Hash::new_unique();
+        vote_state_update.root = Some(1);
+
+        let compact_vote_state_update = CompactVoteStateUpdate::from(vote_state_update.clone());
+
+        assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
+        assert_eq!(vote_state_update.hash, compact_vote_state_update.hash);
+        assert_eq!(vote_state_update.root, compact_vote_state_update.root());
+
+        let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
+        assert_eq!(vote_state_update, vote_state_update_new);
+    }
+
+    #[test]
+    fn test_compact_vote_state_update_large_offsets() {
+        let vote_state_update = VoteStateUpdate::from(vec![
+            (0, 31),
+            (1, 30),
+            (2, 29),
+            (3, 28),
+            (u64::pow(2, 28), 17),
+            (u64::pow(2, 28) + u64::pow(2, 16), 1),
+        ]);
+        let compact_vote_state_update = CompactVoteStateUpdate::from(vote_state_update.clone());
+
+        assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
+
+        let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
+        assert_eq!(vote_state_update, vote_state_update_new);
+    }
+
+    #[test]
+    fn test_compact_vote_state_update_border_conditions() {
+        let two_31 = u64::pow(2, 31);
+        let two_15 = u64::pow(2, 15);
+        let vote_state_update = VoteStateUpdate::from(vec![
+            (0, 31),
+            (two_31, 16),
+            (two_31 + 1, 15),
+            (two_31 + two_15, 7),
+            (two_31 + two_15 + 1, 6),
+            (two_31 + two_15 + 1 + 64, 1),
+        ]);
+        let compact_vote_state_update = CompactVoteStateUpdate::from(vote_state_update.clone());
+
+        assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
+
+        let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
+        assert_eq!(vote_state_update, vote_state_update_new);
+    }
+
+    #[test]
+    fn test_compact_vote_state_update_large_root() {
+        let two_58 = u64::pow(2, 58);
+        let two_31 = u64::pow(2, 31);
+        let mut vote_state_update = VoteStateUpdate::from(vec![(two_58, 31), (two_58 + two_31, 1)]);
+        vote_state_update.root = Some(two_31);
+        let compact_vote_state_update = CompactVoteStateUpdate::from(vote_state_update.clone());
+
+        assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
+
+        let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
+        assert_eq!(vote_state_update, vote_state_update_new);
     }
 }

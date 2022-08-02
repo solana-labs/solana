@@ -81,21 +81,21 @@ function AccountInfo({
   const errorMessage = validator && validator(info.data);
   if (errorMessage) return <span className="text-warning">{errorMessage}</span>;
 
-  if (info.data.details?.executable) {
-    return <span className="text-muted">Executable Program</span>;
+  if (!info.data.details) {
+    return <span className="text-muted">Account doesn't exist</span>;
   }
 
-  const owner = info.data.details?.owner;
-  const ownerAddress = owner?.toBase58();
-  const ownerLabel = ownerAddress && addressLabel(ownerAddress, cluster);
+  const owner = info.data.details.owner;
+  const ownerAddress = owner.toBase58();
+  const ownerLabel = addressLabel(ownerAddress, cluster);
 
   return (
     <span className="text-muted">
-      {ownerAddress
-        ? `Owned by ${
-            ownerLabel || ownerAddress
-          }. Balance is ${lamportsToSolString(info.data.lamports)} SOL`
-        : "Account doesn't exist"}
+      {`Owned by ${ownerLabel || ownerAddress}.`}
+      {` Balance is ${lamportsToSolString(info.data.lamports)} SOL.`}
+      {` Size is ${new Intl.NumberFormat("en-US").format(
+        info.data.details.space
+      )} byte(s).`}
     </span>
   );
 }

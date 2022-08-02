@@ -103,9 +103,9 @@ pub fn open_blockstore(ledger_path: &Path) -> Blockstore {
     })
 }
 
-pub fn purge_slots(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
-    blockstore.purge_from_next_slots(start_slot, start_slot + slot_count);
-    blockstore.purge_slots(start_slot, start_slot + slot_count, PurgeType::Exact);
+pub fn purge_slots_with_count(blockstore: &Blockstore, start_slot: Slot, slot_count: Slot) {
+    blockstore.purge_from_next_slots(start_slot, start_slot + slot_count - 1);
+    blockstore.purge_slots(start_slot, start_slot + slot_count - 1, PurgeType::Exact);
 }
 
 // Fetches the last vote in the tower, blocking until it has also appeared in blockstore.
@@ -277,7 +277,7 @@ pub fn run_cluster_partition<C>(
     let cluster_lamports = node_stakes.iter().sum::<u64>() * 2;
     let turbine_disabled = Arc::new(AtomicBool::new(false));
     let mut validator_config = ValidatorConfig {
-        turbine_disabled: Some(turbine_disabled.clone()),
+        turbine_disabled: turbine_disabled.clone(),
         ..ValidatorConfig::default_for_test()
     };
 

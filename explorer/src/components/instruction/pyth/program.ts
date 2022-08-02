@@ -22,7 +22,8 @@ export type PythInstructionType =
   | "InitPrice"
   | "InitTest"
   | "UpdateTest"
-  | "SetMinPublishers";
+  | "SetMinPublishers"
+  | "UpdatePriceNoFailOnError";
 
 export function headerLayout(property: string = "header") {
   return BufferLayout.struct(
@@ -185,6 +186,17 @@ export const PYTH_INSTRUCTION_LAYOUTS: {
       headerLayout(),
       BufferLayout.u8("minPublishers"),
       BufferLayout.blob(3, "unused1"),
+    ]),
+  },
+  UpdatePriceNoFailOnError: {
+    index: 13,
+    layout: BufferLayout.struct([
+      headerLayout(),
+      BufferLayout.u32("status"),
+      BufferLayout.u32("unused1"),
+      BufferLayout.ns64("price"),
+      BufferLayout.nu64("conf"),
+      BufferLayout.nu64("publishSlot"),
     ]),
   },
 });
@@ -420,6 +432,27 @@ export class PythInstruction {
   ): UpdatePriceParams {
     const { status, price, conf, publishSlot } = decodeData(
       PYTH_INSTRUCTION_LAYOUTS.UpdatePrice,
+      instruction.data
+    );
+
+    return {
+      publisherPubkey: instruction.keys[0].pubkey,
+      pricePubkey: instruction.keys[1].pubkey,
+      status,
+      price,
+      conf,
+      publishSlot,
+    };
+  }
+
+  /**
+   * Decode an "update price no fail error" instruction and retrieve the instruction params.
+   */
+  static decodeUpdatePriceNoFailOnError(
+    instruction: TransactionInstruction
+  ): UpdatePriceParams {
+    const { status, price, conf, publishSlot } = decodeData(
+      PYTH_INSTRUCTION_LAYOUTS.UpdatePriceNoFailOnError,
       instruction.data
     );
 

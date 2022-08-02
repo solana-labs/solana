@@ -243,7 +243,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         remove_tower(&val_c_ledger_path, &validator_b_pubkey);
 
         let blockstore = open_blockstore(&val_c_ledger_path);
-        purge_slots(&blockstore, base_slot + 1, truncated_slots);
+        purge_slots_with_count(&blockstore, base_slot + 1, truncated_slots);
     }
     info!("Create validator A's ledger");
     {
@@ -257,7 +257,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
         copy_blocks(b_last_vote, &b_blockstore, &a_blockstore);
 
         // Purge uneccessary slots
-        purge_slots(&a_blockstore, next_slot_on_a + 1, truncated_slots);
+        purge_slots_with_count(&a_blockstore, next_slot_on_a + 1, truncated_slots);
     }
 
     // This should be guaranteed because we waited for validator `A` to vote on a slot > `next_slot_on_a`
@@ -270,7 +270,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
 
     {
         let blockstore = open_blockstore(&val_a_ledger_path);
-        purge_slots(&blockstore, next_slot_on_a + 1, truncated_slots);
+        purge_slots_with_count(&blockstore, next_slot_on_a + 1, truncated_slots);
         if !with_tower {
             info!("Removing tower!");
             remove_tower(&val_a_ledger_path, &validator_a_pubkey);
@@ -281,7 +281,7 @@ fn do_test_optimistic_confirmation_violation_with_or_without_tower(with_tower: b
             // hasn't gotten the heavier fork from validator C yet.
             // Then it will be stuck on 27 unable to switch because C doesn't
             // have enough stake to generate a switching proof
-            purge_slots(&blockstore, next_slot_on_a, truncated_slots);
+            purge_slots_with_count(&blockstore, next_slot_on_a, truncated_slots);
         } else {
             info!("Not removing tower!");
         }

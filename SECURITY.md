@@ -23,6 +23,7 @@ If you do not receive a response within that time frame, please do followup with
 
 As above, please DO NOT include attachments or provide detail regarding the security issue in this email. 
 
+<a name="process"></a>
 ## Incident Response Process
 
 In case an incident is discovered or reported, the following process will be followed to contain, respond and remediate:
@@ -122,8 +123,27 @@ The following components are out of scope for the bounty program
 * Multiple submissions for the same class of exploit are still eligible for compensation, though may be compensated at a lower rate, however these will be assessed on a case-by-case basis
 * Participants must complete KYC and sign the participation agreement here when the registrations are open https://solana.foundation/kyc. Security exploits will still be assessed and open for submission at all times. This needs only be done prior to distribution of tokens.
 
+### Duplicate Reports
+Compensation for duplicative reports will be split among reporters with first to report taking priority using the following equation
+```
+R: total reports
+ri: report priority
+bi: bounty share
+
+bi = 2 ^ (R - ri) / ((2^R) - 1)
+```
+#### Bounty Split Examples
+| total reports | priority | share  |   | total reports | priority | share  |   | total reports | priority | share  |
+| ------------- | -------- | -----: | - | ------------- | -------- | -----: | - | ------------- | -------- | -----: |
+| 1             | 1        | 100%   |   | 2             | 1        | 66.67% |   | 5             | 1        | 51.61% |
+|               |          |        |   | 2             | 2        | 33.33% |   | 5             | 2        | 25.81% |
+| 4             | 1        | 53.33% |   |               |          |        |   | 5             | 3        | 12.90% |
+| 4             | 2        | 26.67% |   | 3             | 1        | 57.14% |   | 5             | 4        |  6.45% |
+| 4             | 3        | 13.33% |   | 3             | 2        | 26.67% |   | 5             | 5        |  3.23% |
+| 4             | 4        |  6.67% |   | 3             | 3        | 14.29% |   |               |          |        |
+
 ### Payment of Bug Bounties:
-* Bounties are currently awarded on a rolling/weekly basis and paid out within 15 days upon receipt of an invoice.
+* Bounties are currently awarded on a rolling/weekly basis and paid out within 30 days upon receipt of an invoice.
 * The SOL/USD conversion rate used for payments is the market price of SOL (denominated in USD) at the end of the day the invoice is submitted by the researcher.
 * The reference for this price is the Closing Price given by Coingecko.com on that date given here: https://www.coingecko.com/en/coins/solana/historical_data/usd#panel
 * Bug bounties that are paid out in SOL are paid to stake accounts with a lockup expiring 12 months from the date of delivery of SOL.

@@ -2,6 +2,7 @@
 //
 // This can be expensive since we have to walk the append vecs being cleaned up.
 
+mod stats;
 use {
     crate::{
         accounts_hash::CalcAccountsHashConfig,
@@ -19,6 +20,7 @@ use {
         clock::{BankId, Slot},
         hash::Hash,
     },
+    stats::StatsManager,
     std::{
         boxed::Box,
         fmt::{Debug, Formatter},
@@ -184,6 +186,9 @@ impl SnapshotRequestHandler {
                     status_cache_slot_deltas,
                 } = snapshot_request;
 
+                // we should not rely on the state of this validator until startup verification is complete
+                assert!(snapshot_root_bank.is_startup_verification_complete());
+
                 let previous_hash = if test_hash_calculation {
                     // We have to use the index version here.
                     // We cannot calculate the non-index way because cache has not been flushed and stores don't match reality. This comment is out of date and can be re-evaluated.
@@ -235,6 +240,8 @@ impl SnapshotRequestHandler {
                             use_write_cache: false,
                             epoch_schedule: snapshot_root_bank.epoch_schedule(),
                             rent_collector: snapshot_root_bank.rent_collector(),
+                            store_detailed_debug_info_on_failure: false,
+                            full_snapshot: None,
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);
@@ -457,11 +464,13 @@ impl AccountsBackgroundService {
         let t_background = Builder::new()
             .name("solana-bg-accounts".to_string())
             .spawn(move || {
+                let mut stats = StatsManager::new();
                 let mut last_snapshot_end_time = None;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
+                    let start_time = Instant::now();
 
                     // Grab the current root bank
                     let bank = bank_forks.read().unwrap().root_bank().clone();
@@ -556,6 +565,7 @@ impl AccountsBackgroundService {
                             last_cleaned_block_height = bank.block_height();
                         }
                     }
+                    stats.record_and_maybe_submit(start_time.elapsed());
                     sleep(Duration::from_millis(INTERVAL_MS));
                 }
             })

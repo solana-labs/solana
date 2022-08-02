@@ -4,7 +4,7 @@ use {
     crate::{
         id,
         vote_instruction::VoteInstruction,
-        vote_state::{self, VoteAuthorize},
+        vote_state::{self, VoteAuthorize, VoteStateUpdate},
     },
     log::*,
     solana_program_runtime::{
@@ -173,16 +173,34 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
+        VoteInstruction::CompactUpdateVoteState(compact_vote_state_update)
+        | VoteInstruction::CompactUpdateVoteStateSwitch(compact_vote_state_update, _) => {
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
+                && invoke_context
+                    .feature_set
+                    .is_active(&feature_set::compact_vote_state_updates::id())
+            {
+                let sysvar_cache = invoke_context.get_sysvar_cache();
+                let slot_hashes = sysvar_cache.get_slot_hashes()?;
+                let clock = sysvar_cache.get_clock()?;
+                vote_state::process_vote_state_update(
+                    &mut me,
+                    slot_hashes.slot_hashes(),
+                    &clock,
+                    VoteStateUpdate::from(compact_vote_state_update),
+                    &signers,
+                    &invoke_context.feature_set,
+                )
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
+
         VoteInstruction::Withdraw(lamports) => {
             instruction_context.check_number_of_instruction_accounts(2)?;
-            let rent_sysvar = if invoke_context
-                .feature_set
-                .is_active(&feature_set::reject_non_rent_exempt_vote_withdraws::id())
-            {
-                Some(invoke_context.get_sysvar_cache().get_rent()?)
-            } else {
-                None
-            };
+            let rent_sysvar = invoke_context.get_sysvar_cache().get_rent()?;
 
             let clock_if_feature_active = if invoke_context
                 .feature_set
@@ -201,7 +219,7 @@ pub fn process_instruction(
                 lamports,
                 1,
                 &signers,
-                rent_sysvar.as_deref(),
+                &rent_sysvar,
                 clock_if_feature_active.as_deref(),
             )
         }
@@ -496,7 +514,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::rent::id(),
@@ -587,7 +605,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: node_pubkey,
@@ -655,7 +673,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: authorized_withdrawer,
@@ -718,7 +736,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::slot_hashes::id(),
@@ -833,7 +851,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -947,7 +965,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1028,7 +1046,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: sysvar::clock::id(),
@@ -1052,7 +1070,7 @@ mod tests {
         instruction_accounts[1] = AccountMeta {
             pubkey: authorized_withdrawer_pubkey,
             is_signer: true,
-            is_writable: false,
+            is_writable: true,
         };
         transaction_accounts[0] = (vote_pubkey, accounts[0].clone());
         let accounts = process_instruction(
@@ -1136,12 +1154,12 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey_1,
                 is_signer: true,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
-                pubkey: sysvar::clock::id(),
+                pubkey: authorized_withdrawer_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
         ];
 
@@ -1178,30 +1196,11 @@ mod tests {
             &serialize(&VoteInstruction::Withdraw(lamports)).unwrap(),
             transaction_accounts.clone(),
             instruction_accounts.clone(),
-            Err(InstructionError::ActiveVoteAccountClose),
+            Err(VoteError::ActiveVoteAccountClose.into()),
         );
 
-        // Both features disabled:
-        // reject_non_rent_exempt_vote_withdraws
+        // Following features disabled:
         // reject_vote_account_close_unless_zero_credit_epoch
-
-        // non rent exempt withdraw, with 0 credit epoch
-        instruction_accounts[0].pubkey = vote_pubkey_1;
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::Withdraw(lamports - minimum_balance + 1)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
-
-        // non rent exempt withdraw, without 0 credit epoch
-        instruction_accounts[0].pubkey = vote_pubkey_2;
-        process_instruction_disabled_features(
-            &serialize(&VoteInstruction::Withdraw(lamports - minimum_balance + 1)).unwrap(),
-            transaction_accounts.clone(),
-            instruction_accounts.clone(),
-            Ok(()),
-        );
 
         // full withdraw, with 0 credit epoch
         instruction_accounts[0].pubkey = vote_pubkey_1;
@@ -1897,7 +1896,7 @@ mod tests {
             AccountMeta {
                 pubkey: vote_pubkey,
                 is_signer: false,
-                is_writable: false,
+                is_writable: true,
             },
             AccountMeta {
                 pubkey: clock_address,

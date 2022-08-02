@@ -47,3 +47,19 @@ fn bench_status_cache_slot_deltas(bencher: &mut Bencher) {
 
     bencher.iter(|| test::black_box(status_cache.slot_deltas(&slots)));
 }
+
+#[bench]
+fn bench_status_cache_root_slot_deltas(bencher: &mut Bencher) {
+    let mut status_cache = BankStatusCache::default();
+
+    // fill the status cache
+    let slots: Vec<_> = (42..).take(MAX_CACHE_ENTRIES).collect();
+    for slot in &slots {
+        for _ in 0..5 {
+            status_cache.insert(&Hash::new_unique(), Hash::new_unique(), *slot, Ok(()));
+        }
+        status_cache.add_root(*slot);
+    }
+
+    bencher.iter(|| test::black_box(status_cache.root_slot_deltas()));
+}

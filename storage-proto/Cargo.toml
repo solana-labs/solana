@@ -1,6 +1,6 @@
 [package]
 name = "solana-storage-proto"
-version = "1.11.1"
+version = "1.11.5"
 description = "Solana Storage Protobuf Definitions"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -13,10 +13,10 @@ edition = "2021"
 bincode = "1.3.3"
 bs58 = "0.4.0"
 prost = "0.10.4"
-serde = "1.0.137"
-solana-account-decoder = { path = "../account-decoder", version = "=1.11.1" }
-solana-sdk = { path = "../sdk", version = "=1.11.1" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.1" }
+serde = "1.0.138"
+solana-account-decoder = { path = "../account-decoder", version = "=1.11.5" }
+solana-sdk = { path = "../sdk", version = "=1.11.5" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.11.5" }
 
 [dev-dependencies]
 enum-iterator = "0.8.1"

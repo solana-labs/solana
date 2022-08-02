@@ -2,18 +2,18 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-bench-streamer"
-version = "1.11.1"
+version = "1.11.5"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-crossbeam-channel = "0.5"
 clap = { version = "3.1.5", features = ["cargo"] }
-solana-net-utils = { path = "../net-utils", version = "=1.11.1" }
-solana-streamer = { path = "../streamer", version = "=1.11.1" }
-solana-version = { path = "../version", version = "=1.11.1" }
+crossbeam-channel = "0.5"
+solana-net-utils = { path = "../net-utils", version = "=1.11.5" }
+solana-streamer = { path = "../streamer", version = "=1.11.5" }
+solana-version = { path = "../version", version = "=1.11.5" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

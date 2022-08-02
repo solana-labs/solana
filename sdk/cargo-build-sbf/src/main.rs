@@ -6,6 +6,7 @@ use {
     solana_download_utils::download_file,
     solana_sdk::signature::{write_keypair_file, Keypair},
     std::{
+        borrow::Cow,
         collections::{HashMap, HashSet},
         env,
         ffi::OsStr,
@@ -18,6 +19,7 @@ use {
     tar::Archive,
 };
 
+#[derive(Debug)]
 struct Config<'a> {
     cargo_args: Option<Vec<&'a str>>,
     sbf_out_dir: Option<PathBuf>,
@@ -29,9 +31,11 @@ struct Config<'a> {
     no_default_features: bool,
     offline: bool,
     remap_cwd: bool,
+    debug: bool,
     verbose: bool,
     workspace: bool,
     jobs: Option<String>,
+    arch: &'a str,
 }
 
 impl Default for Config<'_> {
@@ -53,9 +57,11 @@ impl Default for Config<'_> {
             no_default_features: false,
             offline: false,
             remap_cwd: true,
+            debug: false,
             verbose: false,
             workspace: false,
             jobs: None,
+            arch: "sbf",
         }
     }
 }
@@ -313,7 +319,11 @@ fn check_undefined_symbols(config: &Config, program: &Path) {
     let readelf = config
         .sbf_sdk
         .join("dependencies")
-        .join("sbf-tools")
+        .join(if config.arch == "bpf" {
+            "bpf-tools"
+        } else {
+            "sbf-tools"
+        })
         .join("llvm")
         .join("bin")
         .join("llvm-readelf");
@@ -352,7 +362,11 @@ fn link_sbf_toolchain(config: &Config) {
     let toolchain_path = config
         .sbf_sdk
         .join("dependencies")
-        .join("sbf-tools")
+        .join(if config.arch == "bpf" {
+            "bpf-tools"
+        } else {
+            "sbf-tools"
+        })
         .join("rust");
     let rustup = PathBuf::from("rustup");
     let rustup_args = vec!["toolchain", "list", "-v"];
@@ -366,12 +380,16 @@ fn link_sbf_toolchain(config: &Config) {
     }
     let mut do_link = true;
     for line in rustup_output.lines() {
-        if line.starts_with("sbf") {
+        if line.starts_with(if config.arch == "bpf" { "bpf" } else { "sbf" }) {
             let mut it = line.split_whitespace();
             let _ = it.next();
             let path = it.next();
             if path.unwrap() != toolchain_path.to_str().unwrap() {
-                let rustup_args = vec!["toolchain", "uninstall", "sbf"];
+                let rustup_args = vec![
+                    "toolchain",
+                    "uninstall",
+                    if config.arch == "bpf" { "bpf" } else { "sbf" },
+                ];
                 let output = spawn(
                     &rustup,
                     &rustup_args,
@@ -387,7 +405,12 @@ fn link_sbf_toolchain(config: &Config) {
         }
     }
     if do_link {
-        let rustup_args = vec!["toolchain", "link", "sbf", toolchain_path.to_str().unwrap()];
+        let rustup_args = vec![
+            "toolchain",
+            "link",
+            if config.arch == "bpf" { "bpf" } else { "sbf" },
+            toolchain_path.to_str().unwrap(),
+        ];
         let output = spawn(
             &rustup,
             &rustup_args,
@@ -444,7 +467,13 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         .cloned()
         .unwrap_or_else(|| target_directory.join("deploy"));
 
-    let target_build_directory = target_directory.join("sbf-solana-solana").join("release");
+    let target_build_directory = target_directory
+        .join(if config.arch == "bpf" {
+            "bpfel-unknown-unknown"
+        } else {
+            "sbf-solana-solana"
+        })
+        .join("release");
 
     env::set_current_dir(&root_package_dir).unwrap_or_else(|err| {
         error!(
@@ -465,9 +494,19 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         info!("Legacy program feature detected");
     }
     let sbf_tools_download_file_name = if cfg!(target_os = "windows") {
-        "solana-sbf-tools-windows.tar.bz2"
+        if config.arch == "bpf" {
+            "solana-bpf-tools-windows.tar.bz2"
+        } else {
+            "solana-sbf-tools-windows.tar.bz2"
+        }
     } else if cfg!(target_os = "macos") {
-        "solana-sbf-tools-osx.tar.bz2"
+        if config.arch == "bpf" {
+            "solana-bpf-tools-osx.tar.bz2"
+        } else {
+            "solana-sbf-tools-osx.tar.bz2"
+        }
+    } else if config.arch == "bpf" {
+        "solana-bpf-tools-linux.tar.bz2"
     } else {
         "solana-sbf-tools-linux.tar.bz2"
     };
@@ -476,7 +515,11 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         error!("Can't get home directory path: {}", err);
         exit(1);
     }));
-    let package = "sbf-tools";
+    let package = if config.arch == "bpf" {
+        "bpf-tools"
+    } else {
+        "sbf-tools"
+    };
     let target_path = home_dir
         .join(".cache")
         .join("solana")
@@ -509,7 +552,11 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     let llvm_bin = config
         .sbf_sdk
         .join("dependencies")
-        .join("sbf-tools")
+        .join(if config.arch == "bpf" {
+            "bpf-tools"
+        } else {
+            "sbf-tools"
+        })
         .join("llvm")
         .join("bin");
     env::set_var("CC", llvm_bin.join("clang"));
@@ -518,23 +565,61 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
 
     let rustflags = env::var("RUSTFLAGS").ok();
-    let rustflags = rustflags.as_deref().unwrap_or_default();
+    let mut rustflags = Cow::Borrowed(rustflags.as_deref().unwrap_or_default());
     if config.remap_cwd {
-        let rustflags = format!("{} -Zremap-cwd-prefix=", &rustflags);
-        env::set_var("RUSTFLAGS", &rustflags);
+        rustflags = Cow::Owned(format!("{} -Zremap-cwd-prefix=", &rustflags));
+    }
+    if config.debug {
+        // Replace with -Zsplit-debuginfo=packed when stabilized.
+        rustflags = Cow::Owned(format!("{} -g", &rustflags));
+    }
+    if let Cow::Owned(flags) = rustflags {
+        env::set_var("RUSTFLAGS", &flags);
     }
     if config.verbose {
-        debug!("RUSTFLAGS={}", &rustflags);
-    };
+        debug!(
+            "RUSTFLAGS=\"{}\"",
+            env::var("RUSTFLAGS").ok().unwrap_or_default()
+        );
+    }
+
+    // RUSTC variable overrides cargo +<toolchain> mechanism of
+    // selecting the rust compiler and makes cargo run a rust compiler
+    // other than the one linked in BPF toolchain. We have to prevent
+    // this by removing RUSTC from the child process environment.
+    if env::var("RUSTC").is_ok() {
+        warn!(
+            "Removed RUSTC from cargo environment, because it overrides +sbf cargo command line option."
+        );
+        env::remove_var("RUSTC")
+    }
+
+    let mut target_rustflags = env::var("CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS")
+        .ok()
+        .unwrap_or_default();
+    if config.arch == "sbfv2" {
+        target_rustflags = format!("{} {}", "-C target_cpu=sbfv2", target_rustflags);
+        env::set_var(
+            "CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS",
+            &target_rustflags,
+        );
+    }
 
     let cargo_build = PathBuf::from("cargo");
     let mut cargo_build_args = vec![
-        "+sbf",
+        if config.arch == "bpf" { "+bpf" } else { "+sbf" },
         "build",
-        "--target",
-        "sbf-solana-solana",
         "--release",
+        "--target",
+        if config.arch == "bpf" {
+            "bpfel-unknown-unknown"
+        } else {
+            "sbf-solana-solana"
+        },
     ];
+    if config.arch == "sbfv2" {
+        cargo_build_args.push("-Zbuild-std=std,panic_abort");
+    }
     if config.no_default_features {
         cargo_build_args.push("--no-default-features");
     }
@@ -573,6 +658,7 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         let program_unstripped_so = target_build_directory.join(&format!("{}.so", program_name));
         let program_dump = sbf_out_dir.join(&format!("{}-dump.txt", program_name));
         let program_so = sbf_out_dir.join(&format!("{}.so", program_name));
+        let program_debug = sbf_out_dir.join(&format!("{}.debug", program_name));
         let program_keypair = sbf_out_dir.join(&format!("{}-keypair.json", program_name));
 
         fn file_older_or_missing(prerequisite_file: &Path, target_file: &Path) -> bool {
@@ -652,6 +738,26 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
             postprocess_dump(&program_dump);
         }
 
+        if config.debug && file_older_or_missing(&program_unstripped_so, &program_debug) {
+            #[cfg(windows)]
+            let llvm_objcopy = &llvm_bin.join("llvm-objcopy");
+            #[cfg(not(windows))]
+            let llvm_objcopy = &config.sbf_sdk.join("scripts").join("objcopy.sh");
+
+            let output = spawn(
+                llvm_objcopy,
+                &[
+                    "--only-keep-debug".as_ref(),
+                    program_unstripped_so.as_os_str(),
+                    program_debug.as_os_str(),
+                ],
+                config.generate_child_script_on_failure,
+            );
+            if config.verbose {
+                debug!("{}", output);
+            }
+        }
+
         check_undefined_symbols(config, &program_so);
 
         info!("To deploy this program:");
@@ -720,7 +826,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = "v1.27";
+    let sbf_tools_version = "v1.28";
     let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())
@@ -754,6 +860,12 @@ fn main() {
                 .long("disable-remap-cwd")
                 .takes_value(false)
                 .help("Disable remap of cwd prefix and preserve full path strings in binaries"),
+        )
+        .arg(
+            Arg::new("debug")
+                .long("debug")
+                .takes_value(false)
+                .help("Enable debug symbols"),
         )
         .arg(
             Arg::new("dump")
@@ -818,6 +930,13 @@ fn main() {
                 .validator(|val| val.parse::<usize>().map_err(|e| e.to_string()))
                 .help("Number of parallel jobs, defaults to # of CPUs"),
         )
+        .arg(
+            Arg::new("arch")
+                .long("arch")
+                .possible_values(&["bpf", "sbf", "sbfv2"])
+                .default_value("sbf")
+                .help("Build for the given SBF version"),
+        )
         .get_matches_from(args);
 
     let sbf_sdk: PathBuf = matches.value_of_t_or_exit("sbf_sdk");
@@ -850,11 +969,17 @@ fn main() {
         generate_child_script_on_failure: matches.is_present("generate_child_script_on_failure"),
         no_default_features: matches.is_present("no_default_features"),
         remap_cwd: !matches.is_present("remap_cwd"),
+        debug: matches.is_present("debug"),
         offline: matches.is_present("offline"),
         verbose: matches.is_present("verbose"),
         workspace: matches.is_present("workspace"),
         jobs: matches.value_of_t("jobs").ok(),
+        arch: matches.value_of("arch").unwrap(),
     };
     let manifest_path: Option<PathBuf> = matches.value_of_t("manifest_path").ok();
+    if config.verbose {
+        debug!("{:?}", config);
+        debug!("manifest_path: {:?}", manifest_path);
+    }
     build_sbf(config, manifest_path);
 }
