@@ -462,7 +462,7 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 if from_runnable {
-                    std::mem::swap(next_task.tx.1, populated_lock_attempts);
+                    std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
                     reborrowed_contended_queue
                         .unwrap()
                         .add_to_schedule(*queue_entry.key(), queue_entry.remove());
