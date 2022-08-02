@@ -6,7 +6,9 @@ use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        latest_unprocessed_votes::{self, DeserializedVotePacket, LatestUnprocessedVotes, VoteSource},
+        latest_unprocessed_votes::{
+            self, DeserializedVotePacket, LatestUnprocessedVotes, VoteSource,
+        },
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
@@ -690,6 +692,8 @@ impl BankingStage {
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
         let bank = poh_recorder.read().unwrap().bank();
+        // TODO: add a secondary feature flag and rework this to be able to hot swap into the new
+        // data structure
         let split_voting_threads = bank
             .map(|bank| {
                 bank.feature_set
@@ -1234,14 +1238,12 @@ impl BankingStage {
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let forward_option = unprocessed_transaction_storage.forward_option();
-        // The gossip thread should not even reach this point
-        assert!(!matches!(forward_option, ForwardOption::NotForward));
 
         // get current root bank from bank_forks, use it to sanitize transaction and
         // load all accounts from address loader;
         let current_bank = bank_forks.read().unwrap().root_bank();
         let mut forward_packet_batches_by_accounts =
-            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(current_bank.clone());
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(current_bank);
         let filter_forwarding_result = unprocessed_transaction_storage
             .filter_forwardable_packets_and_add_batches(&mut forward_packet_batches_by_accounts);
 
@@ -2478,9 +2480,10 @@ mod tests {
         },
         solana_program_runtime::timings::ProgramTiming,
         solana_rpc::transaction_status_service::TransactionStatusService,
-        solana_runtime::bank_forks::BankForks,
+        solana_runtime::{bank_forks::BankForks, genesis_utils::activate_feature},
         solana_sdk::{
             account::AccountSharedData,
+            feature_set,
             hash::Hash,
             instruction::InstructionError,
             message::{
@@ -2494,6 +2497,9 @@ mod tests {
         },
         solana_streamer::{recvmmsg::recv_mmsg, socket::SocketAddrSpace},
         solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta},
+        solana_vote_program::{
+            vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
+        },
         std::{
             borrow::Cow,
             collections::HashSet,
@@ -4731,5 +4737,211 @@ mod tests {
         };
         BankingStage::filter_processed_packets(retryable_indexes.iter(), f);
         assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5), (6, 8)]);
+    }
+
+    #[test]
+    fn test_unprocessed_transaction_storage_deserialize_and_insert() {
+        let keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let pubkey = solana_sdk::pubkey::new_rand();
+
+        let small_transfer = Packet::from_data(
+            None,
+            system_transaction::transfer(&keypair, &pubkey, 1, Hash::new_unique()),
+        )
+        .unwrap();
+        let mut vote = Packet::from_data(
+            None,
+            new_vote_state_update_transaction(
+                VoteStateUpdate::default(),
+                Hash::new_unique(),
+                &keypair,
+                &vote_keypair,
+                &vote_keypair,
+                None,
+            ),
+        )
+        .unwrap();
+        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        let big_transfer = Packet::from_data(
+            None,
+            system_transaction::transfer(&keypair, &pubkey, 1000000, Hash::new_unique()),
+        )
+        .unwrap();
+
+        let packet_batch = PacketBatch::new(vec![
+            small_transfer.clone(),
+            vote.clone(),
+            big_transfer.clone(),
+        ]);
+
+        for thread_type in [
+            ThreadType::Transactions,
+            ThreadType::Voting(VoteSource::Gossip),
+            ThreadType::Voting(VoteSource::Tpu),
+        ] {
+            let mut transaction_storage = UnprocessedTransactionStorage::TransactionStorage(
+                UnprocessedPacketBatches::with_capacity(100),
+                thread_type,
+            );
+            transaction_storage
+                .deserialize_and_insert_batch(&packet_batch, &(0..3_usize).collect_vec());
+            let deserialized_packets = transaction_storage
+                .iter()
+                .map(|packet| packet.immutable_section().original_packet().clone())
+                .collect_vec();
+            assert_eq!(3, deserialized_packets.len());
+            assert!(deserialized_packets.contains(&small_transfer));
+            assert!(deserialized_packets.contains(&vote));
+            assert!(deserialized_packets.contains(&big_transfer));
+        }
+
+        for vote_source in [VoteSource::Gossip, VoteSource::Tpu] {
+            let mut transaction_storage = UnprocessedTransactionStorage::VoteStorage(
+                Arc::new(LatestUnprocessedVotes::new()),
+                vote_source,
+            );
+            transaction_storage
+                .deserialize_and_insert_batch(&packet_batch, &(0..3_usize).collect_vec());
+            assert_eq!(1, transaction_storage.len());
+        }
+    }
+
+    #[test]
+    fn test_unprocessed_transaction_storage_full_send() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            mut genesis_config,
+            mint_keypair,
+            ..
+        } = create_slow_genesis_config(10000);
+        // TODO: add second feature flag and activate that here as well
+        activate_feature(
+            &mut genesis_config,
+            feature_set::allow_votes_to_directly_update_vote_state::id(),
+        );
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+        let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
+        let start_hash = bank.last_blockhash();
+        let (verified_sender, verified_receiver) = unbounded();
+        let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
+        let (gossip_verified_vote_sender, gossip_verified_vote_receiver) = unbounded();
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        {
+            let blockstore = Arc::new(
+                Blockstore::open(ledger_path.path())
+                    .expect("Expected to be able to open database ledger"),
+            );
+            let poh_config = PohConfig {
+                // limit tick count to avoid clearing working_bank at PohRecord then
+                // PohRecorderError(MaxHeightReached) at BankingStage
+                target_tick_count: Some(bank.max_tick_height() - 1),
+                ..PohConfig::default()
+            };
+            let (exit, poh_recorder, poh_service, _entry_receiver) =
+                create_test_recorder(&bank, &blockstore, Some(poh_config), None);
+            let cluster_info = new_test_cluster_info(Node::new_localhost().info);
+            let cluster_info = Arc::new(cluster_info);
+            let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
+
+            let banking_stage = BankingStage::new(
+                &cluster_info,
+                &poh_recorder,
+                verified_receiver,
+                tpu_vote_receiver,
+                gossip_verified_vote_receiver,
+                None,
+                gossip_vote_sender,
+                Arc::new(RwLock::new(CostModel::default())),
+                None,
+                Arc::new(ConnectionCache::default()),
+                bank_forks,
+            );
+
+            let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();
+            let vote_keypairs = (0..100).map(|_| Keypair::new()).collect_vec();
+            for i in 0..100_usize {
+                bank.process_transaction(&system_transaction::transfer(
+                    &mint_keypair,
+                    &keypairs[i].pubkey(),
+                    20,
+                    start_hash,
+                ))
+                .unwrap();
+            }
+
+            // Send a bunch of votes and transfers
+            let tpu_votes = (0..100_usize)
+                .map(|i| {
+                    new_vote_state_update_transaction(
+                        VoteStateUpdate::from(vec![
+                            (0, 8),
+                            (1, 7),
+                            (i as u64 + 10, 6),
+                            (i as u64 + 11, 1),
+                        ]),
+                        Hash::new_unique(),
+                        &keypairs[i],
+                        &vote_keypairs[i],
+                        &vote_keypairs[i],
+                        None,
+                    );
+                })
+                .collect_vec();
+            let gossip_votes = (0..100_usize)
+                .map(|i| {
+                    new_vote_state_update_transaction(
+                        VoteStateUpdate::from(vec![
+                            (0, 8),
+                            (1, 7),
+                            (i as u64 + 64 + 5, 6),
+                            (i as u64 + 7, 1),
+                        ]),
+                        Hash::new_unique(),
+                        &keypairs[i],
+                        &vote_keypairs[i],
+                        &vote_keypairs[i],
+                        None,
+                    );
+                })
+                .collect_vec();
+            let txs = (0..100_usize)
+                .map(|i| {
+                    system_transaction::transfer(
+                        &keypairs[i],
+                        &keypairs[(i + 1) % 100].pubkey(),
+                        10,
+                        start_hash,
+                    );
+                })
+                .collect_vec();
+
+            let tpu_packet_batches = to_packet_batches(&tpu_votes, 10);
+            let gossip_packet_batches = to_packet_batches(&gossip_votes, 10);
+            let tx_packet_batches = to_packet_batches(&txs, 10);
+
+            // Send em all
+            [
+                (tpu_packet_batches, tpu_vote_sender.clone()),
+                (gossip_packet_batches, gossip_verified_vote_sender.clone()),
+                (tx_packet_batches, verified_sender.clone()),
+            ]
+            .into_iter()
+            .map(|(packet_batches, sender)| {
+                Builder::new()
+                    .spawn(move || sender.send((packet_batches, None)).unwrap())
+                    .unwrap()
+            })
+            .for_each(|handle| handle.join().unwrap());
+
+            drop(verified_sender);
+            drop(tpu_vote_sender);
+            drop(gossip_verified_vote_sender);
+            banking_stage.join().unwrap();
+            exit.store(true, Ordering::Relaxed);
+            poh_service.join().unwrap();
+        }
+        Blockstore::destroy(ledger_path.path()).unwrap();
     }
 }

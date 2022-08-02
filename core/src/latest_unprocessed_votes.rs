@@ -2,14 +2,10 @@ use {
     crate::{
         banking_stage::weighted_random_order_by_stake,
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
-        immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket}
+        immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     },
     solana_perf::packet::{Packet, PacketBatch},
-    solana_sdk::{
-        clock::Slot,
-        program_utils::limited_deserialize,
-        pubkey::Pubkey,
-    },
+    solana_sdk::{clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey},
     solana_vote_program::vote_instruction::VoteInstruction,
     std::{
         cell::RefCell,
@@ -273,10 +269,407 @@ impl LatestUnprocessedVotes {
                 .for_each(|lock| {
                     if let Ok(cell) = lock.write() {
                         if let Ok(mut vote) = cell.try_borrow_mut() {
-                            vote.clear();
+                            if vote.is_forwarded() {
+                                vote.clear();
+                                self.size.fetch_sub(1, Ordering::Relaxed);
+                            }
                         }
                     }
                 });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        itertools::Itertools,
+        rand::{thread_rng, Rng},
+        solana_perf::packet::{Packet, PacketFlags},
+        solana_runtime::{
+            bank::Bank,
+            genesis_utils::{self, ValidatorVoteKeypairs},
+        },
+        solana_sdk::{hash::Hash, signature::Signer, system_transaction::transfer},
+        solana_vote_program::{
+            vote_state::VoteStateUpdate,
+            vote_transaction::{new_vote_state_update_transaction, new_vote_transaction},
+        },
+        std::{sync::Arc, thread::Builder},
+    };
+
+    fn from_slots(
+        slots: Vec<(u64, u32)>,
+        vote_source: VoteSource,
+        keypairs: &ValidatorVoteKeypairs,
+    ) -> DeserializedVotePacket {
+        let vote = VoteStateUpdate::from(slots);
+        let vote_tx = new_vote_state_update_transaction(
+            vote,
+            Hash::new_unique(),
+            &keypairs.node_keypair,
+            &keypairs.vote_keypair,
+            &keypairs.vote_keypair,
+            None,
+        );
+        let mut packet = Packet::from_data(None, vote_tx).unwrap();
+        packet.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        DeserializedVotePacket::new(packet, vote_source).unwrap()
+    }
+
+    #[test]
+    fn test_deserialize_vote_packets() {
+        let keypairs = ValidatorVoteKeypairs::new_rand();
+        let bankhash = Hash::new_unique();
+        let blockhash = Hash::new_unique();
+        let switch_proof = Hash::new_unique();
+        let mut vote = Packet::from_data(
+            None,
+            new_vote_transaction(
+                vec![0, 1, 2],
+                bankhash,
+                blockhash,
+                &keypairs.node_keypair,
+                &keypairs.vote_keypair,
+                &keypairs.vote_keypair,
+                None,
+            ),
+        )
+        .unwrap();
+        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        let mut vote_switch = Packet::from_data(
+            None,
+            new_vote_transaction(
+                vec![0, 1, 2],
+                bankhash,
+                blockhash,
+                &keypairs.node_keypair,
+                &keypairs.vote_keypair,
+                &keypairs.vote_keypair,
+                Some(switch_proof),
+            ),
+        )
+        .unwrap();
+        vote_switch
+            .meta
+            .flags
+            .set(PacketFlags::SIMPLE_VOTE_TX, true);
+        let mut vote_state_update = Packet::from_data(
+            None,
+            new_vote_state_update_transaction(
+                VoteStateUpdate::from(vec![(0, 3), (1, 2), (2, 1)]),
+                blockhash,
+                &keypairs.node_keypair,
+                &keypairs.vote_keypair,
+                &keypairs.vote_keypair,
+                None,
+            ),
+        )
+        .unwrap();
+        vote_state_update
+            .meta
+            .flags
+            .set(PacketFlags::SIMPLE_VOTE_TX, true);
+        let mut vote_state_update_switch = Packet::from_data(
+            None,
+            new_vote_state_update_transaction(
+                VoteStateUpdate::from(vec![(0, 3), (1, 2), (3, 1)]),
+                blockhash,
+                &keypairs.node_keypair,
+                &keypairs.vote_keypair,
+                &keypairs.vote_keypair,
+                Some(switch_proof),
+            ),
+        )
+        .unwrap();
+        vote_state_update_switch
+            .meta
+            .flags
+            .set(PacketFlags::SIMPLE_VOTE_TX, true);
+        let random_transaction = Packet::from_data(
+            None,
+            transfer(
+                &keypairs.node_keypair,
+                &Pubkey::new_unique(),
+                1000,
+                blockhash,
+            ),
+        )
+        .unwrap();
+        let packet_batch = PacketBatch::new(vec![
+            vote,
+            vote_switch,
+            vote_state_update,
+            vote_state_update_switch,
+            random_transaction,
+        ]);
+
+        let deserialized_packets = deserialize_packets(
+            &packet_batch,
+            &(0..packet_batch.len()).collect_vec(),
+            VoteSource::Gossip,
+        )
+        .collect_vec();
+
+        assert_eq!(2, deserialized_packets.len());
+        assert_eq!(VoteSource::Gossip, deserialized_packets[0].vote_source);
+        assert_eq!(VoteSource::Gossip, deserialized_packets[1].vote_source);
+
+        assert_eq!(
+            keypairs.node_keypair.pubkey(),
+            deserialized_packets[0].pubkey
+        );
+        assert_eq!(
+            keypairs.node_keypair.pubkey(),
+            deserialized_packets[1].pubkey
+        );
+
+        assert!(deserialized_packets[0].vote.is_some());
+        assert!(deserialized_packets[1].vote.is_some());
+    }
+
+    #[test]
+    fn test_update_latest_vote() {
+        let latest_unprocessed_votes = LatestUnprocessedVotes::new();
+        let keypair_a = ValidatorVoteKeypairs::new_rand();
+        let keypair_b = ValidatorVoteKeypairs::new_rand();
+
+        let vote_a = from_slots(vec![(0, 2), (1, 1)], VoteSource::Gossip, &keypair_a);
+        let vote_b = from_slots(vec![(0, 5), (4, 2), (9, 1)], VoteSource::Gossip, &keypair_b);
+
+        assert!(latest_unprocessed_votes
+            .update_latest_vote(vote_a)
+            .is_none());
+        assert!(latest_unprocessed_votes
+            .update_latest_vote(vote_b)
+            .is_none());
+        assert_eq!(2, latest_unprocessed_votes.len());
+
+        assert_eq!(
+            Some(1),
+            latest_unprocessed_votes.get_latest_vote_slot(keypair_a.node_keypair.pubkey())
+        );
+        assert_eq!(
+            Some(9),
+            latest_unprocessed_votes.get_latest_vote_slot(keypair_b.node_keypair.pubkey())
+        );
+
+        let vote_a = from_slots(
+            vec![(0, 5), (1, 4), (3, 3), (10, 1)],
+            VoteSource::Gossip,
+            &keypair_a,
+        );
+        let vote_b = from_slots(vec![(0, 5), (4, 2), (6, 1)], VoteSource::Gossip, &keypair_a);
+
+        // Evict previous vote
+        assert_eq!(
+            1,
+            latest_unprocessed_votes
+                .update_latest_vote(vote_a)
+                .unwrap()
+                .slot
+        );
+        // Drop current vote
+        assert_eq!(
+            6,
+            latest_unprocessed_votes
+                .update_latest_vote(vote_b)
+                .unwrap()
+                .slot
+        );
+
+        assert_eq!(2, latest_unprocessed_votes.len());
+    }
+
+    #[test]
+    fn test_simulate_threads() {
+        let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
+        let latest_unprocessed_votes_tpu = latest_unprocessed_votes.clone();
+        let keypairs = Arc::new(
+            (0..10)
+                .map(|_| ValidatorVoteKeypairs::new_rand())
+                .collect_vec(),
+        );
+        let keypairs_tpu = keypairs.clone();
+        let vote_limit = 1000;
+
+        let gossip = Builder::new()
+            .spawn(move || {
+                let mut rng = thread_rng();
+                for i in 0..vote_limit {
+                    let vote = from_slots(
+                        vec![(i, 1)],
+                        VoteSource::Gossip,
+                        &keypairs[rng.gen_range(0, 10)],
+                    );
+                    latest_unprocessed_votes.update_latest_vote(vote);
+                }
+            })
+            .unwrap();
+
+        let tpu = Builder::new()
+            .spawn(move || {
+                let mut rng = thread_rng();
+                for i in 0..vote_limit {
+                    let vote = from_slots(
+                        vec![(i, 1)],
+                        VoteSource::Tpu,
+                        &keypairs_tpu[rng.gen_range(0, 10)],
+                    );
+                    latest_unprocessed_votes_tpu.update_latest_vote(vote);
+                    if i % 214 == 0 {
+                        // Simulate draining and processing packets
+                        let latest_votes_per_pubkey = latest_unprocessed_votes_tpu
+                            .latest_votes_per_pubkey
+                            .read()
+                            .unwrap();
+                        latest_votes_per_pubkey.iter().for_each(|(_pubkey, lock)| {
+                            let latest_vote = lock.write().unwrap();
+                            let mut latest_vote = latest_vote.try_borrow_mut().unwrap();
+                            if !latest_vote.is_processed() {
+                                latest_vote.clear();
+                                latest_unprocessed_votes_tpu
+                                    .size
+                                    .fetch_sub(1, Ordering::AcqRel);
+                            }
+                        });
+                    }
+                }
+            })
+            .unwrap();
+        gossip.join().unwrap();
+        tpu.join().unwrap();
+    }
+
+    #[test]
+    fn test_forwardable_packets() {
+        let latest_unprocessed_votes = LatestUnprocessedVotes::new();
+        let mut forward_packet_batches_by_accounts =
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(Arc::new(
+                Bank::default_for_tests(),
+            ));
+
+        let keypair_a = ValidatorVoteKeypairs::new_rand();
+        let keypair_b = ValidatorVoteKeypairs::new_rand();
+
+        let vote_a = from_slots(vec![(1, 1)], VoteSource::Gossip, &keypair_a);
+        let vote_b = from_slots(vec![(2, 1)], VoteSource::Tpu, &keypair_b);
+        latest_unprocessed_votes.update_latest_vote(vote_a);
+        latest_unprocessed_votes.update_latest_vote(vote_b);
+
+        // Don't forward 0 stake accounts
+        let forwarded = latest_unprocessed_votes
+            .get_and_insert_forwardable_packets(&mut forward_packet_batches_by_accounts);
+        assert_eq!(0, forwarded);
+        assert_eq!(
+            0,
+            forward_packet_batches_by_accounts
+                .iter_batches()
+                .filter(|&batch| !batch.is_empty())
+                .count()
+        );
+
+        let config = genesis_utils::create_genesis_config_with_leader(
+            100,
+            &keypair_a.node_keypair.pubkey(),
+            200,
+        )
+        .genesis_config;
+        let bank = Bank::new_for_tests(&config);
+        let mut forward_packet_batches_by_accounts =
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(Arc::new(bank));
+
+        // Don't forward votes from gossip
+        let forwarded = latest_unprocessed_votes
+            .get_and_insert_forwardable_packets(&mut forward_packet_batches_by_accounts);
+
+        assert_eq!(0, forwarded);
+        assert_eq!(
+            0,
+            forward_packet_batches_by_accounts
+                .iter_batches()
+                .filter(|&batch| !batch.is_empty())
+                .count()
+        );
+
+        let config = genesis_utils::create_genesis_config_with_leader(
+            100,
+            &keypair_b.node_keypair.pubkey(),
+            200,
+        )
+        .genesis_config;
+        let bank = Arc::new(Bank::new_for_tests(&config));
+        let mut forward_packet_batches_by_accounts =
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(bank.clone());
+
+        // Forward from TPU
+        let forwarded = latest_unprocessed_votes
+            .get_and_insert_forwardable_packets(&mut forward_packet_batches_by_accounts);
+
+        assert_eq!(1, forwarded);
+        assert_eq!(
+            1,
+            forward_packet_batches_by_accounts
+                .iter_batches()
+                .filter(|&batch| !batch.is_empty())
+                .count()
+        );
+
+        // Don't forward again
+        let mut forward_packet_batches_by_accounts =
+            ForwardPacketBatchesByAccounts::new_with_default_batch_limits(bank);
+        let forwarded = latest_unprocessed_votes
+            .get_and_insert_forwardable_packets(&mut forward_packet_batches_by_accounts);
+
+        assert_eq!(0, forwarded);
+        assert_eq!(
+            0,
+            forward_packet_batches_by_accounts
+                .iter_batches()
+                .filter(|&batch| !batch.is_empty())
+                .count()
+        );
+    }
+
+    #[test]
+    fn test_clear_forwarded_packets() {
+        let latest_unprocessed_votes = LatestUnprocessedVotes::new();
+        let keypair_a = ValidatorVoteKeypairs::new_rand();
+        let keypair_b = ValidatorVoteKeypairs::new_rand();
+        let keypair_c = ValidatorVoteKeypairs::new_rand();
+        let keypair_d = ValidatorVoteKeypairs::new_rand();
+
+        let vote_a = from_slots(vec![(1, 1)], VoteSource::Gossip, &keypair_a);
+        let mut vote_b = from_slots(vec![(2, 1)], VoteSource::Tpu, &keypair_b);
+        vote_b.forwarded = true;
+        let vote_c = from_slots(vec![(3, 1)], VoteSource::Tpu, &keypair_c);
+        let vote_d = from_slots(vec![(4, 1)], VoteSource::Gossip, &keypair_d);
+
+        latest_unprocessed_votes.update_latest_vote(vote_a);
+        latest_unprocessed_votes.update_latest_vote(vote_b);
+        latest_unprocessed_votes.update_latest_vote(vote_c);
+        latest_unprocessed_votes.update_latest_vote(vote_d);
+        assert_eq!(4, latest_unprocessed_votes.len());
+
+        latest_unprocessed_votes.clear_forwarded_packets();
+        assert_eq!(1, latest_unprocessed_votes.len());
+
+        assert_eq!(
+            Some(1),
+            latest_unprocessed_votes.get_latest_vote_slot(keypair_a.node_keypair.pubkey())
+        );
+        assert_eq!(
+            Some(2),
+            latest_unprocessed_votes.get_latest_vote_slot(keypair_b.node_keypair.pubkey())
+        );
+        assert_eq!(
+            Some(3),
+            latest_unprocessed_votes.get_latest_vote_slot(keypair_c.node_keypair.pubkey())
+        );
+        assert_eq!(
+            Some(4),
+            latest_unprocessed_votes.get_latest_vote_slot(keypair_d.node_keypair.pubkey())
+        );
     }
 }

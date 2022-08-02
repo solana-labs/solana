@@ -1,5 +1,8 @@
 use {
-    solana_program::vote::{self, state::{Vote, VoteStateUpdate}},
+    solana_program::vote::{
+        self,
+        state::{Vote, VoteStateUpdate},
+    },
     solana_sdk::{
         clock::Slot,
         hash::Hash,
