@@ -332,7 +332,7 @@ fn output_slot(
                     ee.task.tx.signature()
                 );
                 if step % 1966 == 0 {
-                    error!("finished!: {}", step);
+                    error!("finished!: {} {}", step, post_execute_env_receiver.len());
                 }
             }
         })
@@ -346,12 +346,12 @@ fn output_slot(
 
         let mut weight = 10_000_000;
         let mut post_filtering = 0;
-        let skip_non_voting = std::env::var("SKIP_NON_VOTING").is_ok();
+        let skip_voting = std::env::var("SKIP_VOTING").is_ok();
         for i in 0..1000 {
             error!("started!: {} {}", i, post_filtering);
             post_filtering = 0;
             for tx in txes.clone() {
-                if skip_non_voting && solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
+                if skip_voting && solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
                     continue;
                 }
                 while depth.load(Ordering::Relaxed) > 10_000 {
