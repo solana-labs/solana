@@ -713,7 +713,7 @@ mod tests {
         }
 
         let addr = &get_addr(&mut rng);
-        connection_cache.get_connection(&addr);
+        connection_cache.get_connection(addr);
 
         let port = addr
             .port()
