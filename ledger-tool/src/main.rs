@@ -175,7 +175,7 @@ fn output_entry(
                     let readonly_lock_iter = locks
                         .readonly
                         .iter();
-                    let locks = writable_lock_iter.chain(readonly_lock_iter).copied().collect::<Vec<_>>();
+                    let locks = writable_lock_iter.chain(readonly_lock_iter).copied().map(|p| *p).collect::<Vec<_>>();
                     to_schedule_stage.push(Box::new((sanitized_tx, locks)));
                 }
                 /*
