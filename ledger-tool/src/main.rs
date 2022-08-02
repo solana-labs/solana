@@ -165,7 +165,7 @@ fn output_entry(
                     true, // require_static_program_ids
                 )
                 .unwrap();
-                if !skip_voting || !solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
+                if !skip_voting || !solana_runtime::vote_parser::is_simple_vote_transaction(&sanitized_tx) {
                     to_schedule_stage.push(Box::new(sanitized_tx));
                 }
                 /*
