@@ -53,6 +53,14 @@ impl LockAttempt {
         !self.is_success()
     }
 
+    fn new(address: Pubkey, requested_usage) -> Self {
+        Self {
+            address,
+            is_success: true,
+            requested_usage,
+        }
+    }
+
     fn success(address: Pubkey, requested_usage: RequestedUsage) -> Self {
         Self {
             address,
