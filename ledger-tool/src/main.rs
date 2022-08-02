@@ -283,6 +283,9 @@ fn output_slot(
 
                     for step in 0.. {
                         let ee = pre_execute_env_receiver.recv().unwrap();
+                        if step % 1966 == 0 {
+                            error!("executing!: {} {}", step, pre_execute_env_receiver.len());
+                        }
 
                         if send_metrics {
                             let mut process_message_time = Measure::start("process_message_time");
@@ -332,7 +335,7 @@ fn output_slot(
                     ee.task.tx.signature()
                 );
                 if step % 1966 == 0 {
-                    error!("finished!: {} {}", step, post_execute_env_receiver.len());
+                    error!("finished!: {} {}", step, post_schedule_env_receiver.len());
                 }
             }
         })
