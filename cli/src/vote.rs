@@ -2231,5 +2231,37 @@ mod tests {
                 ],
             }
         );
+
+        // Test CloseVoteAccount subcommand with authority w/ ComputeUnitPrice
+        let withdraw_authority = Keypair::new();
+        let (withdraw_authority_file, mut tmp_file) = make_tmp_file();
+        write_keypair(&withdraw_authority, tmp_file.as_file_mut()).unwrap();
+        let test_close_vote_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "close-vote-account",
+            &keypair_file,
+            &pubkey_string,
+            "--authorized-withdrawer",
+            &withdraw_authority_file,
+            "--with-compute-unit-price",
+            "99",
+        ]);
+        assert_eq!(
+            parse_command(&test_close_vote_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::CloseVoteAccount {
+                    vote_account_pubkey: read_keypair_file(&keypair_file).unwrap().pubkey(),
+                    destination_account_pubkey: pubkey,
+                    withdraw_authority: 1,
+                    memo: None,
+                    fee_payer: 0,
+                    compute_unit_price: Some(99),
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&withdraw_authority_file).unwrap().into()
+                ],
+            }
+        );
     }
 }

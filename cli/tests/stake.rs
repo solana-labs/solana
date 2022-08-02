@@ -93,6 +93,7 @@ fn test_stake_redelegation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -113,6 +114,7 @@ fn test_stake_redelegation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -135,6 +137,7 @@ fn test_stake_redelegation() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -153,6 +156,7 @@ fn test_stake_redelegation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -216,6 +220,7 @@ fn test_stake_redelegation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: Some(stake2_keypair.pubkey()),
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 

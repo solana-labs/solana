@@ -4327,6 +4327,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     redelegation_stake_account_pubkey: Some(redelegation_stake_account_pubkey),
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4364,6 +4365,40 @@ mod tests {
                     seed: None,
                     fee_payer: 0,
                     compute_unit_price: None,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test WithdrawStake Subcommand w/ ComputeUnitPrice
+        let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-stake",
+            &stake_account_string,
+            &stake_account_string,
+            "42",
+            "--with-compute-unit-price",
+            "99",
+        ]);
+
+        assert_eq!(
+            parse_command(&test_withdraw_stake, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawStake {
+                    stake_account_pubkey,
+                    destination_account_pubkey: stake_account_pubkey,
+                    amount: SpendAmount::Some(42_000_000_000),
+                    withdraw_authority: 0,
+                    custodian: None,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    seed: None,
+                    fee_payer: 0,
+                    compute_unit_price: Some(99),
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }

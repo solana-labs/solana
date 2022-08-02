@@ -1040,6 +1040,34 @@ mod tests {
                 signers: CliSigners::default(),
             }
         );
+
+        // Test ComputeUnitPrice Subcommand with authority
+        let test_authorize_nonce_account = test_commands.clone().get_matches_from(vec![
+            "test",
+            "authorize-nonce-account",
+            &keypair_file,
+            &Pubkey::default().to_string(),
+            "--nonce-authority",
+            &authority_keypair_file,
+            "--with-compute-unit-price",
+            "99",
+        ]);
+        assert_eq!(
+            parse_command(&test_authorize_nonce_account, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::AuthorizeNonceAccount {
+                    nonce_account: read_keypair_file(&keypair_file).unwrap().pubkey(),
+                    nonce_authority: 1,
+                    memo: None,
+                    new_authority: Pubkey::default(),
+                    compute_unit_price: Some(99),
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&authority_keypair_file).unwrap().into()
+                ],
+            }
+        );
     }
 
     #[test]
