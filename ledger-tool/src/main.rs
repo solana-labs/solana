@@ -345,12 +345,13 @@ fn output_slot(
         }
 
         let mut weight = 10_000_000;
-        let mut non_voting = 0;
+        let mut post_filtering = 0;
+        let skip_non_voting = std::env::var("SKIP_NON_VOTING").is_ok();
         for i in 0..1000 {
-            error!("started!: {} {}", i, non_voting);
-            non_voting = 0;
+            error!("started!: {} {}", i, post_filtering);
+            post_filtering = 0;
             for tx in txes.clone() {
-                if solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
+                if skip_non_voting && solana_runtime::vote_parser::is_simple_vote_transaction(&tx) {
                     continue;
                 }
                 while depth.load(Ordering::Relaxed) > 10_000 {
@@ -365,7 +366,7 @@ fn output_slot(
                     .unwrap();
                 depth.fetch_add(1, Ordering::Relaxed);
                 weight -= 1;
-                non_voting += 1;
+                post_filtering += 1;
             }
         }
         t1.join().unwrap();
