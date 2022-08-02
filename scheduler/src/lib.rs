@@ -346,7 +346,7 @@ fn attempt_lock_for_execution<'a>(
 // adaptive relative load between sigverify stage and execution substage
 // switched from crossbeam_channel::select! due to observed poor performance
 pub enum MultiplexedPayload {
-    FromPrevious((Weight, Box<SanitizedTransaction>)),
+    FromPrevious((Weight, Box<(SanitizedTransaction, Vec<Pubkey>>)),
     FromExecute(Box<ExecutionEnvironment>),
 }
 
