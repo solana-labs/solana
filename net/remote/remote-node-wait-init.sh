@@ -11,6 +11,7 @@ waitForNodeToInit() {
   echo "--- waiting for $hostname to boot up"
   declare startTime=$SECONDS
   while [[ ! -r $initCompleteFile ]]; do
+    echo "greg - remote-node-wait-init.sh waiting..."
     declare timeWaited=$((SECONDS - startTime))
     if [[ $timeWaited -ge $waitTime ]]; then
       echo "^^^ +++"
