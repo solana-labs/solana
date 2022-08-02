@@ -15,6 +15,7 @@ use {
     std::{
         cell::RefCell,
         collections::HashMap,
+        ops::DerefMut,
         rc::Rc,
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -137,16 +138,20 @@ impl LatestUnprocessedVotes {
         &self,
         votes: impl Iterator<Item = DeserializedVotePacket>,
     ) -> (usize, usize) {
-        let mut num_dropped_packets = 0;
+        let mut num_dropped_gossip = 0;
+        let mut num_dropped_tpu = 0;
 
         for vote in votes {
-            if self.update_latest_vote(vote).is_some() {
-                num_dropped_packets += 1;
+            if let Some(vote) = self.update_latest_vote(vote) {
+                assert!(!vote.is_processed());
+                match vote.vote_source {
+                    VoteSource::Gossip => num_dropped_gossip += 1,
+                    VoteSource::Tpu => num_dropped_tpu += 1,
+                }
             }
         }
 
-        // Should not be any tracer packets in votes
-        (num_dropped_packets, 0)
+        (num_dropped_gossip, num_dropped_tpu)
     }
 
     /// If this vote causes an unprocessed vote to be removed, returns Some(old_vote)
@@ -155,7 +160,7 @@ impl LatestUnprocessedVotes {
     pub fn update_latest_vote(
         &self,
         vote: DeserializedVotePacket,
-    ) -> Option<Rc<ImmutableDeserializedPacket>> {
+    ) -> Option<DeserializedVotePacket> {
         let pubkey = vote.pubkey();
         let slot = vote.slot();
         if let Some(latest_vote) = self.latest_votes_per_pubkey.read().unwrap().get(&pubkey) {
@@ -176,19 +181,20 @@ impl LatestUnprocessedVotes {
                     if let Ok(mut latest_vote) = latest_vote.try_borrow_mut() {
                         let latest_slot = latest_vote.slot();
                         if slot > latest_slot {
-                            if latest_vote.is_processed() {
+                            let old_vote = std::mem::replace(latest_vote.deref_mut(), vote);
+                            if old_vote.is_processed() {
                                 self.size.fetch_add(1, Ordering::AcqRel);
+                                return None;
+                            } else {
+                                return Some(old_vote);
                             }
-                            let ret = std::mem::take(&mut latest_vote.vote);
-                            *latest_vote = vote;
-                            return ret;
                         }
                     } else {
                         error!("Implementation error {} {} {:?}", slot, latest_slot, self);
                     }
                 }
             }
-            return vote.vote;
+            return Some(vote);
         }
 
         // Should have low lock contention because this is only hit on the first few blocks of startup
@@ -223,7 +229,7 @@ impl LatestUnprocessedVotes {
         if let Ok(latest_votes_per_pubkey) = self.latest_votes_per_pubkey.read() {
             return weighted_random_order_by_stake(bank)
                 .filter(|pubkey| {
-                    if let Some(lock) = latest_votes_per_pubkey.get(&pubkey) {
+                    if let Some(lock) = latest_votes_per_pubkey.get(pubkey) {
                         if let Ok(cell) = lock.write() {
                             if let Ok(mut vote) = cell.try_borrow_mut() {
                                 if !vote.is_processed() && !vote.is_forwarded() {

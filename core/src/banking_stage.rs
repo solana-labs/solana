@@ -459,22 +459,32 @@ impl UnprocessedTransactionStorage {
         }
     }
 
+    /// returns
+    /// num dropped packets,
+    /// num dropped gossip vote packets,
+    /// num dropped tpu vote packets,
+    /// num dropped tracer packets
     pub fn deserialize_and_insert_batch(
         &mut self,
         packet_batch: &PacketBatch,
         packet_indexes: &[usize],
-    ) -> (usize, usize) {
+    ) -> (usize, usize, usize, usize) {
         match self {
             Self::VoteStorage(v, vote_source) => {
-                v.insert_batch(latest_unprocessed_votes::deserialize_packets(
-                    packet_batch,
-                    packet_indexes,
-                    *vote_source,
-                ))
+                let (dropped_gossip, dropped_tpu) =
+                    v.insert_batch(latest_unprocessed_votes::deserialize_packets(
+                        packet_batch,
+                        packet_indexes,
+                        *vote_source,
+                    ));
+                (dropped_gossip + dropped_tpu, dropped_gossip, dropped_tpu, 0)
             }
-            Self::TransactionStorage(t, _) => t.insert_batch(
-                unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
-            ),
+            Self::TransactionStorage(t, _) => {
+                let (dropped_packets, dropped_tracer) = t.insert_batch(
+                    unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
+                );
+                (dropped_packets, 0, 0, dropped_tracer)
+            }
         }
     }
 
@@ -2362,14 +2372,22 @@ impl BankingStage {
             slot_metrics_tracker
                 .increment_newly_buffered_packets_count(packet_indexes.len() as u64);
 
-            let (number_of_dropped_packets, number_of_dropped_tracer_packets) =
-                unprocessed_transaction_storage
-                    .deserialize_and_insert_batch(packet_batch, packet_indexes);
+            let (
+                number_of_dropped_packets,
+                number_of_dropped_gossip_votes,
+                number_of_dropped_tpu_votes,
+                number_of_dropped_tracer_packets,
+            ) = unprocessed_transaction_storage
+                .deserialize_and_insert_batch(packet_batch, packet_indexes);
 
             saturating_add_assign!(*dropped_packets_count, number_of_dropped_packets);
             slot_metrics_tracker.increment_exceeded_buffer_limit_dropped_packets_count(
                 number_of_dropped_packets as u64,
             );
+            slot_metrics_tracker
+                .increment_dropped_gossip_vote_count(number_of_dropped_gossip_votes as u64);
+            slot_metrics_tracker
+                .increment_dropped_tpu_vote_count(number_of_dropped_tpu_votes as u64);
 
             tracer_packet_stats
                 .increment_total_exceeded_banking_stage_buffer(number_of_dropped_tracer_packets);
