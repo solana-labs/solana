@@ -6440,71 +6440,40 @@ impl AccountsDb {
     {
         let start_bin_index = bin_range.start;
 
-        // any ancient append vecs should definitely be cached
-        // We need to break the ranges into:
-        // 1. individual ancient append vecs (may be empty)
-        // 2. first unevenly divided chunk starting at 1 epoch old slot (may be empty)
-        // 3. evenly divided full chunks in the middle
-        // 4. unevenly divided chunk of most recent slots (may be empty)
-        let max_slot_inclusive = snapshot_storages.max_slot_inclusive();
-        // we are going to use a fixed slots per epoch here.
-        // We are mainly interested in the network at steady state.
-        let slots_in_epoch = config.epoch_schedule.slots_per_epoch;
-        let one_epoch_old_slot = max_slot_inclusive.saturating_sub(slots_in_epoch);
-
+        let width = snapshot_storages.range_width();
+        // 2 is for 2 special chunks - unaligned slots at the beginning and end
+        let chunks = 2 + (width as Slot / MAX_ITEMS_PER_CHUNK);
         let range = snapshot_storages.range();
-        let ancient_slots = snapshot_storages
-            .iter_range(range.start..one_epoch_old_slot)
-            .map(|(slot, _)| slot)
-            .collect::<Vec<_>>();
-        let ancient_slot_count = ancient_slots.len() as Slot;
-        let slot0 = std::cmp::max(range.start, one_epoch_old_slot);
+        let slot0 = range.start;
         let first_boundary =
             ((slot0 + MAX_ITEMS_PER_CHUNK) / MAX_ITEMS_PER_CHUNK) * MAX_ITEMS_PER_CHUNK;
-
-        let width = max_slot_inclusive - slot0;
-        // 2 is for 2 special chunks - unaligned slots at the beginning and end
-        let chunks = ancient_slot_count + 2 + (width as Slot / MAX_ITEMS_PER_CHUNK);
         (0..chunks)
             .into_par_iter()
-            .map(|mut chunk| {
+            .map(|chunk| {
                 let mut scanner = scanner.clone();
-                // calculate start, end_exclusive
-                let (single_cached_slot, (start, mut end_exclusive)) = if chunk < ancient_slot_count
-                {
-                    let ancient_slot = ancient_slots[chunk as usize];
-                    (true, (ancient_slot, ancient_slot + 1))
+                // calculate start, end
+                let (start, mut end) = if chunk == 0 {
+                    if slot0 == first_boundary {
+                        return scanner.scanning_complete(); // if we evenly divide, nothing for special chunk 0 to do
+                    }
+                    // otherwise first chunk is not 'full'
+                    (slot0, first_boundary)
                 } else {
-                    (false, {
-                        chunk -= ancient_slot_count;
-                        if chunk == 0 {
-                            if slot0 == first_boundary {
-                                return scanner.scanning_complete(); // if we evenly divide, nothing for special chunk 0 to do
-                            }
-                            // otherwise first chunk is not 'full'
-                            (slot0, first_boundary)
-                        } else {
-                            // normal chunk in the middle or at the end
-                            let start = first_boundary + MAX_ITEMS_PER_CHUNK * (chunk - 1);
-                            let end_exclusive = start + MAX_ITEMS_PER_CHUNK;
-                            (start, end_exclusive)
-                        }
-                    })
+                    // normal chunk in the middle or at the end
+                    let start = first_boundary + MAX_ITEMS_PER_CHUNK * (chunk - 1);
+                    let end = start + MAX_ITEMS_PER_CHUNK;
+                    (start, end)
                 };
-                end_exclusive = std::cmp::min(end_exclusive, range.end);
-                if start == end_exclusive {
+                end = std::cmp::min(end, range.end);
+                if start == end {
                     return scanner.scanning_complete();
                 }
 
                 let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data()
                     || config.store_detailed_debug_info_on_failure;
 
-                // if we're using the write cache, then we can't rely on cached append vecs since the append vecs may not include every account
-                // Single cached slots get cached and full chunks get cached.
-                // chunks that don't divide evenly would include some cached append vecs that are no longer part of this range and some that are, so we have to ignore caching on non-evenly dividing chunks.
-                let eligible_for_caching = !config.use_write_cache
-                    && (single_cached_slot
-                        || end_exclusive.saturating_sub(start) == MAX_ITEMS_PER_CHUNK);
+                let eligible_for_caching =
+                    !config.use_write_cache && end.saturating_sub(start) == MAX_ITEMS_PER_CHUNK;
 
                 if eligible_for_caching || config.store_detailed_debug_info_on_failure {
                     let range = bin_range.end - bin_range.start;
@@ -6528,7 +6497,7 @@ impl AccountsDb {
                     let mut load_from_cache = true;
                     let mut hasher = std::collections::hash_map::DefaultHasher::new(); // wrong one?
 
-                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
+                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
                         if bin_range.start == 0 && slot < one_epoch_old {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
@@ -6567,7 +6536,7 @@ impl AccountsDb {
                         let hash = hasher.finish();
                         file_name = format!(
                             "{}.{}.{}.{}.{}",
-                            start, end_exclusive, bin_range.start, bin_range.end, hash
+                            start, end, bin_range.start, bin_range.end, hash
                         );
                         let mut retval = scanner.get_accum();
                         if cache_hash_data
@@ -6586,14 +6555,14 @@ impl AccountsDb {
                         // fall through and load normally - we failed to load
                     }
                 } else {
-                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
+                    for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
                         if bin_range.start == 0 && slot < one_epoch_old {
                             self.update_old_slot_stats(stats, sub_storages);
                         }
                     }
                 }
 
-                for (slot, sub_storages) in snapshot_storages.iter_range(start..end_exclusive) {
+                for (slot, sub_storages) in snapshot_storages.iter_range(start..end) {
                     scanner.set_slot(slot);
                     let valid_slot = sub_storages.is_some();
                     if config.use_write_cache {
