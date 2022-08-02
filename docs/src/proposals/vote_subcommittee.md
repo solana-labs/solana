@@ -102,9 +102,11 @@ A1 A1 A2 A2 A3
    B1 B1 B2 B2
 ```
 
-Last block of epoch (A1,B1), X, A1 OC confirmed slot X. B1 since
-it was locked out did not. On the next slot, X+1, B1 is now primary.
-B1 may use votes from A1 on slot X to switch forks.
+Last block of epoch (A1,B1), X, A1 optimistically confirmed slot
+X. B1 since it was locked out did not. On the next slot, X+1, B1
+is now primary. B1 may use votes from A1 on slot X to switch forks.
+The fork form which B1 is switching from must be from an epoch when
+B1 was secondary.
 
 ### Safety
 
