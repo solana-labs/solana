@@ -12,7 +12,7 @@ message and compute load on the network.
 Under the assumption that Turbine is able to guarantee that all
 honest nodes receive the block as long as at least X honest nodes
 receive the block, it is possible to allow a sampled set of validators
-to vote on that block as apposed to all the validators, and achieve
+to vote on that block as opposed to all the validators, and achieve
 the same liveness properties. If the network is tolerant of 1/3
 failures, then for a large enough random sample, like 200 or more,
 the probability of containing 2/3+ faulty nodes is 1:10^40. Assuming
@@ -78,6 +78,15 @@ block that is a descendant of a **rotation block** that was confirmed
 by both super-majorities in the previous epoch. The **rotation seed**
 is used to derive the new secondary subcommittee.
 
+The epoch can be as short as 32 slots, since a slot needs to be
+rooted.  But to make rotation more reliable it makes sense to have
+the epoch be at least 100 slots long, so the probability of a slot
+being rooted is high enough for rotation to nearly always occur.
+
+If there is no rooted block during the epoch, the same voting
+subcommittee continues. Primary subcommittee remains the same until
+the rotation.
+
 ### Subcommittee Selection
 
 A stake weighted shuffle from the **rotation seed** is used to pick
@@ -102,11 +111,12 @@ A1 A1 A2 A2 A3
    B1 B1 B2 B2
 ```
 
-Last block of epoch (A1,B1), X, A1 optimistically confirmed slot
-X. B1 since it was locked out did not. On the next slot, X+1, B1
-is now primary. B1 may use votes from A1 on slot X to switch forks.
-The fork form which B1 is switching from must be from an epoch when
-B1 was secondary.
+Last block of epoch (A1,B1), X, A1 is primary and has optimistically
+confirmed slot X. B1 in this example was locked out did not
+optimistically confirm slot X. On the next slot, X+1, B1 is now
+primary. B1 may use votes from A1 on slot X to switch forks.  The
+fork form which B1 is switching from must be from the epoch when
+B1 was still secondary, earlier than slot X.
 
 ### Safety
 
@@ -119,7 +129,9 @@ To switch subcommittees both currently active primary and secondary
 must confirm the same slot with a 2/3+ super-majority. When voting
 subcommittee switches from (A1,B1) to (A2,B1), B1 must have rooted
 the same fork as A1, and (A2,B1) must include the same fork, or a
-lockout violation has occurred, or the network has stalled.
+lockout violation has occurred, or the network has stalled. At the
+start of the epoch with (A2,B1), B1 is now the primary and A2 is
+the secondary.
 
 ### Optimistic Confirmation
 
