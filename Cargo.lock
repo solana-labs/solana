@@ -5104,6 +5104,7 @@ version = "1.11.5"
 dependencies = [
  "bincode",
  "clap 3.1.8",
+ "crossbeam-channel",
  "itertools",
  "log",
  "rand 0.7.3",
@@ -5116,6 +5117,7 @@ dependencies = [
  "solana-gossip",
  "solana-local-cluster",
  "solana-logger 1.11.5",
+ "solana-measure",
  "solana-net-utils",
  "solana-perf",
  "solana-rpc",

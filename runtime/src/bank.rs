@@ -178,6 +178,7 @@ pub struct VerifyBankHash {
     pub ignore_mismatch: bool,
     pub require_rooted_bank: bool,
     pub run_in_background: bool,
+    pub store_hash_raw_data_for_debug: bool,
 }
 
 #[derive(Debug, Default)]
@@ -6903,6 +6904,7 @@ impl Bank {
                             &rent_collector,
                             config.can_cached_slot_be_unflushed,
                             config.ignore_mismatch,
+                            config.store_hash_raw_data_for_debug,
                         );
                         accounts_
                             .accounts_db
@@ -6923,6 +6925,7 @@ impl Bank {
                 rent_collector,
                 config.can_cached_slot_be_unflushed,
                 config.ignore_mismatch,
+                config.store_hash_raw_data_for_debug,
             );
             self.set_initial_accounts_hash_verification_completed();
             result
@@ -7162,6 +7165,7 @@ impl Bank {
                 ignore_mismatch: false,
                 require_rooted_bank: false,
                 run_in_background: true,
+                store_hash_raw_data_for_debug: false,
             });
             verify_time.stop();
             (verify, verify_time.as_us())
@@ -10393,6 +10397,7 @@ pub(crate) mod tests {
                 ignore_mismatch: false,
                 require_rooted_bank: false,
                 run_in_background: false,
+                store_hash_raw_data_for_debug: false,
             }
         }
     }

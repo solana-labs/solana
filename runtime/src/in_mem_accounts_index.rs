@@ -77,9 +77,9 @@ struct StartupInfo<T: IndexValue> {
 /// result from scanning in-mem index during flush
 struct FlushScanResult<T> {
     /// pubkeys whose age indicates they may be evicted now, pending further checks.
-    evictions_age_possible: Vec<(Pubkey, Option<AccountMapEntry<T>>)>,
+    evictions_age_possible: Vec<(Pubkey, AccountMapEntry<T>)>,
     /// pubkeys chosen to evict based on random eviction
-    evictions_random: Vec<(Pubkey, Option<AccountMapEntry<T>>)>,
+    evictions_random: Vec<(Pubkey, AccountMapEntry<T>)>,
 }
 
 impl<T: IndexValue> InMemAccountsIndex<T> {
@@ -1077,7 +1077,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 } else {
                     &mut evictions_age_possible
                 }
-                .push((*k, Some(Arc::clone(v))));
+                .push((*k, Arc::clone(v)));
             }
         }
         Self::update_time_stat(&self.stats().flush_scan_us, m);
@@ -1208,8 +1208,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                     (false, &mut evictions_age_possible),
                     (true, &mut evictions_random),
                 ] {
-                    for (k, v) in check_for_eviction_and_dirty {
-                        let v = v.take().unwrap();
+                    for (k, v) in check_for_eviction_and_dirty.drain(..) {
                         let mut slot_list = None;
                         if !is_random {
                             let mut mse = Measure::start("flush_should_evict");
@@ -1226,7 +1225,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             mse.stop();
                             flush_should_evict_us += mse.as_us();
                             if evict_for_age {
-                                evictions_age.push(*k);
+                                evictions_age.push(k);
                             } else {
                                 // not evicting, so don't write, even if dirty
                                 continue;
@@ -1265,7 +1264,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                                     let slot_list = slot_list
                                         .take()
                                         .unwrap_or_else(|| v.slot_list.read().unwrap());
-                                    disk.try_write(k, (&slot_list, v.ref_count()))
+                                    disk.try_write(&k, (&slot_list, v.ref_count()))
                                 };
                                 match disk_resize {
                                     Ok(_) => {

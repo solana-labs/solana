@@ -1160,6 +1160,10 @@ fn main() {
         .long("accounts-db-ancient-append-vecs")
         .help("AppendVecs that are older than an epoch are squashed together.")
         .hidden(true);
+    let halt_at_slot_store_hash_raw_data = Arg::with_name("halt_at_slot_store_hash_raw_data")
+            .long("halt-at-slot-store-hash-raw-data")
+            .help("After halting at slot, run an accounts hash calculation and store the raw hash data for debugging.")
+            .hidden(true);
     let verify_index_arg = Arg::with_name("verify_accounts_index")
         .long("verify-accounts-index")
         .takes_value(false)
@@ -1512,6 +1516,7 @@ fn main() {
             .arg(&skip_rewrites_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&ancient_append_vecs)
+            .arg(&halt_at_slot_store_hash_raw_data)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
@@ -2442,6 +2447,8 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
+                    on_halt_store_hash_raw_data_for_debug: arg_matches
+                        .is_present("halt_at_slot_store_hash_raw_data"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),

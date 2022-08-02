@@ -814,6 +814,7 @@ impl Accounts {
 
     /// Only called from startup or test code.
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports(
         &self,
         slot: Slot,
@@ -824,6 +825,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         can_cached_slot_be_unflushed: bool,
         ignore_mismatch: bool,
+        store_detailed_debug_info: bool,
     ) -> bool {
         if let Err(err) = self.accounts_db.verify_bank_hash_and_lamports_new(
             slot,
@@ -834,6 +836,7 @@ impl Accounts {
             rent_collector,
             can_cached_slot_be_unflushed,
             ignore_mismatch,
+            store_detailed_debug_info,
         ) {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
@@ -1289,7 +1292,9 @@ impl Accounts {
                     );
 
                     if execution_status.is_ok() || is_nonce_account || is_fee_payer {
-                        if account.rent_epoch() == INITIAL_RENT_EPOCH {
+                        if !preserve_rent_epoch_for_rent_exempt_accounts
+                            && account.rent_epoch() == INITIAL_RENT_EPOCH
+                        {
                             let rent = rent_collector
                                 .collect_from_created_account(
                                     address,
