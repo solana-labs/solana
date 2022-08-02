@@ -313,7 +313,7 @@ fn attempt_lock_for_execution<'a>(
     let mut all_succeeded_so_far = true;
 
     for attempt in placeholder_attempts.iter_mut() {
-        address_book.attempt_lock_address(from_runnable, unique_weight, lock);
+        address_book.attempt_lock_address(from_runnable, unique_weight, attempt);
         if all_succeeded_so_far && attempt.is_failed() {
             all_succeeded_so_far = false;
         }
