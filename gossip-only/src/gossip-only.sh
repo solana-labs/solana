@@ -35,9 +35,12 @@ EOF
   exit 1
 }
 
+writeKeys=false
+
 positional_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
+    echo "input: $1"
     # validator.sh-only options
     if [[ $1 = --account-file ]]; then
       args+=("$1" "$2")
@@ -57,6 +60,13 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --gossip-port ]]; then
       args+=("$1" "$2")
       shift 2
+    elif [[ $1 = --write-keys ]]; then
+      writeKeys=true
+      args+=("$1")
+      shift
+    elif [[ $1 = --num-keys ]]; then 
+      args+=("$1" "$2")
+      shift 2
     elif [[ $1 = -h ]]; then
       usage "$@"
     else
@@ -70,7 +80,14 @@ while [[ -n $1 ]]; do
 done
 
 echo "greg - args to run: ${args[@]}"
+echo "greg - writeKeys: $writeKeys"
 
-gossip-only "${args[@]}" &
-pid=$!
-echo "pid: $pid"
+if [[ $writeKeys == "true" ]]; then 
+  echo "writeKeys true"
+  gossip-only "${args[@]}"
+else 
+  echo "writeKeys false"
+  gossip-only "${args[@]}" &
+  pid=$!
+  echo "pid: $pid"
+fi

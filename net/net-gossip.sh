@@ -226,6 +226,7 @@ CARGO_BIN="\$HOME/.cargo/bin"
 
 startCommon() {
   declare ipAddress=$1
+  declare instanceIndex=$2
   test -d "$SOLANA_ROOT"
   if $skipSetup; then
     # shellcheck disable=SC2029
@@ -238,7 +239,7 @@ startCommon() {
       mkdir -p $SOLANA_HOME $CARGO_BIN;
       mv ~/config $SOLANA_HOME/
     "
-  else
+  elif [[ $instanceIndex == "0" ]]; then
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
@@ -381,9 +382,10 @@ startGossipNode() {
   declare ipAddress=$1
   declare nodeType=$2
   declare nodeIndex="$3"
+  declare instanceIndex="$4"
 
   initLogDir
-  declare logFile="$netLogDir/validator-$ipAddress.log"
+  declare logFile="$netLogDir/validator-$ipAddress-$instanceIndex.log"
 
   if [[ -z $nodeType ]]; then
     echo nodeType not specified
@@ -395,11 +397,13 @@ startGossipNode() {
     exit 1
   fi
 
-  echo "--- Starting $nodeType: $ipAddress"
+  echo "--- Starting $nodeType: $ipAddress. instance: $instanceIndex"
   echo "start log: $logFile"
   (
     set -x
-    startCommon "$ipAddress"
+    startCommon "$ipAddress" $instanceIndex
+
+
 
     if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
       #
@@ -440,10 +444,11 @@ startGossipNode() {
          \"$waitForGossipNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$instanceIndex\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
+  ln -sf "validator-$ipAddress-$instanceIndex.log" "$netLogDir/validator-$pid.log"
   pids+=("$pid")
 
 }
@@ -702,6 +707,8 @@ prepareDeploy() {
 
 gossipDeploy() {
   echo "greg - in gossipDeploy()"
+  declare instancesPerNode=$1
+  echo "greg - instancesPerNode in gossipDeploy: $instancesPerNode"
   initLogDir
 
   echo "Deployment started at $(date)"
@@ -723,12 +730,16 @@ gossipDeploy() {
       SECONDS=0
       pids=()
     else
-      startGossipNode "$ipAddress" $nodeType $nodeIndex
+      # for i in {0..$instancesPerNode}
+      for (( i=0; i<$instancesPerNode; i++ ))
+      do
+        startGossipNode "$ipAddress" $nodeType $nodeIndex $i
 
-      # Stagger additional node start time. If too many nodes start simultaneously
-      # the bootstrap node gets more rsync requests from the additional nodes than
-      # it can handle.
-      sleep 2
+        # Stagger additional node start time. If too many nodes start simultaneously
+        # the bootstrap node gets more rsync requests from the additional nodes than
+        # it can handle.
+        sleep 2
+      done
     fi
   done
 
@@ -1001,6 +1012,7 @@ maybeFullRpc=false
 waitForNodeInit=true
 waitForGossipNodeInit=false
 extraPrimordialStakes=0
+instancesPerNode=1
 
 command=$1
 [[ -n $command ]] || usage
@@ -1130,6 +1142,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --skip-require-tower ]]; then
       maybeSkipRequireTower="$1"
       shift 1
+    elif [[ $1 = --gossip-instances-per-node ]]; then
+      instancesPerNode="$2"
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -1138,6 +1153,8 @@ while [[ -n $1 ]]; do
     shift
   fi
 done
+
+echo "greg - gossip instances per node: $instancesPerNode"
 
 while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
   case $opt in
@@ -1276,7 +1293,7 @@ case $command in
 gossip-only)
   prepareDeploy
   stop
-  gossipDeploy
+  gossipDeploy $instancesPerNode
   ;;
 restart)
   prepareDeploy

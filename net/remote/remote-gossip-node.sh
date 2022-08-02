@@ -28,6 +28,7 @@ maybeFullRpc="${19}"
 waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
+instanceIndex="${23}"
 set +x
 
 missing() {
@@ -35,7 +36,7 @@ missing() {
   exit 1
 }
 
-echo "greg - in remote-gossip-node.sh"
+echo "greg - in remote-gossip-node.sh. instanceIndex: $instanceIndex"
 
 [[ -n $deployMethod ]]  || missing deployMethod
 [[ -n $nodeType ]]      || missing nodeType
@@ -200,11 +201,11 @@ EOF
     ;;
   validator|blockstreamer)
 
-    if [[ $deployMethod != skip ]]; then
-      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
-      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
-    fi
-    if [[ $skipSetup != true ]]; then
+    # if [[ $deployMethod != skip ]]; then
+    #   net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
+    #   net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
+    # fi
+    if [[ $skipSetup != true && $instanceIndex == "0" ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
 
       # if [[ $nodeType = blockstreamer ]]; then
@@ -233,6 +234,17 @@ EOF
     echo "greg - validator - entrypoint IP: $entrypointIp"
     chmod +x gossip-only/src/gossip-only.sh
 
+    args=(
+      --account-file gossip-only/src/accounts.yaml
+      --write-keys 
+      --num-keys 2
+    )
+
+cat >> ~/solana/gossip-only-run <<EOF
+    gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator-$instanceIndex.log.\$now 2>&1
+EOF
+    ~/solana/gossip-only-run
+
     gossipOnlyPort=9001
     args=(
       --account-file gossip-only/src/accounts.yaml
@@ -242,7 +254,7 @@ EOF
     )
 
 cat >> ~/solana/gossip-only-run <<EOF
-    nohup gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator.log.\$now 2>&1 &
+    nohup gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator-$instanceIndex.log.\$now 2>&1 &
     disown
 EOF
     ~/solana/gossip-only-run
