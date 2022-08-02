@@ -99,7 +99,7 @@ impl ForwardBatch {
 pub struct ForwardPacketBatchesByAccounts {
     // Need a `bank` to load all accounts for VersionedTransaction. Currently
     // using current rooted bank for it.
-    current_bank: Arc<Bank>,
+    pub(crate) current_bank: Arc<Bank>,
     // Forwardable packets are staged in number of batches, each batch is limited
     // by cost_tracker on both account limit and block limits. Those limits are
     // set as `limit_ratio` of regular block limits to facilitate quicker iteration.

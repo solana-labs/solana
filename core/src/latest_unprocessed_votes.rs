@@ -5,7 +5,6 @@ use {
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket}
     },
     solana_perf::packet::{Packet, PacketBatch},
-    solana_runtime::bank::Bank,
     solana_sdk::{
         clock::Slot,
         program_utils::limited_deserialize,
@@ -19,7 +18,7 @@ use {
         rc::Rc,
         sync::{
             atomic::{AtomicUsize, Ordering},
-            Arc, RwLock,
+            RwLock,
         },
     },
 };
@@ -222,36 +221,37 @@ impl LatestUnprocessedVotes {
     /// Votes from validators with 0 stakes are ignored
     pub fn get_and_insert_forwardable_packets(
         &self,
-        bank: &Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> usize {
         let mut continue_forwarding = true;
         if let Ok(latest_votes_per_pubkey) = self.latest_votes_per_pubkey.read() {
-            return weighted_random_order_by_stake(bank)
-                .filter(|pubkey| {
-                    if let Some(lock) = latest_votes_per_pubkey.get(pubkey) {
-                        if let Ok(cell) = lock.write() {
-                            if let Ok(mut vote) = cell.try_borrow_mut() {
-                                if !vote.is_processed() && !vote.is_forwarded() {
-                                    if continue_forwarding {
-                                        if forward_packet_batches_by_accounts
-                                            .add_packet(vote.vote.as_ref().unwrap().clone())
-                                        {
-                                            vote.forwarded = true;
-                                        } else {
-                                            // To match behavior of regular transactions we stop
-                                            // forwarding votes as soon as one fails
-                                            continue_forwarding = false;
-                                        }
+            return weighted_random_order_by_stake(
+                &forward_packet_batches_by_accounts.current_bank,
+            )
+            .filter(|pubkey| {
+                if let Some(lock) = latest_votes_per_pubkey.get(pubkey) {
+                    if let Ok(cell) = lock.write() {
+                        if let Ok(mut vote) = cell.try_borrow_mut() {
+                            if !vote.is_processed() && !vote.is_forwarded() {
+                                if continue_forwarding {
+                                    if forward_packet_batches_by_accounts
+                                        .add_packet(vote.vote.as_ref().unwrap().clone())
+                                    {
+                                        vote.forwarded = true;
+                                    } else {
+                                        // To match behavior of regular transactions we stop
+                                        // forwarding votes as soon as one fails
+                                        continue_forwarding = false;
                                     }
-                                    return true;
                                 }
+                                return true;
                             }
                         }
                     }
-                    false
-                })
-                .count();
+                }
+                false
+            })
+            .count();
         }
         0
     }

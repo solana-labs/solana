@@ -490,7 +490,6 @@ impl UnprocessedTransactionStorage {
 
     pub fn filter_forwardable_packets_and_add_batches(
         &mut self,
-        bank: &Arc<Bank>,
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> FilterForwardingResults {
         match self {
@@ -500,7 +499,7 @@ impl UnprocessedTransactionStorage {
             ),
             Self::VoteStorage(v, VoteSource::Tpu) => {
                 let total_forwardable_packets =
-                    v.get_and_insert_forwardable_packets(bank, forward_packet_batches_by_accounts);
+                    v.get_and_insert_forwardable_packets(forward_packet_batches_by_accounts);
                 FilterForwardingResults {
                     total_forwardable_packets,
                     ..FilterForwardingResults::default()
@@ -1244,10 +1243,7 @@ impl BankingStage {
         let mut forward_packet_batches_by_accounts =
             ForwardPacketBatchesByAccounts::new_with_default_batch_limits(current_bank.clone());
         let filter_forwarding_result = unprocessed_transaction_storage
-            .filter_forwardable_packets_and_add_batches(
-                &current_bank,
-                &mut forward_packet_batches_by_accounts,
-            );
+            .filter_forwardable_packets_and_add_batches(&mut forward_packet_batches_by_accounts);
 
         forward_packet_batches_by_accounts
             .iter_batches()
