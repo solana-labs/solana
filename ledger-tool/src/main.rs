@@ -347,7 +347,7 @@ fn output_slot(
                 trace!(
                     "post schedule stage: #{} {:#?}",
                     step,
-                    ee.task.tx.signature()
+                    ee.task.tx.0.signature()
                 );
                 if step % 1966 == 0 {
                     error!("finished!: {} {}", step, post_schedule_env_receiver.len());
