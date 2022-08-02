@@ -125,7 +125,7 @@ impl AddressBook {
         from_runnable: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
-    ) -> LockAttempt {
+    ) {
         let LockAttempt {address, requested_usage, is_success} = attempt;
 
         match self.book.entry(*address) {
