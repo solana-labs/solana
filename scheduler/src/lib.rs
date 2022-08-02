@@ -342,7 +342,10 @@ fn attempt_lock_for_execution<'a>(
     (all_succeeded_so_far, lock_attempts)
 }
 
-pub enum Incoming {
+// multiplexed to reduce the futex syscal per tx down to minimum and to make the schduler to
+// adaptive relative load between sigverify stage and execution substage
+// switched from crossbeam_channel::select! due to observed poor performance
+pub enum MultiplexedPayload {
     FromPrevious((Weight, Box<SanitizedTransaction>)),
     FromExecute(Box<ExecutionEnvironment>),
 }
@@ -602,12 +605,10 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from: &crossbeam_channel::Receiver<Incoming>,
+        from: &crossbeam_channel::Receiver<MultiplexedPayload>,
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         to_next_stage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>, // assume nonblocking
     ) {
-        use crossbeam_channel::select;
-
         let mut executing_queue_count = 0;
 
         loop {
@@ -615,18 +616,17 @@ impl ScheduleStage {
 
             let i = from.recv().unwrap();
             match i {
-                Incoming::FromPrevious(weighted_tx) => {
+                MultiplexedPayload::FromPrevious(weighted_tx) => {
                     trace!("recv from previous");
 
                     Self::register_runnable_task(weighted_tx, runnable_queue);
                 }
-                Incoming::FromExecute(mut processed_execution_environment) => {
+                MultiplexedPayload::FromExecute(mut processed_execution_environment) => {
                     trace!("recv from execute");
                     executing_queue_count -= 1;
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
                     // async-ly propagate the result to rpc subsystems
-                    // to_next_stage is assumed to be non-blocking so, doesn't need to be one of select! handlers
                     to_next_stage.send(processed_execution_environment).unwrap();
                 }
             }
