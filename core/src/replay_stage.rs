@@ -2600,7 +2600,7 @@ impl ReplayStage {
     ) -> bool {
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
         let num_active_banks = active_bank_slots.len();
-        warn!(
+        trace!(
             "{} active bank(s) to replay: {:?}",
             num_active_banks, active_bank_slots
         );
