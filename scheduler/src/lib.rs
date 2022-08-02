@@ -334,7 +334,7 @@ pub struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_queue(
-        (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<Pubkey>)>),
+        (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>),
         runnable_queue: &mut TaskQueue,
     ) {
         // manage randomness properly for future scheduling determinism
