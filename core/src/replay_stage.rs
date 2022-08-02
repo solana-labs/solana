@@ -2602,7 +2602,8 @@ impl ReplayStage {
         let num_active_banks = active_bank_slots.len();
         trace!(
             "{} active bank(s) to replay: {:?}",
-            num_active_banks, active_bank_slots
+            num_active_banks,
+            active_bank_slots
         );
         if num_active_banks > 0 {
             let replay_result_vec = if num_active_banks > 1 {
