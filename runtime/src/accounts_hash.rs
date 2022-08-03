@@ -94,6 +94,7 @@ pub struct HashStats {
     pub rehash_required: AtomicUsize,
     /// # rehashes that took place and were UNnecessary
     pub rehash_unnecessary: AtomicUsize,
+    pub oldest_root: Slot,
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
     pub append_vec_sizes_older_than_epoch: AtomicUsize,
@@ -218,6 +219,7 @@ impl HashStats {
                 self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
                 i64
             ),
+            ("oldest_root", self.oldest_root as i64, i64),
             (
                 "ancient_append_vecs",
                 self.ancient_append_vecs.load(Ordering::Relaxed) as i64,
