@@ -281,7 +281,11 @@ fn read_disk_stats() -> Result<DiskStats, String> {
     let mut num_disks = 0;
     for blk_device_dir in std::fs::read_dir(SYS_BLOCK_PATH).map_err(|e| e.to_string())? {
         let blk_device_dir = blk_device_dir.map_err(|e| e.to_string())?;
-        if blk_device_dir.file_name().to_string_lossy().starts_with("loop") {
+        if blk_device_dir
+            .file_name()
+            .to_string_lossy()
+            .starts_with("loop")
+        {
             continue;
         }
         let mut path = blk_device_dir.path();
