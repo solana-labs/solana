@@ -26,15 +26,8 @@ use {
         shred::{Nonce, Shred, ShredFetchStats, SIZE_OF_NONCE},
     },
     solana_metrics::inc_new_counter_debug,
-<<<<<<< HEAD
-    solana_perf::packet::{PacketBatch, PacketBatchRecycler},
-=======
-    solana_perf::{
-        data_budget::DataBudget,
-        packet::{Packet, PacketBatch, PacketBatchRecycler},
-    },
+    solana_perf::packet::{Packet, PacketBatch, PacketBatchRecycler},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
->>>>>>> 857be1e23 (sign repair requests (#26833))
     solana_sdk::{
         clock::Slot,
         feature_set::sign_repair_requests,
@@ -170,31 +163,17 @@ impl RequestResponse for AncestorHashesRepairType {
 }
 
 #[derive(Default)]
-<<<<<<< HEAD
-pub struct ServeRepairStats {
-    pub total_requests: usize,
-    pub dropped_requests: usize,
-    pub total_response_packets: usize,
-    pub processed: usize,
-    pub self_repair: usize,
-    pub window_index: usize,
-    pub highest_window_index: usize,
-    pub orphan: usize,
-    pub ancestor_hashes: usize,
-=======
 struct ServeRepairStats {
     total_requests: usize,
     dropped_requests: usize,
-    total_dropped_response_packets: usize,
     total_response_packets: usize,
-    total_response_bytes: usize,
     processed: usize,
     self_repair: usize,
     window_index: usize,
     highest_window_index: usize,
     orphan: usize,
-    pong: usize,
     ancestor_hashes: usize,
+    pong: usize,
     pings_required: usize,
     err_time_skew: usize,
     err_malformed: usize,
@@ -210,7 +189,6 @@ pub struct RepairRequestHeader {
     recipient: Pubkey,
     timestamp: u64,
     nonce: Nonce,
->>>>>>> 857be1e23 (sign repair requests (#26833))
 }
 
 impl RepairRequestHeader {
@@ -522,11 +500,7 @@ impl ServeRepair {
         stats.dropped_requests += dropped_requests;
         stats.total_requests += total_requests;
 
-<<<<<<< HEAD
         let timer = Instant::now();
-        for reqs in reqs_v {
-            Self::handle_packets(obj, recycler, blockstore, reqs, response_sender, stats);
-=======
         let root_bank = obj.read().unwrap().bank_forks.read().unwrap().root_bank();
         for reqs in reqs_v {
             Self::handle_packets(
@@ -538,9 +512,7 @@ impl ServeRepair {
                 response_sender,
                 &root_bank,
                 stats,
-                data_budget,
             );
->>>>>>> 857be1e23 (sign repair requests (#26833))
         }
         packet_threshold.update(total_requests, timer.elapsed());
         Ok(())
@@ -593,15 +565,7 @@ impl ServeRepair {
         response_sender: PacketBatchSender,
         exit: &Arc<AtomicBool>,
     ) -> JoinHandle<()> {
-<<<<<<< HEAD
-=======
-        const INTERVAL_MS: u64 = 1000;
-        const MAX_BYTES_PER_SECOND: usize = 12_000_000;
-        const MAX_BYTES_PER_INTERVAL: usize = MAX_BYTES_PER_SECOND * INTERVAL_MS as usize / 1000;
-
         let mut ping_cache = PingCache::new(REPAIR_PING_CACHE_TTL, REPAIR_PING_CACHE_CAPACITY);
-
->>>>>>> 857be1e23 (sign repair requests (#26833))
         let exit = exit.clone();
         let recycler = PacketBatchRecycler::default();
         Builder::new()
@@ -760,16 +724,6 @@ impl ServeRepair {
         root_bank: &Bank,
         stats: &mut ServeRepairStats,
     ) {
-<<<<<<< HEAD
-        packet_batch.iter().for_each(|packet| {
-            if let Ok(request) = packet.deserialize_slice(..) {
-                stats.processed += 1;
-                let from_addr = packet.meta.socket_addr();
-                let rsp = Self::handle_repair(me, recycler, &from_addr, blockstore, request, stats);
-                stats.total_response_packets += rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
-                if let Some(rsp) = rsp {
-                    let _ignore_disconnect = response_sender.send(rsp);
-=======
         let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
         let (identity_keypair, socket_addr_space) = {
             let me_r = me.read().unwrap();
@@ -781,13 +735,12 @@ impl ServeRepair {
         let mut pending_pings = Vec::default();
 
         // iter over the packets
-        for (i, packet) in packet_batch.iter().enumerate() {
+        for packet in packet_batch.iter() {
             let request: RepairProtocol = match packet.deserialize_slice(..) {
                 Ok(request) => request,
                 Err(_) => {
                     stats.err_malformed += 1;
                     continue;
->>>>>>> 857be1e23 (sign repair requests (#26833))
                 }
             };
 
@@ -795,11 +748,6 @@ impl ServeRepair {
                 stats.self_repair += 1;
                 continue;
             }
-<<<<<<< HEAD
-        });
-    }
-=======
->>>>>>> 857be1e23 (sign repair requests (#26833))
 
             let require_signature_check =
                 Self::requires_signature_check(&request, root_bank, sign_repairs_epoch);
@@ -829,21 +777,10 @@ impl ServeRepair {
             }
 
             stats.processed += 1;
-            let rsp = match Self::handle_repair(
-                recycler, &from_addr, blockstore, request, stats, ping_cache,
-            ) {
-                None => continue,
-                Some(rsp) => rsp,
-            };
-            let num_response_packets = rsp.len();
-            let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
-            if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
-                stats.total_response_bytes += num_response_bytes;
-                stats.total_response_packets += num_response_packets;
-            } else {
-                stats.dropped_requests += packet_batch.len() - i;
-                stats.total_dropped_response_packets += num_response_packets;
-                break;
+            let rsp = Self::handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache);
+            stats.total_response_packets += rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
+            if let Some(rsp) = rsp {
+                let _ignore_disconnect = response_sender.send(rsp);
             }
         }
 
@@ -1268,6 +1205,7 @@ mod tests {
     use {
         super::*,
         crate::{repair_response, result::Error},
+        bincode::deserialize_from,
         solana_gossip::{socketaddr, socketaddr_any},
         solana_ledger::{
             blockstore::make_many_slot_entries,
@@ -1276,7 +1214,7 @@ mod tests {
             get_tmp_ledger_path,
             shred::{max_ticks_per_n_shreds, Shred},
         },
-        solana_perf::packet::{deserialize_from_with_limit, Packet},
+        solana_perf::packet::Packet,
         solana_runtime::bank::Bank,
         solana_sdk::{
             feature_set::FeatureSet, hash::Hash, pubkey::Pubkey, signature::Keypair,
@@ -1320,7 +1258,7 @@ mod tests {
 
         let mut cursor = Cursor::new(&rsp[..]);
         let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+            deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::Orphan { header, slot } = deserialized_request {
             assert_eq!(slot, 123);
@@ -1357,7 +1295,7 @@ mod tests {
             .unwrap();
         let mut cursor = Cursor::new(&request_bytes[..]);
         let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+            deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), request_bytes.len() as u64);
         if let RepairProtocol::AncestorHashes {
             header,
@@ -1389,7 +1327,7 @@ mod tests {
             .unwrap();
         let mut cursor = Cursor::new(&request_bytes[..]);
         let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+            deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), request_bytes.len() as u64);
         if let RepairProtocol::LegacyAncestorHashes(ci, deserialized_slot, deserialized_nonce) =
             deserialized_request
@@ -1430,7 +1368,7 @@ mod tests {
 
         let mut cursor = Cursor::new(&rsp[..]);
         let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+            deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::WindowIndex {
             header,
@@ -1463,7 +1401,7 @@ mod tests {
 
         let mut cursor = Cursor::new(&rsp[..]);
         let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+            deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::LegacyWindowIndexWithNonce(
             ci,
@@ -1493,7 +1431,7 @@ mod tests {
 
         let mut cursor = Cursor::new(&rsp[..]);
         let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+            deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::HighestWindowIndex {
             header,
@@ -1526,7 +1464,7 @@ mod tests {
 
         let mut cursor = Cursor::new(&rsp[..]);
         let deserialized_request: RepairProtocol =
-            deserialize_from_with_limit(&mut cursor).unwrap();
+            deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::LegacyHighestWindowIndexWithNonce(
             ci,

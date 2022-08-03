@@ -177,15 +177,9 @@ impl Tvu {
             fetch_sockets,
             forward_sockets,
             repair_socket.clone(),
-<<<<<<< HEAD
             &fetch_sender,
             Some(bank_forks.clone()),
-=======
-            fetch_sender,
-            tvu_config.shred_version,
-            bank_forks.clone(),
             cluster_info.clone(),
->>>>>>> 857be1e23 (sign repair requests (#26833))
             exit,
         );
 

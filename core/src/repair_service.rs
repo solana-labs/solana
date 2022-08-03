@@ -21,12 +21,8 @@ use {
     solana_measure::measure::Measure,
     solana_runtime::{bank_forks::BankForks, contains::Contains},
     solana_sdk::{
-<<<<<<< HEAD
-        clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey, timing::timestamp,
-=======
         clock::Slot, epoch_schedule::EpochSchedule, hash::Hash, pubkey::Pubkey,
-        signer::keypair::Keypair,
->>>>>>> 857be1e23 (sign repair requests (#26833))
+        signer::keypair::Keypair, timing::timestamp,
     },
     solana_streamer::sendmmsg::{batch_send, SendPktsError},
     std::{

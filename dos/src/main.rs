@@ -31,25 +31,10 @@ use {
     clap::{crate_description, crate_name, crate_version, ArgEnum, Args, Parser},
     log::*,
     rand::{thread_rng, Rng},
-<<<<<<< HEAD
     serde::{Deserialize, Serialize},
     solana_client::rpc_client::RpcClient,
-    solana_core::serve_repair::RepairProtocol,
-    solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
-=======
-    solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
-    solana_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
-        rpc_client::RpcClient,
-        tpu_connection::TpuConnection,
-    },
     solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
-    solana_dos::cli::*,
-    solana_gossip::{
-        contact_info::ContactInfo,
-        gossip_service::{discover, get_multi_client},
-    },
->>>>>>> 857be1e23 (sign repair requests (#26833))
+    solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
     solana_sdk::{
         hash::Hash,
         instruction::{AccountMeta, CompiledInstruction, Instruction},
@@ -70,31 +55,6 @@ use {
     },
 };
 
-<<<<<<< HEAD
-fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
-    let source = thread_rng().gen_range(0, nodes.len());
-    let mut contact = nodes[source].clone();
-    contact.id = solana_sdk::pubkey::new_rand();
-    contact
-}
-
-=======
-const SAMPLE_PERIOD_MS: usize = 10_000;
-fn compute_rate_per_second(count: usize) -> usize {
-    (count * 1000) / SAMPLE_PERIOD_MS
-}
-
-/// Provide functionality to generate several types of transactions:
-///
-/// 1. Without blockhash
-/// 1.1 With valid signatures (number of signatures is configurable)
-/// 1.2 With invalid signatures (number of signatures is configurable)
-///
-/// 2. With blockhash (but still deliberately invalid):
-/// 2.1 Transfer from 1 payer to multiple destinations (many instructions per transaction)
-/// 2.2 Create an account
-///
->>>>>>> 857be1e23 (sign repair requests (#26833))
 struct TransactionGenerator {
     blockhash: Hash,
     last_generated: Instant,
@@ -204,28 +164,17 @@ impl TransactionGenerator {
 
 fn run_dos(
     nodes: &[ContactInfo],
-<<<<<<< HEAD
     iterations: usize,
     payer: Option<&Keypair>,
     params: DosClientParameters,
 ) {
-=======
-    mode: Mode,
-    entrypoint_addr: SocketAddr,
-) -> Option<(Pubkey, SocketAddr)> {
->>>>>>> 857be1e23 (sign repair requests (#26833))
     let mut target = None;
     let mut rpc_client = None;
     if nodes.is_empty() {
-<<<<<<< HEAD
         if params.mode == Mode::Rpc {
             rpc_client = Some(RpcClient::new_socket(params.entrypoint_addr));
         }
-        target = Some(params.entrypoint_addr);
-=======
-        // skip-gossip case
-        target = Some((solana_sdk::pubkey::new_rand(), entrypoint_addr));
->>>>>>> 857be1e23 (sign repair requests (#26833))
+        target = Some((solana_sdk::pubkey::new_rand(), params.entrypoint_addr));
     } else {
         info!("************ NODE ***********");
         for node in nodes {
@@ -236,41 +185,28 @@ fn run_dos(
         for node in nodes {
             if node.gossip == params.entrypoint_addr {
                 info!("{}", node.gossip);
-<<<<<<< HEAD
                 target = match params.mode {
-                    Mode::Gossip => Some(node.gossip),
-                    Mode::Tvu => Some(node.tvu),
-                    Mode::TvuForwards => Some(node.tvu_forwards),
-                    Mode::Tpu => {
-                        rpc_client = Some(RpcClient::new_socket(node.rpc));
-                        Some(node.tpu)
-                    }
-                    Mode::TpuForwards => Some(node.tpu_forwards),
-                    Mode::Repair => Some(node.repair),
-                    Mode::ServeRepair => Some(node.serve_repair),
-                    Mode::Rpc => {
-                        rpc_client = Some(RpcClient::new_socket(node.rpc));
-                        None
-                    }
-=======
-                target = match mode {
                     Mode::Gossip => Some((node.id, node.gossip)),
                     Mode::Tvu => Some((node.id, node.tvu)),
                     Mode::TvuForwards => Some((node.id, node.tvu_forwards)),
-                    Mode::Tpu => Some((node.id, node.tpu)),
+                    Mode::Tpu => {
+                        rpc_client = Some(RpcClient::new_socket(node.rpc));
+                        Some((node.id, node.tpu))
+                    },
                     Mode::TpuForwards => Some((node.id, node.tpu_forwards)),
                     Mode::Repair => Some((node.id, node.repair)),
                     Mode::ServeRepair => Some((node.id, node.serve_repair)),
-                    Mode::Rpc => None,
->>>>>>> 857be1e23 (sign repair requests (#26833))
+                    Mode::Rpc => {
+                        rpc_client = Some(RpcClient::new_socket(node.rpc));
+                        None
+                    },
                 };
                 break;
             }
         }
     }
-    let target = target.expect("should have target");
-
-    info!("Targeting {}", target);
+    let (target_id, target_addr) = target.expect("should have target");
+    info!("Targeting {}", target_addr);
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     let mut data = Vec::new();
@@ -279,19 +215,32 @@ fn run_dos(
     match params.data_type {
         DataType::RepairHighest => {
             let slot = 100;
-            let req = RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-            data = bincode::serialize(&req).unwrap();
+            let keypair = Keypair::new();
+            let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+            let req = RepairProtocol::WindowIndex {
+                header,
+                slot,
+                shred_index: 0,
+            };
+            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
         }
         DataType::RepairShred => {
             let slot = 100;
-            let req =
-                RepairProtocol::HighestWindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-            data = bincode::serialize(&req).unwrap();
+            let keypair = Keypair::new();
+            let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+            let req = RepairProtocol::HighestWindowIndex {
+                header,
+                slot,
+                shred_index: 0,
+            };
+            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
         }
         DataType::RepairOrphan => {
             let slot = 100;
-            let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
-            data = bincode::serialize(&req).unwrap();
+            let keypair = Keypair::new();
+            let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+            let req = RepairProtocol::Orphan { header, slot };
+            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
         }
         DataType::Random => {
             data.resize(params.data_size, 0);
@@ -347,7 +296,7 @@ fn run_dos(
                 info!("{:?}", tx);
                 data = bincode::serialize(&tx).unwrap();
             }
-            let res = socket.send_to(&data, target);
+            let res = socket.send_to(&data, target_addr);
             if res.is_err() {
                 error_count += 1;
             }
@@ -469,97 +418,8 @@ fn validate_input(params: &DosClientParameters) {
         && (params.data_type != DataType::GetAccountInfo
             && params.data_type != DataType::GetProgramAccounts)
     {
-<<<<<<< HEAD
         panic!("unsupported data type");
     }
-=======
-        let (_, target_addr) = target.expect("should have target");
-        info!("Targeting {}", target_addr);
-        run_dos_transactions(
-            target_addr,
-            iterations,
-            client,
-            params.transaction_params,
-            params.tpu_use_quic,
-        );
-    } else {
-        let (target_id, target_addr) = target.expect("should have target");
-        info!("Targeting {}", target_addr);
-        let mut data = match params.data_type {
-            DataType::RepairHighest => {
-                let slot = 100;
-                let keypair = Keypair::new();
-                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
-                let req = RepairProtocol::WindowIndex {
-                    header,
-                    slot,
-                    shred_index: 0,
-                };
-                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
-            }
-            DataType::RepairShred => {
-                let slot = 100;
-                let keypair = Keypair::new();
-                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
-                let req = RepairProtocol::HighestWindowIndex {
-                    header,
-                    slot,
-                    shred_index: 0,
-                };
-                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
-            }
-            DataType::RepairOrphan => {
-                let slot = 100;
-                let keypair = Keypair::new();
-                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
-                let req = RepairProtocol::Orphan { header, slot };
-                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
-            }
-            DataType::Random => {
-                vec![0; params.data_size]
-            }
-            DataType::Transaction => {
-                let tp = params.transaction_params;
-                info!("{:?}", tp);
-
-                let valid_blockhash = tp.valid_blockhash;
-                let payers: Vec<Option<Keypair>> =
-                    create_payers(valid_blockhash, 1, client.as_ref());
-                let payer = payers[0].as_ref();
-
-                let permutation_size =
-                    get_permutation_size(tp.num_signatures.as_ref(), tp.num_instructions.as_ref());
-                let keypairs: Vec<Keypair> =
-                    (0..permutation_size).map(|_| Keypair::new()).collect();
-                let keypairs_chunk: Option<Vec<&Keypair>> =
-                    if tp.valid_signatures || tp.valid_blockhash {
-                        Some(keypairs.iter().collect())
-                    } else {
-                        None
-                    };
-
-                let mut transaction_generator = TransactionGenerator::new(tp);
-                let tx = transaction_generator.generate(payer, keypairs_chunk, client.as_ref());
-                info!("{:?}", tx);
-                bincode::serialize(&tx).unwrap()
-            }
-            _ => panic!("Unsupported data_type detected"),
-        };
-
-        let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut last_log = Instant::now();
-        let mut total_count: usize = 0;
-        let mut count: usize = 0;
-        let mut error_count = 0;
-        loop {
-            if params.data_type == DataType::Random {
-                thread_rng().fill(&mut data[..]);
-            }
-            let res = socket.send_to(&data, target_addr);
-            if res.is_err() {
-                error_count += 1;
-            }
->>>>>>> 857be1e23 (sign repair requests (#26833))
 
     if params.data_type != DataType::Transaction {
         let tp = &params.transaction_params;
