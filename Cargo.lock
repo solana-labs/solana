@@ -5500,6 +5500,7 @@ dependencies = [
  "solana-cli-output",
  "solana-core",
  "solana-entry",
+ "solana-geyser-plugin-manager",
  "solana-ledger",
  "solana-logger 1.12.0",
  "solana-measure",
