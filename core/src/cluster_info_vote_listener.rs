@@ -194,7 +194,7 @@ const VOTE_PROCESSING_REPORT_INTERVAL_MS: u64 = 1_000;
 
 impl VoteProcessingTiming {
     fn reset(&mut self) {
-        self.gossip_slot_confirming_time_us = 0;
+        self.gossip_txn_processing_time_us = 0;
         self.gossip_slot_confirming_time_us = 0;
     }
 

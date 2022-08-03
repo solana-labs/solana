@@ -10,7 +10,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-cargo_metadata = "0.14.2"
+cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo", "env"] }
 solana-sdk = { path = "..", version = "=1.11.5" }
 

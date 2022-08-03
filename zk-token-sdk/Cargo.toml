@@ -9,7 +9,7 @@ edition = "2021"
 
 [dependencies]
 base64 = "0.13"
-bytemuck = { version = "1.10.0", features = ["derive"] }
+bytemuck = { version = "1.11.0", features = ["derive"] }
 num-derive = "0.3"
 num-traits = "0.2"
 solana-program = { path = "../sdk/program", version = "=1.11.5" }

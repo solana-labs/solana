@@ -454,7 +454,7 @@ impl fmt::Display for CliValidators {
             "Credits",
             "Version",
             "Active Stake",
-            padding = padding + 1
+            padding = padding + 2
         ))
         .bold();
         writeln!(f, "{}", header)?;

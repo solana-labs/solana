@@ -87,11 +87,22 @@ impl SwitchForkDecision {
                 v,
                 *switch_proof_hash,
             )),
-            (SwitchForkDecision::SameFork, VoteTransaction::CompactVoteStateUpdate(_v)) => None,
+            (SwitchForkDecision::SameFork, VoteTransaction::CompactVoteStateUpdate(v)) => {
+                Some(vote_instruction::compact_update_vote_state(
+                    vote_account_pubkey,
+                    authorized_voter_pubkey,
+                    v,
+                ))
+            }
             (
-                SwitchForkDecision::SwitchProof(_switch_proof_hash),
-                VoteTransaction::CompactVoteStateUpdate(_v),
-            ) => None,
+                SwitchForkDecision::SwitchProof(switch_proof_hash),
+                VoteTransaction::CompactVoteStateUpdate(v),
+            ) => Some(vote_instruction::compact_update_vote_state_switch(
+                vote_account_pubkey,
+                authorized_voter_pubkey,
+                v,
+                *switch_proof_hash,
+            )),
         }
     }
 

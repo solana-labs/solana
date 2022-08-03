@@ -12,6 +12,7 @@ description = "Tool to send various requests to cluster in order to evaluate the
 [dependencies]
 bincode = "1.3.3"
 clap = { version = "3.1.5", features = ["derive", "cargo"] }
+crossbeam-channel = "0.5.4"
 itertools = "0.10.3"
 log = "0.4.17"
 rand = "0.7.0"
@@ -22,6 +23,7 @@ solana-core = { path = "../core", version = "=1.11.5" }
 solana-faucet = { path = "../faucet", version = "=1.11.5" }
 solana-gossip = { path = "../gossip", version = "=1.11.5" }
 solana-logger = { path = "../logger", version = "=1.11.5" }
+solana-measure = { path = "../measure", version = "=1.11.5" }
 solana-net-utils = { path = "../net-utils", version = "=1.11.5" }
 solana-perf = { path = "../perf", version = "=1.11.5" }
 solana-rpc = { path = "../rpc", version = "=1.11.5" }

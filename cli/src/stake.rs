@@ -286,6 +286,51 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(memo_arg())
         )
         .subcommand(
+            SubCommand::with_name("redelegate-stake")
+                .about("Redelegate active stake to another vote account")
+                .arg(
+                    Arg::with_name("force")
+                        .long("force")
+                        .takes_value(false)
+                        .hidden(true) // Don't document this argument to discourage its use
+                        .help("Override vote account sanity checks (use carefully!)")
+                )
+                .arg(
+                    pubkey!(Arg::with_name("stake_account_pubkey")
+                        .index(1)
+                        .value_name("STAKE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Existing delegated stake account that has been fully activated. \
+                        On success this stake account will be scheduled for deactivation and the rent-exempt balance \
+                        may be withdrawn once fully deactivated")
+                )
+                .arg(
+                    pubkey!(Arg::with_name("vote_account_pubkey")
+                        .index(2)
+                        .value_name("REDELEGATED_VOTE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "The vote account to which the stake will be redelegated")
+                )
+                .arg(
+                    Arg::with_name("redelegation_stake_account")
+                        .index(3)
+                        .value_name("REDELEGATION_STAKE_ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Stake account to create for the redelegation. \
+                               On success this stake account will be created and scheduled for activation with all \
+                               the stake in the existing stake account, exclusive of the rent-exempt balance retained \
+                               in the existing account")
+                )
+                .arg(stake_authority_arg())
+                .offline_args()
+                .nonce_args(false)
+                .arg(fee_payer_arg())
+                .arg(memo_arg())
+        )
+
+        .subcommand(
             SubCommand::with_name("stake-authorize")
                 .about("Authorize a new signing keypair for the given stake account")
                 .arg(
@@ -753,6 +798,8 @@ pub fn parse_stake_delegate_stake(
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
+    let (redelegation_stake_account, redelegation_stake_account_pubkey) =
+        signer_of(matches, "redelegation_stake_account", wallet_manager)?;
     let force = matches.is_present("force");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
@@ -765,7 +812,7 @@ pub fn parse_stake_delegate_stake(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let mut bulk_signers = vec![stake_authority, fee_payer];
+    let mut bulk_signers = vec![stake_authority, fee_payer, redelegation_stake_account];
     if nonce_account.is_some() {
         bulk_signers.push(nonce_authority);
     }
@@ -785,6 +832,7 @@ pub fn parse_stake_delegate_stake(
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            redelegation_stake_account_pubkey,
         },
         signers: signer_info.signers,
     })
@@ -2414,11 +2462,28 @@ pub fn process_delegate_stake(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
+    redelegation_stake_account_pubkey: Option<&Pubkey>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
+    if let Some(redelegation_stake_account_pubkey) = &redelegation_stake_account_pubkey {
+        check_unique_pubkeys(
+            (stake_account_pubkey, "stake_account_pubkey".to_string()),
+            (
+                redelegation_stake_account_pubkey,
+                "redelegation_stake_account".to_string(),
+            ),
+        )?;
+        check_unique_pubkeys(
+            (&config.signers[0].pubkey(), "cli keypair".to_string()),
+            (
+                redelegation_stake_account_pubkey,
+                "redelegation_stake_account".to_string(),
+            ),
+        )?;
+    }
     let stake_authority = config.signers[stake_authority];
 
     if !sign_only {
@@ -2471,12 +2536,22 @@ pub fn process_delegate_stake(
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
-    let ixs = vec![stake_instruction::delegate_stake(
-        stake_account_pubkey,
-        &stake_authority.pubkey(),
-        vote_account_pubkey,
-    )]
+    let ixs = if let Some(redelegation_stake_account_pubkey) = &redelegation_stake_account_pubkey {
+        stake_instruction::redelegate(
+            stake_account_pubkey,
+            &stake_authority.pubkey(),
+            vote_account_pubkey,
+            redelegation_stake_account_pubkey,
+        )
+    } else {
+        vec![stake_instruction::delegate_stake(
+            stake_account_pubkey,
+            &stake_authority.pubkey(),
+            vote_account_pubkey,
+        )]
+    }
     .with_memo(memo);
+
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
@@ -3867,6 +3942,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -3898,6 +3974,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3931,6 +4008,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -3965,6 +4043,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -3994,6 +4073,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -4033,6 +4113,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 1,
+                    redelegation_stake_account_pubkey: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4081,6 +4162,7 @@ mod tests {
                     nonce_authority: 2,
                     memo: None,
                     fee_payer: 1,
+                    redelegation_stake_account_pubkey: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4117,10 +4199,56 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 1,
+                    redelegation_stake_account_pubkey: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
                     read_keypair_file(&fee_payer_keypair_file).unwrap().into()
+                ],
+            }
+        );
+
+        // Test RedelegateStake Subcommand (minimal test due to the significant implementation
+        // overlap with DelegateStake)
+        let (redelegation_stake_account_keypair_file, mut redelegation_stake_account_tmp_file) =
+            make_tmp_file();
+        let redelegation_stake_account_keypair = Keypair::new();
+        write_keypair(
+            &redelegation_stake_account_keypair,
+            redelegation_stake_account_tmp_file.as_file_mut(),
+        )
+        .unwrap();
+        let redelegation_stake_account_pubkey = redelegation_stake_account_keypair.pubkey();
+
+        let test_redelegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "redelegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            &redelegation_stake_account_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_redelegate_stake, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    stake_authority: 0,
+                    force: false,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::default(),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                    redelegation_stake_account_pubkey: Some(redelegation_stake_account_pubkey),
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&redelegation_stake_account_keypair_file)
+                        .unwrap()
+                        .into()
                 ],
             }
         );
