@@ -1,6 +1,6 @@
 [package]
 name = "solana-frozen-abi-macro"
-version = "1.10.34"
+version = "1.10.35"
 description = "Solana Frozen ABI Macro"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
