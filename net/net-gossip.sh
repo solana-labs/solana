@@ -239,16 +239,17 @@ startCommon() {
       mkdir -p $SOLANA_HOME $CARGO_BIN;
       mv ~/config $SOLANA_HOME/
     "
-  elif ! $instanceIndex; then
-      ssh "${sshOptions[@]}" "$ipAddress" "
-      set -x;
-      rm -rf $SOLANA_HOME;
-      mkdir -p $CARGO_BIN
-    "
+  # elif ! $instanceIndex; then
+  #     ssh "${sshOptions[@]}" "$ipAddress" "
+  #     set -x;
+  #     rm -rf $SOLANA_HOME;
+  #     mkdir -p $CARGO_BIN
+  #   "
   else
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
+      rm -rf $SOLANA_HOME;
       mkdir -p $CARGO_BIN
     "
   fi
@@ -392,7 +393,7 @@ startGossipNode() {
   echo "startgossipnode() instance index: $instanceIndex"
 
   initLogDir
-  declare logFile="$netLogDir/validator-$ipAddress.log"
+  declare logFile="$netLogDir/validator-$ipAddress-$instanceIndex.log"
 
   if [[ -z $nodeType ]]; then
     echo nodeType not specified
@@ -735,8 +736,9 @@ gossipDeploy() {
       SECONDS=0
       pids=()
     else
-      for (( i = 0; i < $instancesPerNode; i++ ))
+      for (( i=0; i<$instancesPerNode; i++ ))
       do
+        echo "startGossipNode: instanceIndex: $i"
         startGossipNode "$ipAddress" $nodeType $nodeIndex $i
         sleep 2
       done
@@ -750,24 +752,24 @@ gossipDeploy() {
   done
 
 
-  for pid in "${pids[@]}"; do
-    declare ok=true
-    wait "$pid" || ok=false
-    if ! $ok; then
-      echo "+++ validator failed to start"
-      cat "$netLogDir/validator-$pid.log"
-      if $failOnValidatorBootupFailure; then
-        exit 1
-      else
-        echo "Failure is non-fatal"
-      fi
-    fi
-  done
+  # for pid in "${pids[@]}"; do
+  #   declare ok=true
+  #   wait "$pid" || ok=false
+  #   if ! $ok; then
+  #     echo "+++ validator failed to start"
+  #     cat "$netLogDir/validator-$pid.log"
+  #     if $failOnValidatorBootupFailure; then
+  #       exit 1
+  #     else
+  #       echo "Failure is non-fatal"
+  #     fi
+  #   fi
+  # done
 
-  $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
-  additionalNodeDeployTime=$SECONDS
+  # $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
+  # additionalNodeDeployTime=$SECONDS
 
-  annotateBlockexplorerUrl
+  # annotateBlockexplorerUrl
 
   declare networkVersion=unknown
   case $deployMethod in
@@ -788,7 +790,7 @@ gossipDeploy() {
     usage "Internal error: invalid deployMethod: $deployMethod"
     ;;
   esac
-  $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
+  # $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
 
   echo
   echo "--- Deployment Successful"
