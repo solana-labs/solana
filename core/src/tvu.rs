@@ -179,6 +179,7 @@ impl Tvu {
             repair_socket.clone(),
             &fetch_sender,
             Some(bank_forks.clone()),
+            cluster_info.clone(),
             exit,
         );
 

@@ -33,7 +33,7 @@ use {
     rand::{thread_rng, Rng},
     serde::{Deserialize, Serialize},
     solana_client::rpc_client::RpcClient,
-    solana_core::serve_repair::RepairProtocol,
+    solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_gossip::{contact_info::ContactInfo, gossip_service::discover},
     solana_sdk::{
         hash::Hash,
@@ -43,6 +43,7 @@ use {
         stake,
         system_instruction::SystemInstruction,
         system_program,
+        timing::timestamp,
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
@@ -53,13 +54,6 @@ use {
         time::{Duration, Instant},
     },
 };
-
-fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
-    let source = thread_rng().gen_range(0, nodes.len());
-    let mut contact = nodes[source].clone();
-    contact.id = solana_sdk::pubkey::new_rand();
-    contact
-}
 
 struct TransactionGenerator {
     blockhash: Hash,
@@ -180,7 +174,7 @@ fn run_dos(
         if params.mode == Mode::Rpc {
             rpc_client = Some(RpcClient::new_socket(params.entrypoint_addr));
         }
-        target = Some(params.entrypoint_addr);
+        target = Some((solana_sdk::pubkey::new_rand(), params.entrypoint_addr));
     } else {
         info!("************ NODE ***********");
         for node in nodes {
@@ -192,16 +186,16 @@ fn run_dos(
             if node.gossip == params.entrypoint_addr {
                 info!("{}", node.gossip);
                 target = match params.mode {
-                    Mode::Gossip => Some(node.gossip),
-                    Mode::Tvu => Some(node.tvu),
-                    Mode::TvuForwards => Some(node.tvu_forwards),
+                    Mode::Gossip => Some((node.id, node.gossip)),
+                    Mode::Tvu => Some((node.id, node.tvu)),
+                    Mode::TvuForwards => Some((node.id, node.tvu_forwards)),
                     Mode::Tpu => {
                         rpc_client = Some(RpcClient::new_socket(node.rpc));
-                        Some(node.tpu)
+                        Some((node.id, node.tpu))
                     }
-                    Mode::TpuForwards => Some(node.tpu_forwards),
-                    Mode::Repair => Some(node.repair),
-                    Mode::ServeRepair => Some(node.serve_repair),
+                    Mode::TpuForwards => Some((node.id, node.tpu_forwards)),
+                    Mode::Repair => Some((node.id, node.repair)),
+                    Mode::ServeRepair => Some((node.id, node.serve_repair)),
                     Mode::Rpc => {
                         rpc_client = Some(RpcClient::new_socket(node.rpc));
                         None
@@ -211,9 +205,8 @@ fn run_dos(
             }
         }
     }
-    let target = target.expect("should have target");
-
-    info!("Targeting {}", target);
+    let (target_id, target_addr) = target.expect("should have target");
+    info!("Targeting {}", target_addr);
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
     let mut data = Vec::new();
@@ -222,19 +215,32 @@ fn run_dos(
     match params.data_type {
         DataType::RepairHighest => {
             let slot = 100;
-            let req = RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-            data = bincode::serialize(&req).unwrap();
+            let keypair = Keypair::new();
+            let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+            let req = RepairProtocol::WindowIndex {
+                header,
+                slot,
+                shred_index: 0,
+            };
+            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
         }
         DataType::RepairShred => {
             let slot = 100;
-            let req =
-                RepairProtocol::HighestWindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-            data = bincode::serialize(&req).unwrap();
+            let keypair = Keypair::new();
+            let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+            let req = RepairProtocol::HighestWindowIndex {
+                header,
+                slot,
+                shred_index: 0,
+            };
+            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
         }
         DataType::RepairOrphan => {
             let slot = 100;
-            let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
-            data = bincode::serialize(&req).unwrap();
+            let keypair = Keypair::new();
+            let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+            let req = RepairProtocol::Orphan { header, slot };
+            data = ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap();
         }
         DataType::Random => {
             data.resize(params.data_size, 0);
@@ -290,7 +296,7 @@ fn run_dos(
                 info!("{:?}", tx);
                 data = bincode::serialize(&tx).unwrap();
             }
-            let res = socket.send_to(&data, target);
+            let res = socket.send_to(&data, target_addr);
             if res.is_err() {
                 error_count += 1;
             }
