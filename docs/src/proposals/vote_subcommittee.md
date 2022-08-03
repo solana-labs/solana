@@ -161,7 +161,7 @@ primary. B1 may use votes from A1 on slot X to switch forks.  The
 fork form which B1 is switching from must be from the epoch when
 B1 was still secondary, earlier than slot X.
 
-### Safety
+### Safety of Roots
 
 ```
 A1 A1 A2 A2 A3
