@@ -633,7 +633,14 @@ impl ServeRepair {
                     stats.err_id_mismatch += 1;
                     return false;
                 }
-                let time_diff_ms = timestamp().abs_diff(header.timestamp);
+                let time_diff_ms = {
+                    let ts = timestamp();
+                    if ts < header.timestamp {
+                        header.timestamp - ts
+                    } else {
+                        ts - header.timestamp
+                    }
+                };
                 if u128::from(time_diff_ms) > SIGNED_REPAIR_TIME_WINDOW.as_millis() {
                     stats.err_time_skew += 1;
                     return false;
