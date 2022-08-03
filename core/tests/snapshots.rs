@@ -95,13 +95,9 @@ impl SnapshotTestConfig {
         let bank0 = Bank::new_with_paths_for_tests(
             &genesis_config_info.genesis_config,
             vec![accounts_dir.path().to_path_buf()],
-            None,
-            None,
             AccountSecondaryIndexes::default(),
             false,
             accounts_db::AccountShrinkThreshold::default(),
-            false,
-            None,
         );
         bank0.freeze();
         let mut bank_forks = BankForks::new(bank0);

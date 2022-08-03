@@ -1436,16 +1436,7 @@ impl Bank {
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths_for_benches(
-            genesis_config,
-            Vec::new(),
-            None,
-            None,
-            AccountSecondaryIndexes::default(),
-            false,
-            AccountShrinkThreshold::default(),
-            false,
-        )
+        Self::new_with_paths_for_benches(genesis_config, Vec::new())
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
@@ -1473,13 +1464,9 @@ impl Bank {
         Self::new_with_paths_for_tests(
             genesis_config,
             Vec::new(),
-            None,
-            None,
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
-            false,
-            None,
         )
     }
 
@@ -1555,47 +1542,34 @@ impl Bank {
     pub fn new_with_paths_for_tests(
         genesis_config: &GenesisConfig,
         paths: Vec<PathBuf>,
-        debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        debug_do_not_add_builtins: bool,
-        accounts_db_config: Option<AccountsDbConfig>,
     ) -> Self {
         Self::new_with_paths(
             genesis_config,
             paths,
-            debug_keys,
-            additional_builtins,
+            None,
+            None,
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
-            debug_do_not_add_builtins,
-            accounts_db_config.or(Some(ACCOUNTS_DB_CONFIG_FOR_TESTING)),
+            false,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
         )
     }
 
-    pub fn new_with_paths_for_benches(
-        genesis_config: &GenesisConfig,
-        paths: Vec<PathBuf>,
-        debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
-        account_indexes: AccountSecondaryIndexes,
-        accounts_db_caching_enabled: bool,
-        shrink_ratio: AccountShrinkThreshold,
-        debug_do_not_add_builtins: bool,
-    ) -> Self {
+    pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
         Self::new_with_paths(
             genesis_config,
             paths,
-            debug_keys,
-            additional_builtins,
-            account_indexes,
-            accounts_db_caching_enabled,
-            shrink_ratio,
-            debug_do_not_add_builtins,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
         )

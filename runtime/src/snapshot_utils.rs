@@ -3501,13 +3501,9 @@ mod tests {
         let bank0 = Arc::new(Bank::new_with_paths_for_tests(
             &genesis_config,
             vec![accounts_dir.path().to_path_buf()],
-            None,
-            None,
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
-            false,
-            None,
         ));
         bank0
             .transfer(lamports_to_transfer, &mint_keypair, &key2.pubkey())
