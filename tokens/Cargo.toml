@@ -28,7 +28,7 @@ solana-sdk = { path = "../sdk", version = "=1.10.34" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.34" }
 solana-version = { path = "../version", version = "=1.10.34" }
 spl-associated-token-account = { version = "=1.0.5" }
-spl-token = { version = "=3.3.0", features = ["no-entrypoint"] }
+spl-token = { version = "=3.3.1", features = ["no-entrypoint"] }
 tempfile = "3.3.0"
 thiserror = "1.0"
 
