@@ -2054,25 +2054,78 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     online_stake_percentage as u64
 }
 
-// Cleanup anything that looks like an accounts append-vec
-fn cleanup_accounts_path(account_path: &std::path::Path) {
-    if let Err(e) = std::fs::remove_dir_all(account_path) {
-        warn!(
-            "encountered error removing accounts path: {:?}: {}",
-            account_path, e
-        );
+/*  Move the to-be-deleted path under top_delete_path directory
+ *  If the path has the form <parent_path>/<file_or_dir>, move it to be
+ *  <top_delete_path>/<parent_path>/<file_or_dir><timestamp>
+ *  If parent_path is absolute (starting with /), strip '/'.
+ */
+fn move_path_for_async_removal(top_delete_path: &str, timestamp: &String, path: &std::path::Path) {
+    let mut path_parent_from_top = std::path::PathBuf::from(top_delete_path);
+
+    if let Some(mut path_parent) = path.parent() {
+        if path_parent.has_root() {
+            path_parent = path_parent.strip_prefix("/").unwrap();
+        }
+        path_parent_from_top.push(path_parent);
     }
+
+    // Make sure delete_path_parent exists first to allow moving the
+    // to-be-deleted path under it.
+    std::fs::create_dir_all(&path_parent_from_top).unwrap();
+
+    let path_filename = path.file_name().unwrap();
+
+    // Appending the timestamp is to avoid name collision so that the fs::rename
+    // call won't fail due to the existing files there.
+    let delete_path = path_parent_from_top.join(path_filename).join(timestamp);
+
+    //println!("rename from {:?} to {:?}", path, delete_path);
+    std::fs::rename(&path, &delete_path).unwrap();
 }
 
+/*  Delete directories/files asynchronously to avoid blocking on it.
+    Fist, in sync context, rename the original path into
+    the top to_be_deleted/ directory, then in the async context
+    call remove_dir_all for the top to_be_deleted directory.
+    The async rmdir process may not finish if the process is
+    unexpectly aborted, so the files may be left over undeleted.
+    causing the disk space resource leak.  Always calling rmdir at the
+    top to_be_deleted directory allows cleaning up all the files
+    including the ones possibly left over by previous processes.
+*/
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
+    // TBD this path to be changed to the actual one
+    let top_delete_path = "/tmp/to_be_deleted/";
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        .to_string();
+
     for accounts_path in &config.account_paths {
-        cleanup_accounts_path(accounts_path);
+        move_path_for_async_removal(top_delete_path, &timestamp, accounts_path);
     }
     if let Some(ref shrink_paths) = config.account_shrink_paths {
         for accounts_path in shrink_paths {
-            cleanup_accounts_path(accounts_path);
+            move_path_for_async_removal(top_delete_path, &timestamp, accounts_path);
         }
     }
+
+    // Done moving the direcetories/files in sync context.  Now start
+    // the async task to remove them.  Note that there is no waiting to ensure this
+    // async task is done.  So if the process crashes or is aborted,
+    // some files may be left over.  The next process will resume the deleting work
+    // from the top_delete_path to avoid accumulating and leftover files on disk.
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.spawn(async move {
+        if let Err(e) = tokio::fs::remove_dir_all(&top_delete_path).await {
+            warn!(
+                "encountered error deleting path: {:?}: {}",
+                top_delete_path, e
+            );
+        }
+    });
 }
 
 pub fn is_snapshot_config_valid(
