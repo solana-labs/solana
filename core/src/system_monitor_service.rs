@@ -281,10 +281,11 @@ fn read_disk_stats() -> Result<DiskStats, String> {
     let mut num_disks = 0;
     for blk_device_dir in std::fs::read_dir(SYS_BLOCK_PATH).map_err(|e| e.to_string())? {
         let blk_device_dir = blk_device_dir.map_err(|e| e.to_string())?;
-        println!("blk_device_dir = {:?}", blk_device_dir);
+        if blk_device_dir.file_name().to_string_lossy().starts_with("loop") {
+            continue;
+        }
         let mut path = blk_device_dir.path();
         path.push("stat");
-        println!("path = {:?}", path);
         let file_diskstats = File::open(path).map_err(|e| e.to_string())?;
         let mut reader_diskstats = BufReader::new(file_diskstats);
         stats.accumulate(&parse_disk_stats(&mut reader_diskstats).unwrap_or_default());
@@ -690,7 +691,6 @@ impl SystemMonitorService {
     fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
         match read_disk_stats() {
             Ok(new_stats) => {
-                println!("read_disk_stats returned ok");
                 if let Some(old_stats) = disk_stats {
                     Self::report_disk_stats(old_stats, &new_stats);
                 }
@@ -948,9 +948,9 @@ data" as &[u8];
 
     #[test]
     fn test_bw_temp() {
+        solana_logger::setup();
         let mut disk_stats = None;
         SystemMonitorService::process_disk_stats(&mut disk_stats);
-        println!("num_disks = {}", disk_stats.as_ref().unwrap().num_disks);
         SystemMonitorService::process_disk_stats(&mut disk_stats);
         SystemMonitorService::process_disk_stats(&mut disk_stats);
     }
