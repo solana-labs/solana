@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-validator"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.10.34"
+version = "1.10.35"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -28,31 +28,31 @@ num_cpus = "1.13.1"
 rand = "0.7.0"
 serde = "1.0.136"
 serde_json = "1.0.79"
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.34" }
-solana-cli-config = { path = "../cli-config", version = "=1.10.34" }
-solana-client = { path = "../client", version = "=1.10.34" }
-solana-core = { path = "../core", version = "=1.10.34" }
-solana-download-utils = { path = "../download-utils", version = "=1.10.34" }
-solana-entry = { path = "../entry", version = "=1.10.34" }
-solana-faucet = { path = "../faucet", version = "=1.10.34" }
-solana-genesis-utils = { path = "../genesis-utils", version = "=1.10.34" }
-solana-gossip = { path = "../gossip", version = "=1.10.34" }
-solana-ledger = { path = "../ledger", version = "=1.10.34" }
-solana-logger = { path = "../logger", version = "=1.10.34" }
-solana-metrics = { path = "../metrics", version = "=1.10.34" }
-solana-net-utils = { path = "../net-utils", version = "=1.10.34" }
-solana-perf = { path = "../perf", version = "=1.10.34" }
-solana-poh = { path = "../poh", version = "=1.10.34" }
-solana-replica-lib = { path = "../replica-lib", version = "=1.10.34" }
-solana-rpc = { path = "../rpc", version = "=1.10.34" }
-solana-runtime = { path = "../runtime", version = "=1.10.34" }
-solana-sdk = { path = "../sdk", version = "=1.10.34" }
-solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.10.34" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.34" }
-solana-streamer = { path = "../streamer", version = "=1.10.34" }
-solana-test-validator = { path = "../test-validator", version = "=1.10.34" }
-solana-version = { path = "../version", version = "=1.10.34" }
-solana-vote-program = { path = "../programs/vote", version = "=1.10.34" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.10.35" }
+solana-cli-config = { path = "../cli-config", version = "=1.10.35" }
+solana-client = { path = "../client", version = "=1.10.35" }
+solana-core = { path = "../core", version = "=1.10.35" }
+solana-download-utils = { path = "../download-utils", version = "=1.10.35" }
+solana-entry = { path = "../entry", version = "=1.10.35" }
+solana-faucet = { path = "../faucet", version = "=1.10.35" }
+solana-genesis-utils = { path = "../genesis-utils", version = "=1.10.35" }
+solana-gossip = { path = "../gossip", version = "=1.10.35" }
+solana-ledger = { path = "../ledger", version = "=1.10.35" }
+solana-logger = { path = "../logger", version = "=1.10.35" }
+solana-metrics = { path = "../metrics", version = "=1.10.35" }
+solana-net-utils = { path = "../net-utils", version = "=1.10.35" }
+solana-perf = { path = "../perf", version = "=1.10.35" }
+solana-poh = { path = "../poh", version = "=1.10.35" }
+solana-replica-lib = { path = "../replica-lib", version = "=1.10.35" }
+solana-rpc = { path = "../rpc", version = "=1.10.35" }
+solana-runtime = { path = "../runtime", version = "=1.10.35" }
+solana-sdk = { path = "../sdk", version = "=1.10.35" }
+solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.10.35" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.35" }
+solana-streamer = { path = "../streamer", version = "=1.10.35" }
+solana-test-validator = { path = "../test-validator", version = "=1.10.35" }
+solana-version = { path = "../version", version = "=1.10.35" }
+solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
 symlink = "0.1.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

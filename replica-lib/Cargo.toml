@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-replica-lib"
 description = "The library used for replication by both the client and server"
-version = "1.10.34"
+version = "1.10.35"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,9 +14,9 @@ crossbeam-channel = "0.5"
 futures-util = "0.3"
 log = "0.4.11"
 prost = "0.10.0"
-solana-rpc = { path = "../rpc", version = "=1.10.34" }
-solana-runtime = { path = "../runtime", version = "=1.10.34" }
-solana-sdk = { path = "../sdk", version = "=1.10.34" }
+solana-rpc = { path = "../rpc", version = "=1.10.35" }
+solana-runtime = { path = "../runtime", version = "=1.10.35" }
+solana-sdk = { path = "../sdk", version = "=1.10.35" }
 tokio = { version = "~1.14.1", features = ["full"] }
 tonic = { version = "0.7.1", features = ["tls", "transport"] }
 

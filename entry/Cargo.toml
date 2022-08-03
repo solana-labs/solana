@@ -1,6 +1,6 @@
 [package]
 name = "solana-entry"
-version = "1.10.34"
+version = "1.10.35"
 description = "Solana Entry"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -18,16 +18,16 @@ log = "0.4.11"
 rand = "0.7.0"
 rayon = "1.5.1"
 serde = "1.0.136"
-solana-measure = { path = "../measure", version = "=1.10.34" }
-solana-merkle-tree = { path = "../merkle-tree", version = "=1.10.34" }
-solana-metrics = { path = "../metrics", version = "=1.10.34" }
-solana-perf = { path = "../perf", version = "=1.10.34" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.34" }
-solana-sdk = { path = "../sdk", version = "=1.10.34" }
+solana-measure = { path = "../measure", version = "=1.10.35" }
+solana-merkle-tree = { path = "../merkle-tree", version = "=1.10.35" }
+solana-metrics = { path = "../metrics", version = "=1.10.35" }
+solana-perf = { path = "../perf", version = "=1.10.35" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.35" }
+solana-sdk = { path = "../sdk", version = "=1.10.35" }
 
 [dev-dependencies]
 matches = "0.1.9"
-solana-logger = { path = "../logger", version = "=1.10.34" }
+solana-logger = { path = "../logger", version = "=1.10.35" }
 
 [lib]
 crate-type = ["lib"]

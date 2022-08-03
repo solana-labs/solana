@@ -1,6 +1,6 @@
 [package]
 name = "solana-runtime"
-version = "1.10.34"
+version = "1.10.35"
 description = "Solana runtime"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -37,21 +37,21 @@ rayon = "1.5.1"
 regex = "1.5.4"
 serde = { version = "1.0.136", features = ["rc"] }
 serde_derive = "1.0.103"
-solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.10.34" }
-solana-bucket-map = { path = "../bucket_map", version = "=1.10.34" }
-solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.10.34" }
-solana-config-program = { path = "../programs/config", version = "=1.10.34" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.34" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.34" }
-solana-measure = { path = "../measure", version = "=1.10.34" }
-solana-metrics = { path = "../metrics", version = "=1.10.34" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.10.34" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.34" }
-solana-sdk = { path = "../sdk", version = "=1.10.34" }
-solana-stake-program = { path = "../programs/stake", version = "=1.10.34" }
-solana-vote-program = { path = "../programs/vote", version = "=1.10.34" }
-solana-zk-token-proof-program = { path = "../programs/zk-token-proof", version = "=1.10.34" }
-solana-zk-token-sdk = { path = "../zk-token-sdk", version = "=1.10.34" }
+solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.10.35" }
+solana-bucket-map = { path = "../bucket_map", version = "=1.10.35" }
+solana-compute-budget-program = { path = "../programs/compute-budget", version = "=1.10.35" }
+solana-config-program = { path = "../programs/config", version = "=1.10.35" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.35" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.35" }
+solana-measure = { path = "../measure", version = "=1.10.35" }
+solana-metrics = { path = "../metrics", version = "=1.10.35" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.10.35" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.10.35" }
+solana-sdk = { path = "../sdk", version = "=1.10.35" }
+solana-stake-program = { path = "../programs/stake", version = "=1.10.35" }
+solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
+solana-zk-token-proof-program = { path = "../programs/zk-token-proof", version = "=1.10.35" }
+solana-zk-token-sdk = { path = "../zk-token-sdk", version = "=1.10.35" }
 symlink = "0.1.0"
 tar = "0.4.38"
 tempfile = "3.3.0"
@@ -70,7 +70,7 @@ assert_matches = "1.5.0"
 ed25519-dalek = "=1.0.1"
 libsecp256k1 = "0.6.0"
 rand_chacha = "0.2.2"
-solana-logger = { path = "../logger", version = "=1.10.34" }
+solana-logger = { path = "../logger", version = "=1.10.35" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

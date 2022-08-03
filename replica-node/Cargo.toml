@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-replica-node"
 description = "Solana replication node"
-version = "1.10.34"
+version = "1.10.35"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,27 +14,27 @@ clap = "2.33.1"
 crossbeam-channel = "0.5"
 log = "0.4.14"
 rand = "0.7.0"
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.34" }
-solana-client = { path = "../client", version = "=1.10.34" }
-solana-download-utils = { path = "../download-utils", version = "=1.10.34" }
-solana-genesis-utils = { path = "../genesis-utils", version = "=1.10.34" }
-solana-gossip = { path = "../gossip", version = "=1.10.34" }
-solana-ledger = { path = "../ledger", version = "=1.10.34" }
-solana-logger = { path = "../logger", version = "=1.10.34" }
-solana-net-utils = { path = "../net-utils", version = "=1.10.34" }
-solana-replica-lib = { path = "../replica-lib", version = "=1.10.34" }
-solana-rpc = { path = "../rpc", version = "=1.10.34" }
-solana-runtime = { path = "../runtime", version = "=1.10.34" }
-solana-sdk = { path = "../sdk", version = "=1.10.34" }
-solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.10.34" }
-solana-streamer = { path = "../streamer", version = "=1.10.34" }
-solana-validator = { path = "../validator", version = "=1.10.34" }
-solana-version = { path = "../version", version = "=1.10.34" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.10.35" }
+solana-client = { path = "../client", version = "=1.10.35" }
+solana-download-utils = { path = "../download-utils", version = "=1.10.35" }
+solana-genesis-utils = { path = "../genesis-utils", version = "=1.10.35" }
+solana-gossip = { path = "../gossip", version = "=1.10.35" }
+solana-ledger = { path = "../ledger", version = "=1.10.35" }
+solana-logger = { path = "../logger", version = "=1.10.35" }
+solana-net-utils = { path = "../net-utils", version = "=1.10.35" }
+solana-replica-lib = { path = "../replica-lib", version = "=1.10.35" }
+solana-rpc = { path = "../rpc", version = "=1.10.35" }
+solana-runtime = { path = "../runtime", version = "=1.10.35" }
+solana-sdk = { path = "../sdk", version = "=1.10.35" }
+solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.10.35" }
+solana-streamer = { path = "../streamer", version = "=1.10.35" }
+solana-validator = { path = "../validator", version = "=1.10.35" }
+solana-version = { path = "../version", version = "=1.10.35" }
 
 [dev-dependencies]
 serial_test = "0.6.0"
-solana-core = { path = "../core", version = "=1.10.34" }
-solana-local-cluster = { path = "../local-cluster", version = "=1.10.34" }
+solana-core = { path = "../core", version = "=1.10.35" }
+solana-local-cluster = { path = "../local-cluster", version = "=1.10.35" }
 tempfile = "3.3.0"
 
 [package.metadata.docs.rs]

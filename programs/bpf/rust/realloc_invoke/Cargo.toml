@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-realloc-invoke"
-version = "1.10.34"
+version = "1.10.35"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,8 +14,8 @@ default = ["program"]
 program = []
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.10.34" }
-solana-bpf-rust-realloc = { path = "../realloc", version = "=1.10.34", default-features = false }
+solana-program = { path = "../../../../sdk/program", version = "=1.10.35" }
+solana-bpf-rust-realloc = { path = "../realloc", version = "=1.10.35", default-features = false }
 
 [lib]
 crate-type = ["lib", "cdylib"]
