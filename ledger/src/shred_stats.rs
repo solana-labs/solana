@@ -1,5 +1,4 @@
 use {
-    crate::shred::MAX_DATA_SHREDS_PER_FEC_BLOCK,
     solana_sdk::clock::Slot,
     std::{
         ops::AddAssign,
@@ -18,9 +17,17 @@ pub struct ProcessShredsStats {
     pub sign_coding_elapsed: u64,
     pub coding_send_elapsed: u64,
     pub get_leader_schedule_elapsed: u64,
+<<<<<<< HEAD:ledger/src/shred_stats.rs
     // Number of data shreds from serializing ledger entries which do not make
     // a full batch of MAX_DATA_SHREDS_PER_FEC_BLOCK; counted in 4 buckets.
     num_residual_data_shreds: [usize; 4],
+=======
+    // Histogram count of num_data_shreds obtained from serializing entries
+    // counted in 5 buckets.
+    num_data_shreds_hist: [usize; 5],
+    // If the blockstore already has shreds for the broadcast slot.
+    pub num_extant_slots: u64,
+>>>>>>> 403b2e484 (records num data shreds obtained from serializing entries (#26888)):ledger/src/shred/stats.rs
     pub(crate) data_buffer_residual: usize,
 }
 
@@ -50,9 +57,10 @@ impl ProcessShredsStats {
         let slot_broadcast_time = slot_broadcast_time
             .map(|t| t.as_micros() as i64)
             .unwrap_or(-1);
-        self.num_residual_data_shreds[1] += self.num_residual_data_shreds[0];
-        self.num_residual_data_shreds[2] += self.num_residual_data_shreds[1];
-        self.num_residual_data_shreds[3] += self.num_residual_data_shreds[2];
+        self.num_data_shreds_hist.iter_mut().fold(0, |acc, num| {
+            *num += acc;
+            *num
+        });
         datapoint_info!(
             name,
             ("slot", slot, i64),
@@ -71,34 +79,20 @@ impl ProcessShredsStats {
             ("sign_coding_time", self.sign_coding_elapsed, i64),
             ("coding_send_time", self.coding_send_elapsed, i64),
             ("data_buffer_residual", self.data_buffer_residual, i64),
-            (
-                "residual_data_shreds_08",
-                self.num_residual_data_shreds[0],
-                i64
-            ),
-            (
-                "residual_data_shreds_16",
-                self.num_residual_data_shreds[1],
-                i64
-            ),
-            (
-                "residual_data_shreds_24",
-                self.num_residual_data_shreds[2],
-                i64
-            ),
-            (
-                "residual_data_shreds_32",
-                self.num_residual_data_shreds[3],
-                i64
-            ),
+            ("num_data_shreds_07", self.num_data_shreds_hist[0], i64),
+            ("num_data_shreds_15", self.num_data_shreds_hist[1], i64),
+            ("num_data_shreds_31", self.num_data_shreds_hist[2], i64),
+            ("num_data_shreds_63", self.num_data_shreds_hist[3], i64),
+            ("num_data_shreds_64", self.num_data_shreds_hist[4], i64),
         );
         *self = Self::default();
     }
 
-    pub(crate) fn record_num_residual_data_shreds(&mut self, num_data_shreds: usize) {
-        const SIZE_OF_RESIDUAL_BUCKETS: usize = (MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 3) / 4;
-        let residual = num_data_shreds % (MAX_DATA_SHREDS_PER_FEC_BLOCK as usize);
-        self.num_residual_data_shreds[residual / SIZE_OF_RESIDUAL_BUCKETS] += 1;
+    pub(crate) fn record_num_data_shreds(&mut self, num_data_shreds: usize) {
+        let index = usize::BITS - num_data_shreds.leading_zeros();
+        let index = index.saturating_sub(3) as usize;
+        let index = index.min(self.num_data_shreds_hist.len() - 1);
+        self.num_data_shreds_hist[index] += 1;
     }
 }
 
@@ -138,7 +132,12 @@ impl AddAssign<ProcessShredsStats> for ProcessShredsStats {
             sign_coding_elapsed,
             coding_send_elapsed,
             get_leader_schedule_elapsed,
+<<<<<<< HEAD:ledger/src/shred_stats.rs
             num_residual_data_shreds,
+=======
+            num_data_shreds_hist,
+            num_extant_slots,
+>>>>>>> 403b2e484 (records num data shreds obtained from serializing entries (#26888)):ledger/src/shred/stats.rs
             data_buffer_residual,
         } = rhs;
         self.shredding_elapsed += shredding_elapsed;
@@ -150,8 +149,8 @@ impl AddAssign<ProcessShredsStats> for ProcessShredsStats {
         self.coding_send_elapsed += coding_send_elapsed;
         self.get_leader_schedule_elapsed += get_leader_schedule_elapsed;
         self.data_buffer_residual += data_buffer_residual;
-        for (i, bucket) in self.num_residual_data_shreds.iter_mut().enumerate() {
-            *bucket += num_residual_data_shreds[i];
+        for (i, bucket) in self.num_data_shreds_hist.iter_mut().enumerate() {
+            *bucket += num_data_shreds_hist[i];
         }
     }
 }
