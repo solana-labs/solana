@@ -224,6 +224,40 @@ build() {
 SOLANA_HOME="\$HOME/solana"
 CARGO_BIN="\$HOME/.cargo/bin"
 
+startGossipNodeCommon() {
+  declare ipAddress=$1
+  declare instanceIndex=$2
+  test -d "$SOLANA_ROOT"
+  if $skipSetup; then
+    # shellcheck disable=SC2029
+    ssh "${sshOptions[@]}" "$ipAddress" "
+      set -x;
+      mkdir -p $SOLANA_HOME/config;
+      rm -rf ~/config;
+      mv $SOLANA_HOME/config ~;
+      rm -rf $SOLANA_HOME;
+      mkdir -p $SOLANA_HOME $CARGO_BIN;
+      mv ~/config $SOLANA_HOME/
+    "
+  elif [[ $instanceIndex == 0 ]]; then
+    ssh "${sshOptions[@]}" "$ipAddress" "
+      set -x;
+      rm -rf $SOLANA_HOME;
+      mkdir -p $CARGO_BIN
+    "
+  else
+    # shellcheck disable=SC2029
+    ssh "${sshOptions[@]}" "$ipAddress" "
+      set -x;
+      rm -rf $SOLANA_HOME;
+      mkdir -p $CARGO_BIN
+    "
+  fi
+  [[ -z "$externalNodeSshKey" ]] || ssh-copy-id -f -i "$externalNodeSshKey" "${sshOptions[@]}" "solana@$ipAddress"
+  syncScripts "$ipAddress"
+
+}
+
 startCommon() {
   declare ipAddress=$1
   declare instanceIndex=$2
@@ -409,7 +443,7 @@ startGossipNode() {
   echo "start log: $logFile"
   (
     set -x
-    startCommon "$ipAddress" $instanceIndex
+    startGossipNodeCommon "$ipAddress" $instanceIndex
 
     if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
       #
