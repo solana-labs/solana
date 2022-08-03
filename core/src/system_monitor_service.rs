@@ -950,7 +950,7 @@ data" as &[u8];
     fn test_bw_temp() {
         let mut disk_stats = None;
         SystemMonitorService::process_disk_stats(&mut disk_stats);
-        println!("num_disks = {}", disk_stats.unwrap().num_disks);
+        println!("num_disks = {}", disk_stats.as_ref().unwrap().num_disks);
         SystemMonitorService::process_disk_stats(&mut disk_stats);
         SystemMonitorService::process_disk_stats(&mut disk_stats);
     }
