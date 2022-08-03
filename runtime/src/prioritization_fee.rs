@@ -1,8 +1,76 @@
 use {
     crate::transaction_priority_details::GetTransactionPriorityDetails,
-    solana_sdk::{pubkey::Pubkey, transaction::SanitizedTransaction},
+    solana_measure::measure,
+    solana_sdk::{
+        clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
+    },
     std::collections::HashMap,
 };
+
+#[derive(Debug, Default)]
+struct PrioritizationFeeMetrics {
+    // Count of transactions that are used to update this slot.
+    total_transactions_count: u64,
+
+    // Count of writable accounts has minimum prioritization fee in this slot
+    total_writable_accounts_count: u64,
+
+    // Count of writeable accounts those minimum prioritization fee is higher than minimum transaction fee
+    // in this slot.
+    relevant_writable_accounts_count: u64,
+
+    // Total prioritization fees included in this slot.
+    total_prioritization_fee: u64,
+
+    // Accumulated time spent on tracking prioritization fee for each slot.
+    total_update_elapsed_us: u64,
+}
+
+impl PrioritizationFeeMetrics {
+    fn increment_total_transactions_count(&mut self, val: u64) {
+        saturating_add_assign!(self.total_transactions_count, val);
+    }
+
+    fn increment_total_prioritization_fee(&mut self, val: u64) {
+        saturating_add_assign!(self.total_prioritization_fee, val);
+    }
+
+    fn increment_total_update_elapsed_us(&mut self, val: u64) {
+        saturating_add_assign!(self.total_update_elapsed_us, val);
+    }
+
+    fn report(&self, slot: Slot) {
+        datapoint_info!(
+            "block_prioritization_fee",
+            ("slot", slot as i64, i64),
+            (
+                "total_transactions_count",
+                self.total_transactions_count as i64,
+                i64
+            ),
+            (
+                "total_writable_accounts_count",
+                self.total_writable_accounts_count as i64,
+                i64
+            ),
+            (
+                "relevant_writable_accounts_count",
+                self.relevant_writable_accounts_count as i64,
+                i64
+            ),
+            (
+                "total_prioritization_fee",
+                self.total_prioritization_fee as i64,
+                i64
+            ),
+            (
+                "total_update_elapsed_us",
+                self.total_update_elapsed_us as i64,
+                i64
+            ),
+        );
+    }
+}
 
 pub enum PrioritizationFeeError {
     // Not able to get account locks from sanitized transaction, which is required to update block
@@ -32,6 +100,9 @@ pub struct PrioritizationFee {
     // Default to `false`, set to `true` when a block is completed, therefore the minimum fees recorded
     // are finalized, and can be made available for use (e.g., RPC query)
     is_finalized: bool,
+
+    // slot prioritization fee metrics
+    metrics: PrioritizationFeeMetrics,
 }
 
 impl Default for PrioritizationFee {
@@ -40,6 +111,7 @@ impl Default for PrioritizationFee {
             min_transaction_fee: u64::MAX,
             min_writable_account_fees: HashMap::new(),
             is_finalized: false,
+            metrics: PrioritizationFeeMetrics::default(),
         }
     }
 }
@@ -50,33 +122,48 @@ impl PrioritizationFee {
         &mut self,
         sanitized_tx: &SanitizedTransaction,
     ) -> Result<(), PrioritizationFeeError> {
-        let account_locks = sanitized_tx
-            .get_account_locks()
-            .or(Err(PrioritizationFeeError::FailGetTransactionAccountLocks))?;
+        let (_, update_time) = measure!(
+            {
+                let account_locks = sanitized_tx
+                    .get_account_locks()
+                    .or(Err(PrioritizationFeeError::FailGetTransactionAccountLocks))?;
 
-        let priority_details = sanitized_tx
-            .get_transaction_priority_details()
-            .ok_or(PrioritizationFeeError::FailGetTransactionPriorityDetails)?;
+                let priority_details = sanitized_tx
+                    .get_transaction_priority_details()
+                    .ok_or(PrioritizationFeeError::FailGetTransactionPriorityDetails)?;
 
-        if priority_details.priority < self.min_transaction_fee {
-            self.min_transaction_fee = priority_details.priority;
-        }
-        for write_account in account_locks.writable {
-            self.min_writable_account_fees
-                .entry(*write_account)
-                .and_modify(|write_lock_fee| {
-                    *write_lock_fee = std::cmp::min(*write_lock_fee, priority_details.priority)
-                })
-                .or_insert(priority_details.priority);
-        }
+                if priority_details.priority < self.min_transaction_fee {
+                    self.min_transaction_fee = priority_details.priority;
+                }
+                for write_account in account_locks.writable {
+                    self.min_writable_account_fees
+                        .entry(*write_account)
+                        .and_modify(|write_lock_fee| {
+                            *write_lock_fee =
+                                std::cmp::min(*write_lock_fee, priority_details.priority)
+                        })
+                        .or_insert(priority_details.priority);
+                }
+
+                self.metrics
+                    .increment_total_prioritization_fee(priority_details.priority);
+            },
+            "update_time",
+        );
+
+        self.metrics
+            .increment_total_update_elapsed_us(update_time.as_us());
+        self.metrics.increment_total_transactions_count(1);
         Ok(())
     }
 
     /// Accounts that have minimum fees lesser or equal to the minimum fee in the block are redundant, they are
     /// removed to reduce memory footprint.
     pub fn prune_irrelevant_writable_accounts(&mut self) {
+        self.metrics.total_writable_accounts_count = self.get_writable_accounts_count() as u64;
         self.min_writable_account_fees
             .retain(|_, account_fee| account_fee > &mut self.min_transaction_fee);
+        self.metrics.relevant_writable_accounts_count = self.get_writable_accounts_count() as u64;
     }
 
     pub fn mark_block_completed(&mut self) -> Result<(), PrioritizationFeeError> {
@@ -105,6 +192,29 @@ impl PrioritizationFee {
 
     pub fn is_finalized(&self) -> bool {
         self.is_finalized
+    }
+
+    pub fn report_metrics(&self, slot: Slot) {
+        self.metrics.report(slot);
+
+        // report this slot's min_transaction_fee and top 10 min_writable_account_fees
+        let min_transaction_fee = self.get_min_transaction_fee().unwrap_or(0);
+        let mut accounts_fees: Vec<_> = self.get_writable_account_fees().collect();
+        accounts_fees.sort_by(|lh, rh| rh.1.cmp(lh.1));
+        datapoint_info!(
+            "block_min_prioritization_fee",
+            ("slot", slot as i64, i64),
+            ("entity", "block", String),
+            ("min_prioritization_fee", min_transaction_fee as i64, i64),
+        );
+        for (account_key, fee) in accounts_fees.iter().take(10) {
+            datapoint_info!(
+                "block_min_prioritization_fee",
+                ("slot", slot as i64, i64),
+                ("entity", account_key.to_string(), String),
+                ("min_prioritization_fee", **fee as i64, i64),
+            );
+        }
     }
 }
 

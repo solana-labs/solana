@@ -26,13 +26,6 @@ struct PrioritizationFeeCacheMetrics {
     // Count of transactions that successfully updated each slot's prioritization fee cache.
     successful_transaction_update_count: AtomicU64,
 
-    // Count of writable accounts has minimum prioritization fee in this slot
-    total_writable_accounts_count: AtomicU64,
-
-    // Count of writeable accounts those minimum prioritization fee is higher than minimum transaction fee
-    // in this slot.
-    relevant_writable_accounts_count: AtomicU64,
-
     // Count of transactions that failed to get their priority details.
     fail_get_transaction_priority_details_count: AtomicU64,
 
@@ -49,16 +42,6 @@ struct PrioritizationFeeCacheMetrics {
 impl PrioritizationFeeCacheMetrics {
     fn increment_successful_transaction_update_count(&self, val: u64) {
         self.successful_transaction_update_count
-            .fetch_add(val, Ordering::Relaxed);
-    }
-
-    fn increment_total_writable_accounts_count(&self, val: u64) {
-        self.total_writable_accounts_count
-            .fetch_add(val, Ordering::Relaxed);
-    }
-
-    fn increment_relevant_writable_accounts_count(&self, val: u64) {
-        self.relevant_writable_accounts_count
             .fetch_add(val, Ordering::Relaxed);
     }
 
@@ -89,18 +72,6 @@ impl PrioritizationFeeCacheMetrics {
             (
                 "successful_transaction_update_count",
                 self.successful_transaction_update_count
-                    .swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "total_writable_accounts_count",
-                self.total_writable_accounts_count
-                    .swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "relevant_writable_accounts_count",
-                self.relevant_writable_accounts_count
                     .swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
@@ -241,12 +212,12 @@ impl PrioritizationFeeCache {
         &self,
         slot: Slot,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
-    ) -> Option<u64> {
+    ) {
         let mut successful_transaction_update_count: u64 = 0;
         let mut fail_get_transaction_priority_details_count: u64 = 0;
         let mut fail_get_transaction_account_locks_count: u64 = 0;
 
-        let (updated_min_fee, cache_update_time) = measure!(
+        let (_, cache_update_time) = measure!(
             {
                 let block_prioritization_fee = self.get_prioritization_fee(&slot).entry();
 
@@ -261,10 +232,11 @@ impl PrioritizationFeeCache {
                         Err(PrioritizationFeeError::FailGetTransactionAccountLocks) => {
                             saturating_add_assign!(fail_get_transaction_account_locks_count, 1)
                         }
-                        _ => saturating_add_assign!(successful_transaction_update_count, 1),
+                        _ => {
+                            saturating_add_assign!(successful_transaction_update_count, 1)
+                        }
                     }
                 }
-                block_prioritization_fee.get_min_transaction_fee()
             },
             "cache_update"
         );
@@ -281,8 +253,6 @@ impl PrioritizationFeeCache {
             );
         self.metrics
             .increment_total_update_elapsed_us(cache_update_time.as_us());
-
-        updated_min_fee
     }
 
     /// Finalize prioritization fee when it's bank is completely replayed from blockstore,
@@ -334,55 +304,16 @@ impl PrioritizationFeeCache {
                     slot,
                     prioritization_fee,
                 } => {
-                    let pre_writable_accounts_count: usize;
-                    let post_writable_accounts_count: usize;
-                    let min_transaction_fee: u64;
-                    let mut accounts_fees: Vec<_>;
-
                     // prune cache by evicting write account entry from prioritization fee if its fee is less
                     // or equal to block's minimum transaction fee, because they are irrelevant in calculating
                     // block minimum fee.
                     {
                         let mut prioritization_fee = prioritization_fee.lock().unwrap();
-                        pre_writable_accounts_count =
-                            prioritization_fee.get_writable_accounts_count();
                         prioritization_fee.prune_irrelevant_writable_accounts();
-                        post_writable_accounts_count =
-                            prioritization_fee.get_writable_accounts_count();
                         let _ = prioritization_fee.mark_block_completed();
-                        min_transaction_fee =
-                            prioritization_fee.get_min_transaction_fee().unwrap_or(0);
-                        accounts_fees = prioritization_fee
-                            .get_writable_account_fees()
-                            .map(|(key, fee)| (*key, *fee))
-                            .collect();
+                        prioritization_fee.report_metrics(slot);
                     }
-
-                    metrics.increment_total_writable_accounts_count(
-                        pre_writable_accounts_count as u64,
-                    );
-                    metrics.increment_relevant_writable_accounts_count(
-                        post_writable_accounts_count as u64,
-                    );
                     metrics.report(slot);
-
-                    // report current minimum fees for slot, including min_transaction_fee and top 10
-                    // min_writable_account_fees
-                    datapoint_info!(
-                        "block_prioritization_fee",
-                        ("slot", slot as i64, i64),
-                        ("entity", "block", String),
-                        ("min_prioritization_fee", min_transaction_fee as i64, i64),
-                    );
-                    accounts_fees.sort_by(|lh, rh| rh.1.cmp(&lh.1));
-                    for (account_key, fee) in accounts_fees.iter().take(10) {
-                        datapoint_info!(
-                            "block_prioritization_fee",
-                            ("slot", slot as i64, i64),
-                            ("entity", account_key.to_string(), String),
-                            ("min_prioritization_fee", *fee as i64, i64),
-                        );
-                    }
                 }
                 FinalizingSerivceUpdate::Exit => {
                     break;
@@ -509,12 +440,7 @@ mod tests {
         let slot = 1;
 
         let mut prioritization_fee_cache = PrioritizationFeeCache::default();
-        assert_eq!(
-            2,
-            prioritization_fee_cache
-                .update_transactions(slot, txs.iter())
-                .unwrap()
-        );
+        prioritization_fee_cache.update_transactions(slot, txs.iter());
 
         // assert block minimum fee and account a, b, c fee accordingly
         {
@@ -598,10 +524,15 @@ mod tests {
                 &write_account_a,
                 &write_account_b,
             )];
+            prioritization_fee_cache.update_transactions(1, txs.iter());
             assert_eq!(
                 5,
                 prioritization_fee_cache
-                    .update_transactions(1, txs.iter())
+                    .get_prioritization_fee(&1)
+                    .entry
+                    .lock()
+                    .unwrap()
+                    .get_min_transaction_fee()
                     .unwrap()
             );
             // before block is marked as completed
@@ -620,10 +551,15 @@ mod tests {
                 &write_account_b,
                 &write_account_c,
             )];
+            prioritization_fee_cache.update_transactions(2, txs.iter());
             assert_eq!(
                 9,
                 prioritization_fee_cache
-                    .update_transactions(2, txs.iter())
+                    .get_prioritization_fee(&2)
+                    .entry
+                    .lock()
+                    .unwrap()
+                    .get_min_transaction_fee()
                     .unwrap()
             );
             // before block is marked as completed
@@ -643,10 +579,15 @@ mod tests {
                 &write_account_a,
                 &write_account_c,
             )];
+            prioritization_fee_cache.update_transactions(3, txs.iter());
             assert_eq!(
                 2,
                 prioritization_fee_cache
-                    .update_transactions(3, txs.iter())
+                    .get_prioritization_fee(&3)
+                    .entry
+                    .lock()
+                    .unwrap()
+                    .get_min_transaction_fee()
                     .unwrap()
             );
             // before block is marked as completed
