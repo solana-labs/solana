@@ -38,6 +38,13 @@ use {
 // The point at which transactions become "too old", in seconds.
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
+// Add prioritization fee to transfer transactions, when `--use-randomized-compute-unit-price`
+// is used, compute-unit-price is randomly generated in range of (0..MAX_COMPUTE_UNIT_PRICE).
+// It also sets transaction's compute-unit to TRANSFER_TRANSACTION_COMPUTE_UNIT. Therefore the
+// max additional cost is `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE / 1_000_000`
+const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
+const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
+
 pub type TimestampedTransaction = (Transaction, Option<u64>);
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
 
@@ -441,7 +448,7 @@ fn generate_system_txs(
 
     if use_randomized_compute_unit_price {
         let mut rng = rand::thread_rng();
-        let range = Uniform::from(0..100); // randomized compute_unit_price range.
+        let range = Uniform::from(0..MAX_COMPUTE_UNIT_PRICE);
         let compute_unit_prices: Vec<_> = (0..pairs.len())
             .map(|_| range.sample(&mut rng) as u64)
             .collect();
@@ -484,11 +491,12 @@ fn transfer_with_compute_unit_price(
     compute_unit_price: u64,
 ) -> Transaction {
     let from_pubkey = from_keypair.pubkey();
-    let ixs = vec![
+    let instructions = vec![
         system_instruction::transfer(&from_pubkey, to, lamports),
+        ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COMPUTE_UNIT),
         ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
     ];
-    let message = Message::new(&ixs, Some(&from_pubkey));
+    let message = Message::new(&instructions, Some(&from_pubkey));
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
