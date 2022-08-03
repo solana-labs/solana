@@ -279,12 +279,12 @@ pub fn verify_net_stats_access() -> Result<(), String> {
 fn read_disk_stats() -> Result<DiskStats, String> {
     let mut stats = DiskStats::default();
     let mut num_disks = 0;
-    for blk_device_dir in fs::read_dir(SYS_BLOCK_PATH)? {
+    for blk_device_dir in std::fs::read_dir(SYS_BLOCK_PATH)? {
         let blk_device_dir = blk_device_dir?;
-        println("blk_device_dir = {:?}", blk_device_dir);
+        println!("blk_device_dir = {:?}", blk_device_dir);
         let mut path = blk_device_dir.path();
         path.push("stat");
-        println("path = {:?}", path);
+        println!("path = {:?}", path);
         let file_diskstats = File::open(path).map_err(|e| e.to_string())?;
         let mut reader_diskstats = BufReader::new(file_diskstats);
         stats.accumulate(&parse_disk_stats(&mut reader_diskstats).unwrap_or_default());
