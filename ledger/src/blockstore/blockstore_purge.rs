@@ -136,12 +136,11 @@ impl Blockstore {
         }
     }
 
-    pub(crate) fn run_purge(
-        &self,
-        from_slot: Slot,
-        to_slot: Slot,
-        purge_type: PurgeType,
-    ) -> Result<bool> {
+    /// Purge any slots within the specified slot range for all slot-based columns.
+    ///
+    /// Note that `from_slot` is 0, any sst-file with a slot-range completely older
+    /// than `to_slot` will be deleted immediately.
+    pub fn run_purge(&self, from_slot: Slot, to_slot: Slot, purge_type: PurgeType) -> Result<bool> {
         self.run_purge_with_stats(from_slot, to_slot, purge_type, &mut PurgeStats::default())
     }
 

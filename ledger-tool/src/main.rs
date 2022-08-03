@@ -1492,6 +1492,19 @@ fn main() {
             )
         )
         .subcommand(
+            SubCommand::with_name("purge-older-slots")
+            .about("Purge the slots that is older than or equal to the specified slot")
+            .arg(
+                Arg::with_name("ending_slot")
+                    .long("ending-slot")
+                    .value_name("SLOT")
+                    .takes_value(true)
+                    .required(true)
+                    .help("The latest slot to be purged.  Anything that is older than \
+                           this slot will be purged.")
+            )
+        )
+        .subcommand(
             SubCommand::with_name("slot")
             .about("Print the contents of one or more slots")
             .arg(
@@ -2190,6 +2203,31 @@ fn main() {
                             warn!("error inserting shreds for slot {}", slot);
                         }
                     }
+                }
+            }
+            ("purge-older-slots", Some(arg_matches)) => {
+                let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Primary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                    force_update_to_open,
+                );
+                match blockstore.run_purge(
+                    0, // from_slot
+                    ending_slot,
+                    PurgeType::CompactionFilter,
+                ) {
+                    Ok(columns_purged) => {
+                        if !columns_purged {
+                            eprintln!(
+                                "Internal error.  The purge process on some \
+                                      columns might not be successful."
+                            );
+                        }
+                    }
+                    Err(_) => eprintln!("Internal error. Failed to submit the purge request.",),
                 }
             }
             ("genesis", Some(arg_matches)) => {
