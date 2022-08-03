@@ -85,7 +85,7 @@ it can only use its own votes for switching proofs
 2. If the primary committee is switching from a previous epoch in
 which it was the secondary, it can use its own votes from when it
 was the secondary and the previous epoch primary votes on the primary
-fork.  It can't mix them both together.
+fork. Switching proofs can't mix votes from both subcommittees.
 
 3. The secondary committee can use any votes from the primary and
 itself to switch.
@@ -176,10 +176,16 @@ lockout violation has occurred, or the network has stalled. At the
 start of the epoch with (A2,B1), B1 is now the primary and A2 is
 the secondary.
 
-### Optimistic Confirmation
+### Optimistic Confirmation Safety
 
 A slot is optimistically confirmed if and only if both subcommittees
 confirm it with 2/3+ majority.
+
+When a subcommittee was **secondary**, it can use the **primary**
+votes to switch forks.  But since both **primary** and **secondary**
+confirmed a slot, it is not possible to construct a switching proof.
+Switching proofs must contain votes only from one subcommittee, the
+votes can't be mixed.
 
 Voting subcommittee (A1,B1) confirms the last slot `X` of its
 epoch, (A2,B1) take over on the same epoch. B1 must root `X`, or B1
@@ -189,4 +195,6 @@ it can only use its own votes for a switching proof.
 ### Block producers
 
 All block producing validators even those outside of the subcommittee
-schedule should follow the primary subcommittee fork weight.
+schedule should follow the primary subcommittee fork weight. They
+should be internally running as **secondary** and generate switching
+proofs based on observed **primary** votes.
