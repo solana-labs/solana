@@ -1213,7 +1213,15 @@ pub fn main() {
             Arg::with_name("tpu_use_quic")
                 .long("tpu-use-quic")
                 .takes_value(false)
+                .hidden(true)
+                .conflicts_with("tpu_disable_quic")
                 .help("Use QUIC to send transactions."),
+        )
+        .arg(
+            Arg::with_name("tpu_disable_quic")
+                .long("tpu-disable-quic")
+                .takes_value(false)
+                .help("Do not use QUIC to send transactions."),
         )
         .arg(
             Arg::with_name("disable_quic_servers")
@@ -2314,7 +2322,7 @@ pub fn main() {
     let restricted_repair_only_mode = matches.is_present("restricted_repair_only_mode");
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
-    let tpu_use_quic = matches.is_present("tpu_use_quic");
+    let tpu_use_quic = !matches.is_present("tpu_disable_quic");
     let enable_quic_servers = !matches.is_present("disable_quic_servers");
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
