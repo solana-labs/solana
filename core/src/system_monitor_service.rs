@@ -279,8 +279,8 @@ pub fn verify_net_stats_access() -> Result<(), String> {
 fn read_disk_stats() -> Result<DiskStats, String> {
     let mut stats = DiskStats::default();
     let mut num_disks = 0;
-    for blk_device_dir in std::fs::read_dir(SYS_BLOCK_PATH)? {
-        let blk_device_dir = blk_device_dir?;
+    for blk_device_dir in std::fs::read_dir(SYS_BLOCK_PATH).map_err(|e| e.to_string())? {
+        let blk_device_dir = blk_device_dir.map_err(|e| e.to_string())?;
         println!("blk_device_dir = {:?}", blk_device_dir);
         let mut path = blk_device_dir.path();
         path.push("stat");
