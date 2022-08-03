@@ -456,14 +456,7 @@ impl Validator {
         info!("Cleaning accounts paths..");
         *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
         let mut start = Measure::start("clean_accounts_paths");
-        for accounts_path in &config.account_paths {
-            cleanup_accounts_path(accounts_path);
-        }
-        if let Some(ref shrink_paths) = config.account_shrink_paths {
-            for accounts_path in shrink_paths {
-                cleanup_accounts_path(accounts_path);
-            }
-        }
+        cleanup_accounts_paths(&config);
         start.stop();
         info!("done. {}", start);
 
@@ -2068,6 +2061,17 @@ fn cleanup_accounts_path(account_path: &std::path::Path) {
             "encountered error removing accounts path: {:?}: {}",
             account_path, e
         );
+    }
+}
+
+fn cleanup_accounts_paths(config: &ValidatorConfig) {
+    for accounts_path in &config.account_paths {
+        cleanup_accounts_path(accounts_path);
+    }
+    if let Some(ref shrink_paths) = config.account_shrink_paths {
+        for accounts_path in shrink_paths {
+            cleanup_accounts_path(accounts_path);
+        }
     }
 }
 
