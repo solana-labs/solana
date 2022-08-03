@@ -1,6 +1,6 @@
 [package]
 name = "solana-banks-client"
-version = "1.11.5"
+version = "1.11.6"
 description = "Solana banks client"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,17 +12,17 @@ edition = "2021"
 [dependencies]
 borsh = "0.9.3"
 futures = "0.3"
-solana-banks-interface = { path = "../banks-interface", version = "=1.11.5" }
-solana-program = { path = "../sdk/program", version = "=1.11.5" }
-solana-sdk = { path = "../sdk", version = "=1.11.5" }
+solana-banks-interface = { path = "../banks-interface", version = "=1.11.6" }
+solana-program = { path = "../sdk/program", version = "=1.11.6" }
+solana-sdk = { path = "../sdk", version = "=1.11.6" }
 tarpc = { version = "0.29.0", features = ["full"] }
 thiserror = "1.0"
 tokio = { version = "~1.14.1", features = ["full"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }
 
 [dev-dependencies]
-solana-banks-server = { path = "../banks-server", version = "=1.11.5" }
-solana-runtime = { path = "../runtime", version = "=1.11.5" }
+solana-banks-server = { path = "../banks-server", version = "=1.11.6" }
+solana-runtime = { path = "../runtime", version = "=1.11.6" }
 
 [lib]
 crate-type = ["lib"]
