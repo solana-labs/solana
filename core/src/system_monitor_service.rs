@@ -690,6 +690,7 @@ impl SystemMonitorService {
     fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
         match read_disk_stats() {
             Ok(new_stats) => {
+                println!("read_disk_stats returned ok");
                 if let Some(old_stats) = disk_stats {
                     Self::report_disk_stats(old_stats, &new_stats);
                 }
@@ -949,6 +950,7 @@ data" as &[u8];
     fn test_bw_temp() {
         let mut disk_stats = None;
         SystemMonitorService::process_disk_stats(&mut disk_stats);
+        println!("num_disks = ", disk_stats.unwrap().num_disks);
         SystemMonitorService::process_disk_stats(&mut disk_stats);
         SystemMonitorService::process_disk_stats(&mut disk_stats);
     }
