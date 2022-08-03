@@ -9,9 +9,11 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
     },
+    indexmap::{map::Entry,IndexMap,},
     std::{
         collections::HashMap,
         ops::Div,
+        iter::repeat_with,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
             Arc,
@@ -77,6 +79,10 @@ pub(crate) mod executor_cache {
 }
 
 pub(crate) const MAX_CACHED_EXECUTORS: usize = 256;
+
+// The LFU entry in a random sample of below size is evicted from the cache.
+const RANDOM_SAMPLE_SIZE: usize = 2;
+
 #[derive(Debug)]
 pub(crate) struct CachedExecutorsEntry {
     prev_epoch_count: u64,
@@ -101,7 +107,7 @@ impl Clone for CachedExecutorsEntry {
 pub(crate) struct CachedExecutors {
     capacity: usize,
     current_epoch: Epoch,
-    pub(self) executors: HashMap<Pubkey, CachedExecutorsEntry>,
+    pub(self) executors: IndexMap<Pubkey, CachedExecutorsEntry>,
     stats: executor_cache::Stats,
 }
 
@@ -110,7 +116,7 @@ impl Default for CachedExecutors {
         Self {
             capacity: MAX_CACHED_EXECUTORS,
             current_epoch: Epoch::default(),
-            executors: HashMap::default(),
+            executors: IndexMap::new(),
             stats: executor_cache::Stats::default(),
         }
     }
@@ -126,12 +132,20 @@ impl AbiExample for CachedExecutors {
     }
 }
 
+impl CachedExecutorsEntry {
+    fn num_hits(&self) -> u64 {
+        self.epoch_count
+            .load(Relaxed)
+            .saturating_add(self.prev_epoch_count)
+    }
+}
+
 impl CachedExecutors {
     pub(crate) fn new(max_capacity: usize, current_epoch: Epoch) -> Self {
         Self {
             capacity: max_capacity,
             current_epoch,
-            executors: HashMap::new(),
+            executors: IndexMap::new(),
             stats: executor_cache::Stats::default(),
         }
     }
@@ -178,60 +192,36 @@ impl CachedExecutors {
         }
     }
 
-    pub(crate) fn put(&mut self, executors: &[(&Pubkey, Arc<dyn Executor>)]) {
-        let mut new_executors: Vec<_> = executors
-            .iter()
-            .filter_map(|(key, executor)| {
-                if let Some(mut entry) = self.remove(key) {
-                    self.stats.replacements.fetch_add(1, Relaxed);
-                    entry.executor = executor.clone();
-                    let _ = self.executors.insert(**key, entry);
-                    None
-                } else {
+    pub(crate) fn put(&mut self, executors: Vec<(Pubkey, Arc<dyn Executor>)>) {
+        for (key, executor) in executors {
+            match self.executors.entry(key) {
+                Entry::Vacant(entry) => {
                     self.stats.insertions.fetch_add(1, Relaxed);
-                    Some((*key, executor))
-                }
-            })
-            .collect();
-
-        if !new_executors.is_empty() {
-            let mut counts = self
-                .executors
-                .iter()
-                .map(|(key, entry)| {
-                    let count = entry.prev_epoch_count + entry.epoch_count.load(Relaxed);
-                    (key, count)
-                })
-                .collect::<Vec<_>>();
-            counts.sort_unstable_by_key(|(_, count)| *count);
-
-            let primer_counts = Self::get_primer_counts(counts.as_slice(), new_executors.len());
-
-            if self.executors.len() >= self.capacity {
-                let mut least_keys = counts
-                    .iter()
-                    .take(new_executors.len())
-                    .map(|least| *least.0)
-                    .collect::<Vec<_>>();
-                for least_key in least_keys.drain(..) {
-                    let _ = self.remove(&least_key);
-                    self.stats
-                        .evictions
-                        .entry(least_key)
-                        .and_modify(|c| saturating_add_assign!(*c, 1))
-                        .or_insert(1);
+                    entry.insert(CachedExecutorsEntry {
+                        prev_epoch_count: u64::default(),
+                        epoch_count: AtomicU64::default(),
+                        executor,
+                        hit_count: AtomicU64::new(1),
+                    });
+                },
+                Entry::Occupied(mut entry) => {
+                    self.stats.replacements.fetch_add(1, Relaxed);
+                    entry.get_mut().executor = executor;
                 }
             }
+        }
 
-            for ((key, executor), primer_count) in new_executors.drain(..).zip(primer_counts) {
-                let entry = CachedExecutorsEntry {
-                    prev_epoch_count: 0,
-                    epoch_count: AtomicU64::new(primer_count),
-                    executor: executor.clone(),
-                    hit_count: AtomicU64::new(1),
-                };
-                let _ = self.executors.insert(*key, entry);
-            }
+        let mut rng = rand::thread_rng();
+        // Evict the key with the lowest hits in a random sample of entries.
+        while self.executors.len() > self.capacity {
+            let size = self.executors.len();
+            let index = repeat_with(|| rng.gen_range(0, size))
+                .take(RANDOM_SAMPLE_SIZE)
+                .min_by_key(|&index| self.executors[index].num_hits())
+                .unwrap();
+            let (key, _) = self.executors.swap_remove_index(index).unwrap();
+            let count = self.stats.evictions.entry(key).or_default();
+            saturating_add_assign!(*count, 1)
         }
     }
 

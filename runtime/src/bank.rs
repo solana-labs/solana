@@ -4041,11 +4041,11 @@ impl Bank {
         let executors = executors.borrow();
         let dirty_executors: Vec<_> = executors
             .iter()
-            .filter_map(|(key, executor)| selector(executor).then(|| (key, executor.get())))
+            .filter_map(|(key, executor)| selector(executor).then(|| (*key, executor.get())))
             .collect();
 
         if !dirty_executors.is_empty() {
-            self.cached_executors.write().unwrap().put(&dirty_executors);
+            self.cached_executors.write().unwrap().put(dirty_executors);
         }
     }
 
