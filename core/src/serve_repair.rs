@@ -777,7 +777,8 @@ impl ServeRepair {
             }
 
             stats.processed += 1;
-            let rsp = Self::handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache);
+            let rsp =
+                Self::handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache);
             stats.total_response_packets += rsp.as_ref().map(PacketBatch::len).unwrap_or(0);
             if let Some(rsp) = rsp {
                 let _ignore_disconnect = response_sender.send(rsp);
@@ -1257,8 +1258,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::Orphan { header, slot } = deserialized_request {
             assert_eq!(slot, 123);
@@ -1294,8 +1294,7 @@ mod tests {
             .ancestor_repair_request_bytes(&keypair, &root_bank, &repair_peer_id, slot, nonce)
             .unwrap();
         let mut cursor = Cursor::new(&request_bytes[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), request_bytes.len() as u64);
         if let RepairProtocol::AncestorHashes {
             header,
@@ -1326,8 +1325,7 @@ mod tests {
             .ancestor_repair_request_bytes(&keypair, &root_bank, &repair_peer_id, slot, nonce)
             .unwrap();
         let mut cursor = Cursor::new(&request_bytes[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), request_bytes.len() as u64);
         if let RepairProtocol::LegacyAncestorHashes(ci, deserialized_slot, deserialized_nonce) =
             deserialized_request
@@ -1367,8 +1365,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::WindowIndex {
             header,
@@ -1400,8 +1397,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::LegacyWindowIndexWithNonce(
             ci,
@@ -1430,8 +1426,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::HighestWindowIndex {
             header,
@@ -1463,8 +1458,7 @@ mod tests {
             .unwrap();
 
         let mut cursor = Cursor::new(&rsp[..]);
-        let deserialized_request: RepairProtocol =
-            deserialize_from(&mut cursor).unwrap();
+        let deserialized_request: RepairProtocol = deserialize_from(&mut cursor).unwrap();
         assert_eq!(cursor.position(), rsp.len() as u64);
         if let RepairProtocol::LegacyHighestWindowIndexWithNonce(
             ci,

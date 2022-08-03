@@ -192,14 +192,14 @@ fn run_dos(
                     Mode::Tpu => {
                         rpc_client = Some(RpcClient::new_socket(node.rpc));
                         Some((node.id, node.tpu))
-                    },
+                    }
                     Mode::TpuForwards => Some((node.id, node.tpu_forwards)),
                     Mode::Repair => Some((node.id, node.repair)),
                     Mode::ServeRepair => Some((node.id, node.serve_repair)),
                     Mode::Rpc => {
                         rpc_client = Some(RpcClient::new_socket(node.rpc));
                         None
-                    },
+                    }
                 };
                 break;
             }
