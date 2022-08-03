@@ -234,6 +234,17 @@ EOF
     echo "greg - validator - entrypoint IP: $entrypointIp"
     chmod +x gossip-only/src/gossip-only.sh
 
+    args1=(
+      --account-file gossip-only/src/accounts.yaml
+      --write-keys 
+      --num-keys 2
+    )
+
+# cat >> ~/solana/gossip-only-run <<EOF
+#     gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator-$instanceIndex.log.\$now 2>&1
+# EOF
+#     ~/solana/gossip-only-run
+
     gossipOnlyPort=9001
     args=(
       --account-file gossip-only/src/accounts.yaml
@@ -245,6 +256,7 @@ EOF
     echo "greg - instanceIndex: $instanceIndex"
 
 cat >> ~/solana/gossip-only-run <<EOF
+    gossip-only/src/gossip-only.sh ${args1[@]} > gossip-validator-$instanceIndex.log.\$now
     nohup gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator-$instanceIndex.log.\$now 2>&1 &
     disown
 EOF
