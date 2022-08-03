@@ -1007,11 +1007,17 @@ impl ServeRepair {
                 continue;
             }
             if let Ok(RepairResponse::Ping(ping)) = packet.deserialize_slice(..) {
-                packet.meta.set_discard(true);
                 if !ping.verify() {
+                    // Do _not_ set `discard` to allow shred processing to attempt to
+                    // handle the packet.
+                    // Ping error count may include false posities for shreds of size
+                    // `REPAIR_RESPONSE_SERIALIZED_PING_BYTES` whose first 4 bytes
+                    // match `RepairResponse` discriminator (these 4 bytes overlap
+                    // with the shred signature field).
                     stats.ping_err_verify_count += 1;
                     continue;
                 }
+                packet.meta.set_discard(true);
                 stats.ping_count += 1;
                 if let Ok(pong) = Pong::new(&ping, keypair) {
                     let pong = RepairProtocol::Pong(pong);
@@ -1220,7 +1226,7 @@ mod tests {
             blockstore_processor::fill_blockstore_slot_with_ticks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
-            shred::{max_ticks_per_n_shreds, Shred},
+            shred::{max_ticks_per_n_shreds, Shred, Shredder},
         },
         solana_perf::packet::Packet,
         solana_runtime::bank::Bank,
@@ -1240,6 +1246,33 @@ mod tests {
         let ping = RepairResponse::Ping(ping);
         let pkt = Packet::from_data(None, ping).unwrap();
         assert_eq!(pkt.meta.size, REPAIR_RESPONSE_SERIALIZED_PING_BYTES);
+    }
+
+    #[test]
+    fn test_deserialize_shred_as_ping() {
+        let data_buf = vec![7u8, 44]; // REPAIR_RESPONSE_SERIALIZED_PING_BYTES - SIZE_OF_DATA_SHRED_HEADERS
+        let keypair = Keypair::new();
+        let mut shred = Shred::new_from_data(
+            123, // slot
+            456, // index
+            111, // parent_offset
+            Some(&data_buf),
+            true, // is_last_data
+            true, // is_last_in_slot
+            222,  // reference_tick
+            333,  // version
+            444,  // fec_set_index
+        );
+        Shredder::sign_shred(&keypair, &mut shred);
+        let mut pkt = Packet::default();
+        shred.copy_to_packet(&mut pkt);
+        pkt.meta.size = REPAIR_RESPONSE_SERIALIZED_PING_BYTES;
+        let res = pkt.deserialize_slice::<RepairResponse, _>(..);
+        if let Ok(RepairResponse::Ping(ping)) = res {
+            assert!(!ping.verify());
+        } else {
+            assert!(res.is_err());
+        }
     }
 
     #[test]
