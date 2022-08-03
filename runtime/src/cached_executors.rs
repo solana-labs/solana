@@ -1,6 +1,7 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 use {
+    indexmap::{map::Entry, IndexMap},
     log::*,
     rand::Rng,
     solana_program_runtime::invoke_context::Executor,
@@ -9,10 +10,8 @@ use {
         pubkey::Pubkey,
         saturating_add_assign,
     },
-    indexmap::{map::Entry,IndexMap,},
     std::{
         collections::HashMap,
-        ops::Div,
         iter::repeat_with,
         sync::{
             atomic::{AtomicU64, Ordering::Relaxed},
@@ -203,7 +202,7 @@ impl CachedExecutors {
                         executor,
                         hit_count: AtomicU64::new(1),
                     });
-                },
+                }
                 Entry::Occupied(mut entry) => {
                     self.stats.replacements.fetch_add(1, Relaxed);
                     entry.get_mut().executor = executor;
@@ -239,41 +238,6 @@ impl CachedExecutors {
         *self = CachedExecutors::default();
     }
 
-    pub(crate) fn get_primer_count_upper_bound_inclusive(counts: &[(&Pubkey, u64)]) -> u64 {
-        const PRIMER_COUNT_TARGET_PERCENTILE: u64 = 85;
-        #[allow(clippy::assertions_on_constants)]
-        {
-            assert!(PRIMER_COUNT_TARGET_PERCENTILE <= 100);
-        }
-        // Executor use-frequencies are assumed to fit a Pareto distribution.  Choose an
-        // upper-bound for our primer count as the actual count at the target rank to avoid
-        // an upward bias
-
-        let target_index = u64::try_from(counts.len().saturating_sub(1))
-            .ok()
-            .and_then(|counts| {
-                let index = counts
-                    .saturating_mul(PRIMER_COUNT_TARGET_PERCENTILE)
-                    .div(100); // switch to u64::saturating_div once stable
-                usize::try_from(index).ok()
-            })
-            .unwrap_or(0);
-
-        counts
-            .get(target_index)
-            .map(|(_, count)| *count)
-            .unwrap_or(0)
-    }
-
-    pub(crate) fn get_primer_counts(counts: &[(&Pubkey, u64)], num_counts: usize) -> Vec<u64> {
-        let max_primer_count = Self::get_primer_count_upper_bound_inclusive(counts);
-        let mut rng = rand::thread_rng();
-
-        (0..num_counts)
-            .map(|_| rng.gen_range(0, max_primer_count.saturating_add(1)))
-            .collect::<Vec<_>>()
-    }
-
     pub(crate) fn submit_stats(&self, slot: Slot) {
         self.stats.submit(slot)
     }
@@ -303,9 +267,9 @@ pub(crate) mod tests {
         let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
         let mut cache = CachedExecutors::new(3, 0);
 
-        cache.put(&[(&key1, executor.clone())]);
-        cache.put(&[(&key2, executor.clone())]);
-        cache.put(&[(&key3, executor.clone())]);
+        cache.put(vec![(key1, executor.clone())]);
+        cache.put(vec![(key2, executor.clone())]);
+        cache.put(vec![(key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
@@ -313,24 +277,19 @@ pub(crate) mod tests {
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key2).is_some());
-        cache.put(&[(&key4, executor.clone())]);
-        assert!(cache.get(&key4).is_some());
-        let num_retained = [&key1, &key2, &key3]
+        cache.put(vec![(key4, executor.clone())]);
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
             .filter_map(|key| cache.get(key))
             .count();
-        assert_eq!(num_retained, 2);
+        assert_eq!(num_retained, 3);
 
-        assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key4).is_some());
-        assert!(cache.get(&key4).is_some());
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key3).is_some());
-        let num_retained = [&key1, &key2, &key4]
+        cache.put(vec![(key3, executor.clone())]);
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
             .filter_map(|key| cache.get(key))
             .count();
-        assert_eq!(num_retained, 2);
+        assert_eq!(num_retained, 3);
     }
 
     #[test]
@@ -343,9 +302,9 @@ pub(crate) mod tests {
         let mut cache = CachedExecutors::new(3, 0);
         assert!(cache.current_epoch == 0);
 
-        cache.put(&[(&key1, executor.clone())]);
-        cache.put(&[(&key2, executor.clone())]);
-        cache.put(&[(&key3, executor.clone())]);
+        cache.put(vec![(key1, executor.clone())]);
+        cache.put(vec![(key2, executor.clone())]);
+        cache.put(vec![(key3, executor.clone())]);
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
         assert!(cache.get(&key1).is_some());
@@ -356,79 +315,33 @@ pub(crate) mod tests {
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key2).is_some());
         assert!(cache.get(&key3).is_some());
-        cache.put(&[(&key4, executor.clone())]);
+        cache.put(vec![(key4, executor.clone())]);
 
         assert!(cache.get(&key4).is_some());
-        let num_retained = [&key1, &key2, &key3]
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
             .filter_map(|key| cache.get(key))
             .count();
-        assert_eq!(num_retained, 2);
+        assert_eq!(num_retained, 3);
 
-        cache.put(&[(&key1, executor.clone())]);
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key1).is_some());
-        assert!(cache.get(&key3).is_some());
-        let num_retained = [&key2, &key4]
+        cache.put(vec![(key1, executor.clone())]);
+        cache.put(vec![(key3, executor.clone())]);
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
             .filter_map(|key| cache.get(key))
             .count();
-        assert_eq!(num_retained, 1);
+        assert_eq!(num_retained, 3);
 
         cache = CachedExecutors::new_from_parent_bank_executors(&cache, 2);
         assert!(cache.current_epoch == 2);
 
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&key3).is_some());
-    }
+        cache.put(vec![(key3, executor.clone())]);
 
-    #[test]
-    fn test_cached_executors_evicts_smallest() {
-        let key1 = solana_sdk::pubkey::new_rand();
-        let key2 = solana_sdk::pubkey::new_rand();
-        let key3 = solana_sdk::pubkey::new_rand();
-        let executor: Arc<dyn Executor> = Arc::new(TestExecutor {});
-        let mut cache = CachedExecutors::new(2, 0);
-
-        cache.put(&[(&key1, executor.clone())]);
-        for _ in 0..5 {
-            let _ = cache.get(&key1);
-        }
-        cache.put(&[(&key2, executor.clone())]);
-        // make key1's use-count for sure greater than key2's
-        let _ = cache.get(&key1);
-
-        let mut entries = cache
-            .executors
+        let num_retained = [&key1, &key2, &key3, &key4]
             .iter()
-            .map(|(k, v)| (*k, v.epoch_count.load(Relaxed)))
-            .collect::<Vec<_>>();
-        entries.sort_by_key(|(_, v)| *v);
-        assert!(entries[0].1 < entries[1].1);
-
-        cache.put(&[(&key3, executor.clone())]);
-        assert!(cache.get(&entries[0].0).is_none());
-        assert!(cache.get(&entries[1].0).is_some());
-    }
-
-    #[test]
-    fn test_executor_cache_get_primer_count_upper_bound_inclusive() {
-        let pubkey = Pubkey::default();
-        let v = [];
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
-            0
-        );
-        let v = [(&pubkey, 1)];
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(&v),
-            1
-        );
-        let v = (0u64..10).map(|i| (&pubkey, i)).collect::<Vec<_>>();
-        assert_eq!(
-            CachedExecutors::get_primer_count_upper_bound_inclusive(v.as_slice()),
-            7
-        );
+            .filter_map(|key| cache.get(key))
+            .count();
+        assert_eq!(num_retained, 3);
     }
 
     #[test]
@@ -475,13 +388,13 @@ pub(crate) mod tests {
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats,);
 
         // insert some executors
-        cache.put(&[(&program_id1, executor.clone())]);
-        cache.put(&[(&program_id2, executor.clone())]);
+        cache.put(vec![(program_id1, executor.clone())]);
+        cache.put(vec![(program_id2, executor.clone())]);
         expected_stats.insertions += 2;
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
 
         // replace a one-hit-wonder executor
-        cache.put(&[(&program_id1, executor.clone())]);
+        cache.put(vec![(program_id1, executor.clone())]);
         expected_stats.replacements += 1;
         expected_stats.one_hit_wonders += 1;
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
@@ -499,7 +412,7 @@ pub(crate) mod tests {
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
 
         // evict an executor
-        cache.put(&[(&Pubkey::new_unique(), executor.clone())]);
+        cache.put(vec![(Pubkey::new_unique(), executor.clone())]);
         expected_stats.insertions += 1;
         expected_stats.evictions.insert(program_id2, 1);
         assert_eq!(ComparableStats::from(&cache.stats), expected_stats);
@@ -543,10 +456,10 @@ pub(crate) mod tests {
         assert_eq!(cache.stats.one_hit_wonders.load(Relaxed), 0);
 
         // add our one-hit-wonder
-        cache.put(&[(&one_hit_wonder, executor.clone())]);
+        cache.put(vec![(one_hit_wonder, executor.clone())]);
         assert_eq!(cache.executors[&one_hit_wonder].hit_count.load(Relaxed), 1);
         // displace the one-hit-wonder with "popular program"
-        cache.put(&[(&popular, executor.clone())]);
+        cache.put(vec![(popular, executor.clone())]);
         assert_eq!(cache.executors[&popular].hit_count.load(Relaxed), 1);
 
         // one-hit-wonder counter incremented
@@ -557,7 +470,7 @@ pub(crate) mod tests {
         assert_eq!(cache.executors[&popular].hit_count.load(Relaxed), 2);
 
         // evict "popular program"
-        cache.put(&[(&one_hit_wonder, executor.clone())]);
+        cache.put(vec![(one_hit_wonder, executor.clone())]);
         assert_eq!(cache.executors[&one_hit_wonder].hit_count.load(Relaxed), 1);
 
         // one-hit-wonder counter not incremented
