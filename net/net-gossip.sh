@@ -249,7 +249,6 @@ startGossipNodeCommon() {
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
-      rm -rf $SOLANA_HOME;
       mkdir -p $CARGO_BIN
     "
   fi
