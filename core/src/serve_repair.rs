@@ -1226,7 +1226,7 @@ mod tests {
             blockstore_processor::fill_blockstore_slot_with_ticks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
-            shred::{max_ticks_per_n_shreds, Shred},
+            shred::{max_ticks_per_n_shreds, Shred, Shredder},
         },
         solana_perf::packet::Packet,
         solana_runtime::bank::Bank,
@@ -1256,13 +1256,14 @@ mod tests {
             123, // slot
             456, // index
             111, // parent_offset
-            &data_buf,
-            ShredFlags::empty(),
-            222, // reference_tick
-            333, // version
-            444, // fec_set_index
+            Some(&data_buf),
+            true, // is_last_data
+            true, // is_last_in_slot
+            222,  // reference_tick
+            333,  // version
+            444,  // fec_set_index
         );
-        shred.sign(&keypair);
+        Shredder::sign_shred(&keypair, &mut shred);
         let mut pkt = Packet::default();
         shred.copy_to_packet(&mut pkt);
         pkt.meta.size = REPAIR_RESPONSE_SERIALIZED_PING_BYTES;
