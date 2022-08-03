@@ -106,6 +106,7 @@ fi
 # solana_ledger_tool=$(solana_program ledger-tool)
 # solana_cli=$(solana_program)
 solana_gossip_only=$(solana_gossip_only)
+echo "solana_gossip_only command: $solana_gossip_only"
 
 export RUST_BACKTRACE=1
 

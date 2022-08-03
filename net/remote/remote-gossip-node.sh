@@ -156,8 +156,8 @@ EOF
   bootstrap-validator)
     echo "greg - in bootstrap-validator"
     set -x
-    # if [[ $skipSetup != true ]]; then
-    #   clear_config_dir "$SOLANA_CONFIG_DIR"
+    if [[ $skipSetup != true ]]; then
+      clear_config_dir "$SOLANA_CONFIG_DIR"
 
     #   if [[ -n $internalNodesLamports ]]; then
     #     echo "---" >> config/validator-balances.yml
@@ -183,9 +183,10 @@ EOF
     #       fi
     #     fi
     #   }
-    # fi
+    fi
 
     echo "greg - bootstrap - entrypoint IP: $entrypointIp"
+      chmod +x gossip-only/src/gossip-only.sh
     gossipOnlyPort=9001
     args=(
       --account-file gossip-only/src/accounts.yaml
@@ -195,16 +196,22 @@ EOF
       --gossip-host "$entrypointIp"
       --gossip-port $gossipOnlyPort
     )
-    nohup gossip-only "${args[@]}" &> /dev/null &
+cat >> ~/solana/gossip-only-run <<EOF
+    nohup gossip-only/src/gossip-only.sh ${args[@]} > bootstrap-gossip.log.\$now 2>&1 &
+    disown
+EOF
+    ~/solana/gossip-only-run
+
+    # nohup gossip-only "${args[@]}" &> /dev/null &
 
 
     ;;
   validator|blockstreamer)
 
-    # if [[ $deployMethod != skip ]]; then
-    #   net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
-    #   net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
-    # fi
+    if [[ $deployMethod != skip ]]; then
+      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
+      net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/version.yml ~/version.yml
+    fi
     if [[ $skipSetup != true && $instanceIndex == "0" ]]; then
       clear_config_dir "$SOLANA_CONFIG_DIR"
 
