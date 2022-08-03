@@ -28,6 +28,7 @@ maybeFullRpc="${19}"
 waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
+instanceIndex="${23}"
 set +x
 
 missing() {
@@ -241,8 +242,10 @@ EOF
       --gossip-host $(hostname -i)
     )
 
+    echo "greg - instanceIndex: $instanceIndex"
+
 cat >> ~/solana/gossip-only-run <<EOF
-    nohup gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator.log.\$now 2>&1 &
+    nohup gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator-$instanceIndex.log.\$now 2>&1 &
     disown
 EOF
     ~/solana/gossip-only-run
