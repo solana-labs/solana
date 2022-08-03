@@ -948,9 +948,9 @@ data" as &[u8];
     #[test]
     fn test_bw_temp() {
         let mut disk_stats = None;
-        Self::process_disk_stats(&mut disk_stats);
-        Self::process_disk_stats(&mut disk_stats);
-        Self::process_disk_stats(&mut disk_stats);
+        SystemMonitorService::process_disk_stats(&mut disk_stats);
+        SystemMonitorService::process_disk_stats(&mut disk_stats);
+        SystemMonitorService::process_disk_stats(&mut disk_stats);
     }
 
     #[test]
