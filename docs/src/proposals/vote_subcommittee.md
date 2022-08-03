@@ -47,6 +47,49 @@ It's computed as `slow_hash(rotation block bank_hash)`
 * `slow_hash`: repeated sha256 for rounds equal to 1ms on modern
 sha-ni hardware.
 
+### Rules
+
+1. Subcommittees are scheduled for 2 epochs, and rotate in a staggered
+pattern.
+
+```
+voting epoch: 0  1  2  3  4
+             A1 A1 A2 A2 A3
+                B1 B1 B2 B2
+```
+
+2. First epoch the subcommittee is **secondary**. Epoch 2, (A2,B1)
+is the **voting subcommittee** and B1 is **primary**, A2 is
+**secondary**.
+
+3. Second epoch the subcommittee is **primary**
+
+4. The new **secondary** subcommittee is determined by the **rotation
+seed**
+
+5. **rotation seed** is based on the **rotation block**
+
+6. **rotation block** was rooted by the current **primary** and the
+previous **secondary** AND **primary**
+
+7. There can only be one **rotation block** because the new **primary**
+rooted the **rotation block** and all paths that cross the epoch
+boundary can only point to the same **rotation block** or a lockout
+violation has occurred.
+
+For switching proofs:
+
+1. If the primary committee is switching from the current epoch,
+it can only use its own votes for switching proofs
+
+2. If the primary committee is switching from a previous epoch in
+which it was the secondary, it can use its own votes from when it
+was the secondary and the previous epoch primary votes on the primary
+fork.  It can't mix them both together.
+
+3. The secondary committee can use any votes from the primary and
+itself to switch.
+
 ### Safety Violations
 
 An Optimistic Confirmation violation occurs if a voting subcommittee
