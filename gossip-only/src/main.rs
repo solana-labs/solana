@@ -353,13 +353,13 @@ pub fn main() {
         for i in 0..num_nodes {
             //create new node with external ip
             let mut node = Node::new_with_external_ip(
-                &node_keys[i+1].pubkey(),
+                &node_keys[i].pubkey(),
                 &gossip_addr,
                 dynamic_port_range,
                 bind_address,
                 None,
             );
-            let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[i+1].to_bytes()).unwrap());
+            let my_keypair = Arc::new(Keypair::from_bytes(&node_keys[i].to_bytes()).unwrap());
             node.info.shred_version = shred_version;
 
             let cluster_info =

@@ -237,7 +237,7 @@ EOF
     args=(
       --account-file gossip-only/src/accounts.yaml
       --write-keys 
-      --num-keys 2
+      --num-keys 1
     )
 
 cat >> ~/solana/gossip-only-run <<EOF
