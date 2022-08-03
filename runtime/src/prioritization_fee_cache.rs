@@ -35,6 +35,12 @@ struct PrioritizationFeeCacheMetrics {
     // Accumulated time spent on tracking prioritization fee for each slot.
     total_update_elapsed_us: AtomicU64,
 
+    // Accumulated time spent on acquiring cache write lock.
+    total_cache_lock_elapsed_us: AtomicU64,
+
+    // Accumulated time spent on acquiring each block entry's lock..
+    total_entry_lock_elapsed_us: AtomicU64,
+
     // Accumulated time spent on removing old block's data from cache
     total_evict_old_blocks_elapsed_us: AtomicU64,
 }
@@ -57,6 +63,16 @@ impl PrioritizationFeeCacheMetrics {
 
     fn increment_total_update_elapsed_us(&self, val: u64) {
         self.total_update_elapsed_us
+            .fetch_add(val, Ordering::Relaxed);
+    }
+
+    fn increment_total_cache_lock_elapsed_us(&self, val: u64) {
+        self.total_cache_lock_elapsed_us
+            .fetch_add(val, Ordering::Relaxed);
+    }
+
+    fn increment_total_entry_lock_elapsed_us(&self, val: u64) {
+        self.total_entry_lock_elapsed_us
             .fetch_add(val, Ordering::Relaxed);
     }
 
@@ -90,6 +106,16 @@ impl PrioritizationFeeCacheMetrics {
             (
                 "total_update_elapsed_us",
                 self.total_update_elapsed_us.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "total_cache_lock_elapsed_us",
+                self.total_cache_lock_elapsed_us.swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "total_entry_lock_elapsed_us",
+                self.total_entry_lock_elapsed_us.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
             (
@@ -217,13 +243,18 @@ impl PrioritizationFeeCache {
         let mut fail_get_transaction_priority_details_count: u64 = 0;
         let mut fail_get_transaction_account_locks_count: u64 = 0;
 
-        let (_, cache_update_time) = measure!(
+        let ((cache_lock_time, entry_lock_time), cache_update_time) = measure!(
             {
-                let block_prioritization_fee = self.get_prioritization_fee(&slot).entry();
+                let (block_prioritization_fee, cache_lock_time) = measure!(
+                    self.get_prioritization_fee(&slot).entry(),
+                    "cache_lock_time",
+                );
 
                 // Hold lock of slot's prioritization fee entry until all transactions are
                 // processed
-                let mut block_prioritization_fee = block_prioritization_fee.lock().unwrap();
+                let (mut block_prioritization_fee, entry_lock_time) =
+                    measure!(block_prioritization_fee.lock().unwrap(), "entry_lock_time",);
+
                 for sanitized_tx in txs {
                     match block_prioritization_fee.update(sanitized_tx) {
                         Err(PrioritizationFeeError::FailGetTransactionPriorityDetails) => {
@@ -237,6 +268,8 @@ impl PrioritizationFeeCache {
                         }
                     }
                 }
+
+                (cache_lock_time, entry_lock_time)
             },
             "cache_update"
         );
@@ -251,6 +284,10 @@ impl PrioritizationFeeCache {
             .increment_fail_get_transaction_account_locks_count(
                 fail_get_transaction_account_locks_count,
             );
+        self.metrics
+            .increment_total_cache_lock_elapsed_us(cache_lock_time.as_us());
+        self.metrics
+            .increment_total_entry_lock_elapsed_us(entry_lock_time.as_us());
         self.metrics
             .increment_total_update_elapsed_us(cache_update_time.as_us());
     }
