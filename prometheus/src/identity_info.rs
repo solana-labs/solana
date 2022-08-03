@@ -6,12 +6,12 @@ use bincode;
 use serde::Deserialize;
 use serde_json;
 use solana_runtime::accounts_index::ScanConfig;
-use solana_sdk::account::ReadableAccount;
-use std::collections::HashMap;
-use std::{collections::HashSet, sync::Arc};
-use std::sync::RwLock;
 use solana_runtime::bank_forks::BankForks;
+use solana_sdk::account::ReadableAccount;
 use solana_sdk::transaction_context::TransactionAccount;
+use std::collections::HashMap;
+use std::sync::RwLock;
+use std::{collections::HashSet, sync::Arc};
 
 /// ValidatorInfo represents selected fields from the config account data.
 #[derive(Debug, Default, Deserialize, Clone, Eq, PartialEq)]
@@ -21,7 +21,10 @@ pub struct ValidatorInfo {
 
 pub type IdentityInfoMap = HashMap<Pubkey, ValidatorInfo>;
 
-pub fn map_vote_identity_to_info(bank_forks: &Arc<RwLock<BankForks>>, vote_pubkeys: &Arc<HashSet<Pubkey>>) -> IdentityInfoMap {
+pub fn map_vote_identity_to_info(
+    bank_forks: &Arc<RwLock<BankForks>>,
+    vote_pubkeys: &Arc<HashSet<Pubkey>>,
+) -> IdentityInfoMap {
     use solana_sdk::config::program as config_program;
 
     let bank = bank_forks.read().unwrap().working_bank();
@@ -33,17 +36,19 @@ pub fn map_vote_identity_to_info(bank_forks: &Arc<RwLock<BankForks>>, vote_pubke
     let default_vote_state = VoteState::default();
     let vote_accounts = bank.vote_accounts();
 
-    let identities: HashSet<Pubkey> = vote_pubkeys.iter().filter_map(|vote_pubkey| {
-        let (_, vote_account) = vote_accounts.get(vote_pubkey)?;
-        let vote_state = vote_account.vote_state();
-        let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
+    let identities: HashSet<Pubkey> = vote_pubkeys
+        .iter()
+        .filter_map(|vote_pubkey| {
+            let (_, vote_account) = vote_accounts.get(vote_pubkey)?;
+            let vote_state = vote_account.vote_state();
+            let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
 
-        Some(vote_state.node_pubkey)
-    }).collect();
+            Some(vote_state.node_pubkey)
+        })
+        .collect();
 
     get_identity_validator_info(&all_accounts, &identities)
 }
-
 
 /// Return a map from validator identity account to ValidatorInfo.
 ///
@@ -53,7 +58,10 @@ pub fn map_vote_identity_to_info(bank_forks: &Arc<RwLock<BankForks>>, vote_pubke
 /// know the address of the config account for a given validator; the only way
 /// is to enumerate all config accounts and then find the one you are looking
 /// for. This function builds a map from identity account to validator info.
-fn get_identity_validator_info(all_accounts: &[TransactionAccount], identities: &HashSet<Pubkey>) -> HashMap<Pubkey, ValidatorInfo> {
+fn get_identity_validator_info(
+    all_accounts: &[TransactionAccount],
+    identities: &HashSet<Pubkey>,
+) -> HashMap<Pubkey, ValidatorInfo> {
     let mut mapping = HashMap::new();
 
     // Due to the structure of validator info (config accounts pointing to identity
@@ -64,7 +72,9 @@ fn get_identity_validator_info(all_accounts: &[TransactionAccount], identities: 
     let mut bad_identities = HashSet::new();
 
     for (_, account) in all_accounts {
-        if let Some((validator_identity, validator_info)) = deserialize_validator_info(account.data()) {
+        if let Some((validator_identity, validator_info)) =
+            deserialize_validator_info(account.data())
+        {
             // Skip identities we do not care about.
             if !identities.contains(&validator_identity) {
                 continue;

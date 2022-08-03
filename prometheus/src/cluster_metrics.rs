@@ -3,13 +3,13 @@ use solana_runtime::bank::Bank;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use solana_vote_program::vote_state::VoteState;
 
+use crate::identity_info::{IdentityInfoMap, ValidatorInfo};
 use crate::{
     banks_with_commitments::BanksWithCommitments,
     utils::{write_metric, Metric, MetricFamily},
     Lamports,
 };
 use std::{collections::HashSet, io, sync::Arc};
-use crate::identity_info::{IdentityInfoMap, ValidatorInfo};
 
 struct ValidatorVoteInfo {
     balance: Lamports,
@@ -20,7 +20,11 @@ struct ValidatorVoteInfo {
     validator_info: Option<ValidatorInfo>,
 }
 
-fn get_vote_state(bank: &Bank, vote_pubkey: &Pubkey, identity_info: &Arc<IdentityInfoMap>) -> Option<ValidatorVoteInfo> {
+fn get_vote_state(
+    bank: &Bank,
+    vote_pubkey: &Pubkey,
+    identity_info: &Arc<IdentityInfoMap>,
+) -> Option<ValidatorVoteInfo> {
     let default_vote_state = VoteState::default();
     let vote_accounts = bank.vote_accounts();
     let (activated_stake, vote_account) = vote_accounts.get(vote_pubkey)?;

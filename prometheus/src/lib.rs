@@ -1,14 +1,14 @@
 mod bank_metrics;
 pub mod banks_with_commitments;
 mod cluster_metrics;
-mod utils;
 pub mod identity_info;
+mod utils;
 
 use banks_with_commitments::BanksWithCommitments;
+use identity_info::IdentityInfoMap;
 use solana_gossip::cluster_info::ClusterInfo;
 use solana_sdk::pubkey::Pubkey;
 use std::{collections::HashSet, sync::Arc};
-use identity_info::IdentityInfoMap;
 
 #[derive(Clone, Copy)]
 pub struct Lamports(pub u64);

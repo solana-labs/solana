@@ -84,7 +84,11 @@ impl<'a> Metric<'a> {
         self
     }
 
-    pub fn with_optional_label(self, label_key: &'a str, label_value: Option<String>) -> Metric<'a> {
+    pub fn with_optional_label(
+        self,
+        label_key: &'a str,
+        label_value: Option<String>,
+    ) -> Metric<'a> {
         if let Some(label_value) = label_value {
             return self.with_label(label_key, label_value);
         }
