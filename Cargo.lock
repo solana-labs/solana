@@ -1824,7 +1824,7 @@ dependencies = [
 
 [[package]]
 name = "gossip-only"
-version = "1.11.5"
+version = "1.11.6"
 dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
@@ -1846,11 +1846,11 @@ dependencies = [
  "solana-genesis-utils",
  "solana-gossip",
  "solana-ledger",
- "solana-logger 1.11.5",
+ "solana-logger 1.11.6",
  "solana-metrics",
  "solana-net-utils",
  "solana-runtime",
- "solana-sdk 1.11.5",
+ "solana-sdk 1.11.6",
  "solana-streamer",
  "solana-version",
  "symlink",
