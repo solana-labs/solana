@@ -223,27 +223,38 @@ impl<T: Serialize + Clone> StatusCache<T> {
 
     // returns the statuses for each slot in the slots provided
     pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<T>> {
-        let empty = Arc::new(Mutex::new(HashMap::new()));
-        slots
-            .iter()
-            .map(|slot| {
-                (
-                    *slot,
-                    self.roots.contains(slot),
-                    Arc::clone(self.slot_deltas.get(slot).unwrap_or(&empty)),
-                )
-            })
-            .collect()
+        self._slot_deltas(
+            slots,
+            |slot| self.roots.contains(slot), // do a lookup to see if the slot is a root
+        )
     }
 
     /// Get the statuses for all the root slots
     pub fn root_slot_deltas(&self) -> Vec<SlotDelta<T>> {
-        self.roots
-            .iter()
+        self._slot_deltas(
+            self.roots(),
+            |_| true, // we know every slot is a root, so skip any lookups
+        )
+    }
+
+    /// Get the statuses for the slots
+    ///
+    /// Shared implementation for `slot_deltas()` and `root_slot_deltas()`.  Note that the
+    /// `is_root` parameter is a predicate function to say whether a slot is a root or not.
+    fn _slot_deltas<'a, F>(
+        &self,
+        slots: impl IntoIterator<Item = &'a Slot>,
+        is_root: F,
+    ) -> Vec<SlotDelta<T>>
+    where
+        F: Fn(&Slot) -> bool,
+    {
+        slots
+            .into_iter()
             .map(|slot| {
                 (
                     *slot,
-                    true,
+                    is_root(slot),
                     self.slot_deltas.get(slot).cloned().unwrap_or_default(),
                 )
             })

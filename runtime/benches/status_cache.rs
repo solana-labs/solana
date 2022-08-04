@@ -63,3 +63,15 @@ fn bench_status_cache_root_slot_deltas(bencher: &mut Bencher) {
 
     bencher.iter(|| test::black_box(status_cache.root_slot_deltas()));
 }
+
+/// Benchmark the worst-case time getting slot deltas where every slot requested is not in the
+/// status cache
+#[bench]
+fn bench_status_cache_slot_deltas_empty(bencher: &mut Bencher) {
+    let status_cache = BankStatusCache::default();
+
+    // *do not* fill the status cache
+    let slots: Vec<_> = (42..).take(MAX_CACHE_ENTRIES).collect();
+
+    bencher.iter(|| test::black_box(status_cache.slot_deltas(&slots)));
+}
