@@ -74,6 +74,9 @@ loadConfigFile
 # EOF
 # chmod +x ~/solana/on-reboot
 
+  # rm -f ~/solana/gossip-only-write-keys
+  # rm -f ~/solana/gossip-only-run
+
 cat > ~/solana/gossip-only-run <<EOF
 #!/usr/bin/env bash
 cd ~/solana
@@ -82,6 +85,13 @@ now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 ln -sfT validator.log.\$now validator.log
 EOF
 chmod +x ~/solana/gossip-only-run
+
+cat > ~/solana/gossip-only-write-keys <<EOF
+#!/usr/bin/env bash
+cd ~/solana
+
+EOF
+chmod +x ~/solana/gossip-only-write-keys
 
 # GPU_CUDA_OK=false
 # GPU_FAIL_IF_NONE=false
@@ -142,6 +152,14 @@ local|tar|skip)
 # EOF
 
 cat >> ~/solana/gossip-only-run <<EOF
+  PATH="$HOME"/.cargo/bin:"$PATH"
+  export USE_INSTALL=1
+
+  sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+  echo \$! > sys-tuner.pid
+EOF
+
+cat >> ~/solana/gossip-only-write-keys <<EOF
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
@@ -240,10 +258,10 @@ EOF
       --num-keys 1
     )
 
-cat >> ~/solana/gossip-only-run <<EOF
-    gossip-only/src/gossip-only.sh ${args[@]} > gossip-validator-$instanceIndex.log.\$now 2>&1
+cat >> ~/solana/gossip-only-write-keys <<EOF
+    gossip-only/src/gossip-only.sh ${args[@]} > gossip-instance-key-$instanceIndex.log 2>&1
 EOF
-    ~/solana/gossip-only-run
+    ~/solana/gossip-only-write-keys
 
     gossipOnlyPort=9001
     args=(
@@ -256,10 +274,11 @@ EOF
     echo "greg - instanceIndex: $instanceIndex"
 
 cat >> ~/solana/gossip-only-run <<EOF
-    nohup gossip-only/src/gossip-only.sh ${args[@]} >> gossip-validator-$instanceIndex.log.\$now 2>&1 &
+    nohup gossip-only/src/gossip-only.sh ${args[@]} >> gossip-instance-$instanceIndex.log.\$now 2>&1 &
     disown
 EOF
     ~/solana/gossip-only-run
+
     ;;
   *)
     echo "Error: unknown node type: $nodeType"

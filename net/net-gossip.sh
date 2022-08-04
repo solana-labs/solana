@@ -485,7 +485,7 @@ startGossipNode() {
          \"$TMPFS_ACCOUNTS\" \
          \"$instanceIndex\" \
       "
-  ) >> "$logFile" 2>&1 &
+  ) >> "$logFile" 2>&1
   declare pid=$!
   ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
   pids+=("$pid")
@@ -773,8 +773,8 @@ gossipDeploy() {
       do
         echo "startGossipNode: instanceIndex: $i"
         startGossipNode "$ipAddress" $nodeType $nodeIndex $i
-        echo "################# SLEEP ###################"
-        sleep 5
+        echo "################# Launched Gossip Node: $i ###################"
+        # sleep 2
       done
       # startGossipNode "$ipAddress" $nodeType $nodeIndex
 
