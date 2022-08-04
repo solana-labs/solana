@@ -744,6 +744,22 @@ prepareDeploy() {
   fi
 }
 
+gossipInstancesPerNode() {
+  declare instancesPerNode=$1
+  declare ipAddress="$2"
+  declare nodeType=$3
+  declare nodeIndex=$4
+
+  for (( i=0; i<$instancesPerNode; i++ ))
+  do
+    echo "startGossipNode: instanceIndex: $i"
+    startGossipNode "$ipAddress" $nodeType $nodeIndex $i
+    echo "################# Launched Gossip Node: $i ###################"
+    # sleep 2
+  done
+
+}
+
 gossipDeploy() {
   echo "greg - in gossipDeploy()"
   declare instancesPerNode=$1
@@ -769,13 +785,14 @@ gossipDeploy() {
       SECONDS=0
       pids=()
     else
-      for (( i=0; i<$instancesPerNode; i++ ))
-      do
-        echo "startGossipNode: instanceIndex: $i"
-        startGossipNode "$ipAddress" $nodeType $nodeIndex $i
-        echo "################# Launched Gossip Node: $i ###################"
-        # sleep 2
-      done
+      gossipInstancesPerNode $instancesPerNode $ipAddress $nodeType $nodeIndex &
+      # for (( i=0; i<$instancesPerNode; i++ ))
+      # do
+      #   echo "startGossipNode: instanceIndex: $i"
+      #   startGossipNode "$ipAddress" $nodeType $nodeIndex $i
+      #   echo "################# Launched Gossip Node: $i ###################"
+      #   # sleep 2
+      # done
       # startGossipNode "$ipAddress" $nodeType $nodeIndex
 
       # # Stagger additional node start time. If too many nodes start simultaneously
