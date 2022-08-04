@@ -139,7 +139,7 @@ all_test_steps() {
              ^ci/test-coverage.sh \
              ^scripts/coverage.sh \
       ; then
-    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 120
+    command_step coverage ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-coverage.sh" 80
     wait_step
   else
     annotate --style info --context test-coverage \
