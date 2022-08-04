@@ -135,13 +135,25 @@ export const voteInit = (property: string = 'voteInit') => {
 };
 
 export function getAlloc(type: any, fields: any): number {
+  const getItemAlloc = (item: any): number => {
+    if (item.span >= 0) {
+      return item.span;
+    } else if (typeof item.alloc === 'function') {
+      return item.alloc(fields[item.property]);
+    } else if ('count' in item && 'elementLayout' in item) {
+      const field = fields[item.property];
+      if (Array.isArray(field)) {
+        return field.length * getItemAlloc(item.elementLayout);
+      }
+    }
+    // Couldn't determine allocated size of layout
+    return 0;
+  };
+
   let alloc = 0;
   type.layout.fields.forEach((item: any) => {
-    if (item.span >= 0) {
-      alloc += item.span;
-    } else if (typeof item.alloc === 'function') {
-      alloc += item.alloc(fields[item.property]);
-    }
+    alloc += getItemAlloc(item);
   });
+
   return alloc;
 }

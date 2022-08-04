@@ -410,6 +410,16 @@ impl BucketMapHolderStats {
                     i64
                 ),
                 (
+                    "disk_index_find_entry_mut_us",
+                    disk.map(|disk| disk
+                        .stats
+                        .index
+                        .find_entry_mut_us
+                        .swap(0, Ordering::Relaxed))
+                        .unwrap_or_default(),
+                    i64
+                ),
+                (
                     "disk_index_flush_mmap_us",
                     disk.map(|disk| disk.stats.index.mmap_us.swap(0, Ordering::Relaxed))
                         .unwrap_or_default(),

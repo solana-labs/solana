@@ -107,7 +107,12 @@ fn bench_process_vote_instruction(
     instruction_data: Vec<u8>,
 ) {
     bencher.iter(|| {
-        let mut transaction_context = TransactionContext::new(transaction_accounts.clone(), 1, 1);
+        let mut transaction_context = TransactionContext::new(
+            transaction_accounts.clone(),
+            Some(sysvar::rent::Rent::default()),
+            1,
+            1,
+        );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
             .push(&instruction_accounts, &[0], &instruction_data)

@@ -19,31 +19,3 @@ pattern='^[0-9]+\.[0-9]+\.[0-9]+$'
 if [[ ${HOST_RUST_VERSION} =~ ${pattern} ]]; then
     HOST_RUST_VERSION="${rust_stable%.*}"
 fi
-export CARGO_TARGET_CACHE=$HOME/cargo-target-cache/"$CHANNEL"-"$BUILDKITE_LABEL"-"$SBF_TOOLS_VERSION"-"$HOST_RUST_VERSION"
-(
-  set -x
-  MAX_CACHE_SIZE=18 # gigabytes
-
-  if [[ -d $CARGO_TARGET_CACHE ]]; then
-    du -hs "$CARGO_TARGET_CACHE"
-    read -r cacheSizeInGB _ < <(du -s --block-size=1800000000 "$CARGO_TARGET_CACHE")
-    echo "--- ${cacheSizeInGB}GB: $CARGO_TARGET_CACHE"
-    if [[ $cacheSizeInGB -gt $MAX_CACHE_SIZE ]]; then
-      echo "--- $CARGO_TARGET_CACHE is too large, removing it"
-      rm -rf "$CARGO_TARGET_CACHE"
-    fi
-  else
-    echo "--- $CARGO_TARGET_CACHE not present"
-  fi
-
-  mkdir -p "$CARGO_TARGET_CACHE"/target
-  rsync -a --delete --link-dest="$CARGO_TARGET_CACHE" "$CARGO_TARGET_CACHE"/target .
-
-  # Don't reuse BPF target build artifacts due to incremental build issues with
-  # `std:
-  #    "found possibly newer version of crate `std` which `xyz` depends on
-  rm -rf target/bpfel-unknown-unknown
-  if [[ $BUILDKITE_LABEL = "stable-perf" ]]; then
-    rm -rf target/release
-  fi
-)

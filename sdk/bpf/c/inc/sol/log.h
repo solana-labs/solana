@@ -14,6 +14,7 @@ extern "C" {
 /**
  * Prints a string to stdout
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/log.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 void sol_log_(const char *, uint64_t);
 #else
@@ -28,6 +29,7 @@ static void sol_log_(const char * arg1, uint64_t arg2) {
 /**
  * Prints a 64 bit values represented in hexadecimal to stdout
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/log.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 void sol_log_64_(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 #else
@@ -42,6 +44,7 @@ static void sol_log_64_(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t ar
 /**
  * Prints the current compute unit consumption to stdout
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/log.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 void sol_log_compute_units_();
 #else
@@ -67,6 +70,7 @@ static void sol_log_array(const uint8_t *array, int len) {
 /**
  * Print the base64 representation of some arrays.
  */
+/* DO NOT MODIFY THIS GENERATED FILE. INSTEAD CHANGE sdk/bpf/c/inc/sol/inc/log.inc AND RUN `cargo run --bin gen-headers` */
 #ifndef SOL_SBFV2
 void sol_log_data(SolBytes *, uint64_t);
 #else

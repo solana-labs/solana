@@ -1,6 +1,6 @@
 [package]
 name = "fail"
-version = "1.11.3"
+version = "1.11.6"
 description = "Solana SBF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,7 +10,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-solana-program = { path = "../../../../program", version = "=1.11.3" }
+solana-program = { path = "../../../../program", version = "=1.11.6" }
 
 [lib]
 crate-type = ["cdylib"]

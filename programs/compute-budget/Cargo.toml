@@ -1,7 +1,7 @@
 [package]
 name = "solana-compute-budget-program"
 description = "Solana Compute Budget program"
-version = "1.11.3"
+version = "1.11.6"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-compute-budget-program"
 repository = "https://github.com/solana-labs/solana"
@@ -10,8 +10,8 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
-solana-program-runtime = { path = "../../program-runtime", version = "=1.11.3" }
-solana-sdk = { path = "../../sdk", version = "=1.11.3" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.11.6" }
+solana-sdk = { path = "../../sdk", version = "=1.11.6" }
 
 [lib]
 crate-type = ["lib"]

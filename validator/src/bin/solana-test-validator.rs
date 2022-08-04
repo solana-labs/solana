@@ -209,10 +209,36 @@ fn main() {
                 .value_name("ADDRESS FILENAME.JSON")
                 .takes_value(true)
                 .number_of_values(2)
+                .allow_hyphen_values(true)
                 .multiple(true)
                 .help(
                     "Load an account from the provided JSON file (see `solana account --help` on how to dump \
                         an account to file). Files are searched for relatively to CWD and tests/fixtures. \
+                        If ADDRESS is omitted via the `-` placeholder, the one in the file will be used. \
+                        If the ledger already exists then this parameter is silently ignored",
+                ),
+        )
+        .arg(
+            Arg::with_name("account_dir")
+                .long("account-dir")
+                .value_name("DIRECTORY")
+                .validator(|value| {
+                    value
+                        .parse::<PathBuf>()
+                        .map_err(|err| format!("error parsing '{}': {}", value, err))
+                        .and_then(|path| {
+                            if path.exists() && path.is_dir() {
+                                Ok(())
+                            } else {
+                                Err(format!("path does not exist or is not a directory: {}", value))
+                            }
+                        })
+                })
+                .takes_value(true)
+                .multiple(true)
+                .help(
+                    "Load all the accounts from the JSON files found in the specified DIRECTORY \
+                        (see also the `--account` flag). \
                         If the ledger already exists then this parameter is silently ignored",
                 ),
         )
@@ -549,10 +575,14 @@ fn main() {
         for address_filename in values.chunks(2) {
             match address_filename {
                 [address, filename] => {
-                    let address = address.parse::<Pubkey>().unwrap_or_else(|err| {
-                        println!("Error: invalid address {}: {}", address, err);
-                        exit(1);
-                    });
+                    let address = if *address == "-" {
+                        None
+                    } else {
+                        Some(address.parse::<Pubkey>().unwrap_or_else(|err| {
+                            println!("Error: invalid address {}: {}", address, err);
+                            exit(1);
+                        }))
+                    };
 
                     accounts_to_load.push(AccountInfo { address, filename });
                 }
@@ -560,6 +590,11 @@ fn main() {
             }
         }
     }
+
+    let accounts_from_dirs: HashSet<_> = matches
+        .values_of("account_dir")
+        .unwrap_or_default()
+        .collect();
 
     let accounts_to_clone: HashSet<_> = pubkeys_of(&matches, "clone_account")
         .map(|v| v.into_iter().collect())
@@ -721,6 +756,7 @@ fn main() {
         .rpc_port(rpc_port)
         .add_programs_with_path(&programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
+        .add_accounts_from_directories(&accounts_from_dirs)
         .deactivate_features(&features_to_deactivate);
 
     if !accounts_to_clone.is_empty() {

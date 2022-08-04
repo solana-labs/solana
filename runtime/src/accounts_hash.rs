@@ -6,6 +6,7 @@ use {
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
+        slot_history::Slot,
         sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
@@ -27,6 +28,15 @@ pub struct PreviousPass {
     pub lamports: u64,
 }
 
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct FullSnapshotAccountsHashInfo {
+    /// accounts hash over all accounts when the full snapshot was taken
+    hash: Hash,
+    /// slot where full snapshot was taken
+    slot: Slot,
+}
+
 /// parameters to calculate accounts hash
 #[derive(Debug)]
 pub struct CalcAccountsHashConfig<'a> {
@@ -43,6 +53,10 @@ pub struct CalcAccountsHashConfig<'a> {
     pub use_write_cache: bool,
     pub epoch_schedule: &'a EpochSchedule,
     pub rent_collector: &'a RentCollector,
+    /// used for tracking down hash mismatches after the fact
+    pub store_detailed_debug_info_on_failure: bool,
+    /// `Some` if this is an incremental snapshot which only hashes slots since the base full snapshot
+    pub full_snapshot: Option<FullSnapshotAccountsHashInfo>,
 }
 
 impl<'a> CalcAccountsHashConfig<'a> {
@@ -80,6 +94,7 @@ pub struct HashStats {
     pub rehash_required: AtomicUsize,
     /// # rehashes that took place and were UNnecessary
     pub rehash_unnecessary: AtomicUsize,
+    pub oldest_root: Slot,
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
     pub append_vec_sizes_older_than_epoch: AtomicUsize,
@@ -204,6 +219,7 @@ impl HashStats {
                 self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
                 i64
             ),
+            ("oldest_root", self.oldest_root as i64, i64),
             (
                 "ancient_append_vecs",
                 self.ancient_append_vecs.load(Ordering::Relaxed) as i64,

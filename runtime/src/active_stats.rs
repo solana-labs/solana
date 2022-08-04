@@ -15,7 +15,6 @@ pub struct ActiveStats {
 pub enum ActiveStatItem {
     Clean,
     Shrink,
-    #[allow(dead_code)]
     SquashAncient,
     Hash,
     Flush,

@@ -44,7 +44,7 @@ use {
 pub const DEFAULT_TPU_COALESCE_MS: u64 = 5;
 
 // allow multiple connections for NAT and any open/close overlap
-pub const MAX_QUIC_CONNECTIONS_PER_IP: usize = 8;
+pub const MAX_QUIC_CONNECTIONS_PER_PEER: usize = 8;
 
 pub struct TpuSockets {
     pub transactions: Vec<UdpSocket>,
@@ -97,6 +97,7 @@ impl Tpu {
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
         enable_quic_servers: bool,
+        staked_nodes: &Arc<RwLock<StakedNodes>>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -124,7 +125,6 @@ impl Tpu {
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
         );
 
-        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
             exit.clone(),
             cluster_info.clone(),
@@ -161,7 +161,7 @@ impl Tpu {
                 cluster_info.my_contact_info().tpu.ip(),
                 packet_sender,
                 exit.clone(),
-                MAX_QUIC_CONNECTIONS_PER_IP,
+                MAX_QUIC_CONNECTIONS_PER_PEER,
                 staked_nodes.clone(),
                 MAX_STAKED_CONNECTIONS,
                 MAX_UNSTAKED_CONNECTIONS,
@@ -177,8 +177,8 @@ impl Tpu {
                 cluster_info.my_contact_info().tpu_forwards.ip(),
                 forwarded_packet_sender,
                 exit.clone(),
-                MAX_QUIC_CONNECTIONS_PER_IP,
-                staked_nodes,
+                MAX_QUIC_CONNECTIONS_PER_PEER,
+                staked_nodes.clone(),
                 MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
                 0, // Prevent unstaked nodes from forwarding transactions
                 stats,

@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-bench-tps"
-version = "1.11.3"
+version = "1.11.6"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,29 +14,29 @@ crossbeam-channel = "0.5"
 log = "0.4.17"
 rayon = "1.5.3"
 serde_json = "1.0.81"
-serde_yaml = "0.8.24"
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.3" }
-solana-cli-config = { path = "../cli-config", version = "=1.11.3" }
-solana-client = { path = "../client", version = "=1.11.3" }
-solana-core = { path = "../core", version = "=1.11.3" }
-solana-faucet = { path = "../faucet", version = "=1.11.3" }
-solana-genesis = { path = "../genesis", version = "=1.11.3" }
-solana-gossip = { path = "../gossip", version = "=1.11.3" }
-solana-logger = { path = "../logger", version = "=1.11.3" }
-solana-measure = { path = "../measure", version = "=1.11.3" }
-solana-metrics = { path = "../metrics", version = "=1.11.3" }
-solana-net-utils = { path = "../net-utils", version = "=1.11.3" }
-solana-rpc = { path = "../rpc", version = "=1.11.3" }
-solana-runtime = { path = "../runtime", version = "=1.11.3" }
-solana-sdk = { path = "../sdk", version = "=1.11.3" }
-solana-streamer = { path = "../streamer", version = "=1.11.3" }
-solana-version = { path = "../version", version = "=1.11.3" }
+serde_yaml = "0.8.26"
+solana-clap-utils = { path = "../clap-utils", version = "=1.11.6" }
+solana-cli-config = { path = "../cli-config", version = "=1.11.6" }
+solana-client = { path = "../client", version = "=1.11.6" }
+solana-core = { path = "../core", version = "=1.11.6" }
+solana-faucet = { path = "../faucet", version = "=1.11.6" }
+solana-genesis = { path = "../genesis", version = "=1.11.6" }
+solana-gossip = { path = "../gossip", version = "=1.11.6" }
+solana-logger = { path = "../logger", version = "=1.11.6" }
+solana-measure = { path = "../measure", version = "=1.11.6" }
+solana-metrics = { path = "../metrics", version = "=1.11.6" }
+solana-net-utils = { path = "../net-utils", version = "=1.11.6" }
+solana-rpc = { path = "../rpc", version = "=1.11.6" }
+solana-runtime = { path = "../runtime", version = "=1.11.6" }
+solana-sdk = { path = "../sdk", version = "=1.11.6" }
+solana-streamer = { path = "../streamer", version = "=1.11.6" }
+solana-version = { path = "../version", version = "=1.11.6" }
 thiserror = "1.0"
 
 [dev-dependencies]
 serial_test = "0.8.0"
-solana-local-cluster = { path = "../local-cluster", version = "=1.11.3" }
-solana-test-validator = { path = "../test-validator", version = "=1.11.3" }
+solana-local-cluster = { path = "../local-cluster", version = "=1.11.6" }
+solana-test-validator = { path = "../test-validator", version = "=1.11.6" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

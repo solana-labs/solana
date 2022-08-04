@@ -6,6 +6,7 @@ pub mod recvmmsg;
 pub mod sendmmsg;
 pub mod socket;
 pub mod streamer;
+pub mod tls_certificates;
 
 #[macro_use]
 extern crate log;

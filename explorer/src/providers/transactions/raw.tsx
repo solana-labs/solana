@@ -66,7 +66,12 @@ async function fetchRawTransaction(
 ) {
   let fetchStatus;
   try {
-    const response = await new Connection(url).getTransaction(signature);
+    const response = await new Connection(url).getTransaction(signature, {
+      maxSupportedTransactionVersion: process.env
+        .REACT_APP_MAX_SUPPORTED_TRANSACTION_VERSION
+        ? parseInt(process.env.REACT_APP_MAX_SUPPORTED_TRANSACTION_VERSION, 10)
+        : 0,
+    });
     fetchStatus = FetchStatus.Fetched;
 
     let data: Details = { raw: null };

@@ -3756,7 +3756,58 @@ describe('Connection', function () {
     verifySignatureStatus(response, expectedErr);
   });
 
+  if (mockServer) {
+    it('returnData on simulateTransaction', async () => {
+      const tx = new Transaction();
+      tx.feePayer = Keypair.generate().publicKey;
+
+      const getLatestBlockhashResponse = {
+        method: 'getLatestBlockhash',
+        params: [],
+        value: {
+          blockhash: 'CSymwgTNX1j3E4qhKfJAUE41nBWEwXufoYryPbkde5RR',
+          feeCalculator: {
+            lamportsPerSignature: 5000,
+          },
+          lastValidBlockHeight: 51,
+        },
+        withContext: true,
+      };
+      const simulateTransactionResponse = {
+        method: 'simulateTransaction',
+        params: [],
+        value: {
+          err: null,
+          accounts: null,
+          logs: [
+            'Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri invoke [1]',
+            'Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri consumed 2366 of 1400000 compute units',
+            'Program return: 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri KgAAAAAAAAA=',
+            'Program 83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri success',
+          ],
+          returnData: {
+            data: ['KgAAAAAAAAA==', 'base64'],
+            programId: '83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri',
+          },
+          unitsConsumed: 2366,
+        },
+        withContext: true,
+      };
+      await mockRpcResponse(getLatestBlockhashResponse);
+      await mockRpcResponse(simulateTransactionResponse);
+      const response = (await connection.simulateTransaction(tx)).value;
+      expect(response.returnData).to.eql({
+        data: ['KgAAAAAAAAA==', 'base64'],
+        programId: '83astBRguLMdt2h5U1Tpdq5tjFoJ6noeGwaY3mDLVcri',
+      });
+    });
+  }
+
   if (process.env.TEST_LIVE) {
+    it('getStakeMinimumDelegation', async () => {
+      const {value} = await connection.getStakeMinimumDelegation();
+      expect(value).to.be.a('number');
+    });
     it('simulate transaction with message', async () => {
       connection._commitment = 'confirmed';
 

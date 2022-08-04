@@ -9,6 +9,7 @@ use {
     },
     log::*,
     solana_runtime::{
+        accounts_background_service::AbsRequestSender,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -68,7 +69,7 @@ pub fn load(
         &process_options,
         transaction_status_sender,
         cache_block_meta_sender,
-        &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+        &AbsRequestSender::default(),
     )
     .map(|_| (bank_forks, leader_schedule_cache, starting_snapshot_hashes))
 }
@@ -135,17 +136,21 @@ pub fn load_bank_forks(
         }
 
         info!("Processing ledger from genesis");
-        (
-            blockstore_processor::process_blockstore_for_bank_0(
-                genesis_config,
-                blockstore,
-                account_paths,
-                process_options,
-                cache_block_meta_sender,
-                accounts_update_notifier,
-            ),
-            None,
-        )
+        let bank_forks = blockstore_processor::process_blockstore_for_bank_0(
+            genesis_config,
+            blockstore,
+            account_paths,
+            process_options,
+            cache_block_meta_sender,
+            accounts_update_notifier,
+        );
+        bank_forks
+            .read()
+            .unwrap()
+            .root_bank()
+            .set_startup_verification_complete();
+
+        (bank_forks, None)
     };
 
     let mut leader_schedule_cache =

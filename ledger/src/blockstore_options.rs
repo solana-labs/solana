@@ -1,4 +1,7 @@
-use rocksdb::{DBCompressionType as RocksCompressionType, DBRecoveryMode};
+use {
+    rocksdb::{DBCompressionType as RocksCompressionType, DBRecoveryMode},
+    std::path::Path,
+};
 
 pub struct BlockstoreOptions {
     // The access type of blockstore. Default: Primary
@@ -135,12 +138,55 @@ impl Default for ShredStorageType {
     }
 }
 
+const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
+const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
+
 impl ShredStorageType {
     /// Returns ShredStorageType::RocksFifo where the specified
     /// `shred_storage_size` is equally allocated to shred_data_cf_size
     /// and shred_code_cf_size.
     pub fn rocks_fifo(shred_storage_size: u64) -> ShredStorageType {
         ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::new(shred_storage_size))
+    }
+
+    /// The directory under `ledger_path` to the underlying blockstore.
+    pub fn blockstore_directory(&self) -> &str {
+        match self {
+            ShredStorageType::RocksLevel => BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
+            ShredStorageType::RocksFifo(_) => BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
+        }
+    }
+
+    /// Returns the ShredStorageType that is used under the specified
+    /// ledger_path.
+    ///
+    /// None will be returned if the ShredStorageType cannot be inferred.
+    pub fn from_ledger_path(
+        ledger_path: &Path,
+        fifo_shred_storage_size: u64,
+    ) -> Option<ShredStorageType> {
+        let mut result: Option<ShredStorageType> = None;
+
+        if Path::new(ledger_path)
+            .join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)
+            .exists()
+        {
+            result = Some(ShredStorageType::RocksLevel);
+        }
+
+        if Path::new(ledger_path)
+            .join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)
+            .exists()
+        {
+            if result.is_none() {
+                result = Some(ShredStorageType::RocksFifo(
+                    BlockstoreRocksFifoOptions::new(fifo_shred_storage_size),
+                ));
+            } else {
+                result = None;
+            }
+        }
+        result
     }
 }
 
@@ -209,4 +255,16 @@ impl BlockstoreCompressionType {
             Self::Zlib => RocksCompressionType::Zlib,
         }
     }
+}
+
+#[test]
+fn test_rocksdb_directory() {
+    assert_eq!(
+        ShredStorageType::RocksLevel.blockstore_directory(),
+        BLOCKSTORE_DIRECTORY_ROCKS_LEVEL
+    );
+    assert_eq!(
+        ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default()).blockstore_directory(),
+        BLOCKSTORE_DIRECTORY_ROCKS_FIFO
+    );
 }

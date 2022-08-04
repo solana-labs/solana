@@ -32,7 +32,6 @@ use {
         cost_model::CostModel,
         runtime_config::RuntimeConfig,
         transaction_batch::TransactionBatch,
-        transaction_cost_metrics_sender::TransactionCostMetricsSender,
         vote_account::VoteAccountsHashMap,
         vote_sender_types::ReplayVoteSender,
     },
@@ -524,7 +523,6 @@ pub fn process_entries_for_tests(
         None,
         transaction_status_sender,
         replay_vote_sender,
-        None,
         &mut confirmation_timing,
         Arc::new(RwLock::new(BlockCostCapacityMeter::default())),
         None,
@@ -543,7 +541,6 @@ fn process_entries_with_callback(
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     log_messages_bytes_limit: Option<usize>,
@@ -585,11 +582,6 @@ fn process_entries_with_callback(
                 }
             }
             EntryType::Transactions(transactions) => {
-                if let Some(transaction_cost_metrics_sender) = transaction_cost_metrics_sender {
-                    transaction_cost_metrics_sender
-                        .send_cost_details(bank.clone(), transactions.iter());
-                }
-
                 let starting_index = *starting_index;
                 let transaction_indexes = if randomize {
                     let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
@@ -716,6 +708,7 @@ pub struct ProcessOptions {
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
     pub runtime_config: RuntimeConfig,
+    pub on_halt_store_hash_raw_data_for_debug: bool,
 }
 
 pub fn test_process_blockstore(
@@ -770,7 +763,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     bank0.set_compute_budget(opts.runtime_config.compute_budget);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
-    info!("processing ledger for slot 0...");
+    info!("Processing ledger for slot 0...");
     process_bank_0(
         &bank_forks.read().unwrap().root_bank(),
         blockstore,
@@ -798,7 +791,7 @@ pub fn process_blockstore_from_root(
     assert!(bank.parent().is_none());
 
     let start_slot = bank.slot();
-    info!("processing ledger from slot {}...", start_slot);
+    info!("Processing ledger from slot {}...", start_slot);
     let now = Instant::now();
 
     // ensure start_slot is rooted for correct replay
@@ -842,9 +835,15 @@ pub fn process_blockstore_from_root(
             accounts_background_request_sender,
         )?;
     } else {
-        // If there's no meta for the input `start_slot`, then we started from a snapshot
-        // and there's no point in processing the rest of blockstore and implies blockstore
-        // should be empty past this point.
+        // If there's no meta in the blockstore for the input `start_slot`,
+        // then we started from a snapshot and are unable to process anything.
+        //
+        // If the ledger has any data at all, the snapshot was likely taken at
+        // a slot that is not within the range of ledger min/max slot(s).
+        warn!(
+            "Starting slot {} is not in Blockstore, unable to process",
+            start_slot
+        );
     };
 
     let processing_time = now.elapsed();
@@ -896,7 +895,7 @@ pub fn process_blockstore_from_root(
             if bank_slots.len() > 1 { "s" } else { "" },
             bank_slots.iter().map(|slot| slot.to_string()).join(", "),
         );
-        assert!(bank_forks.active_banks().is_empty());
+        assert!(bank_forks.active_bank_slots().is_empty());
     }
 
     Ok(())
@@ -967,7 +966,6 @@ fn confirm_full_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        None,
         opts.entry_callback.as_ref(),
         recyclers,
         opts.allow_dead_slots,
@@ -1094,7 +1092,6 @@ pub fn confirm_slot(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     allow_dead_slots: bool,
@@ -1124,7 +1121,6 @@ pub fn confirm_slot(
         skip_verification,
         transaction_status_sender,
         replay_vote_sender,
-        transaction_cost_metrics_sender,
         entry_callback,
         recyclers,
         log_messages_bytes_limit,
@@ -1140,7 +1136,6 @@ fn confirm_slot_entries(
     skip_verification: bool,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
-    transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
     entry_callback: Option<&ProcessCallback>,
     recyclers: &VerifyRecyclers,
     log_messages_bytes_limit: Option<usize>,
@@ -1242,7 +1237,6 @@ fn confirm_slot_entries(
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
-                transaction_cost_metrics_sender,
                 timing,
                 cost_capacity_meter,
                 log_messages_bytes_limit,
@@ -1406,6 +1400,7 @@ fn load_frozen_forks(
     )?;
 
     let halt_at_slot = opts.halt_at_slot.unwrap_or(std::u64::MAX);
+    let on_halt_store_hash_raw_data_for_debug = opts.on_halt_store_hash_raw_data_for_debug;
     if bank_forks.read().unwrap().root() != halt_at_slot {
         while !pending_slots.is_empty() {
             timing.details.per_program_timings.clear();
@@ -1538,21 +1533,32 @@ fn load_frozen_forks(
             )?;
 
             if slot >= halt_at_slot {
-                bank.force_flush_accounts_cache();
-                let can_cached_slot_be_unflushed = true;
-                // note that this slot may not be a root
-                let _ = bank.verify_bank_hash(VerifyBankHash {
-                    test_hash_calculation: false,
-                    can_cached_slot_be_unflushed,
-                    ignore_mismatch: true,
-                    require_rooted_bank: false,
-                });
+                run_final_hash_calc(&bank, on_halt_store_hash_raw_data_for_debug);
                 break;
             }
         }
+    } else if on_halt_store_hash_raw_data_for_debug {
+        run_final_hash_calc(
+            &bank_forks.read().unwrap().root_bank(),
+            on_halt_store_hash_raw_data_for_debug,
+        );
     }
 
     Ok(())
+}
+
+fn run_final_hash_calc(bank: &Bank, on_halt_store_hash_raw_data_for_debug: bool) {
+    bank.force_flush_accounts_cache();
+    let can_cached_slot_be_unflushed = true;
+    // note that this slot may not be a root
+    let _ = bank.verify_bank_hash(VerifyBankHash {
+        test_hash_calculation: false,
+        can_cached_slot_be_unflushed,
+        ignore_mismatch: true,
+        require_rooted_bank: false,
+        run_in_background: false,
+        store_hash_raw_data_for_debug: on_halt_store_hash_raw_data_for_debug,
+    });
 }
 
 // `roots` is sorted largest to smallest by root slot
@@ -4122,7 +4128,6 @@ pub mod tests {
             None,
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
         )
@@ -4266,7 +4271,6 @@ pub mod tests {
             Some(&transaction_status_sender),
             None,
             None,
-            None,
             &VerifyRecyclers::default(),
             None,
         )
@@ -4310,7 +4314,6 @@ pub mod tests {
             &mut progress,
             false,
             Some(&transaction_status_sender),
-            None,
             None,
             None,
             &VerifyRecyclers::default(),
@@ -4526,7 +4529,10 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config((1_000_000 + NUM_ACCOUNTS + 1) * LAMPORTS_PER_SOL);
-        let bank = Bank::new_for_tests(&genesis_config);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.deactivate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         let bank = Arc::new(bank);
         assert!(bank
             .feature_set
@@ -4589,6 +4595,9 @@ pub mod tests {
             mock_realloc::process_instruction,
         );
         bank.set_accounts_data_size_initial_for_tests(INITIAL_ACCOUNTS_DATA_SIZE);
+        bank.deactivate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
         let bank = Arc::new(bank);
         let bank = Arc::new(Bank::new_from_parent(&bank, &Pubkey::new_unique(), 1));
         assert!(bank

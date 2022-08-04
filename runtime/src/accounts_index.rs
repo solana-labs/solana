@@ -8,10 +8,12 @@ use {
         inline_spl_token::{self, GenericTokenAccount},
         inline_spl_token_2022,
         pubkey_bins::PubkeyBinCalculator24,
+        rent_paying_accounts_by_partition::RentPayingAccountsByPartition,
         rolling_bit_field::RollingBitField,
         secondary_index::*,
     },
     log::*,
+    once_cell::sync::OnceCell,
     ouroboros::self_referencing,
     rand::{thread_rng, Rng},
     rayon::{
@@ -70,7 +72,7 @@ pub type SlotSlice<'s, T> = &'s [(Slot, T)];
 pub type RefCount = u64;
 pub type AccountMap<V> = Arc<InMemAccountsIndex<V>>;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// how accounts index 'upsert' should handle reclaims
 pub enum UpsertReclaim {
     /// previous entry for this slot in the index is expected to be cached, so irrelevant to reclaims
@@ -78,6 +80,8 @@ pub enum UpsertReclaim {
     /// previous entry for this slot in the index may need to be reclaimed, so return it.
     /// reclaims is the only output of upsert, requiring a synchronous execution
     PopulateReclaims,
+    /// overwrite existing data in the same slot and do not return in 'reclaims'
+    IgnoreReclaims,
 }
 
 #[derive(Debug, Default)]
@@ -266,14 +270,14 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         }
     }
     pub fn ref_count(&self) -> RefCount {
-        self.ref_count.load(Ordering::Relaxed)
+        self.ref_count.load(Ordering::Acquire)
     }
 
     pub fn add_un_ref(&self, add: bool) {
         if add {
-            self.ref_count.fetch_add(1, Ordering::Relaxed);
+            self.ref_count.fetch_add(1, Ordering::Release);
         } else {
-            self.ref_count.fetch_sub(1, Ordering::Relaxed);
+            self.ref_count.fetch_sub(1, Ordering::Release);
         }
         self.set_dirty(true);
     }
@@ -582,9 +586,7 @@ impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
         thread_pool.install(|| {
             (0..bin_range).into_par_iter().for_each(|idx| {
                 let map = &self.account_maps[idx + start_bin];
-                map.read()
-                    .unwrap()
-                    .hold_range_in_memory(range, start_holding);
+                map.hold_range_in_memory(range, start_holding);
             });
         });
     }
@@ -600,7 +602,7 @@ impl<'a, T: IndexValue> Iterator for AccountsIndexIterator<'a, T> {
         let mut chunk = Vec::with_capacity(ITER_BATCH_SIZE);
         'outer: for i in self.account_maps.iter().skip(start_bin).take(bin_range) {
             for (pubkey, account_map_entry) in Self::range(
-                &i.read().unwrap(),
+                &i,
                 (self.start_bound, self.end_bound),
                 self.collect_all_unsorted,
             ) {
@@ -629,10 +631,9 @@ pub trait ZeroLamport {
 }
 
 type MapType<T> = AccountMap<T>;
-type LockMapType<T> = Vec<RwLock<MapType<T>>>;
-type LockMapTypeSlice<T> = [RwLock<MapType<T>>];
-type AccountMapsWriteLock<'a, T> = RwLockWriteGuard<'a, MapType<T>>;
-type AccountMapsReadLock<'a, T> = RwLockReadGuard<'a, MapType<T>>;
+type LockMapType<T> = Vec<MapType<T>>;
+type LockMapTypeSlice<T> = [MapType<T>];
+type AccountMapsReadLock<'a, T> = &'a MapType<T>;
 
 #[derive(Debug, Default)]
 pub struct ScanSlotTracker {
@@ -692,6 +693,9 @@ pub struct AccountsIndex<T: IndexValue> {
     pub active_scans: AtomicUsize,
     /// # of slots between latest max and latest scan
     pub max_distance_to_min_scan_slot: AtomicU64,
+
+    /// populated at generate_index time - accounts that could possibly be rent paying
+    pub rent_paying_accounts_by_partition: OnceCell<RentPayingAccountsByPartition>,
 }
 
 impl<T: IndexValue> AccountsIndex<T> {
@@ -725,6 +729,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             roots_removed: AtomicUsize::default(),
             active_scans: AtomicUsize::default(),
             max_distance_to_min_scan_slot: AtomicU64::default(),
+            rent_paying_accounts_by_partition: OnceCell::default(),
         }
     }
 
@@ -744,7 +749,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         let storage = AccountsIndexStorage::new(bins, &config);
         let account_maps = (0..bins)
             .into_iter()
-            .map(|bin| RwLock::new(Arc::clone(&storage.in_mem[bin])))
+            .map(|bin| Arc::clone(&storage.in_mem[bin]))
             .collect::<Vec<_>>();
         (account_maps, bin_calculator, storage)
     }
@@ -1122,9 +1127,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         pubkey: &Pubkey,
         user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
     ) -> Option<RT> {
-        let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
-            .read()
-            .unwrap();
+        let read_lock = self.get_account_maps_read_lock(pubkey);
         read_lock.slot_list_mut(pubkey, user)
     }
 
@@ -1135,7 +1138,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     ) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
-                let w_index = self.get_account_maps_write_lock(key);
+                let w_index = self.get_account_maps_read_lock(key);
                 if w_index.remove_if_slot_list_empty(**key) {
                     // Note it's only safe to remove all the entries for this key
                     // because we have the lock for this key's entry in the AccountsIndex,
@@ -1352,7 +1355,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             let bin = self.bin_calculator.bin_from_pubkey(pubkey);
             if bin != last_bin {
                 // cannot re-use lock since next pubkey is in a different bin than previous one
-                lock = Some(self.account_maps[bin].read().unwrap());
+                lock = Some(&self.account_maps[bin]);
                 last_bin = bin;
             }
             lock.as_ref().unwrap().get_internal(pubkey, |entry| {
@@ -1387,16 +1390,13 @@ impl<T: IndexValue> AccountsIndex<T> {
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
     ) -> AccountIndexGetResult<T> {
-        let read_lock = self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
-            .read()
-            .unwrap();
+        let read_lock = self.get_account_maps_read_lock(pubkey);
         let account = read_lock
             .get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry);
 
         match account {
             Some(locked_entry) => {
-                drop(read_lock);
                 let slot_list = locked_entry.slot_list();
                 let found_index = self.latest_slot(ancestors, slot_list, max_root);
                 match found_index {
@@ -1519,16 +1519,8 @@ impl<T: IndexValue> AccountsIndex<T> {
         );
     }
 
-    fn get_account_maps_write_lock(&self, pubkey: &Pubkey) -> AccountMapsWriteLock<T> {
-        self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
-            .write()
-            .unwrap()
-    }
-
     pub(crate) fn get_account_maps_read_lock(&self, pubkey: &Pubkey) -> AccountMapsReadLock<T> {
-        self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
-            .read()
-            .unwrap()
+        &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
     }
 
     pub fn bins(&self) -> usize {
@@ -1585,10 +1577,10 @@ impl<T: IndexValue> AccountsIndex<T> {
         let insertion_time = AtomicU64::new(0);
 
         binned.into_iter().for_each(|(pubkey_bin, items)| {
-            let w_account_maps = self.account_maps[pubkey_bin].write().unwrap();
+            let r_account_maps = &self.account_maps[pubkey_bin];
             let mut insert_time = Measure::start("insert_into_primary_index");
             if use_disk {
-                w_account_maps.startup_insert_only(slot, items.into_iter());
+                r_account_maps.startup_insert_only(slot, items.into_iter());
             } else {
                 // not using disk buckets, so just write to in-mem
                 // this is no longer the default case
@@ -1599,7 +1591,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                         &self.storage.storage,
                         use_disk,
                     );
-                    w_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry);
+                    r_account_maps.insert_new_entry_if_missing_with_lock(pubkey, new_entry);
                 });
             }
             insert_time.stop();
@@ -1614,7 +1606,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         (0..self.bins())
             .into_iter()
             .map(|pubkey_bin| {
-                let r_account_maps = self.account_maps[pubkey_bin].read().unwrap();
+                let r_account_maps = &self.account_maps[pubkey_bin];
                 r_account_maps.retrieve_duplicate_keys_from_startup()
             })
             .collect()
@@ -1653,26 +1645,25 @@ impl<T: IndexValue> AccountsIndex<T> {
             &self.storage.storage,
             store_raw,
         );
-        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
+        let map = self.get_account_maps_read_lock(pubkey);
 
-        {
-            let r_account_maps = map.read().unwrap();
-            r_account_maps.upsert(pubkey, new_item, Some(old_slot), reclaims, reclaim);
-        }
+        map.upsert(pubkey, new_item, Some(old_slot), reclaims, reclaim);
         self.update_secondary_indexes(pubkey, account, account_indexes);
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        let map = &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)];
-        map.read().unwrap().unref(pubkey)
+        let map = self.get_account_maps_read_lock(pubkey);
+        map.unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
-        if let Some(locked_entry) = self.get_account_read_entry(pubkey) {
-            locked_entry.ref_count()
-        } else {
-            0
-        }
+        let map = self.get_account_maps_read_lock(pubkey);
+        map.get_internal(pubkey, |entry| {
+            (
+                false,
+                entry.map(|entry| entry.ref_count()).unwrap_or_default(),
+            )
+        })
     }
 
     fn purge_secondary_indexes_by_inner_key<'a>(
@@ -1736,7 +1727,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // locked and inserted the pubkey in-between when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
-            let w_maps = self.get_account_maps_write_lock(pubkey);
+            let w_maps = self.get_account_maps_read_lock(pubkey);
             w_maps.remove_if_slot_list_empty(*pubkey);
         }
     }
@@ -2681,15 +2672,14 @@ pub mod tests {
         assert_eq!((slot, account_info), new_entry.clone().into());
 
         assert_eq!(0, account_maps_stats_len(&index));
-        let w_account_maps = index.get_account_maps_write_lock(&key.pubkey());
-        w_account_maps.upsert(
+        let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
+        r_account_maps.upsert(
             &key.pubkey(),
             new_entry,
             None,
             &mut SlotList::default(),
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
-        drop(w_account_maps);
         assert_eq!(1, account_maps_stats_len(&index));
 
         let mut ancestors = Ancestors::default();
@@ -2749,6 +2739,101 @@ pub mod tests {
             &ScanConfig::default(),
         );
         assert_eq!(num, 0);
+    }
+    #[test]
+    fn test_insert_ignore_reclaims() {
+        {
+            // non-cached
+            let key = Keypair::new();
+            let index = AccountsIndex::<u64>::default_for_tests();
+            let mut reclaims = Vec::new();
+            let slot = 0;
+            let value = 1;
+            assert!(!value.is_cached());
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                UpsertReclaim::PopulateReclaims,
+            );
+            assert!(reclaims.is_empty());
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                UpsertReclaim::PopulateReclaims,
+            );
+            // reclaimed
+            assert!(!reclaims.is_empty());
+            reclaims.clear();
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                // since IgnoreReclaims, we should expect reclaims to be empty
+                UpsertReclaim::IgnoreReclaims,
+            );
+            // reclaims is ignored
+            assert!(reclaims.is_empty());
+        }
+        {
+            // cached
+            let key = Keypair::new();
+            let index = AccountsIndex::<AccountInfoTest>::default_for_tests();
+            let mut reclaims = Vec::new();
+            let slot = 0;
+            let value = 1.0;
+            assert!(value.is_cached());
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                UpsertReclaim::PopulateReclaims,
+            );
+            assert!(reclaims.is_empty());
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                UpsertReclaim::PopulateReclaims,
+            );
+            // reclaimed
+            assert!(!reclaims.is_empty());
+            reclaims.clear();
+            index.upsert(
+                slot,
+                slot,
+                &key.pubkey(),
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut reclaims,
+                // since IgnoreReclaims, we should expect reclaims to be empty
+                UpsertReclaim::IgnoreReclaims,
+            );
+            // reclaims is ignored
+            assert!(reclaims.is_empty());
+        }
     }
 
     #[test]

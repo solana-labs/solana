@@ -972,6 +972,11 @@ pub fn main() {
                 .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
+            Arg::with_name("no_os_disk_stats_reporting")
+                .long("no-os-disk-stats-reporting")
+                .help("Disable reporting of OS disk statistics.")
+        )
+        .arg(
             Arg::with_name("accounts-hash-interval-slots")
                 .long("accounts-hash-interval-slots")
                 .value_name("NUMBER")
@@ -1209,6 +1214,12 @@ pub fn main() {
                 .long("tpu-use-quic")
                 .takes_value(false)
                 .help("Use QUIC to send transactions."),
+        )
+        .arg(
+            Arg::with_name("disable_quic_servers")
+                .long("disable-quic-servers")
+                .takes_value(false)
+                .help("Disable QUIC TPU servers"),
         )
         .arg(
             Arg::with_name("enable_quic_servers")
@@ -2304,7 +2315,7 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = matches.is_present("tpu_use_quic");
-    let enable_quic_servers = matches.is_present("enable_quic_servers");
+    let enable_quic_servers = !matches.is_present("disable_quic_servers");
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
@@ -2471,6 +2482,10 @@ pub fn main() {
         );
     }
 
+    if matches.is_present("enable_quic_servers") {
+        warn!("--enable-quic-servers is now the default behavior. This flag is deprecated and can be removed from the launch args");
+    }
+
     let rpc_bigtable_config = if matches.is_present("enable_rpc_bigtable_ledger_storage")
         || matches.is_present("enable_bigtable_ledger_upload")
     {
@@ -2631,6 +2646,7 @@ pub fn main() {
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
         no_os_network_stats_reporting: matches.is_present("no_os_network_stats_reporting"),
         no_os_cpu_stats_reporting: matches.is_present("no_os_cpu_stats_reporting"),
+        no_os_disk_stats_reporting: matches.is_present("no_os_disk_stats_reporting"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
@@ -2645,7 +2661,7 @@ pub fn main() {
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {
             bpf_jit: !matches.is_present("no_bpf_jit"),
-            log_messages_bytes_limit: value_t!(matches, "log_messages_bytes_limit", usize).ok(),
+            log_messages_bytes_limit: value_of(&matches, "log_messages_bytes_limit"),
             ..RuntimeConfig::default()
         },
         enable_quic_servers,

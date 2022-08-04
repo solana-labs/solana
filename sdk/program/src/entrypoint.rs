@@ -36,6 +36,9 @@ pub const HEAP_START_ADDRESS: u64 = 0x300000000;
 /// Length of the heap memory region used for program heap.
 pub const HEAP_LENGTH: usize = 32 * 1024;
 
+/// Value used to indicate that a serialized account is not a duplicate
+pub const NON_DUP_MARKER: u8 = u8::MAX;
+
 /// Declare the program entry point and set up global handlers.
 ///
 /// This macro emits the common boilerplate necessary to begin program
@@ -283,7 +286,7 @@ pub unsafe fn deserialize<'a>(input: *mut u8) -> (&'a Pubkey, Vec<AccountInfo<'a
     for _ in 0..num_accounts {
         let dup_info = *(input.add(offset) as *const u8);
         offset += size_of::<u8>();
-        if dup_info == std::u8::MAX {
+        if dup_info == NON_DUP_MARKER {
             #[allow(clippy::cast_ptr_alignment)]
             let is_signer = *(input.add(offset) as *const u8) != 0;
             offset += size_of::<u8>();

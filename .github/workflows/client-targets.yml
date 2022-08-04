@@ -54,13 +54,13 @@ jobs:
       - name: Install cargo-ndk
         if: ${{ matrix.platform == 'android' }}
         run: cargo install cargo-ndk
-      - name: Set NDK 21 as default
+      - name: Install NDK 21
         if: ${{ matrix.platform == 'android' }}
         run: |
           ANDROID_ROOT=/usr/local/lib/android
           ANDROID_SDK_ROOT=${ANDROID_ROOT}/sdk
-          ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk-bundle
-          ln -sfn $ANDROID_SDK_ROOT/ndk/21.4.7075529 $ANDROID_NDK_ROOT
+          SDKMANAGER=${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager
+          echo "y" | $SDKMANAGER "ndk;21.4.7075529"
       - uses: actions-rs/cargo@v1
         if: ${{ matrix.platform == 'android' }}
         with:

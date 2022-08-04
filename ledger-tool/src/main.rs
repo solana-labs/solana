@@ -27,12 +27,16 @@ use {
         blockstore_db::{self, Database},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
+            ShredStorageType,
         },
-        blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
+        blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
+        accounts_background_service::{
+            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService,
+        },
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         bank::{Bank, RewardCalculationEvent},
@@ -398,8 +402,62 @@ fn render_dot(dot: String, output_file: &str, output_format: &str) -> io::Result
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug)]
+enum GraphVoteAccountMode {
+    Disabled,
+    LastOnly,
+    WithHistory,
+}
+
+impl GraphVoteAccountMode {
+    const DISABLED: &'static str = "disabled";
+    const LAST_ONLY: &'static str = "last-only";
+    const WITH_HISTORY: &'static str = "with-history";
+    const ALL_MODE_STRINGS: &'static [&'static str] =
+        &[Self::DISABLED, Self::LAST_ONLY, Self::WITH_HISTORY];
+
+    fn is_enabled(&self) -> bool {
+        !matches!(self, Self::Disabled)
+    }
+}
+
+impl AsRef<str> for GraphVoteAccountMode {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Disabled => Self::DISABLED,
+            Self::LastOnly => Self::LAST_ONLY,
+            Self::WithHistory => Self::WITH_HISTORY,
+        }
+    }
+}
+
+impl Default for GraphVoteAccountMode {
+    fn default() -> Self {
+        Self::Disabled
+    }
+}
+
+struct GraphVoteAccountModeError(String);
+
+impl FromStr for GraphVoteAccountMode {
+    type Err = GraphVoteAccountModeError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            Self::DISABLED => Ok(Self::Disabled),
+            Self::LAST_ONLY => Ok(Self::LastOnly),
+            Self::WITH_HISTORY => Ok(Self::WithHistory),
+            _ => Err(GraphVoteAccountModeError(s.to_string())),
+        }
+    }
+}
+
+struct GraphConfig {
+    include_all_votes: bool,
+    vote_account_mode: GraphVoteAccountMode,
+}
+
 #[allow(clippy::cognitive_complexity)]
-fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
+fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
     let frozen_banks = bank_forks.frozen_banks();
     let mut fork_slots: HashSet<_> = frozen_banks.keys().cloned().collect();
     for (_, bank) in frozen_banks {
@@ -520,7 +578,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
                         "1"
                     };
                     let link_label = if slot_distance > 1 {
-                        format!("label=\"{} slots\",color=red", slot_distance)
+                        format!("label=\"{} slots\",color=red", slot_distance - 1)
                     } else {
                         "color=blue".to_string()
                     };
@@ -550,36 +608,60 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
             validator_votes.remove(last_vote_slot);
         });
 
-        dot.push(format!(
-            r#"  "last vote {}"[shape=box,label="Latest validator vote: {}\nstake: {} SOL\nroot slot: {}\nvote history:\n{}"];"#,
-            node_pubkey,
-            node_pubkey,
-            lamports_to_sol(*stake),
-            vote_state.root_slot.unwrap_or(0),
-            vote_state
-                .votes
-                .iter()
-                .map(|vote| format!("slot {} (conf={})", vote.slot, vote.confirmation_count))
-                .collect::<Vec<_>>()
-                .join("\n")
-        ));
+        let maybe_styled_last_vote_slot = styled_slots.get(last_vote_slot);
+        if maybe_styled_last_vote_slot.is_none() {
+            if *last_vote_slot < lowest_last_vote_slot {
+                lowest_last_vote_slot = *last_vote_slot;
+                lowest_total_stake = *total_stake;
+            }
+            absent_votes += 1;
+            absent_stake += stake;
+        };
 
-        dot.push(format!(
-            r#"  "last vote {}" -> "{}" [style=dashed,label="latest vote"];"#,
-            node_pubkey,
-            if styled_slots.contains(last_vote_slot) {
-                last_vote_slot.to_string()
-            } else {
-                if *last_vote_slot < lowest_last_vote_slot {
-                    lowest_last_vote_slot = *last_vote_slot;
-                    lowest_total_stake = *total_stake;
-                }
-                absent_votes += 1;
-                absent_stake += stake;
+        if config.vote_account_mode.is_enabled() {
+            let vote_history =
+                if matches!(config.vote_account_mode, GraphVoteAccountMode::WithHistory) {
+                    format!(
+                        "vote history:\n{}",
+                        vote_state
+                            .votes
+                            .iter()
+                            .map(|vote| format!(
+                                "slot {} (conf={})",
+                                vote.slot, vote.confirmation_count
+                            ))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    )
+                } else {
+                    format!(
+                        "last vote slot: {}",
+                        vote_state
+                            .votes
+                            .back()
+                            .map(|vote| vote.slot.to_string())
+                            .unwrap_or_else(|| "none".to_string())
+                    )
+                };
+            dot.push(format!(
+                r#"  "last vote {}"[shape=box,label="Latest validator vote: {}\nstake: {} SOL\nroot slot: {}\n{}"];"#,
+                node_pubkey,
+                node_pubkey,
+                lamports_to_sol(*stake),
+                vote_state.root_slot.unwrap_or(0),
+                vote_history,
+            ));
 
-                "...".to_string()
-            },
-        ));
+            dot.push(format!(
+                r#"  "last vote {}" -> "{}" [style=dashed,label="latest vote"];"#,
+                node_pubkey,
+                if let Some(styled_last_vote_slot) = maybe_styled_last_vote_slot {
+                    styled_last_vote_slot.to_string()
+                } else {
+                    "...".to_string()
+                },
+            ));
+        }
     }
 
     // Annotate the final "..." node with absent vote and stake information
@@ -593,7 +675,7 @@ fn graph_forks(bank_forks: &BankForks, include_all_votes: bool) -> String {
     }
 
     // Add for vote information from all banks.
-    if include_all_votes {
+    if config.include_all_votes {
         for (node_pubkey, validator_votes) in &all_votes {
             for (vote_slot, vote_state) in validator_votes {
                 dot.push(format!(
@@ -724,6 +806,7 @@ fn open_blockstore(
     ledger_path: &Path,
     access_type: AccessType,
     wal_recovery_mode: Option<BlockstoreRecoveryMode>,
+    shred_storage_type: &ShredStorageType,
 ) -> Blockstore {
     match Blockstore::open_with_options(
         ledger_path,
@@ -731,7 +814,10 @@ fn open_blockstore(
             access_type,
             recovery_mode: wal_recovery_mode,
             enforce_ulimit_nofile: true,
-            ..BlockstoreOptions::default()
+            column_options: LedgerColumnOptions {
+                shred_storage_type: shred_storage_type.clone(),
+                ..LedgerColumnOptions::default()
+            },
         },
     ) {
         Ok(blockstore) => blockstore,
@@ -798,6 +884,8 @@ fn load_bank_forks(
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
+        // Check if we have the slot data necessary to replay from starting_slot to halt_slot.
+        //  - This will not catch the case when loading from genesis without a full slot 0.
         if !blockstore.slots_connected(starting_slot, halt_slot) {
             eprintln!(
                 "Unable to load bank forks at slot {} due to disconnected blocks.",
@@ -838,18 +926,49 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
-    bank_forks_utils::load(
-        genesis_config,
+    let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) =
+        bank_forks_utils::load_bank_forks(
+            genesis_config,
+            blockstore,
+            account_paths,
+            None,
+            snapshot_config.as_ref(),
+            &process_options,
+            None,
+            None,
+        );
+
+    let pruned_banks_receiver =
+        AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
+    let abs_request_handler = AbsRequestHandler {
+        snapshot_request_handler: None,
+        pruned_banks_receiver,
+    };
+    let exit = Arc::new(AtomicBool::new(false));
+    let accounts_background_service = AccountsBackgroundService::new(
+        bank_forks.clone(),
+        &exit,
+        abs_request_handler,
+        process_options.accounts_db_caching_enabled,
+        process_options.accounts_db_test_hash_calculation,
+        None,
+    );
+
+    let result = blockstore_processor::process_blockstore_from_root(
         blockstore,
-        account_paths,
-        None,
-        snapshot_config.as_ref(),
-        process_options,
-        None,
+        &bank_forks,
+        &leader_schedule_cache,
+        &process_options,
         None,
         None,
+        &AbsRequestSender::default(),
     )
-    .map(|(bank_forks, .., starting_snapshot_hashes)| (bank_forks, starting_snapshot_hashes))
+    .map(|_| (bank_forks, starting_snapshot_hashes));
+
+    exit.store(true, Ordering::Relaxed);
+    accounts_background_service.join().unwrap();
+
+    result
 }
 
 fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {
@@ -950,6 +1069,10 @@ use jemallocator::Jemalloc;
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
+
+/// The default size for data and coding shred column families in FIFO compaction.
+/// u64::MAX as the default value means it won't delete any files by default.
+const DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
 
 #[allow(clippy::cognitive_complexity)]
 fn main() {
@@ -1071,6 +1194,10 @@ fn main() {
         .long("accounts-db-ancient-append-vecs")
         .help("AppendVecs that are older than an epoch are squashed together.")
         .hidden(true);
+    let halt_at_slot_store_hash_raw_data = Arg::with_name("halt_at_slot_store_hash_raw_data")
+            .long("halt-at-slot-store-hash-raw-data")
+            .help("After halting at slot, run an accounts hash calculation and store the raw hash data for debugging.")
+            .hidden(true);
     let verify_index_arg = Arg::with_name("verify_accounts_index")
         .long("verify-accounts-index")
         .takes_value(false)
@@ -1155,6 +1282,7 @@ fn main() {
     let default_bootstrap_validator_stake_lamports = &sol_to_lamports(0.5)
         .max(rent.minimum_balance(StakeState::size_of()))
         .to_string();
+    let default_graph_vote_account_mode = GraphVoteAccountMode::default();
 
     let mut measure_total_execution_time = Measure::start("ledger tool");
     let matches = App::new(crate_name!())
@@ -1422,6 +1550,7 @@ fn main() {
             .arg(&skip_rewrites_arg)
             .arg(&accounts_db_skip_initial_hash_calc_arg)
             .arg(&ancient_append_vecs)
+            .arg(&halt_at_slot_store_hash_raw_data)
             .arg(&hard_forks_arg)
             .arg(&no_accounts_db_caching_arg)
             .arg(&accounts_db_test_hash_calculation_arg)
@@ -1461,6 +1590,15 @@ fn main() {
                     .value_name("FILENAME")
                     .takes_value(true)
                     .help("Output file"),
+            )
+            .arg(
+                Arg::with_name("vote_account_mode")
+                    .long("vote-account-mode")
+                    .takes_value(true)
+                    .value_name("MODE")
+                    .default_value(default_graph_vote_account_mode.as_ref())
+                    .possible_values(GraphVoteAccountMode::ALL_MODE_STRINGS)
+                    .help("Specify if and how to graph vote accounts. Enabling will incur significant rendering overhead, especially `with-history`")
             )
         ).subcommand(
             SubCommand::with_name("create-snapshot")
@@ -1870,8 +2008,23 @@ fn main() {
         .map(BlockstoreRecoveryMode::from);
     let verbose_level = matches.occurrences_of("verbose");
 
+    // TODO: the following shred_storage_type inference must be updated once the
+    // rocksdb options can be constructed via load_options_file() as the
+    // temporary use of DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES
+    // could affect the persisted rocksdb options file.
+    let shred_storage_type = match ShredStorageType::from_ledger_path(
+        &ledger_path,
+        DEFAULT_LEDGER_TOOL_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+    ) {
+        Some(s) => s,
+        None => {
+            error!("Shred storage type cannot be inferred, the default RocksLevel will be used");
+            ShredStorageType::RocksLevel
+        }
+    };
+
     if let ("bigtable", Some(arg_matches)) = matches.subcommand() {
-        bigtable_process_command(&ledger_path, arg_matches)
+        bigtable_process_command(&ledger_path, arg_matches, &shred_storage_type)
     } else {
         let ledger_path = canonicalize_ledger_path(&ledger_path);
 
@@ -1883,7 +2036,12 @@ fn main() {
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 let only_rooted = arg_matches.is_present("only_rooted");
                 output_ledger(
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode),
+                    open_blockstore(
+                        &ledger_path,
+                        AccessType::Secondary,
+                        wal_recovery_mode,
+                        &shred_storage_type,
+                    ),
                     starting_slot,
                     ending_slot,
                     allow_dead_slots,
@@ -1897,8 +2055,14 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
                 let target_db = PathBuf::from(value_t_or_exit!(arg_matches, "target_db", String));
-                let source = open_blockstore(&ledger_path, AccessType::Secondary, None);
-                let target = open_blockstore(&target_db, AccessType::Primary, None);
+                let source = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    None,
+                    &shred_storage_type,
+                );
+                let target =
+                    open_blockstore(&target_db, AccessType::Primary, None, &shred_storage_type);
                 for (slot, _meta) in source.slot_meta_iterator(starting_slot).unwrap() {
                     if slot > ending_slot {
                         break;
@@ -1971,8 +2135,12 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -2019,7 +2187,12 @@ fn main() {
                 }
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t!(arg_matches, "ending_slot", Slot).unwrap_or(Slot::MAX);
-                let ledger = open_blockstore(&ledger_path, AccessType::Secondary, None);
+                let ledger = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    None,
+                    &shred_storage_type,
+                );
                 for (slot, _meta) in ledger
                     .slot_meta_iterator(starting_slot)
                     .unwrap()
@@ -2053,8 +2226,12 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -2075,8 +2252,12 @@ fn main() {
             ("slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 for slot in slots {
                     println!("Slot {}", slot);
                     if let Err(err) = output_slot(
@@ -2095,7 +2276,12 @@ fn main() {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let allow_dead_slots = arg_matches.is_present("allow_dead_slots");
                 output_ledger(
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode),
+                    open_blockstore(
+                        &ledger_path,
+                        AccessType::Secondary,
+                        wal_recovery_mode,
+                        &shred_storage_type,
+                    ),
                     starting_slot,
                     Slot::MAX,
                     allow_dead_slots,
@@ -2106,16 +2292,24 @@ fn main() {
                 );
             }
             ("dead-slots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.dead_slots_iterator(starting_slot).unwrap() {
                     println!("{}", slot);
                 }
             }
             ("duplicate-slots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 for slot in blockstore.duplicate_slots_iterator(starting_slot).unwrap() {
                     println!("{}", slot);
@@ -2123,8 +2317,12 @@ fn main() {
             }
             ("set-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Primary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 for slot in slots {
                     match blockstore.set_dead_slot(slot) {
                         Ok(_) => println!("Slot {} dead", slot),
@@ -2134,8 +2332,12 @@ fn main() {
             }
             ("remove-dead-slot", Some(arg_matches)) => {
                 let slots = values_t_or_exit!(arg_matches, "slots", Slot);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Primary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 for slot in slots {
                     match blockstore.remove_dead_slot(slot) {
                         Ok(_) => println!("Slot {} not longer marked dead", slot),
@@ -2148,8 +2350,12 @@ fn main() {
             ("parse_full_frozen", Some(arg_matches)) => {
                 let starting_slot = value_t_or_exit!(arg_matches, "starting_slot", Slot);
                 let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let mut ancestors = BTreeSet::new();
                 assert!(
                     blockstore.meta(ending_slot).unwrap().is_some(),
@@ -2225,6 +2431,7 @@ fn main() {
                     !no_os_memory_stats_reporting,
                     false,
                     false,
+                    false,
                 );
 
                 accounts_index_config.index_limit_mb = if let Some(limit) =
@@ -2275,6 +2482,8 @@ fn main() {
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
                     poh_verify: !arg_matches.is_present("skip_poh_verify"),
+                    on_halt_store_hash_raw_data_for_debug: arg_matches
+                        .is_present("halt_at_slot_store_hash_raw_data"),
                     halt_at_slot: value_t!(arg_matches, "halt_at_slot", Slot).ok(),
                     debug_keys,
                     accounts_db_caching_enabled: !arg_matches.is_present("no_accounts_db_caching"),
@@ -2302,8 +2511,12 @@ fn main() {
                     open_genesis_config_by(&ledger_path, arg_matches).hash()
                 );
 
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
@@ -2326,6 +2539,14 @@ fn main() {
             }
             ("graph", Some(arg_matches)) => {
                 let output_file = value_t_or_exit!(arg_matches, "graph_filename", String);
+                let graph_config = GraphConfig {
+                    include_all_votes: arg_matches.is_present("include_all_votes"),
+                    vote_account_mode: value_t_or_exit!(
+                        arg_matches,
+                        "vote_account_mode",
+                        GraphVoteAccountMode
+                    ),
+                };
 
                 let process_options = ProcessOptions {
                     new_hard_forks: hardforks_of(arg_matches, "hard_forks"),
@@ -2334,8 +2555,12 @@ fn main() {
                     ..ProcessOptions::default()
                 };
 
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match load_bank_forks(
                     arg_matches,
                     &open_genesis_config_by(&ledger_path, arg_matches),
@@ -2345,10 +2570,7 @@ fn main() {
                     incremental_snapshot_archive_path,
                 ) {
                     Ok((bank_forks, ..)) => {
-                        let dot = graph_forks(
-                            &bank_forks.read().unwrap(),
-                            arg_matches.is_present("include_all_votes"),
-                        );
+                        let dot = graph_forks(&bank_forks.read().unwrap(), &graph_config);
 
                         let extension = Path::new(&output_file).extension();
                         let result = if extension == Some(OsStr::new("pdf")) {
@@ -2447,8 +2669,12 @@ fn main() {
                     usize
                 );
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
 
                 let snapshot_slot = if Some("ROOT") == arg_matches.value_of("snapshot_slot") {
                     blockstore
@@ -2831,8 +3057,12 @@ fn main() {
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
                 let include_sysvars = arg_matches.is_present("include_sysvars");
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let (bank_forks, ..) = load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -2891,8 +3121,12 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match load_bank_forks(
                     arg_matches,
                     &genesis_config,
@@ -3422,7 +3656,12 @@ fn main() {
                 } else {
                     AccessType::PrimaryForMaintenance
                 };
-                let blockstore = open_blockstore(&ledger_path, access_type, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    access_type,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
 
                 let end_slot = match end_slot {
                     Some(end_slot) => end_slot,
@@ -3493,8 +3732,12 @@ fn main() {
                 }
             }
             ("list-roots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let max_height = if let Some(height) = arg_matches.value_of("max_height") {
                     usize::from_str(height).expect("Maximum height must be a number")
                 } else {
@@ -3556,8 +3799,12 @@ fn main() {
                     });
             }
             ("latest-optimistic-slots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let num_slots = value_t_or_exit!(arg_matches, "num_slots", usize);
                 let slots = blockstore
                     .get_latest_optimistic_slots(num_slots)
@@ -3576,8 +3823,12 @@ fn main() {
                 }
             }
             ("repair-roots", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Primary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Primary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 let start_root = if let Some(root) = arg_matches.value_of("start_root") {
                     Slot::from_str(root).expect("Before root must be a number")
                 } else {
@@ -3625,8 +3876,12 @@ fn main() {
                 }
             }
             ("bounds", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
                 match blockstore.slot_meta_iterator(0) {
                     Ok(metas) => {
                         let all = arg_matches.is_present("all");
@@ -3687,13 +3942,23 @@ fn main() {
             }
             ("analyze-storage", _) => {
                 analyze_storage(
-                    &open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode).db(),
+                    &open_blockstore(
+                        &ledger_path,
+                        AccessType::Secondary,
+                        wal_recovery_mode,
+                        &shred_storage_type,
+                    )
+                    .db(),
                 );
                 println!("Ok.");
             }
             ("compute-slot-cost", Some(arg_matches)) => {
-                let blockstore =
-                    open_blockstore(&ledger_path, AccessType::Secondary, wal_recovery_mode);
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                );
 
                 let mut slots: Vec<u64> = vec![];
                 if !arg_matches.is_present("slots") {

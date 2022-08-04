@@ -10,7 +10,7 @@ use {
             FullSnapshotHash, FullSnapshotHashes, IncrementalSnapshotHash,
             IncrementalSnapshotHashes, StartingSnapshotHashes,
         },
-        snapshot_package::{PendingSnapshotPackage, SnapshotType},
+        snapshot_package::{retain_max_n_elements, PendingSnapshotPackage, SnapshotType},
         snapshot_utils,
     },
     solana_sdk::{clock::Slot, hash::Hash},
@@ -166,9 +166,12 @@ impl SnapshotGossipManager {
         self.full_snapshot_hashes
             .hashes
             .push(full_snapshot_hash.hash);
-        while self.full_snapshot_hashes.hashes.len() > self.max_full_snapshot_hashes {
-            self.full_snapshot_hashes.hashes.remove(0);
-        }
+
+        retain_max_n_elements(
+            &mut self.full_snapshot_hashes.hashes,
+            self.max_full_snapshot_hashes,
+        );
+
         self.cluster_info
             .push_snapshot_hashes(self.full_snapshot_hashes.hashes.clone());
     }
@@ -190,9 +193,12 @@ impl SnapshotGossipManager {
         self.incremental_snapshot_hashes
             .hashes
             .push(incremental_snapshot_hash.hash);
-        while self.incremental_snapshot_hashes.hashes.len() > self.max_incremental_snapshot_hashes {
-            self.incremental_snapshot_hashes.hashes.remove(0);
-        }
+
+        retain_max_n_elements(
+            &mut self.incremental_snapshot_hashes.hashes,
+            self.max_incremental_snapshot_hashes,
+        );
+
         // Pushing incremental snapshot hashes to the cluster should never fail.  The only error
         // case is when the length of the hashes is too big, but we account for that with
         // `max_incremental_snapshot_hashes`.  If this call ever does error, it's a programmer bug!

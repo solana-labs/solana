@@ -49,6 +49,7 @@ members = [
     "program-test",
     "programs/address-lookup-table",
     "programs/address-lookup-table-tests",
+    "programs/bpf-loader-tests",
     "programs/bpf_loader",
     "programs/bpf_loader/gen-syscall-list",
     "programs/compute-budget",
@@ -90,6 +91,3 @@ members = [
 exclude = [
     "programs/bpf",
 ]
-
-# This prevents a Travis CI error when building for Windows.
-resolver = "2"

@@ -13,4 +13,4 @@ steps:
       ADDITIONAL_FLAGS: ""
       TEST_TYPE: "fixed_duration"
     agents:
-      - "queue=colo-deploy"
+      queue: "colo-deploy"

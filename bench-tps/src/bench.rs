@@ -7,6 +7,7 @@ use {
     },
     log::*,
     rayon::prelude::*,
+    solana_client::nonce_utils,
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
@@ -35,7 +36,132 @@ use {
 // The point at which transactions become "too old", in seconds.
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
 
-pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
+pub type TimestampedTransaction = (Transaction, Option<u64>);
+pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
+
+/// Keypairs split into source and destination
+/// used for transfer transactions
+struct KeypairChunks<'a> {
+    source: Vec<Vec<&'a Keypair>>,
+    dest: Vec<VecDeque<&'a Keypair>>,
+}
+
+impl<'a> KeypairChunks<'a> {
+    /// Split input vector of keypairs into two sets of chunks of given size
+    fn new(keypairs: &'a [Keypair], chunk_size: usize) -> Self {
+        let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
+        let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
+        for chunk in keypairs.chunks_exact(2 * chunk_size) {
+            source_keypair_chunks.push(chunk[..chunk_size].iter().collect());
+            dest_keypair_chunks.push(chunk[chunk_size..].iter().collect());
+        }
+        KeypairChunks {
+            source: source_keypair_chunks,
+            dest: dest_keypair_chunks,
+        }
+    }
+}
+
+struct TransactionChunkGenerator<'a, 'b, T> {
+    client: Arc<T>,
+    account_chunks: KeypairChunks<'a>,
+    nonce_chunks: Option<KeypairChunks<'b>>,
+    chunk_index: usize,
+    reclaim_lamports_back_to_source_account: bool,
+}
+
+impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
+where
+    T: 'static + BenchTpsClient + Send + Sync,
+{
+    fn new(
+        client: Arc<T>,
+        gen_keypairs: &'a [Keypair],
+        nonce_keypairs: Option<&'b Vec<Keypair>>,
+        chunk_size: usize,
+    ) -> Self {
+        let account_chunks = KeypairChunks::new(gen_keypairs, chunk_size);
+        let nonce_chunks =
+            nonce_keypairs.map(|nonce_keypairs| KeypairChunks::new(nonce_keypairs, chunk_size));
+
+        TransactionChunkGenerator {
+            client,
+            account_chunks,
+            nonce_chunks,
+            chunk_index: 0,
+            reclaim_lamports_back_to_source_account: false,
+        }
+    }
+
+    /// generate transactions to transfer lamports from source to destination accounts
+    /// if durable nonce is used, blockhash is None
+    fn generate(&mut self, blockhash: Option<&Hash>) -> Vec<TimestampedTransaction> {
+        let tx_count = self.account_chunks.source.len();
+        info!(
+            "Signing transactions... {} (reclaim={}, blockhash={:?})",
+            tx_count, self.reclaim_lamports_back_to_source_account, blockhash
+        );
+        let signing_start = Instant::now();
+
+        let source_chunk = &self.account_chunks.source[self.chunk_index];
+        let dest_chunk = &self.account_chunks.dest[self.chunk_index];
+        let transactions = if let Some(nonce_chunks) = &self.nonce_chunks {
+            let source_nonce_chunk = &nonce_chunks.source[self.chunk_index];
+            let dest_nonce_chunk: &VecDeque<&Keypair> = &nonce_chunks.dest[self.chunk_index];
+            generate_nonced_system_txs(
+                self.client.clone(),
+                source_chunk,
+                dest_chunk,
+                source_nonce_chunk,
+                dest_nonce_chunk,
+                self.reclaim_lamports_back_to_source_account,
+            )
+        } else {
+            assert!(blockhash.is_some());
+            generate_system_txs(
+                source_chunk,
+                dest_chunk,
+                self.reclaim_lamports_back_to_source_account,
+                blockhash.unwrap(),
+            )
+        };
+
+        let duration = signing_start.elapsed();
+        let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
+        let bsps = (tx_count) as f64 / ns as f64;
+        let nsps = ns as f64 / (tx_count) as f64;
+        info!(
+            "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time, {:?}",
+            bsps * 1_000_000_f64,
+            nsps / 1_000_f64,
+            duration_as_ms(&duration),
+            blockhash,
+        );
+        datapoint_info!(
+            "bench-tps-generate_txs",
+            ("duration", duration_as_us(&duration), i64)
+        );
+
+        transactions
+    }
+
+    fn advance(&mut self) {
+        // Rotate destination keypairs so that the next round of transactions will have different
+        // transaction signatures even when blockhash is reused.
+        self.account_chunks.dest[self.chunk_index].rotate_left(1);
+        if let Some(nonce_chunks) = &mut self.nonce_chunks {
+            nonce_chunks.dest[self.chunk_index].rotate_left(1);
+        }
+        // Move on to next chunk
+        self.chunk_index = (self.chunk_index + 1) % self.account_chunks.source.len();
+
+        // Switch directions after transfering for each "chunk"
+        if self.chunk_index == 0 {
+            self.reclaim_lamports_back_to_source_account =
+                !self.reclaim_lamports_back_to_source_account;
+        }
+    }
+}
 
 fn wait_for_target_slots_per_epoch<T>(target_slots_per_epoch: u64, client: &Arc<T>)
 where
@@ -83,32 +209,21 @@ where
         .unwrap()
 }
 
-fn generate_chunked_transfers(
+fn generate_chunked_transfers<T: 'static + BenchTpsClient + Send + Sync>(
     recent_blockhash: Arc<RwLock<Hash>>,
     shared_txs: &SharedTransactions,
     shared_tx_active_thread_count: Arc<AtomicIsize>,
-    source_keypair_chunks: Vec<Vec<&Keypair>>,
-    dest_keypair_chunks: &mut [VecDeque<&Keypair>],
+    mut chunk_generator: TransactionChunkGenerator<'_, '_, T>,
     threads: usize,
     duration: Duration,
     sustained: bool,
 ) {
     // generate and send transactions for the specified duration
     let start = Instant::now();
-    let keypair_chunks = source_keypair_chunks.len();
-    let mut reclaim_lamports_back_to_source_account = false;
-    let mut chunk_index = 0;
     let mut last_generate_txs_time = Instant::now();
 
     while start.elapsed() < duration {
-        generate_txs(
-            shared_txs,
-            &recent_blockhash,
-            &source_keypair_chunks[chunk_index],
-            &dest_keypair_chunks[chunk_index],
-            threads,
-            reclaim_lamports_back_to_source_account,
-        );
+        generate_txs(shared_txs, &recent_blockhash, &mut chunk_generator, threads);
 
         datapoint_info!(
             "blockhash_stats",
@@ -135,18 +250,7 @@ fn generate_chunked_transfers(
                 sleep(Duration::from_millis(1));
             }
         }
-
-        // Rotate destination keypairs so that the next round of transactions will have different
-        // transaction signatures even when blockhash is reused.
-        dest_keypair_chunks[chunk_index].rotate_left(1);
-
-        // Move on to next chunk
-        chunk_index = (chunk_index + 1) % keypair_chunks;
-
-        // Switch directions after transfering for each "chunk"
-        if chunk_index == 0 {
-            reclaim_lamports_back_to_source_account = !reclaim_lamports_back_to_source_account;
-        }
+        chunk_generator.advance();
     }
 }
 
@@ -201,13 +305,13 @@ where
         ..
     } = config;
 
-    let mut source_keypair_chunks: Vec<Vec<&Keypair>> = Vec::new();
-    let mut dest_keypair_chunks: Vec<VecDeque<&Keypair>> = Vec::new();
     assert!(gen_keypairs.len() >= 2 * tx_count);
-    for chunk in gen_keypairs.chunks_exact(2 * tx_count) {
-        source_keypair_chunks.push(chunk[..tx_count].iter().collect());
-        dest_keypair_chunks.push(chunk[tx_count..].iter().collect());
-    }
+    let chunk_generator = TransactionChunkGenerator::new(
+        client.clone(),
+        &gen_keypairs,
+        None, // TODO(klykov): to be added in the follow up PR
+        tx_count,
+    );
 
     let first_tx_count = loop {
         match client.get_transaction_count() {
@@ -265,8 +369,7 @@ where
         blockhash,
         &shared_txs,
         shared_tx_active_thread_count,
-        source_keypair_chunks,
-        &mut dest_keypair_chunks,
+        chunk_generator,
         threads,
         duration,
         sustained,
@@ -320,7 +423,7 @@ fn generate_system_txs(
     dest: &VecDeque<&Keypair>,
     reclaim: bool,
     blockhash: &Hash,
-) -> Vec<(Transaction, u64)> {
+) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
     } else {
@@ -332,45 +435,75 @@ fn generate_system_txs(
         .map(|(from, to)| {
             (
                 system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
-                timestamp(),
+                Some(timestamp()),
             )
         })
         .collect()
 }
 
-fn generate_txs(
-    shared_txs: &SharedTransactions,
-    blockhash: &Arc<RwLock<Hash>>,
+fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
+    nonce_account_pubkey: Pubkey,
+) -> Hash {
+    let nonce_account = client
+        .get_account(&nonce_account_pubkey)
+        .unwrap_or_else(|error| panic!("{:?}", error));
+    let nonce_data = nonce_utils::data_from_account(&nonce_account)
+        .unwrap_or_else(|error| panic!("{:?}", error));
+    nonce_data.blockhash()
+}
+
+fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
+    client: Arc<T>,
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
-    threads: usize,
+    source_nonce: &[&Keypair],
+    dest_nonce: &VecDeque<&Keypair>,
     reclaim: bool,
+) -> Vec<TimestampedTransaction> {
+    let length = source.len();
+    let mut transactions: Vec<TimestampedTransaction> = Vec::with_capacity(length);
+    for i in 0..length {
+        let (from, to, nonce, nonce_blockhash) = if !reclaim {
+            (
+                source[i],
+                dest[i],
+                source_nonce[i],
+                get_nonce_blockhash(client.clone(), source_nonce[i].pubkey()),
+            )
+        } else {
+            (
+                dest[i],
+                source[i],
+                dest_nonce[i],
+                get_nonce_blockhash(client.clone(), dest_nonce[i].pubkey()),
+            )
+        };
+
+        transactions.push((
+            system_transaction::nonced_transfer(
+                from,
+                &to.pubkey(),
+                1,
+                &nonce.pubkey(),
+                from,
+                nonce_blockhash,
+            ),
+            None,
+        ));
+    }
+    transactions
+}
+
+fn generate_txs<T: 'static + BenchTpsClient + Send + Sync>(
+    shared_txs: &SharedTransactions,
+    blockhash: &Arc<RwLock<Hash>>,
+    chunk_generator: &mut TransactionChunkGenerator<'_, '_, T>,
+    threads: usize,
 ) {
-    let blockhash = *blockhash.read().unwrap();
-    let tx_count = source.len();
-    info!(
-        "Signing transactions... {} (reclaim={}, blockhash={})",
-        tx_count, reclaim, &blockhash
-    );
-    let signing_start = Instant::now();
+    let blockhash = blockhash.read().map(|x| *x).ok();
 
-    let transactions = generate_system_txs(source, dest, reclaim, &blockhash);
-
-    let duration = signing_start.elapsed();
-    let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
-    let bsps = (tx_count) as f64 / ns as f64;
-    let nsps = ns as f64 / (tx_count) as f64;
-    info!(
-        "Done. {:.2} thousand signatures per second, {:.2} us per signature, {} ms total time, {}",
-        bsps * 1_000_000_f64,
-        nsps / 1_000_f64,
-        duration_as_ms(&duration),
-        blockhash,
-    );
-    datapoint_info!(
-        "bench-tps-generate_txs",
-        ("duration", duration_as_us(&duration), i64)
-    );
+    let transactions = chunk_generator.generate(blockhash.as_ref());
 
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
@@ -475,14 +608,16 @@ fn do_tx_transfers<T: BenchTpsClient>(
             let mut min_timestamp = u64::MAX;
             for tx in txs0 {
                 let now = timestamp();
-                // Transactions that are too old will be rejected by the cluster Don't bother
+                // Transactions without durable nonce that are too old will be rejected by the cluster Don't bother
                 // sending them.
-                if tx.1 < min_timestamp {
-                    min_timestamp = tx.1;
-                }
-                if now > tx.1 && now - tx.1 > 1000 * MAX_TX_QUEUE_AGE {
-                    old_transactions = true;
-                    continue;
+                if let Some(tx_timestamp) = tx.1 {
+                    if tx_timestamp < min_timestamp {
+                        min_timestamp = tx_timestamp;
+                    }
+                    if now > tx_timestamp && now - tx_timestamp > 1000 * MAX_TX_QUEUE_AGE {
+                        old_transactions = true;
+                        continue;
+                    }
                 }
                 transactions.push(tx.0);
             }
@@ -700,7 +835,7 @@ mod tests {
         solana_runtime::{bank::Bank, bank_client::BankClient},
         solana_sdk::{
             commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor,
-            genesis_config::create_genesis_config, native_token::sol_to_lamports,
+            genesis_config::create_genesis_config, native_token::sol_to_lamports, nonce::State,
         },
     };
 
@@ -763,5 +898,32 @@ mod tests {
         for kp in &keypairs {
             assert_eq!(client.get_balance(&kp.pubkey()).unwrap(), lamports + rent);
         }
+    }
+
+    #[test]
+    fn test_bench_tps_create_durable_nonce() {
+        let (genesis_config, id) = create_genesis_config(sol_to_lamports(10_000.0));
+        let bank = Bank::new_for_tests(&genesis_config);
+        let client = Arc::new(BankClient::new(bank));
+        let keypair_count = 10;
+        let lamports = 10_000_000;
+
+        let authority_keypairs =
+            generate_and_fund_keypairs(client.clone(), &id, keypair_count, lamports).unwrap();
+
+        let nonce_keypairs = generate_durable_nonce_accounts(client.clone(), &authority_keypairs);
+
+        let rent = client
+            .get_minimum_balance_for_rent_exemption(State::size())
+            .unwrap();
+        for kp in &nonce_keypairs {
+            assert_eq!(
+                client
+                    .get_balance_with_commitment(&kp.pubkey(), CommitmentConfig::processed())
+                    .unwrap(),
+                rent
+            );
+        }
+        withdraw_durable_nonce_accounts(client, &authority_keypairs, &nonce_keypairs)
     }
 }

@@ -786,7 +786,8 @@ mod tests {
 
     #[test]
     fn test_address_create_with_seed_mismatch() {
-        let mut transaction_context = TransactionContext::new(Vec::new(), 1, 1);
+        let mut transaction_context =
+            TransactionContext::new(Vec::new(), Some(Rent::default()), 1, 1);
         let invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         let from = Pubkey::new_unique();
         let seed = "dull boy";

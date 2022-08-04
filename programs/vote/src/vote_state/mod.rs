@@ -1547,7 +1547,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
     lamports: u64,
     to_account_index: usize,
     signers: &HashSet<Pubkey, S>,
-    rent_sysvar: Option<&Rent>,
+    rent_sysvar: &Rent,
     clock: Option<&Clock>,
 ) -> Result<(), InstructionError> {
     let mut vote_account = instruction_context
@@ -1583,7 +1583,7 @@ pub fn withdraw<S: std::hash::BuildHasher>(
             datapoint_debug!("vote-account-close", ("allow", 1, i64));
             vote_account.set_state(&VoteStateVersions::new_current(VoteState::default()))?;
         }
-    } else if let Some(rent_sysvar) = rent_sysvar {
+    } else {
         let min_rent_exempt_balance = rent_sysvar.minimum_balance(vote_account.get_data().len());
         if remaining_balance < min_rent_exempt_balance {
             return Err(InstructionError::InsufficientFunds);

@@ -41,6 +41,7 @@ static void *sol_memset(void *b, int c, size_t len) {
     a++;
     len--;
   }
+  return b;
 }
 
 /**

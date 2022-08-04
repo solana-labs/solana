@@ -1,7 +1,7 @@
 use {
     crate::{
         nonblocking::{
-            quic_client::{QuicClient, QuicLazyInitializedEndpoint},
+            quic_client::{QuicClient, QuicClientCertificate, QuicLazyInitializedEndpoint},
             tpu_connection::NonblockingConnection,
         },
         tpu_connection::{BlockingConnection, ClientStats},
@@ -9,8 +9,16 @@ use {
     indexmap::map::{Entry, IndexMap},
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
-    solana_sdk::{quic::QUIC_PORT_OFFSET, timing::AtomicInterval},
+    solana_sdk::{
+        pubkey::Pubkey, quic::QUIC_PORT_OFFSET, signature::Keypair, timing::AtomicInterval,
+    },
+    solana_streamer::{
+        nonblocking::quic::{compute_max_allowed_uni_streams, ConnectionPeerType},
+        streamer::StakedNodes,
+        tls_certificates::new_self_signed_tls_certificate_chain,
+    },
     std::{
+        error::Error,
         net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicU64, Ordering},
@@ -223,7 +231,11 @@ pub struct ConnectionCache {
     stats: Arc<ConnectionCacheStats>,
     last_stats: AtomicInterval,
     connection_pool_size: usize,
-    tpu_udp_socket: Option<Arc<UdpSocket>>,
+    tpu_udp_socket: Arc<UdpSocket>,
+    client_certificate: Arc<QuicClientCertificate>,
+    use_quic: bool,
+    maybe_staked_nodes: Option<Arc<RwLock<StakedNodes>>>,
+    maybe_client_pubkey: Option<Pubkey>,
 }
 
 /// Models the pool of connections
@@ -256,40 +268,84 @@ impl ConnectionCache {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
-            tpu_udp_socket: None,
+            use_quic: true,
             connection_pool_size,
             ..Self::default()
         }
+    }
+
+    pub fn update_client_certificate(
+        &mut self,
+        keypair: &Keypair,
+        ipaddr: IpAddr,
+    ) -> Result<(), Box<dyn Error>> {
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(keypair, ipaddr)?;
+        self.client_certificate = Arc::new(QuicClientCertificate {
+            certificates: certs,
+            key: priv_key,
+        });
+        Ok(())
+    }
+
+    pub fn set_staked_nodes(
+        &mut self,
+        staked_nodes: &Arc<RwLock<StakedNodes>>,
+        client_pubkey: &Pubkey,
+    ) {
+        self.maybe_staked_nodes = Some(staked_nodes.clone());
+        self.maybe_client_pubkey = Some(*client_pubkey);
     }
 
     pub fn with_udp(connection_pool_size: usize) -> Self {
         // The minimum pool size is 1.
         let connection_pool_size = 1.max(connection_pool_size);
         Self {
+            use_quic: false,
             connection_pool_size,
             ..Self::default()
         }
     }
 
     pub fn use_quic(&self) -> bool {
-        matches!(self.tpu_udp_socket, None)
+        self.use_quic
     }
 
-    fn create_endpoint(&self) -> Option<Arc<QuicLazyInitializedEndpoint>> {
-        if self.use_quic() {
-            Some(Arc::new(QuicLazyInitializedEndpoint::new()))
+    fn create_endpoint(&self, force_use_udp: bool) -> Option<Arc<QuicLazyInitializedEndpoint>> {
+        if self.use_quic() && !force_use_udp {
+            Some(Arc::new(QuicLazyInitializedEndpoint::new(
+                self.client_certificate.clone(),
+            )))
         } else {
             None
         }
     }
 
+    fn compute_max_parallel_chunks(&self) -> usize {
+        let (client_type, stake, total_stake) =
+            self.maybe_client_pubkey
+                .map_or((ConnectionPeerType::Unstaked, 0, 0), |pubkey| {
+                    self.maybe_staked_nodes.as_ref().map_or(
+                        (ConnectionPeerType::Unstaked, 0, 0),
+                        |stakes| {
+                            let rstakes = stakes.read().unwrap();
+                            rstakes.pubkey_stake_map.get(&pubkey).map_or(
+                                (ConnectionPeerType::Unstaked, 0, rstakes.total_stake),
+                                |stake| (ConnectionPeerType::Staked, *stake, rstakes.total_stake),
+                            )
+                        },
+                    )
+                });
+        compute_max_allowed_uni_streams(client_type, stake, total_stake)
+    }
+
     /// Create a lazy connection object under the exclusive lock of the cache map if there is not
-    /// enough unsed connections in the connection pool for the specified address.
+    /// enough used connections in the connection pool for the specified address.
     /// Returns CreateConnectionResult.
     fn create_connection(
         &self,
         lock_timing_ms: &mut u64,
         addr: &SocketAddr,
+        force_use_udp: bool,
     ) -> CreateConnectionResult {
         let mut get_connection_map_lock_measure = Measure::start("get_connection_map_lock_measure");
         let mut map = self.map.write().unwrap();
@@ -300,7 +356,7 @@ impl ConnectionCache {
 
         let (to_create_connection, endpoint) =
             map.get(addr)
-                .map_or((true, self.create_endpoint()), |pool| {
+                .map_or((true, self.create_endpoint(force_use_udp)), |pool| {
                     (
                         pool.need_new_connection(self.connection_pool_size),
                         pool.endpoint.clone(),
@@ -308,12 +364,14 @@ impl ConnectionCache {
                 });
 
         let (cache_hit, num_evictions, eviction_timing_ms) = if to_create_connection {
-            let connection = match &self.tpu_udp_socket {
-                Some(socket) => BaseTpuConnection::Udp(socket.clone()),
-                None => BaseTpuConnection::Quic(Arc::new(QuicClient::new(
+            let connection = if !self.use_quic() || force_use_udp {
+                BaseTpuConnection::Udp(self.tpu_udp_socket.clone())
+            } else {
+                BaseTpuConnection::Quic(Arc::new(QuicClient::new(
                     endpoint.as_ref().unwrap().clone(),
                     *addr,
-                ))),
+                    self.compute_max_parallel_chunks(),
+                )))
             };
 
             let connection = Arc::new(connection);
@@ -370,7 +428,12 @@ impl ConnectionCache {
 
         let port_offset = if self.use_quic() { QUIC_PORT_OFFSET } else { 0 };
 
-        let addr = SocketAddr::new(addr.ip(), addr.port() + port_offset);
+        let port = addr
+            .port()
+            .checked_add(port_offset)
+            .unwrap_or_else(|| addr.port());
+        let force_use_udp = port == addr.port();
+        let addr = SocketAddr::new(addr.ip(), port);
 
         let mut lock_timing_ms = get_connection_map_lock_measure.as_ms();
 
@@ -390,7 +453,7 @@ impl ConnectionCache {
                 if pool.need_new_connection(self.connection_pool_size) {
                     // create more connection and put it in the pool
                     drop(map);
-                    self.create_connection(&mut lock_timing_ms, &addr)
+                    self.create_connection(&mut lock_timing_ms, &addr, force_use_udp)
                 } else {
                     let connection = pool.borrow_connection();
                     CreateConnectionResult {
@@ -405,7 +468,7 @@ impl ConnectionCache {
             None => {
                 // Upgrade to write access by dropping read lock and acquire write lock
                 drop(map);
-                self.create_connection(&mut lock_timing_ms, &addr)
+                self.create_connection(&mut lock_timing_ms, &addr, force_use_udp)
             }
         };
         get_connection_map_measure.stop();
@@ -488,17 +551,27 @@ impl ConnectionCache {
 
 impl Default for ConnectionCache {
     fn default() -> Self {
+        let (certs, priv_key) = new_self_signed_tls_certificate_chain(
+            &Keypair::new(),
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+        )
+        .expect("Failed to initialize QUIC client certificates");
         Self {
             map: RwLock::new(IndexMap::with_capacity(MAX_CONNECTIONS)),
             stats: Arc::new(ConnectionCacheStats::default()),
             last_stats: AtomicInterval::default(),
             connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            tpu_udp_socket: (!DEFAULT_TPU_USE_QUIC).then(|| {
-                Arc::new(
-                    solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
-                        .expect("Unable to bind to UDP socket"),
-                )
+            tpu_udp_socket: Arc::new(
+                solana_net_utils::bind_with_any_port(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)))
+                    .expect("Unable to bind to UDP socket"),
+            ),
+            client_certificate: Arc::new(QuicClientCertificate {
+                certificates: certs,
+                key: priv_key,
             }),
+            use_quic: DEFAULT_TPU_USE_QUIC,
+            maybe_staked_nodes: None,
+            maybe_client_pubkey: None,
         }
     }
 }
@@ -569,7 +642,18 @@ mod tests {
         },
         rand::{Rng, SeedableRng},
         rand_chacha::ChaChaRng,
-        std::net::SocketAddr,
+        solana_sdk::{
+            pubkey::Pubkey,
+            quic::{
+                QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS, QUIC_MIN_STAKED_CONCURRENT_STREAMS,
+                QUIC_PORT_OFFSET,
+            },
+        },
+        solana_streamer::streamer::StakedNodes,
+        std::{
+            net::{IpAddr, Ipv4Addr, SocketAddr},
+            sync::{Arc, RwLock},
+        },
     };
 
     fn get_addr(rng: &mut ChaChaRng) -> SocketAddr {
@@ -623,5 +707,72 @@ mod tests {
         let map = connection_cache.map.read().unwrap();
         assert!(map.len() == MAX_CONNECTIONS);
         let _conn = map.get(&addr).expect("Address not found");
+    }
+
+    #[test]
+    fn test_connection_cache_max_parallel_chunks() {
+        solana_logger::setup();
+        let mut connection_cache = ConnectionCache::default();
+        assert_eq!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
+        let pubkey = Pubkey::new_unique();
+        connection_cache.set_staked_nodes(&staked_nodes, &pubkey);
+        assert_eq!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes.write().unwrap().total_stake = 10000;
+        assert_eq!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .insert(pubkey, 1);
+        assert_eq!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+        );
+
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .remove(&pubkey);
+        staked_nodes
+            .write()
+            .unwrap()
+            .pubkey_stake_map
+            .insert(pubkey, 1000);
+        assert_ne!(
+            connection_cache.compute_max_parallel_chunks(),
+            QUIC_MIN_STAKED_CONCURRENT_STREAMS
+        );
+    }
+
+    // Test that we can get_connection with a connection cache configured for quic
+    // on an address with a port that, if QUIC_PORT_OFFSET were added to it, it would overflow to
+    // an invalid port.
+    #[test]
+    fn test_overflow_address() {
+        let port = u16::MAX - QUIC_PORT_OFFSET + 1;
+        assert!(port.checked_add(QUIC_PORT_OFFSET).is_none());
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port);
+        let connection_cache = ConnectionCache::new(1);
+
+        let conn = connection_cache.get_connection(&addr);
+        // We (intentionally) don't have an interface that allows us to distinguish between
+        // UDP and Quic connections, so check instead that the port is valid (non-zero)
+        // and is the same as the input port (falling back on UDP)
+        assert!(conn.tpu_addr().port() != 0);
+        assert!(conn.tpu_addr().port() == port);
     }
 }

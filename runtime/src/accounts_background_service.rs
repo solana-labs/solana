@@ -53,6 +53,8 @@ pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 
 /// interval to report bank_drop queue events: 60s
 const BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL: u64 = 60_000;
+/// maximum drop bank signal queue length
+const MAX_DROP_BANK_SIGNAL_QUEUE_SIZE: usize = 10_000;
 
 /// Bank drop signal queue events
 #[allow(dead_code)]
@@ -240,6 +242,8 @@ impl SnapshotRequestHandler {
                             use_write_cache: false,
                             epoch_schedule: snapshot_root_bank.epoch_schedule(),
                             rent_collector: snapshot_root_bank.rent_collector(),
+                            store_detailed_debug_info_on_failure: false,
+                            full_snapshot: None,
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);
@@ -569,6 +573,28 @@ impl AccountsBackgroundService {
             })
             .unwrap();
         Self { t_background }
+    }
+
+    /// Should be called immediately after bank_fork_utils::load_bank_forks(), and as such, there
+    /// should only be one bank, the root bank, in `bank_forks`
+    /// All banks added to `bank_forks` will be descended from the root bank, and thus will inherit
+    /// the bank drop callback.
+    pub fn setup_bank_drop_callback(bank_forks: Arc<RwLock<BankForks>>) -> DroppedSlotsReceiver {
+        assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
+
+        let (pruned_banks_sender, pruned_banks_receiver) =
+            crossbeam_channel::bounded(MAX_DROP_BANK_SIGNAL_QUEUE_SIZE);
+        {
+            let root_bank = bank_forks.read().unwrap().root_bank();
+            root_bank.set_callback(Some(Box::new(
+                root_bank
+                    .rc
+                    .accounts
+                    .accounts_db
+                    .create_drop_bank_callback(pruned_banks_sender),
+            )));
+        }
+        pruned_banks_receiver
     }
 
     pub fn join(self) -> thread::Result<()> {

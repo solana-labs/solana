@@ -122,7 +122,7 @@ Votes and lockouts grow exponentially while ASIC speed up is linear. There are t
 An attacker generates a concurrent fork that outruns previous leaders in an effort to censor them. A fork proposed by this attacker will be available concurrently with the next available leader. For nodes to pick this fork it must satisfy the _Greedy Choice_ rule.
 
 1. Fork must have equal number of votes for the ancestor fork.
-2. Fork cannot be so far a head as to cause expired votes.
+2. Fork cannot be so far ahead as to cause expired votes.
 3. Fork must have a greater amount of cluster transaction fees.
 
 This attack is then limited to censoring the previous leaders fees, and individual transactions. But it cannot halt the cluster, or reduce the validator set compared to the concurrent fork. Fee censorship is limited to access fees going to the leaders but not the validators.

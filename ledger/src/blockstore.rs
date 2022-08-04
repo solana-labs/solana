@@ -11,7 +11,8 @@ use {
         },
         blockstore_meta::*,
         blockstore_options::{
-            AccessType, BlockstoreOptions, LedgerColumnOptions, ShredStorageType,
+            AccessType, BlockstoreOptions, BlockstoreRocksFifoOptions, LedgerColumnOptions,
+            ShredStorageType,
         },
         leader_schedule_cache::LeaderScheduleCache,
         next_slots_iterator::NextSlotsIterator,
@@ -83,9 +84,6 @@ pub use {
     blockstore_purge::PurgeType,
     rocksdb::properties as RocksProperties,
 };
-
-pub const BLOCKSTORE_DIRECTORY_ROCKS_LEVEL: &str = "rocksdb";
-pub const BLOCKSTORE_DIRECTORY_ROCKS_FIFO: &str = "rocksdb_fifo";
 
 // get_max_thread_count to match number of threads in the old code.
 // see: https://github.com/solana-labs/solana/pull/24853
@@ -226,14 +224,6 @@ impl Blockstore {
         &self.ledger_path
     }
 
-    /// The directory under `ledger_path` to the underlying blockstore.
-    pub fn blockstore_directory(shred_storage_type: &ShredStorageType) -> &str {
-        match shred_storage_type {
-            ShredStorageType::RocksLevel => BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
-            ShredStorageType::RocksFifo(_) => BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
-        }
-    }
-
     /// Opens a Ledger in directory, provides "infinite" window of shreds
     pub fn open(ledger_path: &Path) -> Result<Blockstore> {
         Self::do_open(ledger_path, BlockstoreOptions::default())
@@ -245,9 +235,12 @@ impl Blockstore {
 
     fn do_open(ledger_path: &Path, options: BlockstoreOptions) -> Result<Blockstore> {
         fs::create_dir_all(&ledger_path)?;
-        let blockstore_path = ledger_path.join(Self::blockstore_directory(
-            &options.column_options.shred_storage_type,
-        ));
+        let blockstore_path = ledger_path.join(
+            options
+                .column_options
+                .shred_storage_type
+                .blockstore_directory(),
+        );
 
         adjust_ulimit_nofile(options.enforce_ulimit_nofile)?;
 
@@ -434,9 +427,15 @@ impl Blockstore {
     pub fn destroy(ledger_path: &Path) -> Result<()> {
         // Database::destroy() fails if the root directory doesn't exist
         fs::create_dir_all(ledger_path)?;
-        Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_LEVEL)).and(
-            Database::destroy(&Path::new(ledger_path).join(BLOCKSTORE_DIRECTORY_ROCKS_FIFO)),
+        Database::destroy(
+            &Path::new(ledger_path).join(ShredStorageType::RocksLevel.blockstore_directory()),
         )
+        .and(Database::destroy(
+            &Path::new(ledger_path).join(
+                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
+                    .blockstore_directory(),
+            ),
+        ))
     }
 
     /// Returns the SlotMeta of the specified slot.
@@ -547,9 +546,17 @@ impl Blockstore {
         self.prepare_rooted_slot_iterator(slot, IteratorDirection::Reverse)
     }
 
-    /// Determines if starting_slot and ending_slot are connected
+    /// Determines if `starting_slot` and `ending_slot` are connected by full slots
+    /// `starting_slot` is excluded from the `is_full()` check
     pub fn slots_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
-        let mut next_slots: VecDeque<_> = vec![starting_slot].into();
+        if starting_slot == ending_slot {
+            return true;
+        }
+
+        let mut next_slots: VecDeque<_> = match self.meta(starting_slot) {
+            Ok(Some(starting_slot_meta)) => starting_slot_meta.next_slots.into(),
+            _ => return false,
+        };
         while let Some(slot) = next_slots.pop_front() {
             if let Ok(Some(slot_meta)) = self.meta(slot) {
                 if slot_meta.is_full() {
@@ -3817,7 +3824,7 @@ pub fn create_new_ledger(
     genesis_config.write(ledger_path)?;
 
     // Fill slot 0 with ticks that link back to the genesis_config to bootstrap the ledger.
-    let blockstore_dir = Blockstore::blockstore_directory(&column_options.shred_storage_type);
+    let blockstore_dir = column_options.shred_storage_type.blockstore_directory();
     let blockstore = Blockstore::open_with_options(
         ledger_path,
         BlockstoreOptions {
@@ -3999,6 +4006,22 @@ macro_rules! create_new_tmp_ledger {
             $crate::tmp_ledger_name!(),
             $genesis_config,
             $crate::blockstore_options::LedgerColumnOptions::default(),
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! create_new_tmp_ledger_fifo {
+    ($genesis_config:expr) => {
+        $crate::blockstore::create_new_ledger_from_name(
+            $crate::tmp_ledger_name!(),
+            $genesis_config,
+            $crate::blockstore_options::LedgerColumnOptions {
+                shred_storage_type: $crate::blockstore_options::ShredStorageType::RocksFifo(
+                    $crate::blockstore_options::BlockstoreRocksFifoOptions::default(),
+                ),
+                ..$crate::blockstore_options::LedgerColumnOptions::default()
+            },
         )
     };
 }
@@ -4354,6 +4377,16 @@ pub mod tests {
         entries
     }
 
+    fn make_and_insert_slot(blockstore: &Blockstore, slot: Slot, parent_slot: Slot) {
+        let (shreds, _) = make_slot_entries(slot, parent_slot, 100);
+        blockstore.insert_shreds(shreds, None, true).unwrap();
+
+        let meta = blockstore.meta(slot).unwrap().unwrap();
+        assert_eq!(slot, meta.slot);
+        assert!(meta.is_full());
+        assert!(meta.next_slots.is_empty());
+    }
+
     #[test]
     fn test_create_new_ledger() {
         solana_logger::setup();
@@ -4367,9 +4400,7 @@ pub mod tests {
 
         assert_eq!(ticks, entries);
         assert!(Path::new(ledger_path.path())
-            .join(Blockstore::blockstore_directory(
-                &ShredStorageType::RocksLevel,
-            ))
+            .join(ShredStorageType::RocksLevel.blockstore_directory())
             .exists());
     }
 
@@ -4398,24 +4429,11 @@ pub mod tests {
 
         assert_eq!(ticks, entries);
         assert!(Path::new(ledger_path.path())
-            .join(Blockstore::blockstore_directory(
-                &ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
-            ))
+            .join(
+                ShredStorageType::RocksFifo(BlockstoreRocksFifoOptions::default())
+                    .blockstore_directory()
+            )
             .exists());
-    }
-
-    #[test]
-    fn test_rocksdb_directory() {
-        assert_eq!(
-            Blockstore::blockstore_directory(&ShredStorageType::RocksLevel),
-            BLOCKSTORE_DIRECTORY_ROCKS_LEVEL
-        );
-        assert_eq!(
-            Blockstore::blockstore_directory(&ShredStorageType::RocksFifo(
-                BlockstoreRocksFifoOptions::default()
-            )),
-            BLOCKSTORE_DIRECTORY_ROCKS_FIFO
-        );
     }
 
     #[test]
@@ -5489,13 +5507,7 @@ pub mod tests {
 
         let num_slots = 3;
         for slot in 1..=num_slots {
-            let (shreds, _) = make_slot_entries(slot, slot.saturating_sub(1), 100);
-            blockstore.insert_shreds(shreds, None, true).unwrap();
-
-            let meta = blockstore.meta(slot).unwrap().unwrap();
-            assert_eq!(slot, meta.slot);
-            assert!(meta.is_full());
-            assert!(meta.next_slots.is_empty());
+            make_and_insert_slot(&blockstore, slot, slot.saturating_sub(1));
         }
 
         assert!(blockstore.slots_connected(1, 3));
@@ -5507,22 +5519,32 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        fn make_and_insert_slot(blockstore: &Blockstore, slot: Slot, parent_slot: Slot) {
-            let (shreds, _) = make_slot_entries(slot, parent_slot, 100);
-            blockstore.insert_shreds(shreds, None, true).unwrap();
-
-            let meta = blockstore.meta(slot).unwrap().unwrap();
-            assert_eq!(slot, meta.slot);
-            assert!(meta.is_full());
-            assert!(meta.next_slots.is_empty());
-        }
-
         make_and_insert_slot(&blockstore, 1, 0);
         make_and_insert_slot(&blockstore, 2, 1);
         make_and_insert_slot(&blockstore, 4, 2);
 
         assert!(!blockstore.slots_connected(1, 3)); // Slot 3 does not exit
         assert!(blockstore.slots_connected(1, 4));
+    }
+
+    #[test]
+    fn test_slots_connected_same_slot() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        assert!(blockstore.slots_connected(54, 54));
+    }
+
+    #[test]
+    fn test_slots_connected_starting_slot_not_full() {
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        make_and_insert_slot(&blockstore, 5, 4);
+        make_and_insert_slot(&blockstore, 6, 5);
+
+        assert!(!blockstore.meta(4).unwrap().unwrap().is_full());
+        assert!(blockstore.slots_connected(4, 6));
     }
 
     #[test]
