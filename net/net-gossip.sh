@@ -848,6 +848,8 @@ gossipDeploy() {
   echo
   echo "--- Deployment Successful"
   echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
+  echo "Deployed $(( $instancesPerNode * $(( ${#validatorIpList[@]} - 1)) + 1)) gossip instances across ${#validatorIpList[@]} GCE nodes"
+  echo "      --- $instancesPerNode gossip instances per node"
   echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"
