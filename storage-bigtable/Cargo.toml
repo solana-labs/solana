@@ -32,7 +32,7 @@ solana-sdk = { path = "../sdk", version = "=1.11.6" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.11.6" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.6" }
 thiserror = "1.0"
-tokio = "~1.14.1"
+tokio = "1"
 tonic = { version = "0.8.0", features = ["tls", "transport"] }
 zstd = "0.11.2"
 
