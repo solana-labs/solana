@@ -5652,7 +5652,6 @@ dependencies = [
  "solana-account-decoder",
  "solana-measure",
  "solana-metrics",
- "solana-runtime",
  "solana-sdk 1.11.6",
  "solana-vote-program",
  "spl-associated-token-account",
