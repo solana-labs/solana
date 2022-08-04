@@ -2898,7 +2898,7 @@ impl ReplayStage {
             newly_voted_pubkeys,
             cluster_slot_pubkeys,
             slot,
-            bank_forks,
+            &bank_forks.read().unwrap(),
         );
     }
 
@@ -3089,11 +3089,11 @@ impl ReplayStage {
         mut newly_voted_pubkeys: Vec<Pubkey>,
         mut cluster_slot_pubkeys: Vec<Pubkey>,
         fork_tip: Slot,
-        bank_forks: &RwLock<BankForks>,
+        bank_forks: &BankForks,
     ) {
         let mut current_leader_slot = progress.get_latest_leader_slot_must_exist(fork_tip);
         let mut did_newly_reach_threshold = false;
-        let root = bank_forks.read().unwrap().root();
+        let root = bank_forks.root();
         loop {
             // These cases mean confirmation of propagation on any earlier
             // leader blocks must have been reached
@@ -3124,8 +3124,6 @@ impl ReplayStage {
             // `progress` map
             assert!(leader_propagated_stats.is_leader_slot);
             let leader_bank = bank_forks
-                .read()
-                .unwrap()
                 .get(current_leader_slot.unwrap())
                 .expect("Entry in progress map must exist in BankForks")
                 .clone();
@@ -3414,7 +3412,7 @@ impl ReplayStage {
                     empty,
                     vec![leader],
                     parent_bank.slot(),
-                    bank_forks,
+                    &forks,
                 );
                 new_banks.insert(child_slot, child_bank);
             }
