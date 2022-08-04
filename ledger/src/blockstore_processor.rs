@@ -289,62 +289,98 @@ fn execute_batches_internal(
         Mutex::new(HashMap::new());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
-        batches
-            .into_par_iter()
-            .enumerate()
-            .map(|(index, transaction_batch_with_indexes)| {
-                let transaction_count = transaction_batch_with_indexes
-                    .batch
-                    .sanitized_transactions()
-                    .len() as u64;
-                let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
-                    {
-                        let result = execute_batch(
-                            transaction_batch_with_indexes,
-                            bank,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            &mut timings,
-                            cost_capacity_meter.clone(),
-                            tx_costs[index],
-                            log_messages_bytes_limit,
-                        );
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
-                        result
-                    },
-                    "execute_batch",
-                );
+    let skip_rayon_threshold: usize = 1;
+    let results: Vec<Result<()>> = if batches.len() > skip_rayon_threshold {
+        PAR_THREAD_POOL.install(|| {
+            batches
+                .into_par_iter()
+                .enumerate()
+                .map(|(index, transaction_batch_with_indexes)| {
+                    let transaction_count = transaction_batch_with_indexes
+                        .batch
+                        .sanitized_transactions()
+                        .len() as u64;
+                    let mut timings = ExecuteTimings::default();
+                    let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+                        {
+                            let result = execute_batch(
+                                transaction_batch_with_indexes,
+                                bank,
+                                transaction_status_sender,
+                                replay_vote_sender,
+                                &mut timings,
+                                cost_capacity_meter.clone(),
+                                tx_costs[index],
+                                log_messages_bytes_limit,
+                            );
+                            if let Some(entry_callback) = entry_callback {
+                                entry_callback(bank);
+                            }
+                            result
+                        },
+                        "execute_batch",
+                    );
 
-                let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
-                execution_timings_per_thread
-                    .lock()
-                    .unwrap()
-                    .entry(thread_index)
-                    .and_modify(|thread_execution_time| {
-                        let ThreadExecuteTimings {
-                            total_thread_us,
-                            total_transactions_executed,
-                            execute_timings: total_thread_execute_timings,
-                        } = thread_execution_time;
-                        *total_thread_us += execute_batches_time.as_us();
-                        *total_transactions_executed += transaction_count;
-                        total_thread_execute_timings
-                            .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
-                        total_thread_execute_timings.accumulate(&timings);
-                    })
-                    .or_insert(ThreadExecuteTimings {
-                        total_thread_us: execute_batches_time.as_us(),
-                        total_transactions_executed: transaction_count,
-                        execute_timings: timings,
-                    });
+                    let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
+                    execution_timings_per_thread
+                        .lock()
+                        .unwrap()
+                        .entry(thread_index)
+                        .and_modify(|thread_execution_time| {
+                            let ThreadExecuteTimings {
+                                total_thread_us,
+                                total_transactions_executed,
+                                execute_timings: total_thread_execute_timings,
+                            } = thread_execution_time;
+                            *total_thread_us += execute_batches_time.as_us();
+                            *total_transactions_executed += transaction_count;
+                            total_thread_execute_timings
+                                .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
+                            total_thread_execute_timings.accumulate(&timings);
+                        })
+                        .or_insert(ThreadExecuteTimings {
+                            total_thread_us: execute_batches_time.as_us(),
+                            total_transactions_executed: transaction_count,
+                            execute_timings: timings,
+                        });
+                    result
+                })
+                .collect()
+        })
+    } else {
+        // Only one batch, so we know it is at index 0
+        let batch_idx: usize = 0;
+        let transaction_count = batches[batch_idx].batch.sanitized_transactions().len() as u64;
+        let mut timings = ExecuteTimings::default();
+        let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+            {
+                let result = execute_batch(
+                    &batches[batch_idx],
+                    bank,
+                    transaction_status_sender,
+                    replay_vote_sender,
+                    &mut timings,
+                    cost_capacity_meter,
+                    tx_costs[batch_idx],
+                    log_messages_bytes_limit,
+                );
+                if let Some(entry_callback) = entry_callback {
+                    entry_callback(bank);
+                }
                 result
-            })
-            .collect()
-    });
+            },
+            "execute_batch",
+        );
+        execution_timings_per_thread.lock().unwrap().insert(
+            0,
+            ThreadExecuteTimings {
+                total_thread_us: execute_batches_time.as_us(),
+                total_transactions_executed: transaction_count,
+                execute_timings: timings,
+            },
+        );
+        vec![result]
+    };
     execute_batches_elapsed.stop();
 
     first_err(&results)?;
@@ -387,6 +423,10 @@ fn execute_batches(
     cost_model: &CostModel,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
+    if batches.is_empty() {
+        return Ok(());
+    }
+
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
         .iter()
         .flat_map(|batch| {
