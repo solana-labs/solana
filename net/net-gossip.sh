@@ -773,7 +773,8 @@ gossipDeploy() {
       do
         echo "startGossipNode: instanceIndex: $i"
         startGossipNode "$ipAddress" $nodeType $nodeIndex $i
-        sleep 2
+        echo "################# SLEEP ###################"
+        sleep 5
       done
       # startGossipNode "$ipAddress" $nodeType $nodeIndex
 
