@@ -24,8 +24,8 @@ use {
     solana_vote_program::{
         vote_instruction,
         vote_state::{
-            BlockTimestamp, Lockout, Vote, VoteState, VoteStateUpdate, VoteTransaction,
-            MAX_LOCKOUT_HISTORY,
+            process_slot_vote_unchecked, process_vote_unchecked, BlockTimestamp, Lockout, Vote,
+            VoteState, VoteStateUpdate, VoteTransaction, MAX_LOCKOUT_HISTORY,
         },
     },
     std::{
@@ -169,7 +169,7 @@ impl TowerVersions {
     }
 }
 
-#[frozen_abi(digest = "8Y9r3XAwXwmrVGMCyTuy4Kbdotnt1V6N8J6NEniBFD9x")]
+#[frozen_abi(digest = "GrkFcKqGEkJNUYoK1M8rorehi2yyLF4N3Gsj6j8f47Jn")]
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct Tower {
     pub node_pubkey: Pubkey,
@@ -337,7 +337,7 @@ impl Tower {
                 );
             }
 
-            vote_state.process_slot_vote_unchecked(bank_slot);
+            process_slot_vote_unchecked(&mut vote_state, bank_slot);
 
             for vote in &vote_state.votes {
                 bank_weight += vote.lockout() as u128 * voted_stake as u128;
@@ -438,7 +438,7 @@ impl Tower {
         last_voted_slot_in_bank: Option<Slot>,
     ) -> VoteTransaction {
         let vote = Vote::new(vec![slot], hash);
-        local_vote_state.process_vote_unchecked(vote);
+        process_vote_unchecked(local_vote_state, vote);
         let slots = if let Some(last_voted_slot) = last_voted_slot_in_bank {
             local_vote_state
                 .votes
@@ -483,7 +483,7 @@ impl Tower {
 
         let mut new_vote = if is_direct_vote_state_update_enabled {
             let vote = Vote::new(vec![vote_slot], vote_hash);
-            self.vote_state.process_vote_unchecked(vote);
+            process_vote_unchecked(&mut self.vote_state, vote);
             VoteTransaction::from(VoteStateUpdate::new(
                 self.vote_state.votes.clone(),
                 self.vote_state.root_slot,
@@ -608,7 +608,7 @@ impl Tower {
         // remaining voted slots are on a different fork from the checked slot,
         // it's still locked out.
         let mut vote_state = self.vote_state.clone();
-        vote_state.process_slot_vote_unchecked(slot);
+        process_slot_vote_unchecked(&mut vote_state, slot);
         for vote in &vote_state.votes {
             if slot != vote.slot && !ancestors.contains(&vote.slot) {
                 return true;
@@ -980,7 +980,7 @@ impl Tower {
         total_stake: Stake,
     ) -> bool {
         let mut vote_state = self.vote_state.clone();
-        vote_state.process_slot_vote_unchecked(slot);
+        process_slot_vote_unchecked(&mut vote_state, slot);
         let vote = vote_state.nth_recent_vote(self.threshold_depth);
         if let Some(vote) = vote {
             if let Some(fork_stake) = voted_stakes.get(&vote.slot) {
@@ -1432,7 +1432,7 @@ pub mod test {
             signature::Signer,
             slot_history::SlotHistory,
         },
-        solana_vote_program::vote_state::{Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+        solana_vote_program::vote_state::{self, Vote, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         std::{
             collections::{HashMap, VecDeque},
             fs::{remove_file, OpenOptions},
@@ -1456,7 +1456,7 @@ pub mod test {
                 });
                 let mut vote_state = VoteState::default();
                 for slot in *votes {
-                    vote_state.process_slot_vote_unchecked(*slot);
+                    process_slot_vote_unchecked(&mut vote_state, *slot);
                 }
                 VoteState::serialize(
                     &VoteStateVersions::new_current(vote_state),
@@ -2409,7 +2409,7 @@ pub mod test {
             hash: Hash::default(),
             timestamp: None,
         };
-        local.process_vote_unchecked(vote);
+        vote_state::process_vote_unchecked(&mut local, vote);
         assert_eq!(local.votes.len(), 1);
         let vote =
             Tower::apply_vote_and_generate_vote_diff(&mut local, 1, Hash::default(), Some(0));
@@ -2425,7 +2425,7 @@ pub mod test {
             hash: Hash::default(),
             timestamp: None,
         };
-        local.process_vote_unchecked(vote);
+        vote_state::process_vote_unchecked(&mut local, vote);
         assert_eq!(local.votes.len(), 1);
 
         // First vote expired, so should be evicted from tower. Thus even with

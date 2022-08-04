@@ -1,3 +1,4 @@
+#![allow(clippy::integer_arithmetic)]
 use super::*;
 
 const MAX_ITEMS: usize = 32;
