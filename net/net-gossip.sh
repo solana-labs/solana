@@ -802,6 +802,8 @@ gossipDeploy() {
     fi
   done
 
+  wait
+
 
   # for pid in "${pids[@]}"; do
   #   declare ok=true
