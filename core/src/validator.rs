@@ -116,9 +116,6 @@ use {
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
 
-/// maximum drop bank signal queue length
-const MAX_DROP_BANK_SIGNAL_QUEUE_SIZE: usize = 10_000;
-
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
     pub expected_genesis_hash: Option<Hash>,
@@ -1468,22 +1465,8 @@ fn load_blockstore(
     // drop behavior can be safely synchronized with any other ongoing accounts activity like
     // cache flush, clean, shrink, as long as the same thread performing those activities also
     // is processing the dropped banks from the `pruned_banks_receiver` channel.
-
-    // There should only be one bank, the root bank in BankForks. Thus all banks added to
-    // BankForks from now on will be descended from the root bank and thus will inherit
-    // the bank drop callback.
-    assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
-    let (pruned_banks_sender, pruned_banks_receiver) = bounded(MAX_DROP_BANK_SIGNAL_QUEUE_SIZE);
-    {
-        let root_bank = bank_forks.read().unwrap().root_bank();
-        root_bank.set_callback(Some(Box::new(
-            root_bank
-                .rc
-                .accounts
-                .accounts_db
-                .create_drop_bank_callback(pruned_banks_sender),
-        )));
-    }
+    let pruned_banks_receiver =
+        AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
 
     {
         let hard_forks: Vec<_> = bank_forks
