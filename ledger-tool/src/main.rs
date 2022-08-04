@@ -29,11 +29,14 @@ use {
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType,
         },
-        blockstore_processor::{BlockstoreProcessorError, ProcessOptions},
+        blockstore_processor::{self, BlockstoreProcessorError, ProcessOptions},
         shred::Shred,
     },
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
+        accounts_background_service::{
+            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService,
+        },
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
         bank::{Bank, RewardCalculationEvent},
@@ -923,18 +926,49 @@ fn load_bank_forks(
         vec![non_primary_accounts_path]
     };
 
-    bank_forks_utils::load(
-        genesis_config,
+    let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) =
+        bank_forks_utils::load_bank_forks(
+            genesis_config,
+            blockstore,
+            account_paths,
+            None,
+            snapshot_config.as_ref(),
+            &process_options,
+            None,
+            None,
+        );
+
+    let pruned_banks_receiver =
+        AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
+    let abs_request_handler = AbsRequestHandler {
+        snapshot_request_handler: None,
+        pruned_banks_receiver,
+    };
+    let exit = Arc::new(AtomicBool::new(false));
+    let accounts_background_service = AccountsBackgroundService::new(
+        bank_forks.clone(),
+        &exit,
+        abs_request_handler,
+        process_options.accounts_db_caching_enabled,
+        process_options.accounts_db_test_hash_calculation,
+        None,
+    );
+
+    let result = blockstore_processor::process_blockstore_from_root(
         blockstore,
-        account_paths,
-        None,
-        snapshot_config.as_ref(),
-        process_options,
-        None,
+        &bank_forks,
+        &leader_schedule_cache,
+        &process_options,
         None,
         None,
+        &AbsRequestSender::default(),
     )
-    .map(|(bank_forks, .., starting_snapshot_hashes)| (bank_forks, starting_snapshot_hashes))
+    .map(|_| (bank_forks, starting_snapshot_hashes));
+
+    exit.store(true, Ordering::Relaxed);
+    accounts_background_service.join().unwrap();
+
+    result
 }
 
 fn compute_slot_cost(blockstore: &Blockstore, slot: Slot) -> Result<(), String> {

@@ -61,7 +61,7 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --enable-rpc-bigtable-ledger-storage ]]; then
       args+=("$1")
       shift
-    elif [[ $1 = --tpu-disable-quic ]]; then
+    elif [[ $1 = --tpu-use-quic ]]; then
       args+=("$1")
       shift
     elif [[ $1 = --rpc-send-batch-ms ]]; then
