@@ -4449,6 +4449,8 @@ version = "1.11.6"
 dependencies = [
  "blake3",
  "solana-program 1.11.6",
+ "generic-array 0.14.5",
+ "sha2 0.10.2",
 ]
 
 [[package]]
@@ -5149,6 +5151,7 @@ dependencies = [
  "console_error_panic_hook",
  "console_log",
  "curve25519-dalek",
+ "generic-array 0.14.5",
  "getrandom 0.2.4",
  "itertools",
  "js-sys",

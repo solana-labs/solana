@@ -39,7 +39,7 @@ use {
             limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
             syscall_saturated_math,
         },
-        hash::{Hasher, HASH_BYTES},
+        hash::{Hasher, HASH_BYTES, compress},
         instruction::{
             AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
@@ -213,6 +213,13 @@ pub fn register_syscalls(
         b"sol_sha256",
         SyscallSha256::init,
         SyscallSha256::call,
+    )?;
+
+    // Sha256
+    syscall_registry.register_syscall_by_name(
+        b"sol_sha256_compress",
+        SyscallSha256Compress::init,
+        SyscallSha256Compress::call,
     )?;
 
     // Keccak256
@@ -908,6 +915,86 @@ declare_syscall!(
         *result = Ok(0);
     }
 );
+
+declare_syscall!(
+    /// SHA256 Compression
+    /// This is not the same thing as the sha256 hash - chances are you want to use `sol_sha256` instead.
+    SyscallSha256Compress,
+    fn call(
+        &mut self,
+        blocks_addr: u64,
+        blocks_len: u64,
+        result_addr: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let compute_budget = invoke_context.get_compute_budget();
+        if compute_budget.sha256_max_slices < blocks_len {
+            ic_msg!(
+                invoke_context,
+                "Number of blocks {} in one `sol_sha256_compress` syscall exceeds the limit {}",
+                blocks_len,
+                compute_budget.sha256_max_slices,
+            );
+            *result = Err(SyscallError::TooManySlices.into());
+            return;
+        }
+        question_mark!(
+            invoke_context
+                .get_compute_meter()
+                .consume(compute_budget.sha256_base_cost),
+            result
+        );
+        
+        let hash_result = question_mark!(
+            translate_slice_mut::<u8>(
+                memory_mapping,
+                result_addr,
+                HASH_BYTES as u64,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+
+        if blocks_len == 0 {
+            let res = compress(&[]);
+            hash_result.copy_from_slice(&res.to_bytes());
+            *result = Ok(0);
+            return;
+        }
+
+        let blocks = question_mark!(
+            translate_slice::<[u8; 64]>(
+                memory_mapping,
+                blocks_addr,
+                blocks_len,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+        let cost = compute_budget.mem_op_base_cost.max(
+            compute_budget
+                .sha256_byte_cost
+                .saturating_mul((blocks.len() as u64).saturating_div(2)),
+        );
+        question_mark!(invoke_context.get_compute_meter().consume(cost), result);
+
+        let res = compress(blocks);
+        hash_result.copy_from_slice(&res.to_bytes());
+        *result = Ok(0);
+    }
+);
+
 
 declare_syscall!(
     // Keccak256

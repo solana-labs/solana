@@ -12,6 +12,8 @@ edition = "2021"
 [dependencies]
 blake3 = "1.0.0"
 solana-program = { path = "../../../../sdk/program", version = "=1.11.6" }
+generic-array = "0.14.5"
+sha2 = "0.10.2"
 
 [lib]
 crate-type = ["cdylib"]

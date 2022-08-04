@@ -29,7 +29,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_bytes = "0.11"
 serde_derive = "1.0"
 serde_json = "1.0"
-sha2 = "0.10.0"
+sha2 = { version = "0.10.0", features = ["compress"] }
+generic-array = "0.14.5"
 sha3 = "0.10.0"
 solana-frozen-abi = { path = "../../frozen-abi", version = "=1.11.6" }
 solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.11.6" }

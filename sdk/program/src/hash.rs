@@ -6,7 +6,8 @@
 use {
     crate::{sanitize::Sanitize, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
-    sha2::{Digest, Sha256},
+    sha2::{Digest, Sha256, compress256},
+    generic_array::{GenericArray, typenum::U64},
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,
 };
@@ -15,6 +16,13 @@ use {
 pub const HASH_BYTES: usize = 32;
 /// Maximum string length of a base58 encoded hash.
 const MAX_BASE58_LEN: usize = 44;
+
+/// Initial Value for SHA256 State
+/// copied from https://github.com/RustCrypto/hashes/blob/457061f19b3538651aa7ef208ce6b04bfba65e61/sha2/src/consts.rs#L84
+pub const H256_256: [u32; 8] = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+];
 
 /// A hash; the 32-byte output of a hashing algorithm.
 ///
@@ -179,6 +187,47 @@ pub fn extend_and_hash(id: &Hash, val: &[u8]) -> Hash {
     let mut hash_data = id.as_ref().to_vec();
     hash_data.extend_from_slice(val);
     hash(&hash_data)
+}
+
+/// Execute the comepression function used internally by sha256 over 512-bit blocks, without the padding step.
+/// This is not the same thing as the sha256 hash - chances are you want to use the `Hasher` instead.
+/// IMPORTANT: The padding step of SHA256 is included in the standard for a reason - only use this if you know what you're doing.
+pub fn compress(blocks: &[[u8; 64]]) -> Hash {
+    let mut res = [0; HASH_BYTES];
+    if blocks.len() == 0 {
+        for (res_chunk, v) in res.chunks_exact_mut(4).zip(H256_256.iter()) {
+            res_chunk.copy_from_slice(&v.to_be_bytes());
+        }
+        return Hash::new_from_array(res);
+    }
+
+    #[cfg(not(target_os = "solana"))]
+    {
+        // SAFETY: GenericArray<u8, U64> has the same memory layout as [u8; 64]
+        let p = blocks.as_ptr() as *const GenericArray<u8, U64>;
+        let blocks = unsafe { core::slice::from_raw_parts(p, blocks.len()) };
+
+        let mut state = H256_256;
+        compress256(&mut state, blocks);
+
+        for (res_chunk, v) in res.chunks_exact_mut(4).zip(state.iter()) {
+            res_chunk.copy_from_slice(&v.to_be_bytes());
+        }
+
+        Hash::new_from_array(res)
+    }
+
+    #[cfg(target_os = "solana")]
+    {
+        unsafe {
+            crate::syscalls::sol_sha256_compress(
+                blocks as * const _ as * const u8,
+                blocks.len() as u64,
+                &mut res as &mut _ as *mut u8
+            );
+        }
+        Hash::new_from_array(res)
+    }
 }
 
 #[cfg(test)]
