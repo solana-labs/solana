@@ -1,6 +1,6 @@
 [package]
 name = "solana-cargo-build-sbf"
-version = "1.11.5"
+version = "1.11.6"
 description = "Compile a local package and all of its dependencies using the Solana SBF SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -15,9 +15,9 @@ cargo_metadata = "0.15.0"
 clap = { version = "3.1.5", features = ["cargo", "env"] }
 log = { version = "0.4.14", features = ["std"] }
 regex = "1.5.6"
-solana-download-utils = { path = "../../download-utils", version = "=1.11.5" }
-solana-logger = { path = "../../logger", version = "=1.11.5" }
-solana-sdk = { path = "..", version = "=1.11.5" }
+solana-download-utils = { path = "../../download-utils", version = "=1.11.6" }
+solana-logger = { path = "../../logger", version = "=1.11.6" }
+solana-sdk = { path = "..", version = "=1.11.6" }
 tar = "0.4.38"
 
 [dev-dependencies]

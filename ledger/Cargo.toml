@@ -1,6 +1,6 @@
 [package]
 name = "solana-ledger"
-version = "1.11.5"
+version = "1.11.6"
 description = "Solana ledger"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -26,7 +26,7 @@ log = { version = "0.4.17" }
 lru = "0.7.7"
 num_cpus = "1.13.1"
 num_enum = "0.5.7"
-prost = "0.10.4"
+prost = "0.11.0"
 rand = "0.7.0"
 rand_chacha = "0.2.2"
 rayon = "1.5.3"
@@ -34,22 +34,22 @@ reed-solomon-erasure = { version = "5.0.3", features = ["simd-accel"] }
 serde = "1.0.138"
 serde_bytes = "0.11.6"
 sha2 = "0.10.2"
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.5" }
-solana-entry = { path = "../entry", version = "=1.11.5" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.5" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.5" }
-solana-measure = { path = "../measure", version = "=1.11.5" }
-solana-metrics = { path = "../metrics", version = "=1.11.5" }
-solana-perf = { path = "../perf", version = "=1.11.5" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.11.5" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.5" }
-solana-runtime = { path = "../runtime", version = "=1.11.5" }
-solana-sdk = { path = "../sdk", version = "=1.11.5" }
-solana-stake-program = { path = "../programs/stake", version = "=1.11.5" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.5" }
-solana-storage-proto = { path = "../storage-proto", version = "=1.11.5" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.5" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.5" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.6" }
+solana-entry = { path = "../entry", version = "=1.11.6" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.6" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.6" }
+solana-measure = { path = "../measure", version = "=1.11.6" }
+solana-metrics = { path = "../metrics", version = "=1.11.6" }
+solana-perf = { path = "../perf", version = "=1.11.6" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.11.6" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.6" }
+solana-runtime = { path = "../runtime", version = "=1.11.6" }
+solana-sdk = { path = "../sdk", version = "=1.11.6" }
+solana-stake-program = { path = "../programs/stake", version = "=1.11.6" }
+solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.6" }
+solana-storage-proto = { path = "../storage-proto", version = "=1.11.6" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.11.6" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.6" }
 static_assertions = "1.1.0"
 tempfile = "3.3.0"
 thiserror = "1.0"
@@ -68,8 +68,8 @@ features = ["lz4"]
 assert_matches = "1.5.0"
 bs58 = "0.4.0"
 matches = "0.1.9"
-solana-account-decoder = { path = "../account-decoder", version = "=1.11.5" }
-solana-logger = { path = "../logger", version = "=1.11.5" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.11.6" }
+solana-logger = { path = "../logger", version = "=1.11.6" }
 
 [build-dependencies]
 rustc_version = "0.4"

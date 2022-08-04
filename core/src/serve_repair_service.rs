@@ -9,7 +9,7 @@ use {
     },
     std::{
         net::UdpSocket,
-        sync::{atomic::AtomicBool, Arc, RwLock},
+        sync::{atomic::AtomicBool, Arc},
         thread::{self, JoinHandle},
     },
 };
@@ -20,18 +20,18 @@ pub struct ServeRepairService {
 
 impl ServeRepairService {
     pub fn new(
-        serve_repair: &Arc<RwLock<ServeRepair>>,
-        blockstore: Option<Arc<Blockstore>>,
+        serve_repair: ServeRepair,
+        blockstore: Arc<Blockstore>,
         serve_repair_socket: UdpSocket,
         socket_addr_space: SocketAddrSpace,
         stats_reporter_sender: Sender<Box<dyn FnOnce() + Send>>,
-        exit: &Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
     ) -> Self {
         let (request_sender, request_receiver) = unbounded();
         let serve_repair_socket = Arc::new(serve_repair_socket);
         trace!(
             "ServeRepairService: id: {}, listening on: {:?}",
-            &serve_repair.read().unwrap().my_id(),
+            &serve_repair.my_id(),
             serve_repair_socket.local_addr().unwrap()
         );
         let t_receiver = streamer::receiver(
@@ -52,13 +52,7 @@ impl ServeRepairService {
             socket_addr_space,
             Some(stats_reporter_sender),
         );
-        let t_listen = ServeRepair::listen(
-            serve_repair.clone(),
-            blockstore,
-            request_receiver,
-            response_sender,
-            exit,
-        );
+        let t_listen = serve_repair.listen(blockstore, request_receiver, response_sender, exit);
 
         let thread_hdls = vec![t_receiver, t_responder, t_listen];
         Self { thread_hdls }

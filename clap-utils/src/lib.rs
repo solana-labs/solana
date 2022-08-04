@@ -23,6 +23,7 @@ impl std::fmt::Debug for DisplayError {
     }
 }
 
+pub mod compute_unit_price;
 pub mod fee_payer;
 pub mod input_parsers;
 pub mod input_validators;
