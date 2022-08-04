@@ -272,12 +272,6 @@ startCommon() {
       mkdir -p $SOLANA_HOME $CARGO_BIN;
       mv ~/config $SOLANA_HOME/
     "
-  # elif ! $instanceIndex; then
-  #     ssh "${sshOptions[@]}" "$ipAddress" "
-  #     set -x;
-  #     rm -rf $SOLANA_HOME;
-  #     mkdir -p $CARGO_BIN
-  #   "
   else
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
@@ -438,7 +432,7 @@ startGossipNode() {
     exit 1
   fi
 
-  echo "--- Starting $nodeType: $ipAddress"
+  echo "--- Starting $nodeType: $ipAddress. instance: $instanceIndex"
   echo "start log: $logFile"
   (
     set -x
@@ -487,7 +481,7 @@ startGossipNode() {
       "
   ) >> "$logFile" 2>&1
   declare pid=$!
-  ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
+  ln -sf "validator-$ipAddress-$instanceIndex.log" "$netLogDir/validator-$pid.log"
   pids+=("$pid")
 
 }
@@ -786,43 +780,10 @@ gossipDeploy() {
       pids=()
     else
       gossipInstancesPerNode $instancesPerNode $ipAddress $nodeType $nodeIndex &
-      # for (( i=0; i<$instancesPerNode; i++ ))
-      # do
-      #   echo "startGossipNode: instanceIndex: $i"
-      #   startGossipNode "$ipAddress" $nodeType $nodeIndex $i
-      #   echo "################# Launched Gossip Node: $i ###################"
-      #   # sleep 2
-      # done
-      # startGossipNode "$ipAddress" $nodeType $nodeIndex
-
-      # # Stagger additional node start time. If too many nodes start simultaneously
-      # # the bootstrap node gets more rsync requests from the additional nodes than
-      # # it can handle.
-      # sleep 2
     fi
   done
 
   wait
-
-
-  # for pid in "${pids[@]}"; do
-  #   declare ok=true
-  #   wait "$pid" || ok=false
-  #   if ! $ok; then
-  #     echo "+++ validator failed to start"
-  #     cat "$netLogDir/validator-$pid.log"
-  #     if $failOnValidatorBootupFailure; then
-  #       exit 1
-  #     else
-  #       echo "Failure is non-fatal"
-  #     fi
-  #   fi
-  # done
-
-  # $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
-  # additionalNodeDeployTime=$SECONDS
-
-  # annotateBlockexplorerUrl
 
   declare networkVersion=unknown
   case $deployMethod in

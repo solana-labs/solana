@@ -39,6 +39,7 @@ writeKeys=false
 positional_args=()
 while [[ -n $1 ]]; do
   if [[ ${1:0:1} = - ]]; then
+    echo "input: $1"
     # validator.sh-only options
     if [[ $1 = --account-file ]]; then
       args+=("$1" "$2")
@@ -80,7 +81,6 @@ done
 echo "greg - args to run: ${args[@]}"
 echo "greg - writeKeys: $writeKeys"
 
-
 if [[ $writeKeys == "true" ]]; then 
   echo "writeKeys true"
   gossip-only "${args[@]}"
@@ -91,7 +91,3 @@ else
   echo "pid: $pid"
 fi
 
-
-# gossip-only "${args[@]}" &
-# pid=$!
-# echo "pid: $pid"
