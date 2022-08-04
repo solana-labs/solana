@@ -40,6 +40,9 @@ solana-sdk = { path = "../../sdk", version = "=1.11.6" }
 solana-transaction-status = { path = "../../transaction-status", version = "=1.11.6" }
 solana_rbpf = "=0.2.31"
 
+[dev-dependencies]
+solana-ledger = { path = "../../ledger", version = "=1.11.6" }
+
 [[bench]]
 name = "bpf_loader"
 

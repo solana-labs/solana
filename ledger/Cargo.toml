@@ -34,6 +34,7 @@ reed-solomon-erasure = { version = "5.0.3", features = ["simd-accel"] }
 serde = "1.0.138"
 serde_bytes = "0.11.6"
 sha2 = "0.10.2"
+solana-account-decoder = { path = "../account-decoder", version = "=1.11.6" }
 solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.6" }
 solana-entry = { path = "../entry", version = "=1.11.6" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.6" }
@@ -50,6 +51,8 @@ solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.6" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.11.6" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.11.6" }
 solana-vote-program = { path = "../programs/vote", version = "=1.11.6" }
+spl-token = { version = "=3.3.1", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.4.2", features = ["no-entrypoint"] }
 static_assertions = "1.1.0"
 tempfile = "3.3.0"
 thiserror = "1.0"
