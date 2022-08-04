@@ -14,10 +14,6 @@ To ensure users get fair priority based on their fee, the proposed scheduler for
 guarantee that given `T1` and `T2` in the pending queue, and `F(T1) > F(T2)`:
 
 1. `T1` should be considered for processing before `T2`
-2. If `T1` cannot be processed before `T2` because there's already a transaction currently being
-processed that contends on an account `A`, then `T2` should not be scheduled if it would grab
-any account locks needed by `T1`. This prevents lower fee transactions like `T2` from starving
-higher paying transactions like `T1`.
 
 
 ### Transaction Pipeline
@@ -42,136 +38,91 @@ to the scheduler via the same channel to signal of completion.
 ### Scheduler Implementation
 
 The scheduler is the most complex piece of the above pipeline, its implementation is made up of a
-few pieces. Note for now, all these pieces are maintained by the single scheduler thread to avoid
-locking complexity.
+few pieces. In cases where the scheduler is receiving a large number of transactions, it may be necessary
+to have a separate thread for deserializing and inserting transactions into the scheduler's structs.
 
 #### Components of the `Scheduler`:
 
-1. `pending_transactions` - A max-heap `BinaryHeap<Transaction>` that tracks all pending transactions that are not known to be blocked.
-2. `transactions_by_account` - A map `HashMap<Pubkey, AccountTransactionQueue>` that tracks all pending and blocked transactions by account key.
-   The `AccountTransactionQueue` is defined as:
-   ```
-   class AccountTransactionQueue {
-       /// Tree of read transactions on the account ordered by fee-priority
-       pub reads: RBTree<Transaction>,
-       /// Tree of write transactions on the account ordered by fee-priority
-       pub writes: RBTree<Trasaction>,
-       /// The type, count, and minimum priority transaction that is currently scheduled for execution
-       pub scheduled_lock: Option<AccountLock>,
-   }
-   ```
-   and `AccountLock` is defined as:
-   ```
-       enum AccountLock {
-           Read(usize, Transaction),
-           Write(Transaction),
-       }
-   ```
-   where the `Transaction` stored in the `AccountLock` will be the minimum priority transaction currently scheduled. The `Read` variant will also store the number
-   of read transactions.
-3. `blocked_transactions` - A map `HashMap<Signature, Vec<Transaction>>` that maps from the blocking transaction's `Signature` to the transactions it is blocking.
-This is lazily evaluated only at the time a transaction is scheduled, or a transaction completes execution.
-
-#### Incoming Transactions:
-
-When the Scheduler receives transactions from SigVerify, the Scheduler's components need to be updated to reflect the new priority.
-For each transaction `transaction` the Scheduler receives we run the following:
+1. `pending_transactions` - A max-heap `BinaryHeap<Transaction>` that tracks all pending transactions that are not currently known to be blocked.
+2. `account_status` - A map `HashMap<Pubkey, AccountScheduleStatus>` that tracks the number of unscheduled reads and writes, as well as the current lock status per account.
+    The `AccountScheduleStatus` is defined as:
+    ```
+        struct AccountScheduleStatus {
+            /// The number of unscheduled read transactions
+            reads: u64,
+            /// The number of unscheduled write transactions
+            writes: u64,
+            /// Current scheduled lock on the account
+            scheduled_lock: AccountLock,
+        }
+    ```
+    where `AccountLock` is defined as:
+    ```
+        struct AccountLock {
+            /// Set of batch ids that the account is scheduled with read-only locks on
+            read_batches: HashSet<TransactionBatchId>,
+            /// Set of batch ids that the account is scheduled with write locks on
+            write_batches: HashSet<TransactionBatchId>,
+        }
+    ```
+3. `blocked_transactions_by_batch_id` - A map `HashMap<TransactionBatchId, HashSet<Transaction>>` that stores the set of blocked transactions by batch id.
+4. `transaction_batches` - A map `HashMap<TransactionBatchId, TransactionBatch>` that tracks transaction batches by id.
+5. `in_progress_batches` - A set `HashSet<TransactionBatchId>` of batches the scheduler is currently building (unscheduled).
+6. `execution_thread_stats` - A vector `Vec<ExecutionThreadStats>` that tracks stats of each execution thread, where `ExecutionThreadStats` is defined by:
+    ```
+        struct ExecutionThreadStats {
+            /// Currently queued compute-units
+            queued_compute_units: usize,
+            /// Currently queued number of transactions
+            queued_transactions: usize,
+            /// Currently queued batch ids
+            queued_batches: VecDeque<TransactionBatchId>,
+        }
+    ```
+A `TransactionBatch` is defined by:
 ```
-    for account in transaction.accounts {
-        let mut account_queue = self.transactions_by_account.entry(account.key()).or_default();
-        match account {
-            Read(pubkey) => account_queue.reads.insert(transaction),
-            Write(pubkey) => account_queue.writes.insert(transaction),
-        };
+    struct TransactionBatch {
+        /// Has the transaction been sent
+        scheduled: bool,
+        /// Timestamp of the batch starting to be built
+        start_time: Instant,
+        /// Identifier
+        id: TransactionBatchId,
+        /// Number of transactions scheduled (only > 0 after send)
+        num_transactions: usize,
+        /// Transactions (only valid before send)
+        transactions: Vec<TransactionRef>,
+        /// Locked Accounts and Kind Set (only built on send)
+        account_locks: HashMap<Pubkey, AccountLockKind>,
+        /// Thread it is scheduled on
+        execution_thread_index: usize,
     }
+```
 
-    self.pending_transactions.insert(transaction);
-```
-where `transaction.accounts` is a set of `LockedPubkey`:
-```
-    enum LockedPubkey {
-        Read(Pubkey),
-        Write(Pubkey),
-    }
-```
-We will not update `blocked_transactions` at this point, because a lower priority, but still blocking, transaction could come in
-before we try scheduling this transaction.
+#### Incoming Packets:
+The packet handling thread will deserialize incoming packets from sigverify, and insert the transactions into the `pending_transactions` queue, and counts in the `account_status` map.
+
 
 #### Algorithm (Main Loop):
 
-Assume `N` BankingStage threads:
-
-The scheduler will run for each banking thread a function `schedule_next_highest_transaction()`:
-1. We run the following:
-
-```
-    // Loop through pending transactions until we find one that is not blocked
-    // or run out of pending transactions
-    while let Some(next_highest_transaction) in self.pending_transactions.pop() {
-        let mut min_blocking_transaction = None;
-        for account_key in next_highest_transaction.accounts.keys() {
-            find_min_priority_blocking_transaction_for_account(account_key, &mut min_blocking_transaction);
-        }
-
-        match min_blocking_transaction {
-            Some(blocking_transaction) => {
-                // Mark this transaction as blocked
-                self.blocking_transactions.entry(blocking_transaction.signature).or_default().insert(next_highest_transaction);
-            },
-            None => {
-                // Lock accounts and send to the BankingStage thread
-                for account in transaction.accounts {
-                    // Updates the `scheduled_lock` field in this account's queue.
-                    // * Read transactions will increment the count, and store the minimum priority transaction.
-                    // * Write transactions will store the transaction
-                    self.update_scheduled_transactions_for_account(account, transaction.priority);
-                }
-                banking_thread_channel.send(transaction);
-                return;
-            },
-        }
-    }
-```
-where
-```
-    fn find_min_priority_blocking_transaction_for_account(account: &LockedPubkey, min_blocking_transaction: &mut Option<Transaction>) -> Option<Transaction> {
-        self.transactions_by_account.get(account.key).map(|account_transaction_queue| {
-            // Get the lowest priority write transaction the blocks this transaction (writes will always block)
-            if let Some(blocking_transaction) = account_transaction_queue.writes.upper_bound(transaction.priority) {
-                min_blocking_transaction = min_blocking_transaction.map_or(Some(blocking_transaction), |tx| tx.min(blocking_transaction));
-            }
-
-            // If this transaction is a writing transaction, get the minimum read that blocks it
-            if account.is_write() && let Some(blocking_transaction) = account_transaction_queue.reads.upper_bound(transaction.priority) {
-                min_blocking_transaction = min_blocking_transaction.map_or(Some(blocking_transaction), |tx| tx.min(blocking_transaction));
-            }
-
-            // Finally, we need to check the currently scheduled transaction lock for this account
-            // This is necessary because this transaction may have higher priority than transactions we scheduled
-            // before this transaction came in. While these transactions are still in the trees, they won't be returned
-            // by our calls to `upper_bound`.
-            //
-            // For read transactions, we won't be blocked by other scheduled reads, only writes.
-            // For write transactions, we are blocked by either read transactions or write transactions.
-            match account_transaction_queue.scheduled {
-                Some(AccountLock(Read(_, scheduled_transaction))) => {
-                    if account.is_write()  {
-                        min_blocking_transaction = min_blocking_transaction.map_or(Some(scheduled_transaction), |tx| tx.min(scheduled_transaction));
-                    }
-                }
-                Some(AccountLock(Write(scheduled_transaction))) => {
-                    min_blocking_transaction = min_blocking_transaction.map_or(Some(scheduled_transaction), |tx| tx.min(scheduled_transaction));
-                }
-            }
-
-            min_blocking_transaction
-        })
-    }
-```
-3. Run until all `N` BankingStage threads have been sent `processing_batch` transactions (i.e. hit step 3 above).
+1. If `in_progress_batches` is empty, do nothing since we have no batches to build.
+2. pop the highest priority transaction from `pending_transactions`, and try to schedule it.
+3. check for any transaction batch(es) that conflict with the transaction
+   1. if there are conflicting batches across threads, mark the transaction as blocked by the conflicting batches
+   2. if there are conflicting batches on a single thread, but no in progress batches on that thread, mark the transaction as blocked by the conflicting batches
+   3. if there are conflicting batches on a single thread, and there is an in progress batch, add the transaction to the in progress batch
+   4. if there are no conflicting batches, add the transaction to the in progress batch with the lowest thread index
+4. If a transaction is added to a batch, add the `TransactionBatchId` to `account_locks`
+5. If the transaction batch we scheduled to is full, either by hitting the max number of transacitons, or max CU limit, we send out the batch:
+   1. Loop through transactions in the batch, and construct `account_locks`
+   2. Build the vec of transactions to send to the execution thread
+   3. Update `execution_thread_stats` for the new batch
+6. If a transaction batch was sent, potentially create a new in progress batch:
+   1. we want to keep a constant queue of batches provided to each thread
+   2. ideally, we have 2 batches queued up for each execution thread
 
 #### Banking Threads
-1. Banking threads maintain a queue of transactions sent to them by the scheduler, sorted by priority.
+1. Banking threads maintain a queue of transaction batches sent to them by the scheduler.
 2. Because the scheduler has guaranteed that there are no locking conflicts, the banking thread can process
 some `M` of these transactions at a time and pack them into entries
 
@@ -180,26 +131,9 @@ some `M` of these transactions at a time and pack them into entries
 Outside of the main loop above, we rely on BankingThreads threads signaling us they've finished their
 task to schedule the next transactions.
 
-1. Once a BankingStage thread finishes processing a batch of transactions `completed_transactions_batch` ,
-it sends the `completed_transactions_batch` back to the scheduler via the same channel to signal of completion.
-2. Upon receiving this signal, the Scheduler thread processes the locked accounts
-`transaction_accounts` for each `completed_transaction` in `completed_transactions_batch`:
-```
-    for account in transaction_accounts {
-        let mut account_transaction_queue = self.transactions_by_account.get(account.key()).unwrap();
-
-        // Removes the transaction from the appriopriate tree (read or write).
-        // Updates `scheduled_lock`:
-        //  - For reads, decrement the count. If 0, we set `scheduled_lock` to None.
-        //  - For writes, set `scheduled_lock` to None.
-        account_transaction_queue.remove_account_lock(account);
-    }
-```
-3. Check if the finished transaction was the blocking transaction for any queue:
-
-```
-if let Some(blocked_transactions) = self.blocked_transactions.remove(completed_transaction.signature) {
-    // Move all blocked transactions back into our pending queue
-    self.pending_transactions.extend(blocked_transactions.into_iter());
-}
-```
+1. Once a BankingStage thread finishes processing a batch of transactions `completed_transactions_batch`,
+it sends the `completed_transactions` back to the scheduler via the same channel to signal of completion.
+2. Upon receiving this signal, the Scheduler thread checks if the batch at the front of the execution thread's queue is complete.
+3. If the batch is complete, we remove the transaction batch from tracking, unlock accounts, and potentially create a new batch.
+   1. transactions from `blocked_transactions_by_batch_id` are pushed back into `pending_transactions`
+4. If the batch is not completed, we decrement `num_transactions` on the batch so we can check for completion
