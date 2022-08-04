@@ -607,6 +607,7 @@ pub mod syscalls;
 pub mod system_instruction;
 pub mod system_program;
 pub mod sysvar;
+pub mod vote;
 pub mod wasm;
 
 #[cfg(target_os = "solana")]
@@ -623,15 +624,6 @@ pub use wasm_bindgen::prelude::wasm_bindgen;
 pub mod config {
     pub mod program {
         crate::declare_id!("Config1111111111111111111111111111111111111");
-    }
-}
-
-/// The [vote native program][np].
-///
-/// [np]: https://docs.solana.com/developing/runtime-facilities/programs#vote-program
-pub mod vote {
-    pub mod program {
-        crate::declare_id!("Vote111111111111111111111111111111111111111");
     }
 }
 

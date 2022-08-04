@@ -30,7 +30,7 @@ use {
         stake_history::{StakeHistory, StakeHistoryEntry},
         transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
     },
-    solana_vote_program::vote_state::{VoteState, VoteStateVersions},
+    solana_vote_program::vote_state::{self, VoteState, VoteStateVersions},
     std::{collections::HashSet, convert::TryFrom},
 };
 
@@ -1750,7 +1750,7 @@ fn do_create_account(
 ) -> AccountSharedData {
     let mut stake_account = AccountSharedData::new(lamports, StakeState::size_of(), &id());
 
-    let vote_state = VoteState::from(vote_account).expect("vote_state");
+    let vote_state = vote_state::from(vote_account).expect("vote_state");
 
     let rent_exempt_reserve = rent.minimum_balance(stake_account.data().len());
 

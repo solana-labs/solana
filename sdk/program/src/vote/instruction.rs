@@ -2,19 +2,19 @@
 
 use {
     crate::{
-        id,
-        vote_state::{
-            CompactVoteStateUpdate, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
-            VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate,
-        },
-    },
-    serde_derive::{Deserialize, Serialize},
-    solana_sdk::{
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_instruction, sysvar,
+        vote::{
+            program::id,
+            state::{
+                CompactVoteStateUpdate, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
+                VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate,
+            },
+        },
     },
+    serde_derive::{Deserialize, Serialize},
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

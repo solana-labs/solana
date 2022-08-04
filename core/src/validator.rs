@@ -99,7 +99,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-    solana_vote_program::vote_state::VoteState,
+    solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -1206,7 +1206,7 @@ impl Validator {
 
 fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
     if let Some(account) = &bank.get_account(vote_account) {
-        if let Some(vote_state) = VoteState::from(account) {
+        if let Some(vote_state) = vote_state::from(account) {
             return !vote_state.votes.is_empty();
         }
     }
