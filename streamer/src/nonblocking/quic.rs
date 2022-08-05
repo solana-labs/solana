@@ -217,6 +217,94 @@ impl NewConnectionHandlerParams {
     }
 }
 
+fn handle_and_cache_new_connection(
+    new_connection: NewConnection,
+    mut connection_table_l: MutexGuard<ConnectionTable>,
+    connection_table: Arc<Mutex<ConnectionTable>>,
+    params: &NewConnectionHandlerParams,
+) -> Result<(), ConnectionHandlerError> {
+    let NewConnection {
+        connection,
+        uni_streams,
+        ..
+    } = new_connection;
+
+    if let Ok(max_uni_streams) = VarInt::from_u64(compute_max_allowed_uni_streams(
+        connection_table_l.peer_type,
+        params.stake,
+        params.total_stake,
+    ) as u64)
+    {
+        connection.set_max_concurrent_uni_streams(max_uni_streams);
+        debug!(
+            "Peer type: {:?}, stake {}, total stake {}, max streams {}",
+            connection_table_l.peer_type,
+            params.stake,
+            params.total_stake,
+            max_uni_streams.into_inner()
+        );
+
+        let remote_addr = connection.remote_address();
+
+        if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
+            ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
+            remote_addr.port(),
+            Some(connection),
+            params.stake,
+            timing::timestamp(),
+            params.max_connections_per_peer,
+        ) {
+            drop(connection_table_l);
+            tokio::spawn(handle_connection(
+                uni_streams,
+                params.packet_sender.clone(),
+                remote_addr,
+                params.remote_pubkey,
+                last_update,
+                connection_table,
+                stream_exit,
+                params.stats.clone(),
+                params.stake,
+            ));
+            Ok(())
+        } else {
+            params
+                .stats
+                .connection_add_failed
+                .fetch_add(1, Ordering::Relaxed);
+            Err(ConnectionHandlerError::ConnectionAddError)
+        }
+    } else {
+        params
+            .stats
+            .connection_add_failed_invalid_stream_count
+            .fetch_add(1, Ordering::Relaxed);
+        Err(ConnectionHandlerError::MaxStreamError)
+    }
+}
+
+fn prune_unstaked_connections_and_add_new_connection(
+    new_connection: NewConnection,
+    mut connection_table_l: MutexGuard<ConnectionTable>,
+    connection_table: Arc<Mutex<ConnectionTable>>,
+    max_connections: usize,
+    params: &NewConnectionHandlerParams,
+) -> Result<(), ConnectionHandlerError> {
+    let stats = params.stats.clone();
+    if max_connections > 0 {
+        prune_unstaked_connection_table(&mut connection_table_l, max_connections, stats);
+        handle_and_cache_new_connection(
+            new_connection,
+            connection_table_l,
+            connection_table,
+            params,
+        )
+    } else {
+        new_connection.connection.close(0u32.into(), &[0u8]);
+        Err(ConnectionHandlerError::ConnectionAddError)
+    }
+}
+
 async fn setup_connection(
     connecting: Connecting,
     unstaked_connection_table: Arc<Mutex<ConnectionTable>>,
@@ -318,94 +406,6 @@ async fn setup_connection(
         stats
             .connection_setup_timeout
             .fetch_add(1, Ordering::Relaxed);
-    }
-}
-
-fn handle_and_cache_new_connection(
-    new_connection: NewConnection,
-    mut connection_table_l: MutexGuard<ConnectionTable>,
-    connection_table: Arc<Mutex<ConnectionTable>>,
-    params: &NewConnectionHandlerParams,
-) -> Result<(), ConnectionHandlerError> {
-    let NewConnection {
-        connection,
-        uni_streams,
-        ..
-    } = new_connection;
-
-    if let Ok(max_uni_streams) = VarInt::from_u64(compute_max_allowed_uni_streams(
-        connection_table_l.peer_type,
-        params.stake,
-        params.total_stake,
-    ) as u64)
-    {
-        connection.set_max_concurrent_uni_streams(max_uni_streams);
-        debug!(
-            "Peer type: {:?}, stake {}, total stake {}, max streams {}",
-            connection_table_l.peer_type,
-            params.stake,
-            params.total_stake,
-            max_uni_streams.into_inner()
-        );
-
-        let remote_addr = connection.remote_address();
-
-        if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
-            ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
-            remote_addr.port(),
-            Some(connection),
-            params.stake,
-            timing::timestamp(),
-            params.max_connections_per_peer,
-        ) {
-            drop(connection_table_l);
-            tokio::spawn(handle_connection(
-                uni_streams,
-                params.packet_sender.clone(),
-                remote_addr,
-                params.remote_pubkey,
-                last_update,
-                connection_table,
-                stream_exit,
-                params.stats.clone(),
-                params.stake,
-            ));
-            Ok(())
-        } else {
-            params
-                .stats
-                .connection_add_failed
-                .fetch_add(1, Ordering::Relaxed);
-            Err(ConnectionHandlerError::ConnectionAddError)
-        }
-    } else {
-        params
-            .stats
-            .connection_add_failed_invalid_stream_count
-            .fetch_add(1, Ordering::Relaxed);
-        Err(ConnectionHandlerError::MaxStreamError)
-    }
-}
-
-fn prune_unstaked_connections_and_add_new_connection(
-    new_connection: NewConnection,
-    mut connection_table_l: MutexGuard<ConnectionTable>,
-    connection_table: Arc<Mutex<ConnectionTable>>,
-    max_connections: usize,
-    params: &NewConnectionHandlerParams,
-) -> Result<(), ConnectionHandlerError> {
-    let stats = params.stats.clone();
-    if max_connections > 0 {
-        prune_unstaked_connection_table(&mut connection_table_l, max_connections, stats);
-        handle_and_cache_new_connection(
-            new_connection,
-            connection_table_l,
-            connection_table,
-            params,
-        )
-    } else {
-        new_connection.connection.close(0u32.into(), &[0u8]);
-        Err(ConnectionHandlerError::ConnectionAddError)
     }
 }
 
