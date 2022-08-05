@@ -350,9 +350,10 @@ impl ScheduleStage {
     fn push_to_queue(
         (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>),
         runnable_queue: &mut TaskQueue,
+        &mut unique_key,
     ) {
         // manage randomness properly for future scheduling determinism
-        let mut rng = rand::thread_rng();
+        //let mut rng = rand::thread_rng();
 
         //let ix = 23;
         //let tx = bank
@@ -366,10 +367,12 @@ impl ScheduleStage {
         runnable_queue.add_to_schedule(
             UniqueWeight {
                 weight,
-                unique_key: solana_sdk::hash::new_rand(&mut rng),
+                //unique_key: solana_sdk::hash::new_rand(&mut rng),
+                unique_key,
             },
             Task { tx },
         );
+        unique_key -= 1;
     }
 
     #[inline(never)]
@@ -591,8 +594,9 @@ impl ScheduleStage {
     fn register_runnable_task(
         weighted_tx: (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>),
         runnable_queue: &mut TaskQueue,
+        unique_key: &mut u64,
     ) {
-        Self::push_to_queue(weighted_tx, runnable_queue)
+        Self::push_to_queue(weighted_tx, runnable_queue, unique_key)
     }
 
     pub fn run(
@@ -605,6 +609,7 @@ impl ScheduleStage {
         // to_next_stage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>, // assume nonblocking
     ) {
         let mut executing_queue_count = 0;
+        let mut current_unique_key = u64::max_value();
 
         loop {
             trace!("schedule_once!");
@@ -614,16 +619,15 @@ impl ScheduleStage {
                 MultiplexedPayload::FromPrevious(weighted_tx) => {
                     trace!("recv from previous");
 
-                    Self::register_runnable_task(weighted_tx, runnable_queue);
+                    Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
                 }
                 MultiplexedPayload::FromPreviousBatched(vvv) => {
                     trace!("recv from previous");
 
-                    //Self::register_runnable_task(weighted_tx, runnable_queue);
                     for vv in vvv {
                         for v in vv {
                             let p = get_transaction_priority_details(&v.0);
-                            Self::register_runnable_task((Weight { ix: p }, v), runnable_queue);
+                            Self::register_runnable_task((Weight { ix: p }, v), runnable_queue, &mut current_unique_key);
                             if executing_queue_count < max_executing_queue_count {
                                 let maybe_ee =
                                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
