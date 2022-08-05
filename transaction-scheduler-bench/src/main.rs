@@ -77,6 +77,10 @@ struct Args {
     high_conflict_sender: usize,
 }
 
+/// Some convenient type aliases
+type TransactionMessage = Box<SanitizedTransaction>;
+type CompletedTransactionMessage = (usize, TransactionMessage); // thread index and transaction message
+type TransactionBatchMessage = Vec<TransactionMessage>;
 
 #[derive(Debug, Default)]
 struct TransactionSchedulerBenchMetrics {
@@ -108,16 +112,6 @@ struct PacketSendingConfig {
     packet_send_rate: usize,
     num_read_locks_per_tx: usize,
     num_write_locks_per_tx: usize,
-}
-
-fn spawn_unified_scheduler(
-    packet_batch_receiver: Receiver<PacketBatchMessage>,
-    transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
-    completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
-    bank_forks: Arc<RwLock<BankForks>>,
-    max_batch_size: usize,
-    exit: Arc<AtomicBool>,
-) {
 }
 
 fn main() {
