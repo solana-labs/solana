@@ -335,7 +335,7 @@ fn handle_transaction_batch(
         .fetch_add(priority_collected, Ordering::Relaxed);
 
         completed_transaction_sender
-            .send((thread_index, transaction_batch))
+            .send(solana_scheduler::MultiplexedPayload::FromExecute(transaction_batch))
             .unwrap();
 }
 
