@@ -78,7 +78,7 @@ struct Args {
 }
 
 /// Some convenient type aliases
-type PreprocessedTransaction = SanitizedTransaction
+type PreprocessedTransaction = SanitizedTransaction;
 type TransactionMessage = Box<PreprocessedTransaction>;
 type CompletedTransactionMessage = (usize, TransactionMessage); // thread index and transaction message
 type TransactionBatchMessage = Vec<TransactionMessage>;
