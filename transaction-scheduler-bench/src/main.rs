@@ -513,7 +513,7 @@ fn build_packet(
         .map(|address| solana_scheduler::LockAttempt::new(**address, solana_scheduler::RequestedUsage::Readonly));
     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
 
-    (sanitized_tx, locks)
+    Box::new((sanitized_tx, locks))
 }
 
 fn build_accounts(num_accounts: usize) -> Vec<Keypair> {
