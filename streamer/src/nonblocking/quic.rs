@@ -12,6 +12,7 @@ use {
         Connecting, Connection, Endpoint, EndpointConfig, Incoming, IncomingUniStreams,
         NewConnection, VarInt,
     },
+    quinn_proto::VarIntBoundsExceeded,
     rand::{thread_rng, Rng},
     solana_perf::packet::PacketBatch,
     solana_sdk::{
@@ -242,23 +243,29 @@ fn handle_and_cache_new_connection(
         params.total_stake,
     ) as u64)
     {
+        connection.set_max_concurrent_uni_streams(max_uni_streams);
         let receive_window = compute_recieve_window(
             params.max_stake,
             params.min_stake,
             connection_table_l.peer_type,
             params.stake,
         );
-        connection.set_max_concurrent_uni_streams(max_uni_streams);
-        connection.set_receive_window(receive_window);
+
+        if let Ok(receive_window) = receive_window {
+            connection.set_receive_window(receive_window);
+        }
+
+        let remote_addr = connection.remote_address();
+
         debug!(
-            "Peer type: {:?}, stake {}, total stake {}, max streams {}",
+            "Peer type: {:?}, stake {}, total stake {}, max streams {} receive_window {:?} from peer {}",
             connection_table_l.peer_type,
             params.stake,
             params.total_stake,
-            max_uni_streams.into_inner()
+            max_uni_streams.into_inner(),
+            receive_window,
+            remote_addr,
         );
-
-        let remote_addr = connection.remote_address();
 
         if let Some((last_update, stream_exit)) = connection_table_l.try_add_connection(
             ConnectionTableKey::new(remote_addr.ip(), params.remote_pubkey),
@@ -350,16 +357,15 @@ fn compute_recieve_window(
     min_stake: u64,
     peer_type: ConnectionPeerType,
     peer_stake: u64,
-) -> VarInt {
+) -> Result<VarInt, VarIntBoundsExceeded> {
     match peer_type {
         ConnectionPeerType::Unstaked => {
             VarInt::from_u64((PACKET_DATA_SIZE as u64 * QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO) as u64)
-                .unwrap()
         }
         ConnectionPeerType::Staked => {
             let ratio =
                 compute_receive_window_ratio_for_staked_node(max_stake, min_stake, peer_stake);
-            VarInt::from_u64((PACKET_DATA_SIZE as u64 * ratio) as u64).unwrap()
+            VarInt::from_u64((PACKET_DATA_SIZE as u64 * ratio) as u64)
         }
     }
 }
