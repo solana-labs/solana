@@ -142,7 +142,7 @@ fn main() {
     let exit = Arc::new(AtomicBool::new(false));
 
     // Spawns and runs the scheduler thread
-    let scheduler_handle = spawn_unified_scheduler(
+    let scheduler_handle = TransactionScheduler::spawn_scheduler(
         packet_batch_receiver,
         transaction_batch_senders,
         completed_transaction_receiver,
