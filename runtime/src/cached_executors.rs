@@ -1,7 +1,7 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 use {
-    indexmap::{map::Entry, IndexMap},
+    indexmap::IndexMap,
     log::*,
     rand::Rng,
     solana_program_runtime::invoke_context::Executor,
@@ -26,7 +26,7 @@ pub(crate) mod executor_cache {
     #[derive(Debug, Default)]
     pub struct Stats {
         pub hits: AtomicU64,
-        pub misses: AtomicU64,
+        pub num_gets: AtomicU64,
         pub evictions: HashMap<Pubkey, u64>,
         pub insertions: AtomicU64,
         pub replacements: AtomicU64,
@@ -36,7 +36,7 @@ pub(crate) mod executor_cache {
     impl Stats {
         pub fn submit(&self, slot: Slot) {
             let hits = self.hits.load(Relaxed);
-            let misses = self.misses.load(Relaxed);
+            let misses = self.num_gets.load(Relaxed) - hits;
             let insertions = self.insertions.load(Relaxed);
             let replacements = self.replacements.load(Relaxed);
             let one_hit_wonders = self.one_hit_wonders.load(Relaxed);
@@ -82,11 +82,10 @@ pub(crate) const MAX_CACHED_EXECUTORS: usize = 256;
 // The LFU entry in a random sample of below size is evicted from the cache.
 const RANDOM_SAMPLE_SIZE: usize = 2;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct CachedExecutorsEntry {
     prev_epoch_count: u64,
     epoch_count: AtomicU64,
-    executor: Arc<dyn Executor>,
     hit_count: AtomicU64,
 }
 
@@ -95,7 +94,6 @@ impl Clone for CachedExecutorsEntry {
         Self {
             prev_epoch_count: self.prev_epoch_count,
             epoch_count: AtomicU64::new(self.epoch_count.load(Relaxed)),
-            executor: self.executor.clone(),
             hit_count: AtomicU64::new(self.hit_count.load(Relaxed)),
         }
     }
@@ -106,7 +104,8 @@ impl Clone for CachedExecutorsEntry {
 pub(crate) struct CachedExecutors {
     capacity: usize,
     current_epoch: Epoch,
-    pub(self) executors: IndexMap<Pubkey, CachedExecutorsEntry>,
+    executors: IndexMap<Pubkey, Arc<dyn Executor>>,
+    entries: IndexMap<Pubkey, CachedExecutorsEntry>,
     stats: executor_cache::Stats,
 }
 
@@ -116,6 +115,7 @@ impl Default for CachedExecutors {
             capacity: MAX_CACHED_EXECUTORS,
             current_epoch: Epoch::default(),
             executors: IndexMap::new(),
+            entries: IndexMap::new(),
             stats: executor_cache::Stats::default(),
         }
     }
@@ -145,6 +145,7 @@ impl CachedExecutors {
             capacity: max_capacity,
             current_epoch,
             executors: IndexMap::new(),
+            entries: IndexMap::new(),
             stats: executor_cache::Stats::default(),
         }
     }
@@ -153,17 +154,16 @@ impl CachedExecutors {
         parent_bank_executors: &CachedExecutors,
         current_epoch: Epoch,
     ) -> Self {
-        let executors = if parent_bank_executors.current_epoch == current_epoch {
-            parent_bank_executors.executors.clone()
+        let entries = if parent_bank_executors.current_epoch == current_epoch {
+            parent_bank_executors.entries.clone()
         } else {
             parent_bank_executors
-                .executors
+                .entries
                 .iter()
                 .map(|(&key, entry)| {
                     let entry = CachedExecutorsEntry {
                         prev_epoch_count: entry.epoch_count.load(Relaxed),
                         epoch_count: AtomicU64::default(),
-                        executor: entry.executor.clone(),
                         hit_count: AtomicU64::new(entry.hit_count.load(Relaxed)),
                     };
                     (key, entry)
@@ -174,40 +174,27 @@ impl CachedExecutors {
         Self {
             capacity: parent_bank_executors.capacity,
             current_epoch,
-            executors,
+            executors: parent_bank_executors.executors.clone(),
+            entries,
             stats: executor_cache::Stats::default(),
         }
     }
 
     pub(crate) fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        if let Some(entry) = self.executors.get(pubkey) {
-            self.stats.hits.fetch_add(1, Relaxed);
-            entry.epoch_count.fetch_add(1, Relaxed);
-            entry.hit_count.fetch_add(1, Relaxed);
-            Some(entry.executor.clone())
-        } else {
-            self.stats.misses.fetch_add(1, Relaxed);
-            None
-        }
+        self.stats.num_gets.fetch_add(1, Relaxed);
+        // self.entries never discards keys with cached executor;
+        // So if the key is not in the entries, the executor is not cached.
+        let entry = self.entries.get(pubkey)?;
+        entry.epoch_count.fetch_add(1, Relaxed);
+        let executor = self.executors.get(pubkey)?;
+        self.stats.hits.fetch_add(1, Relaxed);
+        Some(executor.clone())
     }
 
     pub(crate) fn put(&mut self, executors: Vec<(Pubkey, Arc<dyn Executor>)>) {
-        for (key, executor) in executors {
-            match self.executors.entry(key) {
-                Entry::Vacant(entry) => {
-                    self.stats.insertions.fetch_add(1, Relaxed);
-                    entry.insert(CachedExecutorsEntry {
-                        prev_epoch_count: u64::default(),
-                        epoch_count: AtomicU64::default(),
-                        executor,
-                        hit_count: AtomicU64::new(1),
-                    });
-                }
-                Entry::Occupied(mut entry) => {
-                    self.stats.replacements.fetch_add(1, Relaxed);
-                    entry.get_mut().executor = executor;
-                }
-            }
+        for (pubkey, executor) in executors {
+            self.executors.insert(pubkey, executor);
+            self.entries.entry(pubkey).or_default();
         }
 
         let mut rng = rand::thread_rng();
@@ -216,21 +203,39 @@ impl CachedExecutors {
             let size = self.executors.len();
             let index = repeat_with(|| rng.gen_range(0, size))
                 .take(RANDOM_SAMPLE_SIZE)
-                .min_by_key(|&index| self.executors[index].num_hits())
+                .min_by_key(|&index| {
+                    let (key, _) = self.executors.get_index(index).unwrap();
+                    self.entries[key].num_hits()
+                })
                 .unwrap();
             let (key, _) = self.executors.swap_remove_index(index).unwrap();
             let count = self.stats.evictions.entry(key).or_default();
             saturating_add_assign!(*count, 1)
         }
+
+        while self.entries.len() > self.capacity.saturating_mul(20) {
+            let size = self.entries.len();
+            let index = repeat_with(|| rng.gen_range(0, size))
+                .filter(|&index| {
+                    let (key, _) = self.entries.get_index(index).unwrap();
+                    !self.executors.contains_key(key)
+                })
+                .take(RANDOM_SAMPLE_SIZE)
+                .min_by_key(|&index| self.entries[index].num_hits())
+                .unwrap();
+            self.entries.swap_remove_index(index);
+        }
     }
 
     pub(crate) fn remove(&mut self, pubkey: &Pubkey) -> Option<CachedExecutorsEntry> {
-        let maybe_entry = self.executors.remove(pubkey);
+        let maybe_entry = self.entries.remove(pubkey);
         if let Some(entry) = maybe_entry.as_ref() {
             if entry.hit_count.load(Relaxed) == 1 {
                 self.stats.one_hit_wonders.fetch_add(1, Relaxed);
             }
         }
+
+        self.executors.remove(pubkey);
         maybe_entry
     }
 
