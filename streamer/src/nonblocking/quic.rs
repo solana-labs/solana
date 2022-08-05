@@ -1603,7 +1603,8 @@ pub mod test {
 
         let ratio =
             compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake / 2);
-        let average_ratio = (QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO + QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO) / 2;
+        let average_ratio =
+            (QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO + QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO) / 2;
         assert_eq!(ratio, average_ratio);
 
         max_stake = 10000;
