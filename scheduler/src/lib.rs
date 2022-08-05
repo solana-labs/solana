@@ -322,12 +322,13 @@ fn attempt_lock_for_execution<'a>(
     (all_succeeded_so_far, placeholder_attempts)
 }
 
+type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
 // multiplexed to reduce the futex syscal per tx down to minimum and to make the schduler to
 // adaptive relative load between sigverify stage and execution substage
 // switched from crossbeam_channel::select! due to observed poor performance
 pub enum MultiplexedPayload {
-    FromPrevious((Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>)),
-    FromPreviousBatched(()),
+    FromPrevious((Weight, Box<PreprocessedTransaction>)),
+    FromPreviousBatched(Vec<Vec<Box<PreprocessedTransaction>>>),
     FromExecute(Box<ExecutionEnvironment>),
 }
 
