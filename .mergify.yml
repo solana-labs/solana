@@ -107,29 +107,6 @@ pull_request_rules:
       label:
         add:
           - automerge
-  - name: v1.9 feature-gate backport
-    conditions:
-      - label=v1.9
-      - label=feature-gate
-    actions:
-      backport:
-        assignees: &BackportAssignee
-          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-subscribers')) }}"
-        ignore_conflicts: true
-        labels:
-          - feature-gate
-        branches:
-          - v1.9
-  - name: v1.9 non-feature-gate backport
-    conditions:
-      - label=v1.9
-      - label!=feature-gate
-    actions:
-      backport:
-        assignees: *BackportAssignee
-        ignore_conflicts: true
-        branches:
-          - v1.9
   - name: v1.10 feature-gate backport
     conditions:
       - label=v1.10
@@ -152,6 +129,28 @@ pull_request_rules:
         ignore_conflicts: true
         branches:
           - v1.10
+  - name: v1.11 feature-gate backport
+    conditions:
+      - label=v1.11
+      - label=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        ignore_conflicts: true
+        labels:
+          - feature-gate
+        branches:
+          - v1.11
+  - name: v1.11 non-feature-gate backport
+    conditions:
+      - label=v1.11
+      - label!=feature-gate
+    actions:
+      backport:
+        assignees: *BackportAssignee
+        ignore_conflicts: true
+        branches:
+          - v1.11
 
 commands_restrictions:
   # The author of copied PRs is the Mergify user.
