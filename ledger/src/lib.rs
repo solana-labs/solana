@@ -26,7 +26,12 @@ pub mod shred;
 pub mod shred_stats;
 pub mod sigverify_shreds;
 pub mod slot_stats;
+<<<<<<< HEAD
 pub mod staking_utils;
+=======
+mod staking_utils;
+pub mod token_balances;
+>>>>>>> 2dca23948 (Remove runtime dependency from solana-transaction-status (#26930))
 
 #[macro_use]
 extern crate solana_metrics;

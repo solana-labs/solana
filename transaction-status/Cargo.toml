@@ -19,6 +19,7 @@ lazy_static = "1.4.0"
 log = "0.4.14"
 serde = "1.0.136"
 serde_derive = "1.0.103"
+<<<<<<< HEAD
 serde_json = "1.0.79"
 solana-account-decoder = { path = "../account-decoder", version = "=1.10.35" }
 solana-measure = { path = "../measure", version = "=1.10.35" }
@@ -27,6 +28,15 @@ solana-runtime = { path = "../runtime", version = "=1.10.35" }
 solana-sdk = { path = "../sdk", version = "=1.10.35" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
 spl-associated-token-account = { version = "=1.0.5", features = ["no-entrypoint"] }
+=======
+serde_json = "1.0.81"
+solana-account-decoder = { path = "../account-decoder", version = "=1.11.6" }
+solana-measure = { path = "../measure", version = "=1.11.6" }
+solana-metrics = { path = "../metrics", version = "=1.11.6" }
+solana-sdk = { path = "../sdk", version = "=1.11.6" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.6" }
+spl-associated-token-account = { version = "=1.1.1", features = ["no-entrypoint"] }
+>>>>>>> 2dca23948 (Remove runtime dependency from solana-transaction-status (#26930))
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 spl-token = { version = "=3.3.1", features = ["no-entrypoint"] }
 spl-token-2022 = { version = "=0.2.0", features = ["no-entrypoint"] }

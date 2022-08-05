@@ -1,25 +1,21 @@
-use crate::TransactionTokenBalance;
-
-pub type TransactionTokenBalances = Vec<Vec<TransactionTokenBalance>>;
-
-pub struct TransactionTokenBalancesSet {
-    pub pre_token_balances: TransactionTokenBalances,
-    pub post_token_balances: TransactionTokenBalances,
-}
-
-impl TransactionTokenBalancesSet {
-    pub fn new(
-        pre_token_balances: TransactionTokenBalances,
-        post_token_balances: TransactionTokenBalances,
-    ) -> Self {
-        assert_eq!(pre_token_balances.len(), post_token_balances.len());
-        Self {
-            pre_token_balances,
-            post_token_balances,
-        }
-    }
-}
-<<<<<<< HEAD
+use {
+    solana_account_decoder::parse_token::{
+        is_known_spl_token_id, pubkey_from_spl_token, spl_token_native_mint,
+        token_amount_to_ui_amount, UiTokenAmount,
+    },
+    solana_measure::measure::Measure,
+    solana_metrics::datapoint_debug,
+    solana_runtime::{bank::Bank, transaction_batch::TransactionBatch},
+    solana_sdk::{account::ReadableAccount, pubkey::Pubkey},
+    solana_transaction_status::{
+        token_balances::TransactionTokenBalances, TransactionTokenBalance,
+    },
+    spl_token_2022::{
+        extension::StateWithExtensions,
+        state::{Account as TokenAccount, Mint},
+    },
+    std::collections::HashMap,
+};
 
 fn get_mint_decimals(bank: &Bank, mint: &Pubkey) -> Option<u8> {
     if mint == &spl_token_native_mint() {
@@ -311,7 +307,9 @@ mod test {
         mint_state.base = mint_base;
         mint_state.pack_base();
         mint_state.init_account_type().unwrap();
-        let mut mint_close_authority = mint_state.init_extension::<MintCloseAuthority>().unwrap();
+        let mut mint_close_authority = mint_state
+            .init_extension::<MintCloseAuthority>(true)
+            .unwrap();
         mint_close_authority.close_authority =
             OptionalNonZeroPubkey::try_from(Some(spl_token_pubkey(&mint_authority))).unwrap();
 
@@ -354,8 +352,10 @@ mod test {
         account_state.base = token_base;
         account_state.pack_base();
         account_state.init_account_type().unwrap();
-        account_state.init_extension::<ImmutableOwner>().unwrap();
-        let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
+        account_state
+            .init_extension::<ImmutableOwner>(true)
+            .unwrap();
+        let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
         memo_transfer.require_incoming_transfer_memos = true.into();
 
         let spl_token_account = Account {
@@ -394,8 +394,10 @@ mod test {
         account_state.base = other_mint_token_base;
         account_state.pack_base();
         account_state.init_account_type().unwrap();
-        account_state.init_extension::<ImmutableOwner>().unwrap();
-        let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
+        account_state
+            .init_extension::<ImmutableOwner>(true)
+            .unwrap();
+        let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
         memo_transfer.require_incoming_transfer_memos = true.into();
 
         let other_mint_token_account = Account {
@@ -473,5 +475,3 @@ mod test {
         );
     }
 }
-=======
->>>>>>> 2dca23948 (Remove runtime dependency from solana-transaction-status (#26930))

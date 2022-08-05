@@ -18,6 +18,7 @@ use {
     solana_bpf_rust_invoke::instructions::*,
     solana_bpf_rust_realloc::instructions::*,
     solana_bpf_rust_realloc_invoke::instructions::*,
+    solana_ledger::token_balances::collect_token_balances,
     solana_program_runtime::{
         compute_budget::ComputeBudget, invoke_context::with_mock_invoke_context,
         timings::ExecuteTimings,
@@ -62,9 +63,8 @@ use {
         transaction::{SanitizedTransaction, Transaction, TransactionError, VersionedTransaction},
     },
     solana_transaction_status::{
-        token_balances::collect_token_balances, ConfirmedTransactionWithStatusMeta,
-        InnerInstructions, TransactionStatusMeta, TransactionWithStatusMeta,
-        VersionedTransactionWithStatusMeta,
+        ConfirmedTransactionWithStatusMeta, InnerInstructions, TransactionStatusMeta,
+        TransactionWithStatusMeta, VersionedTransactionWithStatusMeta,
     },
     std::{collections::HashMap, env, fs::File, io::Read, path::PathBuf, str::FromStr, sync::Arc},
 };
