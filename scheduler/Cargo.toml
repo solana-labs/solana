@@ -14,13 +14,13 @@ publish = true
 atomic_enum = "0.1.1"
 crossbeam-channel = "0.5.5"
 log = "0.4.17"
-solana-entry = { path = "../entry", version = "=1.11.4" }
-solana-runtime = { path = "../runtime", version = "=1.11.4" }
-solana-sdk = { path = "../sdk", version = "=1.11.4" }
-solana-logger = { path = "../logger", version = "=1.11.4" }
-solana-version = { path = "../version", version = "=1.11.4" }
-solana-metrics = { path = "../metrics", version = "=1.11.4" }
-solana-measure = { path = "../measure", version = "=1.11.4" }
+solana-entry = { path = "../entry", version = "=1.11.5" }
+solana-runtime = { path = "../runtime", version = "=1.11.5" }
+solana-sdk = { path = "../sdk", version = "=1.11.5" }
+solana-logger = { path = "../logger", version = "=1.11.5" }
+solana-version = { path = "../version", version = "=1.11.5" }
+solana-metrics = { path = "../metrics", version = "=1.11.5" }
+solana-measure = { path = "../measure", version = "=1.11.5" }
 sha2 = { version = "0.10.2" }
 rand = "0.7.0"
 
