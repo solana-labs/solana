@@ -421,7 +421,7 @@ fn build_packet_batches(
     num_accounts: usize,
     accounts: &[Keypair],
     blockhash: &Hash,
-) -> Vec<PacketBatch> {
+) -> Vec<Vec<SanitizedTransaction>> {
     (0..config.batches_per_msg)
         .map(|_| build_packet_batch(config, num_accounts, accounts, blockhash))
         .collect()
