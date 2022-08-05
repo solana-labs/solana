@@ -19,6 +19,7 @@ indexmap = "1.8.0"
 indicatif = "0.16.2"
 pickledb = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
+<<<<<<< HEAD
 solana-account-decoder = { path = "../account-decoder", version = "=1.10.35" }
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.35" }
 solana-cli-config = { path = "../cli-config", version = "=1.10.35" }
@@ -29,6 +30,18 @@ solana-transaction-status = { path = "../transaction-status", version = "=1.10.3
 solana-version = { path = "../version", version = "=1.10.35" }
 spl-associated-token-account = { version = "=1.0.5" }
 spl-token = { version = "=3.3.1", features = ["no-entrypoint"] }
+=======
+solana-account-decoder = { path = "../account-decoder", version = "=1.11.6" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.11.6" }
+solana-cli-config = { path = "../cli-config", version = "=1.11.6" }
+solana-client = { path = "../client", version = "=1.11.6" }
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.11.6" }
+solana-sdk = { path = "../sdk", version = "=1.11.6" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.11.6" }
+solana-version = { path = "../version", version = "=1.11.6" }
+spl-associated-token-account = { version = "=1.1.1" }
+spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
+>>>>>>> b725b8617 (spl: Bump token to 3.5.0 and ata to 1.1.0 (#26921))
 tempfile = "3.3.0"
 thiserror = "1.0"
 
