@@ -470,7 +470,7 @@ fn build_packet(
 
     SanitizedTransaction::try_create(
         versioned_transaction,
-        MessageHash::Compute,
+        solana_sdk::transaction::MessageHash::Compute,
         None,
         solana_sdk::transaction::SimpleAddressLoader::Disabled,
         true, // require_static_program_ids
