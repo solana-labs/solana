@@ -328,7 +328,7 @@ fn handle_transaction_batch(
         num_transactions * execution_per_tx_us,
     ));
 
-    let priority_collected = transaction_batch.tx.get_transaction_priority_details().unwrap().priority;
+    let priority_collected = transaction_batch.task.tx.get_transaction_priority_details().unwrap().priority;
 
     metrics
         .num_transactions_completed
@@ -338,7 +338,7 @@ fn handle_transaction_batch(
         .fetch_add(priority_collected, Ordering::Relaxed);
 
         completed_transaction_sender
-            .send((thread_index, transaction_batch.tx))
+            .send((thread_index, transaction_batch))
             .unwrap();
 }
 
