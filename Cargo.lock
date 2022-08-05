@@ -6458,6 +6458,7 @@ dependencies = [
  "solana-measure",
  "solana-perf",
  "solana-runtime",
+ "solana-scheduler",
  "solana-sdk 1.11.5",
 ]
 
