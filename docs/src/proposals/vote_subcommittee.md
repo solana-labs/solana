@@ -140,6 +140,26 @@ Assuming 1/3 are faulty, probability of 133 or greater faulty nodes
 is 1:10^20. A 1ms hash would require grinding for 10^9 years with
 1 billion cores.
 
+### Multiple Rotation Blocks
+
+```
+epoch: 0   | 1
+slot:  2 <-|- 34
+       1 <-|----- 42
+```
+
+It's possible that a fork may get rolled back and multiple **rotation
+blocks** are valid. In this case, slot 42, would require a different
+secondary subcommittee to vote then slot 34. Only one subcommittee
+will be able to root a slot along side the primary in this epoch,
+so eventually only one will win out. While this is happening, the
+network is still handling a fixed number of votes per slot, and the
+only additional load is the cost of the `slow_hash` computation per
+**rotation block**. Leaders and validators still follow the fork
+weight based on the primary subcommittee voting. Nodes that appear
+in multiple potential secondary subcommittees must still vote within
+their own lockout and switching rules.
+
 ### Threshold Switching
 
 Secondary subcommittee can use the primary's votes as a switching
