@@ -238,7 +238,7 @@ impl AddressBook {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Weight {
     // naming: Sequence Ordering?
-    pub ix: usize, // index in ledger entry?
+    pub ix: u64, // index in ledger entry?
                    // gas fee
 }
 
