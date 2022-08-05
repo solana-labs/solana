@@ -497,7 +497,8 @@ fn build_packet(
         .iter()
         .map(|address| LockAttempt::new(**address, RequestedUsage::Readonly));
     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
-    (sanitized_tx, locks)
+
+    (s, locks)
 }
 
 fn build_accounts(num_accounts: usize) -> Vec<Keypair> {
