@@ -339,7 +339,7 @@ fn handle_transaction_batch(
             .unwrap();
 }
 
-const NUM_SENDERS: usize = 4;
+const NUM_SENDERS: usize = 2;
 
 fn spawn_packet_senders(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
