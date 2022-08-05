@@ -189,7 +189,7 @@ pub fn extend_and_hash(id: &Hash, val: &[u8]) -> Hash {
     hash(&hash_data)
 }
 
-/// Execute the comepression function used internally by sha256 over 512-bit blocks, without the padding step.
+/// Execute the compression function used internally by sha256 over 512-bit blocks, without the padding step.
 /// This is not the same thing as the sha256 hash - chances are you want to use the `Hasher` instead.
 /// IMPORTANT: The padding step of SHA256 is included in the standard for a reason - only use this if you know what you're doing.
 pub fn compress(blocks: &[[u8; 64]]) -> Hash {
