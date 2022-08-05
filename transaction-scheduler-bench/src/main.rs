@@ -127,6 +127,7 @@ fn spawn_unified_scheduler(
         let mut runnable_queue = TaskQueue::default();
         let mut contended_queue = TaskQueue::default();
         let mut address_book = AddressBook::default();
+
         ScheduleStage::run(
             100,
             &mut runnable_queue,
@@ -136,7 +137,6 @@ fn spawn_unified_scheduler(
             3//&pre_execute_env_sender,
             4//&post_schedule_env_sender,
         );
-        })
     })
 }
 
