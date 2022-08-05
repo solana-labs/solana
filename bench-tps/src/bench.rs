@@ -62,7 +62,7 @@ impl<'a> KeypairChunks<'a> {
     }
 }
 
-struct TransactionChunkGenerator<'a, 'b, T> {
+struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     client: Arc<T>,
     account_chunks: KeypairChunks<'a>,
     nonce_chunks: Option<KeypairChunks<'b>>,
@@ -72,7 +72,7 @@ struct TransactionChunkGenerator<'a, 'b, T> {
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
 where
-    T: 'static + BenchTpsClient + Send + Sync,
+    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     fn new(
         client: Arc<T>,
@@ -165,7 +165,7 @@ where
 
 fn wait_for_target_slots_per_epoch<T>(target_slots_per_epoch: u64, client: &Arc<T>)
 where
-    T: 'static + BenchTpsClient + Send + Sync,
+    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     if target_slots_per_epoch != 0 {
         info!(
@@ -195,7 +195,7 @@ fn create_sampler_thread<T>(
     maxes: &Arc<RwLock<Vec<(String, SampleStats)>>>,
 ) -> JoinHandle<()>
 where
-    T: 'static + BenchTpsClient + Send + Sync,
+    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     info!("Sampling TPS every {} second...", sample_period);
     let exit_signal = exit_signal.clone();
@@ -209,7 +209,7 @@ where
         .unwrap()
 }
 
-fn generate_chunked_transfers<T: 'static + BenchTpsClient + Send + Sync>(
+fn generate_chunked_transfers<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     recent_blockhash: Arc<RwLock<Hash>>,
     shared_txs: &SharedTransactions,
     shared_tx_active_thread_count: Arc<AtomicIsize>,
@@ -264,7 +264,7 @@ fn create_sender_threads<T>(
     shared_tx_active_thread_count: &Arc<AtomicIsize>,
 ) -> Vec<JoinHandle<()>>
 where
-    T: 'static + BenchTpsClient + Send + Sync,
+    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     (0..threads)
         .map(|_| {
@@ -292,7 +292,7 @@ where
 
 pub fn do_bench_tps<T>(client: Arc<T>, config: Config, gen_keypairs: Vec<Keypair>) -> u64
 where
-    T: 'static + BenchTpsClient + Send + Sync,
+    T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
     let Config {
         id,
@@ -441,7 +441,7 @@ fn generate_system_txs(
         .collect()
 }
 
-fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync>(
+fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     nonce_account_pubkey: Pubkey,
 ) -> Hash {
@@ -453,7 +453,7 @@ fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync>(
     nonce_data.blockhash()
 }
 
-fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
+fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     source: &[&Keypair],
     dest: &VecDeque<&Keypair>,
@@ -495,7 +495,7 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync>(
     transactions
 }
 
-fn generate_txs<T: 'static + BenchTpsClient + Send + Sync>(
+fn generate_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     shared_txs: &SharedTransactions,
     blockhash: &Arc<RwLock<Hash>>,
     chunk_generator: &mut TransactionChunkGenerator<'_, '_, T>,
@@ -515,7 +515,10 @@ fn generate_txs<T: 'static + BenchTpsClient + Send + Sync>(
     }
 }
 
-fn get_new_latest_blockhash<T: BenchTpsClient>(client: &Arc<T>, blockhash: &Hash) -> Option<Hash> {
+fn get_new_latest_blockhash<T: BenchTpsClient + ?Sized>(
+    client: &Arc<T>,
+    blockhash: &Hash,
+) -> Option<Hash> {
     let start = Instant::now();
     while start.elapsed().as_secs() < 5 {
         if let Ok(new_blockhash) = client.get_latest_blockhash() {
@@ -531,7 +534,7 @@ fn get_new_latest_blockhash<T: BenchTpsClient>(client: &Arc<T>, blockhash: &Hash
     None
 }
 
-fn poll_blockhash<T: BenchTpsClient>(
+fn poll_blockhash<T: BenchTpsClient + ?Sized>(
     exit_signal: &Arc<AtomicBool>,
     blockhash: &Arc<RwLock<Hash>>,
     client: &Arc<T>,
@@ -581,7 +584,7 @@ fn poll_blockhash<T: BenchTpsClient>(
     }
 }
 
-fn do_tx_transfers<T: BenchTpsClient>(
+fn do_tx_transfers<T: BenchTpsClient + ?Sized>(
     exit_signal: &Arc<AtomicBool>,
     shared_txs: &SharedTransactions,
     shared_tx_thread_count: &Arc<AtomicIsize>,
@@ -734,7 +737,7 @@ fn compute_and_report_stats(
     );
 }
 
-pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
+pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     funding_key: &Keypair,
     keypair_count: usize,
@@ -753,7 +756,7 @@ pub fn generate_and_fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
     Ok(keypairs)
 }
 
-pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync>(
+pub fn fund_keypairs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     funding_key: &Keypair,
     keypairs: &[Keypair],
