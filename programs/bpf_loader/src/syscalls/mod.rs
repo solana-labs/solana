@@ -1001,7 +1001,9 @@ declare_syscall!(
 );
 
 declare_syscall!(
-    // keccak permutation
+    /// keccak sponge permutation - not to be confused with the keccak256 hash
+    /// chances are you're looking for `sol_keccak256` instead
+    /// do not use this unless you know what you're doing
     SyscallKeccakPermutation,
     fn call(
         &mut self,
