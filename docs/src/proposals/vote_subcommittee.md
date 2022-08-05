@@ -88,7 +88,7 @@ was the secondary and the previous epoch primary votes on the primary
 fork. Switching proofs can't mix votes from both subcommittees.
 
 3. The secondary committee can use any votes from the primary and
-itself to switch.
+itself to switch, but cannot mix votes in the switching proof.
 
 ### Safety Violations
 
