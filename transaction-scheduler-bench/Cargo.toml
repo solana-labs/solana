@@ -23,4 +23,5 @@ solana-logger = { path = "../logger" }
 solana-measure = { path = "../measure" }
 solana-perf = { path = "../perf" }
 solana-runtime = { path = "../runtime" }
+solana-schedule = { path = "../schedule" }
 solana-sdk = { path = "../sdk" }
