@@ -604,11 +604,11 @@ impl ScheduleStage {
 
                     Self::register_runnable_task(weighted_tx, runnable_queue);
                 }
-                MultiplexedPayload::FromPreviousBatched(weighted_txes) => {
+                MultiplexedPayload::FromPreviousBatched(vvv) => {
                     trace!("recv from previous");
 
                     //Self::register_runnable_task(weighted_tx, runnable_queue);
-                    for vv in vv {
+                    for vv in vvv {
                         for v in vv {
                             let p = v.0.get_transaction_priority_details().unwrap().priority;
                             Self::register_runnable_task((Weight { ix: p }, v), runnable_queue);
