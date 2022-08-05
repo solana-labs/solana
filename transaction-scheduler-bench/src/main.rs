@@ -124,7 +124,7 @@ fn spawn_unified_scheduler(
         max_batch_size: usize,
         exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
-    std::thread::spawn(move || {
+    std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
         let mut runnable_queue = solana_scheduler::TaskQueue::default();
         let mut contended_queue = solana_scheduler::TaskQueue::default();
         let mut address_book = solana_scheduler::AddressBook::default();
@@ -138,7 +138,7 @@ fn spawn_unified_scheduler(
             &transaction_batch_senders[0],
             //&completed_transaction_receiver
         );
-    })
+    }).unwrap()
 }
 
 fn main() {
