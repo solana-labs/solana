@@ -121,7 +121,7 @@ fn spawn_unified_scheduler(
         bank_forks: Arc<RwLock<BankForks>>,
         max_batch_size: usize,
         exit: Arc<AtomicBool>,
-) -> usize {
+) -> JoinHandle<()> {
     std::thread::spawn(|| {})
 }
 
