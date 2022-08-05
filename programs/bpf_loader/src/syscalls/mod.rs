@@ -1000,11 +1000,6 @@ declare_syscall!(
     }
 );
 
-<<<<<<< HEAD
-=======
-<<<<<<<< HEAD:programs/bpf_loader/src/syscalls/mod.rs
-========
->>>>>>> master
 declare_syscall!(
     // keccak permutation
     SyscallKeccakPermutation,
@@ -1049,21 +1044,6 @@ declare_syscall!(
     }
 );
 
-<<<<<<< HEAD
-=======
-fn mem_op_consume<'a, 'b>(
-    invoke_context: &Ref<&'a mut InvokeContext<'b>>,
-    n: u64,
-) -> Result<(), EbpfError<BpfError>> {
-    let compute_budget = invoke_context.get_compute_budget();
-    let cost = compute_budget
-        .mem_op_base_cost
-        .max(n.saturating_div(compute_budget.cpi_bytes_per_unit));
-    invoke_context.get_compute_meter().consume(cost)
-}
-
->>>>>>>> master:programs/bpf_loader/src/syscalls.rs
->>>>>>> master
 declare_syscall!(
     /// secp256k1_recover
     SyscallSecp256k1Recover,
