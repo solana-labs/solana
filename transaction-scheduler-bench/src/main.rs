@@ -210,7 +210,7 @@ fn main() {
     );
 
     // Spawn thread for reporting metrics
-    std::thread::Builder::new().name("sol-metrics").spawn({
+    std::thread::Builder::new().name("sol-metrics".to_string()).spawn({
         move || {
             let start = Instant::now();
             loop {
