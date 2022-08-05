@@ -623,7 +623,7 @@ impl ScheduleStage {
                     //Self::register_runnable_task(weighted_tx, runnable_queue);
                     for vv in vvv {
                         for v in vv {
-                            let p = get_transaction_priority_details(v.0).unwrap().priority;
+                            let p = get_transaction_priority_details(&v.0).unwrap().priority;
                             Self::register_runnable_task((Weight { ix: p }, v), runnable_queue);
                         }
                     }
