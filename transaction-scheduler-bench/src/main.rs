@@ -446,7 +446,7 @@ fn build_packet_batch(
 ) -> Vec<SanitizedTransaction> {
     (0..config.packets_per_batch)
         .map(|_| build_packet(config, num_accounts, accounts, blockhash))
-        .collect(),
+        .collect()
 }
 
 fn build_packet(
