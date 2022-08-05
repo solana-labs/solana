@@ -478,14 +478,26 @@ fn build_packet(
         *blockhash,
     ));
 
-    SanitizedTransaction::try_create(
+    let s = SanitizedTransaction::try_create(
         versioned_transaction,
         solana_sdk::transaction::MessageHash::Compute,
         None,
         solana_sdk::transaction::SimpleAddressLoader::Disabled,
         true, // require_static_program_ids
     )
-    .unwrap()
+    .unwrap();
+
+    let locks = sanitized_tx.get_account_locks().unwrap();
+    let writable_lock_iter = locks
+        .writable
+        .iter()
+        .map(|address| LockAttempt::new(**address, RequestedUsage::Writable));
+    let readonly_lock_iter = locks
+        .readonly
+        .iter()
+        .map(|address| LockAttempt::new(**address, RequestedUsage::Readonly));
+    let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+    (sanitized_tx, locks)
 }
 
 fn build_accounts(num_accounts: usize) -> Vec<Keypair> {
