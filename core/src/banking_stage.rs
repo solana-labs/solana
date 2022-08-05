@@ -23,7 +23,9 @@ use {
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
-    solana_ledger::blockstore_processor::TransactionStatusSender,
+    solana_ledger::{
+        blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
+    },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
     solana_perf::{
@@ -57,9 +59,7 @@ use {
         transport::TransportError,
     },
     solana_streamer::sendmmsg::batch_send,
-    solana_transaction_status::token_balances::{
-        collect_token_balances, TransactionTokenBalancesSet,
-    },
+    solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
         cmp,
         collections::HashMap,
