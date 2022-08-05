@@ -124,11 +124,11 @@ fn spawn_unified_scheduler(
         exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     std::thread::spawn(|| {
-        let mut runnable_queue = TaskQueue::default();
-        let mut contended_queue = TaskQueue::default();
-        let mut address_book = AddressBook::default();
+        let mut runnable_queue = solana_scheduler::TaskQueue::default();
+        let mut contended_queue = solana_scheduler::TaskQueue::default();
+        let mut address_book = solana_scheduler::AddressBook::default();
 
-        ScheduleStage::run(
+        solana_scheduler::ScheduleStage::run(
             100,
             &mut runnable_queue,
             &mut contended_queue,
