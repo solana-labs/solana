@@ -472,7 +472,7 @@ fn build_packet(
         versioned_transaction,
         MessageHash::Compute,
         None,
-        SimpleAddressLoader::Disabled,
+        solana_sdk::transaction::SimpleAddressLoader::Disabled,
         true, // require_static_program_ids
     )
     .unwrap()
