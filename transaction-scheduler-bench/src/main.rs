@@ -135,7 +135,7 @@ fn spawn_unified_scheduler(
             &mut contended_queue,
             &mut address_book,
             &packet_batch_receiver,
-            &transaction_batch_senders[0]
+            &transaction_batch_senders[0],
             4, //&post_schedule_env_sender,
         );
     })
