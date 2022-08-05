@@ -944,20 +944,43 @@ data" as &[u8];
 
     #[test]
     fn test_parse_disk_stats() {
-        const MOCK_DISK: &[u8] =
+        const MOCK_DISK_11: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738" as &[u8];
+        // Matches kernel 4.18+ format
+        const MOCK_DISK_15: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0" as &[u8];
+        // Matches kernel 5.5+ format
+        const MOCK_DISK_17: &[u8] =
 b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0    70715     2922" as &[u8];
-        const UNEXPECTED_DATA: &[u8] = b"un
+        const UNEXPECTED_DATA_1: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0    70715" as &[u8];
+
+        const UNEXPECTED_DATA_2: &[u8] = b"un
 ex
 pec
 ted
 data" as &[u8];
 
-        let mut mock_disk = MOCK_DISK;
+        let mut mock_disk = MOCK_DISK_11;
+        let stats = parse_disk_stats(&mut mock_disk).unwrap();
+        assert_eq!(stats.reads_completed, 2095701);
+        assert_eq!(stats.time_io_weighted_ms, 285220738);
+
+        let mut mock_disk = MOCK_DISK_15;
+        let stats = parse_disk_stats(&mut mock_disk).unwrap();
+        assert_eq!(stats.reads_completed, 2095701);
+        assert_eq!(stats.time_discarding, 0);
+
+        let mut mock_disk = MOCK_DISK_17;
         let stats = parse_disk_stats(&mut mock_disk).unwrap();
         assert_eq!(stats.reads_completed, 2095701);
         assert_eq!(stats.time_flushing, 2922);
 
-        let mut mock_disk = UNEXPECTED_DATA;
+        let mut mock_disk = UNEXPECTED_DATA_1;
+        let stats = parse_disk_stats(&mut mock_disk);
+        assert!(stats.is_err());
+
+        let mut mock_disk = UNEXPECTED_DATA_2;
         let stats = parse_disk_stats(&mut mock_disk);
         assert!(stats.is_err());
     }
