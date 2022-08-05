@@ -436,7 +436,7 @@ fn send_packets(
             packet_batches.iter().map(|pb| pb.len()).sum(),
             Ordering::Relaxed,
         );
-        let _ = packet_batch_sender.send(packet_batches);
+        let _ = packet_batch_sender.send(MultiplexedPayload::FromPreviousBatched(packet_batches));
 
         std::thread::sleep(loop_duration.saturating_sub(packet_build_time.as_duration()));
     }
