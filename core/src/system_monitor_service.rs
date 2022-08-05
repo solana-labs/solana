@@ -284,13 +284,14 @@ fn read_disk_stats() -> Result<DiskStats, String> {
         .filter_map(|blk_device_dir| {
             match blk_device_dir {
                 Ok(blk_device_dir) => {
-                    let blk_device_dir_name = blk_device_dir.file_name().to_string_lossy();
+                    let blk_device_dir_name = &blk_device_dir.file_name();
+                    let blk_device_dir_name = blk_device_dir_name.to_string_lossy();
                     if blk_device_dir_name.starts_with("loop")
                         || blk_device_dir_name.starts_with("dm")
                         || blk_device_dir_name.starts_with("md")
                     {
                         // Filter out loopback devices, dmcrypt volumes, and mdraid volumes
-                        None
+                        return None;
                     }
                     let mut path = blk_device_dir.path();
                     path.push("stat");
@@ -302,7 +303,7 @@ fn read_disk_stats() -> Result<DiskStats, String> {
                 Err(_) => None,
             }
         })
-        .map(|file_diskstats| {
+        .for_each(|file_diskstats| {
             let mut reader_diskstats = BufReader::new(file_diskstats);
             stats.accumulate(&parse_disk_stats(&mut reader_diskstats).unwrap_or_default());
             num_disks += 1;
