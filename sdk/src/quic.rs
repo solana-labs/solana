@@ -19,7 +19,7 @@ pub const QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO: f64 = 1.;
 
 /// The receive window for QUIC connection from minum staked nodes is
 /// set to this ratio times [`solana_sdk::packet::PACKET_DATA_SIZE`]
-pub const QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO: f64 = 1.2;
+pub const QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO: f64 = 2.;
 
 /// The receive window for QUIC connection from maximum staked nodes is
 /// set to this ratio times [`solana_sdk::packet::PACKET_DATA_SIZE`]

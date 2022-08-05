@@ -337,8 +337,8 @@ fn compute_receive_window_ratio_for_staked_node(max_stake: u64, min_stake: u64, 
     let min_ratio = QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO;
     if max_stake > min_stake {
         let a = (max_ratio - min_ratio) / (max_stake - min_stake) as f64;
-        let b: f64 = max_ratio - ((max_stake as f64) * a);
-        (a as f64 * stake as f64) + b
+        let b = max_ratio - ((max_stake as f64) * a);
+        (a * stake as f64) + b
     } else {
         QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO
     }
