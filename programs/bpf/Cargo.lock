@@ -4174,12 +4174,8 @@ dependencies = [
  "solana-bpf-rust-realloc",
  "solana-bpf-rust-realloc-invoke",
  "solana-cli-output",
-<<<<<<< HEAD
- "solana-logger 1.10.35",
-=======
  "solana-ledger",
- "solana-logger 1.11.6",
->>>>>>> 2dca23948 (Remove runtime dependency from solana-transaction-status (#26930))
+ "solana-logger 1.10.35",
  "solana-measure",
  "solana-program-runtime",
  "solana-runtime",
@@ -4983,12 +4979,8 @@ dependencies = [
  "solana-storage-proto",
  "solana-transaction-status",
  "solana-vote-program",
-<<<<<<< HEAD
-=======
  "spl-token",
  "spl-token-2022",
- "static_assertions",
->>>>>>> 2dca23948 (Remove runtime dependency from solana-transaction-status (#26930))
  "tempfile",
  "thiserror",
  "tokio",
@@ -5667,12 +5659,7 @@ dependencies = [
  "solana-account-decoder",
  "solana-measure",
  "solana-metrics",
-<<<<<<< HEAD
- "solana-runtime",
  "solana-sdk 1.10.35",
-=======
- "solana-sdk 1.11.6",
->>>>>>> 2dca23948 (Remove runtime dependency from solana-transaction-status (#26930))
  "solana-vote-program",
  "spl-associated-token-account",
  "spl-memo",

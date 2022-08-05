@@ -307,9 +307,7 @@ mod test {
         mint_state.base = mint_base;
         mint_state.pack_base();
         mint_state.init_account_type().unwrap();
-        let mut mint_close_authority = mint_state
-            .init_extension::<MintCloseAuthority>(true)
-            .unwrap();
+        let mut mint_close_authority = mint_state.init_extension::<MintCloseAuthority>().unwrap();
         mint_close_authority.close_authority =
             OptionalNonZeroPubkey::try_from(Some(spl_token_pubkey(&mint_authority))).unwrap();
 
@@ -352,10 +350,8 @@ mod test {
         account_state.base = token_base;
         account_state.pack_base();
         account_state.init_account_type().unwrap();
-        account_state
-            .init_extension::<ImmutableOwner>(true)
-            .unwrap();
-        let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
+        account_state.init_extension::<ImmutableOwner>().unwrap();
+        let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
         memo_transfer.require_incoming_transfer_memos = true.into();
 
         let spl_token_account = Account {
@@ -394,10 +390,8 @@ mod test {
         account_state.base = other_mint_token_base;
         account_state.pack_base();
         account_state.init_account_type().unwrap();
-        account_state
-            .init_extension::<ImmutableOwner>(true)
-            .unwrap();
-        let mut memo_transfer = account_state.init_extension::<MemoTransfer>(true).unwrap();
+        account_state.init_extension::<ImmutableOwner>().unwrap();
+        let mut memo_transfer = account_state.init_extension::<MemoTransfer>().unwrap();
         memo_transfer.require_incoming_transfer_memos = true.into();
 
         let other_mint_token_account = Account {

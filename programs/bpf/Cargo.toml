@@ -41,7 +41,7 @@ solana-transaction-status = { path = "../../transaction-status", version = "=1.1
 solana-account-decoder = { path = "../../account-decoder", version = "=1.10.35" }
 
 [dev-dependencies]
-solana-ledger = { path = "../../ledger", version = "=1.11.6" }
+solana-ledger = { path = "../../ledger", version = "=1.10.35" }
 
 [[bench]]
 name = "bpf_loader"

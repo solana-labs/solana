@@ -1037,17 +1037,6 @@ impl PartialEq for Bank {
     }
 }
 
-<<<<<<< HEAD
-#[derive(Debug, PartialEq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
-pub enum RewardType {
-    Fee,
-    Rent,
-    Staking,
-    Voting,
-}
-
-=======
->>>>>>> 2dca23948 (Remove runtime dependency from solana-transaction-status (#26930))
 #[derive(Debug)]
 pub enum RewardCalculationEvent<'a, 'b> {
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
