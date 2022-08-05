@@ -379,7 +379,7 @@ fn spawn_packet_sender(
     duration: Duration,
     exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
-    std::thread::spawn(move || {
+    std::thread::Builder::new().name("sol-producer").spawn(move || {
         send_packets(
             metrics,
             num_accounts,
@@ -389,7 +389,7 @@ fn spawn_packet_sender(
             duration,
             exit,
         );
-    })
+    }).unwrap()
 }
 
 fn send_packets(
