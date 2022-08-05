@@ -377,7 +377,7 @@ fn send_packets(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
     accounts: Arc<Vec<Keypair>>,
-    packet_batch_sender: Sender<Vec<PacketBatch>>,
+    packet_batch_sender: Sender<Vec<Vec<SanitizedTransaction>>>,
     config: Arc<PacketSendingConfig>,
     duration: Duration,
     exit: Arc<AtomicBool>,
