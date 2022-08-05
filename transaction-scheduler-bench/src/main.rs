@@ -432,7 +432,7 @@ fn build_packet_batch(
     num_accounts: usize,
     accounts: &[Keypair],
     blockhash: &Hash,
-) -> PacketBatch {
+) -> Vec<SanitizedTransaction> {
     PacketBatch::new(
         (0..config.packets_per_batch)
             .map(|_| build_packet(config, num_accounts, accounts, blockhash))
