@@ -9,7 +9,7 @@ homepage = "https://solana.com/"
 edition = "2021"
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.11.3" }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.6" }
 
 [lib]
 crate-type = ["cdylib"]
