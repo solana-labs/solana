@@ -273,7 +273,7 @@ fn start_execution_thread(
     execution_per_tx_us: u64,
     exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
-    std::thread::Builder::new().name(format!("blockstore_processor_{}", thread_index).spawn(move || {
+    std::thread::Builder::new().name(format!("blockstore_processor_{}", thread_index)).spawn(move || {
         execution_worker(
             metrics,
             thread_index,
