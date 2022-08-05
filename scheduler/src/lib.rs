@@ -248,7 +248,7 @@ pub struct UniqueWeight {
     weight: Weight,
     // we can't use Transaction::message_hash because it's manipulatable to be favorous to the tx
     // submitter
-    //unique_key: Hash, // tie breaker? random noise? also for unique identification of txes?
+    unique_key: Hash, // tie breaker? random noise? also for unique identification of txes?
     // fee?
 }
 /*
@@ -352,7 +352,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
     ) {
         // manage randomness properly for future scheduling determinism
-        //let mut rng = rand::thread_rng();
+        let mut rng = rand::thread_rng();
 
         //let ix = 23;
         //let tx = bank
@@ -366,7 +366,7 @@ impl ScheduleStage {
         runnable_queue.add_to_schedule(
             UniqueWeight {
                 weight,
-                //unique_key: solana_sdk::hash::new_rand(&mut rng),
+                unique_key: solana_sdk::hash::new_rand(&mut rng),
             },
             Task { tx },
         );
