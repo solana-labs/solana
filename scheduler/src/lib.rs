@@ -372,7 +372,7 @@ impl ScheduleStage {
             },
             Task { tx },
         );
-        unique_key -= 1;
+        *unique_key -= 1;
     }
 
     #[inline(never)]
