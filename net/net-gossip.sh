@@ -743,8 +743,17 @@ gossipInstancesPerNode() {
   declare ipAddress="$2"
   declare nodeType=$3
   declare nodeIndex=$4
+  declare leftoverBool=$5
+  if $leftoverBool; then 
+    startIndex=$instancesPerNode
+    endIndex=$(($instancesPerNode + 1))
+  else 
+    startIndex=0
+    endIndex=$instancesPerNode
+  fi 
 
-  for (( i=0; i<$instancesPerNode; i++ ))
+
+  for (( i=$startIndex; i<$endIndex; i++ ))
   do
     echo "startGossipNode: instanceIndex: $i"
     startGossipNode "$ipAddress" $nodeType $nodeIndex $i
@@ -757,11 +766,31 @@ gossipInstancesPerNode() {
 gossipDeploy() {
   echo "greg - in gossipDeploy()"
   declare instancesPerNode=$1
+  declare gossipInstances=$2
   echo "greg - instancesPerNode in gossipDeploy: $instancesPerNode"
+  echo "greg - gossipInstances: $gossipInstances"
   initLogDir
 
   echo "Deployment started at $(date)"
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
+
+
+  if [[ $gossipInstances != 0 ]]; then 
+    perNode=$(( $gossipInstances / $(( ${#validatorIpList[@]} - 1)) ))
+    echo "perNode: $perNode"
+    if [[ $perNode -ge 1 ]]; then 
+      instancesPerNode=$perNode
+    else 
+      instancesPerNode=0
+    fi
+    leftover=$(($gossipInstances % $((${#validatorIpList[@]} - 1)) ))
+  fi
+
+  echo "instancesPerNode: $instancesPerNode, leftover: $leftover"
+  
+  echo "############## TOTAL GOSSIP INSTANCES TO DEPLOY (excl. bootstrap): $gossipInstances ##############"
+
+
 
   declare bootstrapLeader=true
   for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
@@ -779,7 +808,28 @@ gossipDeploy() {
       SECONDS=0
       pids=()
     else
-      gossipInstancesPerNode $instancesPerNode $ipAddress $nodeType $nodeIndex &
+      gossipInstancesPerNode $instancesPerNode $ipAddress $nodeType $nodeIndex false &      
+    fi
+  done
+
+  wait 
+
+  echo "deploying leftovers. total leftover: $leftover"
+  declare skipBootstrapLeader=true
+  declare leftoverCount=0
+  for nodeAddress in "${validatorIpList[@]}"; do 
+    if $skipBootstrapLeader; then 
+      skipBootstrapLeader=false
+      continue
+    else 
+      nodeType=
+      nodeIndex=
+      getNodeType
+      gossipInstancesPerNode $instancesPerNode $ipAddress $nodeType $nodeIndex true &
+      leftoverCount=$(($leftoverCount + 1))
+      if [[ $leftoverCount == $leftover ]]; then 
+        break 
+      fi 
     fi
   done
 
@@ -809,8 +859,8 @@ gossipDeploy() {
   echo
   echo "--- Deployment Successful"
   echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
-  echo "Deployed $(( $instancesPerNode * $(( ${#validatorIpList[@]} - 1)) + 1)) gossip instances across ${#validatorIpList[@]} GCE nodes"
-  echo "      --- $instancesPerNode gossip instances per node"
+  echo "Deployed $gossipInstances gossip instances across $((${#validatorIpList[@]} - 1)) GCE nodes"
+  echo "      --- $instancesPerNode gossip instances per node + $leftover additional gossip instances"
   echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"
@@ -1036,7 +1086,9 @@ maybeFullRpc=false
 waitForNodeInit=true
 waitForGossipNodeInit=false
 extraPrimordialStakes=0
-instancesPerNode=1 # default. 1 replica per node
+# need to set either instancesPerNode or gossipInstances
+instancesPerNode=0 # default. 
+gossipInstances=0 # default number of gossip instances
 
 command=$1
 [[ -n $command ]] || usage
@@ -1169,6 +1221,9 @@ while [[ -n $1 ]]; do
     elif [[ $1 = --gossip-instances-per-node ]]; then
       instancesPerNode="$2"
       shift 2
+    elif [[ $1 = --gossip-instances ]]; then
+      gossipInstances="$2"
+      shift 2
     else
       usage "Unknown long option: $1"
     fi
@@ -1179,6 +1234,9 @@ while [[ -n $1 ]]; do
 done
 
 echo "greg - gossip instances per node: $instancesPerNode"
+if [[ ($instancesPerNode == 0 && $gossipInstances == 0) || ($instancesPerNode != 0 && $gossipInstances != 0) ]]; then 
+  usage "need to set either --gossip-instances-per-node OR --gossip-instances (not both)"
+fi
 
 while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
   case $opt in
@@ -1317,7 +1375,7 @@ case $command in
 gossip-only)
   prepareDeploy
   stop
-  gossipDeploy $instancesPerNode
+  gossipDeploy $instancesPerNode $gossipInstances
   ;;
 restart)
   prepareDeploy
