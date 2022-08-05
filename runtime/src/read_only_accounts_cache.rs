@@ -38,6 +38,7 @@ pub(crate) struct ReadOnlyAccountsCache {
     data_size: AtomicUsize,
     hits: AtomicU64,
     misses: AtomicU64,
+    evicts: AtomicU64,
 }
 
 impl ReadOnlyAccountsCache {
@@ -49,6 +50,7 @@ impl ReadOnlyAccountsCache {
             data_size: AtomicUsize::default(),
             hits: AtomicU64::default(),
             misses: AtomicU64::default(),
+            evicts: AtomicU64::default(),
         }
     }
 
@@ -112,6 +114,7 @@ impl ReadOnlyAccountsCache {
                 None => break,
                 Some(key) => *key,
             };
+            self.evicts.fetch_add(1, Ordering::Relaxed);
             self.remove(pubkey, slot);
         }
     }
@@ -135,10 +138,12 @@ impl ReadOnlyAccountsCache {
         self.data_size.load(Ordering::Relaxed)
     }
 
-    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64) {
+    pub(crate) fn get_and_reset_stats(&self) -> (u64, u64, u64) {
         let hits = self.hits.swap(0, Ordering::Relaxed);
         let misses = self.misses.swap(0, Ordering::Relaxed);
-        (hits, misses)
+        let evicts = self.evicts.swap(0, Ordering::Relaxed);
+
+        (hits, misses, evicts)
     }
 }
 

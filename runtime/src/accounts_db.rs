@@ -7637,7 +7637,7 @@ impl AccountsDb {
 
     fn report_store_timings(&self) {
         if self.stats.last_store_report.should_update(1000) {
-            let (read_only_cache_hits, read_only_cache_misses) =
+            let (read_only_cache_hits, read_only_cache_misses, read_only_cache_evicts) =
                 self.read_only_accounts_cache.get_and_reset_stats();
             datapoint_info!(
                 "accounts_db_store_timings",
@@ -7702,6 +7702,11 @@ impl AccountsDb {
                 (
                     "read_only_accounts_cache_misses",
                     read_only_cache_misses,
+                    i64
+                ),
+                (
+                    "read_only_accounts_cache_evicts",
+                    read_only_cache_evicts,
                     i64
                 ),
                 (
