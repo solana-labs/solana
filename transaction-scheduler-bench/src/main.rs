@@ -481,8 +481,6 @@ fn build_packet(
     let versioned_transaction = VersionedTransaction::from(Transaction::new_with_payer(
         &ixs,
         Some(&sending_keypair.pubkey()),
-        &[sending_keypair],
-        *blockhash,
     ));
 
     let sanitized_tx = SanitizedTransaction::try_create(
