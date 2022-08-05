@@ -134,7 +134,7 @@ fn spawn_unified_scheduler(
             &mut runnable_queue,
             &mut contended_queue,
             &mut address_book,
-            packet_batch_receiver.clone(),
+            &packet_batch_receiver.clone(),
             &transaction_batch_senders[0],
             //&completed_transaction_receiver
         );
