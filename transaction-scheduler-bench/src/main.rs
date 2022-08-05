@@ -328,10 +328,7 @@ fn handle_transaction_batch(
         num_transactions * execution_per_tx_us,
     ));
 
-    let priority_collected = transaction_batch
-        .iter()
-        .map(|tx| tx.0.get_transaction_priority_details().unwrap().priority)
-        .sum();
+    let priority_collected = transaction_batch.tx.get_transaction_priority_details().unwrap().priority;
 
     metrics
         .num_transactions_completed
