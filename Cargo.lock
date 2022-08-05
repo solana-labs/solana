@@ -254,9 +254,9 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a57588a20357c74ee9036656b7fad5c54328ee8657c6ff29ba31fd5ea503a1c"
 dependencies = [
- "proc-macro2 1.0.38",
+ "proc-macro2 1.0.41",
  "quote 1.0.18",
- "syn 1.0.93",
+ "syn 1.0.98",
 ]
 
 [[package]]
@@ -5525,8 +5525,8 @@ dependencies = [
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.11.5",
  "solana-scheduler",
+ "solana-sdk 1.11.5",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-transaction-status",
@@ -6058,7 +6058,7 @@ dependencies = [
 
 [[package]]
 name = "solana-scheduler"
-version = "1.11.4"
+version = "1.11.5"
 dependencies = [
  "atomic_enum",
  "crossbeam-channel",
@@ -6066,11 +6066,11 @@ dependencies = [
  "rand 0.7.3",
  "sha2 0.10.2",
  "solana-entry",
- "solana-logger 1.11.4",
+ "solana-logger 1.11.5",
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
- "solana-sdk 1.11.4",
+ "solana-sdk 1.11.5",
  "solana-version",
 ]
 
