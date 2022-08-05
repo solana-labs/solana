@@ -513,10 +513,10 @@ fn build_accounts(num_accounts: usize) -> Vec<Keypair> {
 fn build_channels<T>(num_execution_threads: usize) -> (Vec<Sender<T>>, Vec<Receiver<T>>) {
     let mut senders = Vec::with_capacity(num_execution_threads);
     let mut receivers = Vec::with_capacity(num_execution_threads);
+    let (sender, receiver) = crossbeam_channel::unbounded();
     for _ in 0..num_execution_threads {
-        let (sender, receiver) = crossbeam_channel::unbounded();
-        senders.push(sender);
-        receivers.push(receiver);
+        senders.push(sender.clone());
+        receivers.push(receiver.clone());
     }
     (senders, receivers)
 }
