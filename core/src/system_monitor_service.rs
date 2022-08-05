@@ -279,22 +279,34 @@ pub fn verify_net_stats_access() -> Result<(), String> {
 fn read_disk_stats() -> Result<DiskStats, String> {
     let mut stats = DiskStats::default();
     let mut num_disks = 0;
-    for blk_device_dir in std::fs::read_dir(SYS_BLOCK_PATH).map_err(|e| e.to_string())? {
-        let blk_device_dir = blk_device_dir.map_err(|e| e.to_string())?;
-        if blk_device_dir
-            .file_name()
-            .to_string_lossy()
-            .starts_with("loop")
-        {
-            continue;
-        }
-        let mut path = blk_device_dir.path();
-        path.push("stat");
-        let file_diskstats = File::open(path).map_err(|e| e.to_string())?;
-        let mut reader_diskstats = BufReader::new(file_diskstats);
-        stats.accumulate(&parse_disk_stats(&mut reader_diskstats).unwrap_or_default());
-        num_disks += 1;
-    }
+    let blk_device_dir_iter = std::fs::read_dir(SYS_BLOCK_PATH).map_err(|e| e.to_string())?;
+    blk_device_dir_iter
+        .filter_map(|blk_device_dir| {
+            match blk_device_dir {
+                Ok(blk_device_dir) => {
+                    let blk_device_dir_name = blk_device_dir.file_name().to_string_lossy();
+                    if blk_device_dir_name.starts_with("loop")
+                        || blk_device_dir_name.starts_with("dm")
+                        || blk_device_dir_name.starts_with("md")
+                    {
+                        // Filter out loopback devices, dmcrypt volumes, and mdraid volumes
+                        None
+                    }
+                    let mut path = blk_device_dir.path();
+                    path.push("stat");
+                    match File::open(path) {
+                        Ok(file_diskstats) => Some(file_diskstats),
+                        Err(_) => None,
+                    }
+                }
+                Err(_) => None,
+            }
+        })
+        .map(|file_diskstats| {
+            let mut reader_diskstats = BufReader::new(file_diskstats);
+            stats.accumulate(&parse_disk_stats(&mut reader_diskstats).unwrap_or_default());
+            num_disks += 1;
+        });
     stats.num_disks = num_disks;
     Ok(stats)
 }
