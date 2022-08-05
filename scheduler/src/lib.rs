@@ -606,7 +606,8 @@ impl ScheduleStage {
                 MultiplexedPayload::FromPreviousBatched(weighted_txes) => {
                     trace!("recv from previous");
 
-                    Self::register_runnable_task(weighted_tx, runnable_queue);
+                    //Self::register_runnable_task(weighted_tx, runnable_queue);
+                    panic!()
                 }
                 MultiplexedPayload::FromExecute(mut processed_execution_environment) => {
                     trace!("recv from execute");
