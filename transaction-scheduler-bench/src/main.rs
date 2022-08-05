@@ -115,13 +115,13 @@ struct PacketSendingConfig {
 }
 
 fn spawn_unified_scheduler(
-        packet_batch_receiver: Receiver<PacketBatchMessage>,
-        transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
-        completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
-        bank_forks: Arc<RwLock<BankForks>>,
-        max_batch_size: usize,
-        exit: Arc<AtomicBool>,
-        ) {
+    packet_batch_receiver: Receiver<PacketBatchMessage>,
+    transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
+    completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
+    bank_forks: Arc<RwLock<BankForks>>,
+    max_batch_size: usize,
+    exit: Arc<AtomicBool>,
+) {
 }
 
 fn main() {

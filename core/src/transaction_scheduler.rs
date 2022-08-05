@@ -113,10 +113,10 @@ impl TransactionPriority {
     }
 }
 
-type PacketBatchMessage = Vec<PacketBatch>;
-type TransactionMessage = Box<SanitizedTransaction>;
-type CompletedTransactionMessage = (usize, TransactionMessage);
-type TransactionBatchMessage = Vec<TransactionMessage>;
+pub type PacketBatchMessage = Vec<PacketBatch>;
+pub type TransactionMessage = Box<SanitizedTransaction>;
+pub type CompletedTransactionMessage = (usize, TransactionMessage);
+pub type TransactionBatchMessage = Vec<TransactionMessage>;
 
 /// Separate packet deserialization and ordering
 struct PacketBatchHandler {
