@@ -17,9 +17,7 @@ pub fn keccak_permutation(state: &mut [u64; KECCAK_F1600_STATE_WIDTH]) {
     #[cfg(target_os = "solana")]
     {
         unsafe {
-            crate::syscalls::sol_keccak_permutation(
-                state as *mut _ as *mut u64
-            );
+            crate::syscalls::sol_keccak_permutation(state as *mut _ as *mut u64);
         }
     }
 }

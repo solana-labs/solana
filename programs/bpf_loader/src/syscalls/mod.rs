@@ -12,6 +12,7 @@ use {
         },
     },
     crate::{allocator_bump::BpfAllocator, BpfError},
+    arrayref::array_mut_ref,
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
         invoke_context::{ComputeMeter, InvokeContext},
@@ -44,7 +45,9 @@ use {
             AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
         },
-        keccak, native_loader, keccak_permutation::{keccak_permutation, KECCAK_F1600_STATE_WIDTH},
+        keccak,
+        keccak_permutation::{keccak_permutation, KECCAK_F1600_STATE_WIDTH},
+        native_loader,
         precompiles::is_precompile,
         program::MAX_RETURN_DATA,
         program_stubs::is_nonoverlapping,
@@ -65,7 +68,6 @@ use {
         sync::Arc,
     },
     thiserror::Error as ThisError,
-    arrayref::array_mut_ref,
 };
 
 mod cpi;
