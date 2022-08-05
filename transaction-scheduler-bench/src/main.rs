@@ -444,11 +444,9 @@ fn build_packet_batch(
     accounts: &[Keypair],
     blockhash: &Hash,
 ) -> Vec<SanitizedTransaction> {
-    PacketBatch::new(
-        (0..config.packets_per_batch)
-            .map(|_| build_packet(config, num_accounts, accounts, blockhash))
-            .collect(),
-    )
+    (0..config.packets_per_batch)
+        .map(|_| build_packet(config, num_accounts, accounts, blockhash))
+        .collect(),
 }
 
 fn build_packet(
