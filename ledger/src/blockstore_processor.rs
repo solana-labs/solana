@@ -748,8 +748,9 @@ pub(crate) fn process_blockstore_for_bank_0(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
 ) -> Arc<RwLock<BankForks>> {
     // Setup bank for slot 0
-    let mut bank0 = Bank::new_with_paths(
+    let bank0 = Bank::new_with_paths(
         genesis_config,
+        opts.runtime_config,
         account_paths,
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
@@ -760,7 +761,6 @@ pub(crate) fn process_blockstore_for_bank_0(
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
     );
-    bank0.set_compute_budget(opts.runtime_config.compute_budget);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
 
     info!("Processing ledger for slot 0...");
@@ -3671,6 +3671,7 @@ pub mod tests {
     ) -> EpochSchedule {
         let bank = Bank::new_with_paths_for_tests(
             genesis_config,
+            RuntimeConfig::default(),
             account_paths,
             AccountSecondaryIndexes::default(),
             false,

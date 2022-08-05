@@ -20,6 +20,7 @@ use {
         bank::{Bank, BankSlotDelta},
         bank_forks::BankForks,
         genesis_utils::{create_genesis_config_with_leader, GenesisConfigInfo},
+        runtime_config::RuntimeConfig,
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
@@ -94,6 +95,7 @@ impl SnapshotTestConfig {
         genesis_config_info.genesis_config.cluster_type = cluster_type;
         let bank0 = Bank::new_with_paths_for_tests(
             &genesis_config_info.genesis_config,
+            RuntimeConfig::default(),
             vec![accounts_dir.path().to_path_buf()],
             AccountSecondaryIndexes::default(),
             false,
@@ -161,6 +163,7 @@ fn restore_from_snapshot(
         &full_snapshot_archive_info,
         None,
         old_genesis_config,
+        RuntimeConfig::default(),
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -827,6 +830,7 @@ fn restore_from_snapshots_and_check_banks_are_equal(
         &snapshot_config.incremental_snapshot_archives_dir,
         &[accounts_dir],
         genesis_config,
+        RuntimeConfig::default(),
         None,
         None,
         AccountSecondaryIndexes::default(),
@@ -1018,6 +1022,7 @@ fn test_snapshots_with_background_services(
             .incremental_snapshot_archives_dir,
         &[snapshot_test_config.accounts_dir.as_ref().to_path_buf()],
         &snapshot_test_config.genesis_config_info.genesis_config,
+        RuntimeConfig::default(),
         None,
         None,
         AccountSecondaryIndexes::default(),

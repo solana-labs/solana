@@ -1429,7 +1429,7 @@ fn load_blockstore(
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
-        runtime_config: config.runtime_config.clone(),
+        runtime_config: config.runtime_config,
         ..blockstore_processor::ProcessOptions::default()
     };
 
