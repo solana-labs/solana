@@ -1306,7 +1306,7 @@ pub struct Bank {
     builtin_programs: BuiltinPrograms,
 
     /// Optional config parameters that can override runtime behavior
-    runtime_config: RuntimeConfig,
+    runtime_config: Arc<RuntimeConfig>,
 
     /// Dynamic feature transitions for builtin programs
     #[allow(clippy::rc_buffer)]
@@ -1527,7 +1527,7 @@ impl Bank {
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
             builtin_programs: BuiltinPrograms::default(),
-            runtime_config: RuntimeConfig::default(),
+            runtime_config: Arc::<RuntimeConfig>::default(),
             builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
@@ -1621,7 +1621,7 @@ impl Bank {
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
-        bank.runtime_config = runtime_config;
+        bank.runtime_config = Arc::new(runtime_config);
         bank.cluster_type = Some(genesis_config.cluster_type);
 
         bank.process_genesis_config(genesis_config);
@@ -1829,7 +1829,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             builtin_programs,
-            runtime_config: parent.runtime_config,
+            runtime_config: parent.runtime_config.clone(),
             builtin_feature_transitions: parent.builtin_feature_transitions.clone(),
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
@@ -2188,7 +2188,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
-            runtime_config,
+            runtime_config: Arc::new(runtime_config),
             builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
