@@ -119,7 +119,7 @@ struct PacketSendingConfig {
 fn spawn_unified_scheduler(
         packet_batch_receiver: Receiver<BatchSenderMessage>,
         transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
-        completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
+        //completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
         bank_forks: Arc<RwLock<BankForks>>,
         max_batch_size: usize,
         exit: Arc<AtomicBool>,
@@ -136,7 +136,7 @@ fn spawn_unified_scheduler(
             &mut address_book,
             &packet_batch_receiver,
             &transaction_batch_senders[0],
-            4, //&post_schedule_env_sender,
+            //&completed_transaction_receiver
         );
     })
 }

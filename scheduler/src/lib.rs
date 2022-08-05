@@ -602,7 +602,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         from: &crossbeam_channel::Receiver<MultiplexedPayload>,
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
-        to_next_stage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>, // assume nonblocking
+        // to_next_stage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>, // assume nonblocking
     ) {
         let mut executing_queue_count = 0;
 
@@ -633,7 +633,7 @@ impl ScheduleStage {
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
                     // async-ly propagate the result to rpc subsystems
-                    to_next_stage.send(processed_execution_environment).unwrap();
+                    // to_next_stage.send(processed_execution_environment).unwrap();
                 }
             }
 
