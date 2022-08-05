@@ -82,6 +82,7 @@ type PreprocessedTransaction = (SanitizedTransaction, Vec<solana_scheduler::Lock
 type TransactionMessage = Box<PreprocessedTransaction>;
 type CompletedTransactionMessage = (usize, TransactionMessage); // thread index and transaction message
 type TransactionBatchMessage = Vec<TransactionMessage>;
+type BatchSenderMessage = Vec<Vec<PreprocessedTransaction>>;
 
 #[derive(Debug, Default)]
 struct TransactionSchedulerBenchMetrics {
@@ -403,7 +404,7 @@ fn send_packets(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
     accounts: Arc<Vec<Keypair>>,
-    packet_batch_sender: Sender<Vec<Vec<PreprocessedTransaction>>>,
+    packet_batch_sender: Sender<BatchSenderMessage>,
     config: Arc<PacketSendingConfig>,
     duration: Duration,
     exit: Arc<AtomicBool>,
