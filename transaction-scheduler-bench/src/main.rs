@@ -491,11 +491,11 @@ fn build_packet(
     let writable_lock_iter = locks
         .writable
         .iter()
-        .map(|address| LockAttempt::new(**address, RequestedUsage::Writable));
+        .map(|address| solana_scheduler::LockAttempt::new(**address, RequestedUsage::Writable));
     let readonly_lock_iter = locks
         .readonly
         .iter()
-        .map(|address| LockAttempt::new(**address, RequestedUsage::Readonly));
+        .map(|address| solana_scheduler::LockAttempt::new(**address, RequestedUsage::Readonly));
     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
 
     (s, locks)
