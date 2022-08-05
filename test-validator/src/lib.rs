@@ -122,6 +122,7 @@ pub struct TestValidatorGenesis {
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
+    pub transaction_account_lock_limit: Option<usize>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -151,6 +152,7 @@ impl Default for TestValidatorGenesis {
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
+            transaction_account_lock_limit: Option::<usize>::default(),
         }
     }
 }
@@ -754,6 +756,7 @@ impl TestValidator {
                     ..ComputeBudget::default()
                 }),
             log_messages_bytes_limit: config.log_messages_bytes_limit,
+            transaction_account_lock_limit: config.transaction_account_lock_limit,
         };
 
         let mut validator_config = ValidatorConfig {
