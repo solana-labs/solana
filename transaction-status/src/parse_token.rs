@@ -440,15 +440,6 @@ pub fn parse_token(
                 }),
             })
         }
-<<<<<<< HEAD
-        TokenInstruction::GetAccountDataSize => {
-            check_num_token_accounts(&instruction.accounts, 1)?;
-            Ok(ParsedInstructionEnum {
-                instruction_type: "getAccountDataSize".to_string(),
-                info: json!({
-                    "mint": account_keys[instruction.accounts[0] as usize].to_string(),
-                }),
-=======
         TokenInstruction::GetAccountDataSize { extension_types } => {
             check_num_token_accounts(&instruction.accounts, 1)?;
             let mut value = json!({
@@ -467,7 +458,6 @@ pub fn parse_token(
             Ok(ParsedInstructionEnum {
                 instruction_type: "getAccountDataSize".to_string(),
                 info: value,
->>>>>>> a1b066a43 (Support token-2022 in RPC instruction parsing (#24537))
             })
         }
         TokenInstruction::InitializeImmutableOwner => {
@@ -499,8 +489,6 @@ pub fn parse_token(
                 }),
             })
         }
-<<<<<<< HEAD
-=======
         TokenInstruction::InitializeMintCloseAuthority { .. } => Err(
             ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
         ),
@@ -522,7 +510,6 @@ pub fn parse_token(
         TokenInstruction::CreateNativeMint => Err(ParseInstructionError::InstructionNotParsable(
             ParsableProgram::SplToken,
         )),
->>>>>>> a1b066a43 (Support token-2022 in RPC instruction parsing (#24537))
     }
 }
 
