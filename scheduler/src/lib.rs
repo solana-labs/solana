@@ -340,9 +340,7 @@ fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
                 true, // use default units per instruction
                 true, // don't reject txs that use set compute unit price ix
             )
-            .ok()?;
-
-            prioritization_fee_details.get_priority()
+            .map(|d| d.get_priority()).unwrap_or_default()
 }
 
 pub struct ScheduleStage {}
