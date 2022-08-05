@@ -245,13 +245,20 @@ fn generate_chunked_transfers<T: 'static + BenchTpsClient + Send + Sync + ?Sized
     threads: usize,
     duration: Duration,
     sustained: bool,
+    use_durable_nonce: bool,
 ) {
     // generate and send transactions for the specified duration
     let start = Instant::now();
     let mut last_generate_txs_time = Instant::now();
 
     while start.elapsed() < duration {
-        generate_txs(shared_txs, &recent_blockhash, &mut chunk_generator, threads);
+        generate_txs(
+            shared_txs,
+            &recent_blockhash,
+            &mut chunk_generator,
+            threads,
+            use_durable_nonce,
+        );
 
         datapoint_info!(
             "blockhash_stats",
@@ -318,7 +325,12 @@ where
         .collect()
 }
 
-pub fn do_bench_tps<T>(client: Arc<T>, config: Config, gen_keypairs: Vec<Keypair>) -> u64
+pub fn do_bench_tps<T>(
+    client: Arc<T>,
+    config: Config,
+    gen_keypairs: Vec<Keypair>,
+    nonce_keypairs: Option<Vec<Keypair>>,
+) -> u64
 where
     T: 'static + BenchTpsClient + Send + Sync + ?Sized,
 {
@@ -331,6 +343,7 @@ where
         sustained,
         target_slots_per_epoch,
         use_randomized_compute_unit_price,
+        use_durable_nonce,
         ..
     } = config;
 
@@ -338,7 +351,7 @@ where
     let chunk_generator = TransactionChunkGenerator::new(
         client.clone(),
         &gen_keypairs,
-        None, // TODO(klykov): to be added in the follow up PR
+        nonce_keypairs.as_ref(),
         tx_count,
         use_randomized_compute_unit_price,
     );
@@ -403,6 +416,7 @@ where
         threads,
         duration,
         sustained,
+        use_durable_nonce,
     );
 
     // Stop the sampling threads so it will collect the stats
@@ -424,6 +438,10 @@ where
     info!("Waiting for blockhash thread...");
     if let Err(err) = blockhash_thread.join() {
         info!("  join() failed with: {:?}", err);
+    }
+
+    if let Some(nonce_keypairs) = nonce_keypairs {
+        withdraw_durable_nonce_accounts(client.clone(), &gen_keypairs, &nonce_keypairs);
     }
 
     let balance = client.get_balance(&id.pubkey()).unwrap_or(0);
@@ -574,10 +592,14 @@ fn generate_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     blockhash: &Arc<RwLock<Hash>>,
     chunk_generator: &mut TransactionChunkGenerator<'_, '_, T>,
     threads: usize,
+    use_durable_nonce: bool,
 ) {
-    let blockhash = blockhash.read().map(|x| *x).ok();
-
-    let transactions = chunk_generator.generate(blockhash.as_ref());
+    let transactions = if use_durable_nonce {
+        chunk_generator.generate(None)
+    } else {
+        let blockhash = blockhash.read().map(|x| *x).ok();
+        chunk_generator.generate(blockhash.as_ref())
+    };
 
     let sz = transactions.len() / threads;
     let chunks: Vec<_> = transactions.chunks(sz).collect();
@@ -933,7 +955,7 @@ mod tests {
         let keypairs =
             generate_and_fund_keypairs(client.clone(), &config.id, keypair_count, 20).unwrap();
 
-        do_bench_tps(client, config, keypairs);
+        do_bench_tps(client, config, keypairs, None);
     }
 
     #[test]

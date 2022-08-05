@@ -76,7 +76,7 @@ fn test_bench_tps_local_cluster(config: Config) {
     )
     .unwrap();
 
-    let _total = do_bench_tps(client, config, keypairs);
+    let _total = do_bench_tps(client, config, keypairs, None);
 
     #[cfg(not(debug_assertions))]
     assert!(_total > 100);
@@ -121,7 +121,7 @@ fn test_bench_tps_test_validator(config: Config) {
     )
     .unwrap();
 
-    let _total = do_bench_tps(client, config, keypairs);
+    let _total = do_bench_tps(client, config, keypairs, None);
 
     #[cfg(not(debug_assertions))]
     assert!(_total > 100);
