@@ -210,7 +210,7 @@ fn main() {
     );
 
     // Spawn thread for reporting metrics
-    std::thread::spawn({
+    std::thread::Builder::new().name("sol-metrics").spawn({
         move || {
             let start = Instant::now();
             loop {
@@ -231,7 +231,7 @@ fn main() {
             }
             exit.store(true, Ordering::Relaxed);
         }
-    });
+    }).unwrap();
 
     scheduler_handle.join().unwrap();
     execution_handles
@@ -273,7 +273,7 @@ fn start_execution_thread(
     execution_per_tx_us: u64,
     exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
-    std::thread::spawn(move || {
+    std::thread::Builder::new().name(format!("blockstore_processor_{}", thread_index).spawn(move || {
         execution_worker(
             metrics,
             thread_index,
@@ -282,7 +282,7 @@ fn start_execution_thread(
             execution_per_tx_us,
             exit,
         )
-    })
+    }).unwrap()
 }
 
 fn execution_worker(
