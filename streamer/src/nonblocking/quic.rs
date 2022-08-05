@@ -329,6 +329,10 @@ fn compute_receive_window_ratio_for_staked_node(max_stake: u64, min_stake: u64, 
     // r(s) = a * s + b. Given the max_stake, min_stake, max_ratio, min_ratio, we can find
     // a and b.
 
+    if stake > max_stake {
+        return QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO;
+    }
+
     let max_ratio = QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO;
     let min_ratio = QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO;
     if max_stake > min_stake {
@@ -1611,6 +1615,19 @@ pub mod test {
         max_stake = 10000;
         min_stake = 10000;
         let ratio = compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake);
+        let ratio = format!("{:.2}", ratio);
+        assert_eq!(ratio, max_ratio);
+
+        max_stake = 0;
+        min_stake = 0;
+        let ratio = compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake);
+        let ratio = format!("{:.2}", ratio);
+        assert_eq!(ratio, max_ratio);
+
+        max_stake = 1000;
+        min_stake = 10;
+        let ratio =
+            compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake + 10);
         let ratio = format!("{:.2}", ratio);
         assert_eq!(ratio, max_ratio);
     }
