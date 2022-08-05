@@ -445,7 +445,7 @@ fn build_packet(
     num_accounts: usize,
     accounts: &[Keypair],
     blockhash: &Hash,
-) -> Packet {
+) -> SanitizedTransaction {
     let get_random_account = || &accounts[rand::thread_rng().gen_range(0..num_accounts)];
     let sending_keypair = get_random_account();
 
