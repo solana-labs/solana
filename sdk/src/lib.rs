@@ -41,6 +41,7 @@ pub mod program_utils;
 pub mod pubkey;
 pub mod quic;
 pub mod recent_blockhashes_account;
+pub mod reward_type;
 pub mod rpc_port;
 pub mod secp256k1_instruction;
 pub mod shred_version;

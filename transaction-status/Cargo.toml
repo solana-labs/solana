@@ -23,7 +23,6 @@ serde_json = "1.0.81"
 solana-account-decoder = { path = "../account-decoder", version = "=1.11.6" }
 solana-measure = { path = "../measure", version = "=1.11.6" }
 solana-metrics = { path = "../metrics", version = "=1.11.6" }
-solana-runtime = { path = "../runtime", version = "=1.11.6" }
 solana-sdk = { path = "../sdk", version = "=1.11.6" }
 solana-vote-program = { path = "../programs/vote", version = "=1.11.6" }
 spl-associated-token-account = { version = "=1.0.5", features = ["no-entrypoint"] }
