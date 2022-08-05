@@ -369,7 +369,7 @@ impl ScheduleStage {
             UniqueWeight {
                 weight,
                 //unique_key: solana_sdk::hash::new_rand(&mut rng),
-                unique_key,
+                unique_key: *unique_key,
             },
             Task { tx },
         );
