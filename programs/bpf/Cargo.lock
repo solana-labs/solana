@@ -5636,6 +5636,7 @@ dependencies = [
  "percentage",
  "pkcs8",
  "quinn 0.8.3 (git+https://github.com/quinn-rs/quinn.git?branch=0.8.x)",
+ "quinn-proto 0.8.3 (git+https://github.com/quinn-rs/quinn.git?branch=0.8.x)",
  "rand 0.7.3",
  "rcgen",
  "rustls 0.20.6",
