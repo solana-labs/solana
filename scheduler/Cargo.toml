@@ -16,6 +16,7 @@ crossbeam-channel = "0.5.5"
 log = "0.4.17"
 solana-entry = { path = "../entry", version = "=1.11.5" }
 solana-runtime = { path = "../runtime", version = "=1.11.5" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.11.5" }
 solana-sdk = { path = "../sdk", version = "=1.11.5" }
 solana-logger = { path = "../logger", version = "=1.11.5" }
 solana-version = { path = "../version", version = "=1.11.5" }
