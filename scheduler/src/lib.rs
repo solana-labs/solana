@@ -624,6 +624,16 @@ impl ScheduleStage {
                         for v in vv {
                             let p = get_transaction_priority_details(&v.0);
                             Self::register_runnable_task((Weight { ix: p }, v), runnable_queue);
+                            while executing_queue_count < max_executing_queue_count {
+                                let maybe_ee =
+                                    Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                                if let Some(ee) = maybe_ee {
+                                    trace!("send to execute");
+                                    executing_queue_count += 1;
+
+                                    to_execute_substage.send(ee).unwrap();
+                                }
+                            }
                         }
                     }
                 }
