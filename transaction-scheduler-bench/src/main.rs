@@ -77,10 +77,6 @@ struct Args {
     high_conflict_sender: usize,
 }
 
-/// Some convenient type aliases
-type TransactionMessage = Box<SanitizedTransaction>;
-type CompletedTransactionMessage = (usize, TransactionMessage); // thread index and transaction message
-type TransactionBatchMessage = Vec<TransactionMessage>;
 
 #[derive(Debug, Default)]
 struct TransactionSchedulerBenchMetrics {
