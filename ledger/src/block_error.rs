@@ -37,4 +37,10 @@ pub enum BlockError {
 
     #[error("duplicate block")]
     DuplicateBlock,
+
+    #[error("exceeded accounts data size total limit")]
+    ExceededAccountsDataSizeTotalLimit,
+
+    #[error("exceeded accounts data size block limit")]
+    ExceededAccountsDataSizeBlockLimit,
 }
