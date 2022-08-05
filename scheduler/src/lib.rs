@@ -327,6 +327,7 @@ fn attempt_lock_for_execution<'a>(
 // switched from crossbeam_channel::select! due to observed poor performance
 pub enum MultiplexedPayload {
     FromPrevious((Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>)),
+    FromPreviousBatched(()),
     FromExecute(Box<ExecutionEnvironment>),
 }
 
