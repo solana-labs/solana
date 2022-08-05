@@ -350,7 +350,7 @@ impl ScheduleStage {
     fn push_to_queue(
         (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>),
         runnable_queue: &mut TaskQueue,
-        &mut unique_key: u64,
+        unique_key: &mut u64,
     ) {
         // manage randomness properly for future scheduling determinism
         //let mut rng = rand::thread_rng();
