@@ -35,6 +35,7 @@
 //! already been signed and verified.
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
+pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
         account_overrides::AccountOverrides,
@@ -1119,14 +1120,6 @@ impl PartialEq for Bank {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
-pub enum RewardType {
-    Fee,
-    Rent,
-    Staking,
-    Voting,
-}
-
 #[derive(Debug)]
 pub enum RewardCalculationEvent<'a, 'b> {
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
@@ -1134,21 +1127,6 @@ pub enum RewardCalculationEvent<'a, 'b> {
 
 fn null_tracer() -> Option<impl Fn(&RewardCalculationEvent) + Send + Sync> {
     None::<fn(&RewardCalculationEvent)>
-}
-
-impl fmt::Display for RewardType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                RewardType::Fee => "fee",
-                RewardType::Rent => "rent",
-                RewardType::Staking => "staking",
-                RewardType::Voting => "voting",
-            }
-        )
-    }
 }
 
 pub trait DropCallback: fmt::Debug {
@@ -17994,62 +17972,6 @@ pub(crate) mod tests {
             transaction_log_collector.get_logs_for_address(Some(&address)),
             Some(Vec::<TransactionLogInfo>::new()),
         );
-    }
-
-    /// Test exceeding the max accounts data size by creating accounts in a loop
-    #[test]
-    fn test_max_accounts_data_size_exceeded() {
-        const NUM_ACCOUNTS: u64 = 20;
-        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH / (NUM_ACCOUNTS + 1);
-        const REMAINING_ACCOUNTS_DATA_SIZE: u64 = NUM_ACCOUNTS * ACCOUNT_SIZE;
-
-        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.activate_feature(&feature_set::cap_accounts_data_len::id());
-        bank.accounts_data_size_initial = bank.accounts_data_size_limit()
-            - REMAINING_ACCOUNTS_DATA_SIZE
-            - bank.load_accounts_data_size_delta() as u64;
-
-        let mut i = 0;
-        let result = loop {
-            let txn = system_transaction::create_account(
-                &mint_keypair,
-                &Keypair::new(),
-                bank.last_blockhash(),
-                genesis_config
-                    .rent
-                    .minimum_balance(ACCOUNT_SIZE.try_into().unwrap()),
-                ACCOUNT_SIZE,
-                &solana_sdk::system_program::id(),
-            );
-
-            let accounts_data_size_before = bank.load_accounts_data_size();
-            let result = bank.process_transaction(&txn);
-            let accounts_data_size_after = bank.load_accounts_data_size();
-            assert!(accounts_data_size_after <= bank.accounts_data_size_limit());
-            if result.is_err() {
-                assert_eq!(i, NUM_ACCOUNTS);
-                break result;
-            }
-
-            assert_eq!(
-                accounts_data_size_after - accounts_data_size_before,
-                ACCOUNT_SIZE,
-            );
-            assert!(
-                i <= NUM_ACCOUNTS,
-                "test must complete within bounded limits"
-            );
-            i += 1;
-        };
-
-        assert!(matches!(
-            result,
-            Err(TransactionError::InstructionError(
-                _,
-                solana_sdk::instruction::InstructionError::MaxAccountsDataSizeExceeded,
-            ))
-        ));
     }
 
     /// Test processing a good transaction correctly modifies the accounts data size
