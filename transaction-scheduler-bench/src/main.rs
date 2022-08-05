@@ -478,7 +478,7 @@ fn build_packet(
             read_account_metas.chain(write_account_metas).collect(),
         ),
     ];
-    let versioned_transaction = VersionedTransaction::from(Transaction::new_signed_with_payer(
+    let versioned_transaction = VersionedTransaction::from(Transaction::new_with_payer(
         &ixs,
         Some(&sending_keypair.pubkey()),
         &[sending_keypair],
