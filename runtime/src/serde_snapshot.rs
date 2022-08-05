@@ -14,6 +14,7 @@ use {
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
+        runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{self, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
         stakes::Stakes,
@@ -285,6 +286,7 @@ pub(crate) fn bank_from_streams<R>(
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     genesis_config: &GenesisConfig,
+    runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
@@ -303,6 +305,7 @@ where
         bank_fields,
         accounts_db_fields,
         genesis_config,
+        runtime_config,
         account_paths,
         unpacked_append_vec_map,
         debug_keys,
@@ -483,6 +486,7 @@ fn reconstruct_bank_from_fields<E>(
     bank_fields: BankFieldsToDeserialize,
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     genesis_config: &GenesisConfig,
+    runtime_config: &RuntimeConfig,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -513,12 +517,14 @@ where
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
+    let runtime_config = Arc::new(runtime_config.clone());
 
     // if limit_load_slot_count_from_snapshot is set, then we need to side-step some correctness checks beneath this call
     let debug_do_not_add_builtins = limit_load_slot_count_from_snapshot.is_some();
     let bank = Bank::new_from_fields(
         bank_rc,
         genesis_config,
+        runtime_config,
         bank_fields,
         debug_keys,
         additional_builtins,

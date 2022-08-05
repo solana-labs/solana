@@ -58,6 +58,7 @@ use {
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
+        runtime_config::RuntimeConfig,
         stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
@@ -1062,7 +1063,7 @@ impl PartialEq for Bank {
             is_delta,
             // TODO: Confirm if all these fields are intentionally ignored!
             builtin_programs: _,
-            compute_budget: _,
+            runtime_config: _,
             builtin_feature_transitions: _,
             rewards: _,
             cluster_type: _,
@@ -1282,7 +1283,8 @@ pub struct Bank {
     /// The builtin programs
     builtin_programs: BuiltinPrograms,
 
-    compute_budget: Option<ComputeBudget>,
+    /// Optional config parameters that can override runtime behavior
+    runtime_config: Arc<RuntimeConfig>,
 
     /// Dynamic feature transitions for builtin programs
     #[allow(clippy::rc_buffer)]
@@ -1414,21 +1416,26 @@ impl Bank {
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths_for_benches(
-            genesis_config,
-            Vec::new(),
-            None,
-            None,
-            AccountSecondaryIndexes::default(),
-            false,
-            AccountShrinkThreshold::default(),
-            false,
-        )
+        Self::new_with_paths_for_benches(genesis_config, Vec::new())
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_config_for_tests(
             genesis_config,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        )
+    }
+
+    pub fn new_with_runtime_config_for_tests(
+        genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
+    ) -> Self {
+        Self::new_with_paths_for_tests(
+            genesis_config,
+            runtime_config,
+            Vec::new(),
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
@@ -1450,14 +1457,11 @@ impl Bank {
     ) -> Self {
         Self::new_with_paths_for_tests(
             genesis_config,
+            Arc::<RuntimeConfig>::default(),
             Vec::new(),
-            None,
-            None,
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
-            false,
-            None,
         )
     }
 
@@ -1501,7 +1505,7 @@ impl Bank {
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
             builtin_programs: BuiltinPrograms::default(),
-            compute_budget: Option::<ComputeBudget>::default(),
+            runtime_config: Arc::<RuntimeConfig>::default(),
             builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
@@ -1532,48 +1536,38 @@ impl Bank {
 
     pub fn new_with_paths_for_tests(
         genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
-        debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        debug_do_not_add_builtins: bool,
-        accounts_db_config: Option<AccountsDbConfig>,
     ) -> Self {
         Self::new_with_paths(
             genesis_config,
+            runtime_config,
             paths,
-            debug_keys,
-            additional_builtins,
+            None,
+            None,
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
-            debug_do_not_add_builtins,
-            accounts_db_config.or(Some(ACCOUNTS_DB_CONFIG_FOR_TESTING)),
+            false,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
         )
     }
 
-    pub fn new_with_paths_for_benches(
-        genesis_config: &GenesisConfig,
-        paths: Vec<PathBuf>,
-        debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
-        account_indexes: AccountSecondaryIndexes,
-        accounts_db_caching_enabled: bool,
-        shrink_ratio: AccountShrinkThreshold,
-        debug_do_not_add_builtins: bool,
-    ) -> Self {
+    pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
         Self::new_with_paths(
             genesis_config,
+            Arc::<RuntimeConfig>::default(),
             paths,
-            debug_keys,
-            additional_builtins,
-            account_indexes,
-            accounts_db_caching_enabled,
-            shrink_ratio,
-            debug_do_not_add_builtins,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
         )
@@ -1582,6 +1576,7 @@ impl Bank {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
@@ -1604,6 +1599,7 @@ impl Bank {
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
+        bank.runtime_config = runtime_config;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
         bank.process_genesis_config(genesis_config);
@@ -1811,7 +1807,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             builtin_programs,
-            compute_budget: parent.compute_budget,
+            runtime_config: parent.runtime_config.clone(),
             builtin_feature_transitions: parent.builtin_feature_transitions.clone(),
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
@@ -2102,6 +2098,7 @@ impl Bank {
     pub(crate) fn new_from_fields(
         bank_rc: BankRc,
         genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
@@ -2169,7 +2166,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
-            compute_budget: None,
+            runtime_config,
             builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
@@ -4519,31 +4516,32 @@ impl Bank {
                         feature_set_clone_time.as_us()
                     );
 
-                    let compute_budget = if let Some(compute_budget) = self.compute_budget {
-                        compute_budget
-                    } else {
-                        let mut compute_budget =
-                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+                    let compute_budget =
+                        if let Some(compute_budget) = self.runtime_config.compute_budget {
+                            compute_budget
+                        } else {
+                            let mut compute_budget =
+                                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
 
-                        let mut compute_budget_process_transaction_time =
-                            Measure::start("compute_budget_process_transaction_time");
-                        let process_transaction_result = compute_budget.process_instructions(
-                            tx.message().program_instructions_iter(),
-                            feature_set.is_active(&default_units_per_instruction::id()),
-                            feature_set.is_active(&add_set_compute_unit_price_ix::id()),
-                        );
-                        compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
-                        if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
-                        }
-                        compute_budget
-                    };
+                            let mut compute_budget_process_transaction_time =
+                                Measure::start("compute_budget_process_transaction_time");
+                            let process_transaction_result = compute_budget.process_instructions(
+                                tx.message().program_instructions_iter(),
+                                feature_set.is_active(&default_units_per_instruction::id()),
+                                feature_set.is_active(&add_set_compute_unit_price_ix::id()),
+                            );
+                            compute_budget_process_transaction_time.stop();
+                            saturating_add_assign!(
+                                timings
+                                    .execute_accessories
+                                    .compute_budget_process_transaction_us,
+                                compute_budget_process_transaction_time.as_us()
+                            );
+                            if let Err(err) = process_transaction_result {
+                                return TransactionExecutionResult::NotExecuted(err);
+                            }
+                            compute_budget
+                        };
 
                     self.execute_loaded_transaction(
                         tx,
@@ -6543,10 +6541,6 @@ impl Bank {
 
     pub fn set_inflation(&self, inflation: Inflation) {
         *self.inflation.write().unwrap() = inflation;
-    }
-
-    pub fn set_compute_budget(&mut self, compute_budget: Option<ComputeBudget>) {
-        self.compute_budget = compute_budget;
     }
 
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
@@ -18742,7 +18736,7 @@ pub(crate) mod tests {
             None,
         );
 
-        let compute_budget = bank.compute_budget.unwrap_or_else(|| {
+        let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
         });
         let transaction_context = TransactionContext::new(
