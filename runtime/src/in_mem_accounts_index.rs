@@ -404,6 +404,13 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         })
     }
 
+    fn is_different(target: &PreAllocatedAccountMapEntry<T>, other_slot: &Option<Slot>) -> bool {
+        if let Some(other_slot) = other_slot {
+            return target.get_first_slot() != *other_slot;
+        }
+        return false;
+    }
+
     pub fn upsert(
         &self,
         pubkey: &Pubkey,
@@ -452,6 +459,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                         let enable_lazy_disk_load = true;
 
+                        // When other_slots are different than the new update slot, we should skip lazy_load.
+                        let is_different = Self::is_different(&new_value, &other_slot);
+
                         let previous_slot_entry_was_cached =
                             reclaim == UpsertReclaim::PreviousSlotEntryWasCached;
 
@@ -464,7 +474,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             if !already_existed {
                                 self.stats().inc_insert();
                             }
-                        } else if enable_lazy_disk_load && previous_slot_entry_was_cached {
+                        } else if enable_lazy_disk_load
+                            && previous_slot_entry_was_cached
+                            && !is_different
+                        {
                             // skip checking the disk
                             self.stats().inc_insert();
                             let entry = new_value.into_account_map_entry(&self.storage);

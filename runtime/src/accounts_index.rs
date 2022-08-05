@@ -449,6 +449,13 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
             Self::Raw((slot, account_info)) => Self::allocate(slot, account_info, storage),
         }
     }
+
+    pub fn get_first_slot(&self) -> Slot {
+        match self {
+            Self::Entry(entry) => entry.slot_list.read().unwrap()[0].0,
+            Self::Raw((slot, _account_info)) => *slot,
+        }
+    }
 }
 
 #[derive(Debug)]
