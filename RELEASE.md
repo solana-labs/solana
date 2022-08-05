@@ -98,8 +98,8 @@ Alternatively use the Github UI.
 
 ### Miscellaneous Clean up
 
-1. Update [mergify.yml](https://github.com/solana-labs/solana/blob/master/.mergify.yml) to add backport actions for the new branch and remove the obsolete branch.
-1. Adjust the [Github backport labels](https://github.com/solana-labs/solana/labels) to add the new branch and remove the label for the obsolete branch.
+1. Update [mergify.yml](https://github.com/solana-labs/solana/blob/master/.mergify.yml) to add backport actions for the new branch and remove actions for the obsolete branch.
+1. Adjust the [Github backport labels](https://github.com/solana-labs/solana/labels) to add the new branch label and remove the label for the obsolete branch.
 1. Announce on Discord #development that the release branch exists so people know to use the new backport labels.
 
 ## Steps to Create a Release
