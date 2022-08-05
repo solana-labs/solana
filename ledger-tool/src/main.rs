@@ -2464,10 +2464,10 @@ fn main() {
                     accounts_db_test_hash_calculation: arg_matches
                         .is_present("accounts_db_test_hash_calculation"),
                     accounts_db_skip_shrink: arg_matches.is_present("accounts_db_skip_shrink"),
-                    runtime_config: RuntimeConfig {
+                    runtime_config: Arc::new(RuntimeConfig {
                         bpf_jit: !arg_matches.is_present("no_bpf_jit"),
                         ..RuntimeConfig::default()
-                    },
+                    }),
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");

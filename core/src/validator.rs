@@ -175,7 +175,7 @@ pub struct ValidatorConfig {
     pub accounts_shrink_ratio: AccountShrinkThreshold,
     pub wait_to_vote_slot: Option<Slot>,
     pub ledger_column_options: LedgerColumnOptions,
-    pub runtime_config: RuntimeConfig,
+    pub runtime_config: Arc<RuntimeConfig>,
     pub enable_quic_servers: bool,
 }
 
@@ -237,7 +237,7 @@ impl Default for ValidatorConfig {
             accounts_db_config: None,
             wait_to_vote_slot: None,
             ledger_column_options: LedgerColumnOptions::default(),
-            runtime_config: RuntimeConfig::default(),
+            runtime_config: Arc::<RuntimeConfig>::default(),
             enable_quic_servers: true,
         }
     }
@@ -1429,7 +1429,7 @@ fn load_blockstore(
         shrink_ratio: config.accounts_shrink_ratio,
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
-        runtime_config: config.runtime_config,
+        runtime_config: config.runtime_config.clone(),
         ..blockstore_processor::ProcessOptions::default()
     };
 

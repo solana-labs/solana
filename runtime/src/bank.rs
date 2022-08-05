@@ -1452,7 +1452,7 @@ impl Bank {
 
     pub fn new_with_runtime_config_for_tests(
         genesis_config: &GenesisConfig,
-        runtime_config: RuntimeConfig,
+        runtime_config: Arc<RuntimeConfig>,
     ) -> Self {
         Self::new_with_paths_for_tests(
             genesis_config,
@@ -1479,7 +1479,7 @@ impl Bank {
     ) -> Self {
         Self::new_with_paths_for_tests(
             genesis_config,
-            RuntimeConfig::default(),
+            Arc::<RuntimeConfig>::default(),
             Vec::new(),
             account_indexes,
             accounts_db_caching_enabled,
@@ -1558,7 +1558,7 @@ impl Bank {
 
     pub fn new_with_paths_for_tests(
         genesis_config: &GenesisConfig,
-        runtime_config: RuntimeConfig,
+        runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
@@ -1582,7 +1582,7 @@ impl Bank {
     pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
         Self::new_with_paths(
             genesis_config,
-            RuntimeConfig::default(),
+            Arc::<RuntimeConfig>::default(),
             paths,
             None,
             None,
@@ -1598,7 +1598,7 @@ impl Bank {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
-        runtime_config: RuntimeConfig,
+        runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
@@ -1621,7 +1621,7 @@ impl Bank {
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
-        bank.runtime_config = Arc::new(runtime_config);
+        bank.runtime_config = runtime_config;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
         bank.process_genesis_config(genesis_config);
@@ -2120,7 +2120,7 @@ impl Bank {
     pub(crate) fn new_from_fields(
         bank_rc: BankRc,
         genesis_config: &GenesisConfig,
-        runtime_config: RuntimeConfig,
+        runtime_config: Arc<RuntimeConfig>,
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
@@ -2188,7 +2188,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
-            runtime_config: Arc::new(runtime_config),
+            runtime_config,
             builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),

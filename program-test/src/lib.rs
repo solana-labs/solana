@@ -784,14 +784,14 @@ impl ProgramTest {
 
         let mut bank = Bank::new_with_runtime_config_for_tests(
             &genesis_config,
-            RuntimeConfig {
+            Arc::new(RuntimeConfig {
                 bpf_jit: self.use_bpf_jit,
                 compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
                     compute_unit_limit: max_units,
                     ..ComputeBudget::default()
                 }),
                 ..RuntimeConfig::default()
-            },
+            }),
         );
 
         // Add loaders

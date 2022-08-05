@@ -707,7 +707,7 @@ pub struct ProcessOptions {
     pub accounts_db_config: Option<AccountsDbConfig>,
     pub verify_index: bool,
     pub shrink_ratio: AccountShrinkThreshold,
-    pub runtime_config: RuntimeConfig,
+    pub runtime_config: Arc<RuntimeConfig>,
     pub on_halt_store_hash_raw_data_for_debug: bool,
 }
 
@@ -750,7 +750,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     // Setup bank for slot 0
     let bank0 = Bank::new_with_paths(
         genesis_config,
-        opts.runtime_config,
+        opts.runtime_config.clone(),
         account_paths,
         opts.debug_keys.clone(),
         Some(&crate::builtins::get(opts.runtime_config.bpf_jit)),
@@ -3671,7 +3671,7 @@ pub mod tests {
     ) -> EpochSchedule {
         let bank = Bank::new_with_paths_for_tests(
             genesis_config,
-            RuntimeConfig::default(),
+            Arc::<RuntimeConfig>::default(),
             account_paths,
             AccountSecondaryIndexes::default(),
             false,

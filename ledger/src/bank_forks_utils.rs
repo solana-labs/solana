@@ -199,7 +199,7 @@ fn bank_forks_from_snapshot(
             &snapshot_config.incremental_snapshot_archives_dir,
             &account_paths,
             genesis_config,
-            process_options.runtime_config,
+            process_options.runtime_config.clone(),
             process_options.debug_keys.clone(),
             Some(&crate::builtins::get(
                 process_options.runtime_config.bpf_jit,
