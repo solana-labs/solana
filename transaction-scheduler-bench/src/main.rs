@@ -315,7 +315,7 @@ fn handle_transaction_batch(
 
     let priority_collected = transaction_batch
         .iter()
-        .map(|tx| tx.get_transaction_priority_details().unwrap().priority)
+        .map(|tx| tx.0.get_transaction_priority_details().unwrap().priority)
         .sum();
 
     metrics
