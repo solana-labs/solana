@@ -337,11 +337,9 @@ fn handle_transaction_batch(
         .priority_collected
         .fetch_add(priority_collected, Ordering::Relaxed);
 
-    for transaction in transaction_batch {
         completed_transaction_sender
-            .send((thread_index, transaction))
+            .send((thread_index, transaction_batch.tx))
             .unwrap();
-    }
 }
 
 const NUM_SENDERS: usize = 4;
