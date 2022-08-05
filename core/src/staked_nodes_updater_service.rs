@@ -36,11 +36,15 @@ impl StakedNodesUpdaterService {
                     let mut new_ip_to_stake = HashMap::new();
                     let mut new_id_to_stake = HashMap::new();
                     let mut total_stake = 0;
+                    let mut max_stake: u64 = 0;
+                    let mut min_stake: u64 = u64::MAX;
                     if Self::try_refresh_stake_maps(
                         &mut last_stakes,
                         &mut new_ip_to_stake,
                         &mut new_id_to_stake,
                         &mut total_stake,
+                        &mut max_stake,
+                        &mut min_stake,
                         &bank_forks,
                         &cluster_info,
                     ) {
@@ -61,16 +65,21 @@ impl StakedNodesUpdaterService {
         ip_to_stake: &mut HashMap<IpAddr, u64>,
         id_to_stake: &mut HashMap<Pubkey, u64>,
         total_stake: &mut u64,
+        max_stake: &mut u64,
+        min_stake: &mut u64,
         bank_forks: &RwLock<BankForks>,
         cluster_info: &ClusterInfo,
     ) -> bool {
         if last_stakes.elapsed() > IP_TO_STAKE_REFRESH_DURATION {
             let root_bank = bank_forks.read().unwrap().root_bank();
             let staked_nodes = root_bank.staked_nodes();
-            *total_stake = staked_nodes
-                .iter()
-                .map(|(_pubkey, stake)| stake)
-                .sum::<u64>();
+
+            for stake in staked_nodes.values() {
+                *total_stake += stake;
+                *max_stake = *stake.max(max_stake);
+                *min_stake = *stake.min(min_stake);
+            }
+
             *id_to_stake = cluster_info
                 .tvu_peers()
                 .into_iter()
