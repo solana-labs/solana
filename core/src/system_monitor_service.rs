@@ -30,7 +30,7 @@ const PROC_NET_SNMP_PATH: &str = "/proc/net/snmp";
 #[cfg(target_os = "linux")]
 const PROC_NET_DEV_PATH: &str = "/proc/net/dev";
 #[cfg(target_os = "linux")]
-const PROC_DISKSTATS_PATH: &str = "/proc/diskstats";
+const SYS_BLOCK_PATH: &str = "/sys/block";
 
 pub struct SystemMonitorService {
     thread_hdl: JoinHandle<()>,
@@ -137,6 +137,29 @@ impl UdpStats {
             in_csum_errors: *udp_stats.get("InCsumErrors").unwrap_or(&0),
             ignored_multi: *udp_stats.get("IgnoredMulti").unwrap_or(&0),
         }
+    }
+}
+
+impl DiskStats {
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    fn accumulate(&mut self, other: &DiskStats) {
+        self.reads_completed += other.reads_completed;
+        self.reads_merged += other.reads_merged;
+        self.sectors_read += other.sectors_read;
+        self.time_reading_ms += other.time_reading_ms;
+        self.writes_completed += other.writes_completed;
+        self.writes_merged += other.writes_merged;
+        self.sectors_written += other.sectors_written;
+        self.time_writing_ms += other.time_writing_ms;
+        self.io_in_progress += other.io_in_progress;
+        self.time_io_ms += other.time_io_ms;
+        self.time_io_weighted_ms += other.time_io_weighted_ms;
+        self.discards_completed += other.discards_completed;
+        self.discards_merged += other.discards_merged;
+        self.sectors_discarded += other.sectors_discarded;
+        self.time_discarding += other.time_discarding;
+        self.flushes_completed += other.flushes_completed;
+        self.time_flushing += other.time_flushing;
     }
 }
 
@@ -254,49 +277,79 @@ pub fn verify_net_stats_access() -> Result<(), String> {
 
 #[cfg(target_os = "linux")]
 fn read_disk_stats() -> Result<DiskStats, String> {
-    let file_path_diskstats = PROC_DISKSTATS_PATH;
-    let file_diskstats = File::open(file_path_diskstats).map_err(|e| e.to_string())?;
-    let mut reader_diskstats = BufReader::new(file_diskstats);
-    parse_disk_stats(&mut reader_diskstats)
+    let mut stats = DiskStats::default();
+    let mut num_disks = 0;
+    let blk_device_dir_iter = std::fs::read_dir(SYS_BLOCK_PATH).map_err(|e| e.to_string())?;
+    blk_device_dir_iter
+        .filter_map(|blk_device_dir| {
+            match blk_device_dir {
+                Ok(blk_device_dir) => {
+                    let blk_device_dir_name = &blk_device_dir.file_name();
+                    let blk_device_dir_name = blk_device_dir_name.to_string_lossy();
+                    if blk_device_dir_name.starts_with("loop")
+                        || blk_device_dir_name.starts_with("dm")
+                        || blk_device_dir_name.starts_with("md")
+                    {
+                        // Filter out loopback devices, dmcrypt volumes, and mdraid volumes
+                        return None;
+                    }
+                    let mut path = blk_device_dir.path();
+                    path.push("stat");
+                    match File::open(path) {
+                        Ok(file_diskstats) => Some(file_diskstats),
+                        Err(_) => None,
+                    }
+                }
+                Err(_) => None,
+            }
+        })
+        .for_each(|file_diskstats| {
+            let mut reader_diskstats = BufReader::new(file_diskstats);
+            stats.accumulate(&parse_disk_stats(&mut reader_diskstats).unwrap_or_default());
+            num_disks += 1;
+        });
+    stats.num_disks = num_disks;
+    Ok(stats)
 }
 
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn parse_disk_stats(reader_diskstats: &mut impl BufRead) -> Result<DiskStats, String> {
     let mut stats = DiskStats::default();
-    let mut num_disks = 0;
-    for line in reader_diskstats.lines() {
-        let line = line.map_err(|e| e.to_string())?;
-        let values: Vec<_> = line.split_ascii_whitespace().collect();
+    let mut line = String::new();
+    reader_diskstats
+        .read_line(&mut line)
+        .map_err(|e| e.to_string())?;
+    let values: Vec<_> = line.split_ascii_whitespace().collect();
+    let num_elements = values.len();
 
-        if values.len() != 20 {
-            return Err("parse error, expected exactly 20 disk stat elements".to_string());
-        }
-        if values[2].starts_with("loop") || values[1].ne("0") {
-            // Filter out the loopback io devices.
-            // Only look at raw device (filter partitions)
-            continue;
-        }
-
-        num_disks += 1;
-        stats.reads_completed += values[3].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.reads_merged += values[4].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.sectors_read += values[5].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.time_reading_ms += values[6].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.writes_completed += values[7].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.writes_merged += values[8].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.sectors_written += values[9].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.time_writing_ms += values[10].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.io_in_progress += values[11].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.time_io_ms += values[12].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.time_io_weighted_ms += values[13].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.discards_completed += values[14].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.discards_merged += values[15].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.sectors_discarded += values[16].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.time_discarding += values[17].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.flushes_completed += values[18].parse::<u64>().map_err(|e| e.to_string())?;
-        stats.time_flushing += values[19].parse::<u64>().map_err(|e| e.to_string())?;
+    if num_elements != 11 && num_elements != 15 && num_elements != 17 {
+        return Err("parse error, unknown number of disk stat elements".to_string());
     }
-    stats.num_disks = num_disks;
+
+    stats.reads_completed = values[0].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.reads_merged = values[1].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.sectors_read = values[2].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.time_reading_ms = values[3].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.writes_completed = values[4].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.writes_merged = values[5].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.sectors_written = values[6].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.time_writing_ms = values[7].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.io_in_progress = values[8].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.time_io_ms = values[9].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.time_io_weighted_ms = values[10].parse::<u64>().map_err(|e| e.to_string())?;
+    if num_elements > 11 {
+        // Kernel 4.18+ appends four more fields for discard
+        stats.discards_completed = values[11].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.discards_merged = values[12].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.sectors_discarded = values[13].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_discarding = values[14].parse::<u64>().map_err(|e| e.to_string())?;
+    }
+    if num_elements > 15 {
+        // Kernel 5.5+ appends two more fields for flush requests
+        stats.flushes_completed = values[15].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_flushing = values[16].parse::<u64>().map_err(|e| e.to_string())?;
+    }
+
     Ok(stats)
 }
 
@@ -892,35 +945,43 @@ data" as &[u8];
 
     #[test]
     fn test_parse_disk_stats() {
-        const MOCK_DISK: &[u8] =
-b"   7       0 loop0 108 0 2906 27 0 0 0 0 0 40 27 0 0 0 0 0 0
-7       1 loop1 48 0 716 23 0 0 0 0 0 28 23 0 0 0 0 0 0
-7       2 loop2 108 0 2916 21 0 0 0 0 0 36 21 0 0 0 0 0 0
-7       3 loop3 257 0 4394 131 0 0 0 0 0 296 131 0 0 0 0 0 0
-7       4 loop4 111 0 2896 62 0 0 0 0 0 68 62 0 0 0 0 0 0
-7       5 loop5 110 0 2914 138 0 0 0 0 0 112 138 0 0 0 0 0 0
-7       6 loop6 68 0 2200 47 0 0 0 0 0 44 47 0 0 0 0 0 0
-7       7 loop7 1397 0 101686 515 0 0 0 0 0 4628 515 0 0 0 0 0 0
-8       0 sda 40883273 294820 1408426268 30522643 352908152 204249001 37827695922 2073754124 0 86054536 2105005805 496399 4 1886486166 167545 18008621 561492
-8       1 sda1 40882879 291543 1408408989 30522451 352908150 204249001 37827695920 2073754122 0 86054508 2104444115 496393 0 1886085576 167541 0 0
-8      14 sda14 73 0 832 22 0 0 0 0 0 48 22 0 0 0 0 0 0
-8      15 sda15 146 3277 9855 62 2 0 2 1 0 76 68 6 4 400590 3 0 0
-7       9 loop9 55 0 2106 41 0 0 0 0 0 28 41 0 0 0 0 0 0
-7       8 loop8 41 0 688 53 0 0 0 0 0 44 53 0 0 0 0 0 0
-7      10 loop10 60 0 748 1 0 0 0 0 0 20 1 0 0 0 0 0 0
-9       0 sdb 1 1 1 1 352908152 204249001 37827695922 2073754124 0 86054536 2105005805 496399 4 1886486166 167545 18008621 561492" as &[u8];
-        const UNEXPECTED_DATA: &[u8] = b"un
+        const MOCK_DISK_11: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738" as &[u8];
+        // Matches kernel 4.18+ format
+        const MOCK_DISK_15: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0" as &[u8];
+        // Matches kernel 5.5+ format
+        const MOCK_DISK_17: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0    70715     2922" as &[u8];
+        const UNEXPECTED_DATA_1: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0    70715" as &[u8];
+
+        const UNEXPECTED_DATA_2: &[u8] = b"un
 ex
 pec
 ted
 data" as &[u8];
 
-        let mut mock_disk = MOCK_DISK;
+        let mut mock_disk = MOCK_DISK_11;
         let stats = parse_disk_stats(&mut mock_disk).unwrap();
-        assert_eq!(stats.reads_completed, 40883274);
-        assert_eq!(stats.time_flushing, 1122984);
+        assert_eq!(stats.reads_completed, 2095701);
+        assert_eq!(stats.time_io_weighted_ms, 285220738);
 
-        let mut mock_disk = UNEXPECTED_DATA;
+        let mut mock_disk = MOCK_DISK_15;
+        let stats = parse_disk_stats(&mut mock_disk).unwrap();
+        assert_eq!(stats.reads_completed, 2095701);
+        assert_eq!(stats.time_discarding, 0);
+
+        let mut mock_disk = MOCK_DISK_17;
+        let stats = parse_disk_stats(&mut mock_disk).unwrap();
+        assert_eq!(stats.reads_completed, 2095701);
+        assert_eq!(stats.time_flushing, 2922);
+
+        let mut mock_disk = UNEXPECTED_DATA_1;
+        let stats = parse_disk_stats(&mut mock_disk);
+        assert!(stats.is_err());
+
+        let mut mock_disk = UNEXPECTED_DATA_2;
         let stats = parse_disk_stats(&mut mock_disk);
         assert!(stats.is_err());
     }
