@@ -80,7 +80,7 @@ struct Args {
 /// Some convenient type aliases
 type PreprocessedTransaction = Box<(SanitizedTransaction, Vec<solana_scheduler::LockAttempt>)>;
 type TransactionMessage = PreprocessedTransaction;
-type CompletedTransactionMessage = (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
+type CompletedTransactionMessage = solana_scheduler::MultiplexedPayload; // (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
 type TransactionBatchMessage = Box<solana_scheduler::ExecutionEnvironment>; // Vec<TransactionMessage>;
 type BatchSenderMessage = solana_scheduler::MultiplexedPayload; // Vec<Vec<PreprocessedTransaction>>;
 
@@ -163,8 +163,6 @@ fn main() {
     let (packet_batch_sender, packet_batch_receiver) = crossbeam_channel::unbounded();
     let (transaction_batch_senders, transaction_batch_receivers) =
         build_channels(num_execution_threads);
-    let (completed_transaction_sender, completed_transaction_receiver) =
-        crossbeam_channel::unbounded();
     let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::default_for_tests())));
     let exit = Arc::new(AtomicBool::new(false));
 
@@ -172,7 +170,6 @@ fn main() {
     let scheduler_handle = spawn_unified_scheduler(
         packet_batch_receiver,
         transaction_batch_senders,
-        completed_transaction_receiver,
         bank_forks,
         max_batch_size,
         exit.clone(),
@@ -184,7 +181,7 @@ fn main() {
     let execution_handles = start_execution_threads(
         metrics.clone(),
         transaction_batch_receivers,
-        completed_transaction_sender,
+        packet_batch_sender,
         execution_per_tx_us,
         exit.clone(),
     );
