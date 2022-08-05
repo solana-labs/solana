@@ -478,7 +478,7 @@ fn build_packet(
         *blockhash,
     ));
 
-    let s = SanitizedTransaction::try_create(
+    let sanitized_tx = SanitizedTransaction::try_create(
         versioned_transaction,
         solana_sdk::transaction::MessageHash::Compute,
         None,
@@ -498,7 +498,7 @@ fn build_packet(
         .map(|address| solana_scheduler::LockAttempt::new(**address, RequestedUsage::Readonly));
     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
 
-    (s, locks)
+    (sanitized_tx, locks)
 }
 
 fn build_accounts(num_accounts: usize) -> Vec<Keypair> {
