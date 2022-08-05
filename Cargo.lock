@@ -4575,7 +4575,7 @@ dependencies = [
  "solana-sdk 1.10.35",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022",
+ "spl-token-2022 0.3.0",
  "thiserror",
  "zstd",
 ]
@@ -4985,7 +4985,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
- "spl-token-2022",
+ "spl-token-2022 0.3.0",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -5465,7 +5465,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022",
+ "spl-token-2022 0.2.0",
  "tempfile",
  "thiserror",
  "tokio",
@@ -5973,7 +5973,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022",
+ "spl-token-2022 0.3.0",
  "stream-cancel",
  "symlink",
  "thiserror",
@@ -6447,7 +6447,7 @@ dependencies = [
  "spl-associated-token-account",
  "spl-memo",
  "spl-token",
- "spl-token-2022",
+ "spl-token-2022 0.3.0",
  "thiserror",
 ]
 
@@ -6608,6 +6608,36 @@ dependencies = [
 
 [[package]]
 name = "solana-zk-token-sdk"
+version = "1.10.33"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "410ee53a26ac91098c289c983863535d4fbb6604b229ae1159503f48fa4fc90f"
+dependencies = [
+ "aes-gcm-siv",
+ "arrayref",
+ "base64 0.13.0",
+ "bincode",
+ "bytemuck",
+ "byteorder",
+ "cipher 0.4.3",
+ "curve25519-dalek",
+ "getrandom 0.1.16",
+ "lazy_static",
+ "merlin",
+ "num-derive",
+ "num-traits",
+ "rand 0.7.3",
+ "serde",
+ "serde_json",
+ "sha3 0.9.1",
+ "solana-program 1.10.33",
+ "solana-sdk 1.10.33",
+ "subtle",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
+name = "solana-zk-token-sdk"
 version = "1.10.35"
 dependencies = [
  "aes-gcm-siv",
@@ -6723,6 +6753,24 @@ dependencies = [
  "num_enum",
  "solana-program 1.10.33",
  "solana-zk-token-sdk 0.8.1",
+ "spl-memo",
+ "spl-token",
+ "thiserror",
+]
+
+[[package]]
+name = "spl-token-2022"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83f001b3579e69a695a22e458fa1a4b76ab25a142544a094e3f65af63dc61c2f"
+dependencies = [
+ "arrayref",
+ "bytemuck",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "solana-program 1.10.33",
+ "solana-zk-token-sdk 1.10.33",
  "spl-memo",
  "spl-token",
  "thiserror",
