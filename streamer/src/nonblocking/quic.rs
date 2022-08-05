@@ -320,7 +320,7 @@ fn prune_unstaked_connections_and_add_new_connection(
 }
 
 /// Calculate the ratio for per connection receive window from a staked peer
-fn compute_receive_window_ratio_for_staked_node(max_stake: u64, min_stake: u64, stake: u64) -> f64 {
+fn compute_receive_window_ratio_for_staked_node(max_stake: u64, min_stake: u64, stake: u64) -> u64 {
     // Testing shows the maximum througput from a connection is achieved at receive_window =
     // PACKET_DATA_SIZE * 10. Beyond that, there is not much gain. We linearly map the
     // stake to the ratio range from QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO to
@@ -336,9 +336,10 @@ fn compute_receive_window_ratio_for_staked_node(max_stake: u64, min_stake: u64, 
     let max_ratio = QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO;
     let min_ratio = QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO;
     if max_stake > min_stake {
-        let a = (max_ratio - min_ratio) / (max_stake - min_stake) as f64;
-        let b = max_ratio - ((max_stake as f64) * a);
-        (a * stake as f64) + b
+        let a = (max_ratio - min_ratio) as f64 / (max_stake - min_stake) as f64;
+        let b = max_ratio as f64 - ((max_stake as f64) * a);
+        let ratio = (a * stake as f64) + b;
+        ratio.round() as u64
     } else {
         QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO
     }
@@ -352,13 +353,13 @@ fn compute_recieve_window(
 ) -> VarInt {
     match peer_type {
         ConnectionPeerType::Unstaked => {
-            VarInt::from_u64((PACKET_DATA_SIZE as f64 * QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO) as u64)
+            VarInt::from_u64((PACKET_DATA_SIZE as u64 * QUIC_UNSTAKED_RECEIVE_WINDOW_RATIO) as u64)
                 .unwrap()
         }
         ConnectionPeerType::Staked => {
             let ratio =
                 compute_receive_window_ratio_for_staked_node(max_stake, min_stake, peer_stake);
-            VarInt::from_u64((PACKET_DATA_SIZE as f64 * ratio) as u64).unwrap()
+            VarInt::from_u64((PACKET_DATA_SIZE as u64 * ratio) as u64).unwrap()
         }
     }
 }
@@ -1594,41 +1595,31 @@ pub mod test {
         let mut max_stake = 10000;
         let mut min_stake = 0;
         let ratio = compute_receive_window_ratio_for_staked_node(max_stake, min_stake, min_stake);
-        let ratio = format!("{:.2}", ratio);
-        let min_ratio = format!("{:.2}", QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO);
-        assert_eq!(ratio, min_ratio);
+        assert_eq!(ratio, QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO);
 
         let ratio = compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake);
-        let ratio = format!("{:.2}", ratio);
-        let max_ratio = format!("{:.2}", QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO);
+        let max_ratio = QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO;
         assert_eq!(ratio, max_ratio);
 
         let ratio =
             compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake / 2);
-        let ratio = format!("{:.2}", ratio);
-        let average_ratio = format!(
-            "{:.2}",
-            (QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO + QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO) / 2.
-        );
+        let average_ratio = (QUIC_MAX_STAKED_RECEIVE_WINDOW_RATIO + QUIC_MIN_STAKED_RECEIVE_WINDOW_RATIO) / 2;
         assert_eq!(ratio, average_ratio);
 
         max_stake = 10000;
         min_stake = 10000;
         let ratio = compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake);
-        let ratio = format!("{:.2}", ratio);
         assert_eq!(ratio, max_ratio);
 
         max_stake = 0;
         min_stake = 0;
         let ratio = compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake);
-        let ratio = format!("{:.2}", ratio);
         assert_eq!(ratio, max_ratio);
 
         max_stake = 1000;
         min_stake = 10;
         let ratio =
             compute_receive_window_ratio_for_staked_node(max_stake, min_stake, max_stake + 10);
-        let ratio = format!("{:.2}", ratio);
         assert_eq!(ratio, max_ratio);
     }
 }
