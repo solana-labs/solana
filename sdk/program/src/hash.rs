@@ -6,8 +6,8 @@
 use {
     crate::{sanitize::Sanitize, wasm_bindgen},
     borsh::{BorshDeserialize, BorshSchema, BorshSerialize},
-    sha2::{Digest, Sha256, compress256},
-    generic_array::{GenericArray, typenum::U64},
+    generic_array::{typenum::U64, GenericArray},
+    sha2::{compress256, Digest, Sha256},
     std::{convert::TryFrom, fmt, mem, str::FromStr},
     thiserror::Error,
 };
@@ -20,8 +20,7 @@ const MAX_BASE58_LEN: usize = 44;
 /// Initial Value for SHA256 State
 /// copied from https://github.com/RustCrypto/hashes/blob/457061f19b3538651aa7ef208ce6b04bfba65e61/sha2/src/consts.rs#L84
 pub const H256_256: [u32; 8] = [
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
 ];
 
 /// A hash; the 32-byte output of a hashing algorithm.
@@ -221,9 +220,9 @@ pub fn compress(blocks: &[[u8; 64]]) -> Hash {
     {
         unsafe {
             crate::syscalls::sol_sha256_compress(
-                blocks as * const _ as * const u8,
+                blocks as *const _ as *const u8,
                 blocks.len() as u64,
-                &mut res as &mut _ as *mut u8
+                &mut res as &mut _ as *mut u8,
             );
         }
         Hash::new_from_array(res)

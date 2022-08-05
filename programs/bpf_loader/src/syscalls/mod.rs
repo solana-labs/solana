@@ -39,7 +39,7 @@ use {
             limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
             syscall_saturated_math,
         },
-        hash::{Hasher, HASH_BYTES, compress},
+        hash::{compress, Hasher, HASH_BYTES},
         instruction::{
             AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
             TRANSACTION_LEVEL_STACK_HEIGHT,
@@ -953,7 +953,7 @@ declare_syscall!(
                 .consume(compute_budget.sha256_base_cost),
             result
         );
-        
+
         let hash_result = question_mark!(
             translate_slice_mut::<u8>(
                 memory_mapping,
@@ -994,7 +994,6 @@ declare_syscall!(
         *result = Ok(0);
     }
 );
-
 
 declare_syscall!(
     // Keccak256
