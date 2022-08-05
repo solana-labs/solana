@@ -774,7 +774,7 @@ gossipDeploy() {
   echo "Deployment started at $(date)"
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
-
+  leftover=0
   if [[ $gossipInstances != 0 ]]; then 
     perNode=$(( $gossipInstances / $(( ${#validatorIpList[@]} - 1)) ))
     echo "perNode: $perNode"
@@ -784,9 +784,12 @@ gossipDeploy() {
       instancesPerNode=0
     fi
     leftover=$(($gossipInstances % $((${#validatorIpList[@]} - 1)) ))
+  else 
+    gossipInstances=$(($instancesPerNode * $((${#validatorIpList[@]} - 1))))
   fi
 
   echo "instancesPerNode: $instancesPerNode, leftover: $leftover"
+
   
   echo "############## TOTAL GOSSIP INSTANCES TO DEPLOY (excl. bootstrap): $gossipInstances ##############"
 
@@ -814,26 +817,29 @@ gossipDeploy() {
 
   wait 
 
-  echo "deploying leftovers. total leftover: $leftover"
-  declare skipBootstrapLeader=true
-  declare leftoverCount=0
-  for nodeAddress in "${validatorIpList[@]}"; do 
-    if $skipBootstrapLeader; then 
-      skipBootstrapLeader=false
-      continue
-    else 
-      nodeType=
-      nodeIndex=
-      getNodeType
-      gossipInstancesPerNode $instancesPerNode $ipAddress $nodeType $nodeIndex true &
-      leftoverCount=$(($leftoverCount + 1))
-      if [[ $leftoverCount == $leftover ]]; then 
-        break 
-      fi 
-    fi
-  done
+  if [[ $leftover == 0 ]]; then 
+    echo "deploying leftovers. total leftover: $leftover"
+    declare skipBootstrapLeader=true
+    declare leftoverCount=0
+    for nodeAddress in "${validatorIpList[@]}"; do 
+      if $skipBootstrapLeader; then 
+        skipBootstrapLeader=false
+        continue
+      else 
+        nodeType=
+        nodeIndex=
+        getNodeType
+        gossipInstancesPerNode $instancesPerNode $ipAddress $nodeType $nodeIndex true &
+        leftoverCount=$(($leftoverCount + 1))
+        if [[ $leftoverCount == $leftover ]]; then 
+          break 
+        fi 
+      fi
+    done
+    wait
+  fi
 
-  wait
+
 
   declare networkVersion=unknown
   case $deployMethod in
