@@ -319,7 +319,7 @@ fn handle_transaction_batch(
     transaction_batch: TransactionBatchMessage,
     execution_per_tx_us: u64,
 ) {
-    let num_transactions = transaction_batch.len() as u64;
+    let num_transactions = 1; //transaction_batch.len() as u64;
     metrics
         .num_transactions_scheduled
         .fetch_add(num_transactions as usize, Ordering::Relaxed);
