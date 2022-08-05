@@ -467,7 +467,15 @@ fn build_packet(
         &[sending_keypair],
         *blockhash,
     ));
-    Packet::from_data(None, &versioned_transaction).unwrap()
+
+    SanitizedTransaction::try_create(
+        versioned_transaction,
+        MessageHash::Compute,
+        None,
+        SimpleAddressLoader::Disabled,
+        true, // require_static_program_ids
+    )
+    .unwrap()
 }
 
 fn build_accounts(num_accounts: usize) -> Vec<Keypair> {
