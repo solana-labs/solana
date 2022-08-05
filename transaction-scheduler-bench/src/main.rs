@@ -115,7 +115,7 @@ struct PacketSendingConfig {
 }
 
 fn spawn_unified_scheduler(
-        packet_batch_receiver: Receiver<PacketBatchMessage>,
+        packet_batch_receiver: Receiver<Vec<Vec<SanitizedTransaction>>>,
         transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
         completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
         bank_forks: Arc<RwLock<BankForks>>,
