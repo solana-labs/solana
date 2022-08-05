@@ -113,7 +113,9 @@ pull_request_rules:
       - label=feature-gate
     actions:
       backport:
-        assignees: *BackportAssignee
+        assignees: &BackportAssignee
+          - "{{ merged_by|replace('mergify[bot]', label|select('equalto', 'community')|first|default(author)|replace('community', '@solana-labs/community-pr-s
+ubscribers')) }}"
         ignore_conflicts: true
         labels:
           - feature-gate
