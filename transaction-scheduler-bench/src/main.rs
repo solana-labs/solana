@@ -78,7 +78,8 @@ struct Args {
 }
 
 /// Some convenient type aliases
-type TransactionMessage = Box<SanitizedTransaction>;
+type PreprocessedTransaction = SanitizedTransaction
+type TransactionMessage = Box<PreprocessedTransaction>;
 type CompletedTransactionMessage = (usize, TransactionMessage); // thread index and transaction message
 type TransactionBatchMessage = Vec<TransactionMessage>;
 
@@ -115,7 +116,7 @@ struct PacketSendingConfig {
 }
 
 fn spawn_unified_scheduler(
-        packet_batch_receiver: Receiver<Vec<Vec<SanitizedTransaction>>>,
+        packet_batch_receiver: Receiver<Vec<Vec<PreprocessedTransaction>>>,
         transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
         completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -337,7 +338,7 @@ fn spawn_packet_senders(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     high_conflict_sender: usize,
     accounts: Arc<Vec<Keypair>>,
-    packet_batch_sender: Sender<Vec<Vec<SanitizedTransaction>>>,
+    packet_batch_sender: Sender<Vec<Vec<PreprocessedTransaction>>>,
     config: Arc<PacketSendingConfig>,
     duration: Duration,
     exit: Arc<AtomicBool>,
@@ -366,7 +367,7 @@ fn spawn_packet_sender(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
     accounts: Arc<Vec<Keypair>>,
-    packet_batch_sender: Sender<Vec<Vec<SanitizedTransaction>>>,
+    packet_batch_sender: Sender<Vec<Vec<PreprocessedTransaction>>>,
     config: Arc<PacketSendingConfig>,
     duration: Duration,
     exit: Arc<AtomicBool>,
@@ -388,7 +389,7 @@ fn send_packets(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
     accounts: Arc<Vec<Keypair>>,
-    packet_batch_sender: Sender<Vec<Vec<SanitizedTransaction>>>,
+    packet_batch_sender: Sender<Vec<Vec<PreprocessedTransaction>>>,
     config: Arc<PacketSendingConfig>,
     duration: Duration,
     exit: Arc<AtomicBool>,
@@ -432,7 +433,7 @@ fn build_packet_batches(
     num_accounts: usize,
     accounts: &[Keypair],
     blockhash: &Hash,
-) -> Vec<Vec<SanitizedTransaction>> {
+) -> Vec<Vec<PreprocessedTransaction>> {
     (0..config.batches_per_msg)
         .map(|_| build_packet_batch(config, num_accounts, accounts, blockhash))
         .collect()
@@ -443,7 +444,7 @@ fn build_packet_batch(
     num_accounts: usize,
     accounts: &[Keypair],
     blockhash: &Hash,
-) -> Vec<SanitizedTransaction> {
+) -> Vec<PreprocessedTransaction> {
     (0..config.packets_per_batch)
         .map(|_| build_packet(config, num_accounts, accounts, blockhash))
         .collect()
@@ -454,7 +455,7 @@ fn build_packet(
     num_accounts: usize,
     accounts: &[Keypair],
     blockhash: &Hash,
-) -> SanitizedTransaction {
+) -> PreprocessedTransaction {
     let get_random_account = || &accounts[rand::thread_rng().gen_range(0..num_accounts)];
     let sending_keypair = get_random_account();
 
