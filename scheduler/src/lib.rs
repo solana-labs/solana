@@ -332,6 +332,19 @@ pub enum MultiplexedPayload {
     FromExecute(Box<ExecutionEnvironment>),
 }
 
+fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
+        let mut compute_budget = ComputeBudget::default();
+        let prioritization_fee_details = compute_budget
+            .process_instructions(
+                tx.message().program_instructions_iter(),
+                true, // use default units per instruction
+                true, // don't reject txs that use set compute unit price ix
+            )
+            .ok()?;
+
+            prioritization_fee_details.get_priority()
+}
+
 pub struct ScheduleStage {}
 
 impl ScheduleStage {
@@ -610,7 +623,7 @@ impl ScheduleStage {
                     //Self::register_runnable_task(weighted_tx, runnable_queue);
                     for vv in vvv {
                         for v in vv {
-                            let p = v.0.get_transaction_priority_details().unwrap().priority;
+                            let p = get_transaction_priority_details(v.0).unwrap().priority;
                             Self::register_runnable_task((Weight { ix: p }, v), runnable_queue);
                         }
                     }
