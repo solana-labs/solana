@@ -333,6 +333,7 @@ pub enum MultiplexedPayload {
 }
 
 fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
+        use solana_program_runtime::compute_budget::ComputeBudget;
         let mut compute_budget = ComputeBudget::default();
         let prioritization_fee_details = compute_budget
             .process_instructions(
