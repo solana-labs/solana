@@ -63,8 +63,8 @@ violation is detected.
 
 ```
 
-a1 A1 A1 a1 a2 A2 A2 a2 a3
-B1 b1 b2 B2 B2 b2 b3 B3 B3
+a0 a1 A1 A1 a1 a2 A2 A2 a2 a3
+B1 B1 b1 b2 B2 B2 b2 b3 B3 B3
 ```
 
 To rotate, the subcommittee must go through the rotation protocol.
@@ -101,21 +101,15 @@ During the **primary rotation** two possible forks can occur.
 * Epoch 1: (a1, B1) - SOME epoch 2 blocks have a root to this epoch
 * Epoch 2: (A1, b1)
 
-Epoch 1, had enough N confirmed blocks such that 2^N > epoch slots,
-but not enough to create a root. 2 kinds of blocks can be proposed
-in epoch 2, those that create a root in epoch 1, and those who do
-not.  For blocks that create a root, A1 is the primary, for blocks
-that do not create a root B1 is the primary.
-
 For the transition to be complete, (A1, b1), must root a block
 together in Epoch 1. Therefore block producers should continue
-picking B1 as the primary during the **primary rotation**.
+picking **B1/b1** during epoch 2.
 
-During the **primary rotation**, *B1* may use A1
-can use each other votes for switching proofs.
+For blocks propsed in epoch 2, **A1** may use **B1/b1**'s votes
+from epoch 1 and 2 for switching proofs.
 
-All block producers should be following B1 for fork weight until
-the epoch is done.
+For blocks propsed in epoch 2, all block producers should be following
+B1/b1 for fork weigt.
 
 Optimistic confirmation is valid iff both vote 2/3+ on the same fork.
 
@@ -130,12 +124,12 @@ During the **secondary rotation** two possible forks can occur.
 Blocks proposed in epoch 2 that have a root in epoch 1 will have
 **b2**, as the new subcommittee.
 
-During the **secondary rotation**, on either fork, each subcommittees
-can only use their own votes for switching proofs.
+For blocks proposed in epoch 2, **A1,b1,b2** may only use their own
+votes for switching proofs.
 
 All block producers should be following A1 for fork weight.
 
-If **b2** doesn't root a block with A1, on the next epoch **b2**
+If **b2** doesn't root a block with **A1**, on the next epoch **b2**
 is shuffled, and each possible fork may have a different valid
 **b2** subcommittee, or the previous b1 subcommittee A1 can only
 pick a single fork, and therefore only 1 of the proposed **b2**
