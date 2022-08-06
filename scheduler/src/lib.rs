@@ -208,7 +208,7 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn unlock(&mut self, attempt: &LockAttempt) -> bool {
+    fn unlock(&mut self, attempt: &mut LockAttempt) -> bool {
         debug_assert!(attempt.is_success());
 
         let mut newly_uncontended = false;
