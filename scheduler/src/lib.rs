@@ -201,7 +201,7 @@ impl AddressBook {
         a.status.page().contended_unique_weights.remove(unique_weight);
     }
 
-    fn ensure_unlock(&mut self, attempt: &LockAttempt) {
+    fn ensure_unlock(&mut self, attempt: &mut LockAttempt) {
         if attempt.is_success() {
             self.unlock(attempt);
         }
