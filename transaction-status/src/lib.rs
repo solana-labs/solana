@@ -288,6 +288,7 @@ pub struct TransactionStatusMeta {
     pub rewards: Option<Rewards>,
     pub loaded_addresses: LoadedAddresses,
     pub return_data: Option<TransactionReturnData>,
+    pub compute_units_consumed: Option<u64>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -304,6 +305,7 @@ impl Default for TransactionStatusMeta {
             rewards: None,
             loaded_addresses: LoadedAddresses::default(),
             return_data: None,
+            compute_units_consumed: None,
         }
     }
 }
@@ -325,6 +327,8 @@ pub struct UiTransactionStatusMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loaded_addresses: Option<UiLoadedAddresses>,
     pub return_data: Option<TransactionReturnData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compute_units_consumed: Option<u64>,
 }
 
 /// A duplicate representation of LoadedAddresses
@@ -376,6 +380,7 @@ impl UiTransactionStatusMeta {
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
             return_data: meta.return_data,
+            compute_units_consumed: meta.compute_units_consumed,
         }
     }
 }
@@ -401,6 +406,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
             return_data: meta.return_data,
+            compute_units_consumed: meta.compute_units_consumed,
         }
     }
 }

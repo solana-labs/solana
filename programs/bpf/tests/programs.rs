@@ -440,6 +440,7 @@ fn execute_transactions(
                         inner_instructions,
                         durable_nonce_fee,
                         return_data,
+                        executed_units,
                         ..
                     } = details;
 
@@ -482,6 +483,7 @@ fn execute_transactions(
                         rewards: None,
                         loaded_addresses: LoadedAddresses::default(),
                         return_data,
+                        compute_units_consumed: Some(executed_units),
                     };
 
                     Ok(ConfirmedTransactionWithStatusMeta {

@@ -230,6 +230,7 @@ impl RpcSender for MockSender {
                             rewards: None,
                             loaded_addresses: None,
                             return_data: None,
+                            compute_units_consumed: None,
                         }),
                 },
                 block_time: Some(1628633791),
