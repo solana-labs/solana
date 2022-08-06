@@ -133,9 +133,9 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let LockAttempt {address, requested_usage, is_success} = attempt;
+        let LockAttempt {status, requested_usage, is_success} = attempt;
 
-        match self.book.entry(*address) {
+        match self.book.entry(status.address()) {
             AddressMapEntry::Vacant(book_entry) => {
                 book_entry.insert(Rc::new(Page::new(CurrentUsage::renew(*requested_usage))));
                 *is_success = true;
