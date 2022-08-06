@@ -52,6 +52,13 @@ impl LockAttemptStatus {
             LockAttemptStatus::AfterLookup(_) => unreachable!(),
         }
     }
+
+    fn page(&self) -> Rc<Page> {
+        match self {
+            LockAttemptStatus::BeforeLookup(_) => unreachable!(),
+            LockAttemptStatus::AfterLookup(page) => Rc::get_mut(page).unwrap(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
