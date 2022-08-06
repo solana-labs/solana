@@ -617,7 +617,7 @@ lazy_static! {
         (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
         (sign_repair_requests::id(), "sign repair requests #26834"),
         (concurrent_replay_of_forks::id(), "Allow slots from different forks to be replayed concurrently #26465"),
-        (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #TODO"),
+        (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
         (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
