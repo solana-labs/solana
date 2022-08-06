@@ -46,7 +46,7 @@ enum LockAttemptStatus {
 
 #[derive(Clone, Debug)]
 pub struct LockAttempt {
-    address: Pubkey,
+    status: LockAttemptStatus,
     is_success: bool,
     requested_usage: RequestedUsage,
 }
