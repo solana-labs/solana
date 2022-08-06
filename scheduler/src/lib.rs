@@ -537,7 +537,7 @@ impl ScheduleStage {
         from_runnable: bool,
     ) {
         for l in lock_attempts {
-            address_book.ensure_unlock(&l);
+            address_book.ensure_unlock(l);
 
             // revert because now contended again
             if !from_runnable {
