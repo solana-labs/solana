@@ -16,6 +16,8 @@ use {
     },
 };
 
+use std::rc::Rc;
+
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
     lock_attempts: Vec<LockAttempt>,
