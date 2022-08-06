@@ -16,7 +16,7 @@ use {
     },
 };
 
-use std::rc::Rc;
+type MyRc = std::rc::Rc;
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
