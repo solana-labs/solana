@@ -49,7 +49,7 @@ impl LockAttemptStatus {
     fn address(&self) -> &Pubkey {
         match self {
             LockAttemptStatus::BeforeLookup(pubkey) => &pubkey,
-            LockAttemptStatus::AfterLookup(_, _) => unreachable!(),
+            LockAttemptStatus::AfterLookup(pubkey, _) => &pubkey,
         }
     }
 
