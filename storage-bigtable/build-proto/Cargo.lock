@@ -219,7 +219,7 @@ dependencies = [
 
 [[package]]
 name = "proto"
-version = "1.11.6"
+version = "1.12.0"
 dependencies = [
  "protobuf-src",
  "tonic-build",
