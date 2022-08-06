@@ -16,7 +16,7 @@ use {
     },
 };
 
-type MyRc<T> = std::rc::Rc<T>;
+type MyRc<T> = std::rc::Arc<T>;
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
