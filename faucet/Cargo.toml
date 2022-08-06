@@ -25,7 +25,7 @@ solana-sdk = { path = "../sdk", version = "=1.11.6" }
 solana-version = { path = "../version", version = "=1.11.6" }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0"
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 
 [lib]
 crate-type = ["lib"]
