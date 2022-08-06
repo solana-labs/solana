@@ -417,7 +417,7 @@ impl ScheduleStage {
         let mut heaviest_weight: Option<UniqueWeight> = None;
         //trace!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for page in address_book.newly_uncontended_addresses.values() {
-            let newly_uncontended_unique_weights = page.contended_unique_weights;
+            let newly_uncontended_unique_weights = &page.contended_unique_weights;
             if let Some(&weight) = newly_uncontended_unique_weights.last() {
                 if let Some(current_heaviest_weight) = heaviest_weight {
                     if weight > current_heaviest_weight {
