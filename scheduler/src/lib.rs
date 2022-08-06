@@ -130,7 +130,7 @@ impl AddressBook {
 
         match self.book.entry(*address) {
             AddressMapEntry::Vacant(book_entry) => {
-                book_entry.insert(Page::new(CurrentUsage::renew(*requested_usage)));
+                book_entry.insert(Rc::new(Page::new(CurrentUsage::renew(*requested_usage))));
                 *is_success = true;
             }
             AddressMapEntry::Occupied(mut book_entry) => {
