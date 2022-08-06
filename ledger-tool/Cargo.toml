@@ -20,7 +20,6 @@ itertools = "0.10.3"
 log = { version = "0.4.14" }
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
-<<<<<<< HEAD
 serde_json = "1.0.79"
 solana-clap-utils = { path = "../clap-utils", version = "=1.10.35" }
 solana-cli-output = { path = "../cli-output", version = "=1.10.35" }
@@ -36,25 +35,7 @@ solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.35" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.35" }
 solana-version = { path = "../version", version = "=1.10.35" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
-tokio = { version = "~1.14.1", features = ["full"] }
-=======
-serde_json = "1.0.81"
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.6" }
-solana-cli-output = { path = "../cli-output", version = "=1.11.6" }
-solana-core = { path = "../core", version = "=1.11.6" }
-solana-entry = { path = "../entry", version = "=1.11.6" }
-solana-ledger = { path = "../ledger", version = "=1.11.6" }
-solana-logger = { path = "../logger", version = "=1.11.6" }
-solana-measure = { path = "../measure", version = "=1.11.6" }
-solana-runtime = { path = "../runtime", version = "=1.11.6" }
-solana-sdk = { path = "../sdk", version = "=1.11.6" }
-solana-stake-program = { path = "../programs/stake", version = "=1.11.6" }
-solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.11.6" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.6" }
-solana-version = { path = "../version", version = "=1.11.6" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.6" }
-tokio = { version = "1", features = ["full"] }
->>>>>>> 66919e5ad (Unpin tokio for non-rpc crates (#26957))
+tokio = { version = "~1", features = ["full"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }

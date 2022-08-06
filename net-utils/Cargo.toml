@@ -19,17 +19,10 @@ rand = "0.7.0"
 serde = "1.0.136"
 serde_derive = "1.0.103"
 socket2 = "0.4.4"
-<<<<<<< HEAD
 solana-logger = { path = "../logger", version = "=1.10.35" }
 solana-sdk = { path = "../sdk", version = "=1.10.35" }
 solana-version = { path = "../version", version = "=1.10.35" }
-tokio = { version = "~1.14.1", features = ["full"] }
-=======
-solana-logger = { path = "../logger", version = "=1.11.6" }
-solana-sdk = { path = "../sdk", version = "=1.11.6" }
-solana-version = { path = "../version", version = "=1.11.6" }
 tokio = { version = "1", features = ["full"] }
->>>>>>> 66919e5ad (Unpin tokio for non-rpc crates (#26957))
 url = "2.2.2"
 
 [lib]
