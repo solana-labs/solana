@@ -162,7 +162,7 @@ impl AddressBook {
                 book_entry.insert(page);
             }
             AddressMapEntry::Occupied(mut book_entry) => {
-                let mut page = Rc::<Page>::get_mut(book_entry.get_mut()).unwrap();
+                let mut page = Rc::get_mut(book_entry.get_mut()).unwrap();
 
                 match page.current_usage {
                     CurrentUsage::Unused => {
