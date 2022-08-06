@@ -213,39 +213,32 @@ impl AddressBook {
         let mut newly_uncontended = false;
         let mut still_queued = false;
 
-        match self.book.entry(attempt.address) {
-            AddressMapEntry::Occupied(mut book_entry) => {
-                let mut page = Rc::get_mut(book_entry.get_mut()).unwrap();
+        let mut page = attempt.page();
 
-                match &mut page.current_usage {
-                    CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
-                        RequestedUsage::Readonly => {
-                            if *count == SOLE_USE_COUNT {
-                                newly_uncontended = true;
-                            } else {
-                                *count -= 1;
-                            }
-                        }
-                        RequestedUsage::Writable => unreachable!(),
-                    },
-                    CurrentUsage::Writable => match &attempt.requested_usage {
-                        RequestedUsage::Writable => {
-                            newly_uncontended = true;
-                        }
-                        RequestedUsage::Readonly => unreachable!(),
-                    },
-                    CurrentUsage::Unused => unreachable!(),
-                }
-
-                if newly_uncontended {
-                    page.current_usage = CurrentUsage::Unused;
-                    if !page.contended_unique_weights.is_empty() {
-                        still_queued = true;
+        match &mut page.current_usage {
+            CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
+                RequestedUsage::Readonly => {
+                    if *count == SOLE_USE_COUNT {
+                        newly_uncontended = true;
+                    } else {
+                        *count -= 1;
                     }
                 }
-            }
-            AddressMapEntry::Vacant(_book_entry) => {
-                unreachable!()
+                RequestedUsage::Writable => unreachable!(),
+            },
+            CurrentUsage::Writable => match &attempt.requested_usage {
+                RequestedUsage::Writable => {
+                    newly_uncontended = true;
+                }
+                RequestedUsage::Readonly => unreachable!(),
+            },
+            CurrentUsage::Unused => unreachable!(),
+        }
+
+        if newly_uncontended {
+            page.current_usage = CurrentUsage::Unused;
+            if !page.contended_unique_weights.is_empty() {
+                still_queued = true;
             }
         }
 
