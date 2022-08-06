@@ -28,7 +28,7 @@ solana-rpc = { path = "../rpc", version = "=1.11.6" }
 solana-runtime = { path = "../runtime", version = "=1.11.6" }
 solana-sdk = { path = "../sdk", version = "=1.11.6" }
 solana-streamer = { path = "../streamer", version = "=1.11.6" }
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
