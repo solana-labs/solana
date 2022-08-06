@@ -129,8 +129,19 @@ votes for switching proofs.
 
 All block producers should be following A1 for fork weight.
 
+Optimistic confirmation is valid iff both vote 2/3+ on the same fork.
+
 If **b2** doesn't root a block with **A1**, on the next epoch **b2**
 is shuffled, and each possible fork may have a different valid
 **b2** subcommittee, or the previous b1 subcommittee A1 can only
 pick a single fork, and therefore only 1 of the proposed **b2**
 subcommittees will survive.
+
+* Epoch 0: (a1, B1) - ALL epoch 2/3 blocks have a root to this epoch
+* Epoch 1: (A1, b1) - SOME epoch 2/3 blocks have a root to this epoch
+* Epoch 2: (A1, b2) -
+* Epoch 3: (A1, b3) - Blocks without an epoch2 root will not accept b2 votes
+
+On epoch 3, blocks without an epoch 2 root will not accept b2 votes.
+If it is not the dominant fork, it will die because all the block
+producers are still following A1's fork weight.
