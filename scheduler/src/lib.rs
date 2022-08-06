@@ -519,9 +519,9 @@ impl ScheduleStage {
     fn finalize_successful_lock_before_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
-        lock_attempts: &Vec<LockAttempt>,
+        lock_attempts: &mut Vec<LockAttempt>,
     ) {
-        for l in lock_attempts {
+        for mut l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
             address_book.forget_address_contention(&unique_weight, &mut l);
 
