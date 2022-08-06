@@ -39,6 +39,11 @@ impl ExecutionEnvironment {
     //}
 }
 
+enum LockAttemptStatus {
+    BeforeLookup(Pubkey),
+    AfterLookup(Rc<Page>),
+}
+
 #[derive(Clone, Debug)]
 pub struct LockAttempt {
     address: Pubkey,
