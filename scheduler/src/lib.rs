@@ -505,7 +505,7 @@ impl ScheduleStage {
             Self::finalize_successful_lock_before_execution(
                 address_book,
                 &unique_weight,
-                &populated_lock_attempts,
+                &mut populated_lock_attempts,
             );
             let task = queue_entry.remove();
             return Some((unique_weight, task, populated_lock_attempts));
