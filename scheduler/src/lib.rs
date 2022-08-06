@@ -39,9 +39,19 @@ impl ExecutionEnvironment {
     //}
 }
 
+#[derive(Clone, Debug)]
 enum LockAttemptStatus {
     BeforeLookup(Pubkey),
     AfterLookup(Rc<Page>),
+}
+
+impl LockAttemptStatus {
+    fn address(&self) -> &Pubkey {
+        match self {
+            LockAttemptStatus::BeforeLookup(pubkey) => &pubkey,
+            LockAttemptStatus::AfterLookup(_) => unreachable!(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
