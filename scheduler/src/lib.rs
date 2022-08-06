@@ -64,7 +64,7 @@ impl LockAttemptStatus {
     fn page(&mut self) -> &mut Page {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(_address, page) => MyRc::get_mut_unchecked(page),
+            LockAttemptStatus::AfterLookup(_address, page) => unsafe { MyRc::get_mut_unchecked(page) },
         }
     }
 }
