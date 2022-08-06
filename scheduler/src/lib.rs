@@ -42,7 +42,7 @@ impl ExecutionEnvironment {
 #[derive(Clone, Debug)]
 enum LockAttemptStatus {
     BeforeLookup(Pubkey),
-    AfterLookup(Pubkey, Rc<Page>),
+    AfterLookup(Pubkey, MyRc<Page>),
 }
 
 impl LockAttemptStatus {
@@ -53,7 +53,7 @@ impl LockAttemptStatus {
         }
     }
 
-    fn page_rc(&mut self) -> &Rc<Page> {
+    fn page_rc(&mut self) -> &MyRc<Page> {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
             LockAttemptStatus::AfterLookup(_address, page) => page,
@@ -63,7 +63,7 @@ impl LockAttemptStatus {
     fn page(&mut self) -> &mut Page {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(_address, page) => Rc::get_mut(page).unwrap(),
+            LockAttemptStatus::AfterLookup(_address, page) => MyRc::get_mut(page).unwrap(),
         }
     }
 }
@@ -139,7 +139,7 @@ impl Page {
     }
 }
 
-type AddressMap = std::collections::HashMap<Pubkey, std::rc::Rc<Page>>;
+type AddressMap = std::collections::HashMap<Pubkey, std::rc::MyRc<Page>>;
 type AddressSet = std::collections::HashSet<Pubkey>;
 type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 
@@ -163,15 +163,15 @@ impl AddressBook {
         let address = status.address2();
         match self.book.entry(*address) {
             AddressMapEntry::Vacant(book_entry) => {
-                let page = Rc::new(Page::new(CurrentUsage::renew(*requested_usage)));
-                *status = LockAttemptStatus::AfterLookup(*address, Rc::clone(&page));
+                let page = MyRc::new(Page::new(CurrentUsage::renew(*requested_usage)));
+                *status = LockAttemptStatus::AfterLookup(*address, MyRc::clone(&page));
                 *is_success = true;
                 book_entry.insert(page);
             }
             AddressMapEntry::Occupied(mut book_entry) => {
                 let page = book_entry.get_mut();
-                *status = LockAttemptStatus::AfterLookup(*address, Rc::clone(&page));
-                let mut page = Rc::get_mut(page).unwrap();
+                *status = LockAttemptStatus::AfterLookup(*address, MyRc::clone(&page));
+                let mut page = MyRc::get_mut(page).unwrap();
 
                 match page.current_usage {
                     CurrentUsage::Unused => {
@@ -565,7 +565,7 @@ impl ScheduleStage {
         for mut l in lock_attempts {
             let newly_uncontended_while_queued = address_book.unlock(&mut l);
             if newly_uncontended_while_queued {
-                address_book.newly_uncontended_addresses.insert(*(l.status.address2()), Rc::clone(l.status.page_rc()));
+                address_book.newly_uncontended_addresses.insert(*(l.status.address2()), MyRc::clone(l.status.page_rc()));
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
