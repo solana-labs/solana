@@ -136,7 +136,7 @@ impl AddressBook {
                 *is_success = true;
             }
             AddressMapEntry::Occupied(mut book_entry) => {
-                let mut page = book_entry.get_mut().get_mut();
+                let mut page = Rc::<Page>::get_mut(book_entry.get_mut());
 
                 match &mut page.current_usage {
                     CurrentUsage::Unused => {
