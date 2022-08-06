@@ -29,7 +29,7 @@ The following sections provide more details of the design.
 * Voting Subcommittee: the set of nodes currently voting on blocks
 
 * Voting epoch: the number of slots that the voting subcommittee
-is voting for
+is voting for. This is separate from the leader schedule epoch.
 
 * primary subcommittee: The half of the voting subcommittee that
 is scheduled for its second epoch.
@@ -37,58 +37,15 @@ is scheduled for its second epoch.
 * secondary subcommittee: The half of the voting subcommittee that
 is scheduled for its first epoch.
 
-* rotation block: The last block in the previous epoch that was
-rooted by 2/3+ of both primary and secondary super-majorities.
-
-* rotation seed: The seed used to generate the random sample of nodes.
-It's computed as `slow_hash(rotation block bank_hash)`
-
+* rotation seed: The seed used to generate the random sample of
+nodes. `slow_hash(penultimate snapshot hash, voting epoch start slot)`
 
 * `slow_hash`: repeated sha256 for rounds equal to 1ms on modern
 sha-ni hardware.
 
-### Rules
+* switch rotation: when a secondary subcommittee is switched
 
-1. Subcommittees are scheduled for 2 epochs, and rotate in a staggered
-pattern.
-
-```
-voting epoch: 0  1  2  3  4
-             A1 A1 A2 A2 A3
-                B1 B1 B2 B2
-```
-
-2. First epoch the subcommittee is **secondary**. Epoch 2, (A2,B1)
-is the **voting subcommittee** and B1 is **primary**, A2 is
-**secondary**.
-
-3. Second epoch the subcommittee is **primary**
-
-4. The new **secondary** subcommittee is determined by the **rotation
-seed**
-
-5. **rotation seed** is based on the **rotation block**
-
-6. **rotation block** was rooted by the current **primary** and the
-previous **secondary** AND **primary**
-
-7. There can only be one **rotation block** because the new **primary**
-rooted the **rotation block** and all paths that cross the epoch
-boundary can only point to the same **rotation block** or a lockout
-violation has occurred.
-
-For switching proofs:
-
-1. If the primary committee is switching from the current epoch,
-it can only use its own votes for switching proofs
-
-2. If the primary committee is switching from a previous epoch in
-which it was the secondary, it can use its own votes from when it
-was the secondary and the previous epoch primary votes on the primary
-fork. Switching proofs can't mix votes from both subcommittees.
-
-3. The secondary committee can use any votes from the primary and
-itself to switch, but cannot mix votes in the switching proof.
+* flip rotation: when primary and secondary subcommittees switch
 
 ### Safety Violations
 
@@ -104,117 +61,41 @@ violation is detected.
 
 ### Subcommittee Rotation
 
-Voting Subcommittee is scheduled for a voting epoch, and is itself
-composed of 2 subcommittees, primary and secondary, scheduled for
-two epochs each in a staggered rotation.
-
-```
-A1 A1 A2 A2 A3
-   B1 B1 B2 B2
 ```
 
-The first epoch the subcommittee runs, it is considered **secondary**.
-On the second epoch, it is considered **primary**.
-
-For a new secondary subcommittee to start, it must start with a
-block that is a descendant of a **rotation block** that was confirmed
-by both super-majorities in the previous epoch. The **rotation seed**
-is used to derive the new secondary subcommittee.
-
-The epoch can be as short as 32 slots, since a slot needs to be
-rooted.  But to make rotation more reliable it makes sense to have
-the epoch be at least 100 slots long, so the probability of a slot
-being rooted is high enough for rotation to nearly always occur.
-
-If there is no rooted block during the epoch, the same voting
-subcommittee continues. Primary subcommittee remains the same until
-the rotation.
-
-### Subcommittee Selection
-
-A stake weighted shuffle from the **rotation seed** is used to pick
-the next secondary subcommittee. A slow hash is necessary to ensure
-that grinding the **rotation block** bankhash is not practical. A
-random sample of 200 nodes picked with a stake weighed shuffle.
-Assuming 1/3 are faulty, probability of 133 or greater faulty nodes
-is 1:10^20. A 1ms hash would require grinding for 10^9 years with
-1 billion cores.
-
-### Multiple Rotation Blocks
-
-```
-epoch: 0   | 1
-slot:  2 <-|- 34
-       1 <-|----- 42
+a1 A1 A1 a1 a2 A2 A2 a2 a3
+B1 b1 b2 B2 B2 b2 b3 B3 B3
 ```
 
-It's possible that a fork may get rolled back and multiple **rotation
-blocks** are valid. In this case, slot 42, would require a different
-secondary subcommittee to vote then slot 34. Only one subcommittee
-will be able to root a slot along side the primary in this epoch,
-so eventually only one will win out. While this is happening, the
-network is still handling a fixed number of votes per slot, and the
-only additional load is the cost of the `slow_hash` computation per
-**rotation block**. Leaders and validators still follow the fork
-weight based on the primary subcommittee voting. Nodes that appear
-in multiple potential secondary subcommittees must still vote within
-their own lockout and switching rules.
+To rotate, the subcommittee must go through the rotation protocol.
+In the above example, lowercase letter represents **secondary**
+while uppercase represents **primary**.
 
-### Threshold Switching
+Each transition like (A1,b1) -> (A1, b2) occurs on blocks that cross
+the epoch boundary and are descendants of a rooted block from the
+previous epoch.
 
-Secondary subcommittee can use the primary's votes as a switching
-threshold proof. The primary can only use its own votes for switching
-proofs.
+The transition starts at a bank that crosses the epoch boundary.
+If it is a descendant of a rooted bank in the previous epoch then
+the transition is active.  If the block is not a descendant, then
+the transition is inactive.
 
-When secondary uses to switch forks using the primary votes, the
-fork that its switching from must be from the secondary epoch.
+There are two types of transitions
 
-```
-A1 A1 A2 A2 A3
-   B1 B1 B2 B2
-```
+Flip: (a1,B1) -> (A1, b1)
+* active blocks: A1 is the primary and fork weight follows A1
+* inactive blocks: B1 is the primary and fork weight follows B1
 
-Last block of epoch (A1,B1), X, A1 is primary and has optimistically
-confirmed slot X. B1 in this example was locked out did not
-optimistically confirm slot X. On the next slot, X+1, B1 is now
-primary. B1 may use votes from A1 on slot X to switch forks.  The
-fork form which B1 is switching from must be from the epoch when
-B1 was still secondary, earlier than slot X.
+During the flip the subcommittees remain constant but change flip
+their **primary/secondary** position.
 
-### Safety of Roots
+Switch: (A1,b1) -> (A1, b2)
+* active blocks: A1 is the primary and fork weight follows A1
+* inactive blocks: A1 is the primary and fork weight follows A1
 
-```
-A1 A1 A2 A2 A3
-   B1 B1 B2 B2
-```
+For **switch** transitions, on every epoch boundary, the subcommittee
+is recomputed from the new **rotation seed** if the transition was
+not successful, a whole epoch went without a root.
 
-To switch subcommittees both currently active primary and secondary
-must confirm the same slot with a 2/3+ super-majority. When voting
-subcommittee switches from (A1,B1) to (A2,B1), B1 must have rooted
-the same fork as A1, and (A2,B1) must include the same fork, or a
-lockout violation has occurred, or the network has stalled. At the
-start of the epoch with (A2,B1), B1 is now the primary and A2 is
-the secondary.
+During the switch the primary remains constant.
 
-### Optimistic Confirmation Safety
-
-A slot is optimistically confirmed if and only if both subcommittees
-confirm it with 2/3+ majority.
-
-When a subcommittee was **secondary**, it can use the **primary**
-votes to switch forks.  But since both **primary** and **secondary**
-confirmed a slot, it is not possible to construct a switching proof.
-Switching proofs must contain votes only from one subcommittee, the
-votes can't be mixed.
-
-Voting subcommittee (A1,B1) confirms the last slot `X` of its
-epoch, (A2,B1) take over on the same epoch. B1 must root `X`, or B1
-has committed a threshold switch violation. Since B1 is primary,
-it can only use its own votes for a switching proof.
-
-### Block producers
-
-All block producing validators even those outside of the subcommittee
-schedule should follow the primary subcommittee fork weight. They
-should be internally running as **secondary** and generate switching
-proofs based on observed **primary** votes.
