@@ -6485,6 +6485,7 @@ pub mod tests {
                     pre_balances.push(i as u64 * 10);
                     post_balances.push(i as u64 * 11);
                 }
+                let compute_units_consumed = Some(12345);
                 let signature = transaction.signatures[0];
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -6498,6 +6499,7 @@ pub mod tests {
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
                     return_data: Some(TransactionReturnData::default()),
+                    compute_units_consumed,
                 }
                 .into();
                 blockstore
@@ -6516,6 +6518,7 @@ pub mod tests {
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
                     return_data: Some(TransactionReturnData::default()),
+                    compute_units_consumed,
                 }
                 .into();
                 blockstore
@@ -6534,6 +6537,7 @@ pub mod tests {
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
                     return_data: Some(TransactionReturnData::default()),
+                    compute_units_consumed,
                 }
                 .into();
                 blockstore
@@ -6554,6 +6558,7 @@ pub mod tests {
                         rewards: Some(vec![]),
                         loaded_addresses: LoadedAddresses::default(),
                         return_data: Some(TransactionReturnData::default()),
+                        compute_units_consumed,
                     },
                 }
             })
@@ -6670,6 +6675,8 @@ pub mod tests {
             program_id: Pubkey::new_unique(),
             data: vec![1, 2, 3],
         };
+        let compute_units_consumed_1 = Some(3812649u64);
+        let compute_units_consumed_2 = Some(42u64);
 
         // result not found
         assert!(transaction_status_cf
@@ -6690,6 +6697,7 @@ pub mod tests {
             rewards: Some(rewards_vec.clone()),
             loaded_addresses: test_loaded_addresses.clone(),
             return_data: Some(test_return_data.clone()),
+            compute_units_consumed: compute_units_consumed_1,
         }
         .into();
         assert!(transaction_status_cf
@@ -6709,6 +6717,7 @@ pub mod tests {
             rewards,
             loaded_addresses,
             return_data,
+            compute_units_consumed,
         } = transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, Signature::default(), 0))
             .unwrap()
@@ -6726,6 +6735,7 @@ pub mod tests {
         assert_eq!(rewards.unwrap(), rewards_vec);
         assert_eq!(loaded_addresses, test_loaded_addresses);
         assert_eq!(return_data.unwrap(), test_return_data);
+        assert_eq!(compute_units_consumed, compute_units_consumed_1);
 
         // insert value
         let status = TransactionStatusMeta {
@@ -6740,6 +6750,7 @@ pub mod tests {
             rewards: Some(rewards_vec.clone()),
             loaded_addresses: test_loaded_addresses.clone(),
             return_data: Some(test_return_data.clone()),
+            compute_units_consumed: compute_units_consumed_2,
         }
         .into();
         assert!(transaction_status_cf
@@ -6759,6 +6770,7 @@ pub mod tests {
             rewards,
             loaded_addresses,
             return_data,
+            compute_units_consumed,
         } = transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                 0,
@@ -6782,6 +6794,7 @@ pub mod tests {
         assert_eq!(rewards.unwrap(), rewards_vec);
         assert_eq!(loaded_addresses, test_loaded_addresses);
         assert_eq!(return_data.unwrap(), test_return_data);
+        assert_eq!(compute_units_consumed, compute_units_consumed_2);
     }
 
     #[test]
@@ -7011,6 +7024,7 @@ pub mod tests {
             rewards: Some(vec![]),
             loaded_addresses: LoadedAddresses::default(),
             return_data: Some(TransactionReturnData::default()),
+            compute_units_consumed: Some(42u64),
         }
         .into();
 
@@ -7207,6 +7221,7 @@ pub mod tests {
             rewards: Some(vec![]),
             loaded_addresses: LoadedAddresses::default(),
             return_data: Some(TransactionReturnData::default()),
+            compute_units_consumed: Some(42u64),
         }
         .into();
 
@@ -7394,6 +7409,7 @@ pub mod tests {
                     rewards: rewards.clone(),
                     loaded_addresses: LoadedAddresses::default(),
                     return_data: return_data.clone(),
+                    compute_units_consumed: Some(42),
                 }
                 .into();
                 blockstore
@@ -7414,6 +7430,7 @@ pub mod tests {
                         rewards,
                         loaded_addresses: LoadedAddresses::default(),
                         return_data,
+                        compute_units_consumed: Some(42),
                     },
                 }
             })
@@ -7502,6 +7519,7 @@ pub mod tests {
                     rewards: rewards.clone(),
                     loaded_addresses: LoadedAddresses::default(),
                     return_data: return_data.clone(),
+                    compute_units_consumed: Some(42u64),
                 }
                 .into();
                 blockstore
@@ -7522,6 +7540,7 @@ pub mod tests {
                         rewards,
                         loaded_addresses: LoadedAddresses::default(),
                         return_data,
+                        compute_units_consumed: Some(42u64),
                     },
                 }
             })
@@ -8282,6 +8301,7 @@ pub mod tests {
                 rewards: Some(vec![]),
                 loaded_addresses: LoadedAddresses::default(),
                 return_data: Some(TransactionReturnData::default()),
+                compute_units_consumed: None,
             }
             .into();
             transaction_status_cf
@@ -8889,6 +8909,7 @@ pub mod tests {
                 program_id: Pubkey::new_unique(),
                 data: vec![1, 2, 3],
             }),
+            compute_units_consumed: Some(23456),
         };
         let deprecated_status: StoredTransactionStatusMeta = status.clone().try_into().unwrap();
         let protobuf_status: generated::TransactionStatusMeta = status.into();

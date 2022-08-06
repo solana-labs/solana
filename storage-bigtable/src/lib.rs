@@ -244,6 +244,7 @@ impl From<StoredConfirmedBlockTransactionStatusMeta> for TransactionStatusMeta {
             rewards: None,
             loaded_addresses: LoadedAddresses::default(),
             return_data: None,
+            compute_units_consumed: None,
         }
     }
 }
