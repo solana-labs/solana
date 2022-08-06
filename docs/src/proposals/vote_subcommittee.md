@@ -97,7 +97,7 @@ but change flip their **primary/secondary** position.
 
 During the **primary rotation** two possible forks can occur.
 
-* Epoch 0: (A1, b1) - ALL epoch 2 blocks have a root to this epoch
+* Epoch 0: (a0, B1) - ALL epoch 2 blocks have a root to this epoch
 * Epoch 1: (a1, B1) - SOME epoch 2 blocks have a root to this epoch
 * Epoch 2: (A1, b1)
 
@@ -111,7 +111,7 @@ For the transition to be complete, (A1, b1), must root a block
 together in Epoch 1. Therefore block producers should continue
 picking B1 as the primary during the **primary rotation**.
 
-During the **primary rotation**, on either fork, both subcommittees
+During the **primary rotation**, *B1* may use A1
 can use each other votes for switching proofs.
 
 All block producers should be following B1 for fork weight until
