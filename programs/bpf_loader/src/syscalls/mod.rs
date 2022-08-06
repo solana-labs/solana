@@ -1,16 +1,16 @@
+pub use self::{
+    cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
+    logging::{
+        SyscallLog, SyscallLogBpfComputeUnits, SyscallLogData, SyscallLogPubkey, SyscallLogU64,
+    },
+    mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
+    sysvar::{
+        SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
+        SyscallGetRentSysvar,
+    },
+};
 #[allow(deprecated)]
 use {
-    self::{
-        cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
-        logging::{
-            SyscallLog, SyscallLogBpfComputeUnits, SyscallLogData, SyscallLogPubkey, SyscallLogU64,
-        },
-        mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
-        sysvar::{
-            SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
-            SyscallGetRentSysvar,
-        },
-    },
     crate::{allocator_bump::BpfAllocator, BpfError},
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
