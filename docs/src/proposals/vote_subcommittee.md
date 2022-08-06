@@ -113,6 +113,17 @@ B1/b1 for fork weigt.
 
 Optimistic confirmation is valid iff both vote 2/3+ on the same fork.
 
+* Epoch 0: (a0, B1) - ALL epoch 2 blocks have a root to this epoch
+* Epoch 1: (a1, B1) - SOME epoch 2 blocks have a root to this epoch
+* Epoch 2: (A1, b1)
+* Epoch 3: (A1, b1|b2) - SOME blocks may have b1 or b2 votes
+
+If there is a root in epoch 2, then the **secondary rotation** will
+be in effect for those blocks, and **b2** will be the valid
+subcommittee. Block producers should stlll be following **b1** fork
+weight, so eventually **b1** will observe a rooted block in epoch 1
+with 2/3+ votes and will stop voting.
+
 #### Secondary Rotation
 
 During the **secondary rotation** two possible forks can occur.
@@ -140,8 +151,8 @@ subcommittees will survive.
 * Epoch 0: (a1, B1) - ALL epoch 2/3 blocks have a root to this epoch
 * Epoch 1: (A1, b1) - SOME epoch 2/3 blocks have a root to this epoch
 * Epoch 2: (A1, b2) -
-* Epoch 3: (A1, b3) - SOME blocks may have b3 or b2 votes
+* Epoch 3: (A1, b3|b2) - SOME blocks may have b3 or b2 votes
 
-On epoch 3, blocks without an epoch 2 root will not accept b2 votes.
-If it is not the dominant fork, it will die because all the block
-producers are still following A1's fork weight.
+On epoch 3, or later epochs, blocks without an epoch 2 root will
+not accept b2 votes.  If it is not the dominant fork, it will die
+because all the block producers are still following A1's fork weight.
