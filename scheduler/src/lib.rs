@@ -526,7 +526,7 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
 
             // revert because now contended again
-            address_book.newly_uncontended_addresses.remove(&l.address);
+            address_book.newly_uncontended_addresses.remove(&l.status.address());
         }
     }
 
@@ -541,7 +541,7 @@ impl ScheduleStage {
 
             // revert because now contended again
             if !from_runnable {
-                address_book.newly_uncontended_addresses.remove(&l.address);
+                address_book.newly_uncontended_addresses.remove(&l.status.address());
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
