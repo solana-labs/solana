@@ -162,7 +162,8 @@ impl AddressBook {
                 book_entry.insert(page);
             }
             AddressMapEntry::Occupied(mut book_entry) => {
-                let mut page = Rc::get_mut(book_entry.get_mut()).unwrap();
+                let page = book_entry.get_mut();
+                let mut page = Rc::get_mut(page).unwrap();
                 *status = LockAttemptStatus::AfterLookup(*address, Rc::clone(&page));
 
                 match page.current_usage {
