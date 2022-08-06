@@ -42,7 +42,7 @@ impl ExecutionEnvironment {
 #[derive(Clone, Debug)]
 enum LockAttemptStatus {
     BeforeLookup(Pubkey),
-    AfterLookup(Rc<Page>),
+    AfterLookup(Pubkey, Rc<Page>),
 }
 
 impl LockAttemptStatus {
