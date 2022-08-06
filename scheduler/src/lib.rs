@@ -155,7 +155,9 @@ impl AddressBook {
 
         match self.book.entry(*status.address()) {
             AddressMapEntry::Vacant(book_entry) => {
-                book_entry.insert(Rc::new(Page::new(CurrentUsage::renew(*requested_usage))));
+                let page = Rc::new(Page::new(CurrentUsage::renew(*requested_usage)));
+                book_entry.insert(page);
+                *status = Rc::clone(page);
                 *is_success = true;
             }
             AddressMapEntry::Occupied(mut book_entry) => {
