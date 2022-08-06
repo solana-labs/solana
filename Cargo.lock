@@ -3120,18 +3120,6 @@ dependencies = [
 [[package]]
 name = "pbkdf2"
 version = "0.10.1"
-<<<<<<< HEAD
-=======
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271779f35b581956db91a3e55737327a03aa051e90b1c47aeb189508533adfd7"
-dependencies = [
- "digest 0.10.3",
-]
-
-[[package]]
-name = "pbkdf2"
-version = "0.11.0"
->>>>>>> 9d31b1d29 (Parse ConfidentialTransaction extensions (#26820))
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "271779f35b581956db91a3e55737327a03aa051e90b1c47aeb189508533adfd7"
 dependencies = [
@@ -4587,7 +4575,7 @@ dependencies = [
  "solana-sdk 1.10.35",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.4.1",
+ "spl-token-2022 0.4.2",
  "thiserror",
  "zstd",
 ]
@@ -4997,7 +4985,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
- "spl-token-2022 0.4.1",
+ "spl-token-2022 0.4.2",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -5985,7 +5973,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.4.1",
+ "spl-token-2022 0.4.2",
  "stream-cancel",
  "symlink",
  "thiserror",
@@ -6459,7 +6447,7 @@ dependencies = [
  "spl-associated-token-account",
  "spl-memo",
  "spl-token",
- "spl-token-2022 0.4.1",
+ "spl-token-2022 0.4.2",
  "thiserror",
 ]
 
@@ -6764,12 +6752,9 @@ dependencies = [
  "num-traits",
  "num_enum",
  "solana-program 1.10.33",
-<<<<<<< HEAD
  "solana-zk-token-sdk 0.8.1",
  "spl-memo",
  "spl-token",
-=======
->>>>>>> 9d31b1d29 (Parse ConfidentialTransaction extensions (#26820))
  "thiserror",
 ]
 
