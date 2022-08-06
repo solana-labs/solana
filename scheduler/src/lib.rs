@@ -533,7 +533,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn ensure_unlock_for_failed_execution(
         address_book: &mut AddressBook,
-        lock_attempts: &Vec<LockAttempt>,
+        lock_attempts: &mut Vec<LockAttempt>,
         from_runnable: bool,
     ) {
         for l in lock_attempts {
