@@ -1,5 +1,6 @@
 use {
     crate::parse_token::UiAccountState,
+    solana_sdk::clock::UnixTimestamp,
     spl_token_2022::{
         extension::{self, BaseState, ExtensionType, StateWithExtensions},
         solana_program::pubkey::Pubkey,
@@ -18,6 +19,8 @@ pub enum UiExtension {
     DefaultAccountState(UiDefaultAccountState),
     ImmutableOwner,
     MemoTransfer(UiMemoTransfer),
+    NonTransferable,
+    InterestBearingConfig(UiInterestBearingConfig),
     UnparseableExtension,
 }
 
@@ -49,6 +52,11 @@ pub fn parse_extension<S: BaseState>(
         ExtensionType::MemoTransfer => account
             .get_extension::<extension::memo_transfer::MemoTransfer>()
             .map(|&extension| UiExtension::MemoTransfer(extension.into()))
+            .unwrap_or(UiExtension::UnparseableExtension),
+        ExtensionType::NonTransferable => UiExtension::NonTransferable,
+        ExtensionType::InterestBearingConfig => account
+            .get_extension::<extension::interest_bearing_mint::InterestBearingConfig>()
+            .map(|&extension| UiExtension::InterestBearingConfig(extension.into()))
             .unwrap_or(UiExtension::UnparseableExtension),
     }
 }
@@ -156,6 +164,36 @@ impl From<extension::memo_transfer::MemoTransfer> for UiMemoTransfer {
     fn from(memo_transfer: extension::memo_transfer::MemoTransfer) -> Self {
         Self {
             require_incoming_transfer_memos: memo_transfer.require_incoming_transfer_memos.into(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiInterestBearingConfig {
+    pub rate_authority: Option<String>,
+    pub initialization_timestamp: UnixTimestamp,
+    pub pre_update_average_rate: i16,
+    pub last_update_timestamp: UnixTimestamp,
+    pub current_rate: i16,
+}
+
+impl From<extension::interest_bearing_mint::InterestBearingConfig> for UiInterestBearingConfig {
+    fn from(
+        interest_bearing_config: extension::interest_bearing_mint::InterestBearingConfig,
+    ) -> Self {
+        let rate_authority: Option<Pubkey> = interest_bearing_config.rate_authority.into();
+
+        Self {
+            rate_authority: rate_authority.map(|pubkey| pubkey.to_string()),
+            initialization_timestamp: UnixTimestamp::from(
+                interest_bearing_config.initialization_timestamp,
+            ),
+            pre_update_average_rate: i16::from(interest_bearing_config.pre_update_average_rate),
+            last_update_timestamp: UnixTimestamp::from(
+                interest_bearing_config.last_update_timestamp,
+            ),
+            current_rate: i16::from(interest_bearing_config.current_rate),
         }
     }
 }
