@@ -213,7 +213,7 @@ impl AddressBook {
         let mut newly_uncontended = false;
         let mut still_queued = false;
 
-        let mut page = attempt.page();
+        let mut page = attempt.status.page();
 
         match &mut page.current_usage {
             CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
