@@ -553,7 +553,7 @@ impl ScheduleStage {
         for l in lock_attempts {
             let newly_uncontended_while_queued = address_book.unlock(&l);
             if newly_uncontended_while_queued {
-                address_book.newly_uncontended_addresses.insert(&l.status.address());
+                address_book.newly_uncontended_addresses.insert(*l.status.address());
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
