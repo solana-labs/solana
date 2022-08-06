@@ -86,8 +86,8 @@ There are two types of transitions
 * active blocks: A1 is the primary and fork weight follows A1
 * inactive blocks: B1 is the primary and fork weight follows B1
 
-During the **primary rotation** the subcommittees remain constant but change flip
-their **primary/secondary** position.
+During the **primary rotation** the subcommittees remain constant
+but change flip their **primary/secondary** position.
 
 **secondary rotation**: (A1,b1) -> (A1, b2)
 * active blocks: A1 is the primary and fork weight follows A1
@@ -97,7 +97,8 @@ their **primary/secondary** position.
 
 During the **primary rotation** two possible forks can occur.
 
-* Epoch 1: (a1, B1)
+* Epoch 0: (A1, b1) - ALL epoch 2 blocks have a root to this epoch
+* Epoch 1: (a1, B1) - SOME epoch 2 blocks have a root to this epoch
 * Epoch 2: (A1, b1)
 
 Epoch 1, had enough N confirmed blocks such that 2^N > epoch slots,
@@ -122,7 +123,8 @@ Optimistic confirmation is valid iff both vote 2/3+ on the same fork.
 
 During the **secondary rotation** two possible forks can occur.
 
-* Epoch 1: (A1, b1)
+* Epoch 0: (a1, B1) - ALL epoch 2 blocks have a root to this epoch
+* Epoch 1: (A1, b1) - SOME epoch 2 blocks have a root to this epoch
 * Epoch 2: (A1, b2)
 
 Blocks proposed in epoch 2 that have a root in epoch 1 will have
@@ -135,5 +137,6 @@ All block producers should be following A1 for fork weight.
 
 If **b2** doesn't root a block with A1, on the next epoch **b2**
 is shuffled, and each possible fork may have a different valid
-**b2** subcommittee.  A1 can only pick a single fork, and therefore
-only 1 of the proposed **b2** subcommittees will survive.
+**b2** subcommittee, or the previous b1 subcommittee A1 can only
+pick a single fork, and therefore only 1 of the proposed **b2**
+subcommittees will survive.
