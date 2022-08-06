@@ -179,7 +179,7 @@ impl AddressBook {
             AddressMapEntry::Vacant(_book_entry) => unreachable!(),
             AddressMapEntry::Occupied(mut entry) => {
                 let page = entry.get_mut();
-                *page.contended_unique_weights.remove(unique_weight);
+                Rc::get_mut(page).contended_unique_weights.remove(unique_weight);
             }
         }
     }
