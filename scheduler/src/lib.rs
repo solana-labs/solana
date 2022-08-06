@@ -199,7 +199,7 @@ impl AddressBook {
 
         match self.book.entry(attempt.address) {
             AddressMapEntry::Occupied(mut book_entry) => {
-                let mut page = book_entry.get_mut();
+                let mut page = Rc::get_mut(book_entry.get_mut()).unwrap();
 
                 match &mut page.current_usage {
                     CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
