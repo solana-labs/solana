@@ -106,6 +106,7 @@ pub enum RequestedUsage {
     Writable,
 }
 
+#[derive(Debug)]
 struct Page {
     current_usage: CurrentUsage,
     contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
