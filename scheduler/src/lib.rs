@@ -49,14 +49,14 @@ impl LockAttemptStatus {
     fn address(&self) -> &Pubkey {
         match self {
             LockAttemptStatus::BeforeLookup(pubkey) => &pubkey,
-            LockAttemptStatus::AfterLookup(_) => unreachable!(),
+            LockAttemptStatus::AfterLookup(_, _) => unreachable!(),
         }
     }
 
     fn page(&mut self) -> &mut Page {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(page) => Rc::get_mut(page).unwrap(),
+            LockAttemptStatus::AfterLookup(_address, page) => Rc::get_mut(page).unwrap(),
         }
     }
 }
