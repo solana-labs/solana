@@ -46,7 +46,7 @@ enum LockAttemptStatus {
 }
 
 impl LockAttemptStatus {
-    fn address(&self) -> &Pubkey {
+    fn address2(&self) -> &Pubkey {
         match self {
             LockAttemptStatus::BeforeLookup(pubkey) => &pubkey,
             LockAttemptStatus::AfterLookup(pubkey, _) => &pubkey,
