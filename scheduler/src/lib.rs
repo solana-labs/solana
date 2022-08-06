@@ -107,7 +107,7 @@ impl Page {
     }
 }
 
-type AddressMap = std::collections::HashMap<Pubkey, Page>;
+type AddressMap = std::collections::HashMap<Pubkey, Rc<Page>>;
 type AddressSet = std::collections::HashSet<Pubkey>;
 type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 
