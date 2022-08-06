@@ -197,14 +197,8 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, address: &Pubkey) {
-        match self.book.entry(*address) {
-            AddressMapEntry::Vacant(_book_entry) => unreachable!(),
-            AddressMapEntry::Occupied(mut entry) => {
-                let page = entry.get_mut();
-                Rc::get_mut(page).unwrap().contended_unique_weights.remove(unique_weight);
-            }
-        }
+    fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, a: &mut LockAttempt) {
+        a.page().contended_unique_weights.remove(unique_weight);
     }
 
     fn ensure_unlock(&mut self, attempt: &LockAttempt) {
@@ -529,7 +523,7 @@ impl ScheduleStage {
     ) {
         for l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
-            address_book.forget_address_contention(&unique_weight, &l.address);
+            address_book.forget_address_contention(&unique_weight, &mut l);
 
             // revert because now contended again
             address_book.newly_uncontended_addresses.remove(&l.address);
