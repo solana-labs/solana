@@ -150,7 +150,7 @@ impl AddressBook {
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
-                                Self::remember_address_contention(page, unique_weight);
+                                Self::remember_address_contention(&mut page, unique_weight);
                             }
                             *is_success = false;
                         }
@@ -158,7 +158,7 @@ impl AddressBook {
                     CurrentUsage::Writable => match requested_usage {
                         RequestedUsage::Readonly | RequestedUsage::Writable => {
                             if from_runnable {
-                                Self::remember_address_contention(page, unique_weight);
+                                Self::remember_address_contention(&mut page, unique_weight);
                             }
                             *is_success = false;
                         }
