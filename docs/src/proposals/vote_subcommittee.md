@@ -43,9 +43,9 @@ nodes. `slow_hash(penultimate snapshot hash, voting epoch start slot)`
 * `slow_hash`: repeated sha256 for rounds equal to 1ms on modern
 sha-ni hardware.
 
-* switch rotation: when a secondary subcommittee is switched
+* secondary rotation: when a secondary subcommittee is switched
 
-* flip rotation: when primary and secondary subcommittees switch
+* primary rotation: when primary and secondary subcommittees switch
 
 ### Safety Violations
 
@@ -82,20 +82,58 @@ the transition is inactive.
 
 There are two types of transitions
 
-Flip: (a1,B1) -> (A1, b1)
+**primary rotation**: (a1,B1) -> (A1, b1)
 * active blocks: A1 is the primary and fork weight follows A1
 * inactive blocks: B1 is the primary and fork weight follows B1
 
-During the flip the subcommittees remain constant but change flip
+During the **primary rotation** the subcommittees remain constant but change flip
 their **primary/secondary** position.
 
-Switch: (A1,b1) -> (A1, b2)
+**secondary rotation**: (A1,b1) -> (A1, b2)
 * active blocks: A1 is the primary and fork weight follows A1
 * inactive blocks: A1 is the primary and fork weight follows A1
 
-For **switch** transitions, on every epoch boundary, the subcommittee
-is recomputed from the new **rotation seed** if the transition was
-not successful, a whole epoch went without a root.
+#### Primary Rotation
 
-During the switch the primary remains constant.
+During the **primary rotation** two possible forks can occur.
 
+* Epoch 1: (a1, B1)
+* Epoch 2: (A1, b1)
+
+Epoch 1, had enough N confirmed blocks such that 2^N > epoch slots,
+but not enough to create a root. 2 kinds of blocks can be proposed
+in epoch 2, those that create a root in epoch 1, and those who do
+not.  For blocks that create a root, A1 is the primary, for blocks
+that do not create a root B1 is the primary.
+
+For the transition to be complete, (A1, b1), must root a block
+together in Epoch 1. Therefore block producers should continue
+picking B1 as the primary during the **primary rotation**.
+
+During the **primary rotation**, on either fork, both subcommittees
+can use each other votes for switching proofs.
+
+All block producers should be following B1 for fork weight until
+the epoch is done.
+
+Optimistic confirmation is valid iff both vote 2/3+ on the same fork.
+
+#### Secondary Rotation
+
+During the **secondary rotation** two possible forks can occur.
+
+* Epoch 1: (A1, b1)
+* Epoch 2: (A1, b2)
+
+Blocks proposed in epoch 2 that have a root in epoch 1 will have
+**b2**, as the new subcommittee.
+
+During the **secondary rotation**, on either fork, each subcommittees
+can only use their own votes for switching proofs.
+
+All block producers should be following A1 for fork weight.
+
+If **b2** doesn't root a block with A1, on the next epoch **b2**
+is shuffled, and each possible fork may have a different valid
+**b2** subcommittee.  A1 can only pick a single fork, and therefore
+only 1 of the proposed **b2** subcommittees will survive.
