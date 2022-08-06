@@ -489,7 +489,7 @@ impl ScheduleStage {
                 //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
-                    &populated_lock_attempts,
+                    &mut populated_lock_attempts,
                     from_runnable,
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
