@@ -19,7 +19,7 @@ solana-runtime = { path = "../runtime", version = "=1.10.35" }
 solana-sdk = { path = "../sdk", version = "=1.10.35" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.10.35" }
 tarpc = { version = "0.27.2", features = ["full"] }
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }
 tokio-stream = "0.1"
 

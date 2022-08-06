@@ -35,7 +35,7 @@ solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.35" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.35" }
 solana-version = { path = "../version", version = "=1.10.35" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "~1", features = ["full"] }
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }

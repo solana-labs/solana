@@ -22,7 +22,7 @@ socket2 = "0.4.4"
 solana-logger = { path = "../logger", version = "=1.10.35" }
 solana-sdk = { path = "../sdk", version = "=1.10.35" }
 solana-version = { path = "../version", version = "=1.10.35" }
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 url = "2.2.2"
 
 [lib]
