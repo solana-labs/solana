@@ -229,6 +229,11 @@ impl RpcSender for MockSender {
                             post_token_balances: None,
                             rewards: None,
                             loaded_addresses: None,
+<<<<<<< HEAD
+=======
+                            return_data: None,
+                            compute_units_consumed: None,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                         }),
                 },
                 block_time: Some(1628633791),

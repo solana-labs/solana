@@ -363,6 +363,11 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             post_token_balances,
             rewards,
             loaded_addresses,
+<<<<<<< HEAD
+=======
+            return_data,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -418,6 +423,12 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             rewards,
             loaded_writable_addresses,
             loaded_readonly_addresses,
+<<<<<<< HEAD
+=======
+            return_data,
+            return_data_none,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
     }
 }
@@ -447,6 +458,12 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             rewards,
             loaded_writable_addresses,
             loaded_readonly_addresses,
+<<<<<<< HEAD
+=======
+            return_data,
+            return_data_none,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -501,6 +518,11 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             post_token_balances,
             rewards,
             loaded_addresses,
+<<<<<<< HEAD
+=======
+            return_data,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         })
     }
 }

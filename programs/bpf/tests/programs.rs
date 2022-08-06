@@ -392,6 +392,11 @@ fn execute_transactions(
                         log_messages,
                         inner_instructions,
                         durable_nonce_fee,
+<<<<<<< HEAD
+=======
+                        return_data,
+                        executed_units,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                         ..
                     } = details;
 
@@ -433,6 +438,11 @@ fn execute_transactions(
                         log_messages,
                         rewards: None,
                         loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                        return_data,
+                        compute_units_consumed: Some(executed_units),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                     };
 
                     Ok(ConfirmedTransactionWithStatusMeta {

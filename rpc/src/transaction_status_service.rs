@@ -99,6 +99,11 @@ impl TransactionStatusService {
                             log_messages,
                             inner_instructions,
                             durable_nonce_fee,
+<<<<<<< HEAD
+=======
+                            return_data,
+                            executed_units,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                             ..
                         } = details;
                         let lamports_per_signature = match durable_nonce_fee {
@@ -155,6 +160,11 @@ impl TransactionStatusService {
                             post_token_balances,
                             rewards,
                             loaded_addresses,
+<<<<<<< HEAD
+=======
+                            return_data,
+                            compute_units_consumed: Some(executed_units),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                         };
 
                         if let Some(transaction_notifier) = transaction_notifier.as_ref() {

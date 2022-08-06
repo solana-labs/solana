@@ -895,6 +895,11 @@ mod tests {
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
                 loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                return_data: Some(TransactionReturnData::default()),
+                compute_units_consumed: Some(1234),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
             },
         });
         let expected_block = ConfirmedBlock {
@@ -952,6 +957,11 @@ mod tests {
                 meta.pre_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.post_token_balances = None; // Legacy bincode implementation does not support token balances
                 meta.rewards = None; // Legacy bincode implementation does not support rewards
+<<<<<<< HEAD
+=======
+                meta.return_data = None; // Legacy bincode implementation does not support return data
+                meta.compute_units_consumed = None; // Legacy bincode implementation does not support CU consumed
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
             }
             assert_eq!(block, bincode_block.into());
         } else {

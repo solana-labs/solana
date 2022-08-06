@@ -6844,6 +6844,7 @@ pub mod tests {
                     pre_balances.push(i as u64 * 10);
                     post_balances.push(i as u64 * 11);
                 }
+                let compute_units_consumed = Some(12345);
                 let signature = transaction.signatures[0];
                 let status = TransactionStatusMeta {
                     status: Ok(()),
@@ -6856,6 +6857,11 @@ pub mod tests {
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                    return_data: Some(TransactionReturnData::default()),
+                    compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                 }
                 .into();
                 blockstore
@@ -6873,6 +6879,11 @@ pub mod tests {
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                    return_data: Some(TransactionReturnData::default()),
+                    compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                 }
                 .into();
                 blockstore
@@ -6890,6 +6901,11 @@ pub mod tests {
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
                     loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                    return_data: Some(TransactionReturnData::default()),
+                    compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                 }
                 .into();
                 blockstore
@@ -6909,6 +6925,11 @@ pub mod tests {
                         post_token_balances: Some(vec![]),
                         rewards: Some(vec![]),
                         loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                        return_data: Some(TransactionReturnData::default()),
+                        compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                     },
                 }
             })
@@ -7021,6 +7042,15 @@ pub mod tests {
             writable: vec![Pubkey::new_unique()],
             readonly: vec![Pubkey::new_unique()],
         };
+<<<<<<< HEAD
+=======
+        let test_return_data = TransactionReturnData {
+            program_id: Pubkey::new_unique(),
+            data: vec![1, 2, 3],
+        };
+        let compute_units_consumed_1 = Some(3812649u64);
+        let compute_units_consumed_2 = Some(42u64);
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
 
         // result not found
         assert!(transaction_status_cf
@@ -7040,6 +7070,11 @@ pub mod tests {
             post_token_balances: Some(post_token_balances_vec.clone()),
             rewards: Some(rewards_vec.clone()),
             loaded_addresses: test_loaded_addresses.clone(),
+<<<<<<< HEAD
+=======
+            return_data: Some(test_return_data.clone()),
+            compute_units_consumed: compute_units_consumed_1,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
         .into();
         assert!(transaction_status_cf
@@ -7058,6 +7093,11 @@ pub mod tests {
             post_token_balances,
             rewards,
             loaded_addresses,
+<<<<<<< HEAD
+=======
+            return_data,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         } = transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((0, Signature::default(), 0))
             .unwrap()
@@ -7074,6 +7114,11 @@ pub mod tests {
         assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
         assert_eq!(rewards.unwrap(), rewards_vec);
         assert_eq!(loaded_addresses, test_loaded_addresses);
+<<<<<<< HEAD
+=======
+        assert_eq!(return_data.unwrap(), test_return_data);
+        assert_eq!(compute_units_consumed, compute_units_consumed_1);
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
 
         // insert value
         let status = TransactionStatusMeta {
@@ -7087,6 +7132,11 @@ pub mod tests {
             post_token_balances: Some(post_token_balances_vec.clone()),
             rewards: Some(rewards_vec.clone()),
             loaded_addresses: test_loaded_addresses.clone(),
+<<<<<<< HEAD
+=======
+            return_data: Some(test_return_data.clone()),
+            compute_units_consumed: compute_units_consumed_2,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
         .into();
         assert!(transaction_status_cf
@@ -7105,6 +7155,11 @@ pub mod tests {
             post_token_balances,
             rewards,
             loaded_addresses,
+<<<<<<< HEAD
+=======
+            return_data,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         } = transaction_status_cf
             .get_protobuf_or_bincode::<StoredTransactionStatusMeta>((
                 0,
@@ -7127,6 +7182,11 @@ pub mod tests {
         assert_eq!(post_token_balances.unwrap(), post_token_balances_vec);
         assert_eq!(rewards.unwrap(), rewards_vec);
         assert_eq!(loaded_addresses, test_loaded_addresses);
+<<<<<<< HEAD
+=======
+        assert_eq!(return_data.unwrap(), test_return_data);
+        assert_eq!(compute_units_consumed, compute_units_consumed_2);
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
     }
 
     #[test]
@@ -7355,6 +7415,11 @@ pub mod tests {
             post_token_balances: Some(vec![]),
             rewards: Some(vec![]),
             loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+            return_data: Some(TransactionReturnData::default()),
+            compute_units_consumed: Some(42u64),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
         .into();
 
@@ -7550,6 +7615,11 @@ pub mod tests {
             post_token_balances: Some(vec![]),
             rewards: Some(vec![]),
             loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+            return_data: Some(TransactionReturnData::default()),
+            compute_units_consumed: Some(42u64),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
         .into();
 
@@ -7732,6 +7802,11 @@ pub mod tests {
                     post_token_balances: post_token_balances.clone(),
                     rewards: rewards.clone(),
                     loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                    return_data: return_data.clone(),
+                    compute_units_consumed: Some(42),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                 }
                 .into();
                 blockstore
@@ -7751,6 +7826,11 @@ pub mod tests {
                         post_token_balances,
                         rewards,
                         loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                        return_data,
+                        compute_units_consumed: Some(42),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                     },
                 }
             })
@@ -7834,6 +7914,11 @@ pub mod tests {
                     post_token_balances: post_token_balances.clone(),
                     rewards: rewards.clone(),
                     loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                    return_data: return_data.clone(),
+                    compute_units_consumed: Some(42u64),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                 }
                 .into();
                 blockstore
@@ -7853,6 +7938,11 @@ pub mod tests {
                         post_token_balances,
                         rewards,
                         loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                        return_data,
+                        compute_units_consumed: Some(42u64),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
                     },
                 }
             })
@@ -8612,6 +8702,11 @@ pub mod tests {
                 post_token_balances: Some(vec![]),
                 rewards: Some(vec![]),
                 loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+                return_data: Some(TransactionReturnData::default()),
+                compute_units_consumed: None,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
             }
             .into();
             transaction_status_cf
@@ -9212,6 +9307,14 @@ pub mod tests {
                 commission: None,
             }]),
             loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+            return_data: Some(TransactionReturnData {
+                program_id: Pubkey::new_unique(),
+                data: vec![1, 2, 3],
+            }),
+            compute_units_consumed: Some(23456),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         };
         let deprecated_status: StoredTransactionStatusMeta = status.clone().try_into().unwrap();
         let protobuf_status: generated::TransactionStatusMeta = status.into();

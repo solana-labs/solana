@@ -286,6 +286,11 @@ pub struct TransactionStatusMeta {
     pub post_token_balances: Option<Vec<TransactionTokenBalance>>,
     pub rewards: Option<Rewards>,
     pub loaded_addresses: LoadedAddresses,
+<<<<<<< HEAD
+=======
+    pub return_data: Option<TransactionReturnData>,
+    pub compute_units_consumed: Option<u64>,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
 }
 
 impl Default for TransactionStatusMeta {
@@ -301,6 +306,11 @@ impl Default for TransactionStatusMeta {
             post_token_balances: None,
             rewards: None,
             loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+            return_data: None,
+            compute_units_consumed: None,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
     }
 }
@@ -321,6 +331,12 @@ pub struct UiTransactionStatusMeta {
     pub rewards: Option<Rewards>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loaded_addresses: Option<UiLoadedAddresses>,
+<<<<<<< HEAD
+=======
+    pub return_data: Option<TransactionReturnData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compute_units_consumed: Option<u64>,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
 }
 
 /// A duplicate representation of LoadedAddresses
@@ -371,6 +387,11 @@ impl UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
+<<<<<<< HEAD
+=======
+            return_data: meta.return_data,
+            compute_units_consumed: meta.compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
     }
 }
@@ -395,6 +416,11 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
+<<<<<<< HEAD
+=======
+            return_data: meta.return_data,
+            compute_units_consumed: meta.compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
     }
 }

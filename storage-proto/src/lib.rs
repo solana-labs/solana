@@ -173,6 +173,13 @@ pub struct StoredTransactionStatusMeta {
     pub post_token_balances: Option<Vec<StoredTransactionTokenBalance>>,
     #[serde(deserialize_with = "default_on_eof")]
     pub rewards: Option<Vec<StoredExtendedReward>>,
+<<<<<<< HEAD
+=======
+    #[serde(deserialize_with = "default_on_eof")]
+    pub return_data: Option<TransactionReturnData>,
+    #[serde(deserialize_with = "default_on_eof")]
+    pub compute_units_consumed: Option<u64>,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
 }
 
 impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
@@ -187,6 +194,11 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
             pre_token_balances,
             post_token_balances,
             rewards,
+<<<<<<< HEAD
+=======
+            return_data,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         } = value;
         Self {
             status,
@@ -202,6 +214,11 @@ impl From<StoredTransactionStatusMeta> for TransactionStatusMeta {
             rewards: rewards
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
             loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+            return_data,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         }
     }
 }
@@ -220,6 +237,11 @@ impl TryFrom<TransactionStatusMeta> for StoredTransactionStatusMeta {
             post_token_balances,
             rewards,
             loaded_addresses,
+<<<<<<< HEAD
+=======
+            return_data,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         } = value;
 
         if !loaded_addresses.is_empty() {
@@ -243,6 +265,11 @@ impl TryFrom<TransactionStatusMeta> for StoredTransactionStatusMeta {
                 .map(|balances| balances.into_iter().map(|balance| balance.into()).collect()),
             rewards: rewards
                 .map(|rewards| rewards.into_iter().map(|reward| reward.into()).collect()),
+<<<<<<< HEAD
+=======
+            return_data,
+            compute_units_consumed,
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         })
     }
 }

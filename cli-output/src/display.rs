@@ -261,6 +261,7 @@ fn write_transaction<W: io::Write>(
         write_status(w, &transaction_status.status, prefix)?;
         write_fees(w, transaction_status.fee, prefix)?;
         write_balances(w, transaction_status, prefix)?;
+        write_compute_units_consumed(w, transaction_status.compute_units_consumed, prefix)?;
         write_log_messages(w, transaction_status.log_messages.as_ref(), prefix)?;
         write_rewards(w, transaction_status.rewards.as_ref(), prefix)?;
     } else {
@@ -592,6 +593,39 @@ fn write_balances<W: io::Write>(
     Ok(())
 }
 
+<<<<<<< HEAD
+=======
+fn write_return_data<W: io::Write>(
+    w: &mut W,
+    return_data: Option<&TransactionReturnData>,
+    prefix: &str,
+) -> io::Result<()> {
+    if let Some(return_data) = return_data {
+        if !return_data.data.is_empty() {
+            use pretty_hex::*;
+            writeln!(
+                w,
+                "{}Return Data from Program {}:",
+                prefix, return_data.program_id
+            )?;
+            writeln!(w, "{}  {:?}", prefix, return_data.data.hex_dump())?;
+        }
+    }
+    Ok(())
+}
+
+fn write_compute_units_consumed<W: io::Write>(
+    w: &mut W,
+    compute_units_consumed: Option<u64>,
+    prefix: &str,
+) -> io::Result<()> {
+    if let Some(cus) = compute_units_consumed {
+        writeln!(w, "{}Compute Units Consumed: {}", prefix, cus)?;
+    }
+    Ok(())
+}
+
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
 fn write_log_messages<W: io::Write>(
     w: &mut W,
     log_messages: Option<&Vec<String>>,
@@ -766,6 +800,14 @@ mod test {
                 commission: None,
             }]),
             loaded_addresses: LoadedAddresses::default(),
+<<<<<<< HEAD
+=======
+            return_data: Some(TransactionReturnData {
+                program_id: Pubkey::new_from_array([2u8; 32]),
+                data: vec![1, 2, 3],
+            }),
+            compute_units_consumed: Some(1234u64),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         };
 
         let output = {
@@ -800,6 +842,7 @@ Status: Ok
   Fee: ◎0.000005
   Account 0 balance: ◎0.000005 -> ◎0
   Account 1 balance: ◎0.00001 -> ◎0.0000099
+Compute Units Consumed: 1234
 Log Messages:
   Test message
 Rewards:
@@ -836,6 +879,14 @@ Rewards:
                 commission: None,
             }]),
             loaded_addresses,
+<<<<<<< HEAD
+=======
+            return_data: Some(TransactionReturnData {
+                program_id: Pubkey::new_from_array([2u8; 32]),
+                data: vec![1, 2, 3],
+            }),
+            compute_units_consumed: Some(2345u64),
+>>>>>>> 270315a7f (transaction-status, storage-proto: add compute_units_consumed (#26528))
         };
 
         let output = {
@@ -879,6 +930,7 @@ Status: Ok
   Account 1 balance: ◎0.00001
   Account 2 balance: ◎0.000015 -> ◎0.0000149
   Account 3 balance: ◎0.00002
+Compute Units Consumed: 2345
 Log Messages:
   Test message
 Rewards:
