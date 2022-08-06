@@ -32,9 +32,15 @@ solana-sdk = { path = "../sdk", version = "=1.10.35" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.10.35" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.35" }
 thiserror = "1.0"
+<<<<<<< HEAD
 tokio = "~1.14.1"
 tonic = { version = "0.7.1", features = ["tls", "transport"] }
 zstd = "0.11.1"
+=======
+tokio = "1"
+tonic = { version = "0.8.0", features = ["tls", "transport"] }
+zstd = "0.11.2"
+>>>>>>> 66919e5ad (Unpin tokio for non-rpc crates (#26957))
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly
 # declare it here as well to activate the "vendored" feature that builds OpenSSL

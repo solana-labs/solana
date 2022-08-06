@@ -14,6 +14,7 @@ edition = "2021"
 base64 = "0.13.0"
 log = "0.4.14"
 serde_derive = "1.0.103"
+<<<<<<< HEAD
 serde_json = "1.0.79"
 solana-cli-output = { path = "../cli-output", version = "=1.10.35" }
 solana-client = { path = "../client", version = "=1.10.35" }
@@ -28,6 +29,23 @@ solana-runtime = { path = "../runtime", version = "=1.10.35" }
 solana-sdk = { path = "../sdk", version = "=1.10.35" }
 solana-streamer = { path = "../streamer", version = "=1.10.35" }
 tokio = { version = "~1.14.1", features = ["full"] }
+=======
+serde_json = "1.0.81"
+solana-cli-output = { path = "../cli-output", version = "=1.11.6" }
+solana-client = { path = "../client", version = "=1.11.6" }
+solana-core = { path = "../core", version = "=1.11.6" }
+solana-gossip = { path = "../gossip", version = "=1.11.6" }
+solana-ledger = { path = "../ledger", version = "=1.11.6" }
+solana-logger = { path = "../logger", version = "=1.11.6" }
+solana-net-utils = { path = "../net-utils", version = "=1.11.6" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.11.6" }
+solana-program-test = { path = "../program-test", version = "=1.11.6" }
+solana-rpc = { path = "../rpc", version = "=1.11.6" }
+solana-runtime = { path = "../runtime", version = "=1.11.6" }
+solana-sdk = { path = "../sdk", version = "=1.11.6" }
+solana-streamer = { path = "../streamer", version = "=1.11.6" }
+tokio = { version = "1", features = ["full"] }
+>>>>>>> 66919e5ad (Unpin tokio for non-rpc crates (#26957))
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

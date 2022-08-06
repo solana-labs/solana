@@ -23,4 +23,4 @@ solana-runtime = { path = "../runtime", version = "=1.10.35" }
 solana-sdk = { path = "../sdk", version = "=1.10.35" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
 thiserror = "1.0"
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
