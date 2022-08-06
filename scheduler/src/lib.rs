@@ -153,7 +153,7 @@ impl AddressBook {
     ) {
         let LockAttempt {status, requested_usage, is_success} = attempt;
 
-        let address = status.address();
+        let address = status.address2();
         match self.book.entry(*address) {
             AddressMapEntry::Vacant(book_entry) => {
                 let page = Rc::new(Page::new(CurrentUsage::renew(*requested_usage)));
