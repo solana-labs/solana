@@ -17,7 +17,7 @@ console = "0.15.0"
 core_affinity = "0.5.10"
 crossbeam-channel = "0.5"
 fd-lock = "3.0.5"
-indicatif = "0.16.2"
+indicatif = "0.17.0"
 jsonrpc-core = "18.0.0"
 jsonrpc-core-client = { version = "18.0.0", features = ["ipc"] }
 jsonrpc-derive = "18.0.0"

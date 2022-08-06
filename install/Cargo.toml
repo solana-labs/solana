@@ -19,7 +19,7 @@ console = "0.15.0"
 crossbeam-channel = "0.5"
 ctrlc = { version = "3.2.2", features = ["termination"] }
 dirs-next = "2.0.0"
-indicatif = "0.16.2"
+indicatif = "0.17.0"
 lazy_static = "1.4.0"
 nix = "0.24.2"
 reqwest = { version = "0.11.11", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
