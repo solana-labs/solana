@@ -467,8 +467,9 @@ impl Message {
     /// Compute the blake3 hash of this transaction's message.
     #[cfg(not(target_os = "solana"))]
     pub fn hash(&self) -> Hash {
-        let message_bytes = self.serialize();
-        Self::hash_raw_message(&message_bytes)
+        //let message_bytes = self.serialize();
+        //Self::hash_raw_message(&message_bytes)
+        Hash::default()
     }
 
     /// Compute the blake3 hash of a raw transaction message.
