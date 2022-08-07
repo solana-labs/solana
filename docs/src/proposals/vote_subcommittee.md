@@ -151,7 +151,7 @@ subcommittees will survive.
 * Epoch 0: (a1, B1) - ALL epoch 2/3 blocks have a root to this epoch
 * Epoch 1: (A1, b1) - SOME epoch 2/3 blocks have a root to this epoch
 * Epoch 2: (A1, b2) -
-* Epoch 3: (A1, b3|b2) - SOME blocks may have b3 or b2 votes
+* Epoch 3: (A1, b3) | (a1, B2) - SOME blocks may have b3 or b2 votes
 
 On epoch 3, or later epochs, blocks without an epoch 2 root will
 not accept b2 votes.  If it is not the dominant fork, it will die
