@@ -44,28 +44,28 @@ impl ExecutionEnvironment {
 #[derive(Clone, Debug)]
 enum LockAttemptStatus {
     BeforeLookup(Pubkey),
-    AfterLookup(Pubkey, MyRc<Page>),
+    AfterLookup(MyRc<Page>),
 }
 
 impl LockAttemptStatus {
     fn address2(&self) -> &Pubkey {
         match self {
             LockAttemptStatus::BeforeLookup(pubkey) => &pubkey,
-            LockAttemptStatus::AfterLookup(pubkey, _) => &pubkey,
+            LockAttemptStatus::AfterLookup(_) => unreachable!(),
         }
     }
 
     fn page_rc(&mut self) -> &MyRc<Page> {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(_address, page) => page,
+            LockAttemptStatus::AfterLookup(page) => page,
         }
     }
 
     fn take_page_rc(mut self) -> MyRc<Page> {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(_address, page) => page,
+            LockAttemptStatus::AfterLookup(page) => page,
         }
     }
 
