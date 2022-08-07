@@ -173,7 +173,7 @@ impl AddressBook {
         let address = status.address2();
         match status {
             LockAttemptStatus::BeforeLookup(ref address) => {
-                match self.book.entry(address) {
+                match self.book.entry(&address) {
                     AddressMapEntry::Vacant(book_entry) => {
                         let page = ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage))));
                         *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
