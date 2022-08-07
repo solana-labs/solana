@@ -339,7 +339,7 @@ fn handle_transaction_batch(
             .unwrap();
 }
 
-const NUM_SENDERS: usize = 2;
+const NUM_SENDERS: usize = 1;
 
 fn spawn_packet_senders(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
@@ -478,17 +478,13 @@ fn build_packet(
             read_account_metas.chain(write_account_metas).collect(),
         ),
     ];
-    let versioned_transaction = VersionedTransaction::from(Transaction::new_with_payer(
+    let transaction = Transaction::new_with_payer(
         &ixs,
         Some(&sending_keypair.pubkey()),
-    ));
+    );
 
-    let sanitized_tx = SanitizedTransaction::try_create(
-        versioned_transaction,
-        solana_sdk::transaction::MessageHash::Compute,
-        None,
-        solana_sdk::transaction::SimpleAddressLoader::Disabled,
-        true, // require_static_program_ids
+    let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(
+        transaction,
     )
     .unwrap();
 
