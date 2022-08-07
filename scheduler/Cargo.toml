@@ -12,6 +12,7 @@ publish = true
 
 [dependencies]
 atomic_enum = "0.1.1"
+by_address = "1.0.4"
 crossbeam-channel = "0.5.5"
 log = "0.4.17"
 solana-entry = { path = "../entry", version = "=1.11.5" }
