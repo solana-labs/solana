@@ -117,6 +117,7 @@ struct PacketSendingConfig {
 }
 
 fn spawn_unified_scheduler(
+        num_execution_threads: usize,
         packet_batch_receiver: Receiver<BatchSenderMessage>,
         transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
         //completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
@@ -130,7 +131,7 @@ fn spawn_unified_scheduler(
         let mut address_book = solana_scheduler::AddressBook::default();
 
         solana_scheduler::ScheduleStage::run(
-            100,
+            num_execution_threads * 10,
             &mut runnable_queue,
             &mut contended_queue,
             &mut address_book,
@@ -168,6 +169,7 @@ fn main() {
 
     // Spawns and runs the scheduler thread
     let scheduler_handle = spawn_unified_scheduler(
+        num_execution_threads,
         packet_batch_receiver,
         transaction_batch_senders,
         bank_forks,
