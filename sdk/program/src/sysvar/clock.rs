@@ -116,7 +116,6 @@
 //! #
 //!     let clock = client.get_account(&clock::ID)?;
 //!     let data: Clock = bincode::deserialize(&clock.data)?;
-//!     println!("clock account data: {:#?}", data);
 //!
 //!     Ok(())
 //! }

@@ -35,7 +35,6 @@
 //! #
 //!     let stake_history = client.get_account(&stake_history::ID)?;
 //!     let data: StakeHistory = bincode::deserialize(&stake_history.data)?;
-//!     println!("stake_history account data: {:#?}", data);
 //!
 //!     Ok(())
 //! }

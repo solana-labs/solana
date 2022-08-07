@@ -37,7 +37,6 @@
 //! #
 //!     let slot_history = client.get_account(&slot_history::ID)?;
 //!     let data: SlotHistory = bincode::deserialize(&slot_history.data)?;
-//!     println!("slot_history account data: {:#?}", data);
 //!
 //!     Ok(())
 //! }

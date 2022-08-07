@@ -116,7 +116,6 @@
 //! #
 //!     let epoch_schedule = client.get_account(&epoch_schedule::ID)?;
 //!     let data: EpochSchedule = bincode::deserialize(&epoch_schedule.data)?;
-//!     println!("epoch_schedule account data: {:#?}", data);
 //!
 //!     Ok(())
 //! }

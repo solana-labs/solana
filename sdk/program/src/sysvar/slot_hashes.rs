@@ -35,7 +35,6 @@
 //! #
 //!     let slot_hashes = client.get_account(&slot_hashes::ID)?;
 //!     let data: SlotHashes = bincode::deserialize(&slot_hashes.data)?;
-//!     println!("slot_hashes account data: {:#?}", data);
 //!
 //!     Ok(())
 //! }

@@ -117,7 +117,6 @@
 //! #
 //!     let rent = client.get_account(&rent::ID)?;
 //!     let data: Rent = bincode::deserialize(&rent.data)?;
-//!     println!("rent account data: {:#?}", data);
 //!
 //!     Ok(())
 //! }
