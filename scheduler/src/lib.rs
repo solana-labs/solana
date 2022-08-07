@@ -171,16 +171,50 @@ impl AddressBook {
         let LockAttempt {status, requested_usage, is_success} = attempt;
 
         let address = status.address2();
-        match self.book.entry(*address) {
-            AddressMapEntry::Vacant(book_entry) => {
-                let page = ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage))));
-                *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
-                *is_success = true;
-                book_entry.insert(page);
+        match status {
+            LockAttemptStatus::BeforeLookup(ref address) {
+                match self.book.entry(address) {
+                    AddressMapEntry::Vacant(book_entry) => {
+                        let page = ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage))));
+                        *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
+                        *is_success = true;
+                        book_entry.insert(page);
+                    }
+                    AddressMapEntry::Occupied(mut book_entry) => {
+                        let page = book_entry.get_mut();
+                        *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
+                        let mut page = unsafe { MyRcInner::get_mut_unchecked(page) };
+
+                        match page.current_usage {
+                            CurrentUsage::Unused => {
+                                page.current_usage = CurrentUsage::renew(*requested_usage);
+                                *is_success = true;
+                            }
+                            CurrentUsage::Readonly(ref mut count) => match requested_usage {
+                                RequestedUsage::Readonly => {
+                                    *count += 1;
+                                    *is_success = true;
+                                }
+                                RequestedUsage::Writable => {
+                                    if from_runnable {
+                                        Self::remember_address_contention(&mut page, unique_weight);
+                                    }
+                                    *is_success = false;
+                                }
+                            },
+                            CurrentUsage::Writable => match requested_usage {
+                                RequestedUsage::Readonly | RequestedUsage::Writable => {
+                                    if from_runnable {
+                                        Self::remember_address_contention(&mut page, unique_weight);
+                                    }
+                                    *is_success = false;
+                                }
+                            },
+                        }
+                    }
+                }
             }
-            AddressMapEntry::Occupied(mut book_entry) => {
-                let page = book_entry.get_mut();
-                *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
+            LockAttemptStatus::AfterLookup(page) {
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(page) };
 
                 match page.current_usage {
