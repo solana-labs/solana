@@ -18,7 +18,7 @@ use {
 };
 
 type MyRcInner<T> = std::sync::Arc<T>;
-type MyRc<T> = ByAddress<MyRcInner>;
+type MyRc<T> = ByAddress<MyRcInner<T>>;
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
