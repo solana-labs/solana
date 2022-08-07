@@ -18,9 +18,9 @@ use {
 };
 
 type MyRcInner<T> = std::sync::Arc<T>;
-type MyRc<T> = ByAddress<MyRcInner<T>>;
+struct MyRc<T>(ByAddress<MyRcInner<T>>);
 
-unsafe impl<T> Send for MyRc<T> {}
+//unsafe impl<T> Send for MyRc<T> {}
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
