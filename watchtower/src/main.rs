@@ -35,6 +35,7 @@ struct Config {
     monitor_active_stake: bool,
     unhealthy_threshold: usize,
     validator_identity_pubkeys: Vec<Pubkey>,
+    name_suffix: String,
 }
 
 fn get_config() -> Config {
@@ -135,6 +136,14 @@ fn get_config() -> Config {
                     no alerting should a Bad Gateway error be a side effect of \
                     the real problem")
         )
+        .arg(
+            Arg::with_name("name_suffix")
+                .long("name-suffix")
+                .value_name("SUFFIX")
+                .takes_value(true)
+                .default_value("")
+                .help("Add this string into all notification messages after \"solana-watchtower\"")
+        )
         .get_matches();
 
     let config = if let Some(config_file) = matches.value_of("config_file") {
@@ -160,6 +169,8 @@ fn get_config() -> Config {
     let monitor_active_stake = matches.is_present("monitor_active_stake");
     let ignore_http_bad_gateway = matches.is_present("ignore_http_bad_gateway");
 
+    let name_suffix = value_t_or_exit!(matches, "name_suffix", String);
+
     let config = Config {
         address_labels: config.address_labels,
         ignore_http_bad_gateway,
@@ -169,6 +180,7 @@ fn get_config() -> Config {
         monitor_active_stake,
         unhealthy_threshold,
         validator_identity_pubkeys,
+        name_suffix,
     };
 
     info!("RPC URL: {}", config.json_rpc_url);
@@ -338,8 +350,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
         if let Some((failure_test_name, failure_error_message)) = &failure {
             let notification_msg = format!(
-                "solana-watchtower: Error: {}: {}",
-                failure_test_name, failure_error_message
+                "solana-watchtower{}: Error: {}: {}",
+                config.name_suffix, failure_test_name, failure_error_message
             );
             num_consecutive_failures += 1;
             if num_consecutive_failures > config.unhealthy_threshold {
@@ -371,7 +383,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                     humantime::format_duration(alarm_duration)
                 );
                 info!("{}", all_clear_msg);
-                notifier.send(&format!("solana-watchtower: {}", all_clear_msg));
+                notifier.send(&format!(
+                    "solana-watchtower{}: {}",
+                    config.name_suffix, all_clear_msg
+                ));
             }
             last_notification_msg = "".into();
             last_success = Instant::now();
