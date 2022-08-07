@@ -128,7 +128,7 @@ pub enum RequestedUsage {
 #[derive(Debug)]
 struct Page {
     current_usage: CurrentUsage,
-    contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
+    contended_unique_weights: std::collections::BinaryHeap<UniqueWeight>,
     //next_scheduled_task // reserved_task guaranteed_task
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
