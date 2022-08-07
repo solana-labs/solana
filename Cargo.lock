@@ -4575,7 +4575,7 @@ dependencies = [
  "solana-sdk 1.10.35",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.4.2",
+ "spl-token-2022",
  "thiserror",
  "zstd",
 ]
@@ -4985,7 +4985,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
- "spl-token-2022 0.4.2",
+ "spl-token-2022",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -5465,7 +5465,7 @@ dependencies = [
  "solana-transaction-status",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.2.0",
+ "spl-token-2022",
  "tempfile",
  "thiserror",
  "tokio",
@@ -5973,7 +5973,7 @@ dependencies = [
  "solana-version",
  "solana-vote-program",
  "spl-token",
- "spl-token-2022 0.4.2",
+ "spl-token-2022",
  "stream-cancel",
  "symlink",
  "thiserror",
@@ -6447,7 +6447,7 @@ dependencies = [
  "spl-associated-token-account",
  "spl-memo",
  "spl-token",
- "spl-token-2022 0.4.2",
+ "spl-token-2022",
  "thiserror",
 ]
 
@@ -6574,36 +6574,6 @@ dependencies = [
  "solana-program-runtime",
  "solana-sdk 1.10.35",
  "solana-zk-token-sdk 1.10.35",
-]
-
-[[package]]
-name = "solana-zk-token-sdk"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74b149253f9ed1afb68b3161b53b62b637d0dd7a3b328dffdc8bb5878d48358e"
-dependencies = [
- "aes-gcm-siv",
- "arrayref",
- "base64 0.13.0",
- "bincode",
- "bytemuck",
- "byteorder",
- "cipher 0.3.0",
- "curve25519-dalek",
- "getrandom 0.1.16",
- "lazy_static",
- "merlin",
- "num-derive",
- "num-traits",
- "rand 0.7.3",
- "serde",
- "serde_json",
- "sha3 0.9.1",
- "solana-program 1.10.33",
- "solana-sdk 1.10.33",
- "subtle",
- "thiserror",
- "zeroize",
 ]
 
 [[package]]
@@ -6742,24 +6712,6 @@ dependencies = [
  "num-traits",
  "num_enum",
  "solana-program 1.10.33",
- "thiserror",
-]
-
-[[package]]
-name = "spl-token-2022"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fce48c69350134e8678de5c0956a531b7de586b28eebdddc03211ceec0660983"
-dependencies = [
- "arrayref",
- "bytemuck",
- "num-derive",
- "num-traits",
- "num_enum",
- "solana-program 1.10.33",
- "solana-zk-token-sdk 0.8.1",
- "spl-memo",
- "spl-token",
  "thiserror",
 ]
 
