@@ -18,7 +18,7 @@ use {
 };
 
 type MyRcInner<T> = std::sync::Arc<T>;
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Hash, PartialEq)]
 struct MyRc<T>(pub ByAddress<MyRcInner<T>>);
 
 impl<T> Clone for MyRc<T> {
