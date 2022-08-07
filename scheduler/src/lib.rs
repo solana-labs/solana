@@ -174,13 +174,13 @@ impl AddressBook {
         match self.book.entry(*address) {
             AddressMapEntry::Vacant(book_entry) => {
                 let page = ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage))));
-                *status = LockAttemptStatus::AfterLookup(*address, MyRc::clone(&page));
+                *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
                 *is_success = true;
                 book_entry.insert(page);
             }
             AddressMapEntry::Occupied(mut book_entry) => {
                 let page = book_entry.get_mut();
-                *status = LockAttemptStatus::AfterLookup(*address, MyRc::clone(&page));
+                *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(page) };
 
                 match page.current_usage {
