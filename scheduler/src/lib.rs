@@ -17,7 +17,8 @@ use {
     },
 };
 
-type MyRc<T> = ByAddress<std::sync::Arc<T>>;
+type MyRcInner<T> = std::sync::Arc<T>;
+type MyRc<T> = ByAddress<MyRcInner>;
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
@@ -64,7 +65,7 @@ impl LockAttemptStatus {
     fn page(&mut self) -> &mut Page {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(_address, page) => unsafe { MyRc::get_mut_unchecked(page) },
+            LockAttemptStatus::AfterLookup(_address, page) => unsafe { MyRcInner::get_mut_unchecked(page) },
         }
     }
 }
