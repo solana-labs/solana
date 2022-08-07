@@ -23,7 +23,7 @@ struct MyRc<T>(ByAddress<MyRcInner<T>>);
 
 impl<T> Clone for MyRc<T> {
     fn clone(&self) -> Self {
-        MyRc(ByAddress(MyRcInner::clone(*self.0)))
+        MyRc(ByAddress(MyRcInner::clone(self.0)))
     }
 }
 
