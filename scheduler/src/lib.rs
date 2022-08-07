@@ -575,7 +575,7 @@ impl ScheduleStage {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended_while_queued = address_book.unlock(&mut l);
             if newly_uncontended_while_queued {
-                address_book.newly_uncontended_addresses.insert(*l.status.take_page_rc());
+                address_book.newly_uncontended_addresses.insert(l.status.take_page_rc());
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
