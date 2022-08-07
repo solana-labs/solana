@@ -454,6 +454,7 @@ impl ScheduleStage {
             .book
             .get(address)
             .unwrap()
+            .0
             .contended_unique_weights
     }
 
