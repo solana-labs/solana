@@ -878,7 +878,8 @@ Returns information about all the nodes participating in the cluster
 
 #### Parameters:
 
-None
+- `<object>` - (optional) Configuration object containing the following fields:
+  - `withSnapshots: <bool>` - if true add snapshot information to return in response (default: false)
 
 #### Results:
 
@@ -891,6 +892,8 @@ The result field will be an array of JSON objects, each with the following sub f
 - `version: <string | null>` - The software version of the node, or `null` if the version information is not available
 - `featureSet: <u32 | null >` - The unique identifier of the node's feature set
 - `shredVersion: <u16 | null>` - The shred version the node has been configured to use
+- `fullSnapshots: <array | null>` - Full snapshots available on the node, as an array of arrays containing: `[slot: <u64>, hash: <string>]`
+- `incrementalSnapshots: <array | null>` - Incremental snapshots available on the node, as an array of arrays containing: `[baseSlot: <u64>, slot: <u64>, hash: <string>]`
 
 #### Example:
 
