@@ -145,8 +145,6 @@ impl SanitizedTransaction {
     }
 
     pub fn try_from_legacy_transaction(tx: Transaction) -> Result<Self> {
-        tx.sanitize()?;
-
         Ok(Self {
             message_hash: tx.message.hash(),
             message: SanitizedMessage::Legacy(tx.message),
