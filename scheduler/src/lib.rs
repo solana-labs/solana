@@ -556,7 +556,7 @@ impl ScheduleStage {
 
             // revert because now contended again
             if !from_runnable {
-                address_book.newly_uncontended_addresses.remove(&ByAddress(*l.status.page_rc()));
+                address_book.newly_uncontended_addresses.remove(&l.status.page_rc());
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
