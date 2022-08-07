@@ -593,7 +593,9 @@ impl ScheduleStage {
 
             // revert because now contended again
             if !from_runnable {
+                error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
                 address_book.newly_uncontended_addresses.remove(&l.status.page_rc().0);
+                error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
