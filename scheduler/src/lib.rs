@@ -578,7 +578,7 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
 
             // revert because now contended again
-            address_book.newly_uncontended_addresses.remove(l.status.page_rc());
+            address_book.newly_uncontended_addresses.remove(l.status.page_rc().0);
         }
     }
 
