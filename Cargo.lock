@@ -582,6 +582,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "by_address"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e245704f60eb4eb45810d65cf14eb54d2eb50a6f3715fe2d7cd01ee905c2944f"
+
+[[package]]
 name = "byte-tools"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6067,6 +6073,7 @@ name = "solana-scheduler"
 version = "1.11.5"
 dependencies = [
  "atomic_enum",
+ "by_address",
  "crossbeam-channel",
  "log",
  "rand 0.7.3",

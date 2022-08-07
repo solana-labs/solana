@@ -141,14 +141,14 @@ impl Page {
 }
 
 type AddressMap = std::collections::HashMap<Pubkey, MyRc<Page>>;
-type AddressSet = std::collections::HashSet<Pubkey>;
+type AddressSet = std::collections::HashSet<ByAddress<MyRc<Page>>>;
 type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 
 // needs ttl mechanism and prune
 #[derive(Default)]
 pub struct AddressBook {
     book: AddressMap,
-    newly_uncontended_addresses: AddressMap,
+    newly_uncontended_addresses: AddressSet,
 }
 
 impl AddressBook {
