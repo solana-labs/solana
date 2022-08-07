@@ -458,7 +458,7 @@ impl ScheduleStage {
         //trace!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for page in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = &page.0.contended_unique_weights;
-            if let Some(&weight) = newly_uncontended_unique_weights.max() {
+            if let Some(&weight) = newly_uncontended_unique_weights.pop() {
                 if let Some(current_heaviest_weight) = heaviest_weight {
                     if weight > current_heaviest_weight {
                         heaviest_weight = Some(weight);
