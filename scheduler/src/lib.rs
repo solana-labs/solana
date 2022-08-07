@@ -19,7 +19,7 @@ use {
 
 type MyRcInner<T> = std::sync::Arc<T>;
 #[derive(Debug)]
-struct MyRc<T>(ByAddress<MyRcInner<T>>);
+struct MyRc(ByAddress<MyRcInner<Page>>);
 
 impl<T> Clone for MyRc<T> {
     fn clone(&self) -> Self {
