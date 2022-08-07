@@ -18,7 +18,7 @@ use {
 };
 
 type MyRcInner<T> = std::sync::Arc<T>;
-#[derive(Eq)]
+#[derive(Hash)]
 #[derive(PartialEq)]
 #[derive(Debug)]
 struct MyRc<T>(pub ByAddress<MyRcInner<T>>);
