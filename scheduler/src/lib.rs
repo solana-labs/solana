@@ -216,7 +216,7 @@ impl AddressBook {
                 }
             }
             LockAttemptStatus::AfterLookup(page) => {
-                let mut page = unsafe { MyRcInner::get_mut_unchecked(page) };
+                let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut page.0) };
 
                 match page.current_usage {
                     CurrentUsage::Unused => {
