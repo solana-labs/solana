@@ -18,6 +18,7 @@ use {
 };
 
 type MyRcInner<T> = std::sync::Arc<T>;
+#[derive(Clone)]
 struct MyRc<T>(ByAddress<MyRcInner<T>>);
 
 //unsafe impl<T> Send for MyRc<T> {}
@@ -67,7 +68,7 @@ impl LockAttemptStatus {
     fn page(&mut self) -> &mut Page {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(page) => unsafe { MyRcInner::get_mut_unchecked(page.0) },
+            LockAttemptStatus::AfterLookup(page) => unsafe { MyRcInner::get_mut_unchecked(&mut page.0) },
         }
     }
 }
