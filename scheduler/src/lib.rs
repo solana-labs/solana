@@ -18,14 +18,8 @@ use {
 };
 
 type MyRcInner<T> = std::sync::Arc<T>;
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 struct MyRc(ByAddress<MyRcInner<Page>>);
-
-impl Clone for MyRc {
-    fn clone(&self) -> Self {
-        MyRc(ByAddress(MyRcInner::clone(&self.0)))
-    }
-}
 
 //unsafe impl<T> Send for MyRc<T> {}
 
