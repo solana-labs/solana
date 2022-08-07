@@ -75,23 +75,26 @@ Each transition like (A1,b1) -> (A1, b2) occurs on blocks that cross
 the epoch boundary and are descendants of a rooted block from the
 previous epoch.
 
-The transition starts at a bank that crosses the epoch boundary.
-If it is a descendant of a rooted bank in the previous epoch then
-the transition is active.  If the block is not a descendant, then
-the transition is inactive.
+Despite the long sequence, there are ONLY two types of transitions,
+**primary rotations**, and **secondary rotation**.
 
-There are two types of transitions
+For each transition, block producers may propose a fork on any
+block, but there are only two kinds of forks. All the transitions
+start at a bank that crosses the epoch boundary.  If it is a
+descendant of a rooted bank in the previous epoch then the transition
+is active.  If the block is not a descendant, then the transition
+is inactive and the previous transition rules are still in affect.
 
 **primary rotation**: (a1,B1) -> (A1, b1)
-* active blocks: A1 is the primary and fork weight follows A1
-* inactive blocks: B1 is the primary and fork weight follows B1
+* active blocks: fork weight follows b1
+* inactive blocks: fork weight follows B1
 
 During the **primary rotation** the subcommittees remain constant
 but change flip their **primary/secondary** position.
 
 **secondary rotation**: (A1,b1) -> (A1, b2)
-* active blocks: A1 is the primary and fork weight follows A1
-* inactive blocks: A1 is the primary and fork weight follows A1
+* active blocks: fork weight follows A1
+* inactive blocks: fork weight follows A1
 
 #### Primary Rotation
 
@@ -101,17 +104,18 @@ During the **primary rotation** two possible forks can occur.
 * Epoch 1: (a1, B1) - SOME epoch 2 blocks have a root to this epoch
 * Epoch 2: (A1, b1)
 
-For the transition to be complete, (A1, b1), must root a block
-together in Epoch 1. Therefore block producers should continue
-picking **B1/b1** during epoch 2.
+For the primary transition to be complete, a block must be rooted
+in Epoch 1. Therefore block producers should continue picking
+**B1/b1** during epoch 2.
 
-For blocks propsed in epoch 2, **A1** may use **B1/b1**'s votes
+For blocks proposed in epoch 2, **A1** may use **B1/b1**'s votes
 from epoch 1 and 2 for switching proofs.
 
-For blocks propsed in epoch 2, all block producers should be following
-B1/b1 for fork weigt.
+For blocks proposed in epoch 2, all block producers should be following
+B1/b1 for fork weight.
 
-Optimistic confirmation is valid iff both vote 2/3+ on the same fork.
+Optimistic confirmation is valid only if both vote 2/3+ on the same
+fork.
 
 * Epoch 0: (a0, B1) - ALL epoch 2 blocks have a root to this epoch
 * Epoch 1: (a1, B1) - SOME epoch 2 blocks have a root to this epoch
@@ -120,7 +124,7 @@ Optimistic confirmation is valid iff both vote 2/3+ on the same fork.
 
 If there is a root in epoch 2, then the **secondary rotation** will
 be in effect for those blocks, and **b2** will be the valid
-subcommittee. Block producers should stlll be following **b1** fork
+subcommittee. Block producers should still be following **b1** fork
 weight, so eventually **b1** will observe a rooted block in epoch 1
 with 2/3+ votes and will stop voting.
 
@@ -156,3 +160,19 @@ subcommittees will survive.
 On epoch 3, or later epochs, blocks without an epoch 2 root will
 not accept b2 votes.  If it is not the dominant fork, it will die
 because all the block producers are still following A1's fork weight.
+
+### Block producers
+
+Block producers switch which subcommittee they are following during
+the **primary rotation**
+
+* Epoch 0: (a1, B1) - ALL epoch 2/3 blocks have a root to this epoch
+* Epoch 1: (A1, b1) - SOME epoch 2/3 blocks have a root to this epoch
+* Epoch 2: (A1, b2) -
+* Epoch 3: (A1, b3) | (a1, B2) - SOME blocks may have b3 or b2 votes
+
+Block producers should be following **b1** through epoch 1. It's
+only when rooting (A1, b1) is complete, that on the next epoch that
+has descendants of roots to (A1, b1) that (A1, b2) blocks can be
+proposed and block producers switch following the fork weight of
+**A1** for the (A1, b2) blocks.
