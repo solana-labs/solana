@@ -18,7 +18,8 @@ use {
 };
 
 type MyRcInner<T> = std::sync::Arc<T>;
-struct MyRc<T>{a: pub ByAddress<MyRcInner<T>>};
+#[derive(Debug, Hash)]
+struct MyRc<T>{pub a: ByAddress<MyRcInner<T>>};
 
 impl<T> Clone for MyRc<T> {
     fn clone(&self) -> Self {
