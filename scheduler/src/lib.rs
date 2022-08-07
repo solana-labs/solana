@@ -1,5 +1,4 @@
 #![feature(map_first_last)]
-#![feature(get_mut_unchecked)]
 
 use {
     atomic_enum::atomic_enum,
