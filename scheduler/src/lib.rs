@@ -176,7 +176,7 @@ impl AddressBook {
             LockAttemptStatus::BeforeLookup(address) => {
                 match self.book.entry(*address) {
                     AddressMapEntry::Vacant(book_entry) => {
-                        let page = ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage))));
+                        let page = MyRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage)))));
                         *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
                         *is_success = true;
                         book_entry.insert(page);
