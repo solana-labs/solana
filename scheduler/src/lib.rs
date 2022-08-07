@@ -21,7 +21,7 @@ type MyRcInner<T> = std::sync::Arc<T>;
 #[derive(Debug)]
 struct MyRc(ByAddress<MyRcInner<Page>>);
 
-impl<T> Clone for MyRc<T> {
+impl<T> Clone for MyRc {
     fn clone(&self) -> Self {
         MyRc(ByAddress(MyRcInner::clone(&self.0)))
     }
@@ -53,18 +53,18 @@ impl ExecutionEnvironment {
 #[derive(Clone, Debug)]
 enum LockAttemptStatus {
     BeforeLookup(Pubkey),
-    AfterLookup(MyRc<Page>),
+    AfterLookup(MyRc),
 }
 
 impl LockAttemptStatus {
-    fn page_rc(&mut self) -> &MyRc<Page> {
+    fn page_rc(&mut self) -> &MyRc {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
             LockAttemptStatus::AfterLookup(page) => page,
         }
     }
 
-    fn take_page_rc(mut self) -> MyRc<Page> {
+    fn take_page_rc(mut self) -> MyRc {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
             LockAttemptStatus::AfterLookup(page) => page,
@@ -150,9 +150,9 @@ impl Page {
     }
 }
 
-type AddressMap = std::collections::HashMap<Pubkey, MyRc<Page>>;
+type AddressMap = std::collections::HashMap<Pubkey, MyRc>;
 use by_address::ByAddress;
-type AddressSet = std::collections::HashSet<MyRc<Page>>;
+type AddressSet = std::collections::HashSet<MyRc>;
 type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 
 // needs ttl mechanism and prune
