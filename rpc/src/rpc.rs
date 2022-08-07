@@ -3284,7 +3284,11 @@ pub mod rpc_full {
         ) -> BoxFuture<Result<Vec<Option<RpcInflationReward>>>>;
 
         #[rpc(meta, name = "getClusterNodes")]
-        fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>>;
+        fn get_cluster_nodes(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcGetClusterNodesConfig>,
+        ) -> Result<Vec<RpcContactInfo>>;
 
         #[rpc(meta, name = "getRecentPerformanceSamples")]
         fn get_recent_performance_samples(
@@ -3455,8 +3459,13 @@ pub mod rpc_full {
                 .collect())
         }
 
-        fn get_cluster_nodes(&self, meta: Self::Metadata) -> Result<Vec<RpcContactInfo>> {
+        fn get_cluster_nodes(
+            &self,
+            meta: Self::Metadata,
+            config: Option<RpcGetClusterNodesConfig>,
+        ) -> Result<Vec<RpcContactInfo>> {
             debug!("get_cluster_nodes rpc request received");
+            let with_snapshots = config.unwrap_or_default().with_snapshots;
             let cluster_info = &meta.cluster_info;
             let socket_addr_space = cluster_info.socket_addr_space();
             let valid_address_or_none = |addr: &SocketAddr| -> Option<SocketAddr> {
@@ -3481,6 +3490,36 @@ pub mod rpc_full {
                         } else {
                             (None, None)
                         };
+                        let (full_snapshots, incremental_snapshots) = if with_snapshots {
+                            let full_snapshots = cluster_info.get_snapshot_hash_for_node(
+                                &contact_info.id,
+                                |slot_hashes| {
+                                    slot_hashes
+                                        .clone()
+                                        .into_iter()
+                                        .map(|slot_hash| (slot_hash.0, slot_hash.1.to_string()))
+                                        .collect()
+                                },
+                            );
+                            let incremental_snapshots = cluster_info
+                                .get_incremental_snapshot_hashes_for_node(&contact_info.id)
+                                .map(|incremental_snapshot_hashes| {
+                                    incremental_snapshot_hashes
+                                        .hashes
+                                        .into_iter()
+                                        .map(|incremental_slot_hash| {
+                                            (
+                                                incremental_snapshot_hashes.base.0,
+                                                incremental_slot_hash.0,
+                                                incremental_slot_hash.1.to_string(),
+                                            )
+                                        })
+                                        .collect()
+                                });
+                            (full_snapshots, incremental_snapshots)
+                        } else {
+                            (None, None)
+                        };
                         Some(RpcContactInfo {
                             pubkey: contact_info.id.to_string(),
                             gossip: Some(contact_info.gossip),
@@ -3489,6 +3528,8 @@ pub mod rpc_full {
                             version,
                             feature_set,
                             shred_version: Some(my_shred_version),
+                            full_snapshots,
+                            incremental_snapshots,
                         })
                     } else {
                         None // Exclude spy nodes

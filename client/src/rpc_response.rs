@@ -285,6 +285,10 @@ pub struct RpcContactInfo {
     pub feature_set: Option<u32>,
     /// Shred version
     pub shred_version: Option<u16>,
+    /// Full snapshots
+    pub full_snapshots: Option<Vec<(Slot, String)>>,
+    /// Incremental snapshots
+    pub incremental_snapshots: Option<Vec<(Slot, Slot, String)>>,
 }
 
 /// Map of leader base58 identity pubkeys to the slot indices relative to the first epoch slot
