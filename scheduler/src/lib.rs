@@ -48,13 +48,6 @@ enum LockAttemptStatus {
 }
 
 impl LockAttemptStatus {
-    fn address2(&self) -> &Pubkey {
-        match self {
-            LockAttemptStatus::BeforeLookup(pubkey) => &pubkey,
-            LockAttemptStatus::AfterLookup(_) => unreachable!(),
-        }
-    }
-
     fn page_rc(&mut self) -> &MyRc<Page> {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
@@ -170,7 +163,6 @@ impl AddressBook {
     ) {
         let LockAttempt {status, requested_usage, is_success} = attempt;
 
-        let address = status.address2();
         match status {
             LockAttemptStatus::BeforeLookup(address) => {
                 match self.book.entry(*address) {
