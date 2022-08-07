@@ -17,7 +17,7 @@ use {
     },
 };
 
-type MyRcInner<T> = std::rc::Rc<T>;
+type MyRcInner<T> = std::sync::Arc<T>;
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 struct MyRc(ByAddress<MyRcInner<Page>>);
 
