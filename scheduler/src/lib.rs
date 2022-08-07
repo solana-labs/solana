@@ -172,7 +172,7 @@ impl AddressBook {
 
         let address = status.address2();
         match status {
-            LockAttemptStatus::BeforeLookup(ref address) {
+            LockAttemptStatus::BeforeLookup(ref address) => {
                 match self.book.entry(address) {
                     AddressMapEntry::Vacant(book_entry) => {
                         let page = ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage))));
@@ -214,7 +214,7 @@ impl AddressBook {
                     }
                 }
             }
-            LockAttemptStatus::AfterLookup(page) {
+            LockAttemptStatus::AfterLookup(page) => {
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(page) };
 
                 match page.current_usage {
