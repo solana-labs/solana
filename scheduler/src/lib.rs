@@ -18,7 +18,7 @@ use {
 };
 
 type MyRcInner<T> = std::sync::Arc<T>;
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct MyRc<T>(ByAddress<MyRcInner<T>>);
 
 //unsafe impl<T> Send for MyRc<T> {}
