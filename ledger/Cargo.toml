@@ -49,8 +49,8 @@ solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.10.35" }
 solana-storage-proto = { path = "../storage-proto", version = "=1.10.35" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.10.35" }
 solana-vote-program = { path = "../programs/vote", version = "=1.10.35" }
-spl-token = { version = "=3.3.1", features = ["no-entrypoint"] }
-spl-token-2022 = { version = "=0.2.0", features = ["no-entrypoint"] }
+spl-token = { version = "=3.5.0", features = ["no-entrypoint"] }
+spl-token-2022 = { version = "=0.4.2", features = ["no-entrypoint"] }
 tempfile = "3.3.0"
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
