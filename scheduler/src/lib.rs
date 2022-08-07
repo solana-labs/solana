@@ -146,7 +146,7 @@ impl Page {
 
 type AddressMap = std::collections::HashMap<Pubkey, MyRc>;
 use by_address::ByAddress;
-type AddressSet = std::collections::HashSet<MyRc>;
+type AddressSet = std::collections::HashSet<ByAddress<MyRcInner<Page>>>;
 type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 
 // needs ttl mechanism and prune
