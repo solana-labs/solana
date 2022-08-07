@@ -31,6 +31,7 @@ struct Config {
     ignore_http_bad_gateway: bool,
     interval: Duration,
     json_rpc_url: String,
+    rpc_timeout: Duration,
     minimum_validator_identity_balance: u64,
     monitor_active_stake: bool,
     unhealthy_threshold: usize,
@@ -80,6 +81,14 @@ fn get_config() -> Config {
                 .takes_value(true)
                 .validator(is_url)
                 .help("JSON RPC URL for the cluster"),
+        )
+        .arg(
+            Arg::with_name("rpc_timeout")
+                .long("rpc-timeout")
+                .value_name("SECONDS")
+                .takes_value(true)
+                .default_value("30")
+                .help("Timeout value for RPC requests"),
         )
         .arg(
             Arg::with_name("interval")
@@ -161,6 +170,8 @@ fn get_config() -> Config {
     ));
     let json_rpc_url =
         value_t!(matches, "json_rpc_url", String).unwrap_or_else(|_| config.json_rpc_url.clone());
+    let rpc_timeout = value_t_or_exit!(matches, "rpc_timeout", u64);
+    let rpc_timeout = Duration::from_secs(rpc_timeout);
     let validator_identity_pubkeys: Vec<_> = pubkeys_of(&matches, "validator_identities")
         .unwrap_or_default()
         .into_iter()
@@ -176,6 +187,7 @@ fn get_config() -> Config {
         ignore_http_bad_gateway,
         interval,
         json_rpc_url,
+        rpc_timeout,
         minimum_validator_identity_balance,
         monitor_active_stake,
         unhealthy_threshold,
@@ -221,7 +233,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
 
     let config = get_config();
 
-    let rpc_client = RpcClient::new(config.json_rpc_url.clone());
+    let rpc_client = RpcClient::new_with_timeout(config.json_rpc_url.clone(), config.rpc_timeout);
     let notifier = Notifier::default();
     let mut last_transaction_count = 0;
     let mut last_recent_blockhash = Hash::default();
