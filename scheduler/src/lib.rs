@@ -21,7 +21,7 @@ type MyRcInner<T> = std::rc::Rc<T>;
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 struct MyRc(ByAddress<MyRcInner<Page>>);
 
-//unsafe impl<T> Send for MyRc<T> {}
+unsafe impl Send for MyRc {}
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
