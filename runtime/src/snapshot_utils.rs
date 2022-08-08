@@ -19,10 +19,7 @@ use {
         snapshot_package::{
             AccountsPackage, PendingAccountsPackage, SnapshotPackage, SnapshotType,
         },
-        snapshot_utils::{
-            snapshot_storage_rebuilder::SnapshotStorageRebuilder,
-            snapshot_unpacker::SnapshotUnpacker,
-        },
+        snapshot_utils::snapshot_storage_rebuilder::SnapshotStorageRebuilder,
         status_cache,
     },
     bincode::{config::Options, serialize_into},
@@ -59,8 +56,12 @@ use {
 
 mod archive_format;
 mod snapshot_storage_rebuilder;
-mod snapshot_unpacker;
 pub use archive_format::*;
+use {
+    crate::hardened_unpack::streaming_unpack_snapshot,
+    crossbeam_channel::Sender,
+    std::thread::{Builder, JoinHandle},
+};
 
 pub const SNAPSHOT_STATUS_CACHE_FILENAME: &str = "status_cache";
 pub const SNAPSHOT_ARCHIVE_DOWNLOAD_DIR: &str = "remote";
@@ -1150,6 +1151,66 @@ fn verify_bank_against_expected_slot_hash(
     Ok(())
 }
 
+/// Spawns a thread for unpacking a snapshot
+fn spawn_unpack_snapshot_thread(
+    file_sender: Sender<PathBuf>,
+    account_paths: Arc<Vec<PathBuf>>,
+    ledger_dir: Arc<PathBuf>,
+    mut archive: Archive<SharedBufferReader>,
+    parallel_selector: Option<ParallelSelector>,
+    thread_index: usize,
+) -> JoinHandle<()> {
+    Builder::new()
+        .name(format!(
+            "solana-streaming-unarchive-snapshot-{thread_index}"
+        ))
+        .spawn(move || {
+            streaming_unpack_snapshot(
+                &mut archive,
+                ledger_dir.as_path(),
+                &account_paths,
+                parallel_selector,
+                &file_sender,
+            )
+            .unwrap();
+        })
+        .unwrap()
+}
+
+/// Streams unpacked files across channel
+fn streaming_unarchive_snapshot(
+    file_sender: Sender<PathBuf>,
+    account_paths: Vec<PathBuf>,
+    ledger_dir: PathBuf,
+    snapshot_archive_path: PathBuf,
+    archive_format: ArchiveFormat,
+    num_threads: usize,
+) -> Vec<JoinHandle<()>> {
+    let account_paths = Arc::new(account_paths);
+    let ledger_dir = Arc::new(ledger_dir);
+    let shared_buffer = untar_snapshot_create_shared_buffer(&snapshot_archive_path, archive_format);
+
+    (0..num_threads)
+        .map(|thread_index| {
+            let parallel_selector = Some(ParallelSelector {
+                index: thread_index,
+                divisions: num_threads,
+            });
+
+            let reader = SharedBufferReader::new(&shared_buffer);
+            let archive = Archive::new(reader);
+            spawn_unpack_snapshot_thread(
+                file_sender.clone(),
+                account_paths.clone(),
+                ledger_dir.clone(),
+                archive,
+                parallel_selector,
+                thread_index,
+            )
+        })
+        .collect()
+}
+
 /// Perform the common tasks when unarchiving a snapshot.  Handles creating the temporary
 /// directories, untaring, reading the version file, and then returning those fields plus the
 /// rebuilt storage
@@ -1173,13 +1234,16 @@ where
     let unpacked_snapshots_dir = unpack_dir.path().join("snapshots");
     let unpacked_version_file = unpack_dir.path().join("version");
 
-    let file_receiver = SnapshotUnpacker::spawn_unpack_snapshot(
+    let (file_sender, file_receiver) = crossbeam_channel::unbounded();
+    streaming_unarchive_snapshot(
+        file_sender,
         account_paths.to_vec(),
         unpack_dir.path().to_path_buf(),
         snapshot_archive_path.as_ref().to_path_buf(),
         archive_format,
         parallel_divisions,
     );
+
     let num_rebuilder_threads = std::cmp::max(
         1,
         num_cpus::get_physical().saturating_sub(parallel_divisions),
