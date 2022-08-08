@@ -117,7 +117,7 @@ struct PacketSendingConfig {
 }
 
 fn spawn_unified_scheduler(
-        address_book: solana_scheduler::AddressBook,
+        mut address_book: solana_scheduler::AddressBook,
         num_execution_threads: usize,
         packet_batch_receiver: Receiver<BatchSenderMessage>,
         transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
@@ -365,7 +365,7 @@ fn spawn_packet_senders(
                 accounts.len()
             };
             spawn_packet_sender(
-                preloader,
+                Arc::clone(preloader),
                 metrics.clone(),
                 num_accounts,
                 accounts.clone(),
