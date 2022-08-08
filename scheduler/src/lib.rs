@@ -80,7 +80,7 @@ impl AddressLookup {
 
 #[derive(Clone, Debug)]
 pub struct LockAttempt {
-    lookup: AddressLookup,
+    target: PageRc,
     is_success: bool,
     requested_usage: RequestedUsage,
 }
