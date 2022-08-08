@@ -33,8 +33,7 @@ for an example of a C program.
 First setup the environment:
 
 - Install the latest Rust stable from https://rustup.rs
-- Install the latest Solana command-line tools from
-  https://docs.solana.com/cli/install-solana-cli-tools
+- Install the latest [Solana command-line tools](../../cli/install-solana-cli-tools.md)
 
 Then build using make:
 
