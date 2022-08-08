@@ -1507,9 +1507,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_instruction_accounts_data_meter() {
-        solana_logger::setup();
-
+    fn test_process_instruction_accounts_resize_delta() {
         let program_key = Pubkey::new_unique();
         let user_account_data_len = 123u64;
         let user_account =
@@ -1533,14 +1531,6 @@ mod tests {
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
 
-        invoke_context
-            .accounts_data_meter
-            .set_initial(user_account_data_len as u64);
-        invoke_context
-            .accounts_data_meter
-            .set_maximum(user_account_data_len as u64 * 3);
-        let remaining_account_data_len = invoke_context.accounts_data_meter.remaining();
-
         let instruction_accounts = [
             InstructionAccount {
                 index_in_transaction: 0,
@@ -1558,9 +1548,10 @@ mod tests {
             },
         ];
 
-        // Test 1: Resize the account to use up all the space; this must succeed
+        // Test: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {
-            let new_len = user_account_data_len + remaining_account_data_len;
+            let resize_delta: i64 = 0;
+            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1578,13 +1569,14 @@ mod tests {
                     .transaction_context
                     .accounts_resize_delta()
                     .unwrap(),
-                user_account_data_len as i64 * 2
+                resize_delta
             );
         }
 
-        // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
+        // Test: Resize the account larger; this must succeed
         {
-            let new_len = user_account_data_len + remaining_account_data_len;
+            let resize_delta: i64 = 1;
+            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1602,13 +1594,14 @@ mod tests {
                     .transaction_context
                     .accounts_resize_delta()
                     .unwrap(),
-                user_account_data_len as i64 * 2
+                resize_delta
             );
         }
 
-        // Test 3: Resize the account to exceed the budget; this must succeed
+        // Test: Resize the account smaller; this must succeed
         {
-            let new_len = user_account_data_len + remaining_account_data_len + 1;
+            let resize_delta: i64 = -1;
+            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1626,7 +1619,7 @@ mod tests {
                     .transaction_context
                     .accounts_resize_delta()
                     .unwrap(),
-                user_account_data_len as i64 * 2 + 1
+                resize_delta
             );
         }
     }
