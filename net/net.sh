@@ -248,7 +248,7 @@ startCommon() {
       mkdir -p $SOLANA_HOME $CARGO_BIN;
       mv ~/config $SOLANA_HOME/
     "
-  elif [[ $instanceIndex -le 0 ]]
+  elif [[ $instanceIndex -le 0 ]]; then 
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
