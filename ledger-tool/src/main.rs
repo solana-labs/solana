@@ -280,7 +280,7 @@ fn output_slot(
                 &mut address_book,
                 &muxed_receiver,
                 &pre_execute_env_sender,
-                &post_schedule_env_sender,
+                //&post_schedule_env_sender,
             );
         })
         .unwrap();
