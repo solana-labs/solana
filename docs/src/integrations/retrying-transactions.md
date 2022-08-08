@@ -7,7 +7,7 @@ title: Retrying Transactions
 On some occasions, a seemingly valid transaction may be dropped before it is
 included in a block. This most often occurs during periods of network
 congestion, when an RPC node fails to rebroadcast the transaction to the
-[leader](https://docs.solana.com/terminology#leader). To an end-user, it may
+[leader](../terminology#leader). To an end-user, it may
 appear as if their transaction disappears entirely. While RPC nodes are equipped
 with a generic rebroadcasting algorithm, application developers are also capable
 of developing their own custom rebroadcasting logic.
@@ -25,6 +25,7 @@ Fact Sheet
   are submitted
 - Before re-signing any transaction, it is **very important** to ensure that the
   initial transaction’s blockhash has expired
+
 :::
 
 ## The Journey of a Transaction
@@ -37,7 +38,7 @@ so that they can be processed into a block. There are two main ways in which a
 transaction can be sent to leaders:
 
 1. By proxy via an RPC server and the
-   [sendTransaction](https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction)
+   [sendTransaction](../developing/clients/jsonrpc-api#sendtransaction)
    JSON-RPC method
 2. Directly to leaders via a
    [TPU Client](https://docs.rs/solana-client/1.7.3/solana_client/tpu_client/index.html)
@@ -50,9 +51,9 @@ outside of what the client and the relaying RPC nodes are aware of. In the case
 of a TPU client, rebroadcast and leader forwarding is handled entirely by the
 client software.
 
-![Transaction Journey](/img/rt-tx-journey.png)
+![Transaction Journey](../../static/img/rt-tx-journey.png)
 
-<!-- (/img/p_ex_unstaked_dilution.png) -->
+<!-- (../../static/img/p_ex_unstaked_dilution.png) -->
 
 ### How RPC Nodes Broadcast Transactions
 
@@ -64,7 +65,7 @@ communicate with one another, but does not provide any guarantees regarding
 transaction delivery.
 
 Because Solana’s leader schedule is known in advance of every
-[epoch](https://docs.solana.com/terminology#epoch) (~2 days), an RPC node will
+[epoch](../terminology#epoch) (~2 days), an RPC node will
 broadcast its transaction directly to the current and next leaders. This is in
 contrast to other gossip protocols such as Ethereum that propagate transactions
 randomly and broadly across the entire network. By default, RPC nodes will try
@@ -89,7 +90,7 @@ The TPU processes transactions in five distinct phases:
 - [Proof of History Service](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/poh/src/poh_service.rs)
 - [Broadcast Stage](https://github.com/solana-labs/solana/blob/cd6f931223181d5a1d47cba64e857785a175a760/core/src/tpu.rs#L136)
 
-![TPU Overview](/img/rt-tpu-jito-labs.png)
+![TPU Overview](../../static/img/rt-tpu-jito-labs.png)
 
 Of these five phases, the Fetch Stage is responsible for receiving transactions.
 Within the Fetch Stage, validators will categorize incoming transactions
@@ -132,15 +133,15 @@ it is processed. The first scenario involves transactions that are submitted via
 an RPC pool. Occasionally, part of the RPC pool can be sufficiently ahead of the
 rest of the pool. This can cause issues when nodes within the pool are required
 to work together. In this example, the transaction’s
-[recentBlockhash](https://docs.solana.com/developing/programming-model/transactions#recent-blockhash)
+[recentBlockhash](../developing/programming-model/transactions#recent-blockhash)
 is queried from the advanced part of the pool (Backend A). When the transaction
 is submitted to the lagging part of the pool (Backend B), the nodes will not
 recognize the advanced blockhash and will drop the transaction. This can be
 detected upon transaction submission if developers enable
-[preflight checks](https://docs.solana.com/developing/clients/jsonrpc-api#sendtransaction)
+[preflight checks](../developing/clients/jsonrpc-api#sendtransaction)
 on `sendTransaction`.
 
-![Dropped via RPC Pool](/img/rt-dropped-via-rpc-pool.png)
+![Dropped via RPC Pool](../../static/img/rt-dropped-via-rpc-pool.png)
 
 Temporarily network forks can also result in dropped transactions. If a
 validator is slow to replay its blocks within the Banking Stage, it may end up
@@ -150,7 +151,7 @@ minority fork. After the transaction is submitted, the cluster can then switch
 away from its minority fork before the transaction is processed. In this
 scenario, the transaction is dropped due to the blockhash not being found.
 
-![Dropped due to Minority Fork (Before Processed)](/img/rt-dropped-minority-fork-pre-process.png)
+![Dropped due to Minority Fork (Before Processed)](../../static/img/rt-dropped-minority-fork-pre-process.png)
 
 ### After a transaction is processed and before it is finalized
 
@@ -162,7 +163,7 @@ would fail to reach consensus with the majority of validators that do not
 recognize the minority fork. At this time, the transaction would be dropped
 before it could be finalized.
 
-![Dropped due to Minority Fork (After Processed)](/img/rt-dropped-minority-fork-post-process.png)
+![Dropped due to Minority Fork (After Processed)](../../static/img/rt-dropped-minority-fork-post-process.png)
 
 ## Handling Dropped Transactions
 
@@ -189,7 +190,7 @@ the transaction will be processed or finalized by the cluster.
   - `skipPreflight`: `boolean` - if true, skip the preflight transaction checks
     (default: false)
   - (optional) `preflightCommitment`: `string` -
-    [Commitment](https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment)
+    [Commitment](../developing/clients/jsonrpc-api#configuring-state-commitment)
     level to use for preflight simulations against the bank slot (default:
     "finalized").
   - (optional) `encoding`: `string` - Encoding used for the transaction data.
@@ -203,8 +204,9 @@ Response
 
 - `transaction id`: `string` - First transaction signature embedded in the
   transaction, as base-58 encoded string. This transaction id can be used with
-  [getSignatureStatuses](https://docs.solana.com/developing/clients/jsonrpc-api#getsignaturestatuses)
+  [getSignatureStatuses](../developing/clients/jsonrpc-api#getsignaturestatuses)
   to poll for status updates.
+
 :::
 
 ## Customizing Rebroadcast Logic
@@ -217,9 +219,9 @@ developers to manually control the retry process
 
 A common pattern for manually retrying transactions involves temporarily storing
 the `lastValidBlockHeight` that comes from
-[getLatestBlockhash](https://docs.solana.com/developing/clients/jsonrpc-api#getlatestblockhash).
+[getLatestBlockhash](../developing/clients/jsonrpc-api#getlatestblockhash).
 Once stashed, an application can then
-[poll the cluster’s blockheight](https://docs.solana.com/developing/clients/jsonrpc-api#getblockheight)
+[poll the cluster’s blockheight](../developing/clients/jsonrpc-api#getblockheight)
 and manually retry the transaction at an appropriate interval. In times of
 network congestion, it’s advantageous to set `maxRetries` to 0 and manually
 rebroadcast via a custom algorithm. While some applications may employ an
@@ -287,7 +289,7 @@ const sleep = async (ms: number) => {
 
 When polling via `getLatestBlockhash`, applications should specify their
 intended
-[commitment](https://docs.solana.com/developing/clients/jsonrpc-api#configuring-state-commitment)
+[commitment](../developing/clients/jsonrpc-api#configuring-state-commitment)
 level. By setting its commitment to `confirmed` (voted on) or `finalized` (~30
 blocks after `confirmed`), an application can avoid polling a blockhash from a
 minority fork.
@@ -329,6 +331,6 @@ In Solana, a dropped transaction can be safely discarded once the blockhash it
 references is older than the `lastValidBlockHeight` received from
 `getLatestBlockhash`. Developers should keep track of this
 `lastValidBlockHeight` by querying
-[`getEpochInfo`](https://docs.solana.com/developing/clients/jsonrpc-api#getepochinfo)
+[`getEpochInfo`](../developing/clients/jsonrpc-api#getepochinfo)
 and comparing with `blockHeight` in the response. Once a blockhash is
 invalidated, clients may re-sign with a newly-queried blockhash.
