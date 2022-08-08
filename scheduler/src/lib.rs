@@ -100,7 +100,7 @@ impl LockAttempt {
         !self.is_success()
     }
 
-    pub fn new(targe: PageRc, requested_usage: RequestedUsage) -> Self {
+    pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
             target,
             is_success: true,
