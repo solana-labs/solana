@@ -507,11 +507,11 @@ fn build_packet(
     let writable_lock_iter = locks
         .writable
         .iter()
-        .map(|address| solana_scheduler::LockAttempt::new(**address, solana_scheduler::RequestedUsage::Writable));
+        .map(|address| solana_scheduler::LockAttempt::new(preloader.load(**address), solana_scheduler::RequestedUsage::Writable));
     let readonly_lock_iter = locks
         .readonly
         .iter()
-        .map(|address| solana_scheduler::LockAttempt::new(**address, solana_scheduler::RequestedUsage::Readonly));
+        .map(|address| solana_scheduler::LockAttempt::new(preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
 
     Box::new((sanitized_tx, locks))
