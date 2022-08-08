@@ -536,7 +536,7 @@ impl ScheduleStage {
             );
 
             if !is_success {
-                //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
+                trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
                     &mut populated_lock_attempts,
