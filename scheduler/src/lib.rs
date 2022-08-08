@@ -281,7 +281,7 @@ impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
         match self.book.entry(*address) {
             AddressMapEntry::Vacant(book_entry) => {
-                let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::new()))));
+                let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::placeholder()))));
                 let cloned = PageRc::clone(&page);
                 book_entry.insert(page);
                 cloned
