@@ -180,10 +180,10 @@ impl AddressBook {
                         let cloned_page = MyRc::clone(&page);
                         //dbg!((&page, &cloned_page));
                         //assert_eq!(&*page, &cloned_page);
-                        let mut a = std::collections::HashSet::new();
-                        a.insert(page.clone());
-                        a.insert(cloned_page);
-                        panic!("{:?}", a);
+                        //let mut a = std::collections::HashSet::new();
+                        //a.insert(page.clone());
+                        //a.insert(cloned_page);
+                        //panic!("{:?}", a);
                         *status = LockAttemptStatus::AfterLookup(cloned_page);
                         let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut page.0) };
 
