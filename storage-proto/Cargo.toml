@@ -29,5 +29,9 @@ name = "solana_storage_proto"
 targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
-protobuf-src = "1.0.5"
 tonic-build = "0.8.0"
+
+# windows users should install the protobuf compiler manually and set the PROTOC
+# envar to point to the installation
+[target."cfg(not(windows))".build-dependencies]
+protobuf-src = "1.0.5"

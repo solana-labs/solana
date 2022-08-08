@@ -12,5 +12,9 @@ version = "1.12.0"
 [workspace]
 
 [dependencies]
-protobuf-src = "1.0.5"
 tonic-build = "0.8.0"
+
+# windows users should install the protobuf compiler manually and set the PROTOC
+# envar to point to the installation
+[target."cfg(not(windows))".dependencies]
+protobuf-src = "1.0.5"
