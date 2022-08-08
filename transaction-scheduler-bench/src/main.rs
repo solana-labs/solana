@@ -460,6 +460,7 @@ fn build_packet_batches(
 }
 
 fn build_packet_batch(
+    preloader: &solana_scheduler::Preloader,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
