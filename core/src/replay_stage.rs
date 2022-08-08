@@ -7184,22 +7184,6 @@ pub(crate) mod tests {
         );
         blockstore.insert_shreds(shreds, None, false).unwrap();
         blockstore.set_roots(std::iter::once(&bank.slot())).unwrap();
-        /*
-         * blockstore
-         *     .put_meta_bytes(
-         *         bank.parent_slot(),
-         *         &bincode::serialize(&SlotMeta::default()).unwrap(),
-         *     )
-         *     .unwrap();
-         */
-        /*
-         * blockstore
-         *     .put_meta_bytes(
-         *         bank.slot(),
-         *         &bincode::serialize(&SlotMeta::default()).unwrap(),
-         *     )
-         *     .unwrap();
-         */
     }
 
     fn do_replay(
