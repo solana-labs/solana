@@ -4486,12 +4486,8 @@ dependencies = [
 name = "solana-bpf-rust-secp256k1-recover"
 version = "1.11.6"
 dependencies = [
-<<<<<<< HEAD
- "solana-program 1.11.6",
-=======
  "libsecp256k1 0.7.0",
- "solana-program 1.12.0",
->>>>>>> ebe25fdb5 (Add API docs for secp256k1_instruction and secp256k1_recover (#26065))
+ "solana-program 1.11.6",
 ]
 
 [[package]]
