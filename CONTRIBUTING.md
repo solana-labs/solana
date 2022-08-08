@@ -250,20 +250,12 @@ confused with 3-letter acronyms.
 
 ## Design Proposals
 
-Solana's architecture is described by docs generated from markdown files in
-the `docs/src/` directory, maintained by an *editor* (currently @garious). To
-add a design proposal, you'll need to include it in the
-[Accepted Design Proposals](https://docs.solana.com/proposals/accepted-design-proposals)
-section of the Solana docs.  Here's the full process:
+Solana's architecture is described by docs generated from markdown files in the `docs/src/` 
+directory and viewable on the official [Solana Documentation](https://docs.solana.com) website.
 
-1. Propose a design by creating a PR that adds a markdown document to the
-   `docs/src/proposals` directory and references it from the [table of
-   contents](docs/src/SUMMARY.md). Add any relevant *maintainers* to the PR
-   review.
-2. The PR being merged indicates your proposed change was accepted and that the
-   maintainers support your plan of attack.
-3. Submit PRs that implement the proposal. When the implementation reveals the
-   need for tweaks to the proposal, be sure to update the proposal and have that
-   change reviewed by the same people as in step 1.
-4. Once the implementation is complete, submit a PR that moves the link from
-   the Accepted Proposals to the Implemented Proposals section.
+Current design proposals may be viewed on the docs site:
+
+1. [Accepted Proposals](https://docs.solana.com/proposals/accepted-design-proposals.md).
+2. [Implemented Proposals](https://docs.solana.com/implemented-proposals/implemented-proposals.md)
+
+New design proposals should follow this guide on [how to submit a design proposal](./docs/src/proposals.md#submit-a-design-proposal).
