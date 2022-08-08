@@ -5118,6 +5118,7 @@ dependencies = [
  "solana-ledger",
  "solana-logger 1.12.0",
  "solana-measure",
+ "solana-measure-block",
  "solana-metrics",
  "solana-net-utils",
  "solana-perf",

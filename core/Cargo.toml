@@ -45,6 +45,7 @@ solana-geyser-plugin-manager = { path = "../geyser-plugin-manager", version = "=
 solana-gossip = { path = "../gossip", version = "=1.12.0" }
 solana-ledger = { path = "../ledger", version = "=1.12.0" }
 solana-measure = { path = "../measure", version = "=1.12.0" }
+solana-measure-block = { path = "../measure-block", version = "=1.12.0" }
 solana-metrics = { path = "../metrics", version = "=1.12.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.12.0" }
 solana-perf = { path = "../perf", version = "=1.12.0" }
