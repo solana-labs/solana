@@ -156,7 +156,7 @@ impl Page {
 }
 
 //type AddressMap = std::collections::HashMap<Pubkey, PageRc>;
-type AddressMap = dashmap::DashMap<Pubkey, PageRc>;
+type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 use by_address::ByAddress;
 type AddressSet = std::collections::HashSet<PageRc>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
@@ -263,6 +263,14 @@ impl AddressBook {
 
         still_queued
     }
+
+    fn preloader() -> Preloader {
+        Preloader{map: Arc::clone(self.map)}
+    }
+}
+
+pub struct Preloader {
+    map: AddressMap,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

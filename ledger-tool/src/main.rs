@@ -359,6 +359,7 @@ fn output_slot(
     if verbose_level >= 2 {
         let mut txes = Vec::new();
         let skip_voting = std::env::var("SKIP_VOTING").is_ok();
+        let preloader = address_book.preloader();
         for (entry_index, entry) in entries.into_iter().enumerate() {
             output_entry(
                 blockstore,
