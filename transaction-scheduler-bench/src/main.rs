@@ -390,6 +390,7 @@ fn spawn_packet_sender(
 ) -> JoinHandle<()> {
     std::thread::Builder::new().name("sol-producer".to_string()).spawn(move || {
         send_packets(
+            preloader,
             metrics,
             num_accounts,
             accounts,
