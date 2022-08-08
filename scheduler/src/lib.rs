@@ -265,7 +265,7 @@ impl AddressBook {
     }
 
     fn preloader(&self) -> Preloader {
-        Preloader{map: Arc::clone(self.book)}
+        Preloader{map: std::sync::Arc::clone(self.book)}
     }
 }
 
