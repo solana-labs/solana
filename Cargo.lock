@@ -894,9 +894,9 @@ checksum = "e4c78c047431fee22c1a7bb92e00ad095a02a983affe4d8a72e2a2c62c1b94f3"
 
 [[package]]
 name = "const_format"
-version = "0.2.25"
+version = "0.2.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2906f2480cdc015e998deac388331a0f1c1cd88744948c749513020c83c370bc"
+checksum = "939dc9e2eb9077e0679d2ce32de1ded8531779360b003b4a972a7a39ec263495"
 dependencies = [
  "const_format_proc_macros",
 ]
@@ -1363,7 +1363,16 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2953d1df47ac0eb70086ccabf0275aa8da8591a28bd358ee2b52bd9f9e3ff9e9"
 dependencies = [
- "enum-iterator-derive",
+ "enum-iterator-derive 0.8.1",
+]
+
+[[package]]
+name = "enum-iterator"
+version = "1.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45a0ac4aeb3a18f92eaf09c6bb9b3ac30ff61ca95514fc58cbead1c9a6bf5401"
+dependencies = [
+ "enum-iterator-derive 1.0.2",
 ]
 
 [[package]]
@@ -1371,6 +1380,17 @@ name = "enum-iterator-derive"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8958699f9359f0b04e691a13850d48b7de329138023876d07cbd024c2c820598"
+dependencies = [
+ "proc-macro2 1.0.41",
+ "quote 1.0.18",
+ "syn 1.0.98",
+]
+
+[[package]]
+name = "enum-iterator-derive"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b13f1e69590421890f90448c3cd5f554746a31adc6dc0dac406ec6901db8dc25"
 dependencies = [
  "proc-macro2 1.0.41",
  "quote 1.0.18",
@@ -5844,7 +5864,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "eager",
- "enum-iterator",
+ "enum-iterator 0.8.1",
  "itertools",
  "libc",
  "libloading",
@@ -6241,7 +6261,7 @@ dependencies = [
  "bincode",
  "bytes",
  "bzip2",
- "enum-iterator",
+ "enum-iterator 1.1.3",
  "flate2",
  "futures 0.3.21",
  "goauth",
@@ -6271,7 +6291,7 @@ version = "1.12.0"
 dependencies = [
  "bincode",
  "bs58",
- "enum-iterator",
+ "enum-iterator 1.1.3",
  "prost 0.11.0",
  "protobuf-src",
  "serde",
