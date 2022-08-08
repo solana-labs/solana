@@ -55,37 +55,54 @@ confirmed blocks.
 
 #### Primary rotation
 
-Starts with block that have N-1 or fewer roots of (A1, b1) and will
-transition to (a1, B1) at the Nth block.
+Starts with block that have N-1 or fewer roots of (a1, B1) and will
+transition to (A1, b1) at the Nth block.
 
 Roots must contain BOTH, **primary** and **secondary** subcommittee
 2/3+ votes.
 
-Block producers will follow A1 fork weight for any blocks proposed
+Block producers will follow B1, fork weight for any blocks proposed
 with N-1 roots.
 
-For any forks with N-1 roots, b1 may use A1's votes to
-switch forks.
+For any forks with N-1 roots, a1 may use **primary**'s (B1) votes
+to switch forks, if 2/3+ of **primary** has voted on a fork.
 
-On blocks with N roots, block producers will follow B1s votes, and
+On blocks with N roots, block producers will follow A1s votes, and
 on those blocks the network is in the **secondary rotation** phase.
+
+#### Primary rotation liveness
+
+On the N-1 block, both a1 and B1 must root another block. If a1 had
+diverged and is on a separate fork form B1, it may use B1's 2/3+
+votes to switch away to B1's heaviest fork.
 
 #### Secondary rotation
 
-Starts with block that have N-1 or fewer roots of (a1, B1) and will
-transition to (a2, B1) at the Nth block
+Starts with block that have N-1 or fewer roots of (A1, b1) and will
+transition to (A1, b2) at the Nth block
 
-Block producers will follow B1 fork weight for any blocks proposed
-with N-1 roots or N roots.
+Block producers will follow **primary** (A1) fork weight for any
+blocks proposed with N-1 roots or N roots.
 
-Roots may contain ONLY **primary** subcommittee 2/3+ votes.
+Roots may contain ONLY **primary** subcommittee (A1) 2/3+ votes.
 
-On the Nth block, the network is in **secondary rotatin** phase.
+In secondary rotation, b1 may diverge from A1, so it is not necessary
+to allow b1 to use any of A1's votes for switching proofs.
+
+On the Nth block, the network is in **primary rotation** phase and
+(b2) is the new secondary.
+
+#### Secondary rotation liveness
+
+On the N-1 block, only A1 needs to root another block for the network
+to move into **primary rotation** phase.  As long as A1 nodes are
+not faulty with respect to lockouts, and block producers follow
+A1's fork weight this will eventually occur.
 
 ### Optimistically Confirmed Safety
 
 In the **primary rotation** phase, BOTH **primary** and **secondary**
-must have 2/3+ votes on the same block.
+must have 2/3+ votes on the same fork.
 
 In the **secondary rotation** phase, ONLY **primary** needs to show
-2/3+ votes on the same block.
+2/3+ votes on the same fork.
