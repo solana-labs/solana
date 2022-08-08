@@ -8,6 +8,10 @@ fn main() -> Result<(), std::io::Error> {
         #[cfg(not(windows))]
         std::env::set_var(PROTOC_ENVAR, protobuf_src::protoc());
     }
+    println!(
+        "cargo:warning=(not a warning) protoc {:?}",
+        std::env::var(PROTOC_ENVAR),
+    );
 
     let proto_base_path = std::path::PathBuf::from("proto");
     let proto_files = ["confirmed_block.proto", "transaction_by_addr.proto"];
