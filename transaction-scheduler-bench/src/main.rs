@@ -205,6 +205,7 @@ fn main() {
         num_write_locks_per_tx: num_read_write_locks_per_tx,
     });
     let packet_sender_handles = spawn_packet_senders(
+        preloader,
         metrics.clone(),
         high_conflict_sender,
         accounts,
@@ -347,6 +348,7 @@ fn handle_transaction_batch(
 const NUM_SENDERS: usize = 1;
 
 fn spawn_packet_senders(
+    preloader: &solana_scheduler::Preloader,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     high_conflict_sender: usize,
     accounts: Arc<Vec<Keypair>>,
