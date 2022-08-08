@@ -1,34 +1,29 @@
 use {
-    clap::{crate_description, crate_name, value_t, value_t_or_exit, App, Arg},
+    clap::Parser,
     log::*,
     solana_runtime::append_vec::{AppendVec, StoredAccountMeta},
     solana_sdk::{account::AccountSharedData, hash::Hash, pubkey::Pubkey},
 };
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about)]
+struct Args {
+    /// Storage file to read
+    #[clap(short, long, value_parser)]
+    file: String,
+    /// Length of accounts written to the storage file
+    #[clap(short, long, value_parser)]
+    len: Option<usize>,
+}
+
 fn main() {
     solana_logger::setup_with_default("solana=info");
-    let matches = App::new(crate_name!())
-        .about(crate_description!())
-        .version(solana_version::version!())
-        .arg(
-            Arg::with_name("file")
-                .long("file")
-                .takes_value(true)
-                .value_name("<PATH>")
-                .help("store to open"),
-        )
-        .arg(
-            Arg::with_name("len")
-                .long("len")
-                .takes_value(true)
-                .value_name("LEN")
-                .help("len of store to open"),
-        )
-        .get_matches();
+    let args = Args::parse();
 
-    let file = value_t_or_exit!(matches, "file", String);
-    let len = value_t!(matches, "len", usize)
-        .unwrap_or_else(|_| std::fs::metadata(&file).unwrap().len() as usize);
+    let file = args.file;
+    let len = args
+        .len
+        .unwrap_or_else(|| std::fs::metadata(&file).unwrap().len() as usize);
 
     let mut store = AppendVec::new_from_file_unchecked(file, len).expect("should succeed");
     store.set_no_remove_on_drop();

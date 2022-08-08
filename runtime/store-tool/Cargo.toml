@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 publish = false
 
 [dependencies]
-clap = "2.33.1"
+clap = { version = "3.2.16", features = ["derive"] }
 log = { version = "0.4.17" }
 solana-logger = { path = "../../logger", version = "=1.12.0" }
 solana-runtime = { path = "..", version = "=1.12.0" }
