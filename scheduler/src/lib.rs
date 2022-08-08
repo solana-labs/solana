@@ -453,6 +453,7 @@ impl ScheduleStage {
         *unique_key -= 1;
     }
 
+    /*
     #[inline(never)]
     fn get_newly_u_u_w<'a>(
         address: &'a Pubkey,
@@ -465,6 +466,7 @@ impl ScheduleStage {
             .0
             .contended_unique_weights
     }
+    */
 
     #[inline(never)]
     fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
