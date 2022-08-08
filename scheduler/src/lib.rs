@@ -80,7 +80,7 @@ impl AddressLookup {
 
 impl PageRc {
     fn page(&mut self) -> &mut Page {
-        MyRcInner::get_mut_unchecked(&mut self.0)
+        unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
     }
 }
 
