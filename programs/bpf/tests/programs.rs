@@ -1651,10 +1651,17 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_membuiltins", 1539),
             ("solana_bpf_rust_noop", 326),
             ("solana_bpf_rust_param_passing", 146),
+<<<<<<< HEAD
             ("solana_bpf_rust_rand", 429),
             ("solana_bpf_rust_sanity", 52290),
             ("solana_bpf_rust_secp256k1_recover", 25707),
             ("solana_bpf_rust_sha", 25265),
+=======
+            ("solana_bpf_rust_rand", 469),
+            ("solana_bpf_rust_sanity", 52054),
+            ("solana_bpf_rust_secp256k1_recover", 91195),
+            ("solana_bpf_rust_sha", 24081),
+>>>>>>> ebe25fdb5 (Add API docs for secp256k1_instruction and secp256k1_recover (#26065))
         ]);
     }
 
