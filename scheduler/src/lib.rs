@@ -78,6 +78,12 @@ impl AddressLookup {
     }
 }
 
+impl PageRc {
+    fn page(&mut self) -> &mut Page {
+        MyRcInner::get_mut_unchecked(&mut page.0)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct LockAttempt {
     target: PageRc,
@@ -541,7 +547,7 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
 
             // revert because now contended again
-            address_book.newly_uncontended_addresses.remove(&l.target.page_rc());
+            address_book.newly_uncontended_addresses.remove(&l.target);
         }
     }
 
@@ -557,7 +563,7 @@ impl ScheduleStage {
             // revert because now contended again
             if !from_runnable {
                 //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
-                address_book.newly_uncontended_addresses.remove(&l.target.page_rc());
+                address_book.newly_uncontended_addresses.remove(&l.target);
                 //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
             }
 
