@@ -28,24 +28,10 @@ fn bench_status_cache_serialize(bencher: &mut Bencher) {
             status_cache.insert(&blockhash, &sig, 0, Ok(()));
         }
     }
+    assert!(status_cache.roots().contains(&0));
     bencher.iter(|| {
-        let _ = serialize(&status_cache.slot_deltas(&[0])).unwrap();
+        let _ = serialize(&status_cache.root_slot_deltas()).unwrap();
     });
-}
-
-#[bench]
-fn bench_status_cache_slot_deltas(bencher: &mut Bencher) {
-    let mut status_cache = BankStatusCache::default();
-
-    // fill the status cache
-    let slots: Vec<_> = (42..).take(MAX_CACHE_ENTRIES).collect();
-    for slot in &slots {
-        for _ in 0..5 {
-            status_cache.insert(&Hash::new_unique(), Hash::new_unique(), *slot, Ok(()));
-        }
-    }
-
-    bencher.iter(|| test::black_box(status_cache.slot_deltas(&slots)));
 }
 
 #[bench]
@@ -62,16 +48,4 @@ fn bench_status_cache_root_slot_deltas(bencher: &mut Bencher) {
     }
 
     bencher.iter(|| test::black_box(status_cache.root_slot_deltas()));
-}
-
-/// Benchmark the worst-case time getting slot deltas where every slot requested is not in the
-/// status cache
-#[bench]
-fn bench_status_cache_slot_deltas_empty(bencher: &mut Bencher) {
-    let status_cache = BankStatusCache::default();
-
-    // *do not* fill the status cache
-    let slots: Vec<_> = (42..).take(MAX_CACHE_ENTRIES).collect();
-
-    bencher.iter(|| test::black_box(status_cache.slot_deltas(&slots)));
 }

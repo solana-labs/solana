@@ -221,41 +221,15 @@ impl<T: Serialize + Clone> StatusCache<T> {
             .for_each(|(_, status)| status.lock().unwrap().clear());
     }
 
-    // returns the statuses for each slot in the slots provided
-    pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<T>> {
-        self._slot_deltas(
-            slots,
-            |slot| self.roots.contains(slot), // do a lookup to see if the slot is a root
-        )
-    }
-
     /// Get the statuses for all the root slots
     pub fn root_slot_deltas(&self) -> Vec<SlotDelta<T>> {
-        self._slot_deltas(
-            self.roots(),
-            |_| true, // we know every slot is a root, so skip any lookups
-        )
-    }
-
-    /// Get the statuses for the slots
-    ///
-    /// Shared implementation for `slot_deltas()` and `root_slot_deltas()`.  Note that the
-    /// `is_root` parameter is a predicate function to say whether a slot is a root or not.
-    fn _slot_deltas<'a, F>(
-        &self,
-        slots: impl IntoIterator<Item = &'a Slot>,
-        is_root: F,
-    ) -> Vec<SlotDelta<T>>
-    where
-        F: Fn(&Slot) -> bool,
-    {
-        slots
-            .into_iter()
-            .map(|slot| {
+        self.roots()
+            .iter()
+            .map(|root| {
                 (
-                    *slot,
-                    is_root(slot),
-                    self.slot_deltas.get(slot).cloned().unwrap_or_default(),
+                    *root,
+                    true, // <-- is_root
+                    self.slot_deltas.get(root).cloned().unwrap_or_default(),
                 )
             })
             .collect()
@@ -455,10 +429,11 @@ mod tests {
         let blockhash = hash(Hash::default().as_ref());
         status_cache.clear();
         status_cache.insert(&blockhash, &sig, 0, ());
-        let slot_deltas = status_cache.slot_deltas(&[0]);
+        assert!(status_cache.roots().contains(&0));
+        let slot_deltas = status_cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
-        let slot_deltas = cache.slot_deltas(&[0]);
+        let slot_deltas = cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
     }
@@ -475,10 +450,9 @@ mod tests {
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
         }
-        let slots: Vec<_> = (0..MAX_CACHE_ENTRIES as u64 + 1).collect();
         assert_eq!(status_cache.slot_deltas.len(), 1);
         assert!(status_cache.slot_deltas.get(&1).is_some());
-        let slot_deltas = status_cache.slot_deltas(&slots);
+        let slot_deltas = status_cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
     }
