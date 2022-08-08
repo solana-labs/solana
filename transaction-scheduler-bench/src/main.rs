@@ -365,6 +365,7 @@ fn spawn_packet_senders(
                 accounts.len()
             };
             spawn_packet_sender(
+                preloader,
                 metrics.clone(),
                 num_accounts,
                 accounts.clone(),
@@ -378,6 +379,7 @@ fn spawn_packet_senders(
 }
 
 fn spawn_packet_sender(
+    preloader: &solana_scheduler::Preloader,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
     accounts: Arc<Vec<Keypair>>,
