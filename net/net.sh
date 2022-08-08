@@ -353,7 +353,7 @@ startNode() {
   declare instanceIndex=${4:-1}
 
   initLogDir
-  if [[ $instanceIndex == -1]]; then 
+  if [[ $instanceIndex == -1 ]]; then 
     declare logFile="$netLogDir/validator-$ipAddress.log"
   else
     declare logFile="$netLogDir/validator-$ipAddress-$instanceIndex.log"
@@ -418,7 +418,7 @@ startNode() {
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  if [[ $instanceIndex == -1]]; then 
+  if [[ $instanceIndex == -1 ]]; then 
     ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
   else 
     ln -sf "validator-$ipAddress-$instanceIndex.log" "$netLogDir/validator-$pid.log"
