@@ -30,8 +30,8 @@ is scheduled for its second epoch.
 * secondary subcommittee: The half of the voting subcommittee that
 is scheduled for its first epoch.
 
-* subcomittee seed: The seed used to generate the random sample of
-nodes. `slow_hash(penultimate snapshot hash, voting epoch start slot)`
+* subcommittee seed: The seed used to generate the random sample of
+nodes. `slow_hash(penultimate snapshot hash, voting epoch number)`
 
 ### Subcommittee Rotation
 
@@ -47,7 +47,7 @@ subcommittee should be the what all the block producers are using
 for fork weight.
 
 Rotation is activated on a block when N 2/3+ roots are achieved by
-of the previous subcommittee. The network will obseve some blocks
+the previous subcommittee. The network will observe some blocks
 with N roots, and some with N-1 roots. For each kind of rotation
 this document will show that N-1 blocks always converges to N without
 loss of liveness or breaking safety assumptions of optimistically
