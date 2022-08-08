@@ -137,7 +137,7 @@ fn spawn_unified_scheduler(
             &mut address_book,
             &packet_batch_receiver.clone(),
             &transaction_batch_senders[0],
-            //&completed_transaction_receiver
+            None,//&completed_transaction_receiver
         );
     }).unwrap()
 }
