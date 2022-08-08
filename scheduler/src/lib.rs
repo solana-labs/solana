@@ -285,6 +285,7 @@ impl Preloader {
             AddressMapEntry::Occupied(mut book_entry) => {
                 let page = book_entry.get_mut();
                 PageRc::clone(&page)
+            }
         }
     }
 }
