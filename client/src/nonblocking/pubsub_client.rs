@@ -118,6 +118,12 @@ impl PubsubClient {
         self.ws.await.unwrap() // WS future should not be cancelled or panicked
     }
 
+    pub async fn set_node_version(&self, version: semver::Version) -> Result<(), ()> {
+        let mut w_node_version = self.node_version.write().await;
+        *w_node_version = Some(version);
+        Ok(())
+    }
+
     async fn get_node_version(&self) -> PubsubClientResult<semver::Version> {
         let r_node_version = self.node_version.read().await;
         if let Some(version) = &*r_node_version {
