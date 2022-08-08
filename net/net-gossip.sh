@@ -29,7 +29,7 @@ usage() {
 EOM
 )
   cat <<EOF
-usage: $0 [start|stop|restart|sanity|gossip-deploy] [command-specific options]
+usage: $0 [start|stop|restart|sanity|gossip-only] [command-specific options]
 
 Operate a configured testnet
 
@@ -57,6 +57,14 @@ Operate a configured testnet
    --client-delay-start
                                       - Number of seconds to wait after validators have finished starting before starting client programs
                                         (default: $clientDelayStart)
+
+   --gossip-instances                 - Number of gossip instances to deploy across GCE instances. 
+                                        Does a round robin deployment. 
+                                        Cannot be used with --gossip-instances-per-node
+
+   --gossip-instances-per-node        - Number of gossip instances to deploy on each GCE instance. 
+                                        Cannot be used with --gossip-instances
+
    -n NUM_VALIDATORS                  - Number of validators to apply command to.
    --gpu-mode GPU_MODE                - Specify GPU mode to launch validators with (default: $gpuMode).
                                         MODE must be one of
