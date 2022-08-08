@@ -161,15 +161,6 @@ impl RpcClient {
         }
     }
 
-    pub async fn copy(&self) -> Self {
-        let node_version = self.node_version.read().await.clone();
-        Self {
-            sender: self.sender.clone(),
-            config: self.config.clone(),
-            node_version: RwLock::new(node_version),
-        }
-    }
-
     /// Create an HTTP `RpcClient`.
     ///
     /// The URL is an HTTP URL, usually for port 8899, as in

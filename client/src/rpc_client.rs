@@ -45,7 +45,7 @@ use {
     std::{net::SocketAddr, str::FromStr, sync::Arc, time::Duration},
 };
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct RpcClientConfig {
     pub commitment_config: CommitmentConfig,
     pub confirm_transaction_initial_timeout: Option<Duration>,
@@ -151,8 +151,8 @@ pub struct GetConfirmedSignaturesForAddress2Config {
 /// [`ClientErrorKind`]: crate::client_error::ClientErrorKind
 /// [`ClientErrorKind::Reqwest`]: crate::client_error::ClientErrorKind::Reqwest
 pub struct RpcClient {
-    rpc_client: Arc<nonblocking::rpc_client::RpcClient>,
-    runtime: Option<tokio::runtime::Runtime>,
+    pub(crate) rpc_client: Arc<nonblocking::rpc_client::RpcClient>,
+    pub(crate) runtime: Option<tokio::runtime::Runtime>,
 }
 
 impl Drop for RpcClient {
@@ -185,13 +185,6 @@ impl RpcClient {
                     .unwrap(),
             ),
         }
-    }
-
-    pub(crate) fn get_nonblocking_client_copy(&self) -> Arc<nonblocking::rpc_client::RpcClient> {
-        let copy = self.rpc_client.copy();
-        Arc::new(tokio::task::block_in_place(move || {
-            self.runtime.as_ref().expect("runtime").block_on(copy)
-        }))
     }
 
     /// Create an HTTP `RpcClient`.

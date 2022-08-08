@@ -33,5 +33,4 @@ pub trait RpcSender {
     ) -> Result<serde_json::Value>;
     fn get_transport_stats(&self) -> RpcTransportStats;
     fn url(&self) -> String;
-    fn clone(&self) -> Box<dyn RpcSender + Send + Sync + 'static>;
 }

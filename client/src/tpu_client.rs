@@ -16,7 +16,7 @@ use {
         net::UdpSocket,
         sync::{Arc, RwLock},
     },
-    tokio::{runtime::Runtime, time::Duration},
+    tokio::time::Duration,
 };
 
 type Result<T> = std::result::Result<T, TpuSenderError>;
@@ -55,40 +55,31 @@ pub struct TpuClient {
     //todo: get rid of this field
     rpc_client: Arc<RpcClient>,
     tpu_client: Arc<NonblockingTpuClient>,
-    runtime: Runtime,
 }
 
 impl TpuClient {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     pub fn send_transaction(&self, transaction: &Transaction) -> bool {
-        let _guard = self.runtime.enter();
-        let send_transaction = self.tpu_client.send_transaction(transaction);
-        self.runtime.block_on(send_transaction)
+        self.invoke(self.tpu_client.send_transaction(transaction))
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     pub fn send_wire_transaction(&self, wire_transaction: Vec<u8>) -> bool {
-        let _guard = self.runtime.enter();
-        let send_wire_transaction = self.tpu_client.send_wire_transaction(wire_transaction);
-        self.runtime.block_on(send_wire_transaction)
+        self.invoke(self.tpu_client.send_wire_transaction(wire_transaction))
     }
 
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
     /// Returns the last error if all sends fail
     pub fn try_send_transaction(&self, transaction: &Transaction) -> TransportResult<()> {
-        let _guard = self.runtime.enter();
-        let try_send_transaction = self.tpu_client.try_send_transaction(transaction);
-        self.runtime.block_on(try_send_transaction)
+        self.invoke(self.tpu_client.try_send_transaction(transaction))
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
     pub fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
-        let _guard = self.runtime.enter();
-        let try_send_wire_transaction = self.tpu_client.try_send_wire_transaction(wire_transaction);
-        self.runtime.block_on(try_send_wire_transaction)
+        self.invoke(self.tpu_client.try_send_wire_transaction(wire_transaction))
     }
 
     /// Create a new client that disconnects when dropped
@@ -97,25 +88,20 @@ impl TpuClient {
         websocket_url: &str,
         config: TpuClientConfig,
     ) -> Result<Self> {
-        let nonblocking_rpc_client = rpc_client.get_nonblocking_client_copy();
-
         let create_tpu_client =
-            NonblockingTpuClient::new(nonblocking_rpc_client, websocket_url, config);
-
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .thread_name("tpu-client")
-            .enable_io()
-            .enable_time()
-            .build()
-            .unwrap(); //rpc_client.get_runtime();
-        let _guard = runtime.enter();
-        let tpu_client = runtime.block_on(create_tpu_client)?;
+            NonblockingTpuClient::new(rpc_client.rpc_client.clone(), websocket_url, config);
+        let tpu_client = tokio::task::block_in_place(|| {
+            rpc_client
+                .runtime
+                .as_ref()
+                .expect("runtime")
+                .block_on(create_tpu_client)
+        })?;
 
         Ok(Self {
             _deprecated: UdpSocket::bind("0.0.0.0:0").unwrap(),
             rpc_client,
             tpu_client: Arc::new(tpu_client),
-            runtime,
         })
     }
 
@@ -126,29 +112,24 @@ impl TpuClient {
         config: TpuClientConfig,
         connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
-        let nonblocking_rpc_client = rpc_client.get_nonblocking_client_copy();
-
         let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
-            nonblocking_rpc_client,
+            rpc_client.rpc_client.clone(),
             websocket_url,
             config,
             connection_cache,
         );
-
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .thread_name("tpu-client")
-            .enable_io()
-            .enable_time()
-            .build()
-            .unwrap();
-        let _guard = runtime.enter();
-        let tpu_client = runtime.block_on(create_tpu_client)?;
+        let tpu_client = tokio::task::block_in_place(|| {
+            rpc_client
+                .runtime
+                .as_ref()
+                .expect("runtime")
+                .block_on(create_tpu_client)
+        })?;
 
         Ok(Self {
             _deprecated: UdpSocket::bind("0.0.0.0:0").unwrap(),
             rpc_client,
             tpu_client: Arc::new(tpu_client),
-            runtime,
         })
     }
 
@@ -157,16 +138,27 @@ impl TpuClient {
         messages: &[Message],
         signers: &T,
     ) -> Result<Vec<Option<TransactionError>>> {
-        let _guard = self.runtime.enter();
-        let send_and_confirm_messages_with_spinner = self
-            .tpu_client
-            .send_and_confirm_messages_with_spinner(messages, signers);
-        self.runtime
-            .block_on(send_and_confirm_messages_with_spinner)
+        self.invoke(
+            self.tpu_client
+                .send_and_confirm_messages_with_spinner(messages, signers),
+        )
     }
 
     pub fn rpc_client(&self) -> &RpcClient {
         &self.rpc_client
+    }
+
+    fn invoke<T, F: std::future::Future<Output = T>>(&self, f: F) -> T {
+        // `block_on()` panics if called within an asynchronous execution context. Whereas
+        // `block_in_place()` only panics if called from a current_thread runtime, which is the
+        // lesser evil.
+        tokio::task::block_in_place(move || {
+            self.rpc_client
+                .runtime
+                .as_ref()
+                .expect("runtime")
+                .block_on(f)
+        })
     }
 }
 
