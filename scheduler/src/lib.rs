@@ -216,7 +216,7 @@ impl AddressBook {
 
     #[inline(never)]
     fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, a: &mut LockAttempt) {
-        a.target.0.contended_unique_weights.remove(unique_weight);
+        a.target.page().contended_unique_weights.remove(unique_weight);
     }
 
     fn ensure_unlock(&mut self, attempt: &mut LockAttempt) {
