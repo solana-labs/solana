@@ -273,6 +273,11 @@ pub struct Preloader {
     map: AddressMap,
 }
 
+impl Preloader {
+    fn load(address: Pubkey) -> PageRc {
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Weight {
     // naming: Sequence Ordering?
