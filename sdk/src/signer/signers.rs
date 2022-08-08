@@ -1,9 +1,11 @@
 #![cfg(feature = "full")]
 
-use std::sync::Arc;
-use crate::{
-    pubkey::Pubkey,
-    signature::{Signature, Signer, SignerError},
+use {
+    crate::{
+        pubkey::Pubkey,
+        signature::{Signature, Signer, SignerError},
+    },
+    std::sync::Arc,
 };
 
 /// Convenience trait for working with mixed collections of `Signer`s
