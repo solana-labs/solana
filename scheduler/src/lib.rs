@@ -462,7 +462,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
         let mut heaviest_weight: Option<UniqueWeight> = None;
-        error!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
+        //error!("n u a len(): {}", address_book.newly_uncontended_addresses.len());
         for page in address_book.newly_uncontended_addresses.iter() {
             let newly_uncontended_unique_weights = &page.0.contended_unique_weights;
             if let Some(&weight) = newly_uncontended_unique_weights.last() {
@@ -600,9 +600,9 @@ impl ScheduleStage {
 
             // revert because now contended again
             if !from_runnable {
-                error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
+                //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
                 address_book.newly_uncontended_addresses.remove(&l.status.page_rc().0);
-                error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
+                //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
