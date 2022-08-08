@@ -50,37 +50,37 @@ impl ExecutionEnvironment {
 }
 
 #[derive(Clone, Debug)]
-enum LockAttemptStatus {
-    BeforeLookup(Pubkey),
-    AfterLookup(PageRc),
+enum AddressLookup {
+    Before(Pubkey),
+    After(PageRc),
 }
 
-impl LockAttemptStatus {
+impl AddressLookup {
     fn page_rc(&mut self) -> &PageRc {
         match self {
-            LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(page) => page,
+            AddressLookup::Before(_) => unreachable!(),
+            AddressLookup::After(page) => page,
         }
     }
 
     fn take_page_rc(mut self) -> PageRc {
         match self {
-            LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(page) => page,
+            AddressLookup::Before(_) => unreachable!(),
+            AddressLookup::After(page) => page,
         }
     }
 
     fn page(&mut self) -> &mut Page {
         match self {
-            LockAttemptStatus::BeforeLookup(_) => unreachable!(),
-            LockAttemptStatus::AfterLookup(page) => unsafe { MyRcInner::get_mut_unchecked(&mut page.0) },
+            AddressLookup::Before(_) => unreachable!(),
+            AddressLookup::After(page) => unsafe { MyRcInner::get_mut_unchecked(&mut page.0) },
         }
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct LockAttempt {
-    status: LockAttemptStatus,
+    status: AddressLookup,
     is_success: bool,
     requested_usage: RequestedUsage,
 }
@@ -96,7 +96,7 @@ impl LockAttempt {
 
     pub fn new(address: Pubkey, requested_usage: RequestedUsage) -> Self {
         Self {
-            status: LockAttemptStatus::BeforeLookup(address),
+            status: AddressLookup::Before(address),
             is_success: true,
             requested_usage,
         }
@@ -174,11 +174,11 @@ impl AddressBook {
         let LockAttempt {status, requested_usage, is_success} = attempt;
 
         match status {
-            LockAttemptStatus::BeforeLookup(address) => {
+            AddressLookup::Before(address) => {
                 match self.book.entry(*address) {
                     AddressMapEntry::Vacant(book_entry) => {
                         let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage)))));
-                        *status = LockAttemptStatus::AfterLookup(PageRc::clone(&page));
+                        *status = AddressLookup::After(PageRc::clone(&page));
                         *is_success = true;
                         book_entry.insert(page);
                     }
@@ -191,7 +191,7 @@ impl AddressBook {
                         //a.insert(page.clone());
                         //a.insert(cloned_page);
                         //panic!("{:?}", a);
-                        *status = LockAttemptStatus::AfterLookup(cloned_page);
+                        *status = AddressLookup::After(cloned_page);
                         let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut page.0) };
 
                         match page.current_usage {
@@ -223,7 +223,7 @@ impl AddressBook {
                     }
                 }
             }
-            LockAttemptStatus::AfterLookup(page) => {
+            AddressLookup::After(page) => {
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut page.0) };
 
                 match page.current_usage {
