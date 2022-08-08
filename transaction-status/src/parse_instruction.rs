@@ -168,7 +168,7 @@ mod test {
         assert_eq!(
             parse(&MEMO_V1_PROGRAM_ID, &memo_instruction, &no_keys).unwrap(),
             ParsedInstruction {
-                program: "spl-memo".to_string(),
+                program: ParsableProgram::SplMemo,
                 program_id: MEMO_V1_PROGRAM_ID.to_string(),
                 parsed: json!("🦖"),
             }
@@ -176,7 +176,7 @@ mod test {
         assert_eq!(
             parse(&MEMO_V3_PROGRAM_ID, &memo_instruction, &no_keys).unwrap(),
             ParsedInstruction {
-                program: "spl-memo".to_string(),
+                program: ParsableProgram::SplMemo,
                 program_id: MEMO_V3_PROGRAM_ID.to_string(),
                 parsed: json!("🦖"),
             }
