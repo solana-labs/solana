@@ -431,7 +431,7 @@ fn send_packets(
             break;
         }
         let (packet_batches, packet_build_time) = measure!(build_packet_batches(
-            preloader,
+            &preloader,
             &config,
             num_accounts,
             &accounts,
@@ -448,7 +448,7 @@ fn send_packets(
 }
 
 fn build_packet_batches(
-    preloader: Arc<solana_scheduler::Preloader>,
+    preloader: &solana_scheduler::Preloader,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
