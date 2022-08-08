@@ -721,7 +721,9 @@ impl ScheduleStage {
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
                     // async-ly propagate the result to rpc subsystems
-                    to_next_stage.unwrap().send(processed_execution_environment).unwrap();
+                    if let Some(to_next_stage) = to_next_stage {
+                        to_next_stage.send(processed_execution_environment).unwrap();
+                    }
                 }
             }
 
