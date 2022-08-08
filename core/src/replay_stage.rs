@@ -2413,7 +2413,7 @@ impl ReplayStage {
         duplicate_slots_to_repair: &mut DuplicateSlotsToRepair,
         ancestor_hashes_replay_update_sender: &AncestorHashesReplayUpdateSender,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
-        replay_result_vec: Vec<ReplaySlotFromBlockstore>,
+        replay_result_vec: &[ReplaySlotFromBlockstore],
     ) -> bool {
         // TODO: See if processing of blockstore replay results and bank completion can be made thread safe.
         let mut did_complete_bank = false;
@@ -2426,15 +2426,7 @@ impl ReplayStage {
 
             let bank_slot = replay_result.bank_slot;
             let bank = &bank_forks.read().unwrap().get(bank_slot).unwrap();
-            if let Some(mut replay_result) = replay_result.replay_result {
-                // check accounts data size and error if the limits were exceeded
-                // - only check when the bank is complate (for correctness)
-                // - only check when the replay result is OK (for optimization)
-                if bank.is_complete() && replay_result.is_ok() {
-                    if let Err(err) = check_accounts_data_size(bank) {
-                        replay_result = Err(err.into())
-                    }
-                }
+            if let Some(replay_result) = &replay_result.replay_result {
                 match replay_result {
                     Ok(replay_tx_count) => tx_count += replay_tx_count,
                     Err(err) => {
@@ -2462,6 +2454,30 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
+                // Once the bank is complete, ensure it hasn't exceeded accounts data size limits.
+                // This must be deterministic across the whole cluster, so cannot be within
+                // parallel transaction processing.
+                match check_accounts_data_size(bank) {
+                    Err(err) => {
+                        Self::mark_dead_slot(
+                            blockstore,
+                            bank,
+                            bank_forks.read().unwrap().root(),
+                            &err.into(),
+                            rpc_subscriptions,
+                            duplicate_slots_tracker,
+                            gossip_duplicate_confirmed_slots,
+                            epoch_slots_frozen_slots,
+                            progress,
+                            heaviest_subtree_fork_choice,
+                            duplicate_slots_to_repair,
+                            ancestor_hashes_replay_update_sender,
+                        );
+                        continue;
+                    }
+                    _ => {}
+                }
+
                 let mut bank_complete_time = Measure::start("bank_complete_time");
                 let bank_progress = progress
                     .get_mut(&bank.slot())
@@ -2692,7 +2708,7 @@ impl ReplayStage {
                 duplicate_slots_to_repair,
                 ancestor_hashes_replay_update_sender,
                 block_metadata_notifier,
-                replay_result_vec,
+                &replay_result_vec,
             )
         } else {
             false
