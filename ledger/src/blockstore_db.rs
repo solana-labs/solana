@@ -455,6 +455,16 @@ impl Rocks {
         Ok(())
     }
 
+    fn delete_file_in_range_cf(
+        &self,
+        cf: &ColumnFamily,
+        from_key: &[u8],
+        to_key: &[u8],
+    ) -> Result<()> {
+        self.db.delete_file_in_range_cf(cf, from_key, to_key)?;
+        Ok(())
+    }
+
     fn iterator_cf<C>(&self, cf: &ColumnFamily, iterator_mode: IteratorMode<C::Index>) -> DBIterator
     where
         C: Column,
@@ -1118,6 +1128,17 @@ impl Database {
         let from_index = C::as_index(from);
         let to_index = C::as_index(to);
         batch.delete_range_cf::<C>(cf, from_index, to_index)
+    }
+
+    pub fn delete_file_in_range_cf<C>(&self, from: Slot, to: Slot) -> Result<()>
+    where
+        C: Column + ColumnName,
+    {
+        self.backend.delete_file_in_range_cf(
+            self.cf_handle::<C>(),
+            &C::key(C::as_index(from)),
+            &C::key(C::as_index(to)),
+        )
     }
 
     pub fn is_primary_access(&self) -> bool {
