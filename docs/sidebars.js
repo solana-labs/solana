@@ -131,7 +131,6 @@ module.exports = {
       items: ["developing/test-validator"],
     },
     "developing/backwards-compatibility",
-    "developing/plugins/geyser-plugins",
   ],
   validatorsSidebar: [
     "running-validator",
