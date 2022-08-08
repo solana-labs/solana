@@ -171,60 +171,9 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let LockAttempt {lookup, requested_usage, is_success} = attempt;
+        let LockAttempt {target, requested_usage, is_success} = attempt;
 
-        match lookup {
-            AddressLookup::Before(address) => {
-                match self.book.entry(*address) {
-                    AddressMapEntry::Vacant(book_entry) => {
-                        let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage)))));
-                        *lookup = AddressLookup::After(PageRc::clone(&page));
-                        *is_success = true;
-                        book_entry.insert(page);
-                    }
-                    AddressMapEntry::Occupied(mut book_entry) => {
-                        let page = book_entry.get_mut();
-                        let cloned_page = PageRc::clone(&page);
-                        //dbg!((&page, &cloned_page));
-                        //assert_eq!(&*page, &cloned_page);
-                        //let mut a = std::collections::HashSet::new();
-                        //a.insert(page.clone());
-                        //a.insert(cloned_page);
-                        //panic!("{:?}", a);
-                        *lookup = AddressLookup::After(cloned_page);
-                        let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut page.0) };
-
-                        match page.current_usage {
-                            CurrentUsage::Unused => {
-                                page.current_usage = CurrentUsage::renew(*requested_usage);
-                                *is_success = true;
-                            }
-                            CurrentUsage::Readonly(ref mut count) => match requested_usage {
-                                RequestedUsage::Readonly => {
-                                    *count += 1;
-                                    *is_success = true;
-                                }
-                                RequestedUsage::Writable => {
-                                    if from_runnable {
-                                        Self::remember_address_contention(&mut page, unique_weight);
-                                    }
-                                    *is_success = false;
-                                }
-                            },
-                            CurrentUsage::Writable => match requested_usage {
-                                RequestedUsage::Readonly | RequestedUsage::Writable => {
-                                    if from_runnable {
-                                        Self::remember_address_contention(&mut page, unique_weight);
-                                    }
-                                    *is_success = false;
-                                }
-                            },
-                        }
-                    }
-                }
-            }
-            AddressLookup::After(page) => {
-                let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut page.0) };
+                let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut target.0) };
 
                 match page.current_usage {
                     CurrentUsage::Unused => {
@@ -252,8 +201,6 @@ impl AddressBook {
                         }
                     },
                 }
-            }
-        }
     }
 
     #[inline(never)]
