@@ -20,6 +20,7 @@ use {
         builtins::Builtin,
         commitment::BlockCommitmentCache,
         genesis_utils::{create_genesis_config_with_leader_ex, GenesisConfigInfo},
+        runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         account::{Account, AccountSharedData, ReadableAccount},
@@ -781,7 +782,17 @@ impl ProgramTest {
         debug!("Payer address: {}", mint_keypair.pubkey());
         debug!("Genesis config: {}", genesis_config);
 
-        let mut bank = Bank::new_for_tests(&genesis_config);
+        let mut bank = Bank::new_with_runtime_config_for_tests(
+            &genesis_config,
+            Arc::new(RuntimeConfig {
+                bpf_jit: self.use_bpf_jit,
+                compute_budget: self.compute_max_units.map(|max_units| ComputeBudget {
+                    compute_unit_limit: max_units,
+                    ..ComputeBudget::default()
+                }),
+                ..RuntimeConfig::default()
+            }),
+        );
 
         // Add loaders
         macro_rules! add_builtin {
@@ -819,12 +830,6 @@ impl ProgramTest {
             bank.store_account(address, account);
         }
         bank.set_capitalization();
-        if let Some(max_units) = self.compute_max_units {
-            bank.set_compute_budget(Some(ComputeBudget {
-                compute_unit_limit: max_units,
-                ..ComputeBudget::default()
-            }));
-        }
         // Advance beyond slot 0 for a slightly more realistic test environment
         let bank = {
             let bank = Arc::new(bank);

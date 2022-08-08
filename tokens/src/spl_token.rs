@@ -63,6 +63,7 @@ pub fn build_spl_token_instructions(
             &spl_token_pubkey(&args.fee_payer.pubkey()),
             &wallet_address,
             &spl_token_pubkey(&spl_token_args.mint),
+            &spl_token::id(),
         );
         instructions.push(spl_token_instruction(
             create_associated_token_account_instruction,

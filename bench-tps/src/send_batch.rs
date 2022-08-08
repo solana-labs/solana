@@ -27,7 +27,7 @@ use {
     },
 };
 
-pub fn get_latest_blockhash<T: BenchTpsClient>(client: &T) -> Hash {
+pub fn get_latest_blockhash<T: BenchTpsClient + ?Sized>(client: &T) -> Hash {
     loop {
         match client.get_latest_blockhash_with_commitment(CommitmentConfig::processed()) {
             Ok((blockhash, _)) => return blockhash,
@@ -58,7 +58,7 @@ pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-pub fn fund_keys<T: 'static + BenchTpsClient + Send + Sync>(
+pub fn fund_keys<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     source: &Keypair,
     dests: &[Keypair],
@@ -96,7 +96,7 @@ pub fn fund_keys<T: 'static + BenchTpsClient + Send + Sync>(
     }
 }
 
-pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     authority_keypairs: &[Keypair],
 ) -> Vec<Keypair> {
@@ -122,7 +122,7 @@ pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync
     nonce_keypairs
 }
 
-pub fn withdraw_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+pub fn withdraw_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     authority_keypairs: &[Keypair],
     nonce_keypairs: &[Keypair],
@@ -145,7 +145,7 @@ const MAX_SPENDS_PER_TX: u64 = 4;
 // assume 4MB network buffers, and 512 byte packets
 const FUND_CHUNK_LEN: usize = 4 * 1024 * 1024 / 512;
 
-fn verify_funding_transfer<T: BenchTpsClient>(
+fn verify_funding_transfer<T: BenchTpsClient + ?Sized>(
     client: &Arc<T>,
     tx: &Transaction,
     amount: u64,
@@ -169,11 +169,11 @@ trait SendBatchTransactions<'a, T: Sliceable + Send + Sync> {
     );
     fn send_transactions<C, F>(&mut self, client: &Arc<C>, to_lamports: u64, log_progress: F)
     where
-        C: 'static + BenchTpsClient + Send + Sync,
+        C: 'static + BenchTpsClient + Send + Sync + ?Sized,
         F: Fn(usize, usize);
     fn sign(&mut self, blockhash: Hash);
-    fn send<C: BenchTpsClient>(&self, client: &Arc<C>);
-    fn verify<C: 'static + BenchTpsClient + Send + Sync>(
+    fn send<C: BenchTpsClient + ?Sized>(&self, client: &Arc<C>);
+    fn verify<C: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         &mut self,
         client: &Arc<C>,
         to_lamports: u64,
@@ -207,7 +207,7 @@ where
 
     fn send_transactions<C, F>(&mut self, client: &Arc<C>, to_lamports: u64, log_progress: F)
     where
-        C: 'static + BenchTpsClient + Send + Sync,
+        C: 'static + BenchTpsClient + Send + Sync + ?Sized,
         F: Fn(usize, usize),
     {
         let mut tries: usize = 0;
@@ -241,7 +241,7 @@ where
         debug!("sign {} txs: {}us", self.len(), sign_txs.as_us());
     }
 
-    fn send<C: BenchTpsClient>(&self, client: &Arc<C>) {
+    fn send<C: BenchTpsClient + ?Sized>(&self, client: &Arc<C>) {
         let mut send_txs = Measure::start("send_and_clone_txs");
         let batch: Vec<_> = self.iter().map(|(_keypair, tx)| tx.clone()).collect();
         client.send_batch(batch).expect("transfer");
@@ -249,7 +249,7 @@ where
         debug!("send {} {}", self.len(), send_txs);
     }
 
-    fn verify<C: 'static + BenchTpsClient + Send + Sync>(
+    fn verify<C: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         &mut self,
         client: &Arc<C>,
         to_lamports: u64,
@@ -341,7 +341,7 @@ impl<'a> Sliceable for FundingSigners<'a> {
 }
 
 trait FundingTransactions<'a>: SendBatchTransactions<'a, FundingSigners<'a>> {
-    fn fund<T: 'static + BenchTpsClient + Send + Sync>(
+    fn fund<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         &mut self,
         client: &Arc<T>,
         to_fund: &FundingChunk<'a>,
@@ -350,7 +350,7 @@ trait FundingTransactions<'a>: SendBatchTransactions<'a, FundingSigners<'a>> {
 }
 
 impl<'a> FundingTransactions<'a> for FundingContainer<'a> {
-    fn fund<T: 'static + BenchTpsClient + Send + Sync>(
+    fn fund<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         &mut self,
         client: &Arc<T>,
         to_fund: &FundingChunk<'a>,
@@ -396,7 +396,7 @@ impl<'a> Sliceable for NonceCreateSigners<'a> {
 }
 
 trait NonceTransactions<'a>: SendBatchTransactions<'a, NonceCreateSigners<'a>> {
-    fn create_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+    fn create_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         &mut self,
         client: &Arc<T>,
         to_fund: &'a NonceCreateChunk<'a>,
@@ -405,7 +405,7 @@ trait NonceTransactions<'a>: SendBatchTransactions<'a, NonceCreateSigners<'a>> {
 }
 
 impl<'a> NonceTransactions<'a> for NonceCreateContainer<'a> {
-    fn create_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+    fn create_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         &mut self,
         client: &Arc<T>,
         to_fund: &'a NonceCreateChunk<'a>,
@@ -453,14 +453,14 @@ impl<'a> Sliceable for NonceWithdrawSigners<'a> {
 }
 
 trait NonceWithdrawTransactions<'a>: SendBatchTransactions<'a, NonceWithdrawSigners<'a>> {
-    fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+    fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         &mut self,
         client: &Arc<T>,
         to_withdraw: &'a NonceWithdrawChunk<'a>,
     );
 }
 impl<'a> NonceWithdrawTransactions<'a> for NonceWithdrawContainer<'a> {
-    fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync>(
+    fn withdraw_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         &mut self,
         client: &Arc<T>,
         to_withdraw: &'a NonceWithdrawChunk<'a>,
