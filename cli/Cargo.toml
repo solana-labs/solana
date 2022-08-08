@@ -14,7 +14,7 @@ bincode = "1.3.3"
 bs58 = "0.4.0"
 clap = "2.33.1"
 console = "0.15.0"
-const_format = "0.2.25"
+const_format = "0.2.26"
 criterion-stats = "0.3.0"
 crossbeam-channel = "0.5"
 ctrlc = { version = "3.2.2", features = ["termination"] }
