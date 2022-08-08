@@ -86,6 +86,7 @@ js-sys = "0.3.58"
 [dev-dependencies]
 anyhow = "1.0.58"
 curve25519-dalek = "3.2.1"
+hex = "0.4.3"
 static_assertions = "1.1.0"
 tiny-bip39 = "0.8.2"
 
