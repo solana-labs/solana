@@ -325,9 +325,6 @@ pub fn main() {
             None,
             AccountSecondaryIndexes::default(),
             false,
-            accounts_db::AccountShrinkThreshold::default(),
-            false,
-            None,
         );
         bank0.freeze();
         let bank_forks = BankForks::new(bank0);
@@ -376,9 +373,6 @@ pub fn main() {
                 None,
                 AccountSecondaryIndexes::default(),
                 false,
-                accounts_db::AccountShrinkThreshold::default(),
-                false,
-                None,
             );
             bank0.freeze();
             let bank_forks = BankForks::new(bank0);
