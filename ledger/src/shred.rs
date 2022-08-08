@@ -786,7 +786,7 @@ impl Shredder {
 
         process_stats.serialize_elapsed += serialize_time.as_us();
         process_stats.gen_data_elapsed += gen_data_time.as_us();
-        process_stats.record_num_residual_data_shreds(data_shreds.len());
+        process_stats.record_num_data_shreds(data_shreds.len());
 
         data_shreds
     }

@@ -17,17 +17,9 @@ pub struct ProcessShredsStats {
     pub sign_coding_elapsed: u64,
     pub coding_send_elapsed: u64,
     pub get_leader_schedule_elapsed: u64,
-<<<<<<< HEAD:ledger/src/shred_stats.rs
-    // Number of data shreds from serializing ledger entries which do not make
-    // a full batch of MAX_DATA_SHREDS_PER_FEC_BLOCK; counted in 4 buckets.
-    num_residual_data_shreds: [usize; 4],
-=======
     // Histogram count of num_data_shreds obtained from serializing entries
     // counted in 5 buckets.
     num_data_shreds_hist: [usize; 5],
-    // If the blockstore already has shreds for the broadcast slot.
-    pub num_extant_slots: u64,
->>>>>>> 403b2e484 (records num data shreds obtained from serializing entries (#26888)):ledger/src/shred/stats.rs
     pub(crate) data_buffer_residual: usize,
 }
 
@@ -132,12 +124,7 @@ impl AddAssign<ProcessShredsStats> for ProcessShredsStats {
             sign_coding_elapsed,
             coding_send_elapsed,
             get_leader_schedule_elapsed,
-<<<<<<< HEAD:ledger/src/shred_stats.rs
-            num_residual_data_shreds,
-=======
             num_data_shreds_hist,
-            num_extant_slots,
->>>>>>> 403b2e484 (records num data shreds obtained from serializing entries (#26888)):ledger/src/shred/stats.rs
             data_buffer_residual,
         } = rhs;
         self.shredding_elapsed += shredding_elapsed;
