@@ -50,6 +50,7 @@ jobs:
           choco install openssl
           export OPENSSL_DIR="C:\Program Files\OpenSSL-Win64"
           choco install protoc
+          export PROTOC="C:\ProgramData\chocolatey\lib\protoc\tools"
           source /tmp/env.sh
           echo "::set-output name=tag::$CI_TAG"
           eval "$(ci/channel-info.sh)"
