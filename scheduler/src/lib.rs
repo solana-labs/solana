@@ -19,9 +19,9 @@ use {
 
 type MyRcInner<T> = std::sync::Arc<T>;
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-struct MyRc(ByAddress<MyRcInner<Page>>);
+struct PageRc(ByAddress<MyRcInner<Page>>);
 
-unsafe impl Send for MyRc {}
+unsafe impl Send for PageRc {}
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
@@ -47,18 +47,18 @@ impl ExecutionEnvironment {
 #[derive(Clone, Debug)]
 enum LockAttemptStatus {
     BeforeLookup(Pubkey),
-    AfterLookup(MyRc),
+    AfterLookup(PageRc),
 }
 
 impl LockAttemptStatus {
-    fn page_rc(&mut self) -> &MyRc {
+    fn page_rc(&mut self) -> &PageRc {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
             LockAttemptStatus::AfterLookup(page) => page,
         }
     }
 
-    fn take_page_rc(mut self) -> MyRc {
+    fn take_page_rc(mut self) -> PageRc {
         match self {
             LockAttemptStatus::BeforeLookup(_) => unreachable!(),
             LockAttemptStatus::AfterLookup(page) => page,
@@ -144,7 +144,7 @@ impl Page {
     }
 }
 
-type AddressMap = std::collections::HashMap<Pubkey, MyRc>;
+type AddressMap = std::collections::HashMap<Pubkey, PageRc>;
 use by_address::ByAddress;
 type AddressSet = std::collections::HashSet<ByAddress<MyRcInner<Page>>>;
 type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
@@ -170,14 +170,14 @@ impl AddressBook {
             LockAttemptStatus::BeforeLookup(address) => {
                 match self.book.entry(*address) {
                     AddressMapEntry::Vacant(book_entry) => {
-                        let page = MyRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage)))));
-                        *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
+                        let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage)))));
+                        *status = LockAttemptStatus::AfterLookup(PageRc::clone(&page));
                         *is_success = true;
                         book_entry.insert(page);
                     }
                     AddressMapEntry::Occupied(mut book_entry) => {
                         let page = book_entry.get_mut();
-                        let cloned_page = MyRc::clone(&page);
+                        let cloned_page = PageRc::clone(&page);
                         //dbg!((&page, &cloned_page));
                         //assert_eq!(&*page, &cloned_page);
                         //let mut a = std::collections::HashSet::new();
