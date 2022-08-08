@@ -496,6 +496,10 @@ pub mod incremental_snapshot_only_incremental_hash_calculation {
     solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
 }
 
+pub mod disable_cpi_setting_executable_and_rent_epoch {
+    solana_sdk::declare_id!("B9cdB55u4jQsDNsdTK525yE9dmSc5Ga7YBaBrDFvEhM9");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -614,6 +618,7 @@ lazy_static! {
         (sign_repair_requests::id(), "sign repair requests #26834"),
         (concurrent_replay_of_forks::id(), "Allow slots from different forks to be replayed concurrently #26465"),
         (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
+        (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
