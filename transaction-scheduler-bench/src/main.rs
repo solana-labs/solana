@@ -460,7 +460,7 @@ fn build_packet_batches(
 }
 
 fn build_packet_batch(
-    preloader: Arc<solana_scheduler::Preloader>,
+    preloader: &solana_scheduler::Preloader,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
@@ -472,7 +472,7 @@ fn build_packet_batch(
 }
 
 fn build_packet(
-    preloader: Arc<solana_scheduler::Preloader>,
+    preloader: &solana_scheduler::Preloader,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
