@@ -265,7 +265,7 @@ impl AddressBook {
     }
 
     fn preloader(&self) -> Preloader {
-        Preloader{map: Arc::clone(self.map)}
+        Preloader{map: Arc::clone(self.book)}
     }
 }
 
