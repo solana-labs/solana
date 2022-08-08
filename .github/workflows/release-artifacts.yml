@@ -24,7 +24,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          ref: master
+          # ref: master
           fetch-depth: 0
 
       - name: Setup Rust
@@ -38,10 +38,10 @@ jobs:
         run: |
           cp -r ci/env.sh /tmp/env.sh
 
-      - name: Switch Version
-        if: ${{ inputs.commit }}
-        run: |
-          git checkout ${{ inputs.commit }}
+      # - name: Switch Version
+      #   if: ${{ inputs.commit }}
+      #   run: |
+      #     git checkout ${{ inputs.commit }}
 
       - name: Build
         id: build
@@ -57,60 +57,60 @@ jobs:
           echo "::set-output name=channel::$CHANNEL"
           ci/publish-tarball.sh
 
-      - name: Prepare Upload Files
-        if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
-        shell: bash
-        run: |
-          FOLDER_NAME=${{ steps.build.outputs.tag || steps.build.outputs.channel }}
-          mkdir -p "github-action-s3-upload/$FOLDER_NAME"
-          cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/$FOLDER_NAME/"
-          cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/$FOLDER_NAME/"
-          cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/$FOLDER_NAME"
-
-      - name: Upload Artifacts
-        if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: windows-artifact
-          path: github-action-s3-upload/
-
-  windows-s3-upload:
-    if: ${{ needs.windows-build.outputs.channel != '' || needs.windows-build.outputs.tag != '' }}
-    needs: [windows-build]
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Download
-        uses: actions/download-artifact@v3
-        with:
-          name: windows-artifact
-          path: ./github-action-s3-upload
-
-      - name: Upload
-        uses: jakejarvis/s3-sync-action@master
-        with:
-          args: --acl public-read --follow-symlinks
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
-          AWS_REGION: "us-west-1"
-          SOURCE_DIR: "github-action-s3-upload"
-
-  windows-gh-release:
-    if: ${{ needs.windows-build.outputs.tag != '' }}
-    needs: [windows-build]
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Download
-        uses: actions/download-artifact@v3
-        with:
-          name: windows-artifact
-          path: ./github-action-s3-upload
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.windows-build.outputs.tag }}
-          draft: true
-          files: |
-            github-action-s3-upload/${{ needs.windows-build.outputs.tag }}/*
+  #     - name: Prepare Upload Files
+  #       if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
+  #       shell: bash
+  #       run: |
+  #         FOLDER_NAME=${{ steps.build.outputs.tag || steps.build.outputs.channel }}
+  #         mkdir -p "github-action-s3-upload/$FOLDER_NAME"
+  #         cp -v "solana-release-x86_64-pc-windows-msvc.tar.bz2" "github-action-s3-upload/$FOLDER_NAME/"
+  #         cp -v "solana-release-x86_64-pc-windows-msvc.yml" "github-action-s3-upload/$FOLDER_NAME/"
+  #         cp -v "solana-install-init-x86_64-pc-windows-msvc"* "github-action-s3-upload/$FOLDER_NAME"
+  #
+  #     - name: Upload Artifacts
+  #       if: ${{ steps.build.outputs.channel != '' || steps.build.outputs.tag != '' }}
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         name: windows-artifact
+  #         path: github-action-s3-upload/
+  #
+  # windows-s3-upload:
+  #   if: ${{ needs.windows-build.outputs.channel != '' || needs.windows-build.outputs.tag != '' }}
+  #   needs: [windows-build]
+  #   runs-on: ubuntu-20.04
+  #   steps:
+  #     - name: Download
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: windows-artifact
+  #         path: ./github-action-s3-upload
+  #
+  #     - name: Upload
+  #       uses: jakejarvis/s3-sync-action@master
+  #       with:
+  #         args: --acl public-read --follow-symlinks
+  #       env:
+  #         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #         AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+  #         AWS_REGION: "us-west-1"
+  #         SOURCE_DIR: "github-action-s3-upload"
+  #
+  # windows-gh-release:
+  #   if: ${{ needs.windows-build.outputs.tag != '' }}
+  #   needs: [windows-build]
+  #   runs-on: ubuntu-20.04
+  #   steps:
+  #     - name: Download
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: windows-artifact
+  #         path: ./github-action-s3-upload
+  #
+  #     - name: Release
+  #       uses: softprops/action-gh-release@v1
+  #       with:
+  #         tag_name: ${{ needs.windows-build.outputs.tag }}
+  #         draft: true
+  #         files: |
+  #           github-action-s3-upload/${{ needs.windows-build.outputs.tag }}/*
