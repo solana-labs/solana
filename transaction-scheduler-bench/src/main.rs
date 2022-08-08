@@ -205,7 +205,7 @@ fn main() {
         num_write_locks_per_tx: num_read_write_locks_per_tx,
     });
     let packet_sender_handles = spawn_packet_senders(
-        preloader,
+        &preloader,
         metrics.clone(),
         high_conflict_sender,
         accounts,
