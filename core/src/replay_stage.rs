@@ -2435,7 +2435,7 @@ impl ReplayStage {
                             blockstore,
                             bank,
                             bank_forks.read().unwrap().root(),
-                            &err,
+                            err,
                             rpc_subscriptions,
                             duplicate_slots_tracker,
                             gossip_duplicate_confirmed_slots,
