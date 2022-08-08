@@ -455,7 +455,7 @@ fn build_packet_batches(
     blockhash: &Hash,
 ) -> Vec<Vec<PreprocessedTransaction>> {
     (0..config.batches_per_msg)
-        .map(|_| build_packet_batch(config, num_accounts, accounts, blockhash))
+        .map(|_| build_packet_batch(preloader, config, num_accounts, accounts, blockhash))
         .collect()
 }
 
