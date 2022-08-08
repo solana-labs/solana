@@ -279,7 +279,7 @@ pub struct Preloader {
 
 impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
-        match self.book.entry(*address) {
+        match self.book.entry(address) {
             AddressMapEntry::Vacant(book_entry) => {
                 let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::placeholder()))));
                 let cloned = PageRc::clone(&page);
