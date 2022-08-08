@@ -8,7 +8,6 @@ use {
         parse_token::parse_token,
         parse_vote::parse_vote,
     },
-    inflector::Inflector,
     serde_json::Value,
     solana_account_decoder::parse_token::spl_token_ids,
     solana_sdk::{
@@ -72,7 +71,7 @@ pub enum ParseInstructionError {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ParsedInstruction {
-    pub program: String,
+    pub program: ParsableProgram,
     pub program_id: String,
     pub parsed: Value,
 }
@@ -86,7 +85,7 @@ pub struct ParsedInstructionEnum {
     pub info: Value,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 pub enum ParsableProgram {
     SplAssociatedTokenAccount,
@@ -124,7 +123,7 @@ pub fn parse(
         ParsableProgram::Vote => serde_json::to_value(parse_vote(instruction, account_keys)?)?,
     };
     Ok(ParsedInstruction {
-        program: format!("{:?}", program_name).to_kebab_case(),
+        program: *program_name,
         program_id: program_id.to_string(),
         parsed: parsed_json,
     })
