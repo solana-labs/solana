@@ -181,7 +181,7 @@ impl AddressBook {
                         //dbg!((&page, &cloned_page));
                         //assert_eq!(&*page, &cloned_page);
                         let mut a = std::collections::HashSet::new();
-                        a.insert(page);
+                        a.insert(page.clone());
                         a.insert(cloned_page);
                         panic!("{:?}", a);
                         *status = LockAttemptStatus::AfterLookup(cloned_page);
