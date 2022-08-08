@@ -94,9 +94,9 @@ impl LockAttempt {
         !self.is_success()
     }
 
-    pub fn new(address: Pubkey, requested_usage: RequestedUsage) -> Self {
+    pub fn new(targe: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
-            lookup: AddressLookup::Before(address),
+            target,
             is_success: true,
             requested_usage,
         }
