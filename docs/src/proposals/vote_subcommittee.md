@@ -47,7 +47,7 @@ subcommittee should be the what all the block producers are using
 for fork weight.
 
 Rotation is activated on a block when N 2/3+ roots are achieved by
-of the previous subcommittees.  The network will obseve some blocks
+of the previous subcommittee. The network will obseve some blocks
 with N roots, and some with N-1 roots. For each kind of rotation
 this document will show that N-1 blocks always converges to N without
 loss of liveness or breaking safety assumptions of optimistically
@@ -55,8 +55,8 @@ confirmed blocks.
 
 #### Primary rotation
 
-Starts with block that have N-1 roots of (A1, b1) and will transition
-to (a1, B1) at the Nth block. 
+Starts with block that have N-1 or fewer roots of (A1, b1) and will
+transition to (a1, B1) at the Nth block.
 
 Roots must contain BOTH, **primary** and **secondary** subcommittee
 2/3+ votes.
@@ -68,15 +68,24 @@ For any forks with N-1 roots, b1 may use A1's votes to
 switch forks.
 
 On blocks with N roots, block producers will follow B1s votes, and
-on those blocks the network is in the **secondary rotation** mode.
+on those blocks the network is in the **secondary rotation** phase.
 
 #### Secondary rotation
 
-Starts with block that have N-1 roots of (a1, B1) and will transition
-to (a2, B1) at the Nth block
+Starts with block that have N-1 or fewer roots of (a1, B1) and will
+transition to (a2, B1) at the Nth block
 
 Block producers will follow B1 fork weight for any blocks proposed
 with N-1 roots or N roots.
 
 Roots may contain ONLY **primary** subcommittee 2/3+ votes.
 
+On the Nth block, the network is in **secondary rotatin** phase.
+
+### Optimistically Confirmed Safety
+
+In the **primary rotation** phase, BOTH **primary** and **secondary**
+must have 2/3+ votes on the same block.
+
+In the **secondary rotation** phase, ONLY **primary** needs to show
+2/3+ votes on the same block.
