@@ -80,7 +80,7 @@ impl AddressLookup {
 
 #[derive(Clone, Debug)]
 pub struct LockAttempt {
-    status: AddressLookup,
+    lookup: AddressLookup,
     is_success: bool,
     requested_usage: RequestedUsage,
 }
@@ -96,7 +96,7 @@ impl LockAttempt {
 
     pub fn new(address: Pubkey, requested_usage: RequestedUsage) -> Self {
         Self {
-            status: AddressLookup::Before(address),
+            lookup: AddressLookup::Before(address),
             is_success: true,
             requested_usage,
         }
@@ -171,14 +171,14 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let LockAttempt {status, requested_usage, is_success} = attempt;
+        let LockAttempt {lookup, requested_usage, is_success} = attempt;
 
-        match status {
+        match lookup {
             AddressLookup::Before(address) => {
                 match self.book.entry(*address) {
                     AddressMapEntry::Vacant(book_entry) => {
                         let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::renew(*requested_usage)))));
-                        *status = AddressLookup::After(PageRc::clone(&page));
+                        *lookup = AddressLookup::After(PageRc::clone(&page));
                         *is_success = true;
                         book_entry.insert(page);
                     }
@@ -191,7 +191,7 @@ impl AddressBook {
                         //a.insert(page.clone());
                         //a.insert(cloned_page);
                         //panic!("{:?}", a);
-                        *status = AddressLookup::After(cloned_page);
+                        *lookup = AddressLookup::After(cloned_page);
                         let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut page.0) };
 
                         match page.current_usage {
@@ -263,7 +263,7 @@ impl AddressBook {
 
     #[inline(never)]
     fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, a: &mut LockAttempt) {
-        a.status.page().contended_unique_weights.remove(unique_weight);
+        a.lookup.page().contended_unique_weights.remove(unique_weight);
     }
 
     fn ensure_unlock(&mut self, attempt: &mut LockAttempt) {
@@ -279,7 +279,7 @@ impl AddressBook {
         let mut newly_uncontended = false;
         let mut still_queued = false;
 
-        let mut page = attempt.status.page();
+        let mut page = attempt.lookup.page();
 
         match &mut page.current_usage {
             CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
@@ -594,7 +594,7 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
 
             // revert because now contended again
-            address_book.newly_uncontended_addresses.remove(&l.status.page_rc());
+            address_book.newly_uncontended_addresses.remove(&l.lookup.page_rc());
         }
     }
 
@@ -610,7 +610,7 @@ impl ScheduleStage {
             // revert because now contended again
             if !from_runnable {
                 //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
-                address_book.newly_uncontended_addresses.remove(&l.status.page_rc());
+                address_book.newly_uncontended_addresses.remove(&l.lookup.page_rc());
                 //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
             }
 
@@ -623,7 +623,7 @@ impl ScheduleStage {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended_while_queued = address_book.unlock(&mut l);
             if newly_uncontended_while_queued {
-                address_book.newly_uncontended_addresses.insert(l.status.take_page_rc());
+                address_book.newly_uncontended_addresses.insert(l.lookup.take_page_rc());
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
