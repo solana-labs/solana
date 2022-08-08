@@ -2,7 +2,7 @@
 #[cfg(not(target_env = "msvc"))]
 use {
     clap::{
-        crate_description, crate_name, value_t, value_t_or_exit, values_t, App, Arg, ArgMatches, AppSettings,
+        crate_description, crate_name, value_t, value_t_or_exit, values_t, App, Arg, ArgMatches,
     },
     solana_clap_utils::input_validators::is_port,
     crossbeam_channel::unbounded,
@@ -15,8 +15,12 @@ use {
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_runtime::{
-        accounts_db, accounts_index::AccountSecondaryIndexes, bank::Bank, bank_forks::BankForks,
-        genesis_utils::create_genesis_config_with_leader,
+        accounts_db, 
+        accounts_index::AccountSecondaryIndexes, 
+        bank::Bank, 
+        bank_forks::BankForks,
+        genesis_utils::create_genesis_config_with_leader, 
+        runtime_config::RuntimeConfig,
     },
     solana_sdk::{
         native_token::LAMPORTS_PER_SOL,
@@ -320,11 +324,11 @@ pub fn main() {
         //Generate new bank and bank forks
         let bank0 = Bank::new_with_paths_for_tests(
             genesis_config,
+            Arc::<RuntimeConfig>::default(),
             vec![ledger_path.clone()],
-            None,
-            None,
             AccountSecondaryIndexes::default(),
             false,
+            accounts_db::AccountShrinkThreshold::default(),
         );
         bank0.freeze();
         let bank_forks = BankForks::new(bank0);
@@ -368,15 +372,15 @@ pub fn main() {
             //Generate new bank and bank forks
             let bank0 = Bank::new_with_paths_for_tests(
                 genesis_config,
+                Arc::<RuntimeConfig>::default(),
                 vec![ledger_path.clone()],
-                None,
-                None,
                 AccountSecondaryIndexes::default(),
                 false,
+                accounts_db::AccountShrinkThreshold::default(),
             );
             bank0.freeze();
-            let bank_forks = BankForks::new(bank0);
-            let bank_forks = Arc::new(RwLock::new(bank_forks));
+            let _bank_forks = BankForks::new(bank0);
+            let _bank_forks = Arc::new(RwLock::new(_bank_forks));
 
             let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
