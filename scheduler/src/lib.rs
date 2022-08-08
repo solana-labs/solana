@@ -226,7 +226,7 @@ impl AddressBook {
         let mut newly_uncontended = false;
         let mut still_queued = false;
 
-        let mut page = attempt.lookup.page();
+        let mut page = attempt.target.page();
 
         match &mut page.current_usage {
             CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
@@ -541,7 +541,7 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
 
             // revert because now contended again
-            address_book.newly_uncontended_addresses.remove(&l.lookup.page_rc());
+            address_book.newly_uncontended_addresses.remove(&l.target.page_rc());
         }
     }
 
@@ -557,7 +557,7 @@ impl ScheduleStage {
             // revert because now contended again
             if !from_runnable {
                 //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
-                address_book.newly_uncontended_addresses.remove(&l.lookup.page_rc());
+                address_book.newly_uncontended_addresses.remove(&l.target.page_rc());
                 //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
             }
 
