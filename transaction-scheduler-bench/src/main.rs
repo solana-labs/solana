@@ -365,7 +365,7 @@ fn spawn_packet_senders(
                 accounts.len()
             };
             spawn_packet_sender(
-                Arc::clone(preloader),
+                Arc::clone(&preloader),
                 metrics.clone(),
                 num_accounts,
                 accounts.clone(),
