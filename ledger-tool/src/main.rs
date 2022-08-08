@@ -141,6 +141,7 @@ fn output_entry(
     slot: Slot,
     entry_index: usize,
     entry: Entry,
+    preloader: &Preloader,
     to_schedule_stage: &mut Vec<Box<(SanitizedTransaction, Vec<LockAttempt>)>>,
     skip_voting: bool,
 ) {
@@ -367,6 +368,7 @@ fn output_slot(
                 slot,
                 entry_index,
                 entry,
+                preloader,
                 &mut txes,
                 skip_voting,
             );
