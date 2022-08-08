@@ -17,12 +17,16 @@ use {
     },
 };
 
+/*
 type MyRcInner<T> = std::rc::Rc<T>;
-//type MyRcInner<T> = std::sync::Arc<T>;
+unsafe impl Send for PageRc {}
+*/
+
+type MyRcInner<T> = std::sync::Arc<T>;
+
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 struct PageRc(ByAddress<MyRcInner<Page>>);
 
-unsafe impl Send for PageRc {}
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
