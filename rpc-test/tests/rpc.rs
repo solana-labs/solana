@@ -379,7 +379,7 @@ fn test_rpc_subscriptions() {
      * show occasional multi-second delay which could come from multiple sources -- other
      * tokio tasks, tokio scheduler, OS scheduler.  The async nature makes it hard to
      * track down the origin of the delay.
-    */
+     */
     let deadline = Instant::now() + Duration::from_secs(30);
     while !signature_set.is_empty() {
         let timeout = deadline.saturating_duration_since(Instant::now());
