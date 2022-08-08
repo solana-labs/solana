@@ -264,7 +264,7 @@ impl AddressBook {
         still_queued
     }
 
-    fn preloader(&self) -> Preloader {
+    pub fn preloader(&self) -> Preloader {
         Preloader{map: std::sync::Arc::clone(&self.book)}
     }
 }
