@@ -177,7 +177,10 @@ impl AddressBook {
                     }
                     AddressMapEntry::Occupied(mut book_entry) => {
                         let page = book_entry.get_mut();
-                        *status = LockAttemptStatus::AfterLookup(MyRc::clone(&page));
+                        let cloned_page = MyRc::clone(&page);
+                        dbg!((page, cloned_page));
+                        assert_eq!(page, cloned_page);
+                        *status = LockAttemptStatus::AfterLookup(cloned_page);
                         let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut page.0) };
 
                         match page.current_usage {
