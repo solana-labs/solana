@@ -6289,6 +6289,7 @@ dependencies = [
  "log",
  "solana-logger 1.12.0",
  "solana-runtime",
+ "solana-sdk 1.12.0",
  "solana-version",
 ]
 
