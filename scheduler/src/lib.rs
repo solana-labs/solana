@@ -274,7 +274,7 @@ pub struct Preloader {
 }
 
 impl Preloader {
-    fn load(&self, address: Pubkey) -> PageRc {
+    pub fn load(&self, address: Pubkey) -> PageRc {
         todo!()
     }
 }
