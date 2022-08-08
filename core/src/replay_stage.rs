@@ -2457,25 +2457,22 @@ impl ReplayStage {
                 // Once the bank is complete, ensure it hasn't exceeded accounts data size limits.
                 // This must be deterministic across the whole cluster, so cannot be within
                 // parallel transaction processing.
-                match check_accounts_data_size(bank) {
-                    Err(err) => {
-                        Self::mark_dead_slot(
-                            blockstore,
-                            bank,
-                            bank_forks.read().unwrap().root(),
-                            &err.into(),
-                            rpc_subscriptions,
-                            duplicate_slots_tracker,
-                            gossip_duplicate_confirmed_slots,
-                            epoch_slots_frozen_slots,
-                            progress,
-                            heaviest_subtree_fork_choice,
-                            duplicate_slots_to_repair,
-                            ancestor_hashes_replay_update_sender,
-                        );
-                        continue;
-                    }
-                    _ => {}
+                if let Err(err) = check_accounts_data_size(bank) {
+                    Self::mark_dead_slot(
+                        blockstore,
+                        bank,
+                        bank_forks.read().unwrap().root(),
+                        &err.into(),
+                        rpc_subscriptions,
+                        duplicate_slots_tracker,
+                        gossip_duplicate_confirmed_slots,
+                        epoch_slots_frozen_slots,
+                        progress,
+                        heaviest_subtree_fork_choice,
+                        duplicate_slots_to_repair,
+                        ancestor_hashes_replay_update_sender,
+                    );
+                    continue;
                 }
 
                 let mut bank_complete_time = Measure::start("bank_complete_time");
