@@ -23,7 +23,7 @@ use {
         runtime_config::RuntimeConfig,
     },
     solana_sdk::{
-        account::{Account, AccountSharedData, ReadableAccount},
+        account::{Account, AccountSharedData},
         account_info::AccountInfo,
         clock::Slot,
         entrypoint::{deserialize, ProgramResult, SUCCESS},
@@ -291,23 +291,12 @@ impl solana_sdk::program_stubs::SyscallStubs for SyscallStubs {
                 }
                 _ => {}
             }
-            if borrowed_account.is_executable() != account_info.executable {
-                borrowed_account
-                    .set_executable(account_info.executable)
-                    .unwrap();
-            }
             // Change the owner at the end so that we are allowed to change the lamports and data before
             if borrowed_account.get_owner() != account_info.owner {
                 borrowed_account
                     .set_owner(account_info.owner.as_ref())
                     .unwrap();
             }
-            drop(borrowed_account);
-            let account = transaction_context
-                .get_account_at_index(instruction_account.index_in_transaction)
-                .unwrap()
-                .borrow();
-            assert_eq!(account.rent_epoch(), account_info.rent_epoch);
             if instruction_account.is_writable {
                 account_indices.push((instruction_account.index_in_caller, account_info_index));
             }
