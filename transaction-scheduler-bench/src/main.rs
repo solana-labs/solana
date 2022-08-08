@@ -131,7 +131,7 @@ fn spawn_unified_scheduler(
         let mut contended_queue = solana_scheduler::TaskQueue::default();
 
         solana_scheduler::ScheduleStage::run(
-            num_execution_threads * 100,
+            num_execution_threads * 10,
             &mut runnable_queue,
             &mut contended_queue,
             &mut address_book,
