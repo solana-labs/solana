@@ -160,7 +160,7 @@ module.exports = {
               label: "Program Library »",
             },
             {
-              label: "Exchange Integrations",
+              label: "Integrations",
               to: "integrations/exchange",
             },
           ],
