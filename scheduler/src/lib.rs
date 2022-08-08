@@ -264,7 +264,7 @@ impl AddressBook {
         still_queued
     }
 
-    fn preloader() -> Preloader {
+    fn preloader(&self) -> Preloader {
         Preloader{map: Arc::clone(self.map)}
     }
 }
