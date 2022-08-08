@@ -128,6 +128,10 @@ impl CurrentUsage {
             RequestedUsage::Writable => CurrentUsage::Writable,
         }
     }
+
+    fn placeholder() -> Self {
+        CurrentUsage::Readonly(0) // basically unused
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
