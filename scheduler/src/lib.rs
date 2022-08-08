@@ -129,8 +129,8 @@ impl CurrentUsage {
         }
     }
 
-    fn placeholder() -> Self {
-        CurrentUsage::Readonly(0) // basically unused
+    fn unused() -> Self {
+        CurrentUsage::Unused
     }
 }
 
@@ -281,7 +281,7 @@ impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
         match self.book.entry(address) {
             AddressMapEntry::Vacant(book_entry) => {
-                let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::placeholder()))));
+                let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::unused()))));
                 let cloned = PageRc::clone(&page);
                 book_entry.insert(page);
                 cloned
@@ -536,7 +536,7 @@ impl ScheduleStage {
             );
 
             if !is_success {
-                trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
+                //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
                     &mut populated_lock_attempts,
