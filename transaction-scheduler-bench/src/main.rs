@@ -348,7 +348,7 @@ fn handle_transaction_batch(
 const NUM_SENDERS: usize = 1;
 
 fn spawn_packet_senders(
-    preloader: &solana_scheduler::Preloader,
+    preloader: Arc<solana_scheduler::Preloader>,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     high_conflict_sender: usize,
     accounts: Arc<Vec<Keypair>>,
@@ -379,7 +379,7 @@ fn spawn_packet_senders(
 }
 
 fn spawn_packet_sender(
-    preloader: &solana_scheduler::Preloader,
+    preloader: Arc<solana_scheduler::Preloader>,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
     accounts: Arc<Vec<Keypair>>,
@@ -403,7 +403,7 @@ fn spawn_packet_sender(
 }
 
 fn send_packets(
-    preloader: &solana_scheduler::Preloader,
+    preloader: Arc<solana_scheduler::Preloader>,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
     accounts: Arc<Vec<Keypair>>,
@@ -448,7 +448,7 @@ fn send_packets(
 }
 
 fn build_packet_batches(
-    preloader: &solana_scheduler::Preloader,
+    preloader: Arc<solana_scheduler::Preloader>,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
@@ -460,7 +460,7 @@ fn build_packet_batches(
 }
 
 fn build_packet_batch(
-    preloader: &solana_scheduler::Preloader,
+    preloader: Arc<solana_scheduler::Preloader>,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
@@ -472,7 +472,7 @@ fn build_packet_batch(
 }
 
 fn build_packet(
-    preloader: &solana_scheduler::Preloader,
+    preloader: Arc<solana_scheduler::Preloader>,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
