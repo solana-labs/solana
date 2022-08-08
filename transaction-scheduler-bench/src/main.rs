@@ -402,6 +402,7 @@ fn spawn_packet_sender(
 }
 
 fn send_packets(
+    preloader: &solana_scheduler::Preloader,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
     accounts: Arc<Vec<Keypair>>,
@@ -429,6 +430,7 @@ fn send_packets(
             break;
         }
         let (packet_batches, packet_build_time) = measure!(build_packet_batches(
+            preloader: &solana_scheduler::Preloader,
             &config,
             num_accounts,
             &accounts,
@@ -445,6 +447,7 @@ fn send_packets(
 }
 
 fn build_packet_batches(
+    preloader: &solana_scheduler::Preloader,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
@@ -462,11 +465,12 @@ fn build_packet_batch(
     blockhash: &Hash,
 ) -> Vec<PreprocessedTransaction> {
     (0..config.packets_per_batch)
-        .map(|_| build_packet(config, num_accounts, accounts, blockhash))
+        .map(|_| build_packet(preloader, config, num_accounts, accounts, blockhash))
         .collect()
 }
 
 fn build_packet(
+    preloader: &solana_scheduler::Preloader,
     config: &PacketSendingConfig,
     num_accounts: usize,
     accounts: &[Keypair],
