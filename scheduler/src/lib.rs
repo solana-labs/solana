@@ -274,7 +274,7 @@ impl AddressBook {
 }
 
 pub struct Preloader {
-    map: AddressMap,
+    book: AddressMap,
 }
 
 impl Preloader {
