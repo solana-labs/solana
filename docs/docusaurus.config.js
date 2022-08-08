@@ -103,11 +103,27 @@ module.exports = {
       style: "dark",
       links: [
         {
-          title: "Docs",
+          title: "Documentation",
           items: [
             {
               label: "Introduction",
               to: "introduction",
+            },
+            {
+              label: "Developing",
+              to: "developing/programming-model/overview",
+            },
+            {
+              label: "Validators",
+              to: "running-validator",
+            },
+            {
+              label: "Command Line",
+              to: "cli",
+            },
+            {
+              label: "Architecture",
+              to: "cluster/overview",
             },
           ],
         },
@@ -115,25 +131,37 @@ module.exports = {
           title: "Community",
           items: [
             {
-              label: "Discord",
+              label: "GitHub »",
+              href: "https://github.com/solana-labs/solana",
+            },
+            {
+              label: "Discord »",
               href: "https://discordapp.com/invite/pquxPsq",
             },
             {
-              label: "Twitter",
+              label: "Twitter »",
               href: "https://twitter.com/solana",
             },
             {
-              label: "Forums",
+              label: "Forums »",
               href: "https://forums.solana.com",
             },
           ],
         },
         {
-          title: "More",
+          title: "Resources",
           items: [
             {
-              label: "GitHub",
-              href: "https://github.com/solana-labs/solana",
+              label: "Proposals",
+              to: "proposals",
+            },
+            {
+              href: "https://spl.solana.com",
+              label: "Program Library »",
+            },
+            {
+              label: "Exchange Integrations",
+              to: "integrations/exchange",
             },
           ],
         },
