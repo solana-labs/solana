@@ -5091,6 +5091,8 @@ pub mod tests {
             "rpc": format!("127.0.0.1:{}", rpc_port::DEFAULT_RPC_PORT),
             "version": null,
             "featureSet": null,
+            "fullSnapshots": null,
+            "incrementalSnapshots": null,
         }]);
         assert_eq!(result, expected);
     }
