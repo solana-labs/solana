@@ -89,14 +89,9 @@ impl TpuClient {
         config: TpuClientConfig,
     ) -> Result<Self> {
         let create_tpu_client =
-            NonblockingTpuClient::new(rpc_client.rpc_client.clone(), websocket_url, config);
-        let tpu_client = tokio::task::block_in_place(|| {
-            rpc_client
-                .runtime
-                .as_ref()
-                .expect("runtime")
-                .block_on(create_tpu_client)
-        })?;
+            NonblockingTpuClient::new(rpc_client.clone_inner_client(), websocket_url, config);
+        let tpu_client =
+            tokio::task::block_in_place(|| rpc_client.runtime().block_on(create_tpu_client))?;
 
         Ok(Self {
             _deprecated: UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -113,18 +108,13 @@ impl TpuClient {
         connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
-            rpc_client.rpc_client.clone(),
+            rpc_client.clone_inner_client(),
             websocket_url,
             config,
             connection_cache,
         );
-        let tpu_client = tokio::task::block_in_place(|| {
-            rpc_client
-                .runtime
-                .as_ref()
-                .expect("runtime")
-                .block_on(create_tpu_client)
-        })?;
+        let tpu_client =
+            tokio::task::block_in_place(|| rpc_client.runtime().block_on(create_tpu_client))?;
 
         Ok(Self {
             _deprecated: UdpSocket::bind("0.0.0.0:0").unwrap(),
@@ -152,13 +142,7 @@ impl TpuClient {
         // `block_on()` panics if called within an asynchronous execution context. Whereas
         // `block_in_place()` only panics if called from a current_thread runtime, which is the
         // lesser evil.
-        tokio::task::block_in_place(move || {
-            self.rpc_client
-                .runtime
-                .as_ref()
-                .expect("runtime")
-                .block_on(f)
-        })
+        tokio::task::block_in_place(move || self.rpc_client.runtime().block_on(f))
     }
 }
 

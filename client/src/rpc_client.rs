@@ -151,8 +151,8 @@ pub struct GetConfirmedSignaturesForAddress2Config {
 /// [`ClientErrorKind`]: crate::client_error::ClientErrorKind
 /// [`ClientErrorKind::Reqwest`]: crate::client_error::ClientErrorKind::Reqwest
 pub struct RpcClient {
-    pub(crate) rpc_client: Arc<nonblocking::rpc_client::RpcClient>,
-    pub(crate) runtime: Option<tokio::runtime::Runtime>,
+    rpc_client: Arc<nonblocking::rpc_client::RpcClient>,
+    runtime: Option<tokio::runtime::Runtime>,
 }
 
 impl Drop for RpcClient {
@@ -4044,6 +4044,14 @@ impl RpcClient {
         // `block_in_place()` only panics if called from a current_thread runtime, which is the
         // lesser evil.
         tokio::task::block_in_place(move || self.runtime.as_ref().expect("runtime").block_on(f))
+    }
+
+    pub(crate) fn clone_inner_client(&self) -> Arc<nonblocking::rpc_client::RpcClient> {
+        self.rpc_client.clone()
+    }
+
+    pub(crate) fn runtime(&self) -> &tokio::runtime::Runtime {
+        self.runtime.as_ref().expect("runtime")
     }
 }
 
