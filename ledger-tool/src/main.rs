@@ -375,7 +375,7 @@ fn output_slot(
         }
 
         let mut weight = 10_000_000;
-        for i in 0..10000 {
+        for i in 0..100 {
             error!("started!: {} {}", i, txes.len());
             for tx in txes.clone() {
                 while depth.load(Ordering::Relaxed) > 10_000 {
