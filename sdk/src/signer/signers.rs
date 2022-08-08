@@ -1,4 +1,6 @@
 #![cfg(feature = "full")]
+
+use std::sync::Arc;
 use crate::{
     pubkey::Pubkey,
     signature::{Signature, Signer, SignerError},
@@ -56,6 +58,14 @@ impl Signers for [Box<dyn Signer>] {
 }
 
 impl Signers for Vec<Box<dyn Signer>> {
+    default_keypairs_impl!();
+}
+
+impl Signers for [Arc<dyn Signer>] {
+    default_keypairs_impl!();
+}
+
+impl Signers for Vec<Arc<dyn Signer>> {
     default_keypairs_impl!();
 }
 
