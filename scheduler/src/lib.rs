@@ -120,7 +120,7 @@ type UsageCount = usize;
 const SOLE_USE_COUNT: UsageCount = 1;
 
 #[derive(Debug, PartialEq)]
-enum CurrentUsage {
+enum Usage {
     Unused,
     // weight to abort running tx?
     // also sum all readonly weights to subvert to write lock with greater weight?
@@ -128,16 +128,16 @@ enum CurrentUsage {
     Writable,
 }
 
-impl CurrentUsage {
+impl Usage {
     fn renew(requested_usage: RequestedUsage) -> Self {
         match requested_usage {
-            RequestedUsage::Readonly => CurrentUsage::Readonly(SOLE_USE_COUNT),
-            RequestedUsage::Writable => CurrentUsage::Writable,
+            RequestedUsage::Readonly => Usage::Readonly(SOLE_USE_COUNT),
+            RequestedUsage::Writable => Usage::Writable,
         }
     }
 
     fn unused() -> Self {
-        CurrentUsage::Unused
+        Usage::Unused
     }
 }
 
@@ -149,9 +149,9 @@ pub enum RequestedUsage {
 
 #[derive(Debug)]
 struct Page {
-    current_usage: CurrentUsage,
+    current_usage: Usage,
     contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
-    next_usage: Option<CurrentUsage>,
+    next_usage: Usage,
     //next_scheduled_task // reserved_task guaranteed_task
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
@@ -159,7 +159,7 @@ struct Page {
 }
 
 impl Page {
-    fn new(current_usage: CurrentUsage) -> Self {
+    fn new(current_usage: Usage) -> Self {
         Self {
             current_usage,
             contended_unique_weights: Default::default(),
@@ -194,11 +194,11 @@ impl AddressBook {
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut target.0) };
 
                 match page.current_usage {
-                    CurrentUsage::Unused => {
-                        page.current_usage = CurrentUsage::renew(*requested_usage);
+                    Usage::Unused => {
+                        page.current_usage = Usage::renew(*requested_usage);
                         *status = LockStatus::Succeded;
                     }
-                    CurrentUsage::Readonly(ref mut count) => match requested_usage {
+                    Usage::Readonly(ref mut count) => match requested_usage {
                         RequestedUsage::Readonly => {
                             *count += 1;
                             *status = LockStatus::Succeded;
@@ -209,18 +209,18 @@ impl AddressBook {
                                 *status = LockStatus::Failed;
                             } else {
                                 match page.next_usage {
-                                    CurrentUsage::Unused => {
+                                    Usage::Unused => {
                                         *status = LockStatus::Guaranteed;
-                                        page.next_usage = CurrentUsage::renew(*requested_usage);
+                                        page.next_usage = Usage::renew(*requested_usage);
                                     },
-                                    CurrentUsage::Readonly(_) | CurrentUsage::Writable => {
+                                    Usage::Readonly(_) | Usage::Writable => {
                                         *status = LockStatus::Failed;
                                     },
                                 }
                             }
                         }
                     },
-                    CurrentUsage::Writable => match requested_usage {
+                    Usage::Writable => match requested_usage {
                         RequestedUsage::Readonly | RequestedUsage::Writable => {
                             if from_runnable {
                                 Self::remember_address_contention(&mut page, unique_weight);
@@ -257,7 +257,7 @@ impl AddressBook {
         let mut page = attempt.target.page();
 
         match &mut page.current_usage {
-            CurrentUsage::Readonly(ref mut count) => match &attempt.requested_usage {
+            Usage::Readonly(ref mut count) => match &attempt.requested_usage {
                 RequestedUsage::Readonly => {
                     if *count == SOLE_USE_COUNT {
                         newly_uncontended = true;
@@ -267,17 +267,17 @@ impl AddressBook {
                 }
                 RequestedUsage::Writable => unreachable!(),
             },
-            CurrentUsage::Writable => match &attempt.requested_usage {
+            Usage::Writable => match &attempt.requested_usage {
                 RequestedUsage::Writable => {
                     newly_uncontended = true;
                 }
                 RequestedUsage::Readonly => unreachable!(),
             },
-            CurrentUsage::Unused => unreachable!(),
+            Usage::Unused => unreachable!(),
         }
 
         if newly_uncontended {
-            page.current_usage = CurrentUsage::Unused;
+            page.current_usage = Usage::Unused;
             if !page.contended_unique_weights.is_empty() {
                 still_queued = true;
             }
@@ -299,7 +299,7 @@ impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
         match self.book.entry(address) {
             AddressMapEntry::Vacant(book_entry) => {
-                let page = PageRc(ByAddress(MyRcInner::new(Page::new(CurrentUsage::unused()))));
+                let page = PageRc(ByAddress(MyRcInner::new(Page::new(Usage::unused()))));
                 let cloned = PageRc::clone(&page);
                 book_entry.insert(page);
                 cloned
@@ -387,18 +387,25 @@ fn attempt_lock_for_execution<'a>(
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     mut placeholder_attempts: Vec<LockAttempt>,
-) -> (usize, Vec<LockAttempt>) {
+) -> (usize, usize, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
+    let mut guaranteed_count = 0;
 
     for attempt in placeholder_attempts.iter_mut() {
         address_book.attempt_lock_address(from_runnable, unique_weight, attempt);
-        if attempt.is_failed() {
-            unlockable_count += 1;
+        match address_book.status {
+            LockStatus::Succeded => {},
+            LockStatus::Failed => {
+                unlockable_count += 1;
+            },
+            LockStatus::Guaranteed => {
+                guaranteed_count += 1;
+            },
         }
     }
 
-    (unlockable_count, placeholder_attempts)
+    (unlockable_count, guaranteed_count, placeholder_attempts)
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
@@ -543,7 +550,7 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (unlockable_count, mut populated_lock_attempts) = attempt_lock_for_execution(
+            let (unlockable_count, guaranteed_count, mut populated_lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
                 address_book,
                 &unique_weight,
@@ -572,6 +579,18 @@ impl ScheduleStage {
                 } else {
                     trace!("relock failed [{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, lock_count, &unique_weight, next_task.contention_count);
                 }
+                continue;
+            } else if guaranteed_count > 0 {
+                assert!(!from_runnable);
+                address_book.guaranteed_locks.insert(unique_weight, guaranteed_count);
+                Self::ensure_unlock_for_guaranteed__execution(
+                    address_book,
+                    &unique_weight,
+                    &mut populated_lock_attempts,
+                    from_runnable,
+                );
+                std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
+
                 continue;
             }
 
@@ -638,6 +657,14 @@ impl ScheduleStage {
             if newly_uncontended_while_queued {
                 if let Some(uw) = l.target.page().contended_unique_weights.last() {
                     address_book.newly_uncontended_addresses.insert(*uw);
+                }
+                for uw in l.target.page().guaranteed_unique_weights {
+                    if let Some(count) = address_book.guaranteed_locks.get_mut(&uw) {
+                        count -= 1;
+                        if count == 0 {
+                            address_book.runnable_guaranteed_unique_weights.insert(uw);
+                        }
+                    }
                 }
             }
 
