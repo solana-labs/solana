@@ -1824,12 +1824,12 @@ dependencies = [
 
 [[package]]
 name = "gossip-only"
-version = "1.11.6"
+version = "1.12.0"
 dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
  "csv",
- "indicatif",
+ "indicatif 0.16.2",
  "libc",
  "log",
  "num_cpus",
@@ -1846,11 +1846,11 @@ dependencies = [
  "solana-genesis-utils",
  "solana-gossip",
  "solana-ledger",
- "solana-logger 1.11.6",
+ "solana-logger 1.12.0",
  "solana-metrics",
  "solana-net-utils",
  "solana-runtime",
- "solana-sdk 1.11.6",
+ "solana-sdk 1.12.0",
  "solana-streamer",
  "solana-version",
  "symlink",
@@ -2197,6 +2197,18 @@ dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
  "rayon",
+]
+
+[[package]]
+name = "indicatif"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d207dc617c7a380ab07ff572a6e52fa202a2a8f355860ac9c38e23f8196be1b"
+dependencies = [
+ "console",
+ "lazy_static",
+ "number_prefix",
+ "regex",
 ]
 
 [[package]]
@@ -4955,7 +4967,7 @@ dependencies = [
  "console",
  "ed25519-dalek",
  "humantime",
- "indicatif",
+ "indicatif 0.17.0",
  "pretty-hex",
  "semver 1.0.10",
  "serde",
@@ -4988,7 +5000,7 @@ dependencies = [
  "futures 0.3.21",
  "futures-util",
  "indexmap",
- "indicatif",
+ "indicatif 0.17.0",
  "itertools",
  "jsonrpc-core",
  "jsonrpc-http-server",
@@ -5174,7 +5186,7 @@ name = "solana-download-utils"
 version = "1.12.0"
 dependencies = [
  "console",
- "indicatif",
+ "indicatif 0.17.0",
  "log",
  "reqwest",
  "solana-runtime",
@@ -5434,7 +5446,7 @@ dependencies = [
  "crossbeam-channel",
  "ctrlc",
  "dirs-next",
- "indicatif",
+ "indicatif 0.17.0",
  "lazy_static",
  "nix",
  "reqwest",
@@ -6407,7 +6419,7 @@ dependencies = [
  "csv",
  "ctrlc",
  "indexmap",
- "indicatif",
+ "indicatif 0.17.0",
  "pickledb",
  "serde",
  "solana-account-decoder",
@@ -6497,7 +6509,7 @@ dependencies = [
  "core_affinity",
  "crossbeam-channel",
  "fd-lock",
- "indicatif",
+ "indicatif 0.17.0",
  "jsonrpc-core",
  "jsonrpc-core-client",
  "jsonrpc-derive",
