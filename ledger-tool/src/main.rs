@@ -328,7 +328,7 @@ fn output_slot(
                         }
 
                         muxed_sender
-                            .send(solana_scheduler::MultiplexedPayload::FromExecute(ee))
+                            .send(solana_scheduler::Multiplexed::FromExecute(ee))
                             .unwrap();
                     }
                 })
@@ -383,7 +383,7 @@ fn output_slot(
                 }
 
                 muxed_sender
-                    .send(solana_scheduler::MultiplexedPayload::FromPrevious((
+                    .send(solana_scheduler::Multiplexed::FromPrevious((
                         Weight { ix: weight },
                         tx,
                     )))
