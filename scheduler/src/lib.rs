@@ -483,18 +483,24 @@ impl ScheduleStage {
             Self::get_weight_from_contended(address_book),
         ) {
             (Some(heaviest_runnable_entry), None) => {
+                trace!("runnable only");
                 Some((Some(contended_queue), heaviest_runnable_entry))
             }
-            (None, Some(weight_from_contended)) => Some((
+            (None, Some(weight_from_contended)) => {
+                trace!("contended only");
+                Some((
                 None,
                 contended_queue.entry_to_execute(weight_from_contended),
-            )),
+            ))
+            },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
 
                 if weight_from_runnable > &weight_from_contended {
+                    trace!("runnable > contended");
                     Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if &weight_from_contended > weight_from_runnable {
+                    trace!("contended > runnnable");
                     Some((
                         None,
                         contended_queue.entry_to_execute(weight_from_contended),
