@@ -162,7 +162,7 @@ impl Page {
 //type AddressMap = std::collections::HashMap<Pubkey, PageRc>;
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 use by_address::ByAddress;
-type AddressSet = std::collections::HashSet<PageRc>;
+type AddressSet = std::collections::BTreeMap<(UniqueWeight, Pubkey), PageRc>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 
@@ -454,7 +454,7 @@ impl ScheduleStage {
     fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
         let mut heaviest_weight: Option<UniqueWeight> = None;
         trace!("n_u_a len(): {}", address_book.newly_uncontended_addresses.len());
-        for page in address_book.newly_uncontended_addresses.iter() {
+        for page in address_book.newly_uncontended_addresses.last() {
             let newly_uncontended_unique_weights = &page.0.contended_unique_weights;
             if let Some(&weight) = newly_uncontended_unique_weights.last() {
                 if let Some(current_heaviest_weight) = heaviest_weight {
@@ -545,6 +545,7 @@ impl ScheduleStage {
                 //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
+                &unique_weight,
                     &mut populated_lock_attempts,
                     from_runnable,
                 );
@@ -586,13 +587,14 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
 
             // revert because now contended again
-            address_book.newly_uncontended_addresses.remove(&l.target);
+            address_book.newly_uncontended_addresses.remove(&(unique_weight, l.target));
         }
     }
 
     #[inline(never)]
     fn ensure_unlock_for_failed_execution(
         address_book: &mut AddressBook,
+        unique_weight: &UniqueWeight,
         lock_attempts: &mut Vec<LockAttempt>,
         from_runnable: bool,
     ) {
@@ -602,7 +604,7 @@ impl ScheduleStage {
             // revert because now contended again
             if !from_runnable {
                 //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
-                address_book.newly_uncontended_addresses.remove(&l.target);
+                address_book.newly_uncontended_addresses.remove(&(unique_weight, l.target));
                 //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
             }
 
@@ -611,11 +613,11 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+    fn unlock_after_execution(address_book: &mut AddressBook, unique_weight: &UniqueWeight, lock_attempts: Vec<LockAttempt>) {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended_while_queued = address_book.unlock(&mut l);
             if newly_uncontended_while_queued {
-                address_book.newly_uncontended_addresses.insert(l.target);
+                address_book.newly_uncontended_addresses.insert((unique_weight, l.target);
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
@@ -643,7 +645,7 @@ impl ScheduleStage {
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         // do par()-ly?
-        Self::unlock_after_execution(address_book, lock_attempts);
+        Self::unlock_after_execution(address_book, ee.unique_weight, lock_attempts);
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
