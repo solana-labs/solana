@@ -154,6 +154,7 @@ impl Page {
     fn new(current_usage: Usage) -> Self {
         Self {
             current_usage,
+            next_usage: Usage::Unused,
             contended_unique_weights: Default::default(),
         }
     }
