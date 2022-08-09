@@ -409,7 +409,8 @@ impl StandardBroadcastRun {
             self.process_shreds_stats.submit(
                 "broadcast-process-shreds-interrupted-stats",
                 unfinished_slot.slot,
-                unfinished_slot.next_shred_index, // num_data_shreds,
+                unfinished_slot.next_shred_index, // num_data_shreds
+                unfinished_slot.next_code_index,  // num_coding_shreds
                 None,                             // slot_broadcast_time
             );
         } else {
@@ -417,7 +418,8 @@ impl StandardBroadcastRun {
             self.process_shreds_stats.submit(
                 "broadcast-process-shreds-stats",
                 unfinished_slot.slot,
-                unfinished_slot.next_shred_index, // num_data_shreds,
+                unfinished_slot.next_shred_index, // num_data_shreds
+                unfinished_slot.next_code_index,  // num_coding_shreds
                 Some(slot_broadcast_time),
             );
         }
