@@ -718,7 +718,12 @@ impl ScheduleStage {
                 }
             }
 
-            while executing_queue_count < max_executing_queue_count {
+            loop { 
+                if executing_queue_count < max_executing_queue_count {
+                    trace!("outgoing queue full");
+                    break;
+                }
+
                 let maybe_ee =
                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                 if let Some(ee) = maybe_ee {
@@ -727,6 +732,7 @@ impl ScheduleStage {
 
                     to_execute_substage.send(ee).unwrap();
                 } else {
+                    trace!("incoming queue starved");
                     break;
                 }
             }
