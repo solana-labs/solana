@@ -386,7 +386,7 @@ type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
 // multiplexed to reduce the futex syscal per tx down to minimum and to make the schduler to
 // adaptive relative load between sigverify stage and execution substage
 // switched from crossbeam_channel::select! due to observed poor performance
-pub enum MultiplexedPayload {
+pub enum Multiplexed {
     FromPrevious((Weight, Box<PreprocessedTransaction>)),
     FromPreviousBatched(Vec<Vec<Box<PreprocessedTransaction>>>),
     FromExecute(Box<ExecutionEnvironment>),
@@ -675,7 +675,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from: &crossbeam_channel::Receiver<MultiplexedPayload>,
+        from: &crossbeam_channel::Receiver<Multiplexed>,
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
     ) {
@@ -687,12 +687,12 @@ impl ScheduleStage {
 
             let i = from.recv().unwrap();
             match i {
-                MultiplexedPayload::FromPrevious(weighted_tx) => {
+                Multiplexed::FromPrevious(weighted_tx) => {
                     trace!("recv from previous");
 
                     Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
                 }
-                MultiplexedPayload::FromPreviousBatched(vvv) => {
+                Multiplexed::FromPreviousBatched(vvv) => {
                     trace!("recv from previous");
 
                     for vv in vvv {
@@ -714,7 +714,7 @@ impl ScheduleStage {
                         }
                     }
                 }
-                MultiplexedPayload::FromExecute(mut processed_execution_environment) => {
+                Multiplexed::FromExecute(mut processed_execution_environment) => {
                     trace!("recv from execute");
                     executing_queue_count -= 1;
 
@@ -727,7 +727,9 @@ impl ScheduleStage {
             }
 
             loop {
-                if executing_queue_count >= max_executing_queue_count {
+                if !address_book.newly_uncontended_addresses.is_empty() {
+                    trace!("prefer emptying n_u_a");
+                } else if executing_queue_count >= max_executing_queue_count {
                     trace!("outgoing queue full");
                     break;
                 }
