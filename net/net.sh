@@ -398,7 +398,7 @@ startNode() {
     fi
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-gossip-node.sh \
+      "./solana/net/remote/remote-node.sh \
          $deployMethod \
          $nodeType \
          $entrypointIp \
@@ -422,7 +422,7 @@ startNode() {
          \"$TMPFS_ACCOUNTS\" \
          \"$instanceIndex\" \
       "
-  ) >> "$logFile" 2>&1 &
+  ) >> "$logFile" 2>&1 #&
   declare pid=$!
   if [[ $instanceIndex == -1 ]]; then 
     ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
@@ -686,10 +686,15 @@ gossipDeploy() {
     else
       threadGossipDeploy $instancesPerNode $ipAddress $nodeType $nodeIndex false &
     fi
+    echo "done deploying validator"
   done
+
+  echo "waiting for threads to complete"
 
   wait 
 
+  echo "leftovers brefore deploying leftovers: $leftovers"
+  
   if [[ $leftover != 0 ]]; then 
     echo "deploying leftovers. total leftover: $leftover"
     declare skipBootstrapLeader=true
