@@ -596,9 +596,9 @@ dependencies = [
 
 [[package]]
 name = "bytecount"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72feb31ffc86498dacdbd0fcebb56138e7177a8cc5cea4516031d15ae85a742e"
+checksum = "2c676a478f63e9fa2dd5368a42f28bba0d6c560b775f38583c8bbaa7fcd67c9c"
 
 [[package]]
 name = "bytemuck"
@@ -696,7 +696,7 @@ checksum = "3abb7553d5b9b8421c6de7cb02606ff15e0c6eea7d8eadd75ef013fd636bec36"
 dependencies = [
  "camino",
  "cargo-platform",
- "semver 1.0.10",
+ "semver 1.0.13",
  "serde",
  "serde_json",
 ]
@@ -3986,7 +3986,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
 dependencies = [
- "semver 1.0.10",
+ "semver 1.0.13",
 ]
 
 [[package]]
@@ -4190,9 +4190,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.10"
+version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a41d061efea015927ac527063765e73601444cdc344ba855bc7bd44578b25e1c"
+checksum = "93f6841e709003d68bb2deee8c343572bf446003ec20a583e76f7b15cebf3711"
 dependencies = [
  "serde",
 ]
@@ -4370,9 +4370,9 @@ dependencies = [
 
 [[package]]
 name = "sha3"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "881bf8156c87b6301fc5ca6b27f11eeb2761224c7081e69b409d5a1951a70c86"
+checksum = "0a31480366ec990f395a61b7c08122d99bd40544fdb5abcfc1b06bb29994312c"
 dependencies = [
  "digest 0.10.3",
  "keccak",
@@ -4847,7 +4847,7 @@ dependencies = [
  "num-traits",
  "pretty-hex",
  "reqwest",
- "semver 1.0.10",
+ "semver 1.0.13",
  "serde",
  "serde_derive",
  "serde_json",
@@ -4903,7 +4903,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "pretty-hex",
- "semver 1.0.10",
+ "semver 1.0.13",
  "serde",
  "serde_json",
  "solana-account-decoder",
@@ -4947,7 +4947,7 @@ dependencies = [
  "rayon",
  "reqwest",
  "rustls 0.20.6",
- "semver 1.0.10",
+ "semver 1.0.13",
  "serde",
  "serde_derive",
  "serde_json",
@@ -5384,7 +5384,7 @@ dependencies = [
  "lazy_static",
  "nix",
  "reqwest",
- "semver 1.0.10",
+ "semver 1.0.13",
  "serde",
  "serde_yaml",
  "solana-clap-utils",
@@ -5760,7 +5760,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.2",
  "solana-frozen-abi 1.10.33",
  "solana-frozen-abi-macro 1.10.33",
  "solana-sdk-macro 1.10.33",
@@ -5807,7 +5807,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.2",
  "solana-frozen-abi 1.12.0",
  "solana-frozen-abi-macro 1.12.0",
  "solana-logger 1.12.0",
@@ -5887,7 +5887,7 @@ dependencies = [
  "num-traits",
  "parking_lot 0.12.1",
  "qstring",
- "semver 1.0.10",
+ "semver 1.0.13",
  "solana-sdk 1.12.0",
  "thiserror",
  "uriparse",
@@ -6074,7 +6074,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.2",
  "solana-frozen-abi 1.10.33",
  "solana-frozen-abi-macro 1.10.33",
  "solana-logger 1.10.33",
@@ -6126,7 +6126,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.2",
  "solana-frozen-abi 1.12.0",
  "solana-frozen-abi-macro 1.12.0",
  "solana-logger 1.12.0",
@@ -6491,7 +6491,7 @@ version = "1.12.0"
 dependencies = [
  "log",
  "rustc_version 0.4.0",
- "semver 1.0.10",
+ "semver 1.0.13",
  "serde",
  "serde_derive",
  "solana-frozen-abi 1.12.0",
