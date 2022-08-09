@@ -619,6 +619,9 @@ where
         .get_current_instruction_context()
         .map_err(SyscallError::InstructionError)?;
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
+    let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
+        .feature_set
+        .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
 
     let program_account_index = program_indices
         .last()
@@ -680,7 +683,9 @@ where
                     }
                     _ => {}
                 }
-                if callee_account.is_executable() != caller_account.executable {
+                if !is_disable_cpi_setting_executable_and_rent_epoch_active
+                    && callee_account.is_executable() != caller_account.executable
+                {
                     callee_account
                         .set_executable(caller_account.executable)
                         .map_err(SyscallError::InstructionError)?;
@@ -696,7 +701,9 @@ where
                     .transaction_context
                     .get_account_at_index(instruction_account.index_in_transaction)
                     .map_err(SyscallError::InstructionError)?;
-                if callee_account.borrow().rent_epoch() != caller_account.rent_epoch {
+                if !is_disable_cpi_setting_executable_and_rent_epoch_active
+                    && callee_account.borrow().rent_epoch() != caller_account.rent_epoch
+                {
                     if invoke_context
                         .feature_set
                         .is_active(&enable_early_verification_of_account_modifications::id())
