@@ -80,9 +80,9 @@ struct Args {
 /// Some convenient type aliases
 type PreprocessedTransaction = Box<(SanitizedTransaction, Vec<solana_scheduler::LockAttempt>)>;
 type TransactionMessage = PreprocessedTransaction;
-type CompletedTransactionMessage = solana_scheduler::MultiplexedPayload; // (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
+type CompletedTransactionMessage = solana_scheduler::Multiplexed; // (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
 type TransactionBatchMessage = Box<solana_scheduler::ExecutionEnvironment>; // Vec<TransactionMessage>;
-type BatchSenderMessage = solana_scheduler::MultiplexedPayload; // Vec<Vec<PreprocessedTransaction>>;
+type BatchSenderMessage = solana_scheduler::Multiplexed; // Vec<Vec<PreprocessedTransaction>>;
 
 #[derive(Debug, Default)]
 struct TransactionSchedulerBenchMetrics {
@@ -341,7 +341,7 @@ fn handle_transaction_batch(
         .fetch_add(priority_collected, Ordering::Relaxed);
 
         completed_transaction_sender
-            .send(solana_scheduler::MultiplexedPayload::FromExecute(transaction_batch))
+            .send(solana_scheduler::Multiplexed::FromExecute(transaction_batch))
             .unwrap();
 }
 
@@ -441,7 +441,7 @@ fn send_packets(
             packet_batches.iter().map(|pb| pb.len()).sum(),
             Ordering::Relaxed,
         );
-        let _ = packet_batch_sender.send(solana_scheduler::MultiplexedPayload::FromPreviousBatched(packet_batches));
+        let _ = packet_batch_sender.send(solana_scheduler::Multiplexed::FromPreviousBatched(packet_batches));
 
         std::thread::sleep(loop_duration.saturating_sub(packet_build_time.as_duration()));
     }
