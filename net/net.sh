@@ -398,7 +398,7 @@ startNode() {
     fi
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh \
+      "./solana/net/remote/remote-gossip-node.sh \
          $deployMethod \
          $nodeType \
          $entrypointIp \
@@ -684,7 +684,7 @@ gossipDeploy() {
       SECONDS=0
       pids=()
     else
-      threadGossipDeploy $instancesPerNode $ipAddress $nodeType $nodeIndex false &      
+      threadGossipDeploy $instancesPerNode $ipAddress $nodeType $nodeIndex false &
     fi
   done
 
