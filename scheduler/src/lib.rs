@@ -99,14 +99,6 @@ pub struct LockAttempt {
 }
 
 impl LockAttempt {
-    fn is_success(&self) -> bool {
-        self.is_success
-    }
-
-    fn is_failed(&self) -> bool {
-        !self.is_success()
-    }
-
     pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
             target,
