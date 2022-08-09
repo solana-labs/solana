@@ -546,6 +546,7 @@ impl ScheduleStage {
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
                     &mut populated_lock_attempts,
+                    from_runnable,
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
                 if from_runnable {
@@ -593,14 +594,17 @@ impl ScheduleStage {
     fn ensure_unlock_for_failed_execution(
         address_book: &mut AddressBook,
         lock_attempts: &mut Vec<LockAttempt>,
+        from_runnable: bool,
     ) {
         for l in lock_attempts {
             address_book.ensure_unlock(l);
 
             // revert because now contended again
-            //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
-            address_book.newly_uncontended_addresses.remove(&l.target);
-            //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
+            if !from_runnable {
+                //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
+                address_book.newly_uncontended_addresses.remove(&l.target);
+                //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
+            }
 
             // todo: mem::forget and panic in LockAttempt::drop()
         }
