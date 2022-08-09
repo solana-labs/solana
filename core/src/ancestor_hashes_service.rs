@@ -31,7 +31,7 @@ use {
     solana_streamer::streamer::{self, PacketBatchReceiver, StreamerReceiveStats},
     std::{
         collections::HashSet,
-        io::Cursor,
+        io::{Cursor, Read},
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -344,36 +344,47 @@ impl AncestorHashesService {
         ancestor_socket: &UdpSocket,
     ) -> Option<(Slot, DuplicateAncestorDecision)> {
         let from_addr = packet.meta.socket_addr();
-        let packet_buf = if let Some(buf) = packet.data(..) {
-            buf
-        } else {
-            stats.invalid_packets += 1;
-            return None;
+        let packet_data = match packet.data(..) {
+            Some(data) => data,
+            None => {
+                stats.invalid_packets += 1;
+                return None;
+            }
         };
-        let mut cursor = Cursor::new(packet_buf);
-        let response = if let Ok(response) = deserialize_from_with_limit(&mut cursor) {
-            response
-        } else {
-            stats.invalid_packets += 1;
-            return None;
+        let mut cursor = Cursor::new(packet_data);
+        let response = match deserialize_from_with_limit(&mut cursor) {
+            Ok(response) => response,
+            Err(_) => {
+                stats.invalid_packets += 1;
+                return None;
+            }
         };
 
         match response {
             AncestorHashesResponse::Hashes(ref hashes) => {
                 // deserialize trailing nonce
-                let request_slot = if let Ok(nonce) = deserialize_from_with_limit(&mut cursor) {
-                    outstanding_requests.write().unwrap().register_response(
-                        nonce,
-                        &response,
-                        timestamp(),
-                        // If the response is valid, return the slot the request
-                        // was for
-                        |ancestor_hashes_request| ancestor_hashes_request.0,
-                    )
-                } else {
+                let nonce = match deserialize_from_with_limit(&mut cursor) {
+                    Ok(nonce) => nonce,
+                    Err(_) => {
+                        stats.invalid_packets += 1;
+                        return None;
+                    }
+                };
+
+                // verify that packet does not contain extraneous data
+                if cursor.bytes().next().is_some() {
                     stats.invalid_packets += 1;
                     return None;
-                };
+                }
+
+                let request_slot = outstanding_requests.write().unwrap().register_response(
+                    nonce,
+                    &response,
+                    timestamp(),
+                    // If the response is valid, return the slot the request
+                    // was for
+                    |ancestor_hashes_request| ancestor_hashes_request.0,
+                );
 
                 if request_slot.is_none() {
                     stats.invalid_packets += 1;
@@ -410,15 +421,11 @@ impl AncestorHashesService {
             }
             AncestorHashesResponse::Ping(ping) => {
                 // verify that packet does not contain extraneous data
-                let position: usize = if let Ok(position) = cursor.position().try_into() {
-                    position
-                } else {
+                if cursor.bytes().next().is_some() {
                     stats.invalid_packets += 1;
                     return None;
-                };
-                if packet_buf.len() != position {
-                    stats.invalid_packets += 1;
-                } else if ping.verify() {
+                }
+                if ping.verify() {
                     stats.ping_count += 1;
                     if let Ok(pong) = Pong::new(&ping, keypair) {
                         let pong = RepairProtocol::Pong(pong);
