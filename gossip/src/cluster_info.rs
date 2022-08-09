@@ -2834,10 +2834,19 @@ impl Node {
             Self::get_gossip_port(gossip_addr, port_range, bind_ip_addr);
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
-        let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
-        let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
+        let (tpu_port, tpu) = Self::bind(bind_ip_addr, port_range);
+        let (_tpu_port_quic, tpu_quic) = Self::bind(
+            bind_ip_addr,
+            (tpu_port + QUIC_PORT_OFFSET, tpu_port + QUIC_PORT_OFFSET + 1),
+        );
+        let (tpu_forwards_port, tpu_forwards) = Self::bind(bind_ip_addr, port_range);
+        let (_tpu_forwards_quic_port, tpu_forwards_quic) = Self::bind(
+            bind_ip_addr,
+            (
+                tpu_forwards_port + QUIC_PORT_OFFSET,
+                tpu_forwards_port + QUIC_PORT_OFFSET + 1,
+            ),
+        );
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
         let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);
