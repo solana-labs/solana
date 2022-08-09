@@ -189,25 +189,25 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let LockAttempt {target, requested_usage, is_success} = attempt;
+        let LockAttempt {target, requested_usage, status} = attempt;
 
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut target.0) };
 
                 match page.current_usage {
                     CurrentUsage::Unused => {
                         page.current_usage = CurrentUsage::renew(*requested_usage);
-                        *is_success = true;
+                        *status = LockStatus::Succeded;
                     }
                     CurrentUsage::Readonly(ref mut count) => match requested_usage {
                         RequestedUsage::Readonly => {
                             *count += 1;
-                            *is_success = true;
+                            *status = LockStatus::Succeded;
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
                                 Self::remember_address_contention(&mut page, unique_weight);
                             }
-                            *is_success = false;
+                            *status = LockStatus::Failed;
                         }
                     },
                     CurrentUsage::Writable => match requested_usage {
@@ -215,7 +215,7 @@ impl AddressBook {
                             if from_runnable {
                                 Self::remember_address_contention(&mut page, unique_weight);
                             }
-                            *is_success = false;
+                            *status = LockStatus::Failed;
                         }
                     },
                 }
