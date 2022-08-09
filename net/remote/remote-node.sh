@@ -289,7 +289,7 @@ EOF
     if $useQuic; then
       args+=(--tpu-use-quic)
     fi
- 
+
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &

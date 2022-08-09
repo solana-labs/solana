@@ -109,7 +109,7 @@ Operate a configured testnet
                                       - Support full RPC services on all nodes
 
    --tpu-use-quic
-                                      - Use quic for tpu packet forwarding 
+                                      - Use quic for tpu packet forwarding
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
