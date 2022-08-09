@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 async-mutex = "1.4.0"
-async-trait = "0.1.56"
+async-trait = "0.1.57"
 base64 = "0.13.0"
 bincode = "1.3.3"
 bs58 = "0.4.0"
