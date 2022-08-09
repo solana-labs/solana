@@ -543,18 +543,19 @@ impl ScheduleStage {
 
             if !is_success {
                 //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
-                trace!("move to contended due to lock failure");
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
                     &mut populated_lock_attempts,
-                    from_runnable,
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
                 if from_runnable {
+                    trace!("move to contended due to lock failure");
                     reborrowed_contended_queue
                         .unwrap()
                         .add_to_schedule(*queue_entry.key(), queue_entry.remove());
                     // maybe run lightweight prune logic on contended_queue here.
+                } else {
+                    trace!("relock failed; remains in contended");
                 }
                 continue;
             }
@@ -592,17 +593,14 @@ impl ScheduleStage {
     fn ensure_unlock_for_failed_execution(
         address_book: &mut AddressBook,
         lock_attempts: &mut Vec<LockAttempt>,
-        from_runnable: bool,
     ) {
         for l in lock_attempts {
             address_book.ensure_unlock(l);
 
             // revert because now contended again
-            if !from_runnable {
-                //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
-                address_book.newly_uncontended_addresses.remove(&l.target);
-                //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
-            }
+            //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
+            address_book.newly_uncontended_addresses.remove(&l.target);
+            //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
 
             // todo: mem::forget and panic in LockAttempt::drop()
         }
