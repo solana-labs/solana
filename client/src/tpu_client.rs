@@ -89,7 +89,7 @@ impl TpuClient {
         config: TpuClientConfig,
     ) -> Result<Self> {
         let create_tpu_client =
-            NonblockingTpuClient::new(rpc_client.clone_inner_client(), websocket_url, config);
+            NonblockingTpuClient::new(rpc_client.get_inner_client().clone(), websocket_url, config);
         let tpu_client =
             tokio::task::block_in_place(|| rpc_client.runtime().block_on(create_tpu_client))?;
 
@@ -108,7 +108,7 @@ impl TpuClient {
         connection_cache: Arc<ConnectionCache>,
     ) -> Result<Self> {
         let create_tpu_client = NonblockingTpuClient::new_with_connection_cache(
-            rpc_client.clone_inner_client(),
+            rpc_client.get_inner_client().clone(),
             websocket_url,
             config,
             connection_cache,
