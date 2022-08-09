@@ -1,9 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     serial_test::serial,
     solana_bench_tps::{
         bench::{do_bench_tps, generate_and_fund_keypairs},
         cli::Config,
+        send_batch::generate_durable_nonce_accounts,
     },
     solana_client::{
         connection_cache::ConnectionCache,
@@ -110,7 +112,7 @@ fn test_bench_tps_test_validator(config: Config) {
         .unwrap(),
     );
 
-    let lamports_per_account = 100;
+    let lamports_per_account = 1000;
 
     let keypair_count = config.tx_count * config.keypair_multiplier;
     let keypairs = generate_and_fund_keypairs(
@@ -120,8 +122,13 @@ fn test_bench_tps_test_validator(config: Config) {
         lamports_per_account,
     )
     .unwrap();
+    let nonce_keypairs = if config.use_durable_nonce {
+        Some(generate_durable_nonce_accounts(client.clone(), &keypairs))
+    } else {
+        None
+    };
 
-    let _total = do_bench_tps(client, config, keypairs, None);
+    let _total = do_bench_tps(client, config, keypairs, nonce_keypairs);
 
     #[cfg(not(debug_assertions))]
     assert!(_total > 100);
@@ -143,6 +150,17 @@ fn test_bench_tps_tpu_client() {
     test_bench_tps_test_validator(Config {
         tx_count: 100,
         duration: Duration::from_secs(10),
+        ..Config::default()
+    });
+}
+
+#[test]
+#[serial]
+fn test_bench_tps_tpu_client_nonce() {
+    test_bench_tps_test_validator(Config {
+        tx_count: 100,
+        duration: Duration::from_secs(10),
+        use_durable_nonce: true,
         ..Config::default()
     });
 }
