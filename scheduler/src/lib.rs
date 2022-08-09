@@ -718,7 +718,7 @@ impl ScheduleStage {
                 }
             }
 
-            loop { 
+            loop {
                 if executing_queue_count < max_executing_queue_count {
                     trace!("outgoing queue full");
                     break;
