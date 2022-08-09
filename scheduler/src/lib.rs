@@ -541,6 +541,8 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
+                next_task.contention_count += 1;
+
                 if from_runnable {
                     trace!("move to contended due to lock failure");
                     reborrowed_contended_queue
@@ -548,12 +550,12 @@ impl ScheduleStage {
                         .add_to_schedule(*queue_entry.key(), queue_entry.remove());
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
-                    trace!("relock failed; remains in contended: {:?}", &unique_weight);
+                    trace!("relock failed; remains in contended: {:?} contention: {}", &unique_weight, next_task.contention_count);
                 }
                 continue;
             }
 
-            trace!("successful lock: (from_runnable: {})", from_runnable);
+            trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
             Self::finalize_successful_lock_before_execution(
                 address_book,
                 &unique_weight,
