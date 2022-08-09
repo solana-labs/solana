@@ -1,3 +1,4 @@
+pub use crate::nonblocking::pubsub_client::PubsubClientError;
 use {
     crate::{
         rpc_config::{
@@ -31,28 +32,9 @@ use {
         thread::{sleep, JoinHandle},
         time::Duration,
     },
-    thiserror::Error,
     tungstenite::{connect, stream::MaybeTlsStream, Message, WebSocket},
-    url::{ParseError, Url},
+    url::Url,
 };
-
-#[derive(Debug, Error)]
-pub enum PubsubClientError {
-    #[error("url parse error")]
-    UrlParseError(#[from] ParseError),
-
-    #[error("unable to connect to server")]
-    ConnectionError(#[from] tungstenite::Error),
-
-    #[error("json parse error")]
-    JsonParseError(#[from] serde_json::error::Error),
-
-    #[error("unexpected message format: {0}")]
-    UnexpectedMessageError(String),
-
-    #[error("request error: {0}")]
-    RequestError(String),
-}
 
 pub struct PubsubClientSubscription<T>
 where
