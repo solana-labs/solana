@@ -21,7 +21,9 @@ nix = "0.24.2"
 pem = "1.0.2"
 percentage = "0.1.0"
 pkcs8 = { version = "0.8.0", features = ["alloc"] }
-quinn = "0.8.3"
+quinn = {git = "https://github.com/quinn-rs/quinn.git", branch = "0.8.x", commit = "37c19743cc881cf71369946d572849d5d2ffc3fd"}
+quinn-proto = {git = "https://github.com/quinn-rs/quinn.git", branch = "0.8.x", commit = "37c19743cc881cf71369946d572849d5d2ffc3fd"}
+
 rand = "0.7.0"
 rcgen = "0.9.2"
 rustls = { version = "0.20.6", features = ["dangerous_configuration"] }
