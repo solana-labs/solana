@@ -511,9 +511,11 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
+        trace!("pop begin");
         for (reborrowed_contended_queue, mut queue_entry) in
             Self::select_next_task(runnable_queue, contended_queue, address_book)
         {
+            trace!("pop loop iteration");
             let from_runnable = reborrowed_contended_queue.is_some();
             let unique_weight = *queue_entry.key();
             let next_task = queue_entry.get_mut();
