@@ -102,7 +102,7 @@ impl LockAttempt {
     pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
             target,
-            is_success: true,
+            status: LockStatus::Succeded,
             requested_usage,
         }
     }
