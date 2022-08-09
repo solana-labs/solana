@@ -498,7 +498,10 @@ impl ScheduleStage {
                     )
                 }
             }
-            (None, None) => None,
+            (None, None) => {
+                trace!("select: none");
+                None
+            }
         }
     }
 
