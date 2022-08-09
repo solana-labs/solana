@@ -732,9 +732,9 @@ impl ScheduleStage {
             }
 
             loop {
-                if !address_book.newly_uncontended_addresses.is_empty() {
+                /*if !address_book.newly_uncontended_addresses.is_empty() {
                     trace!("prefer emptying n_u_a");
-                } else if executing_queue_count >= max_executing_queue_count {
+                } else */ if executing_queue_count >= max_executing_queue_count {
                     trace!("outgoing queue full");
                     break;
                 }
