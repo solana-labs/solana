@@ -588,7 +588,7 @@ impl ScheduleStage {
         for l in lock_attempts {
             address_book.ensure_unlock(l);
             if let Some(uw) = l.target.page().contended_unique_weights.last() {
-                address_book.newly_uncontended_addresses.remove(*uw);
+                address_book.newly_uncontended_addresses.remove(uw);
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
