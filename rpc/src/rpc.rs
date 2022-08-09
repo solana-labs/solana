@@ -112,7 +112,7 @@ use {
 
 type RpcCustomResult<T> = std::result::Result<T, RpcCustomError>;
 
-pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
+pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10); // 50kB
 pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 
 // Limit the length of the `epoch_credits` array for each validator in a `get_vote_accounts`
@@ -160,6 +160,7 @@ pub struct JsonRpcConfig {
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
+    pub max_request_body_size: Option<usize>,
 }
 
 impl JsonRpcConfig {

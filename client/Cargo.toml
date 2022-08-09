@@ -1,6 +1,6 @@
 [package]
 name = "solana-client"
-version = "1.11.6"
+version = "1.12.0"
 description = "Solana Client"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 async-mutex = "1.4.0"
-async-trait = "0.1.56"
+async-trait = "0.1.57"
 base64 = "0.13.0"
 bincode = "1.3.3"
 bs58 = "0.4.0"
@@ -34,24 +34,24 @@ rand_chacha = "0.2.2"
 rayon = "1.5.3"
 reqwest = { version = "0.11.11", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
 rustls = { version = "0.20.6", features = ["dangerous_configuration"] }
-semver = "1.0.10"
+semver = "1.0.13"
 serde = "1.0.138"
 serde_derive = "1.0.103"
 serde_json = "1.0.81"
-solana-account-decoder = { path = "../account-decoder", version = "=1.11.6" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.6" }
-solana-faucet = { path = "../faucet", version = "=1.11.6" }
-solana-measure = { path = "../measure", version = "=1.11.6" }
-solana-metrics = { path = "../metrics", version = "=1.11.6" }
-solana-net-utils = { path = "../net-utils", version = "=1.11.6" }
-solana-sdk = { path = "../sdk", version = "=1.11.6" }
-solana-streamer = { path = "../streamer", version = "=1.11.6" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.6" }
-solana-version = { path = "../version", version = "=1.11.6" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.6" }
+solana-account-decoder = { path = "../account-decoder", version = "=1.12.0" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.12.0" }
+solana-faucet = { path = "../faucet", version = "=1.12.0" }
+solana-measure = { path = "../measure", version = "=1.12.0" }
+solana-metrics = { path = "../metrics", version = "=1.12.0" }
+solana-net-utils = { path = "../net-utils", version = "=1.12.0" }
+solana-sdk = { path = "../sdk", version = "=1.12.0" }
+solana-streamer = { path = "../streamer", version = "=1.12.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.12.0" }
+solana-version = { path = "../version", version = "=1.12.0" }
+solana-vote-program = { path = "../programs/vote", version = "=1.12.0" }
 spl-token-2022 = { version = "=0.4.2", features = ["no-entrypoint"] }
 thiserror = "1.0"
-tokio = { version = "~1.14.1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1.9"
 tokio-tungstenite = { version = "0.17.1", features = ["rustls-tls-webpki-roots"] }
 tungstenite = { version = "0.17.2", features = ["rustls-tls-webpki-roots"] }
@@ -61,8 +61,8 @@ url = "2.2.2"
 anyhow = "1.0.58"
 assert_matches = "1.5.0"
 jsonrpc-http-server = "18.0.0"
-solana-logger = { path = "../logger", version = "=1.11.6" }
-solana-perf = { path = "../perf", version = "=1.11.6" }
+solana-logger = { path = "../logger", version = "=1.12.0" }
+solana-perf = { path = "../perf", version = "=1.12.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

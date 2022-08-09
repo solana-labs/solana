@@ -280,6 +280,7 @@ fn execute_batches_internal(
     tx_costs: &[u64],
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
+    assert!(!batches.is_empty());
     inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
     let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
         Mutex::new(HashMap::new());
@@ -383,6 +384,10 @@ fn execute_batches(
     cost_model: &CostModel,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
+    if batches.is_empty() {
+        return Ok(());
+    }
+
     let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
         .iter()
         .flat_map(|batch| {
@@ -450,11 +455,10 @@ fn execute_batches(
             });
         &tx_batches[..]
     } else {
-        match batches.len() {
-            // Ensure that the total cost attributed to this batch is essentially correct
-            0 => tx_batch_costs = Vec::new(),
-            n => tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n],
-        }
+        // Ensure that the total cost attributed to this batch is essentially correct
+        // batches.is_empty() check at top of function ensures that n > 0 for following divide
+        let n = batches.len();
+        tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n];
         batches
     };
 

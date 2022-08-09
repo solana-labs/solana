@@ -262,6 +262,7 @@ fn write_transaction<W: io::Write>(
         write_status(w, &transaction_status.status, prefix)?;
         write_fees(w, transaction_status.fee, prefix)?;
         write_balances(w, transaction_status, prefix)?;
+        write_compute_units_consumed(w, transaction_status.compute_units_consumed, prefix)?;
         write_log_messages(w, transaction_status.log_messages.as_ref(), prefix)?;
         write_return_data(w, transaction_status.return_data.as_ref(), prefix)?;
         write_rewards(w, transaction_status.rewards.as_ref(), prefix)?;
@@ -613,6 +614,17 @@ fn write_return_data<W: io::Write>(
     Ok(())
 }
 
+fn write_compute_units_consumed<W: io::Write>(
+    w: &mut W,
+    compute_units_consumed: Option<u64>,
+    prefix: &str,
+) -> io::Result<()> {
+    if let Some(cus) = compute_units_consumed {
+        writeln!(w, "{}Compute Units Consumed: {}", prefix, cus)?;
+    }
+    Ok(())
+}
+
 fn write_log_messages<W: io::Write>(
     w: &mut W,
     log_messages: Option<&Vec<String>>,
@@ -794,6 +806,7 @@ mod test {
                 program_id: Pubkey::new_from_array([2u8; 32]),
                 data: vec![1, 2, 3],
             }),
+            compute_units_consumed: Some(1234u64),
         };
 
         let output = {
@@ -828,6 +841,7 @@ Status: Ok
   Fee: ◎0.000005
   Account 0 balance: ◎0.000005 -> ◎0
   Account 1 balance: ◎0.00001 -> ◎0.0000099
+Compute Units Consumed: 1234
 Log Messages:
   Test message
 Return Data from Program 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR:
@@ -871,6 +885,7 @@ Rewards:
                 program_id: Pubkey::new_from_array([2u8; 32]),
                 data: vec![1, 2, 3],
             }),
+            compute_units_consumed: Some(2345u64),
         };
 
         let output = {
@@ -914,6 +929,7 @@ Status: Ok
   Account 1 balance: ◎0.00001
   Account 2 balance: ◎0.000015 -> ◎0.0000149
   Account 3 balance: ◎0.00002
+Compute Units Consumed: 2345
 Log Messages:
   Test message
 Return Data from Program 8qbHbw2BbbTHBW1sbeqakYXVKRQM8Ne7pLK7m6CVfeR:

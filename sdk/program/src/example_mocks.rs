@@ -113,7 +113,7 @@ pub mod solana_client {
 /// programs.
 pub mod solana_sdk {
     pub use crate::{
-        address_lookup_table_account, hash, instruction, message, nonce,
+        address_lookup_table_account, hash, instruction, keccak, message, nonce,
         pubkey::{self, Pubkey},
         system_instruction, system_program,
     };
@@ -178,6 +178,7 @@ pub mod solana_sdk {
 
         pub trait Signers {}
 
+        impl<T: Signer> Signers for [&T] {}
         impl<T: Signer> Signers for [&T; 1] {}
         impl<T: Signer> Signers for [&T; 2] {}
     }

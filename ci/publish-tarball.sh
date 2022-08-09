@@ -58,11 +58,6 @@ windows)
     git config core.symlinks true
     find . -type l -delete
     git reset --hard
-    # The Windows build fails without resolver = "2", but including it in Cargo.toml causes
-    # other problems (see PR #26555 and Issue #22603). This adds resolver = "2" to
-    # Cargo.toml before building. Since the build environment does not persist the changes
-    # are discarded after the build and do not interfere with non-Windows builds.
-    echo 'resolver = "2"' >> Cargo.toml
   )
   ;;
 *)
