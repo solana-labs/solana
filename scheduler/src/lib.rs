@@ -323,6 +323,7 @@ struct Bundle {
 #[derive(Debug)]
 pub struct Task {
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
+    pub contention_count: usize,
 }
 
 // RunnableQueue, ContendedQueue?
