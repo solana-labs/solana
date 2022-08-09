@@ -381,17 +381,22 @@ where
     let shared_tx_active_thread_count = Arc::new(AtomicIsize::new(0));
     let total_tx_sent_count = Arc::new(AtomicUsize::new(0));
 
-    let blockhash_thread = {
+    // if we use durable nonce, we don't need blockhash thread
+    let blockhash_thread = if !use_durable_nonce {
         let exit_signal = exit_signal.clone();
         let blockhash = blockhash.clone();
         let client = client.clone();
         let id = id.pubkey();
-        Builder::new()
-            .name("solana-blockhash-poller".to_string())
-            .spawn(move || {
-                poll_blockhash(&exit_signal, &blockhash, &client, &id);
-            })
-            .unwrap()
+        Some(
+            Builder::new()
+                .name("solana-blockhash-poller".to_string())
+                .spawn(move || {
+                    poll_blockhash(&exit_signal, &blockhash, &client, &id);
+                })
+                .unwrap(),
+        )
+    } else {
+        None
     };
 
     let s_threads = create_sender_threads(
@@ -435,9 +440,11 @@ where
         }
     }
 
-    info!("Waiting for blockhash thread...");
-    if let Err(err) = blockhash_thread.join() {
-        info!("  join() failed with: {:?}", err);
+    if let Some(blockhash_thread) = blockhash_thread {
+        info!("Waiting for blockhash thread...");
+        if let Err(err) = blockhash_thread.join() {
+            info!("  join() failed with: {:?}", err);
+        }
     }
 
     if let Some(nonce_keypairs) = nonce_keypairs {
