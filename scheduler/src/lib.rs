@@ -543,6 +543,7 @@ impl ScheduleStage {
 
             if !is_success {
                 //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
+                trace!("move to contended due to lock failure");
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
                     &mut populated_lock_attempts,
@@ -558,6 +559,7 @@ impl ScheduleStage {
                 continue;
             }
 
+            trace!("successful lock");
             Self::finalize_successful_lock_before_execution(
                 address_book,
                 &unique_weight,
@@ -736,6 +738,7 @@ impl ScheduleStage {
 
                 let maybe_ee =
                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
                     executing_queue_count += 1;
