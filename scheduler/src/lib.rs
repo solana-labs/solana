@@ -549,7 +549,7 @@ impl ScheduleStage {
                 continue;
             }
 
-            trace!("successful lock");
+            trace!("successful lock: (from_runnable: {})", from_runnable);
             Self::finalize_successful_lock_before_execution(
                 address_book,
                 &unique_weight,
