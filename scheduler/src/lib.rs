@@ -454,16 +454,13 @@ impl ScheduleStage {
     fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
         let mut heaviest_weight: Option<UniqueWeight> = None;
         trace!("n_u_a len(): {}", address_book.newly_uncontended_addresses.len());
-        for page in address_book.newly_uncontended_addresses.last() {
-            let newly_uncontended_unique_weights = &page.0.contended_unique_weights;
-            if let Some(&weight) = newly_uncontended_unique_weights.last() {
-                if let Some(current_heaviest_weight) = heaviest_weight {
-                    if weight > current_heaviest_weight {
-                        heaviest_weight = Some(weight);
-                    }
-                } else {
+        if let Some(&weight) = address_book.newly_uncontended_addresses.last() {
+            if let Some(current_heaviest_weight) = heaviest_weight {
+                if weight > current_heaviest_weight {
                     heaviest_weight = Some(weight);
                 }
+            } else {
+                heaviest_weight = Some(weight);
             }
         }
         heaviest_weight
