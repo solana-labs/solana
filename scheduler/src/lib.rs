@@ -369,18 +369,18 @@ fn attempt_lock_for_execution<'a>(
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     mut placeholder_attempts: Vec<LockAttempt>,
-) -> (bool, Vec<LockAttempt>) {
+) -> (usize, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
-    let mut all_succeeded_so_far = true;
+    let mut unlockable_count = 0;
 
     for attempt in placeholder_attempts.iter_mut() {
         address_book.attempt_lock_address(from_runnable, unique_weight, attempt);
-        if all_succeeded_so_far && attempt.is_failed() {
-            all_succeeded_so_far = false;
+        if attempt.is_failed() {
+            unlockable_count += 1;
         }
     }
 
-    (all_succeeded_so_far, placeholder_attempts)
+    (unlockable_count, placeholder_attempts)
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
@@ -525,7 +525,7 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (is_success, mut populated_lock_attempts) = attempt_lock_for_execution(
+            let (unlockable_count, mut populated_lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
                 address_book,
                 &unique_weight,
@@ -533,7 +533,7 @@ impl ScheduleStage {
                 placeholder_lock_attempts,
             );
 
-            if !is_success {
+            if unlockable_count > 0 {
                 //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
@@ -541,17 +541,18 @@ impl ScheduleStage {
                     &mut populated_lock_attempts,
                     from_runnable,
                 );
+                let lock_count = populated_lock_attempts.len();
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
                 next_task.contention_count += 1;
 
                 if from_runnable {
-                    trace!("move to contended due to lock failure");
+                    trace!("move to contended due to lock failure [{}/{}]", unlockable_count, lock_count);
                     reborrowed_contended_queue
                         .unwrap()
                         .add_to_schedule(*queue_entry.key(), queue_entry.remove());
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
-                    trace!("relock failed; remains in contended: {:?} contention: {}", &unique_weight, next_task.contention_count);
+                    trace!("relock failed [{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, lock_count, &unique_weight, next_task.contention_count);
                 }
                 continue;
             }
