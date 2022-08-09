@@ -483,11 +483,11 @@ impl ScheduleStage {
             Self::get_weight_from_contended(address_book),
         ) {
             (Some(heaviest_runnable_entry), None) => {
-                trace!("runnable only");
+                trace!("select: runnable only");
                 Some((Some(contended_queue), heaviest_runnable_entry))
             }
             (None, Some(weight_from_contended)) => {
-                trace!("contended only");
+                trace!("select: contended only");
                 Some((
                 None,
                 contended_queue.entry_to_execute(weight_from_contended),
@@ -497,10 +497,10 @@ impl ScheduleStage {
                 let weight_from_runnable = heaviest_runnable_entry.key();
 
                 if weight_from_runnable > &weight_from_contended {
-                    trace!("runnable > contended");
+                    trace!("select: runnable > contended");
                     Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if &weight_from_contended > weight_from_runnable {
-                    trace!("contended > runnnable");
+                    trace!("select: contended > runnnable");
                     Some((
                         None,
                         contended_queue.entry_to_execute(weight_from_contended),
@@ -703,11 +703,13 @@ impl ScheduleStage {
                                 let maybe_ee =
                                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
                                 if let Some(ee) = maybe_ee {
-                                    trace!("send to execute");
+                                    trace!("batched: send to execute");
                                     executing_queue_count += 1;
 
                                     to_execute_substage.send(ee).unwrap();
                                 }
+                            } else {
+                                    trace!("batched: outgoing queue full");
                             }
                         }
                     }
@@ -725,7 +727,7 @@ impl ScheduleStage {
             }
 
             loop {
-                if executing_queue_count < max_executing_queue_count {
+                if executing_queue_count >= max_executing_queue_count {
                     trace!("outgoing queue full");
                     break;
                 }
