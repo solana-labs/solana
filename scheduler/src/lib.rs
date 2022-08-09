@@ -85,9 +85,16 @@ impl PageRc {
 }
 
 #[derive(Clone, Debug)]
+enum LockStatus {
+    Succeded,
+    Guaranteed, 
+    Failed,
+}
+
+#[derive(Clone, Debug)]
 pub struct LockAttempt {
     target: PageRc,
-    is_success: bool,
+    status: LockStatus,
     requested_usage: RequestedUsage,
 }
 
@@ -144,6 +151,7 @@ pub enum RequestedUsage {
 struct Page {
     current_usage: CurrentUsage,
     contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
+    next_usage: Option<CurrentUsage>,
     //next_scheduled_task // reserved_task guaranteed_task
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
