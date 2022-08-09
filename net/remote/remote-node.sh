@@ -77,35 +77,35 @@ chmod +x ~/solana/on-reboot
 # setup gossip logs
 if [[ $instanceIndex != -1 ]]; then
 cat > ~/solana/gossip-only-run <<EOF
-#!/usr/bin/env bash
-cd ~/solana
+  #!/usr/bin/env bash
+  cd ~/solana
 
-now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-ln -sfT validator.log.\$now validator.log
+  now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  ln -sfT validator.log.\$now validator.log
 
-PATH="$HOME"/.cargo/bin:"$PATH"
-export USE_INSTALL=1
+  PATH="$HOME"/.cargo/bin:"$PATH"
+  export USE_INSTALL=1
 
-sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
-echo \$! > sys-tuner.pid
+  sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+  echo \$! > sys-tuner.pid
 
 EOF
-chmod +x ~/solana/gossip-only-run
+  chmod +x ~/solana/gossip-only-run
 
 cat > ~/solana/gossip-only-write-keys <<EOF
-#!/usr/bin/env bash
-cd ~/solana
+  #!/usr/bin/env bash
+  cd ~/solana
 
-PATH="$HOME"/.cargo/bin:"$PATH"
-export USE_INSTALL=1
+  PATH="$HOME"/.cargo/bin:"$PATH"
+  export USE_INSTALL=1
 
-sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
-echo \$! > sys-tuner.pid
+  sudo RUST_LOG=info ~solana/.cargo/bin/solana-sys-tuner --user $(whoami) > sys-tuner.log 2>&1 &
+  echo \$! > sys-tuner.pid
 
 EOF
-chmod +x ~/solana/gossip-only-write-keys
+  chmod +x ~/solana/gossip-only-write-keys
 
-done 
+fi 
 
 GPU_CUDA_OK=false
 GPU_FAIL_IF_NONE=false
