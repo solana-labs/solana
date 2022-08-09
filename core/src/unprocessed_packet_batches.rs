@@ -452,7 +452,7 @@ mod tests {
         solana_vote_program::vote_transaction,
     };
 
-    fn simmple_deserialized_packet() -> DeserializedPacket {
+    fn simple_deserialized_packet() -> DeserializedPacket {
         let tx = system_transaction::transfer(
             &Keypair::new(),
             &solana_sdk::pubkey::new_rand(),
@@ -483,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_unprocessed_packet_batches_insert_pop_same_packet() {
-        let packet = simmple_deserialized_packet();
+        let packet = simple_deserialized_packet();
         let mut unprocessed_packet_batches = UnprocessedPacketBatches::with_capacity(2);
         unprocessed_packet_batches.push(packet.clone());
         unprocessed_packet_batches.push(packet.clone());
@@ -529,7 +529,7 @@ mod tests {
     #[test]
     fn test_unprocessed_packet_batches_pop_max_n() {
         let num_packets = 10;
-        let packets_iter = std::iter::repeat_with(simmple_deserialized_packet).take(num_packets);
+        let packets_iter = std::iter::repeat_with(simple_deserialized_packet).take(num_packets);
         let mut unprocessed_packet_batches =
             UnprocessedPacketBatches::from_iter(packets_iter.clone(), num_packets);
 
