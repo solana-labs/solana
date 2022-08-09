@@ -453,7 +453,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
         trace!("n_u_a len(): {}", address_book.newly_uncontended_addresses.len());
-        address_book.newly_uncontended_addresses.last()
+        address_book.newly_uncontended_addresses.last().map(|w| *w)
     }
 
     #[inline(never)]
