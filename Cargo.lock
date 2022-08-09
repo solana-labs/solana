@@ -239,9 +239,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.56"
+version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96cf8829f67d2eab0b2dfa42c5d0ef737e0724e4a82b01b3e292456202b19716"
+checksum = "76464446b8bc32758d7e88ee1a804d9914cd9b1cb264c029899680b0be29826f"
 dependencies = [
  "proc-macro2 1.0.41",
  "quote 1.0.18",
@@ -3471,7 +3471,7 @@ dependencies = [
  "multimap",
  "petgraph",
  "prost 0.11.0",
- "prost-types 0.11.0",
+ "prost-types 0.11.1",
  "regex",
  "tempfile",
  "which",
@@ -3515,9 +3515,9 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d30bc806a29b347314be074ff0608ef8e547286e8ea68b061a2fe55689edc01f"
+checksum = "4dfaa718ad76a44b3415e6c4d53b17c8f99160dcb3a99b10470fce8ad43f6e3e"
 dependencies = [
  "bytes",
  "prost 0.11.0",
@@ -6234,7 +6234,7 @@ dependencies = [
  "log",
  "openssl",
  "prost 0.11.0",
- "prost-types 0.11.0",
+ "prost-types 0.11.1",
  "serde",
  "serde_derive",
  "smpl_jwt",
