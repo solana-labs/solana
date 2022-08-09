@@ -542,6 +542,7 @@ impl ScheduleStage {
                 //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                 Self::ensure_unlock_for_failed_execution(
                     address_book,
+                    &unique_weight,
                     &mut populated_lock_attempts,
                     from_runnable,
                 );
@@ -590,6 +591,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn ensure_unlock_for_failed_execution(
         address_book: &mut AddressBook,
+        unique_weight: &UniqueWeight,
         lock_attempts: &mut Vec<LockAttempt>,
         from_runnable: bool,
     ) {
