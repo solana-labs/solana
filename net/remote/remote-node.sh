@@ -29,6 +29,12 @@ waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 instanceIndex="${23:-1}"
+
+if [[ $instanceIndex != -1 ]]; then 
+  gossipRunScript="gossip-run-$instanceIndex"
+  gossipRunKeyScript="gossip-run-key-$instanceIndex"
+fi
+
 set +x
 
 missing() {
@@ -76,7 +82,7 @@ chmod +x ~/solana/on-reboot
 
 # setup gossip logs
 if [[ $instanceIndex != -1 ]]; then
-cat > ~/solana/gossip-only-run <<EOF
+cat > ~/solana/$gossipRunScript <<EOF
   #!/usr/bin/env bash
   cd ~/solana
 
@@ -90,9 +96,9 @@ cat > ~/solana/gossip-only-run <<EOF
   echo \$! > sys-tuner.pid
 
 EOF
-  chmod +x ~/solana/gossip-only-run
+  chmod +x ~/solana/$gossipRunScript
 
-cat > ~/solana/gossip-only-write-keys <<EOF
+cat > ~/solana/$gossipRunKeyScript <<EOF
   #!/usr/bin/env bash
   cd ~/solana
 
@@ -103,7 +109,7 @@ cat > ~/solana/gossip-only-write-keys <<EOF
   echo \$! > sys-tuner.pid
 
 EOF
-  chmod +x ~/solana/gossip-only-write-keys
+  chmod +x ~/solana/$gossipRunKeyScript
 
 fi 
 
@@ -307,7 +313,7 @@ EOF
 
     if [[ $instanceIndex != -1 ]]; then
       echo "greg - bootstrap - entrypoint IP: $entrypointIp"
-        chmod +x gossip-only/src/gossip-only.sh
+      chmod +x gossip-only/src/gossip-only.sh
       gossipOnlyPort=9001
       args=(
         --account-file gossip-only/src/accounts.yaml
@@ -317,11 +323,11 @@ EOF
         --gossip-host "$entrypointIp"
         --gossip-port $gossipOnlyPort
       )
-cat >> ~/solana/gossip-only-run <<EOF
+cat >> ~/solana/$gossipRunScript <<EOF
       nohup gossip-only/src/gossip-only.sh ${args[@]} > bootstrap-gossip.log.\$now 2>&1 &
       disown
 EOF
-      ~/solana/gossip-only-run
+      ~/solana/$gossipRunScript
     else 
       args=(
         --gossip-host "$entrypointIp"
@@ -401,10 +407,10 @@ EOF
         --num-keys 1
       )
 
-cat >> ~/solana/gossip-only-write-keys <<EOF
+cat >> ~/solana/$gossipRunKeyScript <<EOF
       gossip-only/src/gossip-only.sh ${args[@]} > gossip-instance-key-$instanceIndex.log 2>&1
 EOF
-      ~/solana/gossip-only-write-keys
+      ~/solana/$gossipRunKeyScript
 
       gossipOnlyPort=9001
       args=(
@@ -416,11 +422,11 @@ EOF
 
       echo "greg - instanceIndex: $instanceIndex"
 
-cat >> ~/solana/gossip-only-run <<EOF
+cat >> ~/solana/$gossipRunScript <<EOF
       nohup gossip-only/src/gossip-only.sh ${args[@]} >> gossip-instance-$instanceIndex.log.\$now 2>&1 &
       disown
 EOF
-      ~/solana/gossip-only-run
+      ~/solana/$gossipRunScript
 
     else 
       args=(

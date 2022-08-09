@@ -422,7 +422,7 @@ startNode() {
          \"$TMPFS_ACCOUNTS\" \
          \"$instanceIndex\" \
       "
-  ) >> "$logFile" 2>&1 #&
+  ) >> "$logFile" 2>&1 &
   declare pid=$!
   if [[ $instanceIndex == -1 ]]; then 
     ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
@@ -635,7 +635,7 @@ threadGossipDeploy() {
     echo "startGossipNode: instanceIndex: $i"
     startNode "$ipAddress" $nodeType $nodeIndex $i
     echo "################# Launched Gossip Node: $i ###################"
-    # sleep 2
+    sleep 2
   done
 
 }
