@@ -503,7 +503,7 @@ fn build_packet(
     )
     .unwrap();
 
-    let locks = sanitized_tx.get_account_locks().unwrap();
+    let locks = sanitized_tx.get_account_locks_unchecked().unwrap();
     let writable_lock_iter = locks
         .writable
         .iter()
