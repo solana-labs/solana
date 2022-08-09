@@ -213,7 +213,7 @@ impl AddressBook {
                                         *status = LockStatus::Guaranteed;
                                         page.next_usage = CurrentUsage::renew(*requested_usage);
                                     },
-                                    CurrentUsage::Readonly | CurrentUsage::Writable => {
+                                    CurrentUsage::Readonly(_) | CurrentUsage::Writable => {
                                         *status = LockStatus::Failed;
                                     },
                                 }
