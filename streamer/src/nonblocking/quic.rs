@@ -480,6 +480,7 @@ async fn setup_connection(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     mut uni_streams: IncomingUniStreams,
     packet_sender: Sender<PacketBatch>,
