@@ -615,7 +615,7 @@ impl ScheduleStage {
             let newly_uncontended_while_queued = address_book.unlock(&mut l);
             if newly_uncontended_while_queued {
                 if let Some(uw) = l.target.page().contended_unique_weights.last() {
-                    address_book.newly_uncontended_addresses.insert(uw);
+                    address_book.newly_uncontended_addresses.insert(*uw);
                 }
             }
 
