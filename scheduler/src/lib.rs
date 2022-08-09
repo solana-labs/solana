@@ -431,7 +431,7 @@ impl ScheduleStage {
                 //unique_key: solana_sdk::hash::new_rand(&mut rng),
                 unique_key: *unique_key,
             },
-            Task { tx },
+            Task { tx, contention_count: 0 },
         );
         *unique_key -= 1;
     }
