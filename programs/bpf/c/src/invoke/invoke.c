@@ -319,6 +319,21 @@ extern uint64_t entrypoint(const uint8_t *input) {
         sol_assert(accounts[ARGUMENT_INDEX].data[i] == 0);
       }
     }
+
+    sol_log("Test that is_executable and rent_epoch are ignored");
+    {
+      accounts[INVOKED_ARGUMENT_INDEX].executable = true;
+      accounts[INVOKED_ARGUMENT_INDEX].rent_epoch += 1;
+      SolAccountMeta arguments[] = {
+          {accounts[INVOKED_ARGUMENT_INDEX].key, true, false}};
+      uint8_t data[] = {RETURN_OK};
+      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                          arguments, SOL_ARRAY_SIZE(arguments),
+                                          data, SOL_ARRAY_SIZE(data)};
+
+      sol_assert(SUCCESS ==
+                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+    }
     break;
   }
   case TEST_PRIVILEGE_ESCALATION_SIGNER: {

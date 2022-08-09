@@ -1102,6 +1102,7 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
+                invoked_program_id.clone(),
             ],
             Languages::Rust => vec![
                 system_program::id(),
