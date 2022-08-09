@@ -206,8 +206,18 @@ impl AddressBook {
                         RequestedUsage::Writable => {
                             if from_runnable {
                                 Self::remember_address_contention(&mut page, unique_weight);
+                                *status = LockStatus::Failed;
+                            } else {
+                                match page.next_usage {
+                                    CurrentUsage::Unused => {
+                                        *status = LockStatus::Guaranteed;
+                                        page.next_usage = CurrentUsage::renew(*requested_usage);
+                                    },
+                                    CurrentUsage::Readonly | CurrentUsage::Writable {
+                                        *status = LockStatus::Failed;
+                                    },
+                                }
                             }
-                            *status = LockStatus::Failed;
                         }
                     },
                     CurrentUsage::Writable => match requested_usage {
