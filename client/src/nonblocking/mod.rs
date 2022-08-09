@@ -1,3 +1,5 @@
+pub mod blockhash_query;
+pub mod nonce_utils;
 pub mod pubsub_client;
 pub mod quic_client;
 pub mod rpc_client;
