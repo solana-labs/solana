@@ -744,7 +744,7 @@ impl ScheduleStage {
 
                     to_execute_substage.send(ee).unwrap();
                 } else {
-                    trace!("incoming queue starved");
+                    trace!("incoming queue starved: n_u_a: {}", address_book.newly_uncontended_addresses.len());
                     break;
                 }
             }
