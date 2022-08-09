@@ -548,7 +548,7 @@ impl ScheduleStage {
                         .add_to_schedule(*queue_entry.key(), queue_entry.remove());
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
-                    trace!("relock failed; remains in contended: {}", unique_weight);
+                    trace!("relock failed; remains in contended: {}", &unique_weight);
                 }
                 continue;
             }
