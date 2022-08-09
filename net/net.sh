@@ -669,6 +669,7 @@ gossipDeploy() {
   echo "############## TOTAL GOSSIP INSTANCES TO DEPLOY (excl. bootstrap): $gossipInstances ##############"
 
   declare bootstrapLeader=true
+  gossipDeployLoopCount=0
   for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
     nodeType=
     nodeIndex=
@@ -684,7 +685,12 @@ gossipDeploy() {
       SECONDS=0
       pids=()
     else
-      threadGossipDeploy $instancesPerNode $ipAddress $nodeType $nodeIndex false &
+      instancesAndLeftoverPerNode=$instancesPerNode
+      if [[ $gossipDeployLoopCount -lt $leftover ]]; then 
+        instancesAndLeftoverPerNode=$(($instancesPerNode  + 1))
+      fi 
+      threadGossipDeploy $instancesAndLeftoverPerNode $ipAddress $nodeType $nodeIndex false &
+      gossipDeployLoopCount=$(($gossipDeployLoopCount + 1))
     fi
     echo "done deploying validator"
   done
@@ -692,32 +698,6 @@ gossipDeploy() {
   echo "waiting for threads to complete"
 
   wait 
-
-  echo "leftovers brefore deploying leftovers: $leftovers"
-  
-  if [[ $leftover != 0 ]]; then 
-    echo "deploying leftovers. total leftover: $leftover"
-    declare skipBootstrapLeader=true
-    declare leftoverCount=0
-    for nodeAddress in "${validatorIpList[@]}"; do 
-      if $skipBootstrapLeader; then 
-        skipBootstrapLeader=false
-        continue
-      else 
-        nodeType=
-        nodeIndex=
-        getNodeType
-        threadGossipDeploy $instancesPerNode $ipAddress $nodeType $nodeIndex true &
-        leftoverCount=$(($leftoverCount + 1))
-        if [[ $leftoverCount == $leftover ]]; then 
-          break 
-        fi 
-      fi
-    done
-    wait
-  fi
-
-
 
   declare networkVersion=unknown
   case $deployMethod in
