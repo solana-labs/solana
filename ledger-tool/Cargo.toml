@@ -43,7 +43,7 @@ jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["
 
 [dev-dependencies]
 assert_cmd = "2.0"
-bytecount = "0.6.2"
+bytecount = "0.6.3"
 
 [target."cfg(unix)".dependencies]
 signal-hook = "0.3.14"
