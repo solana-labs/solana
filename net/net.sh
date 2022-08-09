@@ -620,24 +620,14 @@ threadGossipDeploy() {
   declare ipAddress="$2"
   declare nodeType=$3
   declare nodeIndex=$4
-  declare leftoverBool=$5
-  if $leftoverBool; then 
-    startIndex=$instancesPerNode
-    endIndex=$(($instancesPerNode + 1))
-  else 
-    startIndex=0
-    endIndex=$instancesPerNode
-  fi 
-
-
-  for (( i=$startIndex; i<$endIndex; i++ ))
+  
+  for (( i=0; i<$instancesPerNode; i++ ))
   do
     echo "startGossipNode: instanceIndex: $i"
     startNode "$ipAddress" $nodeType $nodeIndex $i
     echo "################# Launched Gossip Node: $i ###################"
     sleep 2
   done
-
 }
 
 gossipDeploy() {
