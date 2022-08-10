@@ -17,7 +17,7 @@ borsh = "0.9.1"
 bs58 = "0.4.0"
 lazy_static = "1.4.0"
 log = "0.4.17"
-serde = "1.0.138"
+serde = "1.0.143"
 serde_derive = "1.0.103"
 serde_json = "1.0.81"
 solana-account-decoder = { path = "../account-decoder", version = "=1.12.0" }
