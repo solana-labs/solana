@@ -756,7 +756,7 @@ impl ScheduleStage {
         if let Some(a) = address_book.runnable_guaranteed_task_ids.pop() {
             let queue_entry = contended_queue.entry_to_execute(a);
             let task = queue_entry.remove();
-            return Some(prepare_scheduled_execution(address_book, a, task, std::mem::take(&mut task.lock_attempts)));
+            return Some(Self::prepare_scheduled_execution(address_book, a, task, std::mem::take(&mut task.lock_attempts)));
         }
 
         let maybe_ee =
