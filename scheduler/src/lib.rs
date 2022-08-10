@@ -261,7 +261,7 @@ impl AddressBook {
 
     #[inline(never)]
     fn unlock(&mut self, attempt: &mut LockAttempt) -> bool {
-        debug_assert!(attempt.is_success());
+        //debug_assert!(attempt.is_success());
 
         let mut newly_uncontended = false;
         let mut still_queued = false;
@@ -406,7 +406,7 @@ fn attempt_lock_for_execution<'a>(
 
     for attempt in placeholder_attempts.iter_mut() {
         address_book.attempt_lock_address(from_runnable, unique_weight, attempt);
-        match address_book.status {
+        match attempt.status {
             LockStatus::Succeded => {},
             LockStatus::Failed => {
                 unlockable_count += 1;
