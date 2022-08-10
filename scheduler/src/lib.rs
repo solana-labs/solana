@@ -264,14 +264,18 @@ impl AddressBook {
         a.target.page().contended_unique_weights.remove(unique_weight);
     }
 
-    fn reset_lock(&mut self, attempt: &mut LockAttempt) -> bool {
+    fn reset_lock(&mut self, attempt: &mut LockAttempt, after_execution: bool) -> bool {
         match attempt.status {
             LockStatus::Succeded => {
                 self.unlock(attempt)
             },
             LockStatus::Guaranteed => {
                 self.cancel(attempt);
-                self.unlock(attempt)
+                if after_execution {
+                    self.unlock(attempt)
+                } else {
+                    false
+                }
             }
             LockStatus::Failed => {
                 false // do nothing
@@ -716,7 +720,7 @@ impl ScheduleStage {
         from_runnable: bool,
     ) {
         for l in lock_attempts {
-            address_book.reset_lock(l);
+            address_book.reset_lock(l, false);
             //if let Some(uw) = l.target.page().contended_unique_weights.last() {
             //    address_book.uncontended_task_ids.remove(uw);
             //}
@@ -735,7 +739,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
         for mut l in lock_attempts.into_iter() {
-            let newly_uncontended_while_queued = address_book.reset_lock(&mut l);
+            let newly_uncontended_while_queued = address_book.reset_lock(&mut l, true);
 
             let page = l.target.page();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
