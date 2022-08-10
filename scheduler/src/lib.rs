@@ -111,7 +111,7 @@ impl LockAttempt {
 type UsageCount = usize;
 const SOLE_USE_COUNT: UsageCount = 1;
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 enum Usage {
     Unused,
     // weight to abort running tx?
