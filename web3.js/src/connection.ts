@@ -805,6 +805,14 @@ export type TokenBalance = {
 export type ParsedConfirmedTransactionMeta = ParsedTransactionMeta;
 
 /**
+ * Collection of addresses loaded by a transaction using address table lookups
+ */
+export type LoadedAddresses = {
+  writable: Array<PublicKey>;
+  readonly: Array<PublicKey>;
+};
+
+/**
  * Metadata for a parsed transaction on the ledger
  */
 export type ParsedTransactionMeta = {
@@ -824,6 +832,8 @@ export type ParsedTransactionMeta = {
   postTokenBalances?: Array<TokenBalance> | null;
   /** The error result of transaction processing */
   err: TransactionError | null;
+  /** The collection of addresses loaded using address lookup tables */
+  loadedAddresses?: LoadedAddresses;
 };
 
 export type CompiledInnerInstruction = {
@@ -1794,6 +1804,11 @@ const TokenBalanceResult = pick({
   uiTokenAmount: TokenAmountResult,
 });
 
+const LoadedAddressesResult = pick({
+  writable: array(PublicKeyFromString),
+  readonly: array(PublicKeyFromString),
+});
+
 /**
  * @internal
  */
@@ -1821,6 +1836,7 @@ const ConfirmedTransactionMetaResult = pick({
   logMessages: optional(nullable(array(string()))),
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
+  loadedAddresses: optional(LoadedAddressesResult),
 });
 
 /**
@@ -1844,6 +1860,7 @@ const ParsedConfirmedTransactionMetaResult = pick({
   logMessages: optional(nullable(array(string()))),
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
+  loadedAddresses: optional(LoadedAddressesResult),
 });
 
 /**
