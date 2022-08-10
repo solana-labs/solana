@@ -197,13 +197,22 @@ impl AddressBook {
 
                 match page.current_usage {
                     Usage::Unused => {
+                        assert_eq!(page.next_usage, Usage::Unused);
                         page.current_usage = Usage::renew(*requested_usage);
                         *status = LockStatus::Succeded;
                     }
                     Usage::Readonly(ref mut count) => match requested_usage {
                         RequestedUsage::Readonly => {
-                            *count += 1;
-                            *status = LockStatus::Succeded;
+                            // prevent read-lock from runnable too
+                            match page.next_usage {
+                                Usage::Unused => {
+                                    *count += 1;
+                                    *status = LockStatus::Succeded;
+                                },
+                                Usage::Readonly(_) | Usage::Writable => {
+                                    *status = LockStatus::Failed;
+                                }
+                            }
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
@@ -731,12 +740,12 @@ impl ScheduleStage {
             let newly_uncontended_while_queued = address_book.reset_lock(&mut l);
 
             let page = l.target.page();
-            if newly_uncontended_while_queued {
+            if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
                 if let Some(uw) = page.contended_unique_weights.last() {
                     address_book.uncontended_task_ids.insert(*uw);
                 }
             }
-            if page.current_usage == Usage::Unused {
+            if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.guaranteed_task_ids) {
                     let count = address_book.guaranteed_lock_counts.get_mut(&task_id).unwrap();
