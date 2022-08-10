@@ -142,8 +142,8 @@ pub enum RequestedUsage {
 #[derive(Debug)]
 struct Page {
     current_usage: Usage,
-    contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
     next_usage: Usage,
+    contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
     guaranteed_task_ids: WeightedTaskIds,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
@@ -156,6 +156,7 @@ impl Page {
             current_usage,
             next_usage: Usage::Unused,
             contended_unique_weights: Default::default(),
+            guaranteed_lock_counts: Default::default(),
         }
     }
 
