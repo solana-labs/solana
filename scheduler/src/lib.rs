@@ -658,7 +658,7 @@ impl ScheduleStage {
                 }
             }
         }
-        address_book.guaranteed_lock_counts.insert(unique_weight, guaranteed_count);
+        address_book.guaranteed_lock_counts.insert(*unique_weight, guaranteed_count);
         address_book.uncontended_task_ids.remove(&unique_weight);
     }
 
@@ -702,10 +702,10 @@ impl ScheduleStage {
                 page.switch_to_next_usage();
                 for task_id in page.guaranteed_task_ids {
                     if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&task_id) {
-                        count -= 1;
-                        if count == 0 {
+                        *count -= 1;
+                        if *count == 0 {
                             address_book.guaranteed_lock_counts.remove(&task_id);
-                            address_book.runnable_guaranteed_task_ids.insert(*task_id);
+                            address_book.runnable_guaranteed_task_ids.insert(task_id);
                         }
                     }
                 }
@@ -753,10 +753,10 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<Box<ExecutionEnvironment>> {
-        if let Some(a) = address_book.runnable_guaranteed_task_ids.pop() {
+        if let Some(a) = address_book.runnable_guaranteed_task_ids.pop_last() {
             let queue_entry = contended_queue.entry_to_execute(a);
             let task = queue_entry.remove();
-            return Some(Self::prepare_scheduled_execution(address_book, a, task, std::mem::take(&mut task.lock_attempts)));
+            return Some(Self::prepare_scheduled_execution(address_book, a, task, std::mem::take(&mut task.tx.1)));
         }
 
         let maybe_ee =
