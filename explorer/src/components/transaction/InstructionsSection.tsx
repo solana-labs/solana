@@ -66,11 +66,11 @@ export function InstructionsSection({ signature }: SignatureProps) {
   const refreshDetails = () => fetchDetails(signature);
 
   const result = status?.data?.info?.result;
-  if (!result || !details?.data?.transaction) {
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  if (!result || !transactionWithMeta) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
   }
-  const { meta } = details.data.transaction;
-  const { transaction } = details.data?.transaction;
+  const { meta, transaction } = transactionWithMeta;
 
   if (transaction.message.instructions.length === 0) {
     return <ErrorCard retry={refreshDetails} text="No instructions found" />;
@@ -83,7 +83,7 @@ export function InstructionsSection({ signature }: SignatureProps) {
   if (
     meta?.innerInstructions &&
     (cluster !== Cluster.MainnetBeta ||
-      details.data.transaction.slot >= INNER_INSTRUCTIONS_START_SLOT)
+      transactionWithMeta.slot >= INNER_INSTRUCTIONS_START_SLOT)
   ) {
     meta.innerInstructions.forEach((parsed: ParsedInnerInstruction) => {
       if (!innerInstructions[parsed.index]) {

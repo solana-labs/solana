@@ -1,4 +1,4 @@
-import { ParsedConfirmedTransaction } from "@solana/web3.js";
+import { ParsedTransactionWithMeta } from "@solana/web3.js";
 
 export type MintDetails = {
   decimals: number;
@@ -6,13 +6,15 @@ export type MintDetails = {
 };
 
 export function extractMintDetails(
-  parsedTransaction: ParsedConfirmedTransaction,
+  transactionWithMeta: ParsedTransactionWithMeta,
   mintMap: Map<string, MintDetails>
 ) {
-  if (parsedTransaction.meta?.preTokenBalances) {
-    parsedTransaction.meta.preTokenBalances.forEach((balance) => {
+  if (transactionWithMeta.meta?.preTokenBalances) {
+    transactionWithMeta.meta.preTokenBalances.forEach((balance) => {
       const account =
-        parsedTransaction.transaction.message.accountKeys[balance.accountIndex];
+        transactionWithMeta.transaction.message.accountKeys[
+          balance.accountIndex
+        ];
       mintMap.set(account.pubkey.toBase58(), {
         decimals: balance.uiTokenAmount.decimals,
         mint: balance.mint,
@@ -20,10 +22,12 @@ export function extractMintDetails(
     });
   }
 
-  if (parsedTransaction.meta?.postTokenBalances) {
-    parsedTransaction.meta.postTokenBalances.forEach((balance) => {
+  if (transactionWithMeta.meta?.postTokenBalances) {
+    transactionWithMeta.meta.postTokenBalances.forEach((balance) => {
       const account =
-        parsedTransaction.transaction.message.accountKeys[balance.accountIndex];
+        transactionWithMeta.transaction.message.accountKeys[
+          balance.accountIndex
+        ];
       mintMap.set(account.pubkey.toBase58(), {
         decimals: balance.uiTokenAmount.decimals,
         mint: balance.mint,
