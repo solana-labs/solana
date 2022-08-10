@@ -1854,16 +1854,18 @@ fn verify_slot_deltas_with_history(
     // note: it's important to go highest-to-lowest since the status cache is a fifo
     let mut entries_checked = 0;
     for slot in (0..=bank_slot).rev() {
-        if entries_checked > status_cache::MAX_CACHE_ENTRIES {
-            // We've gone through the whole slot deltas; done!
-            break;
-        }
+        let _ = dbg!(slot);
 
-        if slot_history.check(slot) == Check::Found {
+        if dbg!(slot_history.check(slot)) == Check::Found {
             if !slot_deltas_contains_slot(slot_deltas, slot) {
                 return Err(VerifySlotDeltasError::SlotNotFoundInDeltas(slot));
             }
             entries_checked += 1;
+
+            if dbg!(entries_checked) >= status_cache::MAX_CACHE_ENTRIES {
+                // We've gone through the whole slot deltas; done!
+                break;
+            }
         }
     }
 
