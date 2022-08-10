@@ -638,100 +638,6 @@ calculateInstancesPerNode() {
   fi
 }
 
-gossipDeploy() {
-  initLogDir
-
-  echo "Deployment started at $(date)"
-  $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
-
-  leftover=0
-  if [[ $gossipInstances != 0 ]]; then 
-    calculateInstancesPerNode
-    leftover=$(( $gossipInstances % $(( ${#validatorIpList[@]} - 1 )) ))
-  else
-    gossipInstances=$(($instancesPerNode * $((${#validatorIpList[@]} - 1))))
-  fi
-
-  echo "instancesPerNode: $instancesPerNode, leftover: $leftover"
-  echo "############## TOTAL GOSSIP INSTANCES TO DEPLOY (excl. bootstrap): $gossipInstances ##############"
-
-  declare bootstrapLeader=true
-  gossipDeployLoopCount=0
-  for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
-    nodeType=
-    nodeIndex=
-    getNodeType
-    if $bootstrapLeader; then
-      SECONDS=0
-      declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log" 0
-      bootstrapNodeDeployTime=$SECONDS
-      $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
-
-      bootstrapLeader=false
-      SECONDS=0
-      pids=()
-    else
-      instancesAndLeftoverPerNode=$instancesPerNode
-      if [[ $gossipDeployLoopCount -lt $leftover ]]; then 
-        instancesAndLeftoverPerNode=$(($instancesPerNode  + 1))
-      fi 
-      threadGossipDeploy $instancesAndLeftoverPerNode $ipAddress $nodeType $nodeIndex &
-      gossipDeployLoopCount=$(($gossipDeployLoopCount + 1))
-    fi
-    echo "done deploying validator"
-  done
-
-  echo "waiting for threads to complete"
-
-  wait 
-
-  for pid in "${pids[@]}"; do
-    declare ok=true
-    wait "$pid" || ok=false
-    if ! $ok; then
-      echo "+++ gossip-validator failed to start"
-      cat "$netLogDir/validator-$pid.log"
-      if $failOnValidatorBootupFailure; then
-        exit 1
-      else
-        echo "Failure is non-fatal"
-      fi
-    fi
-  done
-
-  declare networkVersion=unknown
-  case $deployMethod in
-  tar)
-    networkVersion="$(
-      (
-        set -o pipefail
-        grep "^commit: " "$SOLANA_ROOT"/solana-release/version.yml | head -n1 | cut -d\  -f2
-      ) || echo "tar-unknown"
-    )"
-    ;;
-  local)
-    networkVersion="$(git rev-parse HEAD || echo local-unknown)"
-    ;;
-  skip)
-    ;;
-  *)
-    usage "Internal error: invalid deployMethod: $deployMethod"
-    ;;
-  esac
-  # $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
-
-  echo
-  echo "--- Deployment Successful"
-  echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
-  echo "Deployed $gossipInstances gossip instances across $((${#validatorIpList[@]} - 1)) GCE nodes"
-  echo "      --- $instancesPerNode gossip instances per node + $leftover additional gossip instances"
-  echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
-  echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
-  echo "Network start logs in $netLogDir"
-}
-
-
 deploy() {
   initLogDir
 
@@ -763,9 +669,7 @@ deploy() {
       SECONDS=0
       pids=()
     else
-      echo "greg - isgossip 1: $isGossip"
       if [[ $isGossip == 1 ]]; then 
-        echo "greg - isgossip 2: $isGossip"
         instancesAndLeftoverPerNode=$instancesPerNode
         if [[ $gossipDeployLoopCount -lt $leftover ]]; then 
           instancesAndLeftoverPerNode=$(($instancesPerNode  + 1))
@@ -773,7 +677,6 @@ deploy() {
         threadGossipDeploy $instancesAndLeftoverPerNode $ipAddress $nodeType $nodeIndex &
         gossipDeployLoopCount=$(($gossipDeployLoopCount + 1))
       else 
-        echo "greg - isgossip 5: $isGossip"
         startNode "$ipAddress" $nodeType $nodeIndex
         # Stagger additional node start time. If too many nodes start simultaneously
         # the bootstrap node gets more rsync requests from the additional nodes than
@@ -786,7 +689,6 @@ deploy() {
   if [[ $isGossip == 1 ]]; then 
     wait 
   fi 
-
 
   for pid in "${pids[@]}"; do
     declare ok=true
@@ -801,8 +703,6 @@ deploy() {
       fi
     fi
   done
-
-  echo "greg - isgossip 2: $isGossip"
 
   if [[ $isGossip != 1 ]]; then 
     if ! $waitForNodeInit; then
