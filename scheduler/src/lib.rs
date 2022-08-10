@@ -156,7 +156,7 @@ impl Page {
             current_usage,
             next_usage: Usage::Unused,
             contended_unique_weights: Default::default(),
-            guaranteed_lock_counts: Default::default(),
+            guaranteed_task_ids: Default::default(),
         }
     }
 
