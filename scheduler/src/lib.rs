@@ -144,7 +144,7 @@ struct Page {
     current_usage: Usage,
     contended_unique_weights: std::collections::BTreeSet<UniqueWeight>,
     next_usage: Usage,
-    //next_scheduled_task // reserved_task guaranteed_task
+    guaranteed_task_ids: WeightedTaskIds,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
@@ -158,12 +158,18 @@ impl Page {
             contended_unique_weights: Default::default(),
         }
     }
+
+    fn switch_to_next_usage(&mut self) {
+        self.current_usage = self.next_usage;
+        self.next_usage = Usage::Unused;
+    }
 }
 
 //type AddressMap = std::collections::HashMap<Pubkey, PageRc>;
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 use by_address::ByAddress;
-type AddressSet = std::collections::BTreeSet<UniqueWeight>;
+type TaskId = UniqueWeight;
+type WeightedTaskIds = std::collections::BTreeSet<TaskId>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 
@@ -171,7 +177,9 @@ type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 #[derive(Default)]
 pub struct AddressBook {
     book: AddressMap,
-    newly_uncontended_addresses: AddressSet,
+    uncontended_task_ids: WeightedTaskIds,
+    runnable_guaranteed_task_ids: WeightedTaskIds,
+    guaranteed_lock_counts: std:collections::HashMap<UniqueWeight, usize>, 
 }
 
 impl AddressBook {
@@ -234,9 +242,18 @@ impl AddressBook {
         a.target.page().contended_unique_weights.remove(unique_weight);
     }
 
-    fn ensure_unlock(&mut self, attempt: &mut LockAttempt) {
-        if attempt.is_success() {
-            self.unlock(attempt);
+    fn reset_lock(&mut self, attempt: &mut LockAttempt) -> bool {
+        match attempt.status {
+            LockStatus::Succeded => {
+                self.unlock(attempt)
+            },
+            LockStatus::Guaranteed => {
+                self.cancel(attempt);
+                false
+            }
+            LockStatus::Failed => {
+                false // do nothing
+            }
         }
     }
 
@@ -271,6 +288,7 @@ impl AddressBook {
 
         if newly_uncontended {
             page.current_usage = Usage::Unused;
+            page.
             if !page.contended_unique_weights.is_empty() {
                 still_queued = true;
             }
@@ -470,9 +488,9 @@ impl ScheduleStage {
     */
 
     #[inline(never)]
-    fn get_weight_from_contended(address_book: &AddressBook) -> Option<UniqueWeight> {
-        trace!("n_u_a len(): {}", address_book.newly_uncontended_addresses.len());
-        address_book.newly_uncontended_addresses.last().map(|w| *w)
+    fn get_heaviest_from_contended(address_book: &AddressBook) -> Option<TaskId> {
+        trace!("n_u_a len(): {}", address_book.uncontended_task_ids.len());
+        address_book.uncontended_task_ids.last().map(|w| *w)
     }
 
     #[inline(never)]
@@ -486,7 +504,7 @@ impl ScheduleStage {
     )> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
-            Self::get_weight_from_contended(address_book),
+            Self::get_heaviest_from_contended(address_book),
         ) {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
@@ -575,12 +593,11 @@ impl ScheduleStage {
                 continue;
             } else if guaranteed_count > 0 {
                 assert!(!from_runnable);
-                address_book.guaranteed_locks.insert(unique_weight, guaranteed_count);
-                Self::ensure_unlock_for_guaranteed__execution(
+                Self::finalize_lock_for_guaranteed_execution(
                     address_book,
                     &unique_weight,
                     &mut populated_lock_attempts,
-                    from_runnable,
+                    guaranteed_count,
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
 
@@ -588,7 +605,7 @@ impl ScheduleStage {
             }
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
-            Self::finalize_successful_lock_before_execution(
+            Self::finalize_lock_before_execution(
                 address_book,
                 &unique_weight,
                 &mut populated_lock_attempts,
@@ -605,7 +622,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     // naming: relock_before_execution() / update_address_book() / update_uncontended_addresses()?
-    fn finalize_successful_lock_before_execution(
+    fn finalize_lock_before_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut Vec<LockAttempt>,
@@ -615,8 +632,33 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
         }
 
-        // revert because now contended again
-        address_book.newly_uncontended_addresses.remove(&unique_weight);
+        address_book.uncontended_task_ids.remove(&unique_weight);
+    }
+
+    #[inline(never)]
+    fn finalize_lock_for_guaranteed_execution(
+        address_book: &mut AddressBook,
+        unique_weight: &UniqueWeight,
+        lock_attempts: &mut Vec<LockAttempt>,
+        guaranteed_count: usize,
+    ) {
+        for mut l in lock_attempts {
+            address_book.forget_address_contention(&unique_weight, &mut l);
+            match l.status {
+                LockStatus::Guaranteed => {
+                    l.status = LockStatus::Succeded;
+                    l.page().guaranteed_task_ids.insert(&unique_weight);
+                }
+                LockStatus::Succeded => {
+                    // do nothing
+                }
+                LockStatus::Failed => {
+                    unreachable!();
+                }
+            }
+        }
+        address_book.guaranteed_lock_counts.insert(unique_weight, guaranteed_count);
+        address_book.uncontended_task_ids.remove(&unique_weight);
     }
 
     #[inline(never)]
@@ -627,9 +669,9 @@ impl ScheduleStage {
         from_runnable: bool,
     ) {
         for l in lock_attempts {
-            address_book.ensure_unlock(l);
+            address_book.reset_lock(l);
             //if let Some(uw) = l.target.page().contended_unique_weights.last() {
-            //    address_book.newly_uncontended_addresses.remove(uw);
+            //    address_book.uncontended_task_ids.remove(uw);
             //}
 
             // todo: mem::forget and panic in LockAttempt::drop()
@@ -637,28 +679,36 @@ impl ScheduleStage {
 
         // revert because now contended again
         if !from_runnable {
-            //error!("n u a len() before: {}", address_book.newly_uncontended_addresses.len());
-            address_book.newly_uncontended_addresses.remove(&unique_weight);
-            //error!("n u a len() after: {}", address_book.newly_uncontended_addresses.len());
+            //error!("n u a len() before: {}", address_book.uncontended_task_ids.len());
+            address_book.uncontended_task_ids.remove(&unique_weight);
+            //error!("n u a len() after: {}", address_book.uncontended_task_ids.len());
         }
     }
 
     #[inline(never)]
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
         for mut l in lock_attempts.into_iter() {
-            let newly_uncontended_while_queued = address_book.unlock(&mut l);
-            if newly_uncontended_while_queued {
-                if let Some(uw) = l.target.page().contended_unique_weights.last() {
-                    address_book.newly_uncontended_addresses.insert(*uw);
+            let newly_uncontended_while_queued = address_book.reset_lock(&mut l);
+
+            let page = l.target.page();
+            if page.next_usage == Usage::Unused {
+                if newly_uncontended_while_queued {
+                    if let Some(uw) = page.contended_unique_weights.last() {
+                        address_book.uncontended_task_ids.insert(*uw);
+                    }
                 }
-                for uw in l.target.page().guaranteed_unique_weights {
-                    if let Some(count) = address_book.guaranteed_locks.get_mut(&uw) {
+            } else {
+                page.switch_to_next_usage();
+                for task_id in page.guaranteed_task_ids {
+                    if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&uw) {
                         count -= 1;
                         if count == 0 {
-                            address_book.runnable_guaranteed_unique_weights.insert(uw);
+                            address_book.guaranteed_lock_counts.remove(&uw);
+                            address_book.runnable_guaranteed_task_ids.insert(uw);
                         }
                     }
                 }
+                page.guaranteed_task_ids.clear();
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
@@ -702,6 +752,12 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<Box<ExecutionEnvironment>> {
+        if let Some(a) = address_book.runnable_guaranteed_task_ids.pop() {
+            let queue_entry = contended_queue.entry_to_execute(a)
+            let task = queue_entry.remove();
+            return Some(prepare_scheduled_execution(address_book, a, task, std::mem::take(&mut task.lock_attempts)));
+        }
+
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
                 .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
@@ -774,7 +830,7 @@ impl ScheduleStage {
             }
 
             loop {
-                /*if !address_book.newly_uncontended_addresses.is_empty() {
+                /*if !address_book.uncontended_task_ids.is_empty() {
                     trace!("prefer emptying n_u_a");
                 } else */ if executing_queue_count >= max_executing_queue_count {
                     trace!("outgoing queue full");
@@ -790,7 +846,7 @@ impl ScheduleStage {
 
                     to_execute_substage.send(ee).unwrap();
                 } else {
-                    trace!("incoming queue starved: n_u_a: {}", address_book.newly_uncontended_addresses.len());
+                    trace!("incoming queue starved: n_u_a: {}", address_book.uncontended_task_ids.len());
                     break;
                 }
             }
