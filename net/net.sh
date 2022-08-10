@@ -235,7 +235,7 @@ CARGO_BIN="\$HOME/.cargo/bin"
 
 startCommon() {
   declare ipAddress=$1
-  declare instanceIndex=$2
+  declare instanceIndex=${2:--1}
   echo "greg - startCommon instanceIndex: $instanceIndex"
   test -d "$SOLANA_ROOT"
   if $skipSetup; then
@@ -628,7 +628,7 @@ threadGossipDeploy() {
     echo "startGossipNode: instanceIndex: $i"
     startNode "$ipAddress" $nodeType $nodeIndex $i
     echo "################# Launched Gossip Node: $i ###################"
-    sleep 2
+    sleep 3
   done
 }
 
