@@ -215,7 +215,7 @@ impl AddressBook {
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
-                                Self::remember_address_contention(&mut page, unique_weight, &mut attempt);
+                                Self::remember_address_contention(unique_weight, &mut attempt);
                                 *status = LockStatus::Failed;
                             } else {
                                 match page.next_usage {
@@ -235,7 +235,7 @@ impl AddressBook {
                     },
                     Usage::Writable => {
                         if from_runnable {
-                            Self::remember_address_contention(&mut page, unique_weight, &mut attempt);
+                            Self::remember_address_contention(unique_weight, &mut attempt);
                             *status = LockStatus::Failed;
                         } else {
                             match page.next_usage {
@@ -680,7 +680,7 @@ impl ScheduleStage {
     ) {
         for mut l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
-            address_book.forget_address_contention(&unique_weight, &mut l);
+            AddressBook::forget_address_contention(&unique_weight, &mut l);
         }
 
         address_book.uncontended_task_ids.remove(&unique_weight);
@@ -694,7 +694,7 @@ impl ScheduleStage {
         guaranteed_count: usize,
     ) {
         for mut l in lock_attempts {
-            address_book.forget_address_contention(&unique_weight, &mut l);
+            AddressBook::forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Guaranteed => {
                     l.target.page().guaranteed_task_ids.insert(*unique_weight);
