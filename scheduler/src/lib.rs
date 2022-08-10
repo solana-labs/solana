@@ -309,11 +309,6 @@ impl AddressBook {
 
     #[inline(never)]
     fn cancel(&mut self, attempt: &mut LockAttempt) {
-        //debug_assert!(attempt.is_success());
-
-        let mut newly_uncontended = false;
-        let mut still_queued = false;
-
         let mut page = attempt.target.page();
 
         match page.next_usage {
