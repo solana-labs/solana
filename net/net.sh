@@ -629,11 +629,8 @@ threadGossipDeploy() {
 }
 
 gossipDeploy() {
-  echo "greg - in gossipDeploy()"
   declare instancesPerNode=$1
   declare gossipInstances=$2
-  echo "greg - instancesPerNode in gossipDeploy: $instancesPerNode"
-  echo "greg - gossipInstances: $gossipInstances"
   initLogDir
 
   echo "Deployment started at $(date)"
@@ -686,6 +683,20 @@ gossipDeploy() {
   echo "waiting for threads to complete"
 
   wait 
+
+  for pid in "${pids[@]}"; do
+    declare ok=true
+    wait "$pid" || ok=false
+    if ! $ok; then
+      echo "+++ gossip-validator failed to start"
+      cat "$netLogDir/validator-$pid.log"
+      if $failOnValidatorBootupFailure; then
+        exit 1
+      else
+        echo "Failure is non-fatal"
+      fi
+    fi
+  done
 
   declare networkVersion=unknown
   case $deployMethod in
