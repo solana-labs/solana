@@ -190,8 +190,6 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let LockAttempt {target, requested_usage, status} = attempt;
-
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut target.0) };
 
                 match page.current_usage {
