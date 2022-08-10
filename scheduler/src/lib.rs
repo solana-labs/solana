@@ -700,7 +700,7 @@ impl ScheduleStage {
                 }
             } else {
                 page.switch_to_next_usage();
-                for task_id in page.guaranteed_task_ids {
+                for task_id in std::mem::take(&mut page.guaranteed_task_ids) {
                     if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&task_id) {
                         *count -= 1;
                         if *count == 0 {
@@ -709,7 +709,6 @@ impl ScheduleStage {
                         }
                     }
                 }
-                page.guaranteed_task_ids.clear();
             }
 
             // todo: mem::forget and panic in LockAttempt::drop()
