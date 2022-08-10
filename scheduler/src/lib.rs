@@ -210,6 +210,7 @@ impl AddressBook {
                                 Self::remember_address_contention(&mut page, unique_weight);
                                 *status = LockStatus::Failed;
                             } else {
+                                /*
                                 match page.next_usage {
                                     Usage::Unused => {
                                         *status = LockStatus::Guaranteed;
@@ -220,6 +221,8 @@ impl AddressBook {
                                         *status = LockStatus::Failed;
                                     },
                                 }
+                                */
+                                *status = LockStatus::Failed;
                             }
                         }
                     },
@@ -228,6 +231,7 @@ impl AddressBook {
                             Self::remember_address_contention(&mut page, unique_weight);
                             *status = LockStatus::Failed;
                         } else {
+                            /*
                             match page.next_usage {
                                 Usage::Unused => {
                                     *status = LockStatus::Guaranteed;
@@ -238,6 +242,8 @@ impl AddressBook {
                                     *status = LockStatus::Failed;
                                 },
                             }
+                            */
+                            *status = LockStatus::Failed;
                         }
                     },
                 }
