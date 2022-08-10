@@ -738,6 +738,15 @@ deploy() {
   echo "Deployment started at $(date)"
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
+  leftover=0
+  if [[ $gossipInstances != 0 ]]; then 
+    calculateInstancesPerNode
+    leftover=$(( $gossipInstances % $(( ${#validatorIpList[@]} - 1 )) ))
+  else
+    gossipInstances=$(($instancesPerNode * $((${#validatorIpList[@]} - 1))))
+  fi
+  
+  gossipDeployLoopCount=0
   declare bootstrapLeader=true
   for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
     nodeType=
@@ -746,7 +755,7 @@ deploy() {
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log"
+      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log" $(($isGossip - 1))
       bootstrapNodeDeployTime=$SECONDS
       $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
@@ -754,14 +763,29 @@ deploy() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" $nodeType $nodeIndex
-
-      # Stagger additional node start time. If too many nodes start simultaneously
-      # the bootstrap node gets more rsync requests from the additional nodes than
-      # it can handle.
-      sleep 2
+      echo "greg - isgossip 1: $isGossip"
+      if [[ $isGossip == 1 ]]; then 
+        echo "greg - isgossip 2: $isGossip"
+        instancesAndLeftoverPerNode=$instancesPerNode
+        if [[ $gossipDeployLoopCount -lt $leftover ]]; then 
+          instancesAndLeftoverPerNode=$(($instancesPerNode  + 1))
+        fi 
+        threadGossipDeploy $instancesAndLeftoverPerNode $ipAddress $nodeType $nodeIndex &
+        gossipDeployLoopCount=$(($gossipDeployLoopCount + 1))
+      else 
+        echo "greg - isgossip 5: $isGossip"
+        startNode "$ipAddress" $nodeType $nodeIndex
+        # Stagger additional node start time. If too many nodes start simultaneously
+        # the bootstrap node gets more rsync requests from the additional nodes than
+        # it can handle.
+        sleep 2
+      fi
     fi
   done
+
+  if [[ $isGossip == 1 ]]; then 
+    wait 
+  fi 
 
 
   for pid in "${pids[@]}"; do
@@ -778,35 +802,39 @@ deploy() {
     fi
   done
 
-  if ! $waitForNodeInit; then
-    # Handle async init
-    declare startTime=$SECONDS
-    for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
-      declare timeWaited=$((SECONDS - startTime))
-      if [[ $timeWaited -gt 600 ]]; then
-        break
-      fi
-      ssh "${sshOptions[@]}" -n "$ipAddress" \
-        "./solana/net/remote/remote-node-wait-init.sh $((600 - timeWaited))"
-    done
-  fi
+  echo "greg - isgossip 2: $isGossip"
 
-  $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
-  additionalNodeDeployTime=$SECONDS
+  if [[ $isGossip != 1 ]]; then 
+    if ! $waitForNodeInit; then
+      # Handle async init
+      declare startTime=$SECONDS
+      for ipAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
+        declare timeWaited=$((SECONDS - startTime))
+        if [[ $timeWaited -gt 600 ]]; then
+          break
+        fi
+        ssh "${sshOptions[@]}" -n "$ipAddress" \
+          "./solana/net/remote/remote-node-wait-init.sh $((600 - timeWaited))"
+      done
+    fi
 
-  annotateBlockexplorerUrl
+    $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
+    additionalNodeDeployTime=$SECONDS
 
-  sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
-                                 # have caught up to the bootstrap validator yet
+    annotateBlockexplorerUrl
 
-  echo "--- Sleeping $clientDelayStart seconds after validators are started before starting clients"
-  sleep "$clientDelayStart"
+    sanity skipBlockstreamerSanity # skip sanity on blockstreamer node, it may not
+                                  # have caught up to the bootstrap validator yet
 
-  SECONDS=0
-  startClients
-  clientDeployTime=$SECONDS
+    echo "--- Sleeping $clientDelayStart seconds after validators are started before starting clients"
+    sleep "$clientDelayStart"
 
-  $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
+    SECONDS=0
+    startClients
+    clientDeployTime=$SECONDS
+
+    $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
+  fi 
 
   declare networkVersion=unknown
   case $deployMethod in
@@ -832,6 +860,10 @@ deploy() {
   echo
   echo "--- Deployment Successful"
   echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
+  if [[ $isGossip != 1 ]]; then 
+    echo "Deployed $gossipInstances gossip instances across $((${#validatorIpList[@]} - 1)) GCE nodes"
+    echo "      --- $instancesPerNode gossip instances per node + $leftover additional gossip instances"
+  fi
   echo "Additional validator deployment (${#validatorIpList[@]} validators, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir"
@@ -954,6 +986,7 @@ extraPrimordialStakes=0
 # need to set either instancesPerNode or gossipInstances
 instancesPerNode=0 # default. 
 gossipInstances=0 # default number of gossip instances
+isGossip=0
 
 command=$1
 [[ -n $command ]] || usage
@@ -1266,9 +1299,10 @@ upgrade)
   # (start|stop)Node need refactored to support restarting the bootstrap validator
   ;;
 gossip-only)
+  isGossip=1
   prepareDeploy
   stop
-  gossipDeploy $instancesPerNode $gossipInstances
+  deploy
   ;;
 stopnode)
   if [[ -z $nodeAddress ]]; then
