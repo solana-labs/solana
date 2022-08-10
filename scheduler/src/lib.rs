@@ -601,19 +601,20 @@ impl ScheduleStage {
                 next_task.contention_count += 1;
 
                 if from_runnable {
-                    trace!("move to contended due to lock failure [{}/{}]", unlockable_count, lock_count);
+                    trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, guaranteed_count, lock_count);
                     reborrowed_contended_queue
                         .unwrap()
                         .add_to_schedule(*queue_entry.key(), queue_entry.remove());
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
-                    trace!("relock failed [{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, lock_count, &unique_weight, next_task.contention_count);
+                    trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, guaranteed_count, lock_count, &unique_weight, next_task.contention_count);
                 }
+
                 continue;
             } else if guaranteed_count > 0 {
                 assert!(!from_runnable);
                 let lock_count = populated_lock_attempts.len();
-                trace!("guranteed exec: [{}/{}]", guaranteed_count, lock_count);
+                trace!("guaranteed exec: [{}/{}]", guaranteed_count, lock_count);
                 Self::finalize_lock_for_guaranteed_execution(
                     address_book,
                     &unique_weight,
