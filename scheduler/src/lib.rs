@@ -162,7 +162,6 @@ impl Page {
 
     fn switch_to_next_usage(&mut self) {
         self.current_usage = self.next_usage;
-        self.next_usage = Usage::Unused;
     }
 }
 
@@ -272,7 +271,7 @@ impl AddressBook {
             },
             LockStatus::Guaranteed => {
                 self.cancel(attempt);
-                false
+                self.unlock(attempt)
             }
             LockStatus::Failed => {
                 false // do nothing
@@ -694,7 +693,6 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Guaranteed => {
-                    l.status = LockStatus::Succeded;
                     l.target.page().guaranteed_task_ids.insert(*unique_weight);
                 }
                 LockStatus::Succeded => {
