@@ -648,7 +648,7 @@ impl ScheduleStage {
             match l.status {
                 LockStatus::Guaranteed => {
                     l.status = LockStatus::Succeded;
-                    l.target.page().guaranteed_task_ids.insert(&unique_weight);
+                    l.target.page().guaranteed_task_ids.insert(*unique_weight);
                 }
                 LockStatus::Succeded => {
                     // do nothing
