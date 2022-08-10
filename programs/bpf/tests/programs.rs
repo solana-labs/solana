@@ -1125,6 +1125,7 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
+                invoked_program_id.clone(),
             ],
             Languages::Rust => vec![
                 system_program::id(),
@@ -1330,13 +1331,6 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
             ],
-            None,
-        );
-
-        do_invoke_failure_test_local(
-            TEST_EXECUTABLE_LAMPORTS,
-            TransactionError::InstructionError(0, InstructionError::ExecutableLamportChange),
-            &[invoke_program_id.clone()],
             None,
         );
 
