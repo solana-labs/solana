@@ -825,7 +825,7 @@ gossipDeploy() {
 
   wait 
 
-  if [[ $leftover != 0 ]]; then 
+  if [[ $leftover == 0 ]]; then 
     echo "deploying leftovers. total leftover: $leftover"
     declare skipBootstrapLeader=true
     declare leftoverCount=0

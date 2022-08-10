@@ -62,6 +62,9 @@ source net/common.sh
 source multinode-demo/common.sh
 loadConfigFile
 
+rm -f gossip-only-run 
+rm -f gossip-only-write-keys
+
 cat > ~/solana/gossip-only-run <<EOF
 #!/usr/bin/env bash
 cd ~/solana

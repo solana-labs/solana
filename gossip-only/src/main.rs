@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 #[cfg(not(target_env = "msvc"))]
 use {
     clap::{
@@ -209,6 +210,9 @@ pub fn main() {
         &format!("{}-{}", VALIDATOR_PORT_RANGE.0, VALIDATOR_PORT_RANGE.1);
     let dynamic_port_range = solana_net_utils::parse_port_range(default_dynamic_port_range)
         .expect("invalid dynamic_port_range");
+
+    info!("greg - default_dynamic_port_range: {}", default_dynamic_port_range);
+    info!("greg - dynamic_port_range: {}, {}", dynamic_port_range.0, dynamic_port_range.1);
 
 
 
