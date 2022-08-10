@@ -1,4 +1,7 @@
-use std::{env, fs, process};
+use {
+    predicates::prelude::*,
+    std::{env, fs},
+};
 
 #[macro_use]
 extern crate serial_test;
@@ -47,11 +50,10 @@ fn test_build() {
 #[serial]
 fn test_dump() {
     // This test requires rustfilt.
-    assert!(process::Command::new("cargo")
+    assert_cmd::Command::new("cargo")
         .args(&["install", "-f", "rustfilt"])
-        .status()
-        .expect("Unable to install rustfilt required for --dump option")
-        .success());
+        .assert()
+        .success();
     run_cargo_build("noop", &["--dump"], false);
     let cwd = env::current_dir().expect("Unable to get current working directory");
     let dump = cwd
@@ -89,4 +91,40 @@ fn test_generate_child_script_on_failre() {
     assert!(scr.exists());
     fs::remove_file(scr).expect("Failed to remove script");
     clean_target("fail");
+}
+
+#[test]
+#[serial]
+fn test_sbfv2() {
+    run_cargo_build("noop", &["--arch", "sbfv2"], false);
+    let cwd = env::current_dir().expect("Unable to get current working directory");
+    let bin = cwd
+        .join("tests")
+        .join("crates")
+        .join("noop")
+        .join("target")
+        .join("deploy")
+        .join("noop.so");
+    let bin = bin.to_str().unwrap();
+    let root = cwd
+        .parent()
+        .expect("Unable to get parent directory of current working dir")
+        .parent()
+        .expect("Unable to get ../.. of current working dir");
+    let readelf = root
+        .join("sdk")
+        .join("bpf")
+        .join("dependencies")
+        .join("sbf-tools")
+        .join("llvm")
+        .join("bin")
+        .join("llvm-readelf");
+    assert_cmd::Command::new(readelf)
+        .args(&["-h", bin])
+        .assert()
+        .stdout(predicate::str::contains(
+            "Flags:                             0x20",
+        ))
+        .success();
+    clean_target("noop");
 }
