@@ -331,7 +331,7 @@ pub struct Weight {
                    // gas fee
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UniqueWeight {
     // naming: Sequence Ordering?
     weight: Weight,
