@@ -612,6 +612,7 @@ impl ScheduleStage {
                 continue;
             } else if guaranteed_count > 0 {
                 assert!(!from_runnable);
+                let lock_count = populated_lock_attempts.len();
                 trace!("guranteed exec: [{}/{}]", guaranteed_count, lock_count);
                 Self::finalize_lock_for_guaranteed_execution(
                     address_book,
