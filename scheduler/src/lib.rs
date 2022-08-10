@@ -700,11 +700,11 @@ impl ScheduleStage {
             } else {
                 page.switch_to_next_usage();
                 for task_id in page.guaranteed_task_ids {
-                    if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&uw) {
+                    if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&task_id) {
                         count -= 1;
                         if count == 0 {
-                            address_book.guaranteed_lock_counts.remove(&uw);
-                            address_book.runnable_guaranteed_task_ids.insert(uw);
+                            address_book.guaranteed_lock_counts.remove(&task_id);
+                            address_book.runnable_guaranteed_task_ids.insert(*task_id);
                         }
                     }
                 }
