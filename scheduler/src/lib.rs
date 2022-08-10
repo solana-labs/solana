@@ -215,6 +215,7 @@ impl AddressBook {
                                         *status = LockStatus::Guaranteed;
                                         page.next_usage = Usage::renew(*requested_usage);
                                     },
+                                    // support multiple readonly locks!
                                     Usage::Readonly(_) | Usage::Writable => {
                                         *status = LockStatus::Failed;
                                     },
@@ -232,6 +233,7 @@ impl AddressBook {
                                     *status = LockStatus::Guaranteed;
                                     page.next_usage = Usage::renew(*requested_usage);
                                 },
+                                // support multiple readonly locks!
                                 Usage::Readonly(_) | Usage::Writable => {
                                     *status = LockStatus::Failed;
                                 },
@@ -702,6 +704,7 @@ impl ScheduleStage {
             let page = l.target.page();
             if page.next_usage == Usage::Unused {
                 if newly_uncontended_while_queued {
+                    // don't insert too eargarly for next_usage != Unused case
                     if let Some(uw) = page.contended_unique_weights.last() {
                         address_book.uncontended_task_ids.insert(*uw);
                     }
