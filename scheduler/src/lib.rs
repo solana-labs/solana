@@ -249,7 +249,8 @@ impl AddressBook {
                 self.unlock(attempt)
             },
             LockStatus::Guaranteed => {
-                self.cancel(attempt);
+                panic!();
+                //self.cancel(attempt);
                 false
             }
             LockStatus::Failed => {
