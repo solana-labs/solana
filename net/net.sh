@@ -628,9 +628,17 @@ threadGossipDeploy() {
   done
 }
 
+calculateInstancesPerNode() {
+  perNode=$(( $gossipInstances / $(( ${#validatorIpList[@]} - 1)) ))
+  echo "perNode: $perNode"
+  if [[ $perNode -ge 1 ]]; then 
+    instancesPerNode=$perNode
+  else 
+    instancesPerNode=0
+  fi
+}
+
 gossipDeploy() {
-  declare instancesPerNode=$1
-  declare gossipInstances=$2
   initLogDir
 
   echo "Deployment started at $(date)"
@@ -638,15 +646,9 @@ gossipDeploy() {
 
   leftover=0
   if [[ $gossipInstances != 0 ]]; then 
-    perNode=$(( $gossipInstances / $(( ${#validatorIpList[@]} - 1)) ))
-    echo "perNode: $perNode"
-    if [[ $perNode -ge 1 ]]; then 
-      instancesPerNode=$perNode
-    else 
-      instancesPerNode=0
-    fi
-    leftover=$(($gossipInstances % $((${#validatorIpList[@]} - 1)) ))
-  else 
+    calculateInstancesPerNode
+    leftover=$(( $gossipInstances % $(( ${#validatorIpList[@]} - 1 )) ))
+  else
     gossipInstances=$(($instancesPerNode * $((${#validatorIpList[@]} - 1))))
   fi
 
