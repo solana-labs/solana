@@ -354,7 +354,7 @@ startNode() {
   declare ipAddress=$1
   declare nodeType=$2
   declare nodeIndex="$3"
-  declare instanceIndex=${4:-1}
+  declare instanceIndex=${4:--1}
 
   echo "startNode instanceIndex: $instanceIndex"
 
