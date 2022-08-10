@@ -574,7 +574,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
         if let Some(a) = address_book.runnable_guaranteed_task_ids.pop_last() {
-            trace!("expediate pop from guaranteed queue");
+            trace!("expediate pop from guaranteed queue [1/{}]", address_book.runnable_guaranteed_task_ids.len());
             let queue_entry = contended_queue.entry_to_execute(a);
             let mut task = queue_entry.remove();
             let ll = std::mem::take(&mut task.tx.1);
