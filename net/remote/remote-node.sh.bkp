@@ -28,7 +28,7 @@ maybeFullRpc="${19}"
 waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
-instanceIndex="${23:-1}"
+instanceIndex="${23:--1}"
 
 if [[ $instanceIndex != -1 ]]; then 
   gossipRunScript="gossip-run-$instanceIndex"
