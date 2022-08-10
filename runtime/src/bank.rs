@@ -4458,7 +4458,10 @@ impl Bank {
             total_size_of_all_accounts,
             total_size_of_touched_accounts,
             accounts_resize_delta,
-        } = transaction_context.into();
+        } = ExecutionRecord::from_transaction_context(
+            transaction_context,
+            tx.message().account_keys().len(),
+        );
         loaded_transaction.accounts = accounts;
         if self
             .feature_set
