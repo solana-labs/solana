@@ -288,7 +288,6 @@ impl AddressBook {
 
         if newly_uncontended {
             page.current_usage = Usage::Unused;
-            page.
             if !page.contended_unique_weights.is_empty() {
                 still_queued = true;
             }
