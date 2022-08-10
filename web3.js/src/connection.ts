@@ -884,6 +884,8 @@ export type TransactionResponse = {
 
 /**
  * A confirmed transaction on the ledger
+ *
+ * @deprecated Deprecated since Solana v1.8.0.
  */
 export type ConfirmedTransaction = {
   /** The slot during which the transaction was processed */
@@ -1013,7 +1015,9 @@ export type BlockResponse = {
 };
 
 /**
- * A ConfirmedBlock on the ledger
+ * A confirmed block on the ledger
+ *
+ * @deprecated Deprecated since Solana v1.8.0.
  */
 export type ConfirmedBlock = {
   /** Blockhash of this block */
