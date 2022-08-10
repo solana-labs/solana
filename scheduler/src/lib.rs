@@ -222,12 +222,20 @@ impl AddressBook {
                             }
                         }
                     },
-                    Usage::Writable => match requested_usage {
-                        RequestedUsage::Readonly | RequestedUsage::Writable => {
-                            if from_runnable {
-                                Self::remember_address_contention(&mut page, unique_weight);
-                            }
+                    Usage::Writable => {
+                        if from_runnable {
+                            Self::remember_address_contention(&mut page, unique_weight);
                             *status = LockStatus::Failed;
+                        } else {
+                            match page.next_usage {
+                                Usage::Unused => {
+                                    *status = LockStatus::Guaranteed;
+                                    page.next_usage = Usage::renew(*requested_usage);
+                                },
+                                Usage::Readonly(_) | Usage::Writable => {
+                                    *status = LockStatus::Failed;
+                                },
+                            }
                         }
                     },
                 }
@@ -699,13 +707,15 @@ impl ScheduleStage {
                     }
                 }
             } else {
-                page.switch_to_next_usage();
-                for task_id in std::mem::take(&mut page.guaranteed_task_ids) {
-                    if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&task_id) {
-                        *count -= 1;
-                        if *count == 0 {
-                            address_book.guaranteed_lock_counts.remove(&task_id);
-                            address_book.runnable_guaranteed_task_ids.insert(task_id);
+                if page.current_usage == Usage::Unused {
+                    page.switch_to_next_usage();
+                    for task_id in std::mem::take(&mut page.guaranteed_task_ids) {
+                        if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&task_id) {
+                            *count -= 1;
+                            if *count == 0 {
+                                address_book.guaranteed_lock_counts.remove(&task_id);
+                                address_book.runnable_guaranteed_task_ids.insert(task_id);
+                            }
                         }
                     }
                 }
