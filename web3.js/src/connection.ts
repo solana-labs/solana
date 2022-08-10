@@ -529,6 +529,14 @@ export type GetSlotLeaderConfig = {
 export type GetTransactionConfig = {
   /** The level of finality desired */
   commitment?: Finality;
+};
+
+/**
+ * Configuration object for changing `getParsedTransaction` query behavior
+ */
+export type GetParsedTransactionConfig = {
+  /** The level of finality desired */
+  commitment?: Finality;
   /** The max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned */
   maxSupportedTransactionVersion?: number;
 };
@@ -3747,7 +3755,7 @@ export class Connection {
    */
   async getParsedTransaction(
     signature: TransactionSignature,
-    commitmentOrConfig?: GetTransactionConfig | Finality,
+    commitmentOrConfig?: GetParsedTransactionConfig | Finality,
   ): Promise<ParsedConfirmedTransaction | null> {
     const {commitment, config} =
       extractCommitmentFromConfig(commitmentOrConfig);
