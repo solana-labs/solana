@@ -236,10 +236,8 @@ CARGO_BIN="\$HOME/.cargo/bin"
 startCommon() {
   declare ipAddress=$1
   declare instanceIndex=${2:--1}
-  echo "greg - startCommon instanceIndex: $instanceIndex"
   test -d "$SOLANA_ROOT"
   if $skipSetup; then
-    echo "greg - startcommon - skip setup"
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
@@ -251,7 +249,6 @@ startCommon() {
       mv ~/config $SOLANA_HOME/
     "
   elif [[ $instanceIndex -le 0 ]]; then 
-    echo "greg - startcommon elif"
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
@@ -259,7 +256,6 @@ startCommon() {
       mkdir -p $CARGO_BIN
     "
   else
-    echo "greg - startcommon else"
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;

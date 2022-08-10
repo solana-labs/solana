@@ -429,6 +429,9 @@ cat >> ~/solana/$gossipRunScript <<EOF
 EOF
       ~/solana/$gossipRunScript
 
+      rm ~/solana/$gossipRunScript
+      rm ~/solana/$gossipRunKeyScript
+
     else 
       args=(
         --entrypoint "$entrypointIp:8001"
