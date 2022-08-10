@@ -679,7 +679,7 @@ gossipDeploy() {
       if [[ $gossipDeployLoopCount -lt $leftover ]]; then 
         instancesAndLeftoverPerNode=$(($instancesPerNode  + 1))
       fi 
-      threadGossipDeploy $instancesAndLeftoverPerNode $ipAddress $nodeType $nodeIndex false &
+      threadGossipDeploy $instancesAndLeftoverPerNode $ipAddress $nodeType $nodeIndex &
       gossipDeployLoopCount=$(($gossipDeployLoopCount + 1))
     fi
     echo "done deploying validator"
@@ -1088,7 +1088,7 @@ while [[ -n $1 ]]; do
 done
 
 echo "greg - gossip instances per node: $instancesPerNode"
-if [[ ($instancesPerNode == 0 && $gossipInstances == 0) || ($instancesPerNode != 0 && $gossipInstances != 0) ]]; then 
+if [[ ($instancesPerNode == 0 && $gossipInstances == 0 && $command == "gossip-only") || ($instancesPerNode != 0 && $gossipInstances != 0) ]]; then 
   usage "need to set either --gossip-instances-per-node OR --gossip-instances (not both)"
 fi
 
