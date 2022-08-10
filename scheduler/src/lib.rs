@@ -559,6 +559,14 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
+        if let Some(a) = address_book.runnable_guaranteed_task_ids.pop_last() {
+            trace!("expediate pop from guaranteed queue");
+            let queue_entry = contended_queue.entry_to_execute(a);
+            let mut task = queue_entry.remove();
+            let ll = std::mem::take(&mut task.tx.1);
+            return Some(Self::prepare_scheduled_execution(address_book, a, task, ll));
+        }
+
         trace!("pop begin");
         loop {
         if let Some((reborrowed_contended_queue, mut queue_entry)) = Self::select_next_task(runnable_queue, contended_queue, address_book) {
@@ -604,6 +612,7 @@ impl ScheduleStage {
                 continue;
             } else if guaranteed_count > 0 {
                 assert!(!from_runnable);
+                trace!("guranteed exec: [{}/{}]", guaranteed_count, lock_count);
                 Self::finalize_lock_for_guaranteed_execution(
                     address_book,
                     &unique_weight,
@@ -765,13 +774,6 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<Box<ExecutionEnvironment>> {
-        if let Some(a) = address_book.runnable_guaranteed_task_ids.pop_last() {
-            let queue_entry = contended_queue.entry_to_execute(a);
-            let mut task = queue_entry.remove();
-            let ll = std::mem::take(&mut task.tx.1);
-            return Some(Self::prepare_scheduled_execution(address_book, a, task, ll));
-        }
-
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
                 .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
