@@ -564,7 +564,7 @@ impl ScheduleStage {
             let queue_entry = contended_queue.entry_to_execute(a);
             let mut task = queue_entry.remove();
             let ll = std::mem::take(&mut task.tx.1);
-            return Some(Self::prepare_scheduled_execution(address_book, a, task, ll));
+            return Some((unique_weight, task, ll));
         }
 
         trace!("pop begin");
