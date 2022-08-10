@@ -1017,9 +1017,11 @@ while [[ -n $1 ]]; do
       maybeSkipRequireTower="$1"
       shift 1
     elif [[ $1 = --gossip-instances-per-node ]]; then
+      isGossip=1
       instancesPerNode="$2"
       shift 2
     elif [[ $1 = --gossip-instances ]]; then
+      isGossip=1
       gossipInstances="$2"
       shift 2
     else
@@ -1031,11 +1033,11 @@ while [[ -n $1 ]]; do
   fi
 done
 
-echo "greg - gossip instances per node: $instancesPerNode"
-if [[ ($instancesPerNode == 0 && $gossipInstances == 0 && $command == "gossip-only") || ($instancesPerNode != 0 && $gossipInstances != 0) ]]; then 
-  usage "need to set either --gossip-instances-per-node OR --gossip-instances (not both)"
+if [[ $isGossip == 1 ]]; then 
+  if [[ ($instancesPerNode == 0 && $gossipInstances == 0) || ($instancesPerNode != 0 && $gossipInstances != 0) ]]; then 
+    usage "need to set either --gossip-instances-per-node OR --gossip-instances (not both)"
+  fi
 fi
-
 
 while getopts "h?T:t:o:f:rc:Fn:i:d" opt "${shortArgs[@]}"; do
   case $opt in

@@ -30,7 +30,6 @@ extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 instanceIndex="${23:--1}"
 
-
 if [[ $instanceIndex != -1 ]]; then 
   gossipRunScript="gossip-run-$instanceIndex"
   gossipRunKeyScript="gossip-run-key-$instanceIndex"
@@ -42,8 +41,6 @@ missing() {
   echo "Error: $1 not specified"
   exit 1
 }
-
-echo "greg - in remote-gossip-node.sh. instanceIndex: $instanceIndex"
 
 [[ -n $deployMethod ]]  || missing deployMethod
 [[ -n $nodeType ]]      || missing nodeType
@@ -313,7 +310,6 @@ EOF
     fi
 
     if [[ $instanceIndex != -1 ]]; then
-      echo "greg - bootstrap - entrypoint IP: $entrypointIp"
       chmod +x gossip-only/src/gossip-only.sh
       gossipOnlyPort=9001
       args=(
@@ -361,7 +357,6 @@ cat >> ~/solana/on-reboot <<EOF
 EOF
       ~/solana/on-reboot
 
-      echo "greg - remote-node.sh - 1"
       if $waitForNodeInit; then
         net/remote/remote-node-wait-init.sh 600
       fi
@@ -397,9 +392,7 @@ EOF
     fi
 
     if [[ $instanceIndex != -1 ]]; then
-      echo "greg - running write keys - 2 "
       set -x
-      echo "greg - validator - entrypoint IP: $entrypointIp"
       chmod +x gossip-only/src/gossip-only.sh
 
       args=(
@@ -420,8 +413,6 @@ EOF
         --entrypoint $entrypointIp:$gossipOnlyPort
         --gossip-host $(hostname -i)
       )
-
-      echo "greg - instanceIndex: $instanceIndex"
 
 cat >> ~/solana/$gossipRunScript <<EOF
       nohup gossip-only/src/gossip-only.sh ${args[@]} >> gossip-instance-$instanceIndex.log.\$now 2>&1 &
@@ -520,7 +511,6 @@ cat >> ~/solana/on-reboot <<EOF
 EOF
       ~/solana/on-reboot
 
-      echo "greg - remote-node.sh - 2"
       if $waitForNodeInit; then
         net/remote/remote-node-wait-init.sh 600
       fi
