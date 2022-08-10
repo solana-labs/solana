@@ -21,7 +21,7 @@ jsonrpc-core-client = { version = "18.0.0" }
 jsonrpc-derive = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-pubsub = "18.0.0"
-libc = "0.2.126"
+libc = "0.2.129"
 log = "0.4.17"
 rayon = "1.5.3"
 regex = "1.5.6"
