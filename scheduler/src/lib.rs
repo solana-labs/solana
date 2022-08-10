@@ -697,6 +697,7 @@ impl ScheduleStage {
             }
         }
         address_book.guaranteed_lock_counts.insert(*unique_weight, guaranteed_count);
+        trace!("guaranteed_lock_counts: {}", address_book.guaranteed_lock_counts.len());
         address_book.uncontended_task_ids.remove(&unique_weight);
     }
 
@@ -739,6 +740,7 @@ impl ScheduleStage {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.guaranteed_task_ids) {
                     let count = address_book.guaranteed_lock_counts.get_mut(&task_id).unwrap();
+                    trace!("guaranteed lock decrease: {} => {}", *count, *count -1);
                     *count -= 1;
                     if *count == 0 {
                         address_book.guaranteed_lock_counts.remove(&task_id);
