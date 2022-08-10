@@ -727,23 +727,20 @@ impl ScheduleStage {
             let newly_uncontended_while_queued = address_book.reset_lock(&mut l);
 
             let page = l.target.page();
-            if page.next_usage == Usage::Unused {
-                if newly_uncontended_while_queued {
-                    // don't insert too eargarly for next_usage != Unused case
-                    if let Some(uw) = page.contended_unique_weights.last() {
-                        address_book.uncontended_task_ids.insert(*uw);
-                    }
+            if newly_uncontended_while_queued {
+                // don't insert too eargarly for next_usage != Unused case
+                if let Some(uw) = page.contended_unique_weights.last() {
+                    address_book.uncontended_task_ids.insert(*uw);
                 }
-            } else {
-                if page.current_usage == Usage::Unused {
-                    page.switch_to_next_usage();
-                    for task_id in std::mem::take(&mut page.guaranteed_task_ids) {
-                        if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&task_id) {
-                            *count -= 1;
-                            if *count == 0 {
-                                address_book.guaranteed_lock_counts.remove(&task_id);
-                                address_book.runnable_guaranteed_task_ids.insert(task_id);
-                            }
+            }
+            if page.current_usage == Usage::Unused {
+                page.switch_to_next_usage();
+                for task_id in std::mem::take(&mut page.guaranteed_task_ids) {
+                    if let Some(count) = address_book.guaranteed_lock_counts.get_mut(&task_id) {
+                        *count -= 1;
+                        if *count == 0 {
+                            address_book.guaranteed_lock_counts.remove(&task_id);
+                            address_book.runnable_guaranteed_task_ids.insert(task_id);
                         }
                     }
                 }
