@@ -190,6 +190,8 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
+        let LockAttempt {target, requested_usage, status} = attempt;
+
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut target.0) };
 
                 match page.current_usage {
@@ -213,7 +215,7 @@ impl AddressBook {
                         }
                         RequestedUsage::Writable => {
                             if from_runnable {
-                                Self::remember_address_contention(unique_weight, &mut attempt);
+                                Self::remember_address_contention(&mut page, unique_weight);
                                 *status = LockStatus::Failed;
                             } else {
                                 match page.next_usage {
@@ -233,7 +235,7 @@ impl AddressBook {
                     },
                     Usage::Writable => {
                         if from_runnable {
-                            Self::remember_address_contention(unique_weight, &mut attempt);
+                            Self::remember_address_contention(&mut page, unique_weight);
                             *status = LockStatus::Failed;
                         } else {
                             match page.next_usage {
@@ -253,12 +255,12 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn remember_address_contention(unique_weight: &UniqueWeight, a: &mut LockAttempt) {
-        a.target.page().contended_unique_weights.insert(*unique_weight);
+    fn remember_address_contention(page: &mut Page, unique_weight: &UniqueWeight) {
+        page.contended_unique_weights.insert(*unique_weight);
     }
 
     #[inline(never)]
-    fn forget_address_contention(unique_weight: &UniqueWeight, a: &mut LockAttempt) {
+    fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, a: &mut LockAttempt) {
         a.target.page().contended_unique_weights.remove(unique_weight);
     }
 
@@ -678,7 +680,7 @@ impl ScheduleStage {
     ) {
         for mut l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
-            AddressBook::forget_address_contention(&unique_weight, &mut l);
+            address_book.forget_address_contention(&unique_weight, &mut l);
         }
 
         address_book.uncontended_task_ids.remove(&unique_weight);
@@ -692,7 +694,7 @@ impl ScheduleStage {
         guaranteed_count: usize,
     ) {
         for mut l in lock_attempts {
-            AddressBook::forget_address_contention(&unique_weight, &mut l);
+            address_book.forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Guaranteed => {
                     l.target.page().guaranteed_task_ids.insert(*unique_weight);
