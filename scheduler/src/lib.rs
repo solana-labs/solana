@@ -179,7 +179,7 @@ pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
     runnable_guaranteed_task_ids: WeightedTaskIds,
-    guaranteed_lock_counts: std:collections::HashMap<UniqueWeight, usize>, 
+    guaranteed_lock_counts: std::collections::HashMap<UniqueWeight, usize>, 
 }
 
 impl AddressBook {
