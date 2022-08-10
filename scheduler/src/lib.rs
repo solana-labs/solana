@@ -259,8 +259,7 @@ impl AddressBook {
                 self.unlock(attempt)
             },
             LockStatus::Guaranteed => {
-                panic!();
-                //self.cancel(attempt);
+                self.cancel(attempt);
                 false
             }
             LockStatus::Failed => {
@@ -306,6 +305,26 @@ impl AddressBook {
         }
 
         still_queued
+    }
+
+    #[inline(never)]
+    fn reset(&mut self, attempt: &mut LockAttempt) {
+        //debug_assert!(attempt.is_success());
+
+        let mut newly_uncontended = false;
+        let mut still_queued = false;
+
+        let mut page = attempt.target.page();
+
+        match page.next_usage {
+            Usage::Unused => {
+                unreachable!();
+            },
+            // support multiple readonly locks!
+            Usage::Readonly(_) | Usage::Writable => {
+                page.next_usage = Usage::Unused;
+            },
+        }
     }
 
     pub fn preloader(&self) -> Preloader {
