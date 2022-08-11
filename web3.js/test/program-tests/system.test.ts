@@ -14,7 +14,7 @@ import {
   LAMPORTS_PER_SOL,
 } from '../../src';
 import {NONCE_ACCOUNT_LENGTH} from '../../src/nonce-account';
-import {sleep} from '../../src/util/sleep';
+import {sleep} from '../../src/utils/sleep';
 import {helpers} from '../mocks/rpc-http';
 import {url} from '../url';
 

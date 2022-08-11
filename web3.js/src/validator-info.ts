@@ -7,7 +7,7 @@ import {
 } from 'superstruct';
 
 import * as Layout from './layout';
-import * as shortvec from './util/shortvec-encoding';
+import * as shortvec from './utils/shortvec-encoding';
 import {PublicKey} from './publickey';
 
 export const VALIDATOR_INFO_KEY = new PublicKey(

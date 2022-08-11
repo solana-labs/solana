@@ -1,6 +1,6 @@
 import {expect} from 'chai';
 
-import {decodeLength, encodeLength} from '../src/util/shortvec-encoding';
+import {decodeLength, encodeLength} from '../src/utils/shortvec-encoding';
 
 function checkDecodedArray(array: Array<number>, expectedValue: number) {
   expect(decodeLength(array)).to.eq(expectedValue);

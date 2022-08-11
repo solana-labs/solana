@@ -1,6 +1,6 @@
 import {expect} from 'chai';
 
-import {clusterApiUrl} from '../src/util/cluster';
+import {clusterApiUrl} from '../src/utils/cluster';
 
 describe('Cluster Util', () => {
   it('invalid', () => {

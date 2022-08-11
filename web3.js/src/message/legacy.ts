@@ -6,8 +6,8 @@ import {PublicKey} from '../publickey';
 import type {Blockhash} from '../blockhash';
 import * as Layout from '../layout';
 import {PACKET_DATA_SIZE} from '../transaction/constants';
-import * as shortvec from '../util/shortvec-encoding';
-import {toBuffer} from '../util/to-buffer';
+import * as shortvec from '../utils/shortvec-encoding';
+import {toBuffer} from '../utils/to-buffer';
 import {CompiledInstruction, MessageHeader} from './index';
 
 /**
