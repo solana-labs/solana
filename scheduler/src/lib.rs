@@ -434,6 +434,10 @@ impl TaskQueue {
     ) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
         self.tasks.last_entry()
     }
+
+    fn task_count(&self) -> usize {
+        self.tasks.len()
+    }
 }
 
 #[inline(never)]
