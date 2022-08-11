@@ -14,8 +14,8 @@ struct PrioritizationFeeMetrics {
     // this counter and `relevant_writable_accounts_count`.
     total_writable_accounts_count: u64,
 
-    // Count of writeable accounts those minimum prioritization fee is higher than minimum transaction fee
-    // in this slot.
+    // Count of writeable accounts with a minimum prioritization fee higher than the minimum transaction
+    // fee for this slot.
     relevant_writable_accounts_count: u64,
 
     // Total prioritization fees included in this slot.
