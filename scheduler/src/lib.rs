@@ -34,6 +34,7 @@ pub struct ExecutionEnvironment {
     //accounts: Vec<i8>,
     pub cu: usize,
     pub task: Task,
+    pub remembered: bool,
 }
 
 impl ExecutionEnvironment {
@@ -189,7 +190,7 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let LockAttempt {target, requested_usage, status} = attempt;
+        let LockAttempt {target, requested_usage, status, remembered} = attempt;
 
                 let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut target.0) };
 
@@ -215,6 +216,7 @@ impl AddressBook {
                         RequestedUsage::Writable => {
                             if from_runnable {
                                 Self::remember_address_contention(&mut page, unique_weight);
+                                *remembered = true;
                                 *status = LockStatus::Failed;
                             } else {
                                 match page.next_usage {
@@ -235,6 +237,7 @@ impl AddressBook {
                     Usage::Writable => {
                         if from_runnable {
                             Self::remember_address_contention(&mut page, unique_weight);
+                            *remembered = true;
                             *status = LockStatus::Failed;
                         } else {
                             match page.next_usage {
