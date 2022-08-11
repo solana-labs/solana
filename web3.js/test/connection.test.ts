@@ -19,7 +19,7 @@ import {
   Keypair,
   Message,
 } from '../src';
-import invariant from '../src/util/assert';
+import invariant from '../src/utils/assert';
 import {MOCK_PORT, url} from './url';
 import {
   AccountInfo,
@@ -35,7 +35,7 @@ import {
   SignatureResult,
   SlotInfo,
 } from '../src/connection';
-import {sleep} from '../src/util/sleep';
+import {sleep} from '../src/utils/sleep';
 import {
   helpers,
   mockErrorMessage,
@@ -49,16 +49,17 @@ import {
   restoreRpcWebSocket,
   mockRpcMessage,
 } from './mocks/rpc-websockets';
-import {TransactionInstruction, TransactionSignature} from '../src/transaction';
+import {
+  TransactionInstruction,
+  TransactionSignature,
+  TransactionExpiredBlockheightExceededError,
+  TransactionExpiredTimeoutError,
+} from '../src/transaction';
 import type {
   SignatureStatus,
   TransactionError,
   KeyedAccountInfo,
 } from '../src/connection';
-import {
-  TransactionExpiredBlockheightExceededError,
-  TransactionExpiredTimeoutError,
-} from '../src/util/tx-expiry-custom-errors';
 
 use(chaiAsPromised);
 

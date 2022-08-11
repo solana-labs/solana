@@ -11,7 +11,7 @@ import {PublicKey} from '../publickey';
 import {SystemProgram} from './system';
 import {SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY} from '../sysvar';
 import {Transaction, TransactionInstruction} from '../transaction';
-import {toBuffer} from '../util/to-buffer';
+import {toBuffer} from '../utils/to-buffer';
 
 /**
  * Vote account info

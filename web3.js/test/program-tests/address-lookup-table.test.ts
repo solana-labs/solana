@@ -9,7 +9,7 @@ import {
   Connection,
   sendAndConfirmTransaction,
 } from '../../src';
-import {sleep} from '../../src/util/sleep';
+import {sleep} from '../../src/utils/sleep';
 import {helpers} from '../mocks/rpc-http';
 import {url} from '../url';
 

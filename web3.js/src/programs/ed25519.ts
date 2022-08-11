@@ -5,7 +5,7 @@ import nacl from 'tweetnacl';
 import {Keypair} from '../keypair';
 import {PublicKey} from '../publickey';
 import {TransactionInstruction} from '../transaction';
-import assert from '../util/assert';
+import assert from '../utils/assert';
 
 const PRIVATE_KEY_BYTES = 64;
 const PUBLIC_KEY_BYTES = 32;

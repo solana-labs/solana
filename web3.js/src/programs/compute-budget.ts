@@ -8,7 +8,7 @@ import {
 } from '../instruction';
 import {PublicKey} from '../publickey';
 import {TransactionInstruction} from '../transaction';
-import {u64} from '../util/bigint';
+import {u64} from '../utils/bigint';
 
 /**
  * Compute Budget Instruction class

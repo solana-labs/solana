@@ -5,8 +5,8 @@ import sha3 from 'js-sha3';
 
 import {PublicKey} from '../publickey';
 import {TransactionInstruction} from '../transaction';
-import assert from '../util/assert';
-import {toBuffer} from '../util/to-buffer';
+import assert from '../utils/assert';
+import {toBuffer} from '../utils/to-buffer';
 
 const {publicKeyCreate, ecdsaSign} = secp256k1;
 
