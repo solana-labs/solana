@@ -3,7 +3,7 @@ use {
     solana_entry::entry::Entry,
     solana_ledger::shred::{
         max_entries_per_n_shred, verify_test_data_shred, ProcessShredsStats, Shred, Shredder,
-        LEGACY_SHRED_DATA_CAPACITY, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+        DATA_SHREDS_PER_FEC_BLOCK, LEGACY_SHRED_DATA_CAPACITY,
     },
     solana_sdk::{
         clock::Slot,
@@ -26,7 +26,7 @@ fn test_multi_fec_block_coding() {
     let slot = 0x1234_5678_9abc_def0;
     let shredder = Shredder::new(slot, slot - 5, 0, 0).unwrap();
     let num_fec_sets = 100;
-    let num_data_shreds = (MAX_DATA_SHREDS_PER_FEC_BLOCK * num_fec_sets) as usize;
+    let num_data_shreds = DATA_SHREDS_PER_FEC_BLOCK * num_fec_sets;
     let keypair0 = Keypair::new();
     let keypair1 = Keypair::new();
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
@@ -67,8 +67,8 @@ fn test_multi_fec_block_coding() {
 
     let mut all_shreds = vec![];
     for i in 0..num_fec_sets {
-        let shred_start_index = (MAX_DATA_SHREDS_PER_FEC_BLOCK * i) as usize;
-        let end_index = shred_start_index + MAX_DATA_SHREDS_PER_FEC_BLOCK as usize - 1;
+        let shred_start_index = DATA_SHREDS_PER_FEC_BLOCK * i;
+        let end_index = shred_start_index + DATA_SHREDS_PER_FEC_BLOCK - 1;
         let fec_set_shreds = data_shreds[shred_start_index..=end_index]
             .iter()
             .cloned()
@@ -99,11 +99,7 @@ fn test_multi_fec_block_coding() {
             shred_info.insert(i * 2, recovered_shred);
         }
 
-        all_shreds.extend(
-            shred_info
-                .into_iter()
-                .take(MAX_DATA_SHREDS_PER_FEC_BLOCK as usize),
-        );
+        all_shreds.extend(shred_info.into_iter().take(DATA_SHREDS_PER_FEC_BLOCK));
     }
 
     let result = Shredder::deshred(&all_shreds[..]).unwrap();
@@ -193,11 +189,11 @@ fn setup_different_sized_fec_blocks(
     let tx0 = system_transaction::transfer(&keypair0, &keypair1.pubkey(), 1, Hash::default());
     let entry = Entry::new(&Hash::default(), 1, vec![tx0]);
 
-    // Make enough entries for `MAX_DATA_SHREDS_PER_FEC_BLOCK + 2` shreds so one
-    // fec set will have `MAX_DATA_SHREDS_PER_FEC_BLOCK` shreds and the next
+    // Make enough entries for `DATA_SHREDS_PER_FEC_BLOCK + 2` shreds so one
+    // fec set will have `DATA_SHREDS_PER_FEC_BLOCK` shreds and the next
     // will have 2 shreds.
-    assert!(MAX_DATA_SHREDS_PER_FEC_BLOCK > 2);
-    let num_shreds_per_iter = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize + 2;
+    assert!(DATA_SHREDS_PER_FEC_BLOCK > 2);
+    let num_shreds_per_iter = DATA_SHREDS_PER_FEC_BLOCK + 2;
     let num_entries = max_entries_per_n_shred(
         &entry,
         num_shreds_per_iter as u64,

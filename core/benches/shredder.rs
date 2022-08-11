@@ -9,7 +9,7 @@ use {
     solana_entry::entry::{create_ticks, Entry},
     solana_ledger::shred::{
         max_entries_per_n_shred, max_ticks_per_n_shreds, ProcessShredsStats, Shred, ShredFlags,
-        Shredder, LEGACY_SHRED_DATA_CAPACITY, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+        Shredder, DATA_SHREDS_PER_FEC_BLOCK, LEGACY_SHRED_DATA_CAPACITY,
     },
     solana_perf::test_tx,
     solana_sdk::{hash::Hash, packet::PACKET_DATA_SIZE, signature::Keypair},
@@ -153,13 +153,12 @@ fn bench_deserialize_hdr(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_shredder_coding(bencher: &mut Bencher) {
-    let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
+    let symbol_count = DATA_SHREDS_PER_FEC_BLOCK;
     let data_shreds = make_shreds(symbol_count);
     bencher.iter(|| {
         Shredder::generate_coding_shreds(
             &data_shreds[..symbol_count],
-            true, // is_last_in_slot
-            0,    // next_code_index
+            0, // next_code_index
         )
         .len();
     })
@@ -167,12 +166,11 @@ fn bench_shredder_coding(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_shredder_decoding(bencher: &mut Bencher) {
-    let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK as usize;
+    let symbol_count = DATA_SHREDS_PER_FEC_BLOCK;
     let data_shreds = make_shreds(symbol_count);
     let coding_shreds = Shredder::generate_coding_shreds(
         &data_shreds[..symbol_count],
-        true, // is_last_in_slot
-        0,    // next_code_index
+        0, // next_code_index
     );
     bencher.iter(|| {
         Shredder::try_recovery(coding_shreds[..].to_vec()).unwrap();
@@ -181,18 +179,18 @@ fn bench_shredder_decoding(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_shredder_coding_raptorq(bencher: &mut Bencher) {
-    let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK;
-    let data = make_concatenated_shreds(symbol_count as usize);
+    let symbol_count = DATA_SHREDS_PER_FEC_BLOCK;
+    let data = make_concatenated_shreds(symbol_count);
     bencher.iter(|| {
         let encoder = Encoder::with_defaults(&data, VALID_SHRED_DATA_LEN as u16);
-        encoder.get_encoded_packets(symbol_count);
+        encoder.get_encoded_packets(symbol_count as u32);
     })
 }
 
 #[bench]
 fn bench_shredder_decoding_raptorq(bencher: &mut Bencher) {
-    let symbol_count = MAX_DATA_SHREDS_PER_FEC_BLOCK;
-    let data = make_concatenated_shreds(symbol_count as usize);
+    let symbol_count = DATA_SHREDS_PER_FEC_BLOCK;
+    let data = make_concatenated_shreds(symbol_count);
     let encoder = Encoder::with_defaults(&data, VALID_SHRED_DATA_LEN as u16);
     let mut packets = encoder.get_encoded_packets(symbol_count as u32);
     packets.shuffle(&mut rand::thread_rng());
