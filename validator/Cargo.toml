@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-validator"
 default-run = "solana-validator"
 
 [dependencies]
-chrono = { version = "0.4.11", features = ["serde"] }
+chrono = { version = "0.4.21", features = ["serde"] }
 clap = "2.33.1"
 console = "0.15.0"
 core_affinity = "0.5.10"
@@ -59,7 +59,7 @@ symlink = "0.1.0"
 jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["unprefixed_malloc_on_supported_platforms"] }
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.126"
+libc = "0.2.129"
 signal-hook = "0.3.14"
 
 [package.metadata.docs.rs]

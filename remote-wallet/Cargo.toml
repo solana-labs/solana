@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-remote-wallet"
 
 [dependencies]
 console = "0.15.0"
-dialoguer = "0.10.1"
+dialoguer = "0.10.2"
 hidapi = { version = "1.4.1", default-features = false, optional = true }
 log = "0.4.17"
 num-derive = { version = "0.3" }

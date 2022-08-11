@@ -99,7 +99,11 @@ const OFFSET_OF_SHRED_VARIANT: usize = SIZE_OF_SIGNATURE;
 const OFFSET_OF_SHRED_SLOT: usize = SIZE_OF_SIGNATURE + SIZE_OF_SHRED_VARIANT;
 const OFFSET_OF_SHRED_INDEX: usize = OFFSET_OF_SHRED_SLOT + SIZE_OF_SHRED_SLOT;
 
-pub const MAX_DATA_SHREDS_PER_FEC_BLOCK: u32 = 32;
+// Shreds are uniformly split into erasure batches with a "target" number of
+// data shreds per each batch as below. The actual number of data shreds in
+// each erasure batch depends on the number of shreds obtained from serializing
+// a &[Entry].
+pub const DATA_SHREDS_PER_FEC_BLOCK: usize = 32;
 
 // For legacy tests and benchmarks.
 const_assert_eq!(LEGACY_SHRED_DATA_CAPACITY, 1051);

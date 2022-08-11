@@ -2,7 +2,7 @@
 
 ## Problem
 
-In the Solidity langauge it is permitted to return any number of values from a function,
+In the Solidity language it is permitted to return any number of values from a function,
 for example a variable length string can be returned:
 
 ```
