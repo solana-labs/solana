@@ -530,7 +530,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn get_heaviest_from_contended(address_book: &mut AddressBook) -> Option<TaskId> {
         trace!("n_u_a len(): {}", address_book.uncontended_task_ids.len());
-        address_book.uncontended_task_ids.pop_last().map(|w| *w)
+        address_book.uncontended_task_ids.pop_last()
     }
 
     #[inline(never)]
