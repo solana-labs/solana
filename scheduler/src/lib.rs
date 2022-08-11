@@ -443,7 +443,7 @@ fn attempt_lock_for_execution<'a>(
     let mut guaranteed_count = 0;
     use rayon::iter::IntoParallelRefMutIterator;
 
-    for attempt in placeholder_attempts.par_iter_mut() {
+    placeholder_attempts.par_iter_mut().for_each(|attempt| {
         AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
         match attempt.status {
             LockStatus::Succeded => {},
@@ -454,7 +454,7 @@ fn attempt_lock_for_execution<'a>(
                 guaranteed_count += 1;
             },
         }
-    }
+    });
 
     (unlockable_count, guaranteed_count, placeholder_attempts)
 }
