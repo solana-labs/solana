@@ -17,7 +17,6 @@ export * from './stake-program';
 export * from './system-program';
 export * from './secp256k1-program';
 export * from './transaction';
-export * from './transaction-constants';
 export * from './validator-info';
 export * from './vote-account';
 export * from './vote-program';
