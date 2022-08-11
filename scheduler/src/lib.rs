@@ -528,9 +528,9 @@ impl ScheduleStage {
     */
 
     #[inline(never)]
-    fn get_heaviest_from_contended(address_book: &AddressBook) -> Option<TaskId> {
+    fn get_heaviest_from_contended(address_book: &mut AddressBook) -> Option<TaskId> {
         trace!("n_u_a len(): {}", address_book.uncontended_task_ids.len());
-        address_book.uncontended_task_ids.last().map(|w| *w)
+        address_book.uncontended_task_ids.pop_last().map(|w| *w)
     }
 
     #[inline(never)]
@@ -618,8 +618,8 @@ impl ScheduleStage {
             );
 
             if unlockable_count > 0 {
-                //trace!("ensure_unlock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
-                Self::ensure_unlock_for_failed_execution(
+                //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
+                Self::reset_lock_for_failed_execution(
                     address_book,
                     &unique_weight,
                     &mut populated_lock_attempts,
@@ -682,8 +682,6 @@ impl ScheduleStage {
             // ensure to remove remaining refs of this unique_weight
             address_book.forget_address_contention(&unique_weight, &mut l);
         }
-
-        address_book.uncontended_task_ids.remove(&unique_weight);
     }
 
     #[inline(never)]
@@ -709,11 +707,10 @@ impl ScheduleStage {
         }
         address_book.guaranteed_lock_counts.insert(*unique_weight, guaranteed_count);
         trace!("guaranteed_lock_counts: {}", address_book.guaranteed_lock_counts.len());
-        address_book.uncontended_task_ids.remove(&unique_weight);
     }
 
     #[inline(never)]
-    fn ensure_unlock_for_failed_execution(
+    fn reset_lock_for_failed_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut Vec<LockAttempt>,
@@ -726,13 +723,6 @@ impl ScheduleStage {
             //}
 
             // todo: mem::forget and panic in LockAttempt::drop()
-        }
-
-        // revert because now contended again
-        if !from_runnable {
-            //error!("n u a len() before: {}", address_book.uncontended_task_ids.len());
-            address_book.uncontended_task_ids.remove(&unique_weight);
-            //error!("n u a len() after: {}", address_book.uncontended_task_ids.len());
         }
     }
 
