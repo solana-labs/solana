@@ -7,7 +7,8 @@ use {
     log::*,
     serde::{Deserialize, Serialize},
     solana_core::{
-        consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
+        consensus::Tower, staked_nodes_updater_service::StakedNodesOverrides,
+        tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::bank_forks::BankForks,
@@ -17,6 +18,7 @@ use {
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
+        error,
         fmt::{self, Display},
         net::SocketAddr,
         path::{Path, PathBuf},
@@ -41,6 +43,7 @@ pub struct AdminRpcRequestMetadata {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub tower_storage: Arc<dyn TowerStorage>,
+    pub staked_nodes_overrides: Arc<RwLock<StakedNodesOverrides>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
@@ -175,6 +178,9 @@ pub trait AdminRpc {
         require_tower: bool,
     ) -> Result<()>;
 
+    #[rpc(meta, name = "setStakedNodesOverrides")]
+    fn set_staked_nodes_overrides(&self, meta: Self::Metadata, path: String) -> Result<()>;
+
     #[rpc(meta, name = "contactInfo")]
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo>;
 }
@@ -292,6 +298,21 @@ impl AdminRpc for AdminRpcImpl {
         })?;
 
         AdminRpcImpl::set_identity_keypair(meta, identity_keypair, require_tower)
+    }
+
+    fn set_staked_nodes_overrides(&self, meta: Self::Metadata, path: String) -> Result<()> {
+        let loaded_config = load_staked_nodes_overrides(&path).map_err(|err| {
+            error!(
+                "Failed to load staked nodes overrides from {}: {}",
+                &path, err
+            );
+            jsonrpc_core::error::Error::internal_error()
+        })?;
+        let mut write_staked_nodes = meta.staked_nodes_overrides.write().unwrap();
+        write_staked_nodes.staked_map_id = loaded_config.staked_map_id;
+        info!("Staked nodes overrides loaded from {}", path);
+        debug!("overrides map: {:?}", write_staked_nodes.staked_map_id);
+        Ok(())
     }
 
     fn contact_info(&self, meta: Self::Metadata) -> Result<AdminRpcContactInfo> {
@@ -425,4 +446,18 @@ pub async fn connect(ledger_path: &Path) -> std::result::Result<gen_client::Clie
 
 pub fn runtime() -> jsonrpc_server_utils::tokio::runtime::Runtime {
     jsonrpc_server_utils::tokio::runtime::Runtime::new().expect("new tokio runtime")
+}
+
+pub fn load_staked_nodes_overrides(
+    path: &String,
+) -> std::result::Result<StakedNodesOverrides, Box<dyn error::Error>> {
+    debug!("Loading staked nodes overrides configuration from {}", path);
+    if Path::new(&path).exists() {
+        let file = std::fs::File::open(path)?;
+        Ok(serde_yaml::from_reader(file)?)
+    } else {
+        Err(
+            format!("Staked nodes overrides provided '{}' a non-existing file path.", path).into()
+        )
+    }
 }

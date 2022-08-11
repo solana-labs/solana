@@ -56,6 +56,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         accounts_db_test_hash_calculation: config.accounts_db_test_hash_calculation,
         accounts_db_skip_shrink: config.accounts_db_skip_shrink,
         tpu_coalesce_ms: config.tpu_coalesce_ms,
+        staked_nodes_overrides: config.staked_nodes_overrides.clone(),
         validator_exit: Arc::new(RwLock::new(Exit::default())),
         poh_hashes_per_batch: config.poh_hashes_per_batch,
         no_wait_for_vote_to_start_leader: config.no_wait_for_vote_to_start_leader,

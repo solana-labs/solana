@@ -8,6 +8,7 @@ use {
         rpc_client::RpcClient,
     },
     solana_core::{
+        staked_nodes_updater_service::StakedNodesOverrides,
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
@@ -115,6 +116,7 @@ pub struct TestValidatorGenesis {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
+    pub staked_nodes_overrides: Arc<RwLock<StakedNodesOverrides>>,
     pub max_ledger_shreds: Option<u64>,
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
@@ -144,6 +146,7 @@ impl Default for TestValidatorGenesis {
             validator_exit: Arc::<RwLock<Exit>>::default(),
             start_progress: Arc::<RwLock<ValidatorStartProgress>>::default(),
             authorized_voter_keypairs: Arc::<RwLock<Vec<Arc<Keypair>>>>::default(),
+            staked_nodes_overrides: Arc::new(RwLock::new(StakedNodesOverrides::default())),
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
@@ -785,6 +788,7 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
+            staked_nodes_overrides: config.staked_nodes_overrides.clone(),
             accounts_db_config,
             runtime_config,
             ..ValidatorConfig::default_for_test()

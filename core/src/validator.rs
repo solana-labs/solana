@@ -17,6 +17,7 @@ use {
         serve_repair_service::ServeRepairService,
         sigverify,
         snapshot_packager_service::SnapshotPackagerService,
+        staked_nodes_updater_service::StakedNodesOverrides,
         stats_reporter_service::StatsReporterService,
         system_monitor_service::{verify_net_stats_access, SystemMonitorService},
         tower_storage::TowerStorage,
@@ -168,6 +169,7 @@ pub struct ValidatorConfig {
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
     pub tpu_coalesce_ms: u64,
+    pub staked_nodes_overrides: Arc<RwLock<StakedNodesOverrides>>,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
     pub accounts_shrink_ratio: AccountShrinkThreshold,
@@ -230,6 +232,7 @@ impl Default for ValidatorConfig {
             accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
+            staked_nodes_overrides: Arc::new(RwLock::new(StakedNodesOverrides::default())),
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
             accounts_shrink_ratio: AccountShrinkThreshold::default(),
@@ -1038,6 +1041,7 @@ impl Validator {
             config.runtime_config.log_messages_bytes_limit,
             config.enable_quic_servers,
             &staked_nodes,
+            config.staked_nodes_overrides.clone(),
         );
 
         datapoint_info!(

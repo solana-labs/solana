@@ -702,6 +702,7 @@ fn main() {
             start_time: std::time::SystemTime::now(),
             validator_exit: genesis.validator_exit.clone(),
             authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
+            staked_nodes_overrides: genesis.staked_nodes_overrides.clone(),
             post_init: admin_service_post_init.clone(),
             tower_storage: tower_storage.clone(),
         },
