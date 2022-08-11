@@ -8969,14 +8969,8 @@ pub mod tests {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        let coding1 = Shredder::generate_coding_shreds(
-            &shreds, false, // is_last_in_slot
-            0,     // next_code_index
-        );
-        let coding2 = Shredder::generate_coding_shreds(
-            &shreds, true, // is_last_in_slot
-            0,    // next_code_index
-        );
+        let coding1 = Shredder::generate_coding_shreds(&shreds, /*next_code_index:*/ 0);
+        let coding2 = Shredder::generate_coding_shreds(&shreds, /*next_code_index:*/ 1);
         for shred in &shreds {
             info!("shred {:?}", shred);
         }
