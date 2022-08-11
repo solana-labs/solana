@@ -749,7 +749,7 @@ impl ScheduleStage {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.guaranteed_task_ids).keys() {
                     match address_book.guaranteed_lock_counts.entry(*task_id) {
-                        std::collections::hash_map::Occupied(entry) => {
+                        std::collections::hash_map::Entry::Occupied(entry) => {
                             let count = entry.get_mut();
                             trace!("guaranteed lock decrease: {} => {}", *count, *count -1);
                             *count -= 1;
@@ -758,7 +758,7 @@ impl ScheduleStage {
                                 address_book.runnable_guaranteed_task_ids.insert(*task_id, ());
                             }
                         },
-                        std::collections::hash_map::Vacant(_) => {
+                        std::collections::hash_map::Entry::Vacant(_) => {
                             unreachable!();
                         }
                     }
