@@ -41,7 +41,7 @@ use {
     },
 };
 
-pub const MAX_PARALLEL_RPC_CONNECTIONS_FOR_SNAPSHOT: usize = 32;
+pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
 
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
@@ -305,7 +305,7 @@ fn check_vote_account(
     Ok(())
 }
 
-/// Struct to wrap the return value from get_rpc_node().  The `rpc_contact_info` is the peer to
+/// Struct to wrap the return value from get_rpc_nodes().  The `rpc_contact_info` is the peer to
 /// download from, and `snapshot_hash` is the (optional) full and (optional) incremental
 /// snapshots to download.
 #[derive(Debug)]
@@ -689,7 +689,7 @@ fn get_rpc_nodes(
                     rpc_contact_info: peer_snapshot_hash.rpc_contact_info.clone(),
                     snapshot_hash: Some(peer_snapshot_hash.snapshot_hash),
                 })
-                .take(MAX_PARALLEL_RPC_CONNECTIONS_FOR_SNAPSHOT)
+                .take(MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION)
                 .collect();
             return rpc_node_results;
         }
