@@ -49,7 +49,7 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{
         vote_instruction,
-        vote_state::{VoteInit, VoteState},
+        vote_state::{self, VoteInit},
     },
     std::{
         collections::HashMap,
@@ -706,7 +706,7 @@ impl LocalCluster {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
                     stake_state::stake_from(&stake_account),
-                    VoteState::from(&vote_account),
+                    vote_state::from(&vote_account),
                 ) {
                     (Some(stake_state), Some(vote_state)) => {
                         if stake_state.delegation.voter_pubkey != vote_account_pubkey

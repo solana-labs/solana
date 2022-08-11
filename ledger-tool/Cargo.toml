@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-ledger-tool"
 
 [dependencies]
 bs58 = "0.4.0"
-chrono = "0.4.11"
+chrono = "0.4.21"
 clap = "2.33.1"
 crossbeam-channel = "0.5"
 csv = "1.1.6"
@@ -21,11 +21,12 @@ itertools = "0.10.3"
 log = { version = "0.4.17" }
 regex = "1"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.81"
+serde_json = "1.0.83"
 solana-clap-utils = { path = "../clap-utils", version = "=1.12.0" }
 solana-cli-output = { path = "../cli-output", version = "=1.12.0" }
 solana-core = { path = "../core", version = "=1.12.0" }
 solana-entry = { path = "../entry", version = "=1.12.0" }
+solana-geyser-plugin-manager = { path = "../geyser-plugin-manager", version = "=1.12.0" }
 solana-ledger = { path = "../ledger", version = "=1.12.0" }
 solana-logger = { path = "../logger", version = "=1.12.0" }
 solana-measure = { path = "../measure", version = "=1.12.0" }
@@ -43,7 +44,7 @@ jemallocator = { package = "tikv-jemallocator", version = "0.4.1", features = ["
 
 [dev-dependencies]
 assert_cmd = "2.0"
-bytecount = "0.6.2"
+bytecount = "0.6.3"
 
 [target."cfg(unix)".dependencies]
 signal-hook = "0.3.14"

@@ -805,6 +805,14 @@ export type TokenBalance = {
 export type ParsedConfirmedTransactionMeta = ParsedTransactionMeta;
 
 /**
+ * Collection of addresses loaded by a transaction using address table lookups
+ */
+export type LoadedAddresses = {
+  writable: Array<PublicKey>;
+  readonly: Array<PublicKey>;
+};
+
+/**
  * Metadata for a parsed transaction on the ledger
  */
 export type ParsedTransactionMeta = {
@@ -824,6 +832,8 @@ export type ParsedTransactionMeta = {
   postTokenBalances?: Array<TokenBalance> | null;
   /** The error result of transaction processing */
   err: TransactionError | null;
+  /** The collection of addresses loaded using address lookup tables */
+  loadedAddresses?: LoadedAddresses;
 };
 
 export type CompiledInnerInstruction = {
@@ -874,6 +884,8 @@ export type TransactionResponse = {
 
 /**
  * A confirmed transaction on the ledger
+ *
+ * @deprecated Deprecated since Solana v1.8.0.
  */
 export type ConfirmedTransaction = {
   /** The slot during which the transaction was processed */
@@ -1003,7 +1015,9 @@ export type BlockResponse = {
 };
 
 /**
- * A ConfirmedBlock on the ledger
+ * A confirmed block on the ledger
+ *
+ * @deprecated Deprecated since Solana v1.8.0.
  */
 export type ConfirmedBlock = {
   /** Blockhash of this block */
@@ -1794,6 +1808,11 @@ const TokenBalanceResult = pick({
   uiTokenAmount: TokenAmountResult,
 });
 
+const LoadedAddressesResult = pick({
+  writable: array(PublicKeyFromString),
+  readonly: array(PublicKeyFromString),
+});
+
 /**
  * @internal
  */
@@ -1821,6 +1840,7 @@ const ConfirmedTransactionMetaResult = pick({
   logMessages: optional(nullable(array(string()))),
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
+  loadedAddresses: optional(LoadedAddressesResult),
 });
 
 /**
@@ -1844,6 +1864,7 @@ const ParsedConfirmedTransactionMetaResult = pick({
   logMessages: optional(nullable(array(string()))),
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
+  loadedAddresses: optional(LoadedAddressesResult),
 });
 
 /**
@@ -2850,14 +2871,17 @@ export class Connection {
    */
   async getParsedAccountInfo(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<
     RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>
   > {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
       'jsonParsed',
+      config,
     );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = create(

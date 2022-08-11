@@ -1125,6 +1125,7 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
+                invoked_program_id.clone(),
             ],
             Languages::Rust => vec![
                 system_program::id(),
@@ -1330,13 +1331,6 @@ fn test_program_bpf_invoke_sanity() {
                 invoked_program_id.clone(),
                 invoked_program_id.clone(),
             ],
-            None,
-        );
-
-        do_invoke_failure_test_local(
-            TEST_EXECUTABLE_LAMPORTS,
-            TransactionError::InstructionError(0, InstructionError::ExecutableLamportChange),
-            &[invoke_program_id.clone()],
             None,
         );
 
@@ -1676,7 +1670,7 @@ fn assert_instruction_count() {
             ("solana_bpf_rust_param_passing", 146),
             ("solana_bpf_rust_rand", 469),
             ("solana_bpf_rust_sanity", 52054),
-            ("solana_bpf_rust_secp256k1_recover", 25707),
+            ("solana_bpf_rust_secp256k1_recover", 91195),
             ("solana_bpf_rust_sha", 24081),
         ]);
     }

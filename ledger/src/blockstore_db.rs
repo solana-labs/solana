@@ -455,6 +455,16 @@ impl Rocks {
         Ok(())
     }
 
+    fn delete_file_in_range_cf(
+        &self,
+        cf: &ColumnFamily,
+        from_key: &[u8],
+        to_key: &[u8],
+    ) -> Result<()> {
+        self.db.delete_file_in_range_cf(cf, from_key, to_key)?;
+        Ok(())
+    }
+
     fn iterator_cf<C>(&self, cf: &ColumnFamily, iterator_mode: IteratorMode<C::Index>) -> DBIterator
     where
         C: Column,
@@ -509,7 +519,7 @@ impl Rocks {
     ///
     /// Full list of properties that return int values could be found
     /// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
-    fn get_int_property_cf(&self, cf: &ColumnFamily, name: &str) -> Result<i64> {
+    fn get_int_property_cf(&self, cf: &ColumnFamily, name: &'static std::ffi::CStr) -> Result<i64> {
         match self.db.property_int_value_cf(cf, name) {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
             Ok(None) => Ok(0),
@@ -1059,7 +1069,10 @@ impl Database {
     {
         let cf = self.cf_handle::<C>();
         let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
-        Ok(iter.map(|(key, value)| (C::index(&key), value)))
+        Ok(iter.map(|pair| {
+            let (key, value) = pair.unwrap();
+            (C::index(&key), value)
+        }))
     }
 
     #[inline]
@@ -1117,6 +1130,17 @@ impl Database {
         batch.delete_range_cf::<C>(cf, from_index, to_index)
     }
 
+    pub fn delete_file_in_range_cf<C>(&self, from: Slot, to: Slot) -> Result<()>
+    where
+        C: Column + ColumnName,
+    {
+        self.backend.delete_file_in_range_cf(
+            self.cf_handle::<C>(),
+            &C::key(C::as_index(from)),
+            &C::key(C::as_index(to)),
+        )
+    }
+
     pub fn is_primary_access(&self) -> bool {
         self.backend.is_primary_access()
     }
@@ -1153,7 +1177,10 @@ where
     ) -> Result<impl Iterator<Item = (C::Index, Box<[u8]>)> + '_> {
         let cf = self.handle();
         let iter = self.backend.iterator_cf::<C>(cf, iterator_mode);
-        Ok(iter.map(|(key, value)| (C::index(&key), value)))
+        Ok(iter.map(|pair| {
+            let (key, value) = pair.unwrap();
+            (C::index(&key), value)
+        }))
     }
 
     pub fn delete_slot(
@@ -1235,7 +1262,7 @@ where
     ///
     /// Full list of properties that return int values could be found
     /// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
-    pub fn get_int_property(&self, name: &str) -> Result<i64> {
+    pub fn get_int_property(&self, name: &'static std::ffi::CStr) -> Result<i64> {
         self.backend.get_int_property_cf(self.handle(), name)
     }
 }

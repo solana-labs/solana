@@ -21,6 +21,8 @@ solana-sdk = { path = "..", version = "=1.12.0" }
 tar = "0.4.38"
 
 [dev-dependencies]
+assert_cmd = "*"
+predicates = "2.0"
 serial_test = "*"
 
 [features]

@@ -99,7 +99,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-    solana_vote_program::vote_state::VoteState,
+    solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -259,14 +259,23 @@ impl ValidatorConfig {
 pub enum ValidatorStartProgress {
     Initializing, // Catch all, default state
     SearchingForRpcService,
-    DownloadingSnapshot { slot: Slot, rpc_addr: SocketAddr },
+    DownloadingSnapshot {
+        slot: Slot,
+        rpc_addr: SocketAddr,
+    },
     CleaningBlockStore,
     CleaningAccounts,
     LoadingLedger,
-    ProcessingLedger { slot: Slot, max_slot: Slot },
+    ProcessingLedger {
+        slot: Slot,
+        max_slot: Slot,
+    },
     StartingServices,
     Halted, // Validator halted due to `--dev-halt-at-slot` argument
-    WaitingForSupermajority,
+    WaitingForSupermajority {
+        slot: Slot,
+        gossip_stake_percent: u64,
+    },
 
     // `Running` is the terminal state once the validator fully starts and all services are
     // operational
@@ -1206,7 +1215,7 @@ impl Validator {
 
 fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
     if let Some(account) = &bank.get_account(vote_account) {
-        if let Some(vote_state) = VoteState::from(account) {
+        if let Some(vote_state) = vote_state::from(account) {
             return !vote_state.votes.is_empty();
         }
     }
@@ -1890,20 +1899,20 @@ fn wait_for_supermajority(
 ) -> Result<bool, ValidatorError> {
     match config.wait_for_supermajority {
         None => Ok(false),
-        Some(wait_for_supermajority) => {
+        Some(wait_for_supermajority_slot) => {
             if let Some(process_blockstore) = process_blockstore {
                 process_blockstore.process();
             }
 
             let bank = bank_forks.read().unwrap().working_bank();
-            match wait_for_supermajority.cmp(&bank.slot()) {
+            match wait_for_supermajority_slot.cmp(&bank.slot()) {
                 std::cmp::Ordering::Less => return Ok(false),
                 std::cmp::Ordering::Greater => {
                     error!(
                         "Ledger does not have enough data to wait for supermajority, \
                              please enable snapshot fetch. Has {} needs {}",
                         bank.slot(),
-                        wait_for_supermajority
+                        wait_for_supermajority_slot
                     );
                     return Err(ValidatorError::NotEnoughLedgerData);
                 }
@@ -1921,7 +1930,6 @@ fn wait_for_supermajority(
                 }
             }
 
-            *start_progress.write().unwrap() = ValidatorStartProgress::WaitingForSupermajority;
             for i in 1.. {
                 if i % 10 == 1 {
                     info!(
@@ -1933,6 +1941,12 @@ fn wait_for_supermajority(
 
                 let gossip_stake_percent =
                     get_stake_percent_in_gossip(&bank, cluster_info, i % 10 == 0);
+
+                *start_progress.write().unwrap() =
+                    ValidatorStartProgress::WaitingForSupermajority {
+                        slot: wait_for_supermajority_slot,
+                        gossip_stake_percent,
+                    };
 
                 if gossip_stake_percent >= WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT {
                     info!(

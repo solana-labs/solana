@@ -4617,7 +4617,7 @@ pub mod tests {
         },
         solana_vote_program::{
             vote_instruction,
-            vote_state::{Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+            vote_state::{self, Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
         spl_token_2022::{
             extension::{
@@ -4937,7 +4937,7 @@ pub mod tests {
             let balance = bank.get_minimum_balance_for_rent_exemption(space);
             let mut vote_account =
                 AccountSharedData::new(balance, space, &solana_vote_program::id());
-            VoteState::to(&versioned, &mut vote_account).unwrap();
+            vote_state::to(&versioned, &mut vote_account).unwrap();
             bank.store_account(vote_pubkey, &vote_account);
         }
 

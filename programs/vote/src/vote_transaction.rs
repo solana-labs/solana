@@ -1,5 +1,5 @@
 use {
-    crate::{vote_instruction, vote_state::Vote},
+    solana_program::vote::{self, state::Vote},
     solana_sdk::{
         clock::Slot,
         hash::Hash,
@@ -19,14 +19,14 @@ pub fn new_vote_transaction(
 ) -> Transaction {
     let votes = Vote::new(slots, bank_hash);
     let vote_ix = if let Some(switch_proof_hash) = switch_proof_hash {
-        vote_instruction::vote_switch(
+        vote::instruction::vote_switch(
             &vote_keypair.pubkey(),
             &authorized_voter_keypair.pubkey(),
             votes,
             switch_proof_hash,
         )
     } else {
-        vote_instruction::vote(
+        vote::instruction::vote(
             &vote_keypair.pubkey(),
             &authorized_voter_keypair.pubkey(),
             votes,

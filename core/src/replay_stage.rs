@@ -3529,7 +3529,7 @@ pub(crate) mod tests {
         solana_streamer::socket::SocketAddrSpace,
         solana_transaction_status::VersionedTransactionWithStatusMeta,
         solana_vote_program::{
-            vote_state::{VoteState, VoteStateVersions},
+            vote_state::{self, VoteStateVersions},
             vote_transaction,
         },
         std::{
@@ -4220,10 +4220,10 @@ pub(crate) mod tests {
     fn test_replay_commitment_cache() {
         fn leader_vote(vote_slot: Slot, bank: &Arc<Bank>, pubkey: &Pubkey) {
             let mut leader_vote_account = bank.get_account(pubkey).unwrap();
-            let mut vote_state = VoteState::from(&leader_vote_account).unwrap();
-            vote_state.process_slot_vote_unchecked(vote_slot);
+            let mut vote_state = vote_state::from(&leader_vote_account).unwrap();
+            vote_state::process_slot_vote_unchecked(&mut vote_state, vote_slot);
             let versioned = VoteStateVersions::new_current(vote_state);
-            VoteState::to(&versioned, &mut leader_vote_account).unwrap();
+            vote_state::to(&versioned, &mut leader_vote_account).unwrap();
             bank.store_account(pubkey, &leader_vote_account);
         }
 
