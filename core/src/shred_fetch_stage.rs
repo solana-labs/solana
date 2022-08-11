@@ -293,8 +293,7 @@ mod tests {
         ));
         let coding = solana_ledger::shred::Shredder::generate_coding_shreds(
             &[shred],
-            false, // is_last_in_slot
-            3,     // next_code_index
+            3, // next_code_index
         );
         coding[0].copy_to_packet(&mut packet);
         assert!(!should_discard_packet(
