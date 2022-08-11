@@ -561,7 +561,7 @@ impl ScheduleStage {
                 let weight_from_runnable = heaviest_runnable_entry.key();
                 let uw = *weight_from_contended.key();
 
-                if weight_from_runnable > uw {
+                if weight_from_runnable > &uw {
                     trace!("select: runnable > contended");
                     Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if uw > weight_from_runnable {
