@@ -457,7 +457,7 @@ fn attempt_lock_for_execution<'a>(
         }
     });
 
-    (unlockable_count.into(), guaranteed_count.into(), placeholder_attempts)
+    (unlockable_count.load(std::sync::atomic::Ordering::Relaxed), guaranteed_count.load(std::sync::atomic::Ordering::Relaxed), placeholder_attempts)
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
