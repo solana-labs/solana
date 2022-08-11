@@ -697,7 +697,7 @@ impl ScheduleStage {
             address_book.forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Guaranteed => {
-                    l.target.page().guaranteed_task_ids.insert(*unique_weight);
+                    l.target.page().guaranteed_task_ids.insert(*unique_weight, ());
                 }
                 LockStatus::Succeded => {
                     // do nothing
@@ -736,12 +736,12 @@ impl ScheduleStage {
             let page = l.target.page();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
                 if let Some(uw) = page.contended_unique_weights.last() {
-                    address_book.uncontended_task_ids.insert(*uw);
+                    address_book.uncontended_task_ids.insert(*uw, ());
                 }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for task_id in std::mem::take(&mut page.guaranteed_task_ids) {
+                for task_id in std::mem::take(&mut page.guaranteed_task_ids).keys() {
                     let count = address_book.guaranteed_lock_counts.get_mut(&task_id).unwrap();
                     trace!("guaranteed lock decrease: {} => {}", *count, *count -1);
                     *count -= 1;
