@@ -439,8 +439,8 @@ fn attempt_lock_for_execution<'a>(
     mut placeholder_attempts: Vec<LockAttempt>,
 ) -> (usize, usize, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
-    let mut unlockable_count = std::sync::atomic::AtomicUsize::new();
-    let mut guaranteed_count = 0;
+    let mut unlockable_count = std::sync::atomic::AtomicUsize::new(0);
+    let mut guaranteed_count = std::sync::atomic::AtomicUsize::new(0);
     use rayon::iter::IntoParallelRefMutIterator;
     use rayon::iter::ParallelIterator;
 
@@ -449,10 +449,10 @@ fn attempt_lock_for_execution<'a>(
         match attempt.status {
             LockStatus::Succeded => {},
             LockStatus::Failed => {
-                unlockable_count += 1;
+                unlockable_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             },
             LockStatus::Guaranteed => {
-                guaranteed_count += 1;
+                guaranteed_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             },
         }
     });
