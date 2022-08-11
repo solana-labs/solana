@@ -29,12 +29,13 @@ use {
         cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::signature::Keypair,
+    solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
     std::{
+        collections::HashMap,
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
@@ -98,6 +99,7 @@ impl Tpu {
         log_messages_bytes_limit: Option<usize>,
         enable_quic_servers: bool,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
+        shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -130,6 +132,7 @@ impl Tpu {
             cluster_info.clone(),
             bank_forks.clone(),
             staked_nodes.clone(),
+            shared_staked_nodes_overrides,
         );
 
         let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
