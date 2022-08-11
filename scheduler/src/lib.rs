@@ -569,7 +569,7 @@ impl ScheduleStage {
                     weight_from_contended.remove();
                     Some((
                         None,
-                        contended_queue.entry_to_execute(uw),
+                        contended_queue.entry_to_execute(*uw),
                     ))
                 } else {
                     unreachable!(
@@ -592,10 +592,10 @@ impl ScheduleStage {
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
         if let Some(a) = address_book.runnable_guaranteed_task_ids.pop_last() {
             trace!("expediate pop from guaranteed queue [rest: {}]", address_book.runnable_guaranteed_task_ids.len());
-            let queue_entry = contended_queue.entry_to_execute(a);
+            let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
             let ll = std::mem::take(&mut task.tx.1);
-            return Some((a, task, ll));
+            return Some((a.0, task, ll));
         }
 
         trace!("pop begin");
