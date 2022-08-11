@@ -8,8 +8,8 @@ import {
   LAMPORTS_PER_SOL,
   Transaction,
   Ed25519Program,
-} from '../src';
-import {url} from './url';
+} from '../../src';
+import {url} from '../url';
 
 if (process.env.TEST_LIVE) {
   describe('ed25519', () => {

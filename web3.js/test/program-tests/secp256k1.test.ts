@@ -9,8 +9,8 @@ import {
   LAMPORTS_PER_SOL,
   Transaction,
   Secp256k1Program,
-} from '../src';
-import {url} from './url';
+} from '../../src';
+import {url} from '../url';
 
 const randomPrivateKey = () => {
   let privateKey;

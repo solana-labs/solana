@@ -12,11 +12,11 @@ import {
   TransactionInstruction,
   sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
-} from '../src';
-import {NONCE_ACCOUNT_LENGTH} from '../src/nonce-account';
-import {sleep} from '../src/util/sleep';
-import {helpers} from './mocks/rpc-http';
-import {url} from './url';
+} from '../../src';
+import {NONCE_ACCOUNT_LENGTH} from '../../src/nonce-account';
+import {sleep} from '../../src/util/sleep';
+import {helpers} from '../mocks/rpc-http';
+import {url} from '../url';
 
 describe('SystemProgram', () => {
   it('createAccount', () => {

@@ -8,10 +8,10 @@ import {
   AddressLookupTableInstruction,
   Connection,
   sendAndConfirmTransaction,
-} from '../src';
-import {sleep} from '../src/util/sleep';
-import {helpers} from './mocks/rpc-http';
-import {url} from './url';
+} from '../../src';
+import {sleep} from '../../src/util/sleep';
+import {helpers} from '../mocks/rpc-http';
+import {url} from '../url';
 
 use(chaiAsPromised);
 
