@@ -442,6 +442,7 @@ fn attempt_lock_for_execution<'a>(
     let mut unlockable_count = 0;
     let mut guaranteed_count = 0;
     use rayon::iter::IntoParallelRefMutIterator;
+    use rayon::iter::ParallelIterator;
 
     placeholder_attempts.par_iter_mut().for_each(|attempt| {
         AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
