@@ -456,8 +456,7 @@ struct GraphConfig {
     vote_account_mode: GraphVoteAccountMode,
 }
 
-#[allow(clippy::cognitive_complexity)]
-fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
+fn get_leaf_slots(bank_forks: &BankForks) -> HashSet<u64> {
     let frozen_banks = bank_forks.frozen_banks();
     let mut fork_slots: HashSet<_> = frozen_banks.keys().cloned().collect();
     for (_, bank) in frozen_banks {
@@ -465,6 +464,13 @@ fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
             fork_slots.remove(&parent.slot());
         }
     }
+
+    fork_slots
+}
+
+#[allow(clippy::cognitive_complexity)]
+fn graph_forks(bank_forks: &BankForks, config: &GraphConfig) -> String {
+    let fork_slots = get_leaf_slots(bank_forks);
 
     // Search all forks and collect the last vote made by each validator
     let mut last_votes = HashMap::new();
@@ -1571,6 +1577,12 @@ fn main() {
                     .takes_value(false)
                     .help("After verifying the ledger, print some information about the account stores"),
             )
+            .arg(
+                Arg::with_name("print_vote_states")
+                    .long("print-vote-states")
+                    .takes_value(false)
+                    .help("After verifying the ledger, print a list of vote account states sorted by latest voted slot"),
+            )
         ).subcommand(
             SubCommand::with_name("graph")
             .about("Create a Graphviz rendering of the ledger")
@@ -2506,6 +2518,7 @@ fn main() {
                     ..ProcessOptions::default()
                 };
                 let print_accounts_stats = arg_matches.is_present("print_accounts_stats");
+                let print_vote_states = arg_matches.is_present("print_vote_states");
                 println!(
                     "genesis hash: {}",
                     open_genesis_config_by(&ledger_path, arg_matches).hash()
@@ -2532,6 +2545,46 @@ fn main() {
                 if print_accounts_stats {
                     let working_bank = bank_forks.read().unwrap().working_bank();
                     working_bank.print_accounts_stats();
+                }
+                if print_vote_states {
+                    let fork_slots = get_leaf_slots(&bank_forks.read().unwrap());
+                    let default_vote_state = VoteState::default();
+                    for fork_slot in &fork_slots {
+                        println!("vote state for fork {}", fork_slot);
+                        let bank = &bank_forks.read().unwrap()[*fork_slot];
+                        let total_stake: u64 = bank
+                            .vote_accounts()
+                            .iter()
+                            .map(|(_, (stake, _))| stake)
+                            .sum();
+                        let mut vote_states = Vec::new();
+                        for (_vote_account_key, (stake, vote_account)) in
+                            bank.vote_accounts().iter()
+                        {
+                            if *stake > 0 {
+                                let vote_state = vote_account.vote_state();
+                                let vote_state = vote_state.as_ref().unwrap_or(&default_vote_state);
+                                if let Some(last_vote) = vote_state.votes.iter().last() {
+                                    vote_states.push((
+                                        vote_state.node_pubkey,
+                                        last_vote.slot,
+                                        *stake,
+                                    ));
+                                }
+                            }
+                        }
+                        // sort by latest vote
+                        vote_states.sort_by(|a, b| b.1.cmp(&a.1));
+                        for (key, slot, stake) in &vote_states {
+                            println!(
+                                "{}, {}, {}, {:.7}",
+                                key,
+                                slot,
+                                stake,
+                                (100 * *stake) as f64 / total_stake as f64,
+                            );
+                        }
+                    }
                 }
                 exit_signal.store(true, Ordering::Relaxed);
                 system_monitor_service.join().unwrap();
