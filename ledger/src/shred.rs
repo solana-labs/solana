@@ -49,6 +49,8 @@
 //! So, given a) - c), we must restrict data shred's payload length such that the entire coding
 //! payload can fit into one coding shred / packet.
 
+#[cfg(test)]
+pub(crate) use shred_code::MAX_CODE_SHREDS_PER_SLOT;
 pub(crate) use shred_data::ShredData;
 pub use {
     self::stats::{ProcessShredsStats, ShredFetchStats},
