@@ -89,10 +89,10 @@ impl<'a> Metric<'a> {
         label_key: &'a str,
         label_value: Option<String>,
     ) -> Metric<'a> {
-        if let Some(label_value) = label_value {
-            return self.with_label(label_key, label_value);
+        match label_value {
+            Some(value) => self.with_label(label_key, value),
+            None => self,
         }
-        self
     }
 }
 
