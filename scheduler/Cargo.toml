@@ -15,6 +15,7 @@ atomic_enum = "0.1.1"
 by_address = "1.0.4"
 crossbeam-channel = "0.5.5"
 dashmap = { version = "4.0.2" }
+rayon = "1.5.3"
 log = "0.4.17"
 solana-entry = { path = "../entry", version = "=1.11.5" }
 solana-runtime = { path = "../runtime", version = "=1.11.5" }
