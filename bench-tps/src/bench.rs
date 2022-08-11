@@ -44,6 +44,21 @@ const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) a
 // max additional cost is `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE / 1_000_000`
 const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
 const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
+/// calculate maximum possible prioritizatino fee, if `use-randomized-compute-unit-price` is
+/// enabled, round to nearest lamports.
+pub fn max_lamporots_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
+    if use_randomized_compute_unit_price {
+        const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
+        let micro_lamport_fee: u128 = (MAX_COMPUTE_UNIT_PRICE as u128)
+            .saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
+        let fee = micro_lamport_fee
+            .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
+            .saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
+        u64::try_from(fee).unwrap_or(u64::MAX)
+    } else {
+        0u64
+    }
+}
 
 pub type TimestampedTransaction = (Transaction, Option<u64>);
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
