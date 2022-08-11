@@ -745,7 +745,7 @@ impl ScheduleStage {
                     *count -= 1;
                     if *count == 0 {
                         address_book.guaranteed_lock_counts.remove(&task_id);
-                        address_book.runnable_guaranteed_task_ids.insert(task_id);
+                        address_book.runnable_guaranteed_task_ids.insert(task_id, ());
                     }
                 }
             }
