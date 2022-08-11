@@ -457,7 +457,7 @@ fn attempt_lock_for_execution<'a>(
         }
     });
 
-    (unlockable_count, guaranteed_count, placeholder_attempts)
+    (unlockable_count.into(), guaranteed_count.into(), placeholder_attempts)
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
