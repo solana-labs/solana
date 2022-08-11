@@ -564,7 +564,7 @@ impl ScheduleStage {
                 if weight_from_runnable > &uw {
                     trace!("select: runnable > contended");
                     Some((Some(contended_queue), heaviest_runnable_entry))
-                } else if *uw > weight_from_runnable {
+                } else if uw > *weight_from_runnable {
                     trace!("select: contended > runnnable");
                     weight_from_contended.remove();
                     Some((
