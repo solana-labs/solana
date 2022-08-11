@@ -236,6 +236,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_cli_parse_dos_valid_signatures() {
         let entrypoint_addr: SocketAddr = "127.0.0.1:8001".parse().unwrap();
         let params = DosClientParameters::try_parse_from(vec![

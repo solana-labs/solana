@@ -1185,11 +1185,13 @@ pub mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_dos_with_blockhash_and_payer() {
         run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ false)
     }
 
     #[test]
+    #[ignore]
     fn test_dos_with_blockhash_and_payer_and_quic() {
         run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ true)
     }
