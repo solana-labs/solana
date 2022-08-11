@@ -397,9 +397,9 @@ impl ReplayStage {
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         log_messages_bytes_limit: Option<usize>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
-            let tower = process_blockstore.process_to_create_tower();
+            let tower = process_blockstore.process_to_create_tower()?;
             info!("Tower state: {:?}", tower);
             tower
         } else {
@@ -940,10 +940,10 @@ impl ReplayStage {
             })
             .unwrap();
 
-        Self {
+        Ok(Self {
             t_replay,
             commitment_service,
-        }
+        })
     }
 
     fn check_for_vote_only_mode(

@@ -355,7 +355,7 @@ impl JsonRpcService {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         connection_cache: Arc<ConnectionCache>,
         current_transaction_status_slot: Arc<AtomicU64>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
         let rpc_threads = 1.max(config.rpc_threads);
@@ -528,28 +528,29 @@ impl JsonRpcService {
                         e,
                         rpc_addr.port()
                     );
+                    close_handle_sender.send(Err(e.to_string())).unwrap();
                     return;
                 }
 
                 let server = server.unwrap();
-                close_handle_sender.send(server.close_handle()).unwrap();
+                close_handle_sender.send(Ok(server.close_handle())).unwrap();
                 server.wait();
                 exit_bigtable_ledger_upload_service.store(true, Ordering::Relaxed);
             })
             .unwrap();
 
-        let close_handle = close_handle_receiver.recv().unwrap();
+        let close_handle = close_handle_receiver.recv().unwrap()?;
         let close_handle_ = close_handle.clone();
         validator_exit
             .write()
             .unwrap()
             .register_exit(Box::new(move || close_handle_.close()));
-        Self {
+        Ok(Self {
             thread_hdl,
             #[cfg(test)]
             request_processor: test_request_processor,
             close_handle: Some(close_handle),
-        }
+        })
     }
 
     pub fn exit(&mut self) {
@@ -644,7 +645,8 @@ mod tests {
             Arc::new(LeaderScheduleCache::default()),
             connection_cache,
             Arc::new(AtomicU64::default()),
-        );
+        )
+        .expect("assume successful JsonRpcService start");
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
