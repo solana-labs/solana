@@ -34,7 +34,6 @@ pub struct ExecutionEnvironment {
     //accounts: Vec<i8>,
     pub cu: usize,
     pub task: Task,
-    pub remembered: bool,
 }
 
 impl ExecutionEnvironment {
@@ -97,6 +96,7 @@ pub struct LockAttempt {
     target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
+    remembered: bool,
 }
 
 impl LockAttempt {
