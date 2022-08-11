@@ -6078,6 +6078,7 @@ dependencies = [
  "dashmap",
  "log",
  "rand 0.7.3",
+ "rayon",
  "sha2 0.10.2",
  "solana-entry",
  "solana-logger 1.11.5",
