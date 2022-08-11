@@ -1201,7 +1201,6 @@ upgrade)
   # (start|stop)Node need refactored to support restarting the bootstrap validator
   ;;
 gossip-only)
-  isGossip=1
   prepareDeploy
   stop
   deploy
