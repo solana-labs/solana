@@ -439,25 +439,23 @@ fn attempt_lock_for_execution<'a>(
     mut placeholder_attempts: Vec<LockAttempt>,
 ) -> (usize, usize, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
-    let mut unlockable_count = std::sync::atomic::AtomicUsize::new(0);
-    let mut guaranteed_count = std::sync::atomic::AtomicUsize::new(0);
-    use rayon::iter::IntoParallelRefMutIterator;
-    use rayon::iter::ParallelIterator;
+    let mut unlockable_count = 0;
+    let mut guaranteed_count = 0;
 
-    placeholder_attempts.par_iter_mut().for_each(|attempt| {
+    for attempt in placeholder_attempts.iter_mut() {
         AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
         match attempt.status {
             LockStatus::Succeded => {},
             LockStatus::Failed => {
-                unlockable_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                unlockable_count += 1;
             },
             LockStatus::Guaranteed => {
-                guaranteed_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                guaranteed_count += 1;
             },
         }
-    });
+    }
 
-    (unlockable_count.load(std::sync::atomic::Ordering::Relaxed), guaranteed_count.load(std::sync::atomic::Ordering::Relaxed), placeholder_attempts)
+    (unlockable_count, guaranteed_count, placeholder_attempts)
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
