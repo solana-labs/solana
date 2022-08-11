@@ -93,7 +93,7 @@ mod tests {
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
-        let num_expected_packets: usize = 3072;
+        let num_expected_packets: usize = 3000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
         assert!(client.send_wire_transaction_batch_async(packets).is_ok());
@@ -138,7 +138,7 @@ mod tests {
 
         // Send a full size packet with single byte writes.
         let num_bytes = PACKET_DATA_SIZE;
-        let num_expected_packets: usize = 3072;
+        let num_expected_packets: usize = 3000;
         let packets = vec![vec![0u8; PACKET_DATA_SIZE]; num_expected_packets];
 
         assert!(client.send_wire_transaction_batch(&packets).await.is_ok());
