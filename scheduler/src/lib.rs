@@ -559,15 +559,17 @@ impl ScheduleStage {
             },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
+                let uw = weight_from_contended.key();
 
-                if weight_from_runnable > &weight_from_contended {
+                if weight_from_runnable > &uw {
                     trace!("select: runnable > contended");
                     Some((Some(contended_queue), heaviest_runnable_entry))
-                } else if &weight_from_contended > weight_from_runnable {
+                } else if &uw > weight_from_runnable {
                     trace!("select: contended > runnnable");
+                    weight_from_contended.remove();
                     Some((
                         None,
-                        contended_queue.entry_to_execute(weight_from_contended),
+                        contended_queue.entry_to_execute(uw),
                     ))
                 } else {
                     unreachable!(
