@@ -185,7 +185,6 @@ pub struct AddressBook {
 impl AddressBook {
     #[inline(never)]
     fn attempt_lock_address(
-        &mut self,
         from_runnable: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
@@ -444,7 +443,7 @@ fn attempt_lock_for_execution<'a>(
     let mut guaranteed_count = 0;
 
     for attempt in placeholder_attempts.iter_mut() {
-        address_book.attempt_lock_address(from_runnable, unique_weight, attempt);
+        Self::attempt_lock_address(from_runnable, unique_weight, attempt);
         match attempt.status {
             LockStatus::Succeded => {},
             LockStatus::Failed => {
