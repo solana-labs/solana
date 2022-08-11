@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-ledger-tool"
 
 [dependencies]
 bs58 = "0.4.0"
-chrono = "0.4.11"
+chrono = "0.4.21"
 clap = "2.33.1"
 crossbeam-channel = "0.5"
 csv = "1.1.6"
