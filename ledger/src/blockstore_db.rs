@@ -535,13 +535,8 @@ impl Rocks {
     ///
     /// Full list of properties that return int values could be found
     /// [here](https://github.com/facebook/rocksdb/blob/08809f5e6cd9cc4bc3958dd4d59457ae78c76660/include/rocksdb/db.h#L654-L689).
-<<<<<<< HEAD
-    fn get_int_property_cf(&self, cf: &ColumnFamily, name: &str) -> Result<i64> {
-        match self.0.property_int_value_cf(cf, name) {
-=======
     fn get_int_property_cf(&self, cf: &ColumnFamily, name: &'static std::ffi::CStr) -> Result<i64> {
-        match self.db.property_int_value_cf(cf, name) {
->>>>>>> 14d992210 (Bump rust-rocksdb to 0.19.0 tag (#26949))
+        match self.0.property_int_value_cf(cf, name) {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
             Ok(None) => Ok(0),
             Err(e) => Err(BlockstoreError::RocksDb(e)),
