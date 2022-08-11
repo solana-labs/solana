@@ -748,7 +748,8 @@ impl ScheduleStage {
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.guaranteed_task_ids).keys() {
-                    let count = address_book.guaranteed_lock_counts.get_mut(&task_id).unwrap();
+                    match address_book.guaranteed_lock_counts.entry(&task_id) {
+                    }
                     trace!("guaranteed lock decrease: {} => {}", *count, *count -1);
                     *count -= 1;
                     if *count == 0 {
