@@ -757,7 +757,7 @@ impl ScheduleStage {
                                 entry.remove();
                                 address_book.runnable_guaranteed_task_ids.insert(*task_id, ());
                             }
-                        }
+                        },
                         std::collections::hash_map::Vacant(_) => {
                             unreachable!();
                         }
