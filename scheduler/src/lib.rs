@@ -554,7 +554,7 @@ impl ScheduleStage {
                 trace!("select: contended only");
                 Some((
                 None,
-                contended_queue.entry_to_execute(weight_from_contended),
+                contended_queue.entry_to_execute(weight_from_contended.remove()),
             ))
             },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
