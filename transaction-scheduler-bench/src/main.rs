@@ -345,7 +345,7 @@ fn handle_transaction_batch(
             .unwrap();
 }
 
-const NUM_SENDERS: usize = 2;
+const NUM_SENDERS: usize = 1;
 
 fn spawn_packet_senders(
     preloader: Arc<solana_scheduler::Preloader>,
