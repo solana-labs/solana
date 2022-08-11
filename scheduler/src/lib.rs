@@ -263,8 +263,10 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn forget_address_contention(&mut self, unique_weight: &UniqueWeight, a: &mut LockAttempt) {
-        a.target.page().contended_unique_weights.remove(unique_weight);
+    fn forget_address_contention(unique_weight: &UniqueWeight, a: &mut LockAttempt) {
+        if a.remembered {
+            a.target.page().contended_unique_weights.remove(unique_weight);
+        }
     }
 
     fn reset_lock(&mut self, attempt: &mut LockAttempt, after_execution: bool) -> bool {
@@ -686,7 +688,7 @@ impl ScheduleStage {
     ) {
         for mut l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
-            address_book.forget_address_contention(&unique_weight, &mut l);
+            AddressBook::forget_address_contention(&unique_weight, &mut l);
         }
     }
 
@@ -698,7 +700,7 @@ impl ScheduleStage {
         guaranteed_count: usize,
     ) {
         for mut l in lock_attempts {
-            address_book.forget_address_contention(&unique_weight, &mut l);
+            AddressBook::forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Guaranteed => {
                     l.target.page().guaranteed_task_ids.insert(*unique_weight, ());
