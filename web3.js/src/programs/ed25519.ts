@@ -2,10 +2,10 @@ import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 import nacl from 'tweetnacl';
 
-import {Keypair} from './keypair';
-import {PublicKey} from './publickey';
-import {TransactionInstruction} from './transaction';
-import assert from './util/assert';
+import {Keypair} from '../keypair';
+import {PublicKey} from '../publickey';
+import {TransactionInstruction} from '../transaction';
+import assert from '../util/assert';
 
 const PRIVATE_KEY_BYTES = 64;
 const PUBLIC_KEY_BYTES = 32;

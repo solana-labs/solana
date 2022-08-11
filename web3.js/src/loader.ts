@@ -8,7 +8,7 @@ import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import {sleep} from './util/sleep';
 import type {Connection} from './connection';
 import type {Signer} from './keypair';
-import {SystemProgram} from './system-program';
+import {SystemProgram} from './programs/system';
 import {IInstructionInputData} from './instruction';
 
 // Keep program chunks under PACKET_DATA_SIZE, leaving enough room for the

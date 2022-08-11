@@ -5,13 +5,13 @@ import {
   decodeData,
   InstructionType,
   IInstructionInputData,
-} from './instruction';
-import * as Layout from './layout';
-import {PublicKey} from './publickey';
-import {SystemProgram} from './system-program';
-import {SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY} from './sysvar';
-import {Transaction, TransactionInstruction} from './transaction';
-import {toBuffer} from './util/to-buffer';
+} from '../instruction';
+import * as Layout from '../layout';
+import {PublicKey} from '../publickey';
+import {SystemProgram} from './system';
+import {SYSVAR_CLOCK_PUBKEY, SYSVAR_RENT_PUBKEY} from '../sysvar';
+import {Transaction, TransactionInstruction} from '../transaction';
+import {toBuffer} from '../util/to-buffer';
 
 /**
  * Vote account info

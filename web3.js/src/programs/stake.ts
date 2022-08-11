@@ -5,17 +5,17 @@ import {
   decodeData,
   InstructionType,
   IInstructionInputData,
-} from './instruction';
-import * as Layout from './layout';
-import {PublicKey} from './publickey';
-import {SystemProgram} from './system-program';
+} from '../instruction';
+import * as Layout from '../layout';
+import {PublicKey} from '../publickey';
+import {SystemProgram} from './system';
 import {
   SYSVAR_CLOCK_PUBKEY,
   SYSVAR_RENT_PUBKEY,
   SYSVAR_STAKE_HISTORY_PUBKEY,
-} from './sysvar';
-import {Transaction, TransactionInstruction} from './transaction';
-import {toBuffer} from './util/to-buffer';
+} from '../sysvar';
+import {Transaction, TransactionInstruction} from '../transaction';
+import {toBuffer} from '../util/to-buffer';
 
 /**
  * Address of the stake config account which configures the rate

@@ -1,12 +1,12 @@
 import {toBufferLE} from 'bigint-buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 
-import * as Layout from './layout';
-import {PublicKey} from './publickey';
-import * as bigintLayout from './util/bigint';
-import {SystemProgram} from './system-program';
-import {TransactionInstruction} from './transaction';
-import {decodeData, encodeData, IInstructionInputData} from './instruction';
+import * as Layout from '../layout';
+import {PublicKey} from '../publickey';
+import * as bigintLayout from '../util/bigint';
+import {SystemProgram} from './system';
+import {TransactionInstruction} from '../transaction';
+import {decodeData, encodeData, IInstructionInputData} from '../instruction';
 
 export type CreateLookupTableParams = {
   /** Account used to derive and control the new address lookup table. */

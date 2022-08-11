@@ -14,9 +14,9 @@ import {
   StakeProgram,
   SystemInstruction,
   Transaction,
-} from '../src';
-import {helpers} from './mocks/rpc-http';
-import {url} from './url';
+} from '../../src';
+import {helpers} from '../mocks/rpc-http';
+import {url} from '../url';
 
 use(chaiAsPromised);
 

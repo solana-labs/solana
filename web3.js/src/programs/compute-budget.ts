@@ -5,10 +5,10 @@ import {
   decodeData,
   InstructionType,
   IInstructionInputData,
-} from './instruction';
-import {PublicKey} from './publickey';
-import {TransactionInstruction} from './transaction';
-import {u64} from './util/bigint';
+} from '../instruction';
+import {PublicKey} from '../publickey';
+import {TransactionInstruction} from '../transaction';
+import {u64} from '../util/bigint';
 
 /**
  * Compute Budget Instruction class
