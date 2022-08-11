@@ -2,43 +2,13 @@ import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 
-import {PublicKey} from './publickey';
-import type {Blockhash} from './blockhash';
-import * as Layout from './layout';
-import {PACKET_DATA_SIZE} from './transaction/constants';
-import * as shortvec from './util/shortvec-encoding';
-import {toBuffer} from './util/to-buffer';
-
-/**
- * The message header, identifying signed and read-only account
- */
-export type MessageHeader = {
-  /**
-   * The number of signatures required for this message to be considered valid. The
-   * signatures must match the first `numRequiredSignatures` of `accountKeys`.
-   */
-  numRequiredSignatures: number;
-  /** The last `numReadonlySignedAccounts` of the signed keys are read-only accounts */
-  numReadonlySignedAccounts: number;
-  /** The last `numReadonlySignedAccounts` of the unsigned keys are read-only accounts */
-  numReadonlyUnsignedAccounts: number;
-};
-
-/**
- * An instruction to execute by a program
- *
- * @property {number} programIdIndex
- * @property {number[]} accounts
- * @property {string} data
- */
-export type CompiledInstruction = {
-  /** Index into the transaction keys array indicating the program account that executes this instruction */
-  programIdIndex: number;
-  /** Ordered indices into the transaction keys array indicating which accounts to pass to the program */
-  accounts: number[];
-  /** The program input data encoded as base 58 */
-  data: string;
-};
+import {PublicKey} from '../publickey';
+import type {Blockhash} from '../blockhash';
+import * as Layout from '../layout';
+import {PACKET_DATA_SIZE} from '../transaction/constants';
+import * as shortvec from '../util/shortvec-encoding';
+import {toBuffer} from '../util/to-buffer';
+import {CompiledInstruction, MessageHeader} from './index';
 
 /**
  * Message constructor arguments
