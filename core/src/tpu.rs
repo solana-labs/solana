@@ -13,7 +13,7 @@ use {
         find_packet_sender_stake_stage::FindPacketSenderStakeStage,
         sigverify::TransactionSigVerifier,
         sigverify_stage::SigVerifyStage,
-        staked_nodes_updater_service::{StakedNodesOverrides, StakedNodesUpdaterService},
+        staked_nodes_updater_service::StakedNodesUpdaterService,
     },
     crossbeam_channel::{unbounded, Receiver},
     solana_client::connection_cache::ConnectionCache,
@@ -29,12 +29,13 @@ use {
         cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::signature::Keypair,
+    solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
     std::{
+        collections::HashMap,
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
@@ -98,7 +99,7 @@ impl Tpu {
         log_messages_bytes_limit: Option<usize>,
         enable_quic_servers: bool,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
-        shared_staked_nodes_overrides: Arc<RwLock<StakedNodesOverrides>>,
+        shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,

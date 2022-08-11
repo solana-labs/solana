@@ -1,5 +1,4 @@
 use {
-    serde::de::Deserializer,
     solana_gossip::cluster_info::ClusterInfo,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::pubkey::Pubkey,
@@ -22,33 +21,13 @@ pub struct StakedNodesUpdaterService {
     thread_hdl: JoinHandle<()>,
 }
 
-#[derive(Default, Deserialize, Clone)]
-pub struct StakedNodesOverrides {
-    #[serde(deserialize_with = "deserialize_pubkey_map")]
-    pub staked_map_id: HashMap<Pubkey, u64>,
-}
-
-pub fn deserialize_pubkey_map<'de, D>(des: D) -> Result<HashMap<Pubkey, u64>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let container: HashMap<String, u64> = serde::Deserialize::deserialize(des)?;
-    let mut container_typed: HashMap<Pubkey, u64> = HashMap::new();
-    for (key, value) in container.iter() {
-        let typed_key = Pubkey::try_from(key.as_str())
-            .map_err(|_| serde::de::Error::invalid_type(serde::de::Unexpected::Map, &"PubKey"))?;
-        container_typed.insert(typed_key, *value);
-    }
-    Ok(container_typed)
-}
-
 impl StakedNodesUpdaterService {
     pub fn new(
         exit: Arc<AtomicBool>,
         cluster_info: Arc<ClusterInfo>,
         bank_forks: Arc<RwLock<BankForks>>,
         shared_staked_nodes: Arc<RwLock<StakedNodes>>,
-        shared_staked_nodes_overrides: Arc<RwLock<StakedNodesOverrides>>,
+        shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("sol-sn-updater".to_string())
@@ -93,7 +72,7 @@ impl StakedNodesUpdaterService {
         min_stake: &mut u64,
         bank_forks: &RwLock<BankForks>,
         cluster_info: &ClusterInfo,
-        overrides: &RwLockReadGuard<StakedNodesOverrides>,
+        overrides: &RwLockReadGuard<HashMap<Pubkey, u64>>,
     ) -> bool {
         if last_stakes.elapsed() > IP_TO_STAKE_REFRESH_DURATION {
             let root_bank = bank_forks.read().unwrap().root_bank();
@@ -126,7 +105,7 @@ impl StakedNodesUpdaterService {
                 total_stake,
                 id_to_stake,
                 ip_to_stake,
-                &overrides.staked_map_id,
+                overrides,
             );
 
             *last_stakes = Instant::now();
@@ -145,12 +124,17 @@ impl StakedNodesUpdaterService {
         staked_map_overrides: &HashMap<Pubkey, u64>,
     ) {
         for (id_override, stake_override) in staked_map_overrides.iter() {
-            if let Some(ip_override) = cluster_info.tvu_peers().into_iter().find_map(|node| {
-                if node.id == *id_override {
-                    return Some(node.tvu.ip());
-                }
-                None
-            }) {
+            if let Some(ip_override) =
+                cluster_info
+                    .all_peers()
+                    .into_iter()
+                    .find_map(|(node, _seen_time)| {
+                        if node.id == *id_override {
+                            return Some(node.tvu.ip());
+                        }
+                        None
+                    })
+            {
                 if let Some(previous_stake) = id_to_stake_map.get(id_override) {
                     *total_stake -= previous_stake;
                 }

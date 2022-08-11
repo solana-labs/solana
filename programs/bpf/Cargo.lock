@@ -5804,6 +5804,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
+ "serde_yaml",
  "signal-hook",
  "solana-clap-utils",
  "solana-cli-config",

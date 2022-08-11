@@ -5,10 +5,9 @@ use {
     jsonrpc_ipc_server::{RequestContext, ServerBuilder},
     jsonrpc_server_utils::tokio,
     log::*,
-    serde::{Deserialize, Serialize},
+    serde::{de::Deserializer, Deserialize, Serialize},
     solana_core::{
-        consensus::Tower, staked_nodes_updater_service::StakedNodesOverrides,
-        tower_storage::TowerStorage, validator::ValidatorStartProgress,
+        consensus::Tower, tower_storage::TowerStorage, validator::ValidatorStartProgress,
     },
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::bank_forks::BankForks,
@@ -18,6 +17,7 @@ use {
         signature::{read_keypair_file, Keypair, Signer},
     },
     std::{
+        collections::HashMap,
         error,
         fmt::{self, Display},
         net::SocketAddr,
@@ -43,7 +43,7 @@ pub struct AdminRpcRequestMetadata {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
     pub tower_storage: Arc<dyn TowerStorage>,
-    pub staked_nodes_overrides: Arc<RwLock<StakedNodesOverrides>>,
+    pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub post_init: Arc<RwLock<Option<AdminRpcRequestMetadataPostInit>>>,
 }
 impl Metadata for AdminRpcRequestMetadata {}
@@ -301,17 +301,20 @@ impl AdminRpc for AdminRpcImpl {
     }
 
     fn set_staked_nodes_overrides(&self, meta: Self::Metadata, path: String) -> Result<()> {
-        let loaded_config = load_staked_nodes_overrides(&path).map_err(|err| {
-            error!(
-                "Failed to load staked nodes overrides from {}: {}",
-                &path, err
-            );
-            jsonrpc_core::error::Error::internal_error()
-        })?;
+        let loaded_config = load_staked_nodes_overrides(&path)
+            .map_err(|err| {
+                error!(
+                    "Failed to load staked nodes overrides from {}: {}",
+                    &path, err
+                );
+                jsonrpc_core::error::Error::internal_error()
+            })?
+            .staked_map_id;
         let mut write_staked_nodes = meta.staked_nodes_overrides.write().unwrap();
-        write_staked_nodes.staked_map_id = loaded_config.staked_map_id;
+        write_staked_nodes.clear();
+        write_staked_nodes.extend(loaded_config.into_iter());
         info!("Staked nodes overrides loaded from {}", path);
-        debug!("overrides map: {:?}", write_staked_nodes.staked_map_id);
+        debug!("overrides map: {:?}", write_staked_nodes);
         Ok(())
     }
 
@@ -448,6 +451,26 @@ pub fn runtime() -> jsonrpc_server_utils::tokio::runtime::Runtime {
     jsonrpc_server_utils::tokio::runtime::Runtime::new().expect("new tokio runtime")
 }
 
+#[derive(Default, Deserialize, Clone)]
+pub struct StakedNodesOverrides {
+    #[serde(deserialize_with = "deserialize_pubkey_map")]
+    pub staked_map_id: HashMap<Pubkey, u64>,
+}
+
+pub fn deserialize_pubkey_map<'de, D>(des: D) -> std::result::Result<HashMap<Pubkey, u64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let container: HashMap<String, u64> = serde::Deserialize::deserialize(des)?;
+    let mut container_typed: HashMap<Pubkey, u64> = HashMap::new();
+    for (key, value) in container.iter() {
+        let typed_key = Pubkey::try_from(key.as_str())
+            .map_err(|_| serde::de::Error::invalid_type(serde::de::Unexpected::Map, &"PubKey"))?;
+        container_typed.insert(typed_key, *value);
+    }
+    Ok(container_typed)
+}
+
 pub fn load_staked_nodes_overrides(
     path: &String,
 ) -> std::result::Result<StakedNodesOverrides, Box<dyn error::Error>> {
@@ -456,8 +479,10 @@ pub fn load_staked_nodes_overrides(
         let file = std::fs::File::open(path)?;
         Ok(serde_yaml::from_reader(file)?)
     } else {
-        Err(
-            format!("Staked nodes overrides provided '{}' a non-existing file path.", path).into()
+        Err(format!(
+            "Staked nodes overrides provided '{}' a non-existing file path.",
+            path
         )
+        .into())
     }
 }

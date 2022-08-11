@@ -5105,7 +5105,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "serde_yaml",
  "serial_test",
  "solana-address-lookup-table-program",
  "solana-bloom",

@@ -24,7 +24,6 @@ use {
     },
     solana_core::{
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
-        staked_nodes_updater_service::StakedNodesOverrides,
         system_monitor_service::SystemMonitorService,
         tower_storage,
         tpu::DEFAULT_TPU_COALESCE_MS,
@@ -74,9 +73,12 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
-        admin_rpc_service, admin_rpc_service::load_staked_nodes_overrides, bootstrap,
-        dashboard::Dashboard, ledger_lockfile, lock_ledger, new_spinner_progress_bar,
-        println_name_value, redirect_stderr_to_file,
+        admin_rpc_service,
+        admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
+        bootstrap,
+        dashboard::Dashboard,
+        ledger_lockfile, lock_ledger, new_spinner_progress_bar, println_name_value,
+        redirect_stderr_to_file,
     },
     std::{
         collections::{HashSet, VecDeque},
@@ -2291,17 +2293,20 @@ pub fn main() {
     let staked_nodes_overrides_path = matches
         .value_of("staked_nodes_overrides")
         .map(str::to_string);
-    let staked_nodes_overrides = Arc::new(RwLock::new(match staked_nodes_overrides_path {
-        None => StakedNodesOverrides::default(),
-        Some(p) => load_staked_nodes_overrides(&p).unwrap_or_else(|err| {
-            error!("Failed to load stake-nodes-overrides from {}: {}", &p, err);
-            clap::Error::with_description(
-                "Failed to load configuration of stake-nodes-overrides argument",
-                clap::ErrorKind::InvalidValue,
-            )
-            .exit()
-        }),
-    }));
+    let staked_nodes_overrides = Arc::new(RwLock::new(
+        match staked_nodes_overrides_path {
+            None => StakedNodesOverrides::default(),
+            Some(p) => load_staked_nodes_overrides(&p).unwrap_or_else(|err| {
+                error!("Failed to load stake-nodes-overrides from {}: {}", &p, err);
+                clap::Error::with_description(
+                    "Failed to load configuration of stake-nodes-overrides argument",
+                    clap::ErrorKind::InvalidValue,
+                )
+                .exit()
+            }),
+        }
+        .staked_map_id,
+    ));
 
     let init_complete_file = matches.value_of("init_complete_file");
 

@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     log::*,
     solana_cli_output::CliAccount,
@@ -8,7 +9,6 @@ use {
         rpc_client::RpcClient,
     },
     solana_core::{
-        staked_nodes_updater_service::StakedNodesOverrides,
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
     },
@@ -116,7 +116,7 @@ pub struct TestValidatorGenesis {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
-    pub staked_nodes_overrides: Arc<RwLock<StakedNodesOverrides>>,
+    pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub max_ledger_shreds: Option<u64>,
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
@@ -146,7 +146,7 @@ impl Default for TestValidatorGenesis {
             validator_exit: Arc::<RwLock<Exit>>::default(),
             start_progress: Arc::<RwLock<ValidatorStartProgress>>::default(),
             authorized_voter_keypairs: Arc::<RwLock<Vec<Arc<Keypair>>>>::default(),
-            staked_nodes_overrides: Arc::new(RwLock::new(StakedNodesOverrides::default())),
+            staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
