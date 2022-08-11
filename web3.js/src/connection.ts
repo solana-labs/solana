@@ -2871,14 +2871,17 @@ export class Connection {
    */
   async getParsedAccountInfo(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<
     RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>
   > {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
       'jsonParsed',
+      config,
     );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = create(
