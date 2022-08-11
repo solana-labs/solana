@@ -16,9 +16,9 @@ use {
     },
 };
 
-/// The maximum number of blocks to keep in `PrioritizationFeeCache`; States from
-/// up to 150 recent blocks should be sufficient to estimate minimal prioritization fee to
-/// land transactions to current block.
+/// The maximum number of blocks to keep in `PrioritizationFeeCache`, ie.
+/// the amount of history generally desired to estimate the prioritization fee needed to
+/// land a transaction in the current block.
 const MAX_NUM_RECENT_BLOCKS: u64 = 150;
 
 #[derive(Debug, Default)]
