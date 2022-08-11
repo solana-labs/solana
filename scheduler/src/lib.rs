@@ -443,7 +443,7 @@ fn attempt_lock_for_execution<'a>(
     let mut guaranteed_count = 0;
 
     for attempt in placeholder_attempts.iter_mut() {
-        Self::attempt_lock_address(from_runnable, unique_weight, attempt);
+        AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
         match attempt.status {
             LockStatus::Succeded => {},
             LockStatus::Failed => {
