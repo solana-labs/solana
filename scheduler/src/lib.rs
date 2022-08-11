@@ -169,7 +169,7 @@ impl Page {
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 use by_address::ByAddress;
 type TaskId = UniqueWeight;
-type WeightedTaskIds = std::collections::BTreeSet<TaskId>;
+type WeightedTaskIds = std::collections::BTreeMap<TaskId, ()>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 
