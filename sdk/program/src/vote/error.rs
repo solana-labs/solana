@@ -1,9 +1,8 @@
 //! Vote program errors
 
 use {
-    log::*,
+    crate::decode_error::DecodeError,
     num_derive::{FromPrimitive, ToPrimitive},
-    solana_sdk::decode_error::DecodeError,
     thiserror::Error,
 };
 
@@ -77,7 +76,7 @@ impl<E> DecodeError<E> for VoteError {
 
 #[cfg(test)]
 mod tests {
-    use {super::*, solana_sdk::instruction::InstructionError};
+    use {super::*, crate::instruction::InstructionError};
 
     #[test]
     fn test_custom_error_decode() {

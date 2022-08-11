@@ -1,9 +1,11 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to construct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
+
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
+        immutable_deserialized_packet::ImmutableDeserializedPacket,
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,

@@ -2,19 +2,19 @@
 
 use {
     crate::{
-        id,
-        vote_state::{
-            CompactVoteStateUpdate, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
-            VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate,
-        },
-    },
-    serde_derive::{Deserialize, Serialize},
-    solana_sdk::{
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_instruction, sysvar,
+        vote::{
+            program::id,
+            state::{
+                CompactVoteStateUpdate, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
+                VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate,
+            },
+        },
     },
+    serde_derive::{Deserialize, Serialize},
 };
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -103,20 +103,6 @@ pub enum VoteInstruction {
     ///   1. `[SIGNER]` Vote authority
     UpdateVoteStateSwitch(VoteStateUpdate, Hash),
 
-    /// Update the onchain vote state for the signer.
-    ///
-    /// # Account references
-    ///   0. `[Write]` Vote account to vote with
-    ///   1. `[SIGNER]` Vote authority
-    CompactUpdateVoteState(CompactVoteStateUpdate),
-
-    /// Update the onchain vote state for the signer along with a switching proof.
-    ///
-    /// # Account references
-    ///   0. `[Write]` Vote account to vote with
-    ///   1. `[SIGNER]` Vote authority
-    CompactUpdateVoteStateSwitch(CompactVoteStateUpdate, Hash),
-
     /// Given that the current Voter or Withdrawer authority is a derived key,
     /// this instruction allows someone who can sign for that derived key's
     /// base key to authorize a new Voter or Withdrawer for a vote account.
@@ -140,6 +126,20 @@ pub enum VoteInstruction {
     ///   2. `[SIGNER]` Base key of current Voter or Withdrawer authority's derived key
     ///   3. `[SIGNER]` New vote or withdraw authority
     AuthorizeCheckedWithSeed(VoteAuthorizeCheckedWithSeedArgs),
+
+    /// Update the onchain vote state for the signer.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    CompactUpdateVoteState(CompactVoteStateUpdate),
+
+    /// Update the onchain vote state for the signer along with a switching proof.
+    ///
+    /// # Account references
+    ///   0. `[Write]` Vote account to vote with
+    ///   1. `[SIGNER]` Vote authority
+    CompactUpdateVoteStateSwitch(CompactVoteStateUpdate, Hash),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {

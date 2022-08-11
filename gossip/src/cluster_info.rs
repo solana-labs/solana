@@ -48,7 +48,7 @@ use {
     solana_ledger::shred::Shred,
     solana_measure::measure::Measure,
     solana_net_utils::{
-        bind_common, bind_common_in_range, bind_in_range, bind_two_consecutive_in_range,
+        bind_common, bind_common_in_range, bind_in_range, bind_two_in_range_with_offset,
         find_available_port_in_range, multi_bind_in_range, PortRange,
     },
     solana_perf::{
@@ -2746,20 +2746,21 @@ impl Node {
     }
     pub fn new_localhost_with_pubkey(pubkey: &Pubkey) -> Self {
         let bind_ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+        let port_range = (1024, 65535);
         let ((_tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_consecutive_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (gossip_port, (gossip, ip_echo)) =
-            bind_common_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+            bind_common_in_range(bind_ip_addr, port_range).unwrap();
         let gossip_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), gossip_port);
         let tvu = UdpSocket::bind("127.0.0.1:0").unwrap();
         let tvu_forwards = UdpSocket::bind("127.0.0.1:0").unwrap();
         let ((_tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_consecutive_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let tpu_vote = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let rpc_port = find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+        let rpc_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_port);
-        let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, (1024, 65535)).unwrap();
+        let rpc_pubsub_port = find_available_port_in_range(bind_ip_addr, port_range).unwrap();
         let rpc_pubsub_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
 
@@ -2835,9 +2836,9 @@ impl Node {
         let (tvu_port, tvu) = Self::bind(bind_ip_addr, port_range);
         let (tvu_forwards_port, tvu_forwards) = Self::bind(bind_ip_addr, port_range);
         let ((tpu_port, tpu), (_tpu_quic_port, tpu_quic)) =
-            bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let ((tpu_forwards_port, tpu_forwards), (_tpu_forwards_quic_port, tpu_forwards_quic)) =
-            bind_two_consecutive_in_range(bind_ip_addr, port_range).unwrap();
+            bind_two_in_range_with_offset(bind_ip_addr, port_range, QUIC_PORT_OFFSET).unwrap();
         let (tpu_vote_port, tpu_vote) = Self::bind(bind_ip_addr, port_range);
         let (_, retransmit_socket) = Self::bind(bind_ip_addr, port_range);
         let (repair_port, repair) = Self::bind(bind_ip_addr, port_range);

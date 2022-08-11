@@ -48,6 +48,7 @@ impl ProcessShredsStats {
         name: &'static str,
         slot: Slot,
         num_data_shreds: u32,
+        num_coding_shreds: u32,
         slot_broadcast_time: Option<Duration>,
     ) {
         let slot_broadcast_time = slot_broadcast_time
@@ -63,6 +64,7 @@ impl ProcessShredsStats {
             ("shredding_time", self.shredding_elapsed, i64),
             ("receive_time", self.receive_elapsed, i64),
             ("num_data_shreds", num_data_shreds, i64),
+            ("num_coding_shreds", num_coding_shreds, i64),
             ("slot_broadcast_time", slot_broadcast_time, i64),
             (
                 "get_leader_schedule_time",

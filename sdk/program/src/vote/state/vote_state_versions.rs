@@ -1,4 +1,4 @@
-use {super::*, crate::vote_state::vote_state_0_23_5::VoteState0_23_5};
+use super::{vote_state_0_23_5::VoteState0_23_5, *};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub enum VoteStateVersions {
