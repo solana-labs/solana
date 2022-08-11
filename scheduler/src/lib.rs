@@ -756,7 +756,7 @@ impl ScheduleStage {
                         std::collections::hash_map::Entry::Occupied(mut entry) => {
                             let count = entry.get_mut();
                             trace!("guaranteed lock decrease: {} => {}", *count, *count -1);
-                            *count -= 1;
+                            count.checked_sub(1).unwrap();
                             if *count == 0 {
                                 entry.remove();
                                 address_book.runnable_guaranteed_task_ids.insert(*task_id, ());
