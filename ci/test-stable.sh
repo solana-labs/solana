@@ -12,6 +12,12 @@ annotate() {
   }
 }
 
+exit_if_error() {
+   if [[ "$1" -ne 0 ]]; then
+    exit "$1"
+  fi
+}
+
 # Run the appropriate test based on entrypoint
 testName=$(basename "$0" .sh)
 
@@ -35,7 +41,8 @@ JOBS=$((JOBS>NPROC ? NPROC : JOBS))
 echo "Executing $testName"
 case $testName in
 test-stable)
-  _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
+  _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
+  exit_if_error "${PIPESTATUS[0]}"
   ;;
 test-stable-bpf)
   # Clear the C dependency files, if dependency moves these files are not regenerated
