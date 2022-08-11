@@ -37,7 +37,7 @@ use {
         message::Message,
         poh_config::PohConfig,
         pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::{Keypair, KeypairInsecureClone, Signer},
         stake::{
             config as stake_config, instruction as stake_instruction,
             state::{Authorized, Lockup},
@@ -49,12 +49,13 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{
         vote_instruction,
-        vote_state::{VoteInit, VoteState},
+        vote_state::{self, VoteInit},
     },
     std::{
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
+        ops::Deref,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
@@ -203,10 +204,8 @@ impl LocalCluster {
                     if *in_genesis {
                         Some((
                             ValidatorVoteKeypairs {
-                                node_keypair: Keypair::from_bytes(&node_keypair.to_bytes())
-                                    .unwrap(),
-                                vote_keypair: Keypair::from_bytes(&vote_keypair.to_bytes())
-                                    .unwrap(),
+                                node_keypair: node_keypair.deref().clone(),
+                                vote_keypair: vote_keypair.deref().clone(),
                                 stake_keypair: Keypair::new(),
                             },
                             stake,
@@ -265,9 +264,8 @@ impl LocalCluster {
         let mut leader_config = safe_clone_config(&config.validator_configs[0]);
         leader_config.rpc_addrs = Some((leader_node.info.rpc, leader_node.info.rpc_pubsub));
         Self::sync_ledger_path_across_nested_config_fields(&mut leader_config, &leader_ledger_path);
-        let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
-        let leader_vote_keypair =
-            Arc::new(Keypair::from_bytes(&leader_vote_keypair.to_bytes()).unwrap());
+        let leader_keypair = Arc::new(leader_keypair.clone());
+        let leader_vote_keypair = Arc::new(leader_vote_keypair.clone());
 
         let leader_server = Validator::new(
             leader_node,
@@ -315,7 +313,7 @@ impl LocalCluster {
             .map(|keypairs| {
                 (
                     keypairs.node_keypair.pubkey(),
-                    Arc::new(Keypair::from_bytes(&keypairs.vote_keypair.to_bytes()).unwrap()),
+                    Arc::new(keypairs.vote_keypair.clone()),
                 )
             })
             .collect();
@@ -708,7 +706,7 @@ impl LocalCluster {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
                     stake_state::stake_from(&stake_account),
-                    VoteState::from(&vote_account),
+                    vote_state::from(&vote_account),
                 ) {
                     (Some(stake_state), Some(vote_state)) => {
                         if stake_state.delegation.voter_pubkey != vote_account_pubkey

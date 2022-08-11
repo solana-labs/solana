@@ -15,9 +15,7 @@ use {
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount},
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
-        feature_set::{
-            cap_accounts_data_len, enable_early_verification_of_account_modifications, FeatureSet,
-        },
+        feature_set::{enable_early_verification_of_account_modifications, FeatureSet},
         hash::Hash,
         instruction::{AccountMeta, Instruction, InstructionError},
         native_loader,
@@ -448,7 +446,6 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         program_indices: &[usize],
     ) -> Result<(), InstructionError> {
-        let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let instruction_context = self
             .transaction_context
             .get_current_instruction_context()
@@ -519,12 +516,8 @@ impl<'a> InvokeContext<'a> {
             let pre_data_len = pre_account.data().len() as i64;
             let post_data_len = account.data().len() as i64;
             let data_len_delta = post_data_len.saturating_sub(pre_data_len);
-            if cap_accounts_data_len {
-                self.accounts_data_meter.adjust_delta(data_len_delta)?;
-            } else {
-                self.accounts_data_meter
-                    .adjust_delta_unchecked(data_len_delta);
-            }
+            self.accounts_data_meter
+                .adjust_delta_unchecked(data_len_delta);
         }
 
         // Verify that the total sum of all the lamports did not change
@@ -543,7 +536,6 @@ impl<'a> InvokeContext<'a> {
         instruction_accounts: &[InstructionAccount],
         before_instruction_context_push: bool,
     ) -> Result<(), InstructionError> {
-        let cap_accounts_data_len = self.feature_set.is_active(&cap_accounts_data_len::id());
         let transaction_context = &self.transaction_context;
         let instruction_context = transaction_context.get_current_instruction_context()?;
         let program_id = instruction_context
@@ -612,12 +604,8 @@ impl<'a> InvokeContext<'a> {
                         let pre_data_len = pre_account.data().len() as i64;
                         let post_data_len = account.data().len() as i64;
                         let data_len_delta = post_data_len.saturating_sub(pre_data_len);
-                        if cap_accounts_data_len {
-                            self.accounts_data_meter.adjust_delta(data_len_delta)?;
-                        } else {
-                            self.accounts_data_meter
-                                .adjust_delta_unchecked(data_len_delta);
-                        }
+                        self.accounts_data_meter
+                            .adjust_delta_unchecked(data_len_delta);
 
                         break;
                     }
@@ -1519,9 +1507,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_instruction_accounts_data_meter() {
-        solana_logger::setup();
-
+    fn test_process_instruction_accounts_resize_delta() {
         let program_key = Pubkey::new_unique();
         let user_account_data_len = 123u64;
         let user_account =
@@ -1545,14 +1531,6 @@ mod tests {
         let mut invoke_context =
             InvokeContext::new_mock(&mut transaction_context, &builtin_programs);
 
-        invoke_context
-            .accounts_data_meter
-            .set_initial(user_account_data_len as u64);
-        invoke_context
-            .accounts_data_meter
-            .set_maximum(user_account_data_len as u64 * 3);
-        let remaining_account_data_len = invoke_context.accounts_data_meter.remaining();
-
         let instruction_accounts = [
             InstructionAccount {
                 index_in_transaction: 0,
@@ -1570,9 +1548,10 @@ mod tests {
             },
         ];
 
-        // Test 1: Resize the account to use up all the space; this must succeed
+        // Test: Resize the account to *the same size*, so not consuming any additional size; this must succeed
         {
-            let new_len = user_account_data_len + remaining_account_data_len;
+            let resize_delta: i64 = 0;
+            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1590,13 +1569,14 @@ mod tests {
                     .transaction_context
                     .accounts_resize_delta()
                     .unwrap(),
-                user_account_data_len as i64 * 2
+                resize_delta
             );
         }
 
-        // Test 2: Resize the account to *the same size*, so not consuming any additional size; this must succeed
+        // Test: Resize the account larger; this must succeed
         {
-            let new_len = user_account_data_len + remaining_account_data_len;
+            let resize_delta: i64 = 1;
+            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1614,13 +1594,14 @@ mod tests {
                     .transaction_context
                     .accounts_resize_delta()
                     .unwrap(),
-                user_account_data_len as i64 * 2
+                resize_delta
             );
         }
 
-        // Test 3: Resize the account to exceed the budget; this must succeed
+        // Test: Resize the account smaller; this must succeed
         {
-            let new_len = user_account_data_len + remaining_account_data_len + 1;
+            let resize_delta: i64 = -1;
+            let new_len = (user_account_data_len as i64 + resize_delta) as u64;
             let instruction_data =
                 bincode::serialize(&MockInstruction::Resize { new_len }).unwrap();
 
@@ -1638,7 +1619,7 @@ mod tests {
                     .transaction_context
                     .accounts_resize_delta()
                     .unwrap(),
-                user_account_data_len as i64 * 2 + 1
+                resize_delta
             );
         }
     }

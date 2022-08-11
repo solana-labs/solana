@@ -99,7 +99,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service,
     solana_streamer::{socket::SocketAddrSpace, streamer::StakedNodes},
-    solana_vote_program::vote_state::VoteState,
+    solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
         net::SocketAddr,
@@ -115,9 +115,6 @@ use {
 
 const MAX_COMPLETED_DATA_SETS_IN_CHANNEL: usize = 100_000;
 const WAIT_FOR_SUPERMAJORITY_THRESHOLD_PERCENT: u64 = 80;
-
-/// maximum drop bank signal queue length
-const MAX_DROP_BANK_SIGNAL_QUEUE_SIZE: usize = 10_000;
 
 pub struct ValidatorConfig {
     pub halt_at_slot: Option<Slot>,
@@ -161,6 +158,7 @@ pub struct ValidatorConfig {
     pub no_os_memory_stats_reporting: bool,
     pub no_os_network_stats_reporting: bool,
     pub no_os_cpu_stats_reporting: bool,
+    pub no_os_disk_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
     pub account_indexes: AccountSecondaryIndexes,
@@ -223,6 +221,7 @@ impl Default for ValidatorConfig {
             no_os_memory_stats_reporting: true,
             no_os_network_stats_reporting: true,
             no_os_cpu_stats_reporting: true,
+            no_os_disk_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
             account_indexes: AccountSecondaryIndexes::default(),
@@ -504,6 +503,7 @@ impl Validator {
             !config.no_os_memory_stats_reporting,
             !config.no_os_network_stats_reporting,
             !config.no_os_cpu_stats_reporting,
+            !config.no_os_disk_stats_reporting,
         ));
 
         let (poh_timing_point_sender, poh_timing_point_receiver) = unbounded();
@@ -1206,7 +1206,7 @@ impl Validator {
 
 fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -> bool {
     if let Some(account) = &bank.get_account(vote_account) {
-        if let Some(vote_state) = VoteState::from(account) {
+        if let Some(vote_state) = vote_state::from(account) {
             return !vote_state.votes.is_empty();
         }
     }
@@ -1465,22 +1465,8 @@ fn load_blockstore(
     // drop behavior can be safely synchronized with any other ongoing accounts activity like
     // cache flush, clean, shrink, as long as the same thread performing those activities also
     // is processing the dropped banks from the `pruned_banks_receiver` channel.
-
-    // There should only be one bank, the root bank in BankForks. Thus all banks added to
-    // BankForks from now on will be descended from the root bank and thus will inherit
-    // the bank drop callback.
-    assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
-    let (pruned_banks_sender, pruned_banks_receiver) = bounded(MAX_DROP_BANK_SIGNAL_QUEUE_SIZE);
-    {
-        let root_bank = bank_forks.read().unwrap().root_bank();
-        root_bank.set_callback(Some(Box::new(
-            root_bank
-                .rc
-                .accounts
-                .accounts_db
-                .create_drop_bank_callback(pruned_banks_sender),
-        )));
-    }
+    let pruned_banks_receiver =
+        AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
 
     {
         let hard_forks: Vec<_> = bank_forks

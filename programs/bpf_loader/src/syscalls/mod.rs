@@ -1,16 +1,16 @@
+pub use self::{
+    cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
+    logging::{
+        SyscallLog, SyscallLogBpfComputeUnits, SyscallLogData, SyscallLogPubkey, SyscallLogU64,
+    },
+    mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
+    sysvar::{
+        SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
+        SyscallGetRentSysvar,
+    },
+};
 #[allow(deprecated)]
 use {
-    self::{
-        cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
-        logging::{
-            SyscallLog, SyscallLogBpfComputeUnits, SyscallLogData, SyscallLogPubkey, SyscallLogU64,
-        },
-        mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
-        sysvar::{
-            SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
-            SyscallGetRentSysvar,
-        },
-    },
     crate::{allocator_bump::BpfAllocator, BpfError},
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
@@ -34,10 +34,10 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             self, blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
-            curve25519_syscall_enabled, disable_fees_sysvar,
-            enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
-            limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
-            syscall_saturated_math,
+            curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
+            disable_fees_sysvar, enable_early_verification_of_account_modifications,
+            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
+            prevent_calling_precompiles_as_programs, syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -1750,8 +1750,9 @@ declare_syscall!(
                 result
             );
 
-            if *data_len == instruction_context.get_instruction_data().len()
-                && *accounts_len == instruction_context.get_number_of_instruction_accounts()
+            if *data_len == (instruction_context.get_instruction_data().len() as u64)
+                && *accounts_len
+                    == (instruction_context.get_number_of_instruction_accounts() as u64)
             {
                 let program_id = question_mark!(
                     translate_type_mut::<Pubkey>(
@@ -1809,8 +1810,8 @@ declare_syscall!(
                 );
                 accounts.clone_from_slice(account_metas.as_slice());
             }
-            *data_len = instruction_context.get_instruction_data().len();
-            *accounts_len = instruction_context.get_number_of_instruction_accounts();
+            *data_len = instruction_context.get_instruction_data().len() as u64;
+            *accounts_len = instruction_context.get_number_of_instruction_accounts() as u64;
             *result = Ok(true as u64);
             return;
         }

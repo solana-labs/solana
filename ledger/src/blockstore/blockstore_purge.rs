@@ -4,6 +4,7 @@ use {super::*, solana_sdk::message::AccountKeys, std::time::Instant};
 pub struct PurgeStats {
     delete_range: u64,
     write_batch: u64,
+    delete_files_in_range: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -46,7 +47,12 @@ impl Blockstore {
             ("from_slot", from_slot as i64, i64),
             ("to_slot", to_slot as i64, i64),
             ("delete_range_us", purge_stats.delete_range as i64, i64),
-            ("write_batch_us", purge_stats.write_batch as i64, i64)
+            ("write_batch_us", purge_stats.write_batch as i64, i64),
+            (
+                "delete_files_in_range_us",
+                purge_stats.write_batch as i64,
+                i64
+            )
         );
         if let Err(e) = purge_result {
             error!(
@@ -141,6 +147,9 @@ impl Blockstore {
 
     /// A helper function to `purge_slots` that executes the ledger clean up
     /// from `from_slot` to `to_slot`.
+    ///
+    /// When `from_slot` is 0, any sst-file with a key-range completely older
+    /// than `to_slot` will also be deleted.
     pub(crate) fn run_purge_with_stats(
         &self,
         from_slot: Slot,
@@ -239,6 +248,7 @@ impl Blockstore {
             }
         }
         delete_range_timer.stop();
+
         let mut write_timer = Measure::start("write_batch");
         if let Err(e) = self.db.write(write_batch) {
             error!(
@@ -248,13 +258,95 @@ impl Blockstore {
             return Err(e);
         }
         write_timer.stop();
+
+        let mut purge_files_in_range_timer = Measure::start("delete_file_in_range");
+        // purge_files_in_range delete any files whose slot range is within
+        // [from_slot, to_slot].  When from_slot is 0, it is safe to run
+        // purge_files_in_range because if purge_files_in_range deletes any
+        // sst file that contains any range-deletion tombstone, the deletion
+        // range of that tombstone will be completely covered by the new
+        // range-delete tombstone (0, to_slot) issued above.
+        //
+        // On the other hand, purge_files_in_range is more effective and
+        // efficient than the compaction filter (which runs key-by-key)
+        // because all the sst files that have key range below to_slot
+        // can be deleted immediately.
+        if columns_purged && from_slot == 0 {
+            self.purge_files_in_range(from_slot, to_slot);
+        }
+        purge_files_in_range_timer.stop();
+
         purge_stats.delete_range += delete_range_timer.as_us();
         purge_stats.write_batch += write_timer.as_us();
+        purge_stats.delete_files_in_range += purge_files_in_range_timer.as_us();
+
         // only drop w_active_transaction_status_index after we do db.write(write_batch);
         // otherwise, readers might be confused with inconsistent state between
         // self.active_transaction_status_index and RockDb's TransactionStatusIndex contents
         drop(w_active_transaction_status_index);
         Ok(columns_purged)
+    }
+
+    fn purge_files_in_range(&self, from_slot: Slot, to_slot: Slot) -> bool {
+        self.db
+            .delete_file_in_range_cf::<cf::SlotMeta>(from_slot, to_slot)
+            .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::BankHash>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::Root>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::ShredData>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::ShredCode>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::DeadSlots>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::DuplicateSlots>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::ErasureMeta>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::Orphans>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::Index>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::Rewards>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::Blocktime>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::PerfSamples>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::BlockHeight>(from_slot, to_slot)
+                .is_ok()
+            & self
+                .db
+                .delete_file_in_range_cf::<cf::OptimisticSlots>(from_slot, to_slot)
+                .is_ok()
     }
 
     pub fn compact_storage(&self, from_slot: Slot, to_slot: Slot) -> Result<bool> {

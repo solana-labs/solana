@@ -35,6 +35,7 @@
 //! already been signed and verified.
 #[allow(deprecated)]
 use solana_sdk::recent_blockhashes_account;
+pub use solana_sdk::reward_type::RewardType;
 use {
     crate::{
         account_overrides::AccountOverrides,
@@ -57,6 +58,7 @@ use {
         inline_spl_associated_token_account, inline_spl_token,
         message_processor::MessageProcessor,
         rent_collector::{CollectedInfo, RentCollector},
+        runtime_config::RuntimeConfig,
         stake_account::{self, StakeAccount},
         stake_weighted_timestamp::{
             calculate_stake_weighted_timestamp, MaxAllowableDrift,
@@ -1061,7 +1063,7 @@ impl PartialEq for Bank {
             is_delta,
             // TODO: Confirm if all these fields are intentionally ignored!
             builtin_programs: _,
-            compute_budget: _,
+            runtime_config: _,
             builtin_feature_transitions: _,
             rewards: _,
             cluster_type: _,
@@ -1119,14 +1121,6 @@ impl PartialEq for Bank {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, AbiExample, AbiEnumVisitor, Clone, Copy)]
-pub enum RewardType {
-    Fee,
-    Rent,
-    Staking,
-    Voting,
-}
-
 #[derive(Debug)]
 pub enum RewardCalculationEvent<'a, 'b> {
     Staking(&'a Pubkey, &'b InflationPointCalculationEvent),
@@ -1134,21 +1128,6 @@ pub enum RewardCalculationEvent<'a, 'b> {
 
 fn null_tracer() -> Option<impl Fn(&RewardCalculationEvent) + Send + Sync> {
     None::<fn(&RewardCalculationEvent)>
-}
-
-impl fmt::Display for RewardType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                RewardType::Fee => "fee",
-                RewardType::Rent => "rent",
-                RewardType::Staking => "staking",
-                RewardType::Voting => "voting",
-            }
-        )
-    }
 }
 
 pub trait DropCallback: fmt::Debug {
@@ -1304,7 +1283,8 @@ pub struct Bank {
     /// The builtin programs
     builtin_programs: BuiltinPrograms,
 
-    compute_budget: Option<ComputeBudget>,
+    /// Optional config parameters that can override runtime behavior
+    runtime_config: Arc<RuntimeConfig>,
 
     /// Dynamic feature transitions for builtin programs
     #[allow(clippy::rc_buffer)]
@@ -1436,21 +1416,26 @@ impl Bank {
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
-        Self::new_with_paths_for_benches(
-            genesis_config,
-            Vec::new(),
-            None,
-            None,
-            AccountSecondaryIndexes::default(),
-            false,
-            AccountShrinkThreshold::default(),
-            false,
-        )
+        Self::new_with_paths_for_benches(genesis_config, Vec::new())
     }
 
     pub fn new_for_tests(genesis_config: &GenesisConfig) -> Self {
         Self::new_with_config_for_tests(
             genesis_config,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+        )
+    }
+
+    pub fn new_with_runtime_config_for_tests(
+        genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
+    ) -> Self {
+        Self::new_with_paths_for_tests(
+            genesis_config,
+            runtime_config,
+            Vec::new(),
             AccountSecondaryIndexes::default(),
             false,
             AccountShrinkThreshold::default(),
@@ -1472,14 +1457,11 @@ impl Bank {
     ) -> Self {
         Self::new_with_paths_for_tests(
             genesis_config,
+            Arc::<RuntimeConfig>::default(),
             Vec::new(),
-            None,
-            None,
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
-            false,
-            None,
         )
     }
 
@@ -1523,7 +1505,7 @@ impl Bank {
             epoch_stakes: HashMap::<Epoch, EpochStakes>::default(),
             is_delta: AtomicBool::default(),
             builtin_programs: BuiltinPrograms::default(),
-            compute_budget: Option::<ComputeBudget>::default(),
+            runtime_config: Arc::<RuntimeConfig>::default(),
             builtin_feature_transitions: Arc::<Vec<BuiltinFeatureTransition>>::default(),
             rewards: RwLock::<Vec<(Pubkey, RewardInfo)>>::default(),
             cluster_type: Option::<ClusterType>::default(),
@@ -1554,48 +1536,38 @@ impl Bank {
 
     pub fn new_with_paths_for_tests(
         genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
-        debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
         account_indexes: AccountSecondaryIndexes,
         accounts_db_caching_enabled: bool,
         shrink_ratio: AccountShrinkThreshold,
-        debug_do_not_add_builtins: bool,
-        accounts_db_config: Option<AccountsDbConfig>,
     ) -> Self {
         Self::new_with_paths(
             genesis_config,
+            runtime_config,
             paths,
-            debug_keys,
-            additional_builtins,
+            None,
+            None,
             account_indexes,
             accounts_db_caching_enabled,
             shrink_ratio,
-            debug_do_not_add_builtins,
-            accounts_db_config.or(Some(ACCOUNTS_DB_CONFIG_FOR_TESTING)),
+            false,
+            Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
         )
     }
 
-    pub fn new_with_paths_for_benches(
-        genesis_config: &GenesisConfig,
-        paths: Vec<PathBuf>,
-        debug_keys: Option<Arc<HashSet<Pubkey>>>,
-        additional_builtins: Option<&Builtins>,
-        account_indexes: AccountSecondaryIndexes,
-        accounts_db_caching_enabled: bool,
-        shrink_ratio: AccountShrinkThreshold,
-        debug_do_not_add_builtins: bool,
-    ) -> Self {
+    pub fn new_with_paths_for_benches(genesis_config: &GenesisConfig, paths: Vec<PathBuf>) -> Self {
         Self::new_with_paths(
             genesis_config,
+            Arc::<RuntimeConfig>::default(),
             paths,
-            debug_keys,
-            additional_builtins,
-            account_indexes,
-            accounts_db_caching_enabled,
-            shrink_ratio,
-            debug_do_not_add_builtins,
+            None,
+            None,
+            AccountSecondaryIndexes::default(),
+            false,
+            AccountShrinkThreshold::default(),
+            false,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
         )
@@ -1604,6 +1576,7 @@ impl Bank {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_paths(
         genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
         paths: Vec<PathBuf>,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
@@ -1626,6 +1599,7 @@ impl Bank {
         let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
+        bank.runtime_config = runtime_config;
         bank.cluster_type = Some(genesis_config.cluster_type);
 
         bank.process_genesis_config(genesis_config);
@@ -1833,7 +1807,7 @@ impl Bank {
             tick_height: AtomicU64::new(parent.tick_height.load(Relaxed)),
             signature_count: AtomicU64::new(0),
             builtin_programs,
-            compute_budget: parent.compute_budget,
+            runtime_config: parent.runtime_config.clone(),
             builtin_feature_transitions: parent.builtin_feature_transitions.clone(),
             hard_forks: parent.hard_forks.clone(),
             rewards: RwLock::new(vec![]),
@@ -2124,6 +2098,7 @@ impl Bank {
     pub(crate) fn new_from_fields(
         bank_rc: BankRc,
         genesis_config: &GenesisConfig,
+        runtime_config: Arc<RuntimeConfig>,
         fields: BankFieldsToDeserialize,
         debug_keys: Option<Arc<HashSet<Pubkey>>>,
         additional_builtins: Option<&Builtins>,
@@ -2191,7 +2166,7 @@ impl Bank {
             epoch_stakes: fields.epoch_stakes,
             is_delta: AtomicBool::new(fields.is_delta),
             builtin_programs: new(),
-            compute_budget: None,
+            runtime_config,
             builtin_feature_transitions: new(),
             rewards: new(),
             cluster_type: Some(genesis_config.cluster_type),
@@ -4381,6 +4356,9 @@ impl Bank {
                     | TransactionError::InsufficientFundsForRent { .. } => {
                         error_counters.invalid_rent_paying_account += 1;
                     }
+                    TransactionError::InvalidAccountIndex => {
+                        error_counters.invalid_account_index += 1;
+                    }
                     _ => {
                         error_counters.instruction_error += 1;
                     }
@@ -4538,31 +4516,32 @@ impl Bank {
                         feature_set_clone_time.as_us()
                     );
 
-                    let compute_budget = if let Some(compute_budget) = self.compute_budget {
-                        compute_budget
-                    } else {
-                        let mut compute_budget =
-                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
+                    let compute_budget =
+                        if let Some(compute_budget) = self.runtime_config.compute_budget {
+                            compute_budget
+                        } else {
+                            let mut compute_budget =
+                                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
 
-                        let mut compute_budget_process_transaction_time =
-                            Measure::start("compute_budget_process_transaction_time");
-                        let process_transaction_result = compute_budget.process_instructions(
-                            tx.message().program_instructions_iter(),
-                            feature_set.is_active(&default_units_per_instruction::id()),
-                            feature_set.is_active(&add_set_compute_unit_price_ix::id()),
-                        );
-                        compute_budget_process_transaction_time.stop();
-                        saturating_add_assign!(
-                            timings
-                                .execute_accessories
-                                .compute_budget_process_transaction_us,
-                            compute_budget_process_transaction_time.as_us()
-                        );
-                        if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
-                        }
-                        compute_budget
-                    };
+                            let mut compute_budget_process_transaction_time =
+                                Measure::start("compute_budget_process_transaction_time");
+                            let process_transaction_result = compute_budget.process_instructions(
+                                tx.message().program_instructions_iter(),
+                                feature_set.is_active(&default_units_per_instruction::id()),
+                                feature_set.is_active(&add_set_compute_unit_price_ix::id()),
+                            );
+                            compute_budget_process_transaction_time.stop();
+                            saturating_add_assign!(
+                                timings
+                                    .execute_accessories
+                                    .compute_budget_process_transaction_us,
+                                compute_budget_process_transaction_time.as_us()
+                            );
+                            if let Err(err) = process_transaction_result {
+                                return TransactionExecutionResult::NotExecuted(err);
+                            }
+                            compute_budget
+                        };
 
                     self.execute_loaded_transaction(
                         tx,
@@ -6562,10 +6541,6 @@ impl Bank {
 
     pub fn set_inflation(&self, inflation: Inflation) {
         *self.inflation.write().unwrap() = inflation;
-    }
-
-    pub fn set_compute_budget(&mut self, compute_budget: Option<ComputeBudget>) {
-        self.compute_budget = compute_budget;
     }
 
     pub fn hard_forks(&self) -> Arc<RwLock<HardForks>> {
@@ -10211,13 +10186,13 @@ pub(crate) mod tests {
         bank0.store_account_and_update_capitalization(&stake_id, &stake_account);
 
         // generate some rewards
-        let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
+        let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
         for i in 0..MAX_LOCKOUT_HISTORY + 42 {
             if let Some(v) = vote_state.as_mut() {
-                v.process_slot_vote_unchecked(i as u64)
+                vote_state::process_slot_vote_unchecked(v, i as u64)
             }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
-            VoteState::to(&versioned, &mut vote_account).unwrap();
+            vote_state::to(&versioned, &mut vote_account).unwrap();
             bank0.store_account_and_update_capitalization(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
@@ -10332,13 +10307,13 @@ pub(crate) mod tests {
         bank.store_account_and_update_capitalization(&stake_id2, &stake_account2);
 
         // generate some rewards
-        let mut vote_state = Some(VoteState::from(&vote_account).unwrap());
+        let mut vote_state = Some(vote_state::from(&vote_account).unwrap());
         for i in 0..MAX_LOCKOUT_HISTORY + 42 {
             if let Some(v) = vote_state.as_mut() {
-                v.process_slot_vote_unchecked(i as u64)
+                vote_state::process_slot_vote_unchecked(v, i as u64)
             }
             let versioned = VoteStateVersions::Current(Box::new(vote_state.take().unwrap()));
-            VoteState::to(&versioned, &mut vote_account).unwrap();
+            vote_state::to(&versioned, &mut vote_account).unwrap();
             bank.store_account_and_update_capitalization(&vote_id, &vote_account);
             match versioned {
                 VoteStateVersions::Current(v) => {
@@ -15751,10 +15726,10 @@ pub(crate) mod tests {
         vote_pubkey: &Pubkey,
     ) {
         let mut vote_account = bank.get_account(vote_pubkey).unwrap_or_default();
-        let mut vote_state = VoteState::from(&vote_account).unwrap_or_default();
+        let mut vote_state = vote_state::from(&vote_account).unwrap_or_default();
         vote_state.last_timestamp = timestamp;
         let versioned = VoteStateVersions::new_current(vote_state);
-        VoteState::to(&versioned, &mut vote_account).unwrap();
+        vote_state::to(&versioned, &mut vote_account).unwrap();
         bank.store_account(vote_pubkey, &vote_account);
     }
 
@@ -17993,62 +17968,6 @@ pub(crate) mod tests {
         );
     }
 
-    /// Test exceeding the max accounts data size by creating accounts in a loop
-    #[test]
-    fn test_max_accounts_data_size_exceeded() {
-        const NUM_ACCOUNTS: u64 = 20;
-        const ACCOUNT_SIZE: u64 = MAX_PERMITTED_DATA_LENGTH / (NUM_ACCOUNTS + 1);
-        const REMAINING_ACCOUNTS_DATA_SIZE: u64 = NUM_ACCOUNTS * ACCOUNT_SIZE;
-
-        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000_000_000);
-        let mut bank = Bank::new_for_tests(&genesis_config);
-        bank.activate_feature(&feature_set::cap_accounts_data_len::id());
-        bank.accounts_data_size_initial = bank.accounts_data_size_limit()
-            - REMAINING_ACCOUNTS_DATA_SIZE
-            - bank.load_accounts_data_size_delta() as u64;
-
-        let mut i = 0;
-        let result = loop {
-            let txn = system_transaction::create_account(
-                &mint_keypair,
-                &Keypair::new(),
-                bank.last_blockhash(),
-                genesis_config
-                    .rent
-                    .minimum_balance(ACCOUNT_SIZE.try_into().unwrap()),
-                ACCOUNT_SIZE,
-                &solana_sdk::system_program::id(),
-            );
-
-            let accounts_data_size_before = bank.load_accounts_data_size();
-            let result = bank.process_transaction(&txn);
-            let accounts_data_size_after = bank.load_accounts_data_size();
-            assert!(accounts_data_size_after <= bank.accounts_data_size_limit());
-            if result.is_err() {
-                assert_eq!(i, NUM_ACCOUNTS);
-                break result;
-            }
-
-            assert_eq!(
-                accounts_data_size_after - accounts_data_size_before,
-                ACCOUNT_SIZE,
-            );
-            assert!(
-                i <= NUM_ACCOUNTS,
-                "test must complete within bounded limits"
-            );
-            i += 1;
-        };
-
-        assert!(matches!(
-            result,
-            Err(TransactionError::InstructionError(
-                _,
-                solana_sdk::instruction::InstructionError::MaxAccountsDataSizeExceeded,
-            ))
-        ));
-    }
-
     /// Test processing a good transaction correctly modifies the accounts data size
     #[test]
     fn test_accounts_data_size_with_good_transaction() {
@@ -18817,7 +18736,7 @@ pub(crate) mod tests {
             None,
         );
 
-        let compute_budget = bank.compute_budget.unwrap_or_else(|| {
+        let compute_budget = bank.runtime_config.compute_budget.unwrap_or_else(|| {
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
         });
         let transaction_context = TransactionContext::new(

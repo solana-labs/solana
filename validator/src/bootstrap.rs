@@ -266,7 +266,7 @@ fn check_vote_account(
         .value
         .ok_or_else(|| format!("identity account does not exist: {}", identity_pubkey))?;
 
-    let vote_state = solana_vote_program::vote_state::VoteState::from(&vote_account);
+    let vote_state = solana_vote_program::vote_state::from(&vote_account);
     if let Some(vote_state) = vote_state {
         if vote_state.authorized_voters().is_empty() {
             return Err("Vote account not yet initialized".to_string());

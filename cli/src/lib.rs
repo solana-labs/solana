@@ -27,6 +27,7 @@ pub mod checks;
 pub mod clap_app;
 pub mod cli;
 pub mod cluster_query;
+pub mod compute_unit_price;
 pub mod feature;
 pub mod inflation;
 pub mod memo;

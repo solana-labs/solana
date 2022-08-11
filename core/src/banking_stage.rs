@@ -1,9 +1,11 @@
 //! The `banking_stage` processes Transaction messages. It is intended to be used
 //! to construct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
+
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
+        immutable_deserialized_packet::ImmutableDeserializedPacket,
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
@@ -23,7 +25,9 @@ use {
     solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
-    solana_ledger::blockstore_processor::TransactionStatusSender,
+    solana_ledger::{
+        blockstore_processor::TransactionStatusSender, token_balances::collect_token_balances,
+    },
     solana_measure::{measure, measure::Measure},
     solana_metrics::inc_new_counter_info,
     solana_perf::{
@@ -57,9 +61,7 @@ use {
         transport::TransportError,
     },
     solana_streamer::sendmmsg::batch_send,
-    solana_transaction_status::token_balances::{
-        collect_token_balances, TransactionTokenBalancesSet,
-    },
+    solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
         cmp,
         collections::HashMap,
@@ -3881,6 +3883,7 @@ mod tests {
                     post_token_balances: Some(vec![]),
                     rewards: Some(vec![]),
                     loaded_addresses: sanitized_tx.get_loaded_addresses(),
+                    compute_units_consumed: Some(0),
                     ..TransactionStatusMeta::default()
                 }
             );

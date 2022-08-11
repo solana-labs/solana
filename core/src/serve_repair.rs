@@ -32,7 +32,7 @@ use {
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{
         clock::Slot,
-        feature_set::sign_repair_requests,
+        feature_set::{check_ping_ancestor_requests, sign_repair_requests},
         hash::{Hash, HASH_BYTES},
         packet::PACKET_DATA_SIZE,
         pubkey::{Pubkey, PUBKEY_BYTES},
@@ -43,7 +43,6 @@ use {
     },
     solana_streamer::{
         sendmmsg::{batch_send, SendPktsError},
-        socket::SocketAddrSpace,
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
@@ -131,36 +130,21 @@ impl AncestorHashesRepairType {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum AncestorHashesResponseVersion {
-    Current(Vec<SlotHash>),
-}
-impl AncestorHashesResponseVersion {
-    pub fn into_slot_hashes(self) -> Vec<SlotHash> {
-        match self {
-            AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
-        }
-    }
-
-    pub fn slot_hashes(&self) -> &[SlotHash] {
-        match self {
-            AncestorHashesResponseVersion::Current(slot_hashes) => slot_hashes,
-        }
-    }
-
-    fn max_ancestors_in_response(&self) -> usize {
-        match self {
-            AncestorHashesResponseVersion::Current(_) => MAX_ANCESTOR_RESPONSES,
-        }
-    }
+pub enum AncestorHashesResponse {
+    Hashes(Vec<SlotHash>),
+    Ping(Ping),
 }
 
 impl RequestResponse for AncestorHashesRepairType {
-    type Response = AncestorHashesResponseVersion;
+    type Response = AncestorHashesResponse;
     fn num_expected_responses(&self) -> u32 {
         1
     }
-    fn verify_response(&self, response: &AncestorHashesResponseVersion) -> bool {
-        response.slot_hashes().len() <= response.max_ancestors_in_response()
+    fn verify_response(&self, response: &AncestorHashesResponse) -> bool {
+        match response {
+            AncestorHashesResponse::Hashes(hashes) => hashes.len() <= MAX_ANCESTOR_RESPONSES,
+            AncestorHashesResponse::Ping(ping) => ping.verify(),
+        }
     }
 }
 
@@ -241,7 +225,7 @@ pub enum RepairProtocol {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-enum RepairResponse {
+pub(crate) enum RepairResponse {
     Ping(Ping),
 }
 
@@ -277,23 +261,6 @@ impl RepairProtocol {
             | Self::HighestWindowIndex { .. }
             | Self::Orphan { .. }
             | Self::AncestorHashes { .. } => true,
-        }
-    }
-
-    fn requires_ping_check(&self) -> bool {
-        match self {
-            Self::LegacyWindowIndex(_, _, _)
-            | Self::LegacyHighestWindowIndex(_, _, _)
-            | Self::LegacyOrphan(_, _)
-            | Self::LegacyWindowIndexWithNonce(_, _, _, _)
-            | Self::LegacyHighestWindowIndexWithNonce(_, _, _, _)
-            | Self::LegacyOrphanWithNonce(_, _, _)
-            | Self::LegacyAncestorHashes(_, _, _)
-            | Self::Pong(_)
-            | Self::AncestorHashes { .. } => false,
-            Self::WindowIndex { .. } | Self::HighestWindowIndex { .. } | Self::Orphan { .. } => {
-                true
-            }
         }
     }
 }
@@ -470,6 +437,24 @@ impl ServeRepair {
         sign_repairs_epoch: Option<Epoch>,
     ) -> bool {
         match sign_repairs_epoch {
+            None => false,
+            Some(feature_epoch) => feature_epoch < root_bank.epoch_schedule().get_epoch(slot),
+        }
+    }
+
+    fn check_ping_ancestor_requests_activated_epoch(root_bank: &Bank) -> Option<Epoch> {
+        root_bank
+            .feature_set
+            .activated_slot(&check_ping_ancestor_requests::id())
+            .map(|slot| root_bank.epoch_schedule().get_epoch(slot))
+    }
+
+    fn should_check_ping_ancestor_request(
+        slot: Slot,
+        root_bank: &Bank,
+        check_ping_ancestor_request_epoch: Option<Epoch>,
+    ) -> bool {
+        match check_ping_ancestor_request_epoch {
             None => false,
             Some(feature_epoch) => feature_epoch < root_bank.epoch_schedule().get_epoch(slot),
         }
@@ -682,26 +667,11 @@ impl ServeRepair {
         request: &RepairProtocol,
         from_addr: &SocketAddr,
         identity_keypair: &Keypair,
-        socket_addr_space: &SocketAddrSpace,
         ping_cache: &mut PingCache,
-        pending_pings: &mut Vec<(SocketAddr, Ping)>,
-        stats: &mut ServeRepairStats,
-    ) -> bool {
-        if !ContactInfo::is_valid_address(from_addr, socket_addr_space) {
-            stats.err_malformed += 1;
-            return false;
-        }
+    ) -> (bool, Option<Ping>) {
         let mut rng = rand::thread_rng();
         let mut pingf = move || Ping::new_rand(&mut rng, identity_keypair).ok();
-        let (check, ping) =
-            ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf);
-        if let Some(ping) = ping {
-            pending_pings.push((*from_addr, ping));
-        }
-        if !check {
-            stats.pings_required += 1;
-        }
-        check
+        ping_cache.check(Instant::now(), (*request.sender(), *from_addr), &mut pingf)
     }
 
     fn requires_signature_check(
@@ -727,6 +697,44 @@ impl ServeRepair {
         }
     }
 
+    fn ping_to_packet_mapper_by_request_variant(
+        request: &RepairProtocol,
+        dest_addr: SocketAddr,
+        root_bank: &Bank,
+        check_ping_ancestor_request_epoch: Option<Epoch>,
+    ) -> Option<Box<dyn FnOnce(Ping) -> Option<Packet>>> {
+        match request {
+            RepairProtocol::LegacyWindowIndex(_, _, _)
+            | RepairProtocol::LegacyHighestWindowIndex(_, _, _)
+            | RepairProtocol::LegacyOrphan(_, _)
+            | RepairProtocol::LegacyWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::LegacyHighestWindowIndexWithNonce(_, _, _, _)
+            | RepairProtocol::LegacyOrphanWithNonce(_, _, _)
+            | RepairProtocol::LegacyAncestorHashes(_, _, _)
+            | RepairProtocol::Pong(_) => None,
+            RepairProtocol::WindowIndex { .. }
+            | RepairProtocol::HighestWindowIndex { .. }
+            | RepairProtocol::Orphan { .. } => Some(Box::new(move |ping| {
+                let ping = RepairResponse::Ping(ping);
+                Packet::from_data(Some(&dest_addr), ping).ok()
+            })),
+            RepairProtocol::AncestorHashes { slot, .. } => {
+                if Self::should_check_ping_ancestor_request(
+                    *slot,
+                    root_bank,
+                    check_ping_ancestor_request_epoch,
+                ) {
+                    Some(Box::new(move |ping| {
+                        let ping = AncestorHashesResponse::Ping(ping);
+                        Packet::from_data(Some(&dest_addr), ping).ok()
+                    }))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     fn handle_packets(
         &self,
         ping_cache: &mut PingCache,
@@ -739,6 +747,8 @@ impl ServeRepair {
         data_budget: &DataBudget,
     ) {
         let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
+        let check_ping_ancestor_request_epoch =
+            Self::check_ping_ancestor_requests_activated_epoch(root_bank);
         let identity_keypair = self.cluster_info.keypair().clone();
         let socket_addr_space = *self.cluster_info.socket_addr_space();
         let my_id = identity_keypair.pubkey();
@@ -772,18 +782,27 @@ impl ServeRepair {
             }
 
             let from_addr = packet.meta.socket_addr();
-            if request.requires_ping_check()
-                && !Self::check_ping_cache(
-                    &request,
-                    &from_addr,
-                    &identity_keypair,
-                    &socket_addr_space,
-                    ping_cache,
-                    &mut pending_pings,
-                    stats,
-                )
-            {
-                continue;
+            if let Some(ping_to_pkt) = Self::ping_to_packet_mapper_by_request_variant(
+                &request,
+                from_addr,
+                root_bank,
+                check_ping_ancestor_request_epoch,
+            ) {
+                if !ContactInfo::is_valid_address(&from_addr, &socket_addr_space) {
+                    stats.err_malformed += 1;
+                    continue;
+                }
+                let (check, ping) =
+                    Self::check_ping_cache(&request, &from_addr, &identity_keypair, ping_cache);
+                if let Some(ping) = ping {
+                    if let Some(pkt) = ping_to_pkt(ping) {
+                        pending_pings.push(pkt);
+                    }
+                }
+                if !check {
+                    stats.pings_required += 1;
+                    continue;
+                }
             }
 
             stats.processed += 1;
@@ -806,15 +825,8 @@ impl ServeRepair {
         }
 
         if !pending_pings.is_empty() {
-            let packets: Vec<_> = pending_pings
-                .into_iter()
-                .filter_map(|(sockaddr, ping)| {
-                    let ping = RepairResponse::Ping(ping);
-                    Packet::from_data(Some(&sockaddr), ping).ok()
-                })
-                .collect();
-            let batch = PacketBatch::new(packets);
-            let _ = response_sender.send(batch);
+            let batch = PacketBatch::new(pending_pings);
+            let _ignore = response_sender.send(batch);
         }
     }
 
@@ -1198,7 +1210,7 @@ impl ServeRepair {
             // If this slot is not duplicate confirmed, return nothing
             vec![]
         };
-        let response = AncestorHashesResponseVersion::Current(ancestor_slot_hashes);
+        let response = AncestorHashesResponse::Hashes(ancestor_slot_hashes);
         let serialized_response = serialize(&response).ok()?;
 
         // Could probably directly write response into packet via `serialize_into()`
@@ -1961,7 +1973,7 @@ mod tests {
 
     #[test]
     fn test_run_ancestor_hashes() {
-        fn deserialize_ancestor_hashes_response(packet: &Packet) -> AncestorHashesResponseVersion {
+        fn deserialize_ancestor_hashes_response(packet: &Packet) -> AncestorHashesResponse {
             packet
                 .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
                 .unwrap()
@@ -1996,7 +2008,14 @@ mod tests {
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
-            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
+            match ancestor_hashes_response {
+                AncestorHashesResponse::Hashes(hashes) => {
+                    assert!(hashes.is_empty());
+                }
+                _ => {
+                    panic!("unexpected response: {:?}", &ancestor_hashes_response);
+                }
+            }
 
             // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
             // empty
@@ -2011,7 +2030,14 @@ mod tests {
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
-            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
+            match ancestor_hashes_response {
+                AncestorHashesResponse::Hashes(hashes) => {
+                    assert!(hashes.is_empty());
+                }
+                _ => {
+                    panic!("unexpected response: {:?}", &ancestor_hashes_response);
+                }
+            }
 
             // Set duplicate confirmed
             let mut expected_ancestors = Vec::with_capacity(num_slots as usize);
@@ -2033,10 +2059,14 @@ mod tests {
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
-            assert_eq!(
-                ancestor_hashes_response.into_slot_hashes(),
-                expected_ancestors
-            );
+            match ancestor_hashes_response {
+                AncestorHashesResponse::Hashes(hashes) => {
+                    assert_eq!(hashes, expected_ancestors);
+                }
+                _ => {
+                    panic!("unexpected response: {:?}", &ancestor_hashes_response);
+                }
+            }
         }
 
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
@@ -2184,10 +2214,10 @@ mod tests {
             .into_iter()
             .map(|slot| (slot, Hash::new_unique()))
             .collect();
-        assert!(repair.verify_response(&AncestorHashesResponseVersion::Current(response.clone())));
+        assert!(repair.verify_response(&AncestorHashesResponse::Hashes(response.clone())));
 
         // over the allowed limit, should fail
         response.push((request_slot, Hash::new_unique()));
-        assert!(!repair.verify_response(&AncestorHashesResponseVersion::Current(response)));
+        assert!(!repair.verify_response(&AncestorHashesResponse::Hashes(response)));
     }
 }

@@ -1,7 +1,6 @@
 use {
-    log::*,
+    crate::{clock::Epoch, pubkey::Pubkey},
     serde_derive::{Deserialize, Serialize},
-    solana_sdk::{clock::Epoch, pubkey::Pubkey},
     std::collections::BTreeMap,
 };
 
@@ -93,12 +92,14 @@ impl AuthorizedVoters {
             // from the latest epoch before this one
             let res = self.authorized_voters.range(0..epoch).next_back();
 
+            /*
             if res.is_none() {
                 warn!(
                     "Tried to query for the authorized voter of an epoch earlier
                     than the current epoch. Earlier epochs have been purged"
                 );
             }
+            */
 
             res.map(|(_, pubkey)| (*pubkey, false))
         } else {

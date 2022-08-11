@@ -618,7 +618,7 @@ pub(crate) mod tests {
         stakes_cache.check_and_store(&vote11_pubkey, &vote11_account);
         stakes_cache.check_and_store(&stake11_pubkey, &stake11_account);
 
-        let vote11_node_pubkey = VoteState::from(&vote11_account).unwrap().node_pubkey;
+        let vote11_node_pubkey = vote_state::from(&vote11_account).unwrap().node_pubkey;
 
         let highest_staked_node = stakes_cache.stakes().highest_staked_node();
         assert_eq!(highest_staked_node, Some(vote11_node_pubkey));
@@ -681,7 +681,7 @@ pub(crate) mod tests {
         // Vote account uninitialized
         let default_vote_state = VoteState::default();
         let versioned = VoteStateVersions::new_current(default_vote_state);
-        VoteState::to(&versioned, &mut vote_account).unwrap();
+        vote_state::to(&versioned, &mut vote_account).unwrap();
         stakes_cache.check_and_store(&vote_pubkey, &vote_account);
 
         {
