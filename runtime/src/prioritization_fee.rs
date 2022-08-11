@@ -9,10 +9,9 @@ use {
 
 #[derive(Debug, Default)]
 struct PrioritizationFeeMetrics {
-    // Count of transactions that are used to update this slot.
-    total_transactions_count: u64,
-
-    // Count of writable accounts has minimum prioritization fee in this slot
+    // Count of writable accounts in slot; including accounts have minimum prioritization fee equal
+    // to blocker's minimum fee, the number of these irrelevant accounts is the difference between
+    // this counter and `relevant_writable_accounts_count`.
     total_writable_accounts_count: u64,
 
     // Count of writeable accounts those minimum prioritization fee is higher than minimum transaction fee
@@ -27,10 +26,6 @@ struct PrioritizationFeeMetrics {
 }
 
 impl PrioritizationFeeMetrics {
-    fn increment_total_transactions_count(&mut self, val: u64) {
-        saturating_add_assign!(self.total_transactions_count, val);
-    }
-
     fn increment_total_prioritization_fee(&mut self, val: u64) {
         saturating_add_assign!(self.total_prioritization_fee, val);
     }
@@ -43,11 +38,6 @@ impl PrioritizationFeeMetrics {
         datapoint_info!(
             "block_prioritization_fee",
             ("slot", slot as i64, i64),
-            (
-                "total_transactions_count",
-                self.total_transactions_count as i64,
-                i64
-            ),
             (
                 "total_writable_accounts_count",
                 self.total_writable_accounts_count as i64,
@@ -153,7 +143,6 @@ impl PrioritizationFee {
 
         self.metrics
             .increment_total_update_elapsed_us(update_time.as_us());
-        self.metrics.increment_total_transactions_count(1);
         Ok(())
     }
 
