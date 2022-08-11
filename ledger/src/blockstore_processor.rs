@@ -551,6 +551,7 @@ fn process_entries_with_callback(
     let mut rng = thread_rng();
     let cost_model = CostModel::new();
 
+    info!("steviez test");
     for ReplayEntry {
         entry,
         starting_index,
