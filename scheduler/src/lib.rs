@@ -441,6 +441,7 @@ fn attempt_lock_for_execution<'a>(
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
     let mut guaranteed_count = 0;
+    use rayon::iter::IntoParallelRefMutIterator;
 
     for attempt in placeholder_attempts.par_iter_mut() {
         AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
