@@ -105,6 +105,7 @@ impl LockAttempt {
             target,
             status: LockStatus::Succeded,
             requested_usage,
+            remembered: false,
         }
     }
 }
