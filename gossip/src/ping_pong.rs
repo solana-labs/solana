@@ -217,13 +217,15 @@ impl PingCache {
             None => (false, true),
             Some(t) => {
                 let age = now.saturating_duration_since(*t);
-                // Pop if the pong message has expired.
                 if age > self.ttl {
+                    // The pong message has expired.
                     self.pongs.pop(&node);
+                    (false, true)
+                } else {
+                    // If the pong message is not too recent, generate a new ping
+                    // message to extend remote node verification.
+                    (true, age > self.ttl / 8)
                 }
-                // If the pong message is not too recent, generate a new ping
-                // message to extend remote node verification.
-                (true, age > self.ttl / 8)
             }
         };
         let ping = if should_ping {
@@ -385,11 +387,10 @@ mod tests {
             let node = (keypair.pubkey(), *socket);
             let pingf = || Ping::<Token>::new_rand(&mut rng, &this_node).ok();
             let (check, ping) = cache.check(now, node, pingf);
+            assert!(!check);
             if seen_nodes.insert(node) {
-                assert!(check);
                 assert!(ping.is_some());
             } else {
-                assert!(!check);
                 assert!(ping.is_none());
             }
         }
@@ -415,5 +416,21 @@ mod tests {
             assert!(!check);
             assert_eq!(seen_nodes.insert(node), ping.is_some());
         }
+    }
+
+    #[test]
+    fn test_expired() {
+        let now = Instant::now();
+        let past = now - Duration::from_secs(1);
+        let mut rng = rand::thread_rng();
+        let ttl = Duration::from_millis(256);
+        let mut cache = PingCache::new(ttl, /*cap=*/ 1000);
+        let node_keypair = Keypair::new();
+        let node_sockaddr: SocketAddr = "111.222.111.222:1234".parse().unwrap();
+        let pingf = || Ping::<Token>::new_rand(&mut rng, &node_keypair).ok();
+
+        cache.mock_pong(node_keypair.pubkey(), node_sockaddr, past);
+        let (check, _) = cache.check(now, (node_keypair.pubkey(), node_sockaddr), pingf);
+        assert!(!check);
     }
 }
