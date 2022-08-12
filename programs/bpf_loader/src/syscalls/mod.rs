@@ -1714,15 +1714,21 @@ declare_syscall!(
         let stack_height = invoke_context.get_stack_height();
         let instruction_trace = invoke_context.transaction_context.get_instruction_trace();
         let mut current_index = 0;
-        let instruction_context = instruction_trace.iter().rev().find(|instruction_context| {
-            if instruction_context.get_stack_height() == stack_height {
+        let mut instruction_context = None;
+        for current_instruction_context in instruction_trace.iter().rev() {
+            if current_instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT
+                && stack_height > TRANSACTION_LEVEL_STACK_HEIGHT
+            {
+                break;
+            }
+            if current_instruction_context.get_stack_height() == stack_height {
                 if index.saturating_add(1) == current_index {
-                    return true;
+                    instruction_context = Some(current_instruction_context);
+                    break;
                 }
                 current_index = current_index.saturating_add(1);
             }
-            false
-        });
+        }
 
         if let Some(instruction_context) = instruction_context {
             let ProcessedSiblingInstruction {
