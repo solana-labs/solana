@@ -513,6 +513,7 @@ fn build_packet(
         .iter()
         .map(|address| solana_scheduler::LockAttempt::new(preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+    let p = solana_scheduler::get_transaction_priority_details(&sanitized_tx);
 
     Box::new((sanitized_tx, locks))
 }
