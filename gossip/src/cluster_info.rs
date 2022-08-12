@@ -3760,6 +3760,8 @@ RPC Enabled Nodes: 1"#;
                 latest_refreshed_recent_blockhash,
             );
             cluster_info.refresh_vote(latest_refresh_tx.clone(), refresh_slot);
+            // Sleep to avoid votes with same timestamp causing later vote to not override prior vote
+            std::thread::sleep(Duration::from_millis(1));
         }
         // The diff since `max_ts` should only be the latest refreshed vote
         let votes = cluster_info.get_votes(&mut cursor);
