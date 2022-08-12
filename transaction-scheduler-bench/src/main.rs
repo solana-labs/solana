@@ -444,8 +444,8 @@ fn send_packets(
 
         for vv in packet_batches {
             for v in vv {
-                let p = get_transaction_priority_details(&v.0);
-                packet_batch_sender.send(solana_scheduler::Multiplexed::FromPrevious((Weight { ix: p }, v)));
+                let p = solana_scheduler::get_transaction_priority_details(&v.0);
+                packet_batch_sender.send(solana_scheduler::Multiplexed::FromPrevious((solana_scheduler::Weight { ix: p }, v)));
             }
         }
         
