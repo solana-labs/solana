@@ -78,7 +78,7 @@ struct Args {
 }
 
 /// Some convenient type aliases
-type PreprocessedTransaction = Box<(SanitizedTransaction, Vec<solana_scheduler::LockAttempt>, u64)>;
+type PreprocessedTransaction = Box<(SanitizedTransaction, Vec<solana_scheduler::LockAttempt>)>;
 type TransactionMessage = PreprocessedTransaction;
 type CompletedTransactionMessage = solana_scheduler::Multiplexed; // (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
 type TransactionBatchMessage = Box<solana_scheduler::ExecutionEnvironment>; // Vec<TransactionMessage>;
@@ -513,9 +513,8 @@ fn build_packet(
         .iter()
         .map(|address| solana_scheduler::LockAttempt::new(preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
-    let p = solana_scheduler::get_transaction_priority_details(&sanitized_tx);
 
-    Box::new((sanitized_tx, locks, p))
+    Box::new((sanitized_tx, locks))
 }
 
 fn build_accounts(num_accounts: usize) -> Vec<Keypair> {
