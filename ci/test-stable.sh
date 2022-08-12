@@ -66,7 +66,8 @@ test-stable-bpf)
   _ make -C programs/bpf/c tests
   _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
-    --no-default-features --features=bpf_c,bpf_rust -- --nocapture
+    --no-default-features --features=bpf_c,bpf_rust -- -Z unstable-options --format json --report-time | tee results.json
+  exit_if_error "${PIPESTATUS[0]}"
 
   # BPF Rust program unit tests
   for bpf_test in programs/bpf/rust/*; do
@@ -102,7 +103,8 @@ test-stable-bpf)
   _ "$cargo" stable test \
     --manifest-path programs/bpf/Cargo.toml \
     --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
-    -- --nocapture &> "${bpf_target_path}"/deploy/instuction_counts.txt
+    -- -Z unstable-options --format json --report-time |& tee results.json
+  awk '!/{ "type": .* }/' results.json > "${bpf_target_path}"/deploy/instuction_counts.txt
 
   bpf_dump_archive="bpf-dumps.tar.bz2"
   rm -f "$bpf_dump_archive"
