@@ -110,8 +110,7 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, add_set_compute_unit_price_ix, disable_fee_calculator,
-            enable_early_verification_of_account_modifications,
+            self, disable_fee_calculator, enable_early_verification_of_account_modifications,
             use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
@@ -3684,8 +3683,6 @@ impl Bank {
             lamports_per_signature,
             &self.fee_structure,
             self.feature_set
-                .is_active(&add_set_compute_unit_price_ix::id()),
-            self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
         ))
     }
@@ -3726,8 +3723,6 @@ impl Bank {
             message,
             lamports_per_signature,
             &self.fee_structure,
-            self.feature_set
-                .is_active(&add_set_compute_unit_price_ix::id()),
             self.feature_set
                 .is_active(&use_default_units_in_fee_calculation::id()),
         )
@@ -4536,40 +4531,30 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
                 (Ok(loaded_transaction), nonce) => {
-                    let mut feature_set_clone_time = Measure::start("feature_set_clone");
-                    let feature_set = self.feature_set.clone();
-                    feature_set_clone_time.stop();
-                    saturating_add_assign!(
-                        timings.execute_accessories.feature_set_clone_us,
-                        feature_set_clone_time.as_us()
-                    );
+                    let compute_budget = if let Some(compute_budget) =
+                        self.runtime_config.compute_budget
+                    {
+                        compute_budget
+                    } else {
+                        let mut compute_budget =
+                            ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
 
-                    let compute_budget =
-                        if let Some(compute_budget) = self.runtime_config.compute_budget {
-                            compute_budget
-                        } else {
-                            let mut compute_budget =
-                                ComputeBudget::new(compute_budget::MAX_COMPUTE_UNIT_LIMIT as u64);
-
-                            let mut compute_budget_process_transaction_time =
-                                Measure::start("compute_budget_process_transaction_time");
-                            let process_transaction_result = compute_budget.process_instructions(
-                                tx.message().program_instructions_iter(),
-                                true,
-                                feature_set.is_active(&add_set_compute_unit_price_ix::id()),
-                            );
-                            compute_budget_process_transaction_time.stop();
-                            saturating_add_assign!(
-                                timings
-                                    .execute_accessories
-                                    .compute_budget_process_transaction_us,
-                                compute_budget_process_transaction_time.as_us()
-                            );
-                            if let Err(err) = process_transaction_result {
-                                return TransactionExecutionResult::NotExecuted(err);
-                            }
-                            compute_budget
-                        };
+                        let mut compute_budget_process_transaction_time =
+                            Measure::start("compute_budget_process_transaction_time");
+                        let process_transaction_result = compute_budget
+                            .process_instructions(tx.message().program_instructions_iter(), true);
+                        compute_budget_process_transaction_time.stop();
+                        saturating_add_assign!(
+                            timings
+                                .execute_accessories
+                                .compute_budget_process_transaction_us,
+                            compute_budget_process_transaction_time.as_us()
+                        );
+                        if let Err(err) = process_transaction_result {
+                            return TransactionExecutionResult::NotExecuted(err);
+                        }
+                        compute_budget
+                    };
 
                     self.execute_loaded_transaction(
                         tx,
@@ -4841,7 +4826,6 @@ impl Bank {
         message: &SanitizedMessage,
         lamports_per_signature: u64,
         fee_structure: &FeeStructure,
-        support_set_compute_unit_price_ix: bool,
         use_default_units_per_instruction: bool,
     ) -> u64 {
         // Fee based on compute units and signatures
@@ -4858,7 +4842,6 @@ impl Bank {
             .process_instructions(
                 message.program_instructions_iter(),
                 use_default_units_per_instruction,
-                support_set_compute_unit_price_ix,
             )
             .unwrap_or_default();
         let prioritization_fee = prioritization_fee_details.get_fee();
@@ -4922,8 +4905,6 @@ impl Bank {
                     tx.message(),
                     lamports_per_signature,
                     &self.fee_structure,
-                    self.feature_set
-                        .is_active(&add_set_compute_unit_price_ix::id()),
                     self.feature_set
                         .is_active(&use_default_units_in_fee_calculation::id()),
                 );
@@ -10893,7 +10874,6 @@ pub(crate) mod tests {
                 .lamports_per_signature,
             &FeeStructure::default(),
             true,
-            true,
         );
 
         let (expected_fee_collected, expected_fee_burned) =
@@ -11075,7 +11055,6 @@ pub(crate) mod tests {
             cheap_lamports_per_signature,
             &FeeStructure::default(),
             true,
-            true,
         );
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
@@ -11092,7 +11071,6 @@ pub(crate) mod tests {
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
             expensive_lamports_per_signature,
             &FeeStructure::default(),
-            true,
             true,
         );
         assert_eq!(
@@ -11208,7 +11186,6 @@ pub(crate) mod tests {
                                 .create_fee_calculator()
                                 .lamports_per_signature,
                             &FeeStructure::default(),
-                            true,
                             true,
                         ) * 2
                     )
@@ -17809,7 +17786,6 @@ pub(crate) mod tests {
                     ..FeeStructure::default()
                 },
                 true,
-                true,
             ),
             0
         );
@@ -17823,7 +17799,6 @@ pub(crate) mod tests {
                     lamports_per_signature: 1,
                     ..FeeStructure::default()
                 },
-                true,
                 true,
             ),
             1
@@ -17844,7 +17819,6 @@ pub(crate) mod tests {
                     ..FeeStructure::default()
                 },
                 true,
-                true,
             ),
             4
         );
@@ -17864,7 +17838,7 @@ pub(crate) mod tests {
         let message =
             SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true),
             max_fee + lamports_per_signature
         );
 
@@ -17876,7 +17850,7 @@ pub(crate) mod tests {
             SanitizedMessage::try_from(Message::new(&[ix0, ix1], Some(&Pubkey::new_unique())))
                 .unwrap();
         assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
+            Bank::calculate_fee(&message, 1, &fee_structure, true),
             max_fee + 3 * lamports_per_signature
         );
 
@@ -17909,7 +17883,7 @@ pub(crate) mod tests {
                 Some(&Pubkey::new_unique()),
             ))
             .unwrap();
-            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true, true);
+            let fee = Bank::calculate_fee(&message, 1, &fee_structure, true);
             assert_eq!(
                 fee,
                 lamports_per_signature + prioritization_fee_details.get_fee()
@@ -17947,10 +17921,7 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
-            2
-        );
+        assert_eq!(Bank::calculate_fee(&message, 1, &fee_structure, true), 2);
 
         secp_instruction1.data = vec![0];
         secp_instruction2.data = vec![10];
@@ -17959,10 +17930,7 @@ pub(crate) mod tests {
             Some(&key0),
         ))
         .unwrap();
-        assert_eq!(
-            Bank::calculate_fee(&message, 1, &fee_structure, true, true,),
-            11
-        );
+        assert_eq!(Bank::calculate_fee(&message, 1, &fee_structure, true), 11);
     }
 
     #[test]
