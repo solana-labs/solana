@@ -547,6 +547,7 @@ impl ScheduleStage {
         runnable_queue: &'a mut TaskQueue,
         contended_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
+        prefer_contend: bool
     ) -> Option<(
         Option<&'a mut TaskQueue>,
         std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, Task>,
@@ -557,7 +558,11 @@ impl ScheduleStage {
         ) {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
-                Some((Some(contended_queue), heaviest_runnable_entry))
+                if prefer_contend {
+                    None
+                } else {
+                    Some((Some(contended_queue), heaviest_runnable_entry))
+                }
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
@@ -569,6 +574,16 @@ impl ScheduleStage {
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
                 let uw = weight_from_contended.key();
+
+                if prefer_contend {
+                    trace!("select: contended > runnnable");
+                    let uw = *uw;
+                    weight_from_contended.remove();
+                    return Some((
+                        None,
+                        contended_queue.entry_to_execute(uw),
+                    ))
+                }
 
                 if weight_from_runnable > uw {
                     trace!("select: runnable > contended");
@@ -599,6 +614,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
+        prefer_contend: bool,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
         if let Some(a) = address_book.runnable_guaranteed_task_ids.pop_last() {
             trace!("expediate pop from guaranteed queue [rest: {}]", address_book.runnable_guaranteed_task_ids.len());
@@ -610,7 +626,7 @@ impl ScheduleStage {
 
         trace!("pop begin");
         loop {
-        if let Some((reborrowed_contended_queue, mut queue_entry)) = Self::select_next_task(runnable_queue, contended_queue, address_book) {
+        if let Some((reborrowed_contended_queue, mut queue_entry)) = Self::select_next_task(runnable_queue, contended_queue, address_book, prefer_contend) {
             trace!("pop loop iteration");
             let from_runnable = reborrowed_contended_queue.is_some();
             let unique_weight = *queue_entry.key();
@@ -813,9 +829,10 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
+        prefer_contend: bool,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
+            Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book, prefer_contend)
                 .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
         maybe_ee
     }
@@ -895,8 +912,9 @@ impl ScheduleStage {
                     break;
                 }
 
+                let prefer_contend = executing_queue_count == max_executing_queue_count;
                 let maybe_ee =
-                    Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                    Self::schedule_next_execution(runnable_queue, contended_queue, address_book, prefer_contend);
 
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
