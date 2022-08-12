@@ -468,7 +468,7 @@ fn attempt_lock_for_execution<'a>(
     (unlockable_count, guaranteed_count, placeholder_attempts)
 }
 
-type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
+type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>, u64);
 // multiplexed to reduce the futex syscal per tx down to minimum and to make the schduler to
 // adaptive relative load between sigverify stage and execution substage
 // switched from crossbeam_channel::select! due to observed poor performance
