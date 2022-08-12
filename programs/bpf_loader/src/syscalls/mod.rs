@@ -1709,32 +1709,20 @@ declare_syscall!(
             result
         );
 
+        // Reverse iterate through the instruction trace,
+        // ignoring anything except instructions on the same level
         let stack_height = invoke_context.get_stack_height();
         let instruction_trace = invoke_context.transaction_context.get_instruction_trace();
-        let instruction_context = if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
-            // pick one of the top-level instructions
-            instruction_trace
-                .len()
-                .checked_sub(2)
-                .and_then(|result| result.checked_sub(index as usize))
-                .and_then(|index| instruction_trace.get(index))
-                .and_then(|instruction_list| instruction_list.first())
-        } else {
-            // Walk the last list of inner instructions
-            instruction_trace.last().and_then(|inners| {
-                let mut current_index = 0;
-                inners.iter().rev().skip(1).find(|instruction_context| {
-                    if stack_height == instruction_context.get_stack_height() {
-                        if index == current_index {
-                            return true;
-                        } else {
-                            current_index = current_index.saturating_add(1);
-                        }
-                    }
-                    false
-                })
-            })
-        };
+        let mut current_index = 0;
+        let instruction_context = instruction_trace.iter().rev().find(|instruction_context| {
+            if instruction_context.get_stack_height() == stack_height {
+                if index.saturating_add(1) == current_index {
+                    return true;
+                }
+                current_index = current_index.saturating_add(1);
+            }
+            false
+        });
 
         if let Some(instruction_context) = instruction_context {
             let ProcessedSiblingInstruction {

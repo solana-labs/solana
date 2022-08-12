@@ -120,7 +120,7 @@ use {
         hash::{extend_and_hash, hashv, Hash},
         incinerator,
         inflation::Inflation,
-        instruction::CompiledInstruction,
+        instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
         lamports::LamportsError,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
@@ -143,7 +143,7 @@ use {
             TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{
-            ExecutionRecord, InstructionTrace, TransactionAccount, TransactionContext,
+            ExecutionRecord, InstructionContext, TransactionAccount, TransactionContext,
             TransactionReturnData,
         },
     },
@@ -762,40 +762,44 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 /// a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
 
-/// Convert from an InstructionTrace to InnerInstructionsList
+/// Convert from an &[InstructionContext] to InnerInstructionsList
 pub fn inner_instructions_list_from_instruction_trace(
-    instruction_trace: &InstructionTrace,
+    instruction_trace: &[InstructionContext],
 ) -> InnerInstructionsList {
-    instruction_trace
-        .iter()
-        .map(|inner_instructions_trace| {
-            inner_instructions_trace
-                .iter()
-                .skip(1)
-                .map(|instruction_context| {
-                    CompiledInstruction::new_from_raw_parts(
+    debug_assert!(instruction_trace
+        .first()
+        .map(|instruction_context| instruction_context.get_stack_height()
+            == TRANSACTION_LEVEL_STACK_HEIGHT)
+        .unwrap_or(true));
+    let mut outer_instructions = Vec::new();
+    for instruction_context in instruction_trace.iter() {
+        if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT {
+            outer_instructions.push(Vec::new());
+        } else if let Some(inner_instructions) = outer_instructions.last_mut() {
+            inner_instructions.push(CompiledInstruction::new_from_raw_parts(
+                instruction_context
+                    .get_index_of_program_account_in_transaction(
                         instruction_context
-                            .get_index_of_program_account_in_transaction(
-                                instruction_context
-                                    .get_number_of_program_accounts()
-                                    .saturating_sub(1),
-                            )
-                            .unwrap_or_default() as u8,
-                        instruction_context.get_instruction_data().to_vec(),
-                        (0..instruction_context.get_number_of_instruction_accounts())
-                            .map(|instruction_account_index| {
-                                instruction_context
-                                    .get_index_of_instruction_account_in_transaction(
-                                        instruction_account_index,
-                                    )
-                                    .unwrap_or_default() as u8
-                            })
-                            .collect(),
+                            .get_number_of_program_accounts()
+                            .saturating_sub(1),
                     )
-                })
-                .collect()
-        })
-        .collect()
+                    .unwrap_or_default() as u8,
+                instruction_context.get_instruction_data().to_vec(),
+                (0..instruction_context.get_number_of_instruction_accounts())
+                    .map(|instruction_account_index| {
+                        instruction_context
+                            .get_index_of_instruction_account_in_transaction(
+                                instruction_account_index,
+                            )
+                            .unwrap_or_default() as u8
+                    })
+                    .collect(),
+            ));
+        } else {
+            debug_assert!(false);
+        }
+    }
+    outer_instructions
 }
 
 /// A list of log messages emitted during a transaction
@@ -18838,17 +18842,13 @@ pub(crate) mod tests {
     #[test]
     fn test_inner_instructions_list_from_instruction_trace() {
         let instruction_trace = vec![
-            vec![
-                InstructionContext::new(0, 0, &[], &[], &[1]),
-                InstructionContext::new(1, 0, &[], &[], &[2]),
-            ],
-            vec![],
-            vec![
-                InstructionContext::new(0, 0, &[], &[], &[3]),
-                InstructionContext::new(1, 0, &[], &[], &[4]),
-                InstructionContext::new(2, 0, &[], &[], &[5]),
-                InstructionContext::new(1, 0, &[], &[], &[6]),
-            ],
+            InstructionContext::new(0, 0, &[], &[], &[0]),
+            InstructionContext::new(1, 0, &[], &[], &[1]),
+            InstructionContext::new(0, 0, &[], &[], &[2]),
+            InstructionContext::new(0, 0, &[], &[], &[3]),
+            InstructionContext::new(1, 0, &[], &[], &[4]),
+            InstructionContext::new(2, 0, &[], &[], &[5]),
+            InstructionContext::new(1, 0, &[], &[], &[6]),
         ];
 
         let inner_instructions = inner_instructions_list_from_instruction_trace(&instruction_trace);
@@ -18856,7 +18856,7 @@ pub(crate) mod tests {
         assert_eq!(
             inner_instructions,
             vec![
-                vec![CompiledInstruction::new_from_raw_parts(0, vec![2], vec![])],
+                vec![CompiledInstruction::new_from_raw_parts(0, vec![1], vec![])],
                 vec![],
                 vec![
                     CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),

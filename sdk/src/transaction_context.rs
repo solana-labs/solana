@@ -48,8 +48,7 @@ pub struct TransactionContext {
     account_touched_flags: RefCell<Pin<Box<[bool]>>>,
     instruction_context_capacity: usize,
     instruction_stack: Vec<usize>,
-    number_of_instructions_at_transaction_level: usize,
-    instruction_trace: InstructionTrace,
+    instruction_trace: Vec<InstructionContext>,
     return_data: TransactionReturnData,
     accounts_resize_delta: RefCell<i64>,
     rent: Option<Rent>,
@@ -61,7 +60,7 @@ impl TransactionContext {
         transaction_accounts: Vec<TransactionAccount>,
         rent: Option<Rent>,
         instruction_context_capacity: usize,
-        number_of_instructions_at_transaction_level: usize,
+        _number_of_instructions_at_transaction_level: usize,
     ) -> Self {
         let (account_keys, accounts): (Vec<Pubkey>, Vec<RefCell<AccountSharedData>>) =
             transaction_accounts
@@ -75,8 +74,7 @@ impl TransactionContext {
             account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
             instruction_context_capacity,
             instruction_stack: Vec::with_capacity(instruction_context_capacity),
-            number_of_instructions_at_transaction_level,
-            instruction_trace: Vec::with_capacity(number_of_instructions_at_transaction_level),
+            instruction_trace: Vec::new(),
             return_data: TransactionReturnData::default(),
             accounts_resize_delta: RefCell::new(0),
             rent,
@@ -144,22 +142,13 @@ impl TransactionContext {
         &self,
         level: usize,
     ) -> Result<&InstructionContext, InstructionError> {
-        let top_level_index = *self
+        let index_in_trace = *self
             .instruction_stack
-            .first()
+            .get(level)
             .ok_or(InstructionError::CallDepth)?;
-        let cpi_index = if level == 0 {
-            0
-        } else {
-            *self
-                .instruction_stack
-                .get(level)
-                .ok_or(InstructionError::CallDepth)?
-        };
         let instruction_context = self
             .instruction_trace
-            .get(top_level_index)
-            .and_then(|instruction_trace| instruction_trace.get(cpi_index))
+            .get(index_in_trace)
             .ok_or(InstructionError::CallDepth)?;
         debug_assert_eq!(instruction_context.nesting_level, level);
         Ok(instruction_context)
@@ -194,48 +183,31 @@ impl TransactionContext {
     ) -> Result<(), InstructionError> {
         let callee_instruction_accounts_lamport_sum =
             self.instruction_accounts_lamport_sum(instruction_accounts)?;
-        let index_in_trace = if self.instruction_stack.is_empty() {
-            debug_assert!(
-                self.instruction_trace.len() < self.number_of_instructions_at_transaction_level
-            );
-            let instruction_context = InstructionContext {
-                nesting_level: self.instruction_stack.len(),
-                instruction_accounts_lamport_sum: callee_instruction_accounts_lamport_sum,
-                program_accounts: program_accounts.to_vec(),
-                instruction_accounts: instruction_accounts.to_vec(),
-                instruction_data: instruction_data.to_vec(),
-            };
-            self.instruction_trace.push(vec![instruction_context]);
-            self.instruction_trace.len().saturating_sub(1)
-        } else {
-            if self.is_early_verification_of_account_modifications_enabled() {
-                let caller_instruction_context = self.get_current_instruction_context()?;
-                let original_caller_instruction_accounts_lamport_sum =
-                    caller_instruction_context.instruction_accounts_lamport_sum;
-                let current_caller_instruction_accounts_lamport_sum = self
-                    .instruction_accounts_lamport_sum(
-                        &caller_instruction_context.instruction_accounts,
-                    )?;
-                if original_caller_instruction_accounts_lamport_sum
-                    != current_caller_instruction_accounts_lamport_sum
-                {
-                    return Err(InstructionError::UnbalancedInstruction);
-                }
+        if !self.instruction_stack.is_empty()
+            && self.is_early_verification_of_account_modifications_enabled()
+        {
+            let caller_instruction_context = self.get_current_instruction_context()?;
+            let original_caller_instruction_accounts_lamport_sum =
+                caller_instruction_context.instruction_accounts_lamport_sum;
+            let current_caller_instruction_accounts_lamport_sum = self
+                .instruction_accounts_lamport_sum(
+                    &caller_instruction_context.instruction_accounts,
+                )?;
+            if original_caller_instruction_accounts_lamport_sum
+                != current_caller_instruction_accounts_lamport_sum
+            {
+                return Err(InstructionError::UnbalancedInstruction);
             }
-            if let Some(instruction_trace) = self.instruction_trace.last_mut() {
-                let instruction_context = InstructionContext {
-                    nesting_level: self.instruction_stack.len(),
-                    instruction_accounts_lamport_sum: callee_instruction_accounts_lamport_sum,
-                    program_accounts: program_accounts.to_vec(),
-                    instruction_accounts: instruction_accounts.to_vec(),
-                    instruction_data: instruction_data.to_vec(),
-                };
-                instruction_trace.push(instruction_context);
-                instruction_trace.len().saturating_sub(1)
-            } else {
-                return Err(InstructionError::CallDepth);
-            }
+        }
+        let instruction_context = InstructionContext {
+            nesting_level: self.instruction_stack.len(),
+            instruction_accounts_lamport_sum: callee_instruction_accounts_lamport_sum,
+            program_accounts: program_accounts.to_vec(),
+            instruction_accounts: instruction_accounts.to_vec(),
+            instruction_data: instruction_data.to_vec(),
         };
+        let index_in_trace = self.instruction_trace.len();
+        self.instruction_trace.push(instruction_context);
         if self.instruction_stack.len() >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
         }
@@ -294,7 +266,7 @@ impl TransactionContext {
     }
 
     /// Returns instruction trace
-    pub fn get_instruction_trace(&self) -> &InstructionTrace {
+    pub fn get_instruction_trace(&self) -> &[InstructionContext] {
         &self.instruction_trace
     }
 
@@ -339,9 +311,6 @@ pub struct TransactionReturnData {
     pub program_id: Pubkey,
     pub data: Vec<u8>,
 }
-
-/// List of (stack height, instruction) for each top-level instruction
-pub type InstructionTrace = Vec<Vec<InstructionContext>>;
 
 /// Loaded instruction shared between runtime and programs.
 ///
@@ -912,7 +881,7 @@ impl<'a> BorrowedAccount<'a> {
 /// Everything that needs to be recorded from a TransactionContext after execution
 pub struct ExecutionRecord {
     pub accounts: Vec<TransactionAccount>,
-    pub instruction_trace: InstructionTrace,
+    pub instruction_trace: Vec<InstructionContext>,
     pub return_data: TransactionReturnData,
     pub changed_account_count: u64,
     pub total_size_of_all_accounts: u64,
