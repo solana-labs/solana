@@ -203,14 +203,17 @@ impl AddressBook {
                     }
                     Usage::Readonly(ref mut count) => match requested_usage {
                         RequestedUsage::Readonly => {
-                            // prevent read-lock from runnable too
+                            // prevent newer read-locks (even from runnable too)
                             match page.next_usage {
                                 Usage::Unused => {
                                     *count += 1;
                                     *status = LockStatus::Succeded;
                                 },
-                                Usage::Readonly(_) | Usage::Writable => {
+                                Usage::Writable => {
                                     *status = LockStatus::Failed;
+                                }
+                                Usage::Readonly(_) => {
+                                    unreachable!();
                                 }
                             }
                         }
