@@ -509,7 +509,7 @@ impl ScheduleStage {
         //    )
         //    .unwrap();
         //tx.foo();
-        assert!(weight < 0x1_0000_0000);
+        assert!(weight.ix < 0x1_0000_0000);
         let weight = (weight.ix << 32) | (*unique_key >> 32);
 
         runnable_queue.add_to_schedule(
