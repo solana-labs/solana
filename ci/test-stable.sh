@@ -145,7 +145,8 @@ test-local-cluster-flakey)
   ;;
 test-local-cluster-slow-1)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
-  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
+  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
+  exit_if_error "${PIPESTATUS[0]}"
   exit 0
   ;;
 test-local-cluster-slow-2)
