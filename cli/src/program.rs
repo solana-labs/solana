@@ -3029,6 +3029,30 @@ mod tests {
                     recipient_pubkey: default_keypair.pubkey(),
                     authority_index: 0,
                     use_lamports_unit: false,
+                    bypass_warning: false,
+                }),
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        // with bypass-warning
+        write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "close",
+            &buffer_pubkey.to_string(),
+            "--bypass-warning",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Close {
+                    account_pubkey: Some(buffer_pubkey),
+                    recipient_pubkey: default_keypair.pubkey(),
+                    authority_index: 0,
+                    use_lamports_unit: false,
+                    bypass_warning: true,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3052,6 +3076,7 @@ mod tests {
                     recipient_pubkey: default_keypair.pubkey(),
                     authority_index: 1,
                     use_lamports_unit: false,
+                    bypass_warning: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3077,6 +3102,7 @@ mod tests {
                     recipient_pubkey,
                     authority_index: 0,
                     use_lamports_unit: false,
+                    bypass_warning: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into(),],
             }
@@ -3098,6 +3124,7 @@ mod tests {
                     recipient_pubkey: default_keypair.pubkey(),
                     authority_index: 0,
                     use_lamports_unit: true,
+                    bypass_warning: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into(),],
             }
