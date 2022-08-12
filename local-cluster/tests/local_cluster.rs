@@ -191,7 +191,7 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-    let (rpc, tpu) = non_bootstrap_info.client_facing_addr();
+    let (rpc, tpu) = cluster_tests::get_client_facing_addr(non_bootstrap_info);
     let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
     let (blockhash, _) = tx_client
@@ -418,7 +418,7 @@ fn test_mainnet_beta_cluster_type() {
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
-    let (rpc, tpu) = cluster.entry_point_info.client_facing_addr();
+    let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
     let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
     // Programs that are available at epoch 0
