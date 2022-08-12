@@ -48,19 +48,29 @@ module.exports = {
       items: [
         "terminology",
         {
-          type: "link",
+          type: "ref",
           label: "Developers",
-          href: "developing/programming-model/overview",
+          id: "developing/programming-model/overview",
         },
         {
-          type: "link",
+          type: "ref",
           label: "Validators",
-          href: "running-validator",
+          id: "running-validator",
         },
         {
-          type: "link",
+          type: "ref",
           label: "Command Line",
-          href: "cli",
+          id: "cli",
+        },
+        {
+          type: "ref",
+          label: "Economics",
+          id: "economics_overview",
+        },
+        {
+          type: "ref",
+          label: "Proposals",
+          id: "proposals",
         },
       ],
     },
