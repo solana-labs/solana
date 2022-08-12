@@ -6,18 +6,20 @@ use {
         send_batch::*,
     },
     log::*,
+    rand::distributions::{Distribution, Uniform},
     rayon::prelude::*,
     solana_client::nonce_utils,
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
+        compute_budget::ComputeBudgetInstruction,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
         message::Message,
         native_token::Sol,
         pubkey::Pubkey,
         signature::{Keypair, Signer},
-        system_transaction,
+        system_instruction, system_transaction,
         timing::{duration_as_ms, duration_as_s, duration_as_us, timestamp},
         transaction::Transaction,
     },
@@ -35,6 +37,28 @@ use {
 
 // The point at which transactions become "too old", in seconds.
 const MAX_TX_QUEUE_AGE: u64 = (MAX_PROCESSING_AGE as f64 * DEFAULT_S_PER_SLOT) as u64;
+
+// Add prioritization fee to transfer transactions, when `--use-randomized-compute-unit-price`
+// is used, compute-unit-price is randomly generated in range of (0..MAX_COMPUTE_UNIT_PRICE).
+// It also sets transaction's compute-unit to TRANSFER_TRANSACTION_COMPUTE_UNIT. Therefore the
+// max additional cost is `TRANSFER_TRANSACTION_COMPUTE_UNIT * MAX_COMPUTE_UNIT_PRICE / 1_000_000`
+const MAX_COMPUTE_UNIT_PRICE: u64 = 50;
+const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
+/// calculate maximum possible prioritizatino fee, if `use-randomized-compute-unit-price` is
+/// enabled, round to nearest lamports.
+pub fn max_lamporots_for_prioritization(use_randomized_compute_unit_price: bool) -> u64 {
+    if use_randomized_compute_unit_price {
+        const MICRO_LAMPORTS_PER_LAMPORT: u64 = 1_000_000;
+        let micro_lamport_fee: u128 = (MAX_COMPUTE_UNIT_PRICE as u128)
+            .saturating_mul(TRANSFER_TRANSACTION_COMPUTE_UNIT as u128);
+        let fee = micro_lamport_fee
+            .saturating_add(MICRO_LAMPORTS_PER_LAMPORT.saturating_sub(1) as u128)
+            .saturating_div(MICRO_LAMPORTS_PER_LAMPORT as u128);
+        u64::try_from(fee).unwrap_or(u64::MAX)
+    } else {
+        0u64
+    }
+}
 
 pub type TimestampedTransaction = (Transaction, Option<u64>);
 pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<TimestampedTransaction>>>>;
@@ -68,6 +92,7 @@ struct TransactionChunkGenerator<'a, 'b, T: ?Sized> {
     nonce_chunks: Option<KeypairChunks<'b>>,
     chunk_index: usize,
     reclaim_lamports_back_to_source_account: bool,
+    use_randomized_compute_unit_price: bool,
 }
 
 impl<'a, 'b, T> TransactionChunkGenerator<'a, 'b, T>
@@ -79,6 +104,7 @@ where
         gen_keypairs: &'a [Keypair],
         nonce_keypairs: Option<&'b Vec<Keypair>>,
         chunk_size: usize,
+        use_randomized_compute_unit_price: bool,
     ) -> Self {
         let account_chunks = KeypairChunks::new(gen_keypairs, chunk_size);
         let nonce_chunks =
@@ -90,6 +116,7 @@ where
             nonce_chunks,
             chunk_index: 0,
             reclaim_lamports_back_to_source_account: false,
+            use_randomized_compute_unit_price,
         }
     }
 
@@ -123,6 +150,7 @@ where
                 dest_chunk,
                 self.reclaim_lamports_back_to_source_account,
                 blockhash.unwrap(),
+                self.use_randomized_compute_unit_price,
             )
         };
 
@@ -302,6 +330,7 @@ where
         tx_count,
         sustained,
         target_slots_per_epoch,
+        use_randomized_compute_unit_price,
         ..
     } = config;
 
@@ -311,6 +340,7 @@ where
         &gen_keypairs,
         None, // TODO(klykov): to be added in the follow up PR
         tx_count,
+        use_randomized_compute_unit_price,
     );
 
     let first_tx_count = loop {
@@ -423,6 +453,7 @@ fn generate_system_txs(
     dest: &VecDeque<&Keypair>,
     reclaim: bool,
     blockhash: &Hash,
+    use_randomized_compute_unit_price: bool,
 ) -> Vec<TimestampedTransaction> {
     let pairs: Vec<_> = if !reclaim {
         source.iter().zip(dest.iter()).collect()
@@ -430,15 +461,58 @@ fn generate_system_txs(
         dest.iter().zip(source.iter()).collect()
     };
 
-    pairs
-        .par_iter()
-        .map(|(from, to)| {
-            (
-                system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
-                Some(timestamp()),
-            )
-        })
-        .collect()
+    if use_randomized_compute_unit_price {
+        let mut rng = rand::thread_rng();
+        let range = Uniform::from(0..MAX_COMPUTE_UNIT_PRICE);
+        let compute_unit_prices: Vec<_> = (0..pairs.len())
+            .map(|_| range.sample(&mut rng) as u64)
+            .collect();
+        let pairs_with_compute_unit_prices: Vec<_> =
+            pairs.iter().zip(compute_unit_prices.iter()).collect();
+
+        pairs_with_compute_unit_prices
+            .par_iter()
+            .map(|((from, to), compute_unit_price)| {
+                (
+                    transfer_with_compute_unit_price(
+                        from,
+                        &to.pubkey(),
+                        1,
+                        *blockhash,
+                        **compute_unit_price,
+                    ),
+                    Some(timestamp()),
+                )
+            })
+            .collect()
+    } else {
+        pairs
+            .par_iter()
+            .map(|(from, to)| {
+                (
+                    system_transaction::transfer(from, &to.pubkey(), 1, *blockhash),
+                    Some(timestamp()),
+                )
+            })
+            .collect()
+    }
+}
+
+fn transfer_with_compute_unit_price(
+    from_keypair: &Keypair,
+    to: &Pubkey,
+    lamports: u64,
+    recent_blockhash: Hash,
+    compute_unit_price: u64,
+) -> Transaction {
+    let from_pubkey = from_keypair.pubkey();
+    let instructions = vec![
+        system_instruction::transfer(&from_pubkey, to, lamports),
+        ComputeBudgetInstruction::set_compute_unit_limit(TRANSFER_TRANSACTION_COMPUTE_UNIT),
+        ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
+    ];
+    let message = Message::new(&instructions, Some(&from_pubkey));
+    Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
 fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
