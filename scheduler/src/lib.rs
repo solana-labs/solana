@@ -382,7 +382,7 @@ pub struct UniqueWeight {
     // we can't use Transaction::message_hash because it's manipulatable to be favorous to the tx
     // submitter
     //unique_key: Hash, // tie breaker? random noise? also for unique identification of txes?
-    //unique_key: u64, // tie breaker? random noise? also for unique identification of txes?
+    unique_key: u64, // tie breaker? random noise? also for unique identification of txes?
     // fee?
 }
 /*
