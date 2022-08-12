@@ -81,7 +81,7 @@ uriparse = "0.6.4"
 wasm-bindgen = "0.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3.58"
+js-sys = "0.3.59"
 
 [dev-dependencies]
 anyhow = "1.0.58"
