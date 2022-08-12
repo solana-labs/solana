@@ -3145,7 +3145,7 @@ impl Blockstore {
         }
         .expect("fetch from DuplicateSlots column family failed")?;
         let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
-        (existing_shred != *new_shred.payload()).then(|| existing_shred)
+        (existing_shred != *new_shred.payload()).then_some(existing_shred)
     }
 
     pub fn has_duplicate_shreds_in_slot(&self, slot: Slot) -> bool {

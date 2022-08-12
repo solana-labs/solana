@@ -155,7 +155,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     accountsdb_to_stream(
         serde_style,
         &mut writer,
-        &*accounts.accounts_db,
+        &accounts.accounts_db,
         0,
         &accounts.accounts_db.get_snapshot_storages(0, None, None).0,
     )
