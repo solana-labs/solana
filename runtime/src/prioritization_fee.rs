@@ -150,8 +150,8 @@ impl PrioritizationFee {
     }
 
     /// Accounts that have minimum fees lesser or equal to the minimum fee in the block are redundant, they are
-    /// removed to reduce memory footprint.
-    pub fn prune_irrelevant_writable_accounts(&mut self) {
+    /// removed to reduce memory footprint when mark_block_completed() is called.
+    fn prune_irrelevant_writable_accounts(&mut self) {
         self.metrics.total_writable_accounts_count = self.get_writable_accounts_count() as u64;
         self.min_writable_account_fees
             .retain(|_, account_fee| account_fee > &mut self.min_transaction_fee);
@@ -162,6 +162,7 @@ impl PrioritizationFee {
         if self.is_finalized {
             return Err(PrioritizationFeeError::BlockIsAlreadyFinalized);
         }
+        self.prune_irrelevant_writable_accounts();
         self.is_finalized = true;
         Ok(())
     }

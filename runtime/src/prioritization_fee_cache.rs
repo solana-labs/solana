@@ -346,7 +346,6 @@ impl PrioritizationFeeCache {
                     // block minimum fee.
                     {
                         let mut prioritization_fee = prioritization_fee.lock().unwrap();
-                        prioritization_fee.prune_irrelevant_writable_accounts();
                         let _ = prioritization_fee.mark_block_completed();
                         prioritization_fee.report_metrics(slot);
                     }
