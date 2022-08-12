@@ -2111,6 +2111,23 @@ impl fmt::Display for CliUpgradeableBuffers {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliAddressLookupTableCreated {
+    pub lookup_table_address: String,
+    pub signature: String,
+}
+impl QuietDisplay for CliAddressLookupTableCreated {}
+impl VerboseDisplay for CliAddressLookupTableCreated {}
+impl fmt::Display for CliAddressLookupTableCreated {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Signature:", &self.signature)?;
+        writeln_name_value(f, "Lookup Table Address:", &self.lookup_table_address)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ReturnSignersConfig {
     pub dump_transaction_message: bool,
