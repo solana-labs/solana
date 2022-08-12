@@ -494,7 +494,7 @@ pub struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_queue(
-        (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>),
+        (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>, u64)>),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
