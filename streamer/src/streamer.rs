@@ -307,7 +307,7 @@ fn recv_send(
     let packets = packet_batch.iter().filter_map(|pkt| {
         let addr = pkt.meta.socket_addr();
         let data = pkt.data(..)?;
-        socket_addr_space.check(&addr).then(|| (data, addr))
+        socket_addr_space.check(&addr).then_some((data, addr))
     });
     batch_send(sock, &packets.collect::<Vec<_>>())?;
     Ok(())
