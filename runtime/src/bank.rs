@@ -16181,7 +16181,7 @@ pub(crate) mod tests {
         std::thread::sleep(Duration::new(5, 0));
         // This can be reduced when you are running this test locally to deal with hangs
         // But, if it is too low, the ci fails intermittently.
-        let mut remaining_loops = 20_000;
+        let mut remaining_loops = 2000;
         loop {
             if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
                 break;
@@ -16196,7 +16196,7 @@ pub(crate) mod tests {
         exit.store(true, Relaxed);
         scan_thread.join().unwrap();
         update_thread.join().unwrap();
-        assert!(remaining_loops > 0, "test timed out");
+        assert!(remaining_loops > 0, "test timed out - completed {} scans", num_banks_scanned.load(Relaxed));
     }
 
     #[test]
