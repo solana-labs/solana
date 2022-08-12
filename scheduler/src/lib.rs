@@ -514,7 +514,7 @@ impl ScheduleStage {
 
         runnable_queue.add_to_schedule(
             UniqueWeight {
-                weight,
+                Weight {ix: weight},
                 //unique_key: solana_sdk::hash::new_rand(&mut rng),
                 //unique_key: *unique_key,
             },
