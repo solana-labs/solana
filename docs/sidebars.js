@@ -10,11 +10,12 @@ module.exports = {
           id: "introduction",
           label: "What is Solana?",
         },
-        {
-          type: "doc",
-          id: "economics_overview",
-          label: "How do the economics work?",
-        },
+        // This will be the future home for the economics overview page
+        // {
+        //   type: "doc",
+        //   id: "economics_overview",
+        //   label: "How do the economics work?",
+        // },
         {
           type: "doc",
           id: "history",
@@ -200,6 +201,21 @@ module.exports = {
     },
     {
       type: "category",
+      label: "Clusters",
+      collapsed: false,
+      items: [
+        "clusters",
+        {
+          type: "doc",
+          label: "RPC Endpoints",
+          id: "cluster/rpc-endpoints",
+        },
+        "cluster/bench-tps",
+        "cluster/performance-metrics",
+      ],
+    },
+    {
+      type: "category",
       label: "Consensus",
       collapsed: false,
       items: [
@@ -255,31 +271,27 @@ module.exports = {
       ],
     },
   ],
-  docs: {
-    Staking: ["staking", "staking/stake-accounts"],
-    Integrating: [
-      "integrations/exchange",
-      "integrations/retrying-transactions",
-    ],
-    Clusters: [
-      "clusters",
-      "cluster/rpc-endpoints",
-      "cluster/bench-tps",
-      "cluster/performance-metrics",
-    ],
-    Economics: [
-      "economics_overview",
-      {
-        type: "category",
-        label: "Inflation Design",
-        items: [
-          "inflation/terminology",
-          "inflation/inflation_schedule",
-          "inflation/adjusted_staking_yield",
-        ],
-      },
-      "transaction_fees",
-      "storage_rent_economics",
-    ],
-  },
+  stakingSidebar: ["staking", "staking/stake-accounts"],
+  integratingSidebar: [
+    "integrations/exchange",
+    "integrations/retrying-transactions",
+  ],
+  economicsSidebar: [
+    {
+      type: "doc",
+      id: "economics_overview",
+      // label: "How do the economics work?",
+    },
+    {
+      type: "category",
+      label: "Inflation Design",
+      items: [
+        "inflation/terminology",
+        "inflation/inflation_schedule",
+        "inflation/adjusted_staking_yield",
+      ],
+    },
+    "transaction_fees",
+    "storage_rent_economics",
+  ],
 };
