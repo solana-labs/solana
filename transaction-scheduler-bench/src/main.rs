@@ -441,7 +441,13 @@ fn send_packets(
             packet_batches.iter().map(|pb| pb.len()).sum(),
             Ordering::Relaxed,
         );
-        let _ = packet_batch_sender.send(solana_scheduler::Multiplexed::FromPreviousBatched(packet_batches));
+
+        for vv in vvv {
+            for v in vv {
+                packet_batch_sender.send(solana_scheduler::Multiplexed::FromPrevious(v));
+            }
+        }
+        
 
         std::thread::sleep(loop_duration.saturating_sub(packet_build_time.as_duration()));
     }
