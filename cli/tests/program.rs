@@ -1,9 +1,10 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     serde_json::Value,
     solana_cli::{
         cli::{process_command, CliCommand, CliConfig},
-        program::ProgramCliCommand,
+        program::{ProgramCliCommand, CLOSE_PROGRAM_WARNING},
     },
     solana_cli_output::OutputFormat,
     solana_client::rpc_client::RpcClient,
@@ -638,13 +639,30 @@ fn test_cli_program_close_program() {
     let programdata_lamports = close_account.lamports;
     let recipient_pubkey = Pubkey::new_unique();
     config.signers = vec![&keypair, &upgrade_authority];
+
+    // Close without --bypass-warning flag
     config.command = CliCommand::Program(ProgramCliCommand::Close {
         account_pubkey: Some(program_keypair.pubkey()),
         recipient_pubkey,
         authority_index: 1,
         use_lamports_unit: false,
+        bypass_warning: false,
+    });
+    assert_eq!(
+        process_command(&config).unwrap_err().to_string(),
+        CLOSE_PROGRAM_WARNING.to_string()
+    );
+
+    // Close with --bypass-warning flag
+    config.command = CliCommand::Program(ProgramCliCommand::Close {
+        account_pubkey: Some(program_keypair.pubkey()),
+        recipient_pubkey,
+        authority_index: 1,
+        use_lamports_unit: false,
+        bypass_warning: true,
     });
     process_command(&config).unwrap();
+
     rpc_client.get_account(&programdata_pubkey).unwrap_err();
     let recipient_account = rpc_client.get_account(&recipient_pubkey).unwrap();
     assert_eq!(programdata_lamports, recipient_account.lamports);
@@ -902,6 +920,7 @@ fn test_cli_program_write_buffer() {
         recipient_pubkey,
         authority_index: 1,
         use_lamports_unit: false,
+        bypass_warning: false,
     });
     process_command(&config).unwrap();
     rpc_client.get_account(&buffer_pubkey).unwrap_err();
@@ -938,6 +957,7 @@ fn test_cli_program_write_buffer() {
         recipient_pubkey: keypair.pubkey(),
         authority_index: 0,
         use_lamports_unit: false,
+        bypass_warning: false,
     });
     process_command(&config).unwrap();
     rpc_client.get_account(&new_buffer_pubkey).unwrap_err();
