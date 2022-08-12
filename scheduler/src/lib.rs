@@ -858,6 +858,7 @@ impl ScheduleStage {
                         for v in vv {
                             let p = get_transaction_priority_details(&v.0);
                             Self::register_runnable_task((Weight { ix: p }, v), runnable_queue, &mut current_unique_key);
+                            /*
                             if executing_queue_count < max_executing_queue_count {
                                 let maybe_ee =
                                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
@@ -870,6 +871,7 @@ impl ScheduleStage {
                             } else {
                                     trace!("batched: outgoing queue full");
                             }
+                            */
                         }
                     }
                 }
