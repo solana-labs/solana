@@ -16181,7 +16181,7 @@ pub(crate) mod tests {
         std::thread::sleep(Duration::new(5, 0));
         // This can be reduced when you are running this test locally to deal with hangs
         // But, if it is too low, the ci fails intermittently.
-        let mut remaining_loops = 2000;
+        let mut remaining_loops = 20_000;
         loop {
             if num_banks_scanned.load(Relaxed) > min_expected_number_of_scans {
                 break;
