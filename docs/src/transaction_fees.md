@@ -15,7 +15,7 @@ As each transaction (aka collection of instructions) is sent through the network
 
 ## Why pay transaction fees?
 
-Transaction fees offer many benefits in for the Solana [economic design](#basic-economic-design) described below. Mainly:
+Transaction fees offer many benefits in the Solana [economic design](#basic-economic-design) described below. Mainly:
 
 - they provide compensation to the validator network for the CPU/GPU resources necessary to process transactions,
 - reduce network spam by introducing real cost to transactions,
