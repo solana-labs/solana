@@ -409,7 +409,7 @@ pub fn attempt_download_genesis_and_snapshot(
         .map_err(|err| format!("Failed to get RPC node slot: {}", err))?;
     info!("RPC node root slot: {}", rpc_client_slot);
 
-    if let Err(err) = download_snapshots(
+    download_snapshots(
         full_snapshot_archives_dir,
         incremental_snapshot_archives_dir,
         validator_config,
@@ -422,9 +422,7 @@ pub fn attempt_download_genesis_and_snapshot(
         download_abort_count,
         snapshot_hash,
         rpc_contact_info,
-    ) {
-        return Err(err);
-    };
+    )?;
 
     if let Some(url) = bootstrap_config.check_vote_account.as_ref() {
         let rpc_client = RpcClient::new(url);

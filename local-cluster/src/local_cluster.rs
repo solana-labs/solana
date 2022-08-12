@@ -319,7 +319,7 @@ impl LocalCluster {
             })
             .collect();
         for (stake, validator_config, (key, _)) in izip!(
-            (&config.node_stakes[1..]).iter(),
+            config.node_stakes[1..].iter(),
             config.validator_configs[1..].iter(),
             validator_keys[1..].iter(),
         ) {

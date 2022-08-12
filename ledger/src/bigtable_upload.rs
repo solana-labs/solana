@@ -60,7 +60,7 @@ pub async fn upload_confirmed_blocks(
                 starting_slot, err
             )
         })?
-        .map_while(|slot| (slot <= ending_slot).then(|| slot))
+        .map_while(|slot| (slot <= ending_slot).then_some(slot))
         .collect();
 
     if blockstore_slots.is_empty() {

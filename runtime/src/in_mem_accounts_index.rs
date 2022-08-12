@@ -1418,7 +1418,7 @@ impl<'a> FlushGuard<'a> {
     #[must_use = "if unused, the `flushing` flag will immediately clear"]
     fn lock(flushing: &'a AtomicBool) -> Option<Self> {
         let already_flushing = flushing.swap(true, Ordering::AcqRel);
-        (!already_flushing).then(|| Self { flushing })
+        (!already_flushing).then_some(Self { flushing })
     }
 }
 
