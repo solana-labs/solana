@@ -182,7 +182,7 @@ pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
     runnable_guaranteed_task_ids: WeightedTaskIds,
-    guaranteed_lock_counts: std::collections::HashMap<UniqueWeight, usize>, 
+    gurantee_timers: std::collections::HashMap<UniqueWeight, usize>, 
 }
 
 impl AddressBook {
@@ -665,7 +665,7 @@ impl ScheduleStage {
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
 
-                continue;
+                return None;
             }
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
@@ -718,8 +718,8 @@ impl ScheduleStage {
                 }
             }
         }
-        address_book.guaranteed_lock_counts.insert(*unique_weight, guaranteed_count);
-        trace!("guaranteed_lock_counts: {}", address_book.guaranteed_lock_counts.len());
+        address_book.gurantee_timers.insert(*unique_weight, guaranteed_count);
+        trace!("gurantee_timers: {}", address_book.gurantee_timers.len());
     }
 
     #[inline(never)]
@@ -757,7 +757,7 @@ impl ScheduleStage {
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.guaranteed_task_ids).keys() {
-                    match address_book.guaranteed_lock_counts.entry(*task_id) {
+                    match address_book.gurantee_timers.entry(*task_id) {
                         std::collections::hash_map::Entry::Occupied(mut entry) => {
                             let count = entry.get_mut();
                             trace!("guaranteed lock decrease: {} => {}", *count, *count -1);
@@ -843,7 +843,7 @@ impl ScheduleStage {
         let mut current_unique_key = u64::max_value();
 
         loop {
-            trace!("schedule_once (runnnable: {}, contended: {}, guaranteed: {}, exec: {}/{})!", runnable_queue.task_count(), contended_queue.task_count(), address_book.guaranteed_lock_counts.len(), executing_queue_count, max_executing_queue_count);
+            trace!("schedule_once (runnnable: {}, contended: {}, guaranteed: {}, exec: {}/{})!", runnable_queue.task_count(), contended_queue.task_count(), address_book.gurantee_timers.len(), executing_queue_count, max_executing_queue_count);
 
             let i = from.recv().unwrap();
             match i {
