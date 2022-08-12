@@ -515,7 +515,7 @@ fn build_packet(
     let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
     let p = solana_scheduler::get_transaction_priority_details(&sanitized_tx);
 
-    Box::new((sanitized_tx, locks))
+    Box::new((sanitized_tx, locks, p))
 }
 
 fn build_accounts(num_accounts: usize) -> Vec<Keypair> {
