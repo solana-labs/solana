@@ -2000,18 +2000,8 @@ impl BankingStage {
         packet_count_upperbound: usize,
     ) -> Result<(Vec<PacketBatch>, Option<SigverifyTracerPacketStats>), RecvTimeoutError> {
         let start = Instant::now();
-        let mut aggregated_tracer_packet_stats_option: Option<SigverifyTracerPacketStats> = None;
-        let (mut packet_batches, new_tracer_packet_stats_option) =
+        let (mut packet_batches, aggregated_tracer_packet_stats_option) =
             verified_receiver.recv_timeout(recv_timeout)?;
-
-        if let Some(new_tracer_packet_stats) = &new_tracer_packet_stats_option {
-            if let Some(aggregated_tracer_packet_stats) = &mut aggregated_tracer_packet_stats_option
-            {
-                aggregated_tracer_packet_stats.aggregate(new_tracer_packet_stats);
-            } else {
-                aggregated_tracer_packet_stats_option = new_tracer_packet_stats_option;
-            }
-        }
 
         let mut num_packets_received: usize = packet_batches.iter().map(|batch| batch.len()).sum();
         while let Ok((packet_batch, _tracer_packet_stats_option)) = verified_receiver.try_recv() {
