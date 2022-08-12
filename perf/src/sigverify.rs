@@ -830,12 +830,7 @@ mod tests {
     pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
         assert!(a.len() >= b.len());
         let end = a.len() - b.len() + 1;
-        for i in 0..end {
-            if a[i..i + b.len()] == b[..] {
-                return Some(i);
-            }
-        }
-        None
+        (0..end).find(|&i| a[i..i + b.len()] == b[..])
     }
 
     #[test]

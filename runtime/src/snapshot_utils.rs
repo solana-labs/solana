@@ -1179,7 +1179,7 @@ fn check_are_snapshots_compatible(
     let incremental_snapshot_archive_info = incremental_snapshot_archive_info.unwrap();
 
     (full_snapshot_archive_info.slot() == incremental_snapshot_archive_info.base_slot())
-        .then(|| ())
+        .then_some(())
         .ok_or_else(|| {
             SnapshotError::MismatchedBaseSlot(
                 full_snapshot_archive_info.slot(),
