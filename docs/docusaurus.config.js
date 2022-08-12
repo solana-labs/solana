@@ -185,12 +185,12 @@ module.exports = {
               to: "proposals",
             },
             {
-              href: "https://spl.solana.com",
-              label: "Program Library »",
-            },
-            {
               label: "Integrations",
               to: "integrations/exchange",
+            },
+            {
+              href: "https://spl.solana.com",
+              label: "Solana Program Library »",
             },
           ],
         },
