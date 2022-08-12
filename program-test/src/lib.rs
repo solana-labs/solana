@@ -436,6 +436,7 @@ pub struct ProgramTest {
     prefer_bpf: bool,
     use_bpf_jit: bool,
     deactivate_feature_set: HashSet<Pubkey>,
+    transaction_account_lock_limit: Option<usize>,
 }
 
 impl Default for ProgramTest {
@@ -468,6 +469,7 @@ impl Default for ProgramTest {
             prefer_bpf,
             use_bpf_jit: false,
             deactivate_feature_set: HashSet::default(),
+            transaction_account_lock_limit: None,
         }
     }
 }
@@ -498,6 +500,11 @@ impl ProgramTest {
     /// Override the default maximum compute units
     pub fn set_compute_max_units(&mut self, compute_max_units: u64) {
         self.compute_max_units = Some(compute_max_units);
+    }
+
+    /// Override the default transaction account lock limit
+    pub fn set_transaction_account_lock_limit(&mut self, transaction_account_lock_limit: usize) {
+        self.transaction_account_lock_limit = Some(transaction_account_lock_limit);
     }
 
     /// Override the BPF compute budget
@@ -779,6 +786,7 @@ impl ProgramTest {
                     compute_unit_limit: max_units,
                     ..ComputeBudget::default()
                 }),
+                transaction_account_lock_limit: self.transaction_account_lock_limit,
                 ..RuntimeConfig::default()
             }),
         );

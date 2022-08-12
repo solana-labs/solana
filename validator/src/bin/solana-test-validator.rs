@@ -420,6 +420,14 @@ fn main() {
                 .takes_value(true)
                 .help("Maximum number of bytes written to the program log before truncation")
         )
+        .arg(
+            Arg::with_name("transaction_account_lock_limit")
+                .long("transaction-account-lock-limit")
+                .value_name("NUM_ACCOUNTS")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("Override the runtime's account lock limit per transaction")
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -687,6 +695,8 @@ fn main() {
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
     genesis.accounts_db_caching_enabled = !matches.is_present("no_accounts_db_caching");
     genesis.log_messages_bytes_limit = value_t!(matches, "log_messages_bytes_limit", usize).ok();
+    genesis.transaction_account_lock_limit =
+        value_t!(matches, "transaction_account_lock_limit", usize).ok();
 
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 
