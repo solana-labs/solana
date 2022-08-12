@@ -2,7 +2,10 @@ use {
     crate::transaction_priority_details::GetTransactionPriorityDetails,
     solana_measure::measure,
     solana_sdk::{
-        clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
+        clock::Slot,
+        pubkey::Pubkey,
+        saturating_add_assign,
+        transaction::{SanitizedTransaction, MAX_TX_ACCOUNT_LOCKS},
     },
     std::collections::HashMap,
 };
@@ -115,7 +118,7 @@ impl PrioritizationFee {
         let (_, update_time) = measure!(
             {
                 let account_locks = sanitized_tx
-                    .get_account_locks()
+                    .get_account_locks(MAX_TX_ACCOUNT_LOCKS)
                     .or(Err(PrioritizationFeeError::FailGetTransactionAccountLocks))?;
 
                 let priority_details = sanitized_tx
