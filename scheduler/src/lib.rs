@@ -468,13 +468,13 @@ fn attempt_lock_for_execution<'a>(
     (unlockable_count, guaranteed_count, placeholder_attempts)
 }
 
-type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>, u64);
+type PreloadedTransaction = (SanitizedTransaction, Vec<LockAttempt>, u64);
 // multiplexed to reduce the futex syscal per tx down to minimum and to make the schduler to
 // adaptive relative load between sigverify stage and execution substage
 // switched from crossbeam_channel::select! due to observed poor performance
 pub enum Multiplexed {
-    FromPrevious((Weight, Box<PreprocessedTransaction>)),
-    FromPreviousBatched(Vec<Vec<Box<PreprocessedTransaction>>>),
+    FromPrevious((Weight, Box<PreloadedTransaction>)),
+    FromPreviousBatched(Vec<Vec<Box<PreloadedTransaction>>>),
     FromExecute(Box<ExecutionEnvironment>),
 }
 
@@ -494,7 +494,7 @@ pub struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_queue(
-        (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>, u64)>),
+        (weight, tx): (Weight, Box<(PreloadedTransaction)>),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
@@ -824,7 +824,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn register_runnable_task(
-        weighted_tx: (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>, u64)>),
+        weighted_tx: (Weight, Box<PreloadedTransaction>),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
