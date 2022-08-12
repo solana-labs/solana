@@ -365,20 +365,6 @@ pub struct Validator {
     accounts_hash_verifier: AccountsHashVerifier,
 }
 
-// in the distant future, get rid of ::new()/exit() and use Result properly...
-pub fn abort() -> ! {
-    #[cfg(not(test))]
-    {
-        // standard error is usually redirected to a log file, cry for help on standard output as
-        // well
-        println!("Validator process aborted. The validator log may contain further details");
-        std::process::exit(1);
-    }
-
-    #[cfg(test)]
-    panic!("process::exit(1) is intercepted for friendly test failure...");
-}
-
 impl Validator {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -394,7 +380,7 @@ impl Validator {
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
         tpu_connection_pool_size: usize,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
 
@@ -402,10 +388,12 @@ impl Validator {
         warn!("vote account: {}", vote_account);
 
         if !config.no_os_network_stats_reporting {
-            verify_net_stats_access().unwrap_or_else(|err| {
-                error!("Failed to access Network stats: {}. Bypass check with --no-os-network-stats-reporting.", err);
-                abort();
-            });
+            if let Err(e) = verify_net_stats_access() {
+                return Err(format!(
+                    "Failed to access Network stats: {}. Bypass check with --no-os-network-stats-reporting.",
+                    e,
+                ));
+            }
         }
 
         let mut bank_notification_senders = Vec::new();
@@ -419,8 +407,7 @@ impl Validator {
                 match result {
                     Ok(geyser_plugin_service) => Some(geyser_plugin_service),
                     Err(err) => {
-                        error!("Failed to load the Geyser plugin: {:?}", err);
-                        abort();
+                        return Err(format!("Failed to load the Geyser plugin: {:?}", err));
                     }
                 }
             } else {
@@ -449,11 +436,10 @@ impl Validator {
         info!("Done.");
 
         if !ledger_path.is_dir() {
-            error!(
+            return Err(format!(
                 "ledger directory does not exist or is not accessible: {:?}",
                 ledger_path
-            );
-            abort();
+            ));
         }
 
         if let Some(shred_version) = config.expected_shred_version {
@@ -550,7 +536,7 @@ impl Validator {
             accounts_update_notifier,
             transaction_notifier,
             Some(poh_timing_point_sender.clone()),
-        );
+        )?;
 
         node.info.wallclock = timestamp();
         node.info.shred_version = compute_shred_version(
@@ -570,11 +556,10 @@ impl Validator {
 
         if let Some(expected_shred_version) = config.expected_shred_version {
             if expected_shred_version != node.info.shred_version {
-                error!(
+                return Err(format!(
                     "shred version mismatch: expected {} found: {}",
                     expected_shred_version, node.info.shred_version,
-                );
-                abort();
+                ));
             }
         }
 
@@ -698,7 +683,7 @@ impl Validator {
             ledger_path,
             &bank_forks,
             &leader_schedule_cache,
-        );
+        )?;
 
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
@@ -807,29 +792,32 @@ impl Validator {
             } else {
                 None
             };
+
+            let json_rpc_service = JsonRpcService::new(
+                rpc_addr,
+                config.rpc_config.clone(),
+                config.snapshot_config.clone(),
+                bank_forks.clone(),
+                block_commitment_cache.clone(),
+                blockstore.clone(),
+                cluster_info.clone(),
+                Some(poh_recorder.clone()),
+                genesis_config.hash(),
+                ledger_path,
+                config.validator_exit.clone(),
+                config.known_validators.clone(),
+                rpc_override_health_check.clone(),
+                startup_verification_complete,
+                optimistically_confirmed_bank.clone(),
+                config.send_transaction_service_config.clone(),
+                max_slots.clone(),
+                leader_schedule_cache.clone(),
+                connection_cache.clone(),
+                max_complete_transaction_status_slot,
+            )?;
+
             (
-                Some(JsonRpcService::new(
-                    rpc_addr,
-                    config.rpc_config.clone(),
-                    config.snapshot_config.clone(),
-                    bank_forks.clone(),
-                    block_commitment_cache.clone(),
-                    blockstore.clone(),
-                    cluster_info.clone(),
-                    Some(poh_recorder.clone()),
-                    genesis_config.hash(),
-                    ledger_path,
-                    config.validator_exit.clone(),
-                    config.known_validators.clone(),
-                    rpc_override_health_check.clone(),
-                    startup_verification_complete,
-                    optimistically_confirmed_bank.clone(),
-                    config.send_transaction_service_config.clone(),
-                    max_slots.clone(),
-                    leader_schedule_cache.clone(),
-                    connection_cache.clone(),
-                    max_complete_transaction_status_slot,
-                )),
+                Some(json_rpc_service),
                 if !config.rpc_config.full_api {
                     None
                 } else {
@@ -904,7 +892,7 @@ impl Validator {
             exit.clone(),
         );
 
-        let waited_for_supermajority = if let Ok(waited) = wait_for_supermajority(
+        let waited_for_supermajority = match wait_for_supermajority(
             config,
             Some(&mut process_blockstore),
             &bank_forks,
@@ -912,9 +900,8 @@ impl Validator {
             rpc_override_health_check,
             &start_progress,
         ) {
-            waited
-        } else {
-            abort();
+            Ok(waited) => waited,
+            Err(e) => return Err(format!("wait_for_supermajority failed: {:?}", e)),
         };
 
         let ledger_metric_report_service =
@@ -1004,7 +991,7 @@ impl Validator {
             accounts_background_request_sender,
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
-        );
+        )?;
 
         let tpu = Tpu::new(
             &cluster_info,
@@ -1050,7 +1037,7 @@ impl Validator {
         );
 
         *start_progress.write().unwrap() = ValidatorStartProgress::Running;
-        Self {
+        Ok(Self {
             stats_reporter_service,
             gossip_service,
             serve_repair_service,
@@ -1079,7 +1066,7 @@ impl Validator {
             ledger_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
-        }
+        })
     }
 
     // Used for notifying many nodes in parallel to exit
@@ -1225,7 +1212,10 @@ fn active_vote_account_exists_in_bank(bank: &Arc<Bank>, vote_account: &Pubkey) -
     false
 }
 
-fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u64>) {
+fn check_poh_speed(
+    genesis_config: &GenesisConfig,
+    maybe_hash_samples: Option<u64>,
+) -> Result<(), String> {
     if let Some(hashes_per_tick) = genesis_config.hashes_per_tick() {
         let ticks_per_slot = genesis_config.ticks_per_slot();
         let hashes_per_slot = hashes_per_tick * ticks_per_slot;
@@ -1245,13 +1235,14 @@ fn check_poh_speed(genesis_config: &GenesisConfig, maybe_hash_samples: Option<u6
             let extra_ns = target_ns_per_slot - my_ns_per_slot;
             info!("PoH speed check: Will sleep {}ns per slot.", extra_ns);
         } else {
-            error!(
-                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. If you wish to continue, try --no-poh-speed-test",
+            return Err(format!(
+                "PoH is slower than cluster target tick rate! mine: {} cluster: {}. \
+                If you wish to continue, try --no-poh-speed-test",
                 my_ns_per_slot, target_ns_per_slot,
-            );
-            abort();
+            ));
         }
     }
+    Ok(())
 }
 
 fn maybe_cluster_restart_with_hard_fork(config: &ValidatorConfig, root_slot: Slot) -> Option<Slot> {
@@ -1271,66 +1262,64 @@ fn post_process_restored_tower(
     vote_account: &Pubkey,
     config: &ValidatorConfig,
     bank_forks: &BankForks,
-) -> Tower {
+) -> Result<Tower, String> {
     let mut should_require_tower = config.require_tower;
 
-    restored_tower
-        .and_then(|tower| {
-            let root_bank = bank_forks.root_bank();
-            let slot_history = root_bank.get_slot_history();
-            // make sure tower isn't corrupted first before the following hard fork check
-            let tower = tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history);
+    let restored_tower = restored_tower.and_then(|tower| {
+        let root_bank = bank_forks.root_bank();
+        let slot_history = root_bank.get_slot_history();
+        // make sure tower isn't corrupted first before the following hard fork check
+        let tower = tower.adjust_lockouts_after_replay(root_bank.slot(), &slot_history);
 
-            if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(config, root_bank.slot()) {
-                // intentionally fail to restore tower; we're supposedly in a new hard fork; past
-                // out-of-chain vote state doesn't make sense at all
-                // what if --wait-for-supermajority again if the validator restarted?
-                let message = format!("Hard fork is detected; discarding tower restoration result: {:?}", tower);
-                datapoint_error!(
-                    "tower_error",
-                    (
-                        "error",
-                        message,
-                        String
-                    ),
-                );
-                error!("{}", message);
+        if let Some(hard_fork_restart_slot) =
+            maybe_cluster_restart_with_hard_fork(config, root_bank.slot())
+        {
+            // intentionally fail to restore tower; we're supposedly in a new hard fork; past
+            // out-of-chain vote state doesn't make sense at all
+            // what if --wait-for-supermajority again if the validator restarted?
+            let message = format!(
+                "Hard fork is detected; discarding tower restoration result: {:?}",
+                tower
+            );
+            datapoint_error!("tower_error", ("error", message, String),);
+            error!("{}", message);
 
-                // unconditionally relax tower requirement so that we can always restore tower
-                // from root bank.
-                should_require_tower = false;
-                return Err(crate::consensus::TowerError::HardFork(hard_fork_restart_slot));
-            }
+            // unconditionally relax tower requirement so that we can always restore tower
+            // from root bank.
+            should_require_tower = false;
+            return Err(crate::consensus::TowerError::HardFork(
+                hard_fork_restart_slot,
+            ));
+        }
 
-            if let Some(warp_slot) = config.warp_slot {
-                // unconditionally relax tower requirement so that we can always restore tower
-                // from root bank after the warp
-                should_require_tower = false;
-                return Err(crate::consensus::TowerError::HardFork(warp_slot));
-            }
+        if let Some(warp_slot) = config.warp_slot {
+            // unconditionally relax tower requirement so that we can always restore tower
+            // from root bank after the warp
+            should_require_tower = false;
+            return Err(crate::consensus::TowerError::HardFork(warp_slot));
+        }
 
-            tower
-        })
-        .unwrap_or_else(|err| {
+        tower
+    });
+
+    let restored_tower = match restored_tower {
+        Ok(tower) => tower,
+        Err(err) => {
             let voting_has_been_active =
                 active_vote_account_exists_in_bank(&bank_forks.working_bank(), vote_account);
             if !err.is_file_missing() {
                 datapoint_error!(
                     "tower_error",
-                    (
-                        "error",
-                        format!("Unable to restore tower: {}", err),
-                        String
-                    ),
+                    ("error", format!("Unable to restore tower: {}", err), String),
                 );
             }
             if should_require_tower && voting_has_been_active {
-                error!("Requested mandatory tower restore failed: {}", err);
-                error!(
-                    "And there is an existing vote_account containing actual votes. \
+                return Err(format!(
+                    "Requested mandatory tower restore failed: {}. \
+                     And there is an existing vote_account containing actual votes. \
                      Aborting due to possible conflicting duplicate votes",
-                );
-                abort();
+                    err
+                ));
             }
             if err.is_file_missing() && !voting_has_been_active {
                 // Currently, don't protect against spoofed snapshots with no tower at all
@@ -1345,12 +1334,11 @@ fn post_process_restored_tower(
                 );
             }
 
-            Tower::new_from_bankforks(
-                bank_forks,
-                validator_identity,
-                vote_account,
-            )
-        })
+            Tower::new_from_bankforks(bank_forks, validator_identity, vote_account)
+        }
+    };
+
+    Ok(restored_tower)
 }
 
 #[allow(clippy::type_complexity)]
@@ -1362,20 +1350,23 @@ fn load_blockstore(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     poh_timing_point_sender: Option<PohTimingSender>,
-) -> (
-    GenesisConfig,
-    Arc<RwLock<BankForks>>,
-    Arc<Blockstore>,
-    Slot,
-    Receiver<bool>,
-    CompletedSlotsReceiver,
-    LeaderScheduleCache,
-    Option<StartingSnapshotHashes>,
-    TransactionHistoryServices,
-    blockstore_processor::ProcessOptions,
-    BlockstoreRootScan,
-    DroppedSlotsReceiver,
-) {
+) -> Result<
+    (
+        GenesisConfig,
+        Arc<RwLock<BankForks>>,
+        Arc<Blockstore>,
+        Slot,
+        Receiver<bool>,
+        CompletedSlotsReceiver,
+        LeaderScheduleCache,
+        Option<StartingSnapshotHashes>,
+        TransactionHistoryServices,
+        blockstore_processor::ProcessOptions,
+        BlockstoreRootScan,
+        DroppedSlotsReceiver,
+    ),
+    String,
+> {
     info!("loading ledger from {:?}...", ledger_path);
     *start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
     let genesis_config = open_genesis_config(ledger_path, config.max_genesis_archive_unpacked_size);
@@ -1392,14 +1383,17 @@ fn load_blockstore(
 
     if let Some(expected_genesis_hash) = config.expected_genesis_hash {
         if genesis_hash != expected_genesis_hash {
-            error!("genesis hash mismatch: expected {}", expected_genesis_hash);
-            error!("Delete the ledger directory to continue: {:?}", ledger_path);
-            abort();
+            return Err(format!(
+                "genesis hash mismatch: hash={} expected={}. Delete the ledger directory to continue: {:?}",
+                genesis_hash,
+                expected_genesis_hash,
+                ledger_path,
+            ));
         }
     }
 
     if !config.no_poh_speed_test {
-        check_poh_speed(&genesis_config, None);
+        check_poh_speed(&genesis_config, None)?;
     }
 
     let BlockstoreSignals {
@@ -1508,7 +1502,7 @@ fn load_blockstore(
         }
     }
 
-    (
+    Ok((
         genesis_config,
         bank_forks,
         blockstore,
@@ -1521,7 +1515,7 @@ fn load_blockstore(
         process_options,
         blockstore_root_scan,
         pruned_banks_receiver,
-    )
+    ))
 }
 
 fn highest_slot(blockstore: &Blockstore) -> Option<Slot> {
@@ -1599,7 +1593,7 @@ impl<'a> ProcessBlockStore<'a> {
         }
     }
 
-    pub(crate) fn process(&mut self) {
+    pub(crate) fn process(&mut self) -> Result<(), String> {
         if self.tower.is_none() {
             let previous_start_process = *self.start_progress.read().unwrap();
             *self.start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
@@ -1633,7 +1627,7 @@ impl<'a> ProcessBlockStore<'a> {
                     }
                 });
             }
-            blockstore_processor::process_blockstore_from_root(
+            if let Err(e) = blockstore_processor::process_blockstore_from_root(
                 self.blockstore,
                 self.bank_forks,
                 self.leader_schedule_cache,
@@ -1641,11 +1635,9 @@ impl<'a> ProcessBlockStore<'a> {
                 self.transaction_status_sender,
                 self.cache_block_meta_sender.as_ref(),
                 &self.accounts_background_request_sender,
-            )
-            .unwrap_or_else(|err| {
-                error!("Failed to load ledger: {:?}", err);
-                abort()
-            });
+            ) {
+                return Err(format!("Failed to load ledger: {:?}", e));
+            }
 
             exit.store(true, Ordering::Relaxed);
 
@@ -1657,15 +1649,16 @@ impl<'a> ProcessBlockStore<'a> {
                 let restored_tower = Tower::restore(self.config.tower_storage.as_ref(), self.id);
                 if let Ok(tower) = &restored_tower {
                     // reconciliation attempt 1 of 2 with tower
-                    reconcile_blockstore_roots_with_external_source(
+                    if let Err(e) = reconcile_blockstore_roots_with_external_source(
                         ExternalRootSource::Tower(tower.root()),
                         self.blockstore,
                         &mut self.original_blockstore_root,
-                    )
-                    .unwrap_or_else(|err| {
-                        error!("Failed to reconcile blockstore with tower: {:?}", err);
-                        abort()
-                    });
+                    ) {
+                        return Err(format!(
+                            "Failed to reconcile blockstore with tower: {:?}",
+                            e
+                        ));
+                    }
                 }
 
                 post_process_restored_tower(
@@ -1674,7 +1667,7 @@ impl<'a> ProcessBlockStore<'a> {
                     self.vote_account,
                     self.config,
                     &self.bank_forks.read().unwrap(),
-                )
+                )?
             });
 
             if let Some(hard_fork_restart_slot) = maybe_cluster_restart_with_hard_fork(
@@ -1683,24 +1676,26 @@ impl<'a> ProcessBlockStore<'a> {
             ) {
                 // reconciliation attempt 2 of 2 with hard fork
                 // this should be #2 because hard fork root > tower root in almost all cases
-                reconcile_blockstore_roots_with_external_source(
+                if let Err(e) = reconcile_blockstore_roots_with_external_source(
                     ExternalRootSource::HardFork(hard_fork_restart_slot),
                     self.blockstore,
                     &mut self.original_blockstore_root,
-                )
-                .unwrap_or_else(|err| {
-                    error!("Failed to reconcile blockstore with hard fork: {:?}", err);
-                    abort()
-                });
+                ) {
+                    return Err(format!(
+                        "Failed to reconcile blockstore with hard fork: {:?}",
+                        e
+                    ));
+                }
             }
 
             *self.start_progress.write().unwrap() = previous_start_process;
         }
+        Ok(())
     }
 
-    pub(crate) fn process_to_create_tower(mut self) -> Tower {
-        self.process();
-        self.tower.unwrap()
+    pub(crate) fn process_to_create_tower(mut self) -> Result<Tower, String> {
+        self.process()?;
+        Ok(self.tower.unwrap())
     }
 }
 
@@ -1710,26 +1705,25 @@ fn maybe_warp_slot(
     ledger_path: &Path,
     bank_forks: &RwLock<BankForks>,
     leader_schedule_cache: &LeaderScheduleCache,
-) {
+) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
-        let snapshot_config = config.snapshot_config.as_ref().unwrap_or_else(|| {
-            error!("warp slot requires a snapshot config");
-            abort();
-        });
+        let snapshot_config = match config.snapshot_config.as_ref() {
+            Some(config) => config,
+            None => return Err("warp slot requires a snapshot config".to_owned()),
+        };
 
-        process_blockstore.process();
+        process_blockstore.process()?;
 
         let mut bank_forks = bank_forks.write().unwrap();
 
         let working_bank = bank_forks.working_bank();
 
         if warp_slot <= working_bank.slot() {
-            error!(
+            return Err(format!(
                 "warp slot ({}) cannot be less than the working bank slot ({})",
                 warp_slot,
                 working_bank.slot()
-            );
-            abort();
+            ));
         }
         info!("warping to slot {}", warp_slot);
 
@@ -1746,7 +1740,7 @@ fn maybe_warp_slot(
         );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
-        let full_snapshot_archive_info = snapshot_utils::bank_to_full_snapshot_archive(
+        let full_snapshot_archive_info = match snapshot_utils::bank_to_full_snapshot_archive(
             ledger_path,
             &bank_forks.root_bank(),
             None,
@@ -1755,16 +1749,16 @@ fn maybe_warp_slot(
             snapshot_config.archive_format,
             snapshot_config.maximum_full_snapshot_archives_to_retain,
             snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-        )
-        .unwrap_or_else(|err| {
-            error!("Unable to create snapshot: {}", err);
-            abort();
-        });
+        ) {
+            Ok(archive_info) => archive_info,
+            Err(e) => return Err(format!("Unable to create snapshot: {}", e)),
+        };
         info!(
             "created snapshot: {}",
             full_snapshot_archive_info.path().display()
         );
     }
+    Ok(())
 }
 
 fn blockstore_contains_bad_shred_version(
@@ -1884,6 +1878,7 @@ fn initialize_rpc_transaction_history_services(
 enum ValidatorError {
     BadExpectedBankHash,
     NotEnoughLedgerData,
+    Error(String),
 }
 
 // Return if the validator waited on other nodes to start. In this case
@@ -1904,7 +1899,9 @@ fn wait_for_supermajority(
         None => Ok(false),
         Some(wait_for_supermajority_slot) => {
             if let Some(process_blockstore) = process_blockstore {
-                process_blockstore.process();
+                process_blockstore
+                    .process()
+                    .map_err(ValidatorError::Error)?;
             }
 
             let bank = bank_forks.read().unwrap().working_bank();
@@ -2140,7 +2137,8 @@ mod tests {
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        );
+        )
+        .expect("assume successful validator start");
         assert_eq!(
             *start_progress.read().unwrap(),
             ValidatorStartProgress::Running
@@ -2224,6 +2222,7 @@ mod tests {
                     DEFAULT_TPU_USE_QUIC,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
                 )
+                .expect("assume successful validator start")
             })
             .collect();
 
@@ -2363,7 +2362,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn test_poh_speed() {
         solana_logger::setup();
         let poh_config = PohConfig {
@@ -2376,7 +2374,7 @@ mod tests {
             poh_config,
             ..GenesisConfig::default()
         };
-        check_poh_speed(&genesis_config, Some(10_000));
+        assert!(check_poh_speed(&genesis_config, Some(10_000)).is_err());
     }
 
     #[test]
@@ -2390,6 +2388,6 @@ mod tests {
             poh_config,
             ..GenesisConfig::default()
         };
-        check_poh_speed(&genesis_config, Some(10_000));
+        check_poh_speed(&genesis_config, Some(10_000)).unwrap();
     }
 }

@@ -295,7 +295,7 @@ impl TestValidatorGenesis {
                 warn!("Could not find {}, skipping.", address);
             } else {
                 error!("Failed to fetch {}: {}", address, res.unwrap_err());
-                solana_core::validator::abort();
+                Self::abort();
             }
         }
         self
@@ -306,7 +306,7 @@ impl TestValidatorGenesis {
             let account_path =
                 solana_program_test::find_file(account.filename).unwrap_or_else(|| {
                     error!("Unable to locate {}", account.filename);
-                    solana_core::validator::abort();
+                    Self::abort();
                 });
             let mut file = File::open(&account_path).unwrap();
             let mut account_info_raw = String::new();
@@ -320,7 +320,7 @@ impl TestValidatorGenesis {
                         account_path.to_str().unwrap(),
                         err
                     );
-                    solana_core::validator::abort();
+                    Self::abort();
                 }
                 Ok(deserialized) => deserialized,
             };
@@ -349,7 +349,7 @@ impl TestValidatorGenesis {
             let matched_files = fs::read_dir(&dir)
                 .unwrap_or_else(|err| {
                     error!("Cannot read directory {}: {}", dir, err);
-                    solana_core::validator::abort();
+                    Self::abort();
                 })
                 .flatten()
                 .map(|entry| entry.path())
@@ -509,6 +509,19 @@ impl TestValidatorGenesis {
             }
             Err(err) => panic!("Test validator failed to start: {}", err),
         }
+    }
+
+    fn abort() -> ! {
+        #[cfg(not(test))]
+        {
+            // standard error is usually redirected to a log file, cry for help on standard output as
+            // well
+            println!("Validator process aborted. The validator log may contain further details");
+            std::process::exit(1);
+        }
+
+        #[cfg(test)]
+        panic!("process::exit(1) is intercepted for friendly test failure...");
     }
 }
 
@@ -810,7 +823,7 @@ impl TestValidator {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        ));
+        )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...

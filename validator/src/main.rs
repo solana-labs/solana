@@ -3176,7 +3176,11 @@ pub fn main() {
         socket_addr_space,
         tpu_use_quic,
         tpu_connection_pool_size,
-    );
+    )
+    .unwrap_or_else(|e| {
+        error!("Failed to start validator: {:?}", e);
+        exit(1);
+    });
     *admin_service_post_init.write().unwrap() =
         Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
             bank_forks: validator.bank_forks.clone(),
