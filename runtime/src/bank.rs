@@ -19333,7 +19333,10 @@ pub(crate) mod tests {
         {
             let account_pubkey = Pubkey::new_unique();
             let account_balance = LAMPORTS_PER_SOL;
-            let account_size = rng.gen_range(1, MAX_PERMITTED_DATA_LENGTH) as usize;
+            let account_size = rng.gen_range(
+                1,
+                MAX_PERMITTED_DATA_LENGTH as usize - MAX_PERMITTED_DATA_INCREASE,
+            );
             let account_data =
                 AccountSharedData::new(account_balance, account_size, &mock_program_id);
             bank.store_account(&account_pubkey, &account_data);
