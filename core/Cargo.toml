@@ -69,7 +69,7 @@ trees = "0.4.2"
 matches = "0.1.9"
 raptorq = "1.7.0"
 serde_json = "1.0.83"
-serial_test = "0.8.0"
+serial_test = "0.9.0"
 solana-logger = { path = "../logger", version = "=1.12.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.12.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.12.0" }

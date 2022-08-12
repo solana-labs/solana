@@ -1118,6 +1118,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dashmap"
+version = "5.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c8858831f7781322e539ea39e72449c46b059638250c14344fec8d0aa6e539c"
+dependencies = [
+ "cfg-if 1.0.0",
+ "num_cpus",
+ "parking_lot 0.12.1",
+]
+
+[[package]]
 name = "data-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3303,9 +3314,9 @@ checksum = "ed0cfbc8191465bed66e1718596ee0b0b35d5ee1f41c5df2189d0fe8bde535ba"
 
 [[package]]
 name = "predicates"
-version = "2.0.3"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c6ce811d0b2e103743eec01db1c50612221f173084ce2f7941053e94b6bb474"
+checksum = "a5aab5be6e4732b473071984b3164dbbfb7a3674d30ea5ff44410b6bcd960c3c"
 dependencies = [
  "difflib",
  "float-cmp",
@@ -4327,10 +4338,11 @@ dependencies = [
 
 [[package]]
 name = "serial_test"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7eec42e7232e5ca56aa59d63af3c7f991fe71ee6a3ddd2d3480834cf3902b007"
+checksum = "92761393ee4dc3ff8f4af487bd58f4307c9329bbedea02cac0089ad9c411e153"
 dependencies = [
+ "dashmap 5.2.0",
  "futures 0.3.21",
  "lazy_static",
  "log",
@@ -4340,14 +4352,13 @@ dependencies = [
 
 [[package]]
 name = "serial_test_derive"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1b95bb2f4f624565e8fe8140c789af7e2082c0e0561b5a82a1b678baa9703dc"
+checksum = "4b6f5d1c3087fb119617cff2966fe3808a80e5eb59a8c1601d5994d66f4346a5"
 dependencies = [
  "proc-macro-error",
  "proc-macro2 1.0.41",
  "quote 1.0.18",
- "rustversion",
  "syn 1.0.98",
 ]
 
@@ -5087,7 +5098,7 @@ dependencies = [
  "bs58",
  "chrono",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 4.0.2",
  "eager",
  "etcd-client",
  "fs_extra",
@@ -5485,7 +5496,7 @@ dependencies = [
  "chrono",
  "chrono-humanize",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 4.0.2",
  "fs_extra",
  "futures 0.3.21",
  "itertools",
@@ -5545,7 +5556,7 @@ dependencies = [
  "clap 2.33.3",
  "crossbeam-channel",
  "csv",
- "dashmap",
+ "dashmap 4.0.2",
  "histogram",
  "itertools",
  "log",
@@ -5959,7 +5970,7 @@ dependencies = [
  "bincode",
  "bs58",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 4.0.2",
  "itertools",
  "jsonrpc-core",
  "jsonrpc-core-client",
@@ -6042,7 +6053,7 @@ dependencies = [
  "byteorder",
  "bzip2",
  "crossbeam-channel",
- "dashmap",
+ "dashmap 4.0.2",
  "dir-diff",
  "ed25519-dalek",
  "flate2",

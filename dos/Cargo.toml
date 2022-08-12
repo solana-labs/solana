@@ -35,5 +35,5 @@ solana-version = { path = "../version", version = "=1.12.0" }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
-serial_test = "0.8.0"
+serial_test = "0.9.0"
 solana-local-cluster = { path = "../local-cluster", version = "=1.12.0" }
