@@ -1416,6 +1416,7 @@ impl<'a> FlushGuard<'a> {
     /// Set the `flushing` atomic flag to true.  If the flag was already true, then return `None`
     /// (so as to not clear the flag erroneously).  Otherwise return `Some(FlushGuard)`.
     #[must_use = "if unused, the `flushing` flag will immediately clear"]
+    #[allow(clippy::unnecessary_lazy_evaluations)]
     fn lock(flushing: &'a AtomicBool) -> Option<Self> {
         let already_flushing = flushing.swap(true, Ordering::AcqRel);
         (!already_flushing).then(|| Self { flushing })
