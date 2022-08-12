@@ -729,7 +729,7 @@ impl ScheduleStage {
         from_runnable: bool,
     ) {
         for l in lock_attempts {
-            Self::remember_address_contention(&mut l.target.page(), unique_weight);
+            AddressBook::remember_address_contention(&mut l.target.page(), unique_weight);
             l.remembered = true;
             address_book.reset_lock(l, false);
             //if let Some(uw) = l.target.page().contended_unique_weights.last() {
