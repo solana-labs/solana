@@ -139,7 +139,6 @@ fn genesis_builtins() -> Vec<Builtin> {
     ]
 }
 
-/// place holder for precompile programs, remove when the precompile program is deactivated via feature activation
 /// Dynamic feature transitions for builtin programs
 fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![
