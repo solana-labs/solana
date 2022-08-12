@@ -396,7 +396,7 @@ struct Bundle {
 
 #[derive(Debug)]
 pub struct Task {
-    pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>, u64)>, // actually should be Bundle
+    pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
     pub contention_count: usize,
 }
 
@@ -468,17 +468,17 @@ fn attempt_lock_for_execution<'a>(
     (unlockable_count, guaranteed_count, placeholder_attempts)
 }
 
-type PreloadedTransaction = (SanitizedTransaction, Vec<LockAttempt>, u64);
+type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
 // multiplexed to reduce the futex syscal per tx down to minimum and to make the schduler to
 // adaptive relative load between sigverify stage and execution substage
 // switched from crossbeam_channel::select! due to observed poor performance
 pub enum Multiplexed {
-    FromPrevious((Weight, Box<PreloadedTransaction>)),
-    FromPreviousBatched(Vec<Vec<Box<PreloadedTransaction>>>),
+    FromPrevious((Weight, Box<PreprocessedTransaction>)),
+    FromPreviousBatched(Vec<Vec<Box<PreprocessedTransaction>>>),
     FromExecute(Box<ExecutionEnvironment>),
 }
 
-pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
+fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
         use solana_program_runtime::compute_budget::ComputeBudget;
         let mut compute_budget = ComputeBudget::default();
         compute_budget
@@ -494,7 +494,7 @@ pub struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_queue(
-        (weight, tx): (Weight, Box<PreloadedTransaction>),
+        (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
@@ -509,8 +509,6 @@ impl ScheduleStage {
         //    )
         //    .unwrap();
         //tx.foo();
-        assert!(weight.ix < 0x1_0000_0000);
-        //let weight = Weight { ix: (weight.ix << 32) | (*unique_key & 0x0000_0000_ffff_ffff) };
 
         runnable_queue.add_to_schedule(
             UniqueWeight {
@@ -824,7 +822,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn register_runnable_task(
-        weighted_tx: (Weight, Box<PreloadedTransaction>),
+        weighted_tx: (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
@@ -858,7 +856,8 @@ impl ScheduleStage {
 
                     for vv in vvv {
                         for v in vv {
-                            Self::register_runnable_task((Weight { ix: v.2 }, v), runnable_queue, &mut current_unique_key);
+                            let p = get_transaction_priority_details(&v.0);
+                            Self::register_runnable_task((Weight { ix: p }, v), runnable_queue, &mut current_unique_key);
                             if executing_queue_count < max_executing_queue_count {
                                 let maybe_ee =
                                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
