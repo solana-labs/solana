@@ -1,5 +1,6 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
+use solana_prometheus::identity_info::map_vote_identity_to_info;
 use {
     crate::{
         cluster_tpu_info::ClusterTpuInfo,
@@ -28,7 +29,10 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_perf::thread::renice_this_thread,
     solana_poh::poh_recorder::PohRecorder,
-    solana_prometheus::{banks_with_commitments::BanksWithCommitments, render_prometheus, identity_info::IdentityInfoMap},
+    solana_prometheus::{
+        banks_with_commitments::BanksWithCommitments, identity_info::IdentityInfoMap,
+        render_prometheus,
+    },
     solana_runtime::{
         bank_forks::BankForks, commitment::BlockCommitmentCache,
         prioritization_fee_cache::PrioritizationFeeCache,
@@ -54,7 +58,6 @@ use {
     },
     tokio_util::codec::{BytesCodec, FramedRead},
 };
-use solana_prometheus::identity_info::map_vote_identity_to_info;
 
 const FULL_SNAPSHOT_REQUEST_PATH: &str = "/snapshot.tar.bz2";
 const INCREMENTAL_SNAPSHOT_REQUEST_PATH: &str = "/incremental-snapshot.tar.bz2";
@@ -103,7 +106,10 @@ impl RpcRequestMiddleware {
             )
             .unwrap(),
             snapshot_config,
-            identity_info_map: Arc::new(map_vote_identity_to_info(&bank_forks, &vote_accounts_to_monitor)),
+            identity_info_map: Arc::new(map_vote_identity_to_info(
+                &bank_forks,
+                &vote_accounts_to_monitor,
+            )),
             bank_forks,
             health,
             block_commitment_cache,
@@ -329,6 +335,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                             &self.health.cluster_info,
                             &self.vote_accounts_to_monitor,
                             &self.identity_info_map,
+                            &self.snapshot_config,
                         )))
                         .unwrap()
                         .into()
