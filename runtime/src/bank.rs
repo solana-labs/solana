@@ -16196,7 +16196,11 @@ pub(crate) mod tests {
         exit.store(true, Relaxed);
         scan_thread.join().unwrap();
         update_thread.join().unwrap();
-        assert!(remaining_loops > 0, "test timed out - completed {} scans", num_banks_scanned.load(Relaxed));
+        assert!(
+            remaining_loops > 0,
+            "test timed out - completed {} scans",
+            num_banks_scanned.load(Relaxed)
+        );
     }
 
     #[test]
