@@ -36,8 +36,7 @@ use {
             self, blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
             curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
             disable_fees_sysvar, enable_early_verification_of_account_modifications,
-            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            prevent_calling_precompiles_as_programs, syscall_saturated_math,
+            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id, syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
