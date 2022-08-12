@@ -442,7 +442,7 @@ fn send_packets(
             Ordering::Relaxed,
         );
 
-        for vv in vvv {
+        for vv in packet_batches {
             for v in vv {
                 packet_batch_sender.send(solana_scheduler::Multiplexed::FromPrevious(v));
             }
