@@ -729,8 +729,10 @@ impl ScheduleStage {
         from_runnable: bool,
     ) {
         for l in lock_attempts {
-            AddressBook::remember_address_contention(&mut l.target.page(), unique_weight);
-            l.remembered = true;
+            if from_runnable {
+                AddressBook::remember_address_contention(&mut l.target.page(), unique_weight);
+                l.remembered = true;
+            }
             address_book.reset_lock(l, false);
             //if let Some(uw) = l.target.page().contended_unique_weights.last() {
             //    address_book.uncontended_task_ids.remove(uw);
