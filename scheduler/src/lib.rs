@@ -478,7 +478,7 @@ pub enum Multiplexed {
     FromExecute(Box<ExecutionEnvironment>),
 }
 
-fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
+pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
         use solana_program_runtime::compute_budget::ComputeBudget;
         let mut compute_budget = ComputeBudget::default();
         compute_budget
@@ -856,7 +856,6 @@ impl ScheduleStage {
 
                     for vv in vvv {
                         for v in vv {
-                            let p = get_transaction_priority_details(&v.0);
                             Self::register_runnable_task((Weight { ix: p }, v), runnable_queue, &mut current_unique_key);
                             if executing_queue_count < max_executing_queue_count {
                                 let maybe_ee =
