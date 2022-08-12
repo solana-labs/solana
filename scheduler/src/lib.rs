@@ -164,6 +164,7 @@ impl Page {
 
     fn switch_to_next_usage(&mut self) {
         self.current_usage = self.next_usage;
+        self.next_usage = Usage::Unused;
     }
 }
 
@@ -275,10 +276,10 @@ impl AddressBook {
                 self.unlock(attempt)
             },
             LockStatus::Guaranteed => {
-                self.cancel(attempt);
                 if after_execution {
                     self.unlock(attempt)
                 } else {
+                    self.cancel(attempt);
                     false
                 }
             }
