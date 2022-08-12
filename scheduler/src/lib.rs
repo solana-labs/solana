@@ -510,11 +510,11 @@ impl ScheduleStage {
         //    .unwrap();
         //tx.foo();
         assert!(weight.ix < 0x1_0000_0000);
-        let weight = (weight.ix << 32) | (*unique_key >> 32);
+        let weight = Weight { ix: (weight.ix << 32) | (*unique_key >> 32) };
 
         runnable_queue.add_to_schedule(
             UniqueWeight {
-                Weight {ix: weight},
+                weight,
                 //unique_key: solana_sdk::hash::new_rand(&mut rng),
                 //unique_key: *unique_key,
             },
