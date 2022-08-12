@@ -6,7 +6,7 @@ keywords: "instruction fee, processing fee, storage fee, low fee blockchain, gas
 
 The small fees paid to process [instructions](./terminology.md#instruction) on the Solana blockchain are known as "_transaction fees_".
 
-As each transaction (aka collection of instructions) is sent through the network, it gets processed by the current leader validation-client. Once confirmed as a global state transaction, this _transaction fee_ is paid to the network to help support the [economic design](#economic-design) of the Solana blockchain.
+As each transaction (which contains one or more instructions) is sent through the network, it gets processed by the current leader validation-client. Once confirmed as a global state transaction, this _transaction fee_ is paid to the network to help support the [economic design](#economic-design) of the Solana blockchain.
 
 > **NOTE:** Transaction fees are different from [account rent](./terminology.md#rent)!
 > While transaction fees are paid to process instructions on the Solana network, rent is paid to store data on the blockchain.

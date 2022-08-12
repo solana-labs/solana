@@ -193,7 +193,7 @@ The duration of time for which a [validator](#validator) is unable to [vote](#le
 
 The structured contents of a [transaction](#transaction). Generally containing a header, array of account addresses, recent [blockhash](#blockhash), and an array of [instructions](#instruction).
 
-Learn more about the [message formatting](./developing/programming-model/transactions.md#message-format) inside of transactions here.
+Learn more about the [message formatting inside of transactions](./developing/programming-model/transactions.md#message-format) here.
 
 ## native token
 
