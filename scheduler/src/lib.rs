@@ -665,7 +665,8 @@ impl ScheduleStage {
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
 
-                return None;
+                //return None;
+                continue;
             }
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
