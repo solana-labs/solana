@@ -134,7 +134,7 @@ use {
         timing::years_as_slots,
         transaction::{
             MessageHash, Result, SanitizedTransaction, Transaction, TransactionError,
-            TransactionVerificationMode, VersionedTransaction,
+            TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{InstructionTrace, TransactionAccount, TransactionContext},
     },
@@ -3510,8 +3510,20 @@ impl Bank {
         tick_height % self.ticks_per_slot == 0
     }
 
+    /// Get the max number of accounts that a transaction may lock in this block
+    pub fn get_transaction_account_lock_limit(&self) -> usize {
+        if let Some(transaction_account_lock_limit) =
+            self.runtime_config.transaction_account_lock_limit
+        {
+            transaction_account_lock_limit
+        } else {
+            MAX_TX_ACCOUNT_LOCKS
+        }
+    }
+
     /// Prepare a transaction batch from a list of legacy transactions. Used for tests only.
     pub fn prepare_batch_for_tests(&self, txs: Vec<Transaction>) -> TransactionBatch {
+        let transaction_account_lock_limit = self.get_transaction_account_lock_limit();
         let sanitized_txs = txs
             .into_iter()
             .map(SanitizedTransaction::from_transaction_for_tests)
@@ -3519,7 +3531,11 @@ impl Bank {
         let lock_results = self
             .rc
             .accounts
+<<<<<<< HEAD
             .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
+=======
+            .lock_accounts(sanitized_txs.iter(), transaction_account_lock_limit);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         TransactionBatch::new(lock_results, self, Cow::Owned(sanitized_txs))
     }
 
@@ -3539,10 +3555,18 @@ impl Bank {
                 )
             })
             .collect::<Result<Vec<_>>>()?;
+<<<<<<< HEAD
         let lock_results = self
             .rc
             .accounts
             .lock_accounts(sanitized_txs.iter(), &FeatureSet::all_enabled());
+=======
+        let tx_account_lock_limit = self.get_transaction_account_lock_limit();
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(sanitized_txs.iter(), tx_account_lock_limit);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         Ok(TransactionBatch::new(
             lock_results,
             self,
@@ -3555,10 +3579,18 @@ impl Bank {
         &'a self,
         txs: &'b [SanitizedTransaction],
     ) -> TransactionBatch<'a, 'b> {
+<<<<<<< HEAD
         let lock_results = self
             .rc
             .accounts
             .lock_accounts(txs.iter(), &self.feature_set);
+=======
+        let tx_account_lock_limit = self.get_transaction_account_lock_limit();
+        let lock_results = self
+            .rc
+            .accounts
+            .lock_accounts(txs.iter(), tx_account_lock_limit);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         TransactionBatch::new(lock_results, self, Cow::Borrowed(txs))
     }
 
@@ -3570,10 +3602,18 @@ impl Bank {
         transaction_results: impl Iterator<Item = &'b Result<()>>,
     ) -> TransactionBatch<'a, 'b> {
         // this lock_results could be: Ok, AccountInUse, WouldExceedBlockMaxLimit or WouldExceedAccountMaxLimit
+<<<<<<< HEAD
         let lock_results = self.rc.accounts.lock_accounts_with_results(
             transactions.iter(),
             transaction_results,
             &self.feature_set,
+=======
+        let tx_account_lock_limit = self.get_transaction_account_lock_limit();
+        let lock_results = self.rc.accounts.lock_accounts_with_results(
+            transactions.iter(),
+            transaction_results,
+            tx_account_lock_limit,
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         );
         TransactionBatch::new(lock_results, self, Cow::Borrowed(transactions))
     }
@@ -3583,7 +3623,14 @@ impl Bank {
         &'a self,
         transaction: SanitizedTransaction,
     ) -> TransactionBatch<'a, '_> {
+<<<<<<< HEAD
         let lock_result = transaction.get_account_locks(&self.feature_set).map(|_| ());
+=======
+        let tx_account_lock_limit = self.get_transaction_account_lock_limit();
+        let lock_result = transaction
+            .get_account_locks(tx_account_lock_limit)
+            .map(|_| ());
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         let mut batch =
             TransactionBatch::new(vec![lock_result], self, Cow::Owned(vec![transaction]));
         batch.set_needs_unlock(false);

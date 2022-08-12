@@ -1090,10 +1090,18 @@ impl Accounts {
     pub fn lock_accounts<'a>(
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
+<<<<<<< HEAD
         feature_set: &FeatureSet,
     ) -> Vec<Result<()>> {
         let tx_account_locks_results: Vec<Result<_>> =
             txs.map(|tx| tx.get_account_locks(feature_set)).collect();
+=======
+        tx_account_lock_limit: usize,
+    ) -> Vec<Result<()>> {
+        let tx_account_locks_results: Vec<Result<_>> = txs
+            .map(|tx| tx.get_account_locks(tx_account_lock_limit))
+            .collect();
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         self.lock_accounts_inner(tx_account_locks_results)
     }
 
@@ -1103,12 +1111,20 @@ impl Accounts {
         &self,
         txs: impl Iterator<Item = &'a SanitizedTransaction>,
         results: impl Iterator<Item = &'a Result<()>>,
+<<<<<<< HEAD
         feature_set: &FeatureSet,
+=======
+        tx_account_lock_limit: usize,
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
     ) -> Vec<Result<()>> {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .zip(results)
             .map(|(tx, result)| match result {
+<<<<<<< HEAD
                 Ok(()) => tx.get_account_locks(feature_set),
+=======
+                Ok(()) => tx.get_account_locks(tx_account_lock_limit),
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
                 Err(err) => Err(err.clone()),
             })
             .collect();
@@ -2479,7 +2495,11 @@ mod tests {
         };
 
         let tx = new_sanitized_tx(&[&keypair], message, Hash::default());
+<<<<<<< HEAD
         let results = accounts.lock_accounts([tx].iter(), &FeatureSet::all_enabled());
+=======
+        let results = accounts.lock_accounts([tx].iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         assert_eq!(results[0], Err(TransactionError::AccountLoadedTwice));
     }
 
@@ -2512,7 +2532,11 @@ mod tests {
             };
 
             let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
+<<<<<<< HEAD
             let results = accounts.lock_accounts(txs.iter(), &FeatureSet::all_enabled());
+=======
+            let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
             assert_eq!(results[0], Ok(()));
             accounts.unlock_accounts(txs.iter(), &results);
         }
@@ -2534,6 +2558,7 @@ mod tests {
             };
 
             let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
+<<<<<<< HEAD
             let results = accounts.lock_accounts(txs.iter(), &FeatureSet::default());
             assert_eq!(results[0], Ok(()));
             accounts.unlock_accounts(txs.iter(), &results);
@@ -2557,6 +2582,9 @@ mod tests {
 
             let txs = vec![new_sanitized_tx(&[&keypair], message, Hash::default())];
             let results = accounts.lock_accounts(txs.iter(), &FeatureSet::all_enabled());
+=======
+            let results = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
             assert_eq!(results[0], Err(TransactionError::TooManyAccountLocks));
         }
     }
@@ -2595,7 +2623,11 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
+<<<<<<< HEAD
         let results0 = accounts.lock_accounts([tx.clone()].iter(), &FeatureSet::all_enabled());
+=======
+        let results0 = accounts.lock_accounts([tx.clone()].iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
 
         assert!(results0[0].is_ok());
         assert_eq!(
@@ -2630,7 +2662,11 @@ mod tests {
         );
         let tx1 = new_sanitized_tx(&[&keypair1], message, Hash::default());
         let txs = vec![tx0, tx1];
+<<<<<<< HEAD
         let results1 = accounts.lock_accounts(txs.iter(), &FeatureSet::all_enabled());
+=======
+        let results1 = accounts.lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
 
         assert!(results1[0].is_ok()); // Read-only account (keypair1) can be referenced multiple times
         assert!(results1[1].is_err()); // Read-only account (keypair1) cannot also be locked as writable
@@ -2657,7 +2693,11 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair1], message, Hash::default());
+<<<<<<< HEAD
         let results2 = accounts.lock_accounts([tx].iter(), &FeatureSet::all_enabled());
+=======
+        let results2 = accounts.lock_accounts([tx].iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         assert!(results2[0].is_ok()); // Now keypair1 account can be locked as writable
 
         // Check that read-only lock with zero references is deleted
@@ -2728,7 +2768,11 @@ mod tests {
                 let txs = vec![writable_tx.clone()];
                 let results = accounts_clone
                     .clone()
+<<<<<<< HEAD
                     .lock_accounts(txs.iter(), &FeatureSet::all_enabled());
+=======
+                    .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
                 for result in results.iter() {
                     if result.is_ok() {
                         counter_clone.clone().fetch_add(1, Ordering::SeqCst);
@@ -2745,7 +2789,11 @@ mod tests {
             let txs = vec![readonly_tx.clone()];
             let results = accounts_arc
                 .clone()
+<<<<<<< HEAD
                 .lock_accounts(txs.iter(), &FeatureSet::all_enabled());
+=======
+                .lock_accounts(txs.iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
             if results[0].is_ok() {
                 let counter_value = counter_clone.clone().load(Ordering::SeqCst);
                 thread::sleep(time::Duration::from_millis(50));
@@ -2791,7 +2839,11 @@ mod tests {
             instructions,
         );
         let tx = new_sanitized_tx(&[&keypair0], message, Hash::default());
+<<<<<<< HEAD
         let results0 = accounts.lock_accounts([tx].iter(), &FeatureSet::all_enabled());
+=======
+        let results0 = accounts.lock_accounts([tx].iter(), MAX_TX_ACCOUNT_LOCKS);
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
 
         assert!(results0[0].is_ok());
         // Instruction program-id account demoted to readonly
@@ -2885,7 +2937,11 @@ mod tests {
         let results = accounts.lock_accounts_with_results(
             txs.iter(),
             qos_results.iter(),
+<<<<<<< HEAD
             &FeatureSet::all_enabled(),
+=======
+            MAX_TX_ACCOUNT_LOCKS,
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         );
 
         assert!(results[0].is_ok()); // Read-only account (keypair0) can be referenced multiple times

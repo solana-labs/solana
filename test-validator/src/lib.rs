@@ -115,6 +115,12 @@ pub struct TestValidatorGenesis {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub accounts_db_caching_enabled: bool,
     deactivate_feature_set: HashSet<Pubkey>,
+<<<<<<< HEAD
+=======
+    compute_unit_limit: Option<u64>,
+    pub log_messages_bytes_limit: Option<usize>,
+    pub transaction_account_lock_limit: Option<usize>,
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
 }
 
 impl Default for TestValidatorGenesis {
@@ -142,6 +148,12 @@ impl Default for TestValidatorGenesis {
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
             accounts_db_caching_enabled: bool::default(),
             deactivate_feature_set: HashSet::<Pubkey>::default(),
+<<<<<<< HEAD
+=======
+            compute_unit_limit: Option::<u64>::default(),
+            log_messages_bytes_limit: Option::<usize>::default(),
+            transaction_account_lock_limit: Option::<usize>::default(),
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         }
     }
 }
@@ -679,6 +691,21 @@ impl TestValidator {
             ..AccountsDbConfig::default()
         });
 
+<<<<<<< HEAD
+=======
+        let runtime_config = RuntimeConfig {
+            bpf_jit: !config.no_bpf_jit,
+            compute_budget: config
+                .compute_unit_limit
+                .map(|compute_unit_limit| ComputeBudget {
+                    compute_unit_limit,
+                    ..ComputeBudget::default()
+                }),
+            log_messages_bytes_limit: config.log_messages_bytes_limit,
+            transaction_account_lock_limit: config.transaction_account_lock_limit,
+        };
+
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         let mut validator_config = ValidatorConfig {
             geyser_plugin_config_files: config.geyser_plugin_config_files.clone(),
             accounts_db_caching_enabled: config.accounts_db_caching_enabled,

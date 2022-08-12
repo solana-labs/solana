@@ -377,6 +377,34 @@ fn main() {
                 .multiple(true)
                 .help("deactivate this feature in genesis.")
         )
+<<<<<<< HEAD
+=======
+        .arg(
+            Arg::with_name("compute_unit_limit")
+                .long("compute-unit-limit")
+                .alias("max-compute-units")
+                .value_name("COMPUTE_UNITS")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("Override the runtime's compute unit limit per transaction")
+        )
+        .arg(
+            Arg::with_name("log_messages_bytes_limit")
+                .long("log-messages-bytes-limit")
+                .value_name("BYTES")
+                .validator(is_parsable::<usize>)
+                .takes_value(true)
+                .help("Maximum number of bytes written to the program log before truncation")
+        )
+        .arg(
+            Arg::with_name("transaction_account_lock_limit")
+                .long("transaction-account-lock-limit")
+                .value_name("NUM_ACCOUNTS")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("Override the runtime's account lock limit per transaction")
+        )
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -633,6 +661,12 @@ fn main() {
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
     genesis.accounts_db_caching_enabled = !matches.is_present("no_accounts_db_caching");
+<<<<<<< HEAD
+=======
+    genesis.log_messages_bytes_limit = value_t!(matches, "log_messages_bytes_limit", usize).ok();
+    genesis.transaction_account_lock_limit =
+        value_t!(matches, "transaction_account_lock_limit", usize).ok();
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
 
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 
