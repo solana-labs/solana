@@ -27,6 +27,13 @@ pub struct DeserializedPacket {
 }
 
 impl DeserializedPacket {
+    pub fn from_immutable_section(immutable_section: ImmutableDeserializedPacket) -> Self {
+        Self {
+            immutable_section: Rc::new(immutable_section),
+            forwarded: false,
+        }
+    }
+
     pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
         Self::new_internal(packet, None)
     }
