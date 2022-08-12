@@ -250,7 +250,7 @@ confused with 3-letter acronyms.
 
 ## Design Proposals
 
-Solana's architecture is described by docs generated from markdown files in the `docs/src/` 
+Solana's architecture is described by docs generated from markdown files in the `docs/src/`
 directory and viewable on the official [Solana Documentation](https://docs.solana.com) website.
 
 Current design proposals may be viewed on the docs site:

@@ -77,11 +77,6 @@ module.exports = {
           label: "Validators",
           position: "left",
         },
-        // {
-        //   to: "integrations/exchange",
-        //   label: "Integrate",
-        //   position: "left",
-        // },
         {
           label: "More",
           position: "left",
