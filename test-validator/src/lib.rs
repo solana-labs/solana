@@ -125,7 +125,11 @@ pub struct TestValidatorGenesis {
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
+<<<<<<< HEAD
     pub tpu_enable_udp: bool,
+=======
+    pub transaction_account_lock_limit: Option<usize>,
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
 }
 
 impl Default for TestValidatorGenesis {
@@ -155,7 +159,11 @@ impl Default for TestValidatorGenesis {
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
+<<<<<<< HEAD
             tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
+=======
+            transaction_account_lock_limit: Option::<usize>::default(),
+>>>>>>> 5618e9fd0 (Allow overriding the runtime transaction account lock limit (#26948))
         }
     }
 }
@@ -791,6 +799,7 @@ impl TestValidator {
                     ..ComputeBudget::default()
                 }),
             log_messages_bytes_limit: config.log_messages_bytes_limit,
+            transaction_account_lock_limit: config.transaction_account_lock_limit,
         };
 
         let mut validator_config = ValidatorConfig {
