@@ -856,7 +856,7 @@ impl ScheduleStage {
 
                     for vv in vvv {
                         for v in vv {
-                            Self::register_runnable_task((Weight { ix: p }, v), runnable_queue, &mut current_unique_key);
+                            Self::register_runnable_task((Weight { ix: v.2 }, v), runnable_queue, &mut current_unique_key);
                             if executing_queue_count < max_executing_queue_count {
                                 let maybe_ee =
                                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book);

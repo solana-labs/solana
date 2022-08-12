@@ -78,7 +78,7 @@ struct Args {
 }
 
 /// Some convenient type aliases
-type PreprocessedTransaction = Box<(SanitizedTransaction, Vec<solana_scheduler::LockAttempt>)>;
+type PreprocessedTransaction = Box<(SanitizedTransaction, Vec<solana_scheduler::LockAttempt>, u64)>;
 type TransactionMessage = PreprocessedTransaction;
 type CompletedTransactionMessage = solana_scheduler::Multiplexed; // (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
 type TransactionBatchMessage = Box<solana_scheduler::ExecutionEnvironment>; // Vec<TransactionMessage>;
