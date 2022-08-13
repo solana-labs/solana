@@ -510,7 +510,7 @@ impl ScheduleStage {
         //    )
         //    .unwrap();
         //tx.foo();
-        let unique_weight = (weight.ix << 32) | (*unique_key & 0x0000_0000_ffff_ffff);
+        let unique_weight = (weight << 32) | (*unique_key & 0x0000_0000_ffff_ffff);
 
         runnable_queue.add_to_schedule(
             /*
