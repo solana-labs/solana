@@ -151,7 +151,7 @@ impl TaskIds {
         self.task_ids.insert(u)
     }
 
-    fn remove(&self, u: &UniqueWeight) -> UniqueWeight {
+    fn remove(&self, u: &UniqueWeight) -> bool {
         self.task_ids.remove(u)
     }
 }
