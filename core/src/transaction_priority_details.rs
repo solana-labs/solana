@@ -24,7 +24,6 @@ pub trait GetTransactionPriorityDetails {
             .process_instructions(
                 instructions,
                 true, // use default units per instruction
-                true, // don't reject txs that use set compute unit price ix
             )
             .ok()?;
         Some(TransactionPriorityDetails {
