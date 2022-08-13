@@ -48,6 +48,9 @@ pub const NON_DUP_MARKER: u8 = u8::MAX;
 /// It also sets up a [global allocator] and [panic handler], using the
 /// [`custom_heap_default`] and [`custom_panic_default`] macros.
 ///
+/// [`custom_heap_default`]: crate::custom_heap_default
+/// [`custom_panic_default`]: crate::custom_panic_default
+///
 /// [global allocator]: https://doc.rust-lang.org/stable/std/alloc/trait.GlobalAlloc.html
 /// [panic handler]: https://doc.rust-lang.org/nomicon/panic-handler.html
 ///
