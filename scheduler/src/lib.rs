@@ -147,7 +147,7 @@ pub struct TaskIds {
 }
 
 impl TaskIds {
-    fn insert(&self, u: usize) -> usize {
+    fn insert(&self, u: UniqueWeight) -> usize {
         self.task_ids.insert(u)
     }
 }
