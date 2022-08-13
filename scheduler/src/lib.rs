@@ -159,7 +159,7 @@ impl TaskIds {
         self.task_ids.is_empty()
     }
 
-    fn last(&self) -> bool {
+    fn last(&self) -> Option<bool> {
         self.task_ids.last()
     }
 }
