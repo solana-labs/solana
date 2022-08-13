@@ -144,11 +144,17 @@ pub enum RequestedUsage {
 #[derive(Debug, Default)]
 pub struct TaskIds {
     task_ids: std::collections::BTreeSet<UniqueWeight>,
-    cached_heviest: Option<UniqueWeight>,
+    cached_heaviest: Option<UniqueWeight>,
 }
 
 impl TaskIds {
     fn insert(&mut self, u: UniqueWeight) -> bool {
+        match self.cached_heaviest {
+            Some(c) if u > c => { self.cached_heaviest = u },
+            None => { self.cached_heaviest = u; }
+            _,
+        }
+             
         self.task_ids.insert(u)
     }
 
