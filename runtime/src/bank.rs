@@ -110,8 +110,8 @@ use {
         epoch_schedule::EpochSchedule,
         feature,
         feature_set::{
-            self, add_set_compute_unit_price_ix, default_units_per_instruction,
-            disable_fee_calculator, enable_early_verification_of_account_modifications,
+            self, add_set_compute_unit_price_ix, disable_fee_calculator,
+            enable_early_verification_of_account_modifications,
             use_default_units_in_fee_calculation, FeatureSet,
         },
         fee::FeeStructure,
@@ -4555,7 +4555,7 @@ impl Bank {
                                 Measure::start("compute_budget_process_transaction_time");
                             let process_transaction_result = compute_budget.process_instructions(
                                 tx.message().program_instructions_iter(),
-                                feature_set.is_active(&default_units_per_instruction::id()),
+                                true,
                                 feature_set.is_active(&add_set_compute_unit_price_ix::id()),
                             );
                             compute_budget_process_transaction_time.stop();
