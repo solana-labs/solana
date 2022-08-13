@@ -14832,7 +14832,7 @@ pub(crate) mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, 10);
+        assert_eq!(consumed_budgets, 12);
     }
 
     #[test]
