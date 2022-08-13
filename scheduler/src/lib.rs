@@ -154,6 +154,10 @@ impl TaskIds {
     fn remove(&self, u: &UniqueWeight) -> bool {
         self.task_ids.remove(u)
     }
+
+    fn is_empty(&self) -> bool {
+        self.task_ids.is_empty()
+    }
 }
 
 #[derive(Debug)]
