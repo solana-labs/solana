@@ -161,7 +161,7 @@ impl TaskIds {
     fn remove(&mut self, u: &UniqueWeight) -> bool {
         let a = self.task_ids.remove(u);
         match self.cached_heaviest {
-            Some(ref c) if u > c => { self.cached_heaviest = self.task_ids.last() },
+            Some(ref c) if u > c => { self.cached_heaviest = self.task_ids.last().copied() },
             _ => {},
         }
         a
