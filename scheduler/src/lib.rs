@@ -152,7 +152,7 @@ impl TaskIds {
         match self.cached_heaviest {
             Some(c) if u > c => { self.cached_heaviest = Some(u) },
             None => { self.cached_heaviest = Some(u); }
-            _,
+            _ => {},
         }
              
         self.task_ids.insert(u)
