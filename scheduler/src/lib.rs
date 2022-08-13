@@ -141,6 +141,7 @@ pub enum RequestedUsage {
     Writable,
 }
 
+#[derive(Debug)]
 pub struct TaskIds {
     task_ids: std::collections::BTreeSet<UniqueWeight>,
 }
