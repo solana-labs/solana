@@ -369,6 +369,7 @@ impl Preloader {
     }
 }
 
+/*
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Weight {
     // naming: Sequence Ordering?
@@ -376,7 +377,6 @@ pub struct Weight {
                    // gas fee
 }
 
-/*
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UniqueWeight {
     // naming: Sequence Ordering?
