@@ -158,6 +158,10 @@ impl TaskIds {
     fn is_empty(&self) -> bool {
         self.task_ids.is_empty()
     }
+
+    fn last(&self) -> bool {
+        self.task_ids.last()
+    }
 }
 
 #[derive(Debug)]
