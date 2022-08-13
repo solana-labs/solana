@@ -388,8 +388,8 @@ pub struct UniqueWeight {
     // fee?
 }
 */
-pub type Weight = usize;
-pub type UniqueWeight = usize;
+pub type Weight = u64;
+pub type UniqueWeight = u64;
 
 struct Bundle {
     // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
