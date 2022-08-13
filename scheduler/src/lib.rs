@@ -144,6 +144,7 @@ pub enum RequestedUsage {
 #[derive(Debug, Default)]
 pub struct TaskIds {
     task_ids: std::collections::BTreeSet<UniqueWeight>,
+    cached_heviest: Option<UniqueWeight>,
 }
 
 impl TaskIds {
