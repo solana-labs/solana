@@ -8,7 +8,7 @@ use {
         bench_tps_client::BenchTpsClient,
         cli::{self, ExternalClientType},
         keypairs::get_keypairs,
-        send_batch::generate_keypairs,
+        send_batch::{generate_durable_nonce_accounts, generate_keypairs},
     },
     solana_client::{
         connection_cache::ConnectionCache,
@@ -154,6 +154,7 @@ fn main() {
         use_quic,
         tpu_connection_pool_size,
         use_randomized_compute_unit_price,
+        use_durable_nonce,
         ..
     } = &cli_config;
 
@@ -230,5 +231,11 @@ fn main() {
         client_ids_and_stake_file,
         *read_from_client_file,
     );
-    do_bench_tps(client, cli_config, keypairs);
+
+    let nonce_keypairs = if *use_durable_nonce {
+        Some(generate_durable_nonce_accounts(client.clone(), &keypairs))
+    } else {
+        None
+    };
+    do_bench_tps(client, cli_config, keypairs, nonce_keypairs);
 }

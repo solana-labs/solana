@@ -55,6 +55,7 @@ pub struct Config {
     pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
     pub use_randomized_compute_unit_price: bool,
+    pub use_durable_nonce: bool,
 }
 
 impl Default for Config {
@@ -83,6 +84,7 @@ impl Default for Config {
             use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
             use_randomized_compute_unit_price: false,
+            use_durable_nonce: false,
         }
     }
 }
