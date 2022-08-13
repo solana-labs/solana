@@ -150,8 +150,8 @@ pub struct TaskIds {
 impl TaskIds {
     fn insert(&mut self, u: UniqueWeight) -> bool {
         match self.cached_heaviest {
-            Some(c) if u > c => { self.cached_heaviest = u },
-            None => { self.cached_heaviest = u; }
+            Some(c) if u > c => { self.cached_heaviest = Some(u) },
+            None => { self.cached_heaviest = Some(u); }
             _,
         }
              
