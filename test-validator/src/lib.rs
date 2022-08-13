@@ -284,7 +284,7 @@ impl TestValidatorGenesis {
         addresses: T,
         rpc_client: &RpcClient,
         skip_missing: bool,
-    ) -> &mut Self
+    ) -> Result<&mut Self, String>
     where
         T: IntoIterator<Item = Pubkey>,
     {
@@ -296,20 +296,21 @@ impl TestValidatorGenesis {
             } else if skip_missing {
                 warn!("Could not find {}, skipping.", address);
             } else {
-                error!("Failed to fetch {}: {}", address, res.unwrap_err());
-                Self::abort();
+                return Err(format!("Failed to fetch {}: {}", address, res.unwrap_err()));
             }
         }
-        self
+        Ok(self)
     }
 
-    pub fn add_accounts_from_json_files(&mut self, accounts: &[AccountInfo]) -> &mut Self {
+    pub fn add_accounts_from_json_files(
+        &mut self,
+        accounts: &[AccountInfo],
+    ) -> Result<&mut Self, String> {
         for account in accounts {
-            let account_path =
-                solana_program_test::find_file(account.filename).unwrap_or_else(|| {
-                    error!("Unable to locate {}", account.filename);
-                    Self::abort();
-                });
+            let account_path = match solana_program_test::find_file(account.filename) {
+                Some(path) => path,
+                None => return Err(format!("Unable to locate {}", account.filename)),
+            };
             let mut file = File::open(&account_path).unwrap();
             let mut account_info_raw = String::new();
             file.read_to_string(&mut account_info_raw).unwrap();
@@ -317,12 +318,11 @@ impl TestValidatorGenesis {
             let result: serde_json::Result<CliAccount> = serde_json::from_str(&account_info_raw);
             let account_info = match result {
                 Err(err) => {
-                    error!(
+                    return Err(format!(
                         "Unable to deserialize {}: {}",
                         account_path.to_str().unwrap(),
                         err
-                    );
-                    Self::abort();
+                    ));
                 }
                 Ok(deserialized) => deserialized,
             };
@@ -338,25 +338,24 @@ impl TestValidatorGenesis {
 
             self.add_account(address, account);
         }
-        self
+        Ok(self)
     }
 
-    pub fn add_accounts_from_directories<T, P>(&mut self, dirs: T) -> &mut Self
+    pub fn add_accounts_from_directories<T, P>(&mut self, dirs: T) -> Result<&mut Self, String>
     where
         T: IntoIterator<Item = P>,
         P: AsRef<Path> + Display,
     {
         let mut json_files: HashSet<String> = HashSet::new();
         for dir in dirs {
-            let matched_files = fs::read_dir(&dir)
-                .unwrap_or_else(|err| {
-                    error!("Cannot read directory {}: {}", dir, err);
-                    Self::abort();
-                })
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.is_file() && path.extension() == Some(OsStr::new("json")))
-                .map(|path| String::from(path.to_string_lossy()));
+            let matched_files = match fs::read_dir(&dir) {
+                Ok(dir) => dir,
+                Err(e) => return Err(format!("Cannot read directory {}: {}", &dir, e)),
+            }
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file() && path.extension() == Some(OsStr::new("json")))
+            .map(|path| String::from(path.to_string_lossy()));
 
             json_files.extend(matched_files);
         }
@@ -371,9 +370,9 @@ impl TestValidatorGenesis {
             })
             .collect();
 
-        self.add_accounts_from_json_files(&accounts);
+        self.add_accounts_from_json_files(&accounts)?;
 
-        self
+        Ok(self)
     }
 
     /// Add an account to the test environment with the account data in the provided `filename`
@@ -511,19 +510,6 @@ impl TestValidatorGenesis {
             }
             Err(err) => panic!("Test validator failed to start: {}", err),
         }
-    }
-
-    fn abort() -> ! {
-        #[cfg(not(test))]
-        {
-            // standard error is usually redirected to a log file, cry for help on standard output as
-            // well
-            println!("Validator process aborted. The validator log may contain further details");
-            std::process::exit(1);
-        }
-
-        #[cfg(test)]
-        panic!("process::exit(1) is intercepted for friendly test failure...");
     }
 }
 
