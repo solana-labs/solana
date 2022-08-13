@@ -173,6 +173,7 @@ fn test_spend_and_verify_all_nodes_3() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let num_nodes = 2;
@@ -311,6 +312,7 @@ fn test_two_unbalanced_stakes() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_forwarding() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // Set up a cluster where one node is never the leader, so all txs sent to this node
