@@ -376,6 +376,7 @@ pub struct Weight {
                    // gas fee
 }
 
+/*
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UniqueWeight {
     // naming: Sequence Ordering?
@@ -386,10 +387,9 @@ pub struct UniqueWeight {
     unique_key: u64, // tie breaker? random noise? also for unique identification of txes?
     // fee?
 }
-/*
+*/
 pub type Weight = usize;
 pub type UniqueWeight = usize;
-*/
 
 struct Bundle {
     // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
