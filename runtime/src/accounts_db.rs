@@ -3731,14 +3731,7 @@ impl AccountsDb {
         let mut current_ancient = None;
         let mut dropped_roots = vec![];
 
-        if let Some(first_slot) = sorted_slots.first() {
-            info!(
-                "ancient_append_vec: combine_ancient_slots first slot: {}, num_roots: {}",
-                first_slot,
-                sorted_slots.len()
-            );
-        }
-
+        let len = sorted_slots.len();
         for slot in sorted_slots {
             let old_storages =
                 match self.get_storages_to_move_to_ancient_append_vec(slot, &mut current_ancient) {
@@ -3751,7 +3744,11 @@ impl AccountsDb {
 
             if guard.is_none() {
                 // we are now doing interesting work in squashing ancient
-                guard = Some(self.active_stats.activate(ActiveStatItem::SquashAncient))
+                guard = Some(self.active_stats.activate(ActiveStatItem::SquashAncient));
+                info!(
+                    "ancient_append_vec: combine_ancient_slots first slot: {}, num_roots: {}",
+                    slot, len
+                );
             }
 
             // this code is copied from shrink. I would like to combine it into a helper function, but the borrow checker has defeated my efforts so far.
