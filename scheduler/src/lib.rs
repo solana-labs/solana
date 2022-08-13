@@ -147,11 +147,11 @@ pub struct TaskIds {
 }
 
 impl TaskIds {
-    fn insert(&self, u: UniqueWeight) -> bool {
+    fn insert(&mut self, u: UniqueWeight) -> bool {
         self.task_ids.insert(u)
     }
 
-    fn remove(&self, u: &UniqueWeight) -> bool {
+    fn remove(&mut self, u: &UniqueWeight) -> bool {
         self.task_ids.remove(u)
     }
 
