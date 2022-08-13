@@ -384,7 +384,8 @@ fn output_slot(
 
                 muxed_sender
                     .send(solana_scheduler::Multiplexed::FromPrevious((
-                        Weight { ix: weight },
+                        //Weight { ix: weight },
+                        weight,
                         tx,
                     )))
                     .unwrap();
