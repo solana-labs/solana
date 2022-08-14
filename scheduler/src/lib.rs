@@ -860,7 +860,7 @@ impl ScheduleStage {
         let mut current_unique_key = u64::max_value();
 
         loop {
-            trace!("schedule_once (runnnable: {}, contended: {}, (immediate+guaranteed)/max: ({}+{})/{})!", runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count);
+            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+guaranteed)/max: ({}+{})/{})!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count);
 
             let i = from.recv().unwrap();
             match i {
