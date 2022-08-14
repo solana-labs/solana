@@ -25,7 +25,7 @@ unsafe impl Send for PageRc {}
 type MyRcInner<T> = std::sync::Arc<T>;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub struct PageRc(ByAddress<MyRcInner<Page>>);
+pub struct PageRc(MyRcInner<Page>);
 
 
 #[derive(Debug)]
@@ -47,35 +47,6 @@ impl ExecutionEnvironment {
     //fn abort() {
     //  pass AtomicBool into InvokeContext??
     //}
-}
-
-#[derive(Clone, Debug)]
-enum AddressLookup {
-    Before(Pubkey),
-    After(PageRc),
-}
-
-impl AddressLookup {
-    fn page_rc(&mut self) -> &PageRc {
-        match self {
-            AddressLookup::Before(_) => unreachable!(),
-            AddressLookup::After(page) => page,
-        }
-    }
-
-    fn take_page_rc(mut self) -> PageRc {
-        match self {
-            AddressLookup::Before(_) => unreachable!(),
-            AddressLookup::After(page) => page,
-        }
-    }
-
-    fn page(&mut self) -> &mut Page {
-        match self {
-            AddressLookup::Before(_) => unreachable!(),
-            AddressLookup::After(page) => unsafe { MyRcInner::get_mut_unchecked(&mut page.0) },
-        }
-    }
 }
 
 impl PageRc {
@@ -210,7 +181,6 @@ impl Page {
 
 //type AddressMap = std::collections::HashMap<Pubkey, PageRc>;
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
-use by_address::ByAddress;
 type TaskId = UniqueWeight;
 type WeightedTaskIds = std::collections::BTreeMap<TaskId, ()>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
@@ -396,7 +366,7 @@ impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
         match self.book.entry(address) {
             AddressMapEntry::Vacant(book_entry) => {
-                let page = PageRc(ByAddress(MyRcInner::new(Page::new(Usage::unused()))));
+                let page = PageRc(MyRcInner::new(Page::new(Usage::unused())));
                 let cloned = PageRc::clone(&page);
                 book_entry.insert(page);
                 cloned
