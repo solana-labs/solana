@@ -24,7 +24,6 @@ import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
 
-import {URL} from './utils/url-impl';
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
@@ -35,6 +34,7 @@ import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
 import {Transaction, TransactionStatus} from './transaction';
 import {Message} from './message';
+import {AddressLookupTableAccount} from './programs/address-lookup-table/state';
 import assert from './utils/assert';
 import {sleep} from './utils/sleep';
 import {toBuffer} from './utils/to-buffer';
@@ -43,6 +43,7 @@ import {
   TransactionExpiredTimeoutError,
 } from './transaction/expiry-custom-errors';
 import {makeWebsocketUrl} from './utils/makeWebsocketUrl';
+import {URL} from './utils/url-impl';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
@@ -4216,6 +4217,29 @@ export class Connection {
       );
     }
     return res.result;
+  }
+
+  async getAddressLookupTable(
+    accountKey: PublicKey,
+    config?: GetAccountInfoConfig,
+  ): Promise<RpcResponseAndContext<AddressLookupTableAccount | null>> {
+    const {context, value: accountInfo} = await this.getAccountInfoAndContext(
+      accountKey,
+      config,
+    );
+
+    let value = null;
+    if (accountInfo !== null) {
+      value = new AddressLookupTableAccount({
+        key: accountKey,
+        state: AddressLookupTableAccount.deserialize(accountInfo.data),
+      });
+    }
+
+    return {
+      context,
+      value,
+    };
   }
 
   /**

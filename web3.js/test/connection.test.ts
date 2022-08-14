@@ -18,6 +18,7 @@ import {
   sendAndConfirmTransaction,
   Keypair,
   Message,
+  AddressLookupTableProgram,
 } from '../src';
 import invariant from '../src/utils/assert';
 import {MOCK_PORT, url} from './url';
@@ -4243,5 +4244,90 @@ describe('Connection', function () {
       const version = await connection.getVersion();
       expect(version['solana-core']).to.be.ok;
     }).timeout(20 * 1000);
+
+    it('getAddressLookupTable', async () => {
+      const payer = Keypair.generate();
+
+      await helpers.airdrop({
+        connection,
+        address: payer.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+
+      const lookupTableAddresses = new Array(10)
+        .fill(0)
+        .map(() => Keypair.generate().publicKey);
+
+      const recentSlot = await connection.getSlot('finalized');
+      const [createIx, lookupTableKey] =
+        AddressLookupTableProgram.createLookupTable({
+          recentSlot,
+          payer: payer.publicKey,
+          authority: payer.publicKey,
+        });
+
+      // create, extend, and fetch
+      {
+        const transaction = new Transaction().add(createIx).add(
+          AddressLookupTableProgram.extendLookupTable({
+            lookupTable: lookupTableKey,
+            addresses: lookupTableAddresses,
+            authority: payer.publicKey,
+            payer: payer.publicKey,
+          }),
+        );
+        await helpers.processTransaction({
+          connection,
+          transaction,
+          signers: [payer],
+          commitment: 'processed',
+        });
+
+        const lookupTableResponse = await connection.getAddressLookupTable(
+          lookupTableKey,
+          {
+            commitment: 'processed',
+          },
+        );
+        const lookupTableAccount = lookupTableResponse.value;
+        if (!lookupTableAccount) {
+          expect(lookupTableAccount).to.be.ok;
+          return;
+        }
+        expect(lookupTableAccount.isActive()).to.be.true;
+        expect(lookupTableAccount.state.authority).to.eql(payer.publicKey);
+        expect(lookupTableAccount.state.addresses).to.eql(lookupTableAddresses);
+      }
+
+      // freeze and fetch
+      {
+        const transaction = new Transaction().add(
+          AddressLookupTableProgram.freezeLookupTable({
+            lookupTable: lookupTableKey,
+            authority: payer.publicKey,
+          }),
+        );
+        await helpers.processTransaction({
+          connection,
+          transaction,
+          signers: [payer],
+          commitment: 'processed',
+        });
+
+        const lookupTableResponse = await connection.getAddressLookupTable(
+          lookupTableKey,
+          {
+            commitment: 'processed',
+          },
+        );
+        const lookupTableAccount = lookupTableResponse.value;
+        if (!lookupTableAccount) {
+          expect(lookupTableAccount).to.be.ok;
+          return;
+        }
+        expect(lookupTableAccount.isActive()).to.be.true;
+        expect(lookupTableAccount.state.authority).to.be.undefined;
+      }
+    });
   }
 });
