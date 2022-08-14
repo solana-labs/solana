@@ -81,7 +81,7 @@ struct Args {
 type PreprocessedTransaction = Box<(SanitizedTransaction, Vec<solana_scheduler::LockAttempt>)>;
 type TransactionMessage = PreprocessedTransaction;
 //type CompletedTransactionMessage = solana_scheduler::Multiplexed; // (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
-type CompletedTransactionMessage = Box<solana_scheduler::ExecutionEnvironment>);
+type CompletedTransactionMessage = Box<solana_scheduler::ExecutionEnvironment>;
 type TransactionBatchMessage = Box<solana_scheduler::ExecutionEnvironment>; // Vec<TransactionMessage>;
 type BatchSenderMessage = solana_scheduler::Multiplexed; // Vec<Vec<PreprocessedTransaction>>;
 
