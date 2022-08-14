@@ -18,9 +18,6 @@ use {
 };
 
 /// The default number of slots before an epoch starts to calculate the leader schedule.
-///
-/// The default is an entire epoch, i.e. leader schedule for epoch X is calculated at
-/// the beginning of epoch X - 1.
 pub const DEFAULT_LEADER_SCHEDULE_SLOT_OFFSET: u64 = DEFAULT_SLOTS_PER_EPOCH;
 
 /// The maximum number of slots before an epoch starts to calculate the leader schedule.
