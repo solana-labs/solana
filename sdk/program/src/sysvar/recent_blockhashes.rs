@@ -1,4 +1,4 @@
-//! Information about the network’s clock, ticks, slots, etc.
+//! Information about recent blocks and their fee calculators.
 //!
 //! The _recent blockhashes sysvar_ provides access to the [`RecentBlockhashes`],
 //! which contains recent blockhahes and their [`FeeCalculator`]s.
