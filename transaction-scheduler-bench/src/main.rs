@@ -346,7 +346,10 @@ fn handle_transaction_batch(
 
     let uq = transaction_batch.unique_weight;
     completed_transaction_sender.0
-        .send(solana_scheduler::Multiplexed::FromExecute(transaction_batch))
+        .send(transaction_batch)
+        .unwrap();
+    completed_transaction_sender.1
+        .send(solana_scheduler::Multiplexed::HintFromExecute)
         .unwrap();
     trace!("send from execute: {:?}", uq);
 }
