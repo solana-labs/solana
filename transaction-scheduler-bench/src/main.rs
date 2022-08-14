@@ -121,7 +121,7 @@ fn spawn_unified_scheduler(
         num_execution_threads: usize,
         packet_batch_receiver: Receiver<BatchSenderMessage>,
         transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
-        //completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
+        completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
         bank_forks: Arc<RwLock<BankForks>>,
         max_batch_size: usize,
         exit: Arc<AtomicBool>,
@@ -136,6 +136,7 @@ fn spawn_unified_scheduler(
             &mut contended_queue,
             &mut address_book,
             &packet_batch_receiver.clone(),
+            completed_transaction_receiver,
             &transaction_batch_senders[0],
             None,//&completed_transaction_receiver
         );
