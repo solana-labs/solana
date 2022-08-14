@@ -322,7 +322,7 @@ fn execution_worker(
 fn handle_transaction_batch(
     metrics: &TransactionSchedulerBenchMetrics,
     thread_index: usize,
-    completed_transaction_sender: &Sender<CompletedTransactionMessage>,
+    completed_transaction_sender: &(Sender<CompletedTransactionMessage>, Sender<solana_scheduler::Multiplexed>),
     transaction_batch: TransactionBatchMessage,
     execution_per_tx_us: u64,
 ) {
