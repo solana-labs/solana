@@ -24,7 +24,7 @@ unsafe impl Send for PageRc {}
 
 type MyRcInner<T> = std::sync::Arc<T>;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+#[derive(Debug, Clone)]
 pub struct PageRc(MyRcInner<Page>);
 
 
