@@ -33,6 +33,7 @@ pub struct ExecutionEnvironment {
     lock_attempts: Vec<LockAttempt>,
     //accounts: Vec<i8>,
     pub cu: usize,
+    pub unique_weight: UniqueWeight,
     pub task: Task,
 }
 
@@ -806,6 +807,7 @@ impl ScheduleStage {
         Box::new(ExecutionEnvironment {
             lock_attempts,
             task,
+            unique_weight,
             cu: rng.gen_range(3, 1000),
         })
     }
