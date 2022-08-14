@@ -907,14 +907,17 @@ impl ScheduleStage {
                         }
                     }
                 }
-                Multiplexed::FromExecute(mut processed_execution_environment) => {
-                    trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
-                    executing_queue_count -= 1;
+                Multiplexed::HintFromExecute => {
+                    if from_exec.len() > 0 {
+                        let processed_execution_environment = from_exec.recv().unwrap();
+                        trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
+                        executing_queue_count -= 1;
 
-                    Self::commit_result(&mut processed_execution_environment, address_book);
-                    // async-ly propagate the result to rpc subsystems
-                    if let Some(to_next_stage) = to_next_stage {
-                        to_next_stage.send(processed_execution_environment).unwrap();
+                        Self::commit_result(&mut processed_execution_environment, address_book);
+                        // async-ly propagate the result to rpc subsystems
+                        if let Some(to_next_stage) = to_next_stage {
+                            to_next_stage.send(processed_execution_environment).unwrap();
+                        }
                     }
                 }
             }
