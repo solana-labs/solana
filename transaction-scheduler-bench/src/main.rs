@@ -165,6 +165,7 @@ fn main() {
     assert!(high_conflict_sender <= num_accounts);
 
     let (packet_batch_sender, packet_batch_receiver) = crossbeam_channel::unbounded();
+    let (completed_transaction_sender, completed_transaction_receiver) = crossbeam_channel::unbounded();
     let (transaction_batch_senders, transaction_batch_receivers) =
         build_channels(num_execution_threads);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(Bank::default_for_tests())));
@@ -176,6 +177,7 @@ fn main() {
         num_execution_threads,
         packet_batch_receiver,
         transaction_batch_senders,
+        completed_transaction_receiver,
         bank_forks,
         max_batch_size,
         exit.clone(),
@@ -187,7 +189,7 @@ fn main() {
     let execution_handles = start_execution_threads(
         metrics.clone(),
         transaction_batch_receivers,
-        (completed_transaction_sender.clone(), packet_batch_sender.clone()),
+        (completed_transaction_sender, packet_batch_sender.clone()),
         execution_per_tx_us,
         exit.clone(),
     );
