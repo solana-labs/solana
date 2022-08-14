@@ -279,7 +279,7 @@ fn start_execution_thread(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     thread_index: usize,
     transaction_batch_receiver: Receiver<TransactionBatchMessage>,
-    completed_transaction_sender: Sender<CompletedTransactionMessage>,
+    completed_transaction_sender: (Sender<CompletedTransactionMessage>, Sender<solana_scheduler::Multiplexed>),
     execution_per_tx_us: u64,
     exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
