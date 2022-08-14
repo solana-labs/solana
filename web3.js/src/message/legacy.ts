@@ -2,7 +2,7 @@ import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 
-import {PublicKey} from '../publickey';
+import {PublicKey, PUBLIC_KEY_LENGTH} from '../publickey';
 import type {Blockhash} from '../blockhash';
 import * as Layout from '../layout';
 import {PACKET_DATA_SIZE} from '../transaction/constants';
@@ -23,8 +23,6 @@ export type MessageArgs = {
   /** Instructions that will be executed in sequence and committed in one atomic transaction if all succeed. */
   instructions: CompiledInstruction[];
 };
-
-const PUBKEY_LENGTH = 32;
 
 /**
  * List of instructions to be processed atomically
@@ -199,13 +197,13 @@ export class Message {
     const accountCount = shortvec.decodeLength(byteArray);
     let accountKeys = [];
     for (let i = 0; i < accountCount; i++) {
-      const account = byteArray.slice(0, PUBKEY_LENGTH);
-      byteArray = byteArray.slice(PUBKEY_LENGTH);
+      const account = byteArray.slice(0, PUBLIC_KEY_LENGTH);
+      byteArray = byteArray.slice(PUBLIC_KEY_LENGTH);
       accountKeys.push(bs58.encode(Buffer.from(account)));
     }
 
-    const recentBlockhash = byteArray.slice(0, PUBKEY_LENGTH);
-    byteArray = byteArray.slice(PUBKEY_LENGTH);
+    const recentBlockhash = byteArray.slice(0, PUBLIC_KEY_LENGTH);
+    byteArray = byteArray.slice(PUBLIC_KEY_LENGTH);
 
     const instructionCount = shortvec.decodeLength(byteArray);
     let instructions: CompiledInstruction[] = [];

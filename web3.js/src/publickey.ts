@@ -13,6 +13,11 @@ import {toBuffer} from './utils/to-buffer';
 export const MAX_SEED_LENGTH = 32;
 
 /**
+ * Size of public key in bytes
+ */
+export const PUBLIC_KEY_LENGTH = 32;
+
+/**
  * Value to be converted into public key
  */
 export type PublicKeyInitData =
@@ -54,7 +59,7 @@ export class PublicKey extends Struct {
       if (typeof value === 'string') {
         // assume base 58 encoding by default
         const decoded = bs58.decode(value);
-        if (decoded.length != 32) {
+        if (decoded.length != PUBLIC_KEY_LENGTH) {
           throw new Error(`Invalid public key input`);
         }
         this._bn = new BN(decoded);
@@ -103,7 +108,7 @@ export class PublicKey extends Struct {
    */
   toBuffer(): Buffer {
     const b = this._bn.toArrayLike(Buffer);
-    if (b.length === 32) {
+    if (b.length === PUBLIC_KEY_LENGTH) {
       return b;
     }
 
