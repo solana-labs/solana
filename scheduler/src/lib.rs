@@ -895,7 +895,7 @@ impl ScheduleStage {
                     }
                 }
                 Multiplexed::FromExecute(mut processed_execution_environment) => {
-                    trace!("recv from execute");
+                    trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                     executing_queue_count -= 1;
 
                     Self::commit_result(&mut processed_execution_environment, address_book);
