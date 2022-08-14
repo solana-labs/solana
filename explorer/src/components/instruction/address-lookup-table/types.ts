@@ -1,8 +1,6 @@
 import { TransactionInstruction } from "@solana/web3.js";
 
-export const PROGRAM_IDS: string[] = [
-  "AddressLookupTab1e1111111111111111111111111",
-];
+const PROGRAM_ID: string = "AddressLookupTab1e1111111111111111111111111";
 
 const INSTRUCTION_LOOKUP: { [key: number]: string } = {
   0: "Create Lookup Table",
@@ -15,7 +13,7 @@ const INSTRUCTION_LOOKUP: { [key: number]: string } = {
 export function isAddressLookupTableInstruction(
   instruction: TransactionInstruction
 ): boolean {
-  return PROGRAM_IDS.includes(instruction.programId.toBase58());
+  return PROGRAM_ID === instruction.programId.toBase58();
 }
 
 export function parseAddressLookupTableInstructionTitle(
