@@ -340,10 +340,11 @@ fn handle_transaction_batch(
         .priority_collected
         .fetch_add(priority_collected, Ordering::Relaxed);
 
+    let uq = transaction_batch.unique_weight;
     completed_transaction_sender
         .send(solana_scheduler::Multiplexed::FromExecute(transaction_batch))
         .unwrap();
-    dbg!("send: {:?}", transaction_batch.unique_weight);
+    dbg!("send: {:?}", uq);
 }
 
 const NUM_SENDERS: usize = 2;
