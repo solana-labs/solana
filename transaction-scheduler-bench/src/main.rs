@@ -1,7 +1,7 @@
 use {
     clap::Parser,
     crossbeam_channel::{select, Receiver, Sender},
-    log::info,
+    log::*,
     rand::Rng,
     solana_core::{
         transaction_priority_details::GetTransactionPriorityDetails,
