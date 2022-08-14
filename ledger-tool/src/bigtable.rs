@@ -624,6 +624,7 @@ pub fn bigtable_process_command(
     let runtime = tokio::runtime::Runtime::new().unwrap();
 
     let verbose = matches.is_present("verbose");
+    let force_update_to_open = matches.is_present("force_update_to_open");
     let output_format = OutputFormat::from_matches(matches, "output_format", verbose);
 
     let (subcommand, sub_matches) = matches.subcommand();
@@ -650,6 +651,7 @@ pub fn bigtable_process_command(
                 AccessType::Secondary,
                 None,
                 shred_storage_type,
+                force_update_to_open,
             );
             let config = solana_storage_bigtable::LedgerStorageConfig {
                 read_only: false,
