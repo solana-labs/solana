@@ -909,7 +909,7 @@ impl ScheduleStage {
                 }
                 Multiplexed::HintFromExecute => {
                     if from_exec.len() > 0 {
-                        let processed_execution_environment = from_exec.recv().unwrap();
+                        let mut processed_execution_environment = from_exec.recv().unwrap();
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                         executing_queue_count -= 1;
 
