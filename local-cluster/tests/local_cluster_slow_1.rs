@@ -49,6 +49,7 @@ mod common;
 
 #[test]
 #[serial]
+#[ignore]
 // Steps in this test:
 // We want to create a situation like:
 /*
@@ -73,7 +74,6 @@ mod common;
 // 6) Resolve the partition so that the 2% repairs the other fork, and tries to switch,
 // stalling the network.
 
-#[ignore]
 fn test_fork_choice_refresh_old_votes() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let max_switch_threshold_failure_pct = 1.0 - 2.0 * SWITCH_FORK_THRESHOLD;
