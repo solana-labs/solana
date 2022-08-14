@@ -344,7 +344,7 @@ fn handle_transaction_batch(
     completed_transaction_sender
         .send(solana_scheduler::Multiplexed::FromExecute(transaction_batch))
         .unwrap();
-    dbg!("send: {:?}", uq);
+    trace!("send from execute: {:?}", uq);
 }
 
 const NUM_SENDERS: usize = 2;
