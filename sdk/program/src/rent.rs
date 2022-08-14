@@ -48,9 +48,8 @@ pub const DEFAULT_BURN_PERCENT: u8 = 50;
 
 /// Account storage overhead for calculation of base rent.
 ///
-/// This is an approximate constant number of bytes required to store an account
-/// of any size. It is added to an accounts data length when calculating
-/// [`Rent::minimum_balance`].
+/// This is the number of bytes required to store an account with no data. It is
+/// added to an accounts data length when calculating [`Rent::minimum_balance`].
 pub const ACCOUNT_STORAGE_OVERHEAD: u64 = 128;
 
 impl Default for Rent {
