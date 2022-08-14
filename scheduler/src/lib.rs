@@ -680,8 +680,8 @@ impl ScheduleStage {
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
 
-                return None;
-                //continue;
+                //return None;
+                continue;
             }
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
@@ -776,11 +776,13 @@ impl ScheduleStage {
                     match address_book.gurantee_timers.entry(*task_id) {
                         std::collections::hash_map::Entry::Occupied(mut entry) => {
                             let count = entry.get_mut();
-                            trace!("guaranteed lock decrease: {} => {}", *count, *count -1);
                             *count = count.checked_sub(1).unwrap();
                             if *count == 0 {
+                                trace!("guaranteed lock decrease: {} => {} (!)", *count + 1, *count);
                                 entry.remove();
                                 address_book.runnable_guaranteed_task_ids.insert(*task_id, ());
+                            } else {
+                                trace!("guaranteed lock decrease: {} => {}", *count + 1, *count);
                             }
                         },
                         std::collections::hash_map::Entry::Vacant(_) => {
@@ -861,7 +863,7 @@ impl ScheduleStage {
         let mut current_unique_key = u64::max_value();
 
         loop {
-            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+guaranteed)/max: ({}+{})/{})!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count);
+            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+guaranteed)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
 
             if from_exec.len() > 0 {
                 let mut processed_execution_environment = from_exec.recv().unwrap();
@@ -939,7 +941,7 @@ impl ScheduleStage {
 
                     to_execute_substage.send(ee).unwrap();
                 } else {
-                    trace!("incoming queue starved: n_u_a: {}", address_book.uncontended_task_ids.len());
+                    trace!("incoming queue starved");
                     break;
                 }
             }
