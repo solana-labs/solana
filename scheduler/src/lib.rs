@@ -864,7 +864,7 @@ impl ScheduleStage {
             trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+guaranteed)/max: ({}+{})/{})!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count);
 
             if from_exec.len() > 0 {
-                let processed_execution_environment = from_exec.recv().unwrap();
+                let mut processed_execution_environment = from_exec.recv().unwrap();
                 trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                 executing_queue_count -= 1;
 
