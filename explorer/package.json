@@ -45,7 +45,7 @@
     "react": "^18.1.0",
     "react-chartjs-2": "^2.11.2",
     "react-content-loader": "^6.1.0",
-    "react-countup": "^6.1.0",
+    "react-countup": "^6.3.0",
     "react-dom": "^18.2.0",
     "react-json-view": "^1.21.3",
     "react-moment": "^1.1.1",
