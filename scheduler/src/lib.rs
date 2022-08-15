@@ -200,6 +200,7 @@ impl AddressBook {
     #[inline(never)]
     fn attempt_lock_address(
         from_runnable: bool,
+        prefer_immediate: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
@@ -227,7 +228,7 @@ impl AddressBook {
                             }
                         }
                         RequestedUsage::Writable => {
-                            if from_runnable {
+                            if from_runnable || prefer_immediate {
                                 //Self::remember_address_contention(&mut page, unique_weight);
                                 //*remembered = true;
                                 *status = LockStatus::Failed;
@@ -248,7 +249,7 @@ impl AddressBook {
                         }
                     },
                     Usage::Writable => {
-                        if from_runnable {
+                        if from_runnable || prefer_immediate {
                             //Self::remember_address_contention(&mut page, unique_weight);
                             //*remembered = true;
                             *status = LockStatus::Failed;
@@ -455,6 +456,7 @@ impl TaskQueue {
 #[inline(never)]
 fn attempt_lock_for_execution<'a>(
     from_runnable: bool,
+    prefer_immediate: bool,
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
@@ -465,7 +467,7 @@ fn attempt_lock_for_execution<'a>(
     let mut guaranteed_count = 0;
 
     for attempt in placeholder_attempts.iter_mut() {
-        AddressBook::attempt_lock_address(from_runnable, unique_weight, attempt);
+        AddressBook::attempt_lock_address(from_runnable, prefer_immediate, unique_weight, attempt);
         match attempt.status {
             LockStatus::Succeded => {},
             LockStatus::Failed => {
@@ -615,6 +617,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
+        prefer_immediate: bool,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
         if let Some(a) = address_book.runnable_guaranteed_task_ids.pop_last() {
             trace!("expediate pop from guaranteed queue [rest: {}]", address_book.runnable_guaranteed_task_ids.len());
@@ -639,6 +642,7 @@ impl ScheduleStage {
 
             let (unlockable_count, guaranteed_count, mut populated_lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
+                prefer_immediate,
                 address_book,
                 &unique_weight,
                 &message_hash,
@@ -833,9 +837,10 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
+        prefer_immediate: bool,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book)
+            Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book, prefer_immediate)
                 .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
         maybe_ee
     }
@@ -933,8 +938,9 @@ impl ScheduleStage {
                     break;
                 }
 
+                let prefer_immediate = executing_queue_count < max_executing_queue_count / 2;
                 let maybe_ee =
-                    Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
+                    Self::schedule_next_execution(runnable_queue, contended_queue, address_book, prefer_immediate);
 
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
