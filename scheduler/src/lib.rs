@@ -910,6 +910,7 @@ impl ScheduleStage {
                     }
                 }
                 Multiplexed::HintFromExecute => {
+                    trace!("hint of recv from execute");
                     if from_exec.len() > 0 {
                         let mut processed_execution_environment = from_exec.recv().unwrap();
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
@@ -928,7 +929,7 @@ impl ScheduleStage {
                 if !address_book.uncontended_task_ids.is_empty() {
                     trace!("prefer emptying n_u_a");
                 } else if (executing_queue_count + address_book.gurantee_timers.len()) >= max_executing_queue_count {
-                    trace!("outgoing queue full");
+                    trace!("skip scheduling; outgoing queue full");
                     break;
                 }
 
