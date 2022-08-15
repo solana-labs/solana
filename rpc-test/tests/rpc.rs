@@ -374,7 +374,13 @@ fn test_rpc_subscriptions() {
     }
 
     // Wait for all signature subscriptions
-    let deadline = Instant::now() + Duration::from_secs(15);
+    /* Set a large 30-sec timeout here because the timing of the above tokio process is
+     * highly non-deterministic.  The test was too flaky at 15-second timeout.  Debugging
+     * show occasional multi-second delay which could come from multiple sources -- other
+     * tokio tasks, tokio scheduler, OS scheduler.  The async nature makes it hard to
+     * track down the origin of the delay.
+     */
+    let deadline = Instant::now() + Duration::from_secs(30);
     while !signature_set.is_empty() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match status_receiver.recv_timeout(timeout) {
