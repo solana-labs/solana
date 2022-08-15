@@ -624,7 +624,7 @@ threadGossipDeploy() {
     echo "startGossipNode: instanceIndex: $i"
     startNode "$ipAddress" $nodeType $nodeIndex $i
     echo "################# Launched Gossip Node: $i ###################"
-    sleep 2
+    sleep 3
   done
 }
 
