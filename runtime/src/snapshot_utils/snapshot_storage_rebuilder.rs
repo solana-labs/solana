@@ -2,7 +2,9 @@
 
 use {
     crate::{
-        accounts_db::{AccountStorageEntry, AppendVecId, AtomicAppendVecId, SlotStores},
+        accounts_db::{
+            AccountStorageEntry, AccountStorageMap, AppendVecId, AtomicAppendVecId, SlotStores,
+        },
         serde_snapshot::{
             self, remap_and_reconstruct_single_storage, snapshot_storage_lengths_from_fields,
             SerdeStyle, SerializedAppendVecId,
@@ -41,7 +43,7 @@ pub struct SnapshotStorageRebuilder {
     /// Container for storing snapshot file paths
     storage_paths: DashMap<Slot, Mutex<Vec<PathBuf>>>,
     /// Container for storing rebuilt snapshot storages
-    storage: DashMap<Slot, SlotStores>,
+    storage: AccountStorageMap,
     /// Tracks next append_vec_id
     next_append_vec_id: Arc<AtomicAppendVecId>,
     /// Tracker for number of processed slots
@@ -56,7 +58,7 @@ impl SnapshotStorageRebuilder {
         file_receiver: Receiver<PathBuf>,
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
-    ) -> DashMap<Slot, SlotStores> {
+    ) -> AccountStorageMap {
         let (snapshot_file_path, append_vec_files) = Self::get_snapshot_file(&file_receiver);
         let snapshot_storage_lengths = Self::process_snapshot_file(snapshot_file_path).unwrap();
         Self::spawn_rebuilder_threads(
@@ -139,7 +141,7 @@ impl SnapshotStorageRebuilder {
         next_append_vec_id: Arc<AtomicAppendVecId>,
         snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
         append_vec_files: Vec<PathBuf>,
-    ) -> DashMap<Slot, SlotStores> {
+    ) -> AccountStorageMap {
         let rebuilder = Arc::new(SnapshotStorageRebuilder::new(
             file_receiver,
             num_threads,

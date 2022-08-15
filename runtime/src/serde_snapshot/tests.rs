@@ -32,11 +32,11 @@ use {
 fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
-) -> std::io::Result<(DashMap<Slot, SlotStores>, AtomicU32)> {
+) -> std::io::Result<(AccountStorageMap, AtomicU32)> {
     let storage_entries = accounts_db
         .get_snapshot_storages(Slot::max_value(), None, None)
         .0;
-    let storage: DashMap<Slot, SlotStores> = DashMap::with_capacity(storage_entries.len());
+    let storage: AccountStorageMap = DashMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;
     for storage_entry in storage_entries.into_iter().flatten() {
         // Copy file to new directory
@@ -85,7 +85,7 @@ fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
 fn context_accountsdb_from_stream<'a, C, R>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
-    storage: DashMap<Slot, SlotStores>,
+    storage: AccountStorageMap,
     next_append_vec_id: AtomicU32,
 ) -> Result<AccountsDb, Error>
 where
@@ -122,7 +122,7 @@ fn accountsdb_from_stream<R>(
     serde_style: SerdeStyle,
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
-    storage: DashMap<Slot, SlotStores>,
+    storage: AccountStorageMap,
     next_append_vec_id: AtomicU32,
 ) -> Result<AccountsDb, Error>
 where

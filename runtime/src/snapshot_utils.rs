@@ -188,7 +188,7 @@ struct SnapshotRootPaths {
 struct UnarchivedSnapshot {
     #[allow(dead_code)]
     unpack_dir: TempDir,
-    storage: DashMap<Slot, SlotStores>,
+    storage: AccountStorageMap,
     unpacked_snapshots_dir_and_version: UnpackedSnapshotsDirAndVersion,
     measure_untar: Measure,
 }
@@ -1768,7 +1768,7 @@ fn rebuild_bank_from_snapshots(
         &UnpackedSnapshotsDirAndVersion,
     >,
     account_paths: &[PathBuf],
-    storage: DashMap<Slot, SlotStores>,
+    storage: AccountStorageMap,
     next_append_vec_id: AtomicU32,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,

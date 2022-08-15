@@ -633,9 +633,11 @@ impl<'a> ReadableAccount for LoadedAccount<'a> {
     }
 }
 
+pub type AccountStorageMap = DashMap<Slot, SlotStores>;
+
 #[derive(Clone, Default, Debug)]
 pub struct AccountStorage {
-    pub map: DashMap<Slot, SlotStores>,
+    pub map: AccountStorageMap,
 }
 
 impl AccountStorage {
