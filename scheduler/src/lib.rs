@@ -555,7 +555,6 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn get_heaviest_from_contended<'a>(address_book: &'a mut AddressBook) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, ()>> {
-        trace!("n_u_a len(): {}", address_book.uncontended_task_ids.len());
         address_book.uncontended_task_ids.last_entry()
     }
 
