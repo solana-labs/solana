@@ -80,8 +80,8 @@ static_assertions::const_assert_eq!(DEFAULT_MS_PER_SLOT, 400);
 pub const DEFAULT_MS_PER_SLOT: u64 = 1_000 * DEFAULT_TICKS_PER_SLOT / DEFAULT_TICKS_PER_SECOND;
 pub const DEFAULT_S_PER_SLOT: f64 = DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICKS_PER_SECOND as f64;
 
-/// The time window of recent block hash values that the bank will track the
-/// signatures of over.
+/// The time window of recent block hash values over which the bank will track
+/// signatures.
 ///
 /// Once the bank discards a block hash, it will reject any transactions that
 /// use that `recent_blockhash` in a transaction. Lowering this value reduces
