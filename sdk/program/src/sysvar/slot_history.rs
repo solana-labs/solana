@@ -2,7 +2,7 @@
 //!
 //! The _slot history sysvar_ provides access to the [`SlotHistory`] type.
 //!
-//! The [`Sysvar::from_account_info`] and [`Sysvar::get`] methods always returns
+//! The [`Sysvar::from_account_info`] and [`Sysvar::get`] methods always return
 //! [`ProgramError::UnsupportedSysvar`] because this sysvar account is too large
 //! to process on-chain. Thus this sysvar cannot be accessed on chain, though
 //! one can still use the [`SysvarId::id`], [`SysvarId::check_id`] and
