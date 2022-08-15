@@ -149,7 +149,7 @@ pub struct Clock {
     pub slot: Slot,
     /// The timestamp of the first `Slot` in this `Epoch`.
     pub epoch_start_timestamp: UnixTimestamp,
-    /// The bank `Epoch`.
+    /// The current `Epoch`.
     pub epoch: Epoch,
     /// The future `Epoch` for which the leader schedule has
     /// most recently been calculated.
