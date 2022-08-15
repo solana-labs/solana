@@ -117,10 +117,6 @@ impl PrioritizationFee {
     ) -> Result<(), PrioritizationFeeError> {
         let (_, update_time) = measure!(
             {
-                //* Just calling last metrics statement, inner is 3, but outer jumped to 350. So it
-                //is the issue with iterating TXs? or calling the object? Change to not call inner,
-                //but call metrics increse in outter to rule out accessing this object was an
-                //issue.
                 let account_locks = sanitized_tx
                     .get_account_locks(MAX_TX_ACCOUNT_LOCKS)
                     .or(Err(PrioritizationFeeError::FailGetTransactionAccountLocks))?;
@@ -133,9 +129,6 @@ impl PrioritizationFee {
                     self.min_transaction_fee = priority_details.priority;
                 }
 
-                //* TAO TEST - original mean(this) = 1.5k per host, how much it drops after
-                // disabling this block of code?
-                // Without this block, the mean() drop to 250.
                 for write_account in account_locks.writable {
                     self.min_writable_account_fees
                         .entry(*write_account)
@@ -145,7 +138,6 @@ impl PrioritizationFee {
                         })
                         .or_insert(priority_details.priority);
                 }
-                // */
                 self.metrics
                     .increment_total_prioritization_fee(priority_details.priority);
             },
