@@ -109,14 +109,16 @@ impl ReadOnlyAccountsCache {
             }
         };
         // Evict entries from the front of the queue.
+        let mut num_evicts = 0;
         while self.data_size.load(Ordering::Relaxed) > self.max_data_size {
             let (pubkey, slot) = match self.queue.lock().unwrap().get_first() {
                 None => break,
                 Some(key) => *key,
             };
-            self.evicts.fetch_add(1, Ordering::Relaxed);
+            num_evicts += 1;
             self.remove(pubkey, slot);
         }
+        self.evicts.fetch_add(num_evicts, Ordering::Relaxed);
     }
 
     pub(crate) fn remove(&self, pubkey: Pubkey, slot: Slot) -> Option<AccountSharedData> {
