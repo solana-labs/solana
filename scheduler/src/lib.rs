@@ -925,9 +925,9 @@ impl ScheduleStage {
             }
 
             loop {
-                /*if !address_book.uncontended_task_ids.is_empty() {
+                if !address_book.uncontended_task_ids.is_empty() {
                     trace!("prefer emptying n_u_a");
-                } else */ if (executing_queue_count + address_book.gurantee_timers.len()) >= max_executing_queue_count {
+                } else if (executing_queue_count + address_book.gurantee_timers.len()) >= max_executing_queue_count {
                     trace!("outgoing queue full");
                     break;
                 }
