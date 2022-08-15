@@ -348,9 +348,6 @@ fn handle_transaction_batch(
     completed_transaction_sender.0
         .send(transaction_batch)
         .unwrap();
-    completed_transaction_sender.1
-        .send(solana_scheduler::Multiplexed::HintFromExecute)
-        .unwrap();
     trace!("send from execute: {:?}", uq);
 }
 

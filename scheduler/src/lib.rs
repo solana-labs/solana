@@ -489,7 +489,6 @@ type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
 pub enum Multiplexed {
     FromPrevious((Weight, Box<PreprocessedTransaction>)),
     FromPreviousBatched(Vec<Vec<Box<PreprocessedTransaction>>>),
-    HintFromExecute,
 }
 
 pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
