@@ -760,7 +760,7 @@ deploy() {
   echo
   echo "--- Deployment Successful"
   echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
-  if [[ $isGossip != 1 ]]; then 
+  if [[ $isGossip == 1 ]]; then 
     echo "Deployed $gossipInstances gossip instances across $((${#validatorIpList[@]} - 1)) GCE nodes"
     echo "      --- $instancesPerNode gossip instances per node + $leftover additional gossip instances"
   fi
