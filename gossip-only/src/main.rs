@@ -41,15 +41,7 @@ use {
 
 pub const DEFAULT_CLUSTER_LAMPORTS: u64 = 10_000_000 * LAMPORTS_PER_SOL;
 pub const DEFAULT_NODE_STAKE: u64 = 10 * LAMPORTS_PER_SOL;
-pub const DEFAULT_SHRED_VERSION: u16 = 44120;
-
-pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
-    let mut seed = [0u8; 32];
-    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
-    let mut rnd = GenKeys::new(seed);
-
-    (rnd.gen_n_keypairs(count), 0)
-}
+// pub const DEFAULT_SHRED_VERSION: u16 = 0;
 
 fn parse_matches() -> ArgMatches<'static> {
     App::new(crate_name!())
@@ -137,6 +129,14 @@ fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
     })
 }
 
+pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
+    let mut rnd = GenKeys::new(seed);
+
+    (rnd.gen_n_keypairs(count), 0)
+}
+
 fn parse_gossip_host(matches: &ArgMatches, entrypoint_addr: Option<SocketAddr>) -> IpAddr {
     matches
         .value_of("gossip_host")
@@ -195,7 +195,7 @@ pub fn main() {
     }
 
     let shred_version =
-        value_t!(matches, "shred_version", u16).unwrap_or_else(|_| DEFAULT_SHRED_VERSION);
+        value_t!(matches, "shred_version", u16).unwrap_or_else(|_| 0);
 
     // Read keys from file and spin up gossip nodes
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
