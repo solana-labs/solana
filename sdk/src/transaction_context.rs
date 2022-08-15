@@ -1,4 +1,4 @@
-//! Successors of instruction_context_context::StackFrame, KeyedAccount and AccountInfo
+//! Data shared between program runtime and built-in programs as well as SBF programs
 
 use {
     crate::{
