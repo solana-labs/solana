@@ -290,7 +290,8 @@ fn output_slot(
     let handles = (0..lane_count)
         .map(|thx| {
             let pre_execute_env_receiver = pre_execute_env_receiver.clone();
-            let muxed_sender = muxed_sender.clone();
+            let post_execute_env_sender = post_execute_env_sender.clone();
+            //let muxed_sender = muxed_sender.clone();
 
             let t2 = std::thread::Builder::new()
                 .name(format!("blockstore_processor_{}", thx))
