@@ -795,6 +795,9 @@ impl Accounts {
         let use_index = false;
         let is_startup = true;
         self.accounts_db
+            .verify_accounts_hash_in_bg
+            .wait_for_complete();
+        self.accounts_db
             .update_accounts_hash_with_index_option(
                 use_index,
                 debug_verify,
