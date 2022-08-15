@@ -2,7 +2,7 @@
 //!
 //! Epochs mark a period of time composed of _slots_, for which a particular
 //! [leader schedule][ls] is in effect. The epoch schedule determines the length
-//! of epochs, and the timing of the next leader schedule selection.
+//! of epochs, and the timing of the next leader-schedule selection.
 //!
 //! [ls]: https://docs.solana.com/cluster/leader-rotation#leader-schedule-rotation
 //!
