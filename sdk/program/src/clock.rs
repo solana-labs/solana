@@ -39,7 +39,7 @@ pub const MS_PER_TICK: u64 = 1000 / DEFAULT_TICKS_PER_SECOND;
 #[cfg(test)]
 static_assertions::const_assert_eq!(SLOT_MS, 400);
 
-/// The duration of a slot (400 milliseconds).
+/// The expected duration of a slot (400 milliseconds).
 pub const SLOT_MS: u64 = (DEFAULT_TICKS_PER_SLOT * 1000) / DEFAULT_TICKS_PER_SECOND;
 
 // At 160 ticks/s, 64 ticks per slot implies that leader rotation and voting will happen
