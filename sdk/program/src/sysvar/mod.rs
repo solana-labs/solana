@@ -67,9 +67,9 @@
 //! programs that pass around sysvar accounts.
 //!
 //! Some sysvars are too large to deserialize within a program, and
-//! `Sysvar::from_account_info` returns an error. Some sysvars are too large
-//! to deserialize within a program, and attempting to will exhaust the
-//! program's compute budget. Some sysvars do not implement `Sysvar::get` and
+//! `Sysvar::from_account_info` returns an error, or the serialization attempt 
+//! will exhaust the program's compute budget. 
+//! Some sysvars do not implement `Sysvar::get` and
 //! return an error. Some sysvars have custom deserializers that do not
 //! implement the `Sysvar` trait. These cases are documented in the modules for
 //! individual sysvars.
