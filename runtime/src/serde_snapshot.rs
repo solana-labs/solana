@@ -14,7 +14,7 @@ use {
         epoch_stakes::EpochStakes,
         rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
-        serde_snapshot::storage::{SerializableAccountStorageEntry, SerializedAppendVecId},
+        serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{self, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
         stakes::Stakes,
     },
@@ -53,6 +53,7 @@ mod storage;
 mod tests;
 mod utils;
 
+pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;

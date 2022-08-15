@@ -5,7 +5,7 @@ use {
         accounts_db::{AccountStorageEntry, AppendVecId, AtomicAppendVecId, SlotStores},
         serde_snapshot::{
             self, remap_and_reconstruct_single_storage, snapshot_storage_lengths_from_fields,
-            SerdeStyle,
+            SerdeStyle, SerializedAppendVecId,
         },
     },
     crossbeam_channel::{select, unbounded, Receiver, Sender},
@@ -37,7 +37,7 @@ pub struct SnapshotStorageRebuilder {
     /// Number of threads to rebuild with
     num_threads: usize,
     /// Snapshot storage lengths - from the snapshot file
-    snapshot_storage_lengths: HashMap<Slot, HashMap<usize, usize>>,
+    snapshot_storage_lengths: HashMap<Slot, HashMap<SerializedAppendVecId, usize>>,
     /// Container for storing snapshot file paths
     storage_paths: DashMap<Slot, Mutex<Vec<PathBuf>>>,
     /// Container for storing rebuilt snapshot storages
