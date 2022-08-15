@@ -870,7 +870,7 @@ impl ScheduleStage {
         loop {
             trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+guaranteed)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
 
-            select! {
+            crossbeam_channel::select! {
                recv(from) => maybe_from => {
                    let i = maybe_from.unwrap();
                     match i {
