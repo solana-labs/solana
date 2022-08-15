@@ -265,7 +265,7 @@ fn output_slot(
     let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
 
     //let (pre_execute_env_sender, pre_execute_env_receiver) = crossbeam_channel::unbounded();
-    //let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
+    let (post_execute_env_sender, post_execute_env_receiver) = crossbeam_channel::unbounded();
     //
     let (post_schedule_env_sender, post_schedule_env_receiver) = crossbeam_channel::unbounded();
     let mut runnable_queue = TaskQueue::default();
@@ -282,6 +282,7 @@ fn output_slot(
                 &mut address_book,
                 &muxed_receiver,
                 &pre_execute_env_sender,
+                &post_execute_env_receiver,
                 Some(&post_schedule_env_sender),
             );
         })
@@ -327,9 +328,12 @@ fn output_slot(
                             );
                         }
 
+                        /*
                         muxed_sender
                             .send(solana_scheduler::Multiplexed::FromExecute(ee))
                             .unwrap();
+                        */
+                        post_execute_env_sender.send(ee).unwrap();
                     }
                 })
                 .unwrap();
