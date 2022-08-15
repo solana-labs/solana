@@ -62,7 +62,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                 .about("Address lookup table management")
                 .setting(AppSettings::SubcommandRequiredElseHelp)
                 .subcommand(
-                    SubCommand::with_name("create-lookup-table")
+                    SubCommand::with_name("create")
                         .about("Create a lookup table")
                         .arg(
                             Arg::with_name("authority")
@@ -82,7 +82,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                         )
                 )
                 .subcommand(
-                    SubCommand::with_name("freeze-lookup-table")
+                    SubCommand::with_name("freeze")
                         .about("Permanently freezes a lookup table")
                         .arg(
                             Arg::with_name("lookup_table_address")
@@ -109,7 +109,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("extend-lookup-table")
+                    SubCommand::with_name("extend")
                         .about("Append more addresses to a lookup table")
                         .arg(
                             Arg::with_name("lookup_table_address")
@@ -148,7 +148,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                         )
                 )
                 .subcommand(
-                    SubCommand::with_name("deactivate-lookup-table")
+                    SubCommand::with_name("deactivate")
                         .about("Permanently deactivates a lookup table")
                         .arg(
                             Arg::with_name("lookup_table_address")
@@ -174,7 +174,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                         ),
                 )
                 .subcommand(
-                    SubCommand::with_name("close-lookup-table")
+                    SubCommand::with_name("close")
                         .about("Permanently closes a lookup table")
                         .arg(
                             Arg::with_name("lookup_table_address")
@@ -202,7 +202,7 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                         )
                 )
                 .subcommand(
-                    SubCommand::with_name("show-lookup-table")
+                    SubCommand::with_name("get")
                         .about("Display information about a lookup table")
                         .arg(
                             Arg::with_name("lookup_table_address")
@@ -224,7 +224,7 @@ pub fn parse_address_lookup_table_subcommand(
     let (subcommand, sub_matches) = matches.subcommand();
 
     let response = match (subcommand, sub_matches) {
-        ("create-lookup-table", Some(matches)) => {
+        ("create", Some(matches)) => {
             let mut bulk_signers = vec![Some(
                 default_signer.signer_from_path(matches, wallet_manager)?,
             )];
@@ -268,7 +268,7 @@ pub fn parse_address_lookup_table_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("freeze-lookup-table", Some(matches)) => {
+        ("freeze", Some(matches)) => {
             let lookup_table_pubkey = pubkey_of(matches, "lookup_table_address").unwrap();
 
             let mut bulk_signers = vec![Some(
@@ -302,7 +302,7 @@ pub fn parse_address_lookup_table_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("extend-lookup-table", Some(matches)) => {
+        ("extend", Some(matches)) => {
             let lookup_table_pubkey = pubkey_of(matches, "lookup_table_address").unwrap();
 
             let mut bulk_signers = vec![Some(
@@ -352,7 +352,7 @@ pub fn parse_address_lookup_table_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("deactivate-lookup-table", Some(matches)) => {
+        ("deactivate", Some(matches)) => {
             let lookup_table_pubkey = pubkey_of(matches, "lookup_table_address").unwrap();
 
             let mut bulk_signers = vec![Some(
@@ -386,7 +386,7 @@ pub fn parse_address_lookup_table_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("close-lookup-table", Some(matches)) => {
+        ("close", Some(matches)) => {
             let lookup_table_pubkey = pubkey_of(matches, "lookup_table_address").unwrap();
 
             let mut bulk_signers = vec![Some(
@@ -428,7 +428,7 @@ pub fn parse_address_lookup_table_subcommand(
                 signers: signer_info.signers,
             }
         }
-        ("show-lookup-table", Some(matches)) => {
+        ("get", Some(matches)) => {
             let lookup_table_pubkey = pubkey_of(matches, "lookup_table_address").unwrap();
 
             CliCommandInfo {
@@ -565,7 +565,7 @@ fn process_create_lookup_table(
 
 pub const FREEZE_LOOKUP_TABLE_WARNING: &str = "WARNING! \
 Once a lookup table is frozen, it can never be modified or unfrozen again. \
-To proceed with freezing, rerun the `freeze-lookup-table` command with the `--bypass-warning` flag";
+To proceed with freezing, rerun the `freeze` command with the `--bypass-warning` flag";
 
 fn process_freeze_lookup_table(
     rpc_client: &RpcClient,
@@ -682,7 +682,7 @@ fn process_extend_lookup_table(
 pub const DEACTIVATE_LOOKUP_TABLE_WARNING: &str = "WARNING! \
 Once a lookup table is deactivated, it is no longer usable by transactions.
 Deactivated lookup tables may only be closed and cannot be recreated at the same address. \
-To proceed with deactivation, rerun the `deactivate-lookup-table` command with the `--bypass-warning` flag";
+To proceed with deactivation, rerun the `deactivate` command with the `--bypass-warning` flag";
 
 fn process_deactivate_lookup_table(
     rpc_client: &RpcClient,
