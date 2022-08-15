@@ -1,4 +1,4 @@
-//! Access to slots present over the last epoch.
+//! A bitvector of slots present over the last epoch.
 //!
 //! The _slot history sysvar_ provides access to the [`SlotHistory`] type.
 //!
