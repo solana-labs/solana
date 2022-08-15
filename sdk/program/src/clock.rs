@@ -11,7 +11,7 @@
 //! time for the network to produce slots. Note though that this method suffers
 //! a variable amount of drift, as the network does not produce slots at exactly
 //! the target rate, and the greater number of slots being calculated for, the
-//! greater the drift. Epochs can not be used this way as they contain variable
+//! greater the drift. Epochs cannot be used this way as they contain variable
 //! numbers of slots.
 //!
 //! The network's current view of the real-world time can always be accessed via
