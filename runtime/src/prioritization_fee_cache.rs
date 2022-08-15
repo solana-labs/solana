@@ -243,19 +243,30 @@ impl PrioritizationFeeCache {
         let mut fail_get_transaction_priority_details_count: u64 = 0;
         let mut fail_get_transaction_account_locks_count: u64 = 0;
 
+        //* TAO TEST - original mean(cache_update_time) is 3.5K, which is 2K above inner updates
+        //total. Why?
         let ((cache_lock_time, entry_lock_time), cache_update_time) = measure!(
             {
+                //* TAO TEST - original has mean(this) 10-ish
                 let (block_prioritization_fee, cache_lock_time) = measure!(
                     self.get_prioritization_fee(&slot).entry(),
                     "cache_lock_time",
                 );
 
+                //* TAO TEST - original has mean(this) 0-ish
                 // Hold lock of slot's prioritization fee entry until all transactions are
                 // processed
                 let (mut block_prioritization_fee, entry_lock_time) =
                     measure!(block_prioritization_fee.lock().unwrap(), "entry_lock_time",);
 
                 for sanitized_tx in txs {
+                    //* TAO TEST - does no doing match helps reduce total update time?
+                    //with matching, the timer is still about 2K higher than inner. Is this 2K has
+                    //anything to do with calling inner update? Let's disable calling inner all
+                    //together
+                    //With disblaing all, the inner is of course 0, and the outter is 10. That
+                    //makes sense. So the issue is calling inner. Let's enable calling, but changne
+                    //inner to do nothing (that might also cheat optimizer)
                     match block_prioritization_fee.update(sanitized_tx) {
                         Err(PrioritizationFeeError::FailGetTransactionPriorityDetails) => {
                             saturating_add_assign!(fail_get_transaction_priority_details_count, 1)
@@ -267,6 +278,15 @@ impl PrioritizationFeeCache {
                             saturating_add_assign!(successful_transaction_update_count, 1)
                         }
                     }
+                    // */
+                    //
+                    // TAO TEST - this is the last test, and interestingly, the outer drops to 50
+                    // without calling inner. the prev test was calling iinner that does exactly
+                    // same thing: inc a metrics by 1u64. Thath was 350, doing iit here is 50. So
+                    // it sounds like some to do with calling locked object, and has nothing to do
+                    // with iterating TXs.
+                    self.metrics
+                        .increment_successful_transaction_update_count(1u64);
                 }
 
                 (cache_lock_time, entry_lock_time)
