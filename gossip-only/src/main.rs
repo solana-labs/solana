@@ -276,7 +276,6 @@ pub fn main() {
         exit(1);
     });
 
-    let mut gossip_threads: Vec<GossipService> = Vec::new();
     let entrypoint_addr = parse_entrypoint(&matches);
     let gossip_host = parse_gossip_host(&matches, entrypoint_addr);
     let gossip_addr = SocketAddr::new(
@@ -343,7 +342,6 @@ pub fn main() {
             &exit_gossip,
         );
 
-        gossip_threads.push(gossip_service);
     } else {
         // Loop through nodes, spin up a leader first, then have all others join leader
         for i in 0..num_nodes {
@@ -364,19 +362,6 @@ pub fn main() {
             cluster_info.set_entrypoints(cluster_entrypoints.clone());
             let cluster_info = Arc::new(cluster_info);
 
-            //Generate new bank and bank forks
-            let bank0 = Bank::new_with_paths_for_tests(
-                genesis_config,
-                Arc::<RuntimeConfig>::default(),
-                vec![ledger_path.clone()],
-                AccountSecondaryIndexes::default(),
-                false,
-                accounts_db::AccountShrinkThreshold::default(),
-            );
-            bank0.freeze();
-            let _bank_forks = BankForks::new(bank0);
-            let _bank_forks = Arc::new(RwLock::new(_bank_forks));
-
             let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
             // Run Gossip
@@ -392,11 +377,6 @@ pub fn main() {
                 &exit_gossip,
             );
 
-            gossip_threads.push(gossip_service);
         }
-    }
-
-    for thread in gossip_threads {
-        thread.join().unwrap();
     }
 }
