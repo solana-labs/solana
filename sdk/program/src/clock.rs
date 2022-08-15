@@ -145,7 +145,7 @@ pub type UnixTimestamp = i64;
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Eq)]
 pub struct Clock {
-    /// The current network/bank `Slot`.
+    /// The current `Slot`.
     pub slot: Slot,
     /// The timestamp of the first `Slot` in this `Epoch`.
     pub epoch_start_timestamp: UnixTimestamp,
