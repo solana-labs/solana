@@ -8,7 +8,28 @@ import * as Layout from '../layout';
 import {PACKET_DATA_SIZE} from '../transaction/constants';
 import * as shortvec from '../utils/shortvec-encoding';
 import {toBuffer} from '../utils/to-buffer';
-import {CompiledInstruction, MessageHeader} from './index';
+import {
+  MessageHeader,
+  MessageAddressTableLookup,
+  MessageCompiledInstruction,
+} from './index';
+import {TransactionVersion} from '../transaction/versioned';
+
+/**
+ * An instruction to execute by a program
+ *
+ * @property {number} programIdIndex
+ * @property {number[]} accounts
+ * @property {string} data
+ */
+export type CompiledInstruction = {
+  /** Index into the transaction keys array indicating the program account that executes this instruction */
+  programIdIndex: number;
+  /** Ordered indices into the transaction keys array indicating which accounts to pass to the program */
+  accounts: number[];
+  /** The program input data encoded as base 58 */
+  data: string;
+};
 
 /**
  * Message constructor arguments
@@ -49,6 +70,28 @@ export class Message {
         this.accountKeys[ix.programIdIndex],
       ),
     );
+  }
+
+  get version(): TransactionVersion {
+    return 'legacy';
+  }
+
+  get staticAccountKeys(): Array<PublicKey> {
+    return this.accountKeys;
+  }
+
+  get compiledInstructions(): Array<MessageCompiledInstruction> {
+    return this.instructions.map(
+      (ix): MessageCompiledInstruction => ({
+        programIdIndex: ix.programIdIndex,
+        accountKeyIndexes: ix.accounts,
+        data: bs58.decode(ix.data),
+      }),
+    );
+  }
+
+  get addressTableLookups(): Array<MessageAddressTableLookup> {
+    return [];
   }
 
   isAccountSigner(index: number): boolean {
