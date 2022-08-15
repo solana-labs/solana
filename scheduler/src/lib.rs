@@ -870,54 +870,35 @@ impl ScheduleStage {
         loop {
             trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+guaranteed)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
 
-            if from_exec.len() > 0 {
-                let mut processed_execution_environment = from_exec.recv().unwrap();
-                trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
-                executing_queue_count -= 1;
+            select! {
+               recv(from) => maybe_from => {
+                   let i = maybe_from.unwrap();
+                    match i {
+                        Multiplexed::FromPrevious(weighted_tx) => {
+                            trace!("recv from previous");
 
-                Self::commit_result(&mut processed_execution_environment, address_book);
-                // async-ly propagate the result to rpc subsystems
-                if let Some(to_next_stage) = to_next_stage {
-                    to_next_stage.send(processed_execution_environment).unwrap();
-                }
-            }
+                            while from_exec.len() > 0 {
+                                let mut processed_execution_environment = from_exec.recv().unwrap();
+                                trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
+                                executing_queue_count -= 1;
 
-            let i = from.recv().unwrap();
-            match i {
-                Multiplexed::FromPrevious(weighted_tx) => {
-                    trace!("recv from previous");
-
-                    Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
-                }
-                Multiplexed::FromPreviousBatched(vvv) => {
-                    trace!("recv from previous");
-
-                    for vv in vvv {
-                        for v in vv {
-                            panic!();
-                            //let p = get_transaction_priority_details(&v.0);
-                            //Self::register_runnable_task((Weight { ix: p }, v), runnable_queue, &mut current_unique_key);
-                            /*
-                            if executing_queue_count < max_executing_queue_count {
-                                let maybe_ee =
-                                    Self::schedule_next_execution(runnable_queue, contended_queue, address_book);
-                                if let Some(ee) = maybe_ee {
-                                    trace!("batched: send to execute");
-                                    executing_queue_count += 1;
-
-                                    to_execute_substage.send(ee).unwrap();
+                                Self::commit_result(&mut processed_execution_environment, address_book);
+                                // async-ly propagate the result to rpc subsystems
+                                if let Some(to_next_stage) = to_next_stage {
+                                    to_next_stage.send(processed_execution_environment).unwrap();
                                 }
-                            } else {
-                                    trace!("batched: outgoing queue full");
                             }
-                            */
+
+                            Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
+                        }
+                        Multiplexed::FromPreviousBatched(vvv) => {
+                            unreachable!();
                         }
                     }
-                }
-                Multiplexed::HintFromExecute => {
-                    trace!("hint of recv from execute");
-                    if from_exec.len() > 0 {
-                        let mut processed_execution_environment = from_exec.recv().unwrap();
+               }
+               recv(from_exec) => maybe_from_exec => {
+                   let mut processed_execution_environment = maybe_from_exec.unwrap();
+                    loop {
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                         executing_queue_count -= 1;
 
@@ -926,8 +907,13 @@ impl ScheduleStage {
                         if let Some(to_next_stage) = to_next_stage {
                             to_next_stage.send(processed_execution_environment).unwrap();
                         }
+                        if from_exec.len() > 0 {
+                            processed_execution_environment = from_exec.recv().unwrap();
+                        } else {
+                            break;
+                        }
                     }
-                }
+               }
             }
 
             loop {
