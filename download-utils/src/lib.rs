@@ -20,6 +20,9 @@ use {
 static TRUCK: Emoji = Emoji("🚚 ", "");
 static SPARKLE: Emoji = Emoji("✨ ", "");
 
+const SPEED_TEST_MEASURE_START_MS: u128 = 10_000;
+const SPEED_TEST_DURATION_MS: u128 = 15_000;
+
 /// Creates a new process bar for processing that will take an unknown amount of time
 fn new_spinner_progress_bar() -> ProgressBar {
     let progress_bar = ProgressBar::new(42);
@@ -57,6 +60,49 @@ pub struct DownloadProgressRecord {
 
 type DownloadProgressCallback<'a> = Box<dyn FnMut(&DownloadProgressRecord) -> bool + 'a>;
 type DownloadProgressCallbackOption<'a> = Option<DownloadProgressCallback<'a>>;
+
+// Downloads a file from RPC node and measures the speed.
+// There is a download warmup time before speed measurement begins.
+// Returns download speed in bytes per millisecond.
+pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
+    let mut res = reqwest::blocking::Client::new()
+        .get(url)
+        .send()
+        .map_err(|err| err.to_string())?;
+    let mut buffer = vec![0_u8; 10 * 1024 * 1024];
+    let mut total_bytes: usize = 0;
+    let mut start_bytes: usize = 0;
+    let mut start_time = Instant::now();
+    let download_start = Instant::now();
+    while let Ok(bytes) = res.read(&mut buffer) {
+        total_bytes = total_bytes.saturating_add(bytes);
+        let elapsed_ms = Instant::now().duration_since(download_start).as_millis();
+        if elapsed_ms >= SPEED_TEST_DURATION_MS {
+            // speed test completed
+            break;
+        } else if elapsed_ms > SPEED_TEST_MEASURE_START_MS && start_bytes == 0 {
+            // start the real measurement
+            start_bytes = total_bytes;
+            start_time = Instant::now();
+        }
+    }
+    let end_time = Instant::now();
+    let speed_test_bytes = total_bytes.saturating_sub(start_bytes);
+    let speed_test_time = (end_time - start_time).as_millis();
+    if speed_test_time > 0 {
+        let speed_test_download_speed = speed_test_bytes.saturating_div(speed_test_time as usize);
+        warn!(
+            "BWLOG: read {} bytes in {} ms ({} kB/s) from {}",
+            speed_test_bytes,
+            speed_test_time,
+            speed_test_download_speed * 1000 / 1024,
+            url,
+        );
+        Ok(speed_test_download_speed)
+    } else {
+        Err("speed test ran for 0 milliseconds".to_owned())
+    }
+}
 
 /// This callback allows the caller to get notified of the download progress modelled by DownloadProgressRecord
 /// Return "true" to continue the download

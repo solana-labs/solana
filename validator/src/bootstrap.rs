@@ -1,10 +1,15 @@
 use {
+    futures::executor,
+    geoutils::Location,
+    ipgeolocate::{Locator, Service},
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
     rayon::prelude::*,
     solana_client::rpc_client::RpcClient,
     solana_core::validator::{ValidatorConfig, ValidatorStartProgress},
-    solana_download_utils::{download_snapshot_archive, DownloadProgressRecord},
+    solana_download_utils::{
+        download_snapshot_archive, get_file_download_speed, DownloadProgressRecord,
+    },
     solana_genesis_utils::download_then_check_genesis_hash,
     solana_gossip::{
         cluster_info::{ClusterInfo, Node},
@@ -16,7 +21,7 @@ use {
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_package::SnapshotType,
         snapshot_utils::{
-            self, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
+            self, ArchiveFormat, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
             DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
         },
     },
@@ -41,7 +46,11 @@ use {
     },
 };
 
-pub const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
+const MAX_RPC_CONNECTIONS_EVALUATED_PER_ITERATION: usize = 32;
+const DEFAULT_RPC_DISTANCE_METERS: usize = 100_000_000;
+const MINIMUM_VIABLE_DOWNLOAD_SPEED: usize = 5120;
+const SUPER_NODE_DOWNLOAD_SPEED: usize = 40_960;
+const MAX_VIABLE_NODES_TO_SPEED_TEST: usize = 5;
 
 #[derive(Debug)]
 pub struct RpcBootstrapConfig {
@@ -329,6 +338,14 @@ pub struct SnapshotHash {
     incr: Option<(Slot, Hash)>,
 }
 
+pub struct RpcNodeConnectionDetails {
+    download_speed: usize,
+    distance_meters: usize,
+    contact_info: ContactInfo,
+    snapshot_hash: Option<SnapshotHash>,
+    client: RpcClient,
+}
+
 pub fn fail_rpc_node(
     err: String,
     known_validators: &Option<HashSet<Pubkey, RandomState>>,
@@ -495,8 +512,26 @@ pub fn rpc_bootstrap(
 
     let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
     let mut gossip = None;
-    let mut vetted_rpc_nodes: Vec<(ContactInfo, Option<SnapshotHash>, RpcClient)> = vec![];
+    let mut vetted_rpc_nodes: Vec<RpcNodeConnectionDetails> = vec![];
     let mut download_abort_count = 0;
+    let ip = node.info.rpc.ip();
+    let service = Service::IpApi;
+    let our_location = match executor::block_on(Locator::get(&format!("{}", ip), service)) {
+        Ok(ip) => {
+            info!(
+                "our ip is {} and location is {}, {}",
+                ip.ip, ip.city, ip.country
+            );
+            let lat = ip.latitude.parse::<f64>().unwrap_or_default();
+            let lon = ip.longitude.parse::<f64>().unwrap_or_default();
+            Some(Location::new(lat, lon))
+        }
+        Err(error) => {
+            warn!("unable to get our location - {}", error);
+            None
+        }
+    };
+
     loop {
         if gossip.is_none() {
             *start_progress.write().unwrap() = ValidatorStartProgress::SearchingForRpcService;
@@ -545,8 +580,8 @@ pub fn rpc_bootstrap(
 
                     (rpc_contact_info, snapshot_hash, rpc_client)
                 })
-                .filter(|(rpc_contact_info, _snapshot_hash, rpc_client)| {
-                    match rpc_client.get_version() {
+                .filter(
+                    |(contact_info, _snapshot_hash, client)| match client.get_version() {
                         Ok(rpc_version) => {
                             info!("RPC node version: {}", rpc_version.solana_core);
                             true
@@ -555,26 +590,135 @@ pub fn rpc_bootstrap(
                             fail_rpc_node(
                                 format!("Failed to get RPC node version: {}", err),
                                 &validator_config.known_validators,
-                                &rpc_contact_info.id,
+                                &contact_info.id,
                                 &mut blacklisted_rpc_nodes.write().unwrap(),
                             );
                             false
                         }
+                    },
+                )
+                .map(|(contact_info, snapshot_hash, client)| {
+                    let ip = contact_info.rpc.ip();
+                    let distance_meters = if let Some(our_location) = our_location {
+                        // Get the RPC node's location and compute distance
+                        match executor::block_on(Locator::get(&format!("{}", ip), service)) {
+                            Ok(ip) => {
+                                let lat = ip.latitude.parse::<f64>().unwrap_or_default();
+                                let lon = ip.longitude.parse::<f64>().unwrap_or_default();
+                                let their_location = Location::new(lat, lon);
+                                let distance_meters =
+                                    our_location.distance_to(&their_location).unwrap().meters();
+                                warn!(
+                                    "BWLOG: {} {} - {}, {} - {} meters away",
+                                    contact_info.id, ip.ip, ip.city, ip.country, distance_meters
+                                );
+                                distance_meters as usize
+                            }
+                            Err(error) => {
+                                warn!(
+                                    "BWLOG: couldn't get RPC node {} location - {}",
+                                    contact_info.rpc.ip(),
+                                    error
+                                );
+                                DEFAULT_RPC_DISTANCE_METERS
+                            }
+                        }
+                    } else {
+                        // We don't know our own location
+                        DEFAULT_RPC_DISTANCE_METERS
+                    };
+
+                    RpcNodeConnectionDetails {
+                        download_speed: 0, // We will compute download speed later
+                        distance_meters,
+                        contact_info,
+                        snapshot_hash,
+                        client,
                     }
                 })
                 .collect();
+
+            // Prioritize closer RPC nodes for download speed test.
+            vetted_rpc_nodes.sort_by_key(|k| k.distance_meters);
+
+            // Super node is a node with very fast download speed.
+            let mut super_node_found = false;
+            let mut num_viable_nodes_found = 0;
+            let found_sufficient_nodes = RwLock::new(false);
+            vetted_rpc_nodes = vetted_rpc_nodes
+                .into_iter()
+                .take_while(|_| !*found_sufficient_nodes.read().unwrap())
+                .map(|mut rpc_node_connection_details| {
+                    let desired_snapshot_hash =
+                        rpc_node_connection_details.snapshot_hash.unwrap().full;
+                    let destination_path = snapshot_utils::build_full_snapshot_archive_path(
+                        &snapshot_utils::build_snapshot_archives_remote_dir(
+                            full_snapshot_archives_dir,
+                        ),
+                        desired_snapshot_hash.0,
+                        &desired_snapshot_hash.1,
+                        ArchiveFormat::TarZstd,
+                    );
+                    let destination_path = destination_path.file_name().unwrap().to_str().unwrap();
+                    let full_snapshot_url = format!(
+                        "http://{}/{}",
+                        rpc_node_connection_details.contact_info.rpc, destination_path
+                    );
+                    rpc_node_connection_details.download_speed =
+                        match get_file_download_speed(&full_snapshot_url) {
+                            Ok(download_speed) => download_speed,
+                            Err(err) => {
+                                warn!("BWLOG: error estimating snapshot download speed: {}", err);
+                                0
+                            }
+                        };
+                    rpc_node_connection_details
+                })
+                .filter(|rpc_node_connection_details| {
+                    if rpc_node_connection_details.download_speed >= MINIMUM_VIABLE_DOWNLOAD_SPEED {
+                        num_viable_nodes_found += 1;
+                        if rpc_node_connection_details.download_speed >= SUPER_NODE_DOWNLOAD_SPEED {
+                            super_node_found = true;
+                        }
+                        if num_viable_nodes_found >= MAX_VIABLE_NODES_TO_SPEED_TEST
+                            || super_node_found
+                        {
+                            //let mut x = found_sufficient_nodes.write().unwrap();
+                            //*x = true;
+                            *found_sufficient_nodes.write().unwrap() = true;
+                        }
+                        true
+                    } else {
+                        fail_rpc_node(
+                            "BWLOG: RPC node failed speed test".to_string(),
+                            &validator_config.known_validators,
+                            &rpc_node_connection_details.contact_info.id,
+                            &mut blacklisted_rpc_nodes.write().unwrap(),
+                        );
+                        false
+                    }
+                })
+                .collect();
+
+            // Sort by estimated download speed to reduce startup time.
+            vetted_rpc_nodes.sort_by_key(|k| k.download_speed);
         }
 
-        let (rpc_contact_info, snapshot_hash, rpc_client) = vetted_rpc_nodes.pop().unwrap();
+        let RpcNodeConnectionDetails {
+            contact_info,
+            snapshot_hash,
+            client,
+            ..
+        } = vetted_rpc_nodes.pop().unwrap();
 
         match attempt_download_genesis_and_snapshot(
-            &rpc_contact_info,
+            &contact_info,
             ledger_path,
             validator_config,
             &bootstrap_config,
             use_progress_bar,
             &mut gossip,
-            &rpc_client,
+            &client,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             maximum_local_snapshot_age,
@@ -592,7 +736,7 @@ pub fn rpc_bootstrap(
                 fail_rpc_node(
                     err,
                     &validator_config.known_validators,
-                    &rpc_contact_info.id,
+                    &contact_info.id,
                     &mut blacklisted_rpc_nodes.write().unwrap(),
                 );
             }
@@ -1192,7 +1336,7 @@ fn download_snapshot(
         maximum_incremental_snapshot_archives_to_retain,
         use_progress_bar,
         &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
-            debug!("Download progress: {:?}", download_progress);
+            warn!("BWLOG: Download progress: {:?}", download_progress);
             if download_progress.last_throughput < minimal_snapshot_download_speed
                 && download_progress.notification_count <= 1
                 && download_progress.percentage_done <= 2_f32
