@@ -116,6 +116,10 @@ pub mod solana_sdk {
         address_lookup_table_account, hash, instruction, keccak, message, nonce,
         pubkey::{self, Pubkey},
         system_instruction, system_program,
+        sysvar::{
+            self,
+            clock::{self, Clock},
+        },
     };
 
     pub mod account {
