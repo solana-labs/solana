@@ -1,6 +1,6 @@
 //! Information about the network's clock, ticks, slots, etc.
 //!
-//! Time in Solana is marked primily by _slots_, which occur approximately every
+//! Time in Solana is marked primarily by _slots_, which occur approximately every
 //! 400 milliseconds, and are numbered sequentially. For every slot a leader is
 //! chosen from the validator set, and that leader is expected to produce a new
 //! block, though sometimes leaders may fail to do so. Blocks can be identified
