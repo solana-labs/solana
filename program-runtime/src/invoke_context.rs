@@ -1,5 +1,3 @@
-#[allow(deprecated)]
-use solana_sdk::keyed_account::{create_keyed_accounts_unified, KeyedAccount};
 use {
     crate::{
         accounts_data_meter::AccountsDataMeter,
@@ -175,38 +173,6 @@ impl fmt::Display for AllocErr {
     }
 }
 
-#[deprecated(
-    since = "1.11.0",
-    note = "Please use InstructionContext instead of StackFrame"
-)]
-#[allow(deprecated)]
-pub struct StackFrame<'a> {
-    pub number_of_program_accounts: usize,
-    pub keyed_accounts: Vec<KeyedAccount<'a>>,
-    pub keyed_accounts_range: std::ops::Range<usize>,
-}
-
-#[allow(deprecated)]
-impl<'a> StackFrame<'a> {
-    pub fn new(number_of_program_accounts: usize, keyed_accounts: Vec<KeyedAccount<'a>>) -> Self {
-        let keyed_accounts_range = std::ops::Range {
-            start: 0,
-            end: keyed_accounts.len(),
-        };
-        Self {
-            number_of_program_accounts,
-            keyed_accounts,
-            keyed_accounts_range,
-        }
-    }
-
-    pub fn program_id(&self) -> Option<&Pubkey> {
-        self.keyed_accounts
-            .get(self.number_of_program_accounts.saturating_sub(1))
-            .map(|keyed_account| keyed_account.unsigned_key())
-    }
-}
-
 struct SyscallContext {
     check_aligned: bool,
     check_size: bool,
@@ -216,8 +182,6 @@ struct SyscallContext {
 
 pub struct InvokeContext<'a> {
     pub transaction_context: &'a mut TransactionContext,
-    #[allow(deprecated)]
-    invoke_stack: Vec<StackFrame<'a>>,
     rent: Rent,
     pre_accounts: Vec<PreAccount>,
     builtin_programs: &'a [BuiltinProgram],
@@ -252,7 +216,6 @@ impl<'a> InvokeContext<'a> {
     ) -> Self {
         Self {
             transaction_context,
-            invoke_stack: Vec::with_capacity(compute_budget.max_invoke_depth),
             rent,
             pre_accounts: Vec::new(),
             builtin_programs,
@@ -384,40 +347,6 @@ impl<'a> InvokeContext<'a> {
             }
         }
 
-        // Create the KeyedAccounts that will be passed to the program
-        #[allow(deprecated)]
-        let keyed_accounts = program_indices
-            .iter()
-            .map(|account_index| {
-                Ok((
-                    false,
-                    false,
-                    self.transaction_context
-                        .get_key_of_account_at_index(*account_index)?,
-                    self.transaction_context
-                        .get_account_at_index(*account_index)?,
-                ))
-            })
-            .chain(instruction_accounts.iter().map(|instruction_account| {
-                Ok((
-                    instruction_account.is_signer,
-                    instruction_account.is_writable,
-                    self.transaction_context
-                        .get_key_of_account_at_index(instruction_account.index_in_transaction)?,
-                    self.transaction_context
-                        .get_account_at_index(instruction_account.index_in_transaction)?,
-                ))
-            }))
-            .collect::<Result<Vec<_>, InstructionError>>()?;
-
-        // Unsafe will be removed together with the keyed_accounts
-        #[allow(deprecated)]
-        self.invoke_stack.push(StackFrame::new(
-            program_indices.len(),
-            create_keyed_accounts_unified(unsafe {
-                std::mem::transmute(keyed_accounts.as_slice())
-            }),
-        ));
         self.syscall_context.push(None);
         self.transaction_context
             .push(program_indices, instruction_accounts, instruction_data)
@@ -426,7 +355,6 @@ impl<'a> InvokeContext<'a> {
     /// Pop a stack frame from the invocation stack
     pub fn pop(&mut self) -> Result<(), InstructionError> {
         self.syscall_context.pop();
-        self.invoke_stack.pop();
         self.transaction_context.pop()
     }
 
@@ -913,19 +841,6 @@ impl<'a> InvokeContext<'a> {
         }
 
         Err(InstructionError::UnsupportedProgramId)
-    }
-
-    #[deprecated(
-        since = "1.11.0",
-        note = "Please use BorrowedAccount instead of KeyedAccount"
-    )]
-    #[allow(deprecated)]
-    /// Get the list of keyed accounts including the chain of program accounts
-    pub fn get_keyed_accounts(&self) -> Result<&[KeyedAccount], InstructionError> {
-        self.invoke_stack
-            .last()
-            .and_then(|frame| frame.keyed_accounts.get(frame.keyed_accounts_range.clone()))
-            .ok_or(InstructionError::CallDepth)
     }
 
     /// Get this invocation's LogCollector
