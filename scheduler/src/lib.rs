@@ -871,7 +871,7 @@ impl ScheduleStage {
             trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+guaranteed)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
 
             crossbeam_channel::select! {
-               recv(from) => maybe_from => {
+               recv(from) -> maybe_from => {
                    let i = maybe_from.unwrap();
                     match i {
                         Multiplexed::FromPrevious(weighted_tx) => {
@@ -896,7 +896,7 @@ impl ScheduleStage {
                         }
                     }
                }
-               recv(from_exec) => maybe_from_exec => {
+               recv(from_exec) -> maybe_from_exec => {
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
                     loop {
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
