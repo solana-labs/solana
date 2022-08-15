@@ -85,7 +85,7 @@ pub const DEFAULT_S_PER_SLOT: f64 = DEFAULT_TICKS_PER_SLOT as f64 / DEFAULT_TICK
 ///
 /// Once the bank discards a block hash, it will reject any transactions that
 /// use that `recent_blockhash` in a transaction. Lowering this value reduces
-/// memory consumption, but requires clients to update its `recent_blockhash`
+/// memory consumption, but requires a client to update its `recent_blockhash`
 /// more frequently. Raising the value lengthens the time a client must wait to
 /// be certain a missing transaction will not be processed by the network.
 pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;
