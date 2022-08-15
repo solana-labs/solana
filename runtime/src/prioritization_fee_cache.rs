@@ -279,14 +279,6 @@ impl PrioritizationFeeCache {
                         }
                     }
                     // */
-                    //
-                    // TAO TEST - this is the last test, and interestingly, the outer drops to 50
-                    // without calling inner. the prev test was calling iinner that does exactly
-                    // same thing: inc a metrics by 1u64. Thath was 350, doing iit here is 50. So
-                    // it sounds like some to do with calling locked object, and has nothing to do
-                    // with iterating TXs.
-                    self.metrics
-                        .increment_successful_transaction_update_count(1u64);
                 }
 
                 (cache_lock_time, entry_lock_time)

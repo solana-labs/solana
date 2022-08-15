@@ -2,11 +2,16 @@
 extern crate test;
 
 use {
+    rand::{thread_rng, Rng},
     solana_runtime::prioritization_fee_cache::*,
     solana_sdk::{
-        compute_budget::ComputeBudgetInstruction, message::Message, pubkey::Pubkey,
-        system_instruction, transaction::SanitizedTransaction, transaction::Transaction,
+        compute_budget::ComputeBudgetInstruction,
+        message::Message,
+        pubkey::Pubkey,
+        system_instruction,
+        transaction::{SanitizedTransaction, Transaction},
     },
+    std::sync::Arc,
     test::Bencher,
 };
 const TRANSFER_TRANSACTION_COMPUTE_UNIT: u32 = 200;
@@ -31,7 +36,7 @@ fn build_sanitized_transaction(
 
 #[bench]
 fn bench_process_transactions_single_slot(bencher: &mut Bencher) {
-    let mut prioritization_fee_cache = PrioritizationFeeCache::default();
+    let prioritization_fee_cache = PrioritizationFeeCache::default();
 
     let slot = 101;
     // build test transactions
@@ -48,5 +53,44 @@ fn bench_process_transactions_single_slot(bencher: &mut Bencher) {
 
     bencher.iter(|| {
         prioritization_fee_cache.update_transactions(slot, transactions.iter());
+    });
+}
+
+fn process_transactions_multiple_slots() {
+    const NUM_SLOTS: u64 = 5;
+    const NUM_THREADS: usize = 3;
+
+    let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
+
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(NUM_THREADS)
+        .build()
+        .unwrap();
+
+    // each threads updates a slot a batch of 50 transactions, for 100 times
+    for _ in 0..100 {
+        pool.install(|| {
+            let transactions: Vec<_> = (0..50)
+                .map(|n| {
+                    let compute_unit_price = n % 7;
+                    build_sanitized_transaction(
+                        compute_unit_price,
+                        &Pubkey::new_unique(),
+                        &Pubkey::new_unique(),
+                    )
+                })
+                .collect();
+
+            let slot = thread_rng().gen_range(0, NUM_SLOTS);
+
+            prioritization_fee_cache.update_transactions(slot, transactions.iter());
+        })
+    }
+}
+
+#[bench]
+fn bench_process_transactions_multiple_slots(bencher: &mut Bencher) {
+    bencher.iter(|| {
+        process_transactions_multiple_slots();
     });
 }
