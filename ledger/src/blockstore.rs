@@ -546,9 +546,9 @@ impl Blockstore {
         self.prepare_rooted_slot_iterator(slot, IteratorDirection::Reverse)
     }
 
-    /// Determines if `starting_slot` and `ending_slot` are connected by full slots
+    /// Determines if we can iterate from `starting_slot` to >= `ending_slot` by full slots
     /// `starting_slot` is excluded from the `is_full()` check
-    pub fn slots_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
+    pub fn slot_range_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
         if starting_slot == ending_slot {
             return true;
         }
@@ -562,8 +562,7 @@ impl Blockstore {
                 if slot_meta.is_full() {
                     match slot.cmp(&ending_slot) {
                         cmp::Ordering::Less => next_slots.extend(slot_meta.next_slots),
-                        cmp::Ordering::Equal => return true,
-                        cmp::Ordering::Greater => {} // slot is greater than the ending slot, so all its children would be as well
+                        _ => return true,
                     }
                 }
             }
@@ -5501,7 +5500,7 @@ pub mod tests {
         }
     */
     #[test]
-    fn test_slots_connected_chain() {
+    fn test_slot_range_connected_chain() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5510,12 +5509,12 @@ pub mod tests {
             make_and_insert_slot(&blockstore, slot, slot.saturating_sub(1));
         }
 
-        assert!(blockstore.slots_connected(1, 3));
-        assert!(!blockstore.slots_connected(1, 4)); // slot 4 does not exist
+        assert!(blockstore.slot_range_connected(1, 3));
+        assert!(!blockstore.slot_range_connected(1, 4)); // slot 4 does not exist
     }
 
     #[test]
-    fn test_slots_connected_disconnected() {
+    fn test_slot_range_connected_disconnected() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5523,20 +5522,20 @@ pub mod tests {
         make_and_insert_slot(&blockstore, 2, 1);
         make_and_insert_slot(&blockstore, 4, 2);
 
-        assert!(!blockstore.slots_connected(1, 3)); // Slot 3 does not exit
-        assert!(blockstore.slots_connected(1, 4));
+        assert!(blockstore.slot_range_connected(1, 3)); // Slot 3 does not exist, but we can still replay this range to slot 4
+        assert!(blockstore.slot_range_connected(1, 4));
     }
 
     #[test]
-    fn test_slots_connected_same_slot() {
+    fn test_slot_range_connected_same_slot() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        assert!(blockstore.slots_connected(54, 54));
+        assert!(blockstore.slot_range_connected(54, 54));
     }
 
     #[test]
-    fn test_slots_connected_starting_slot_not_full() {
+    fn test_slot_range_connected_starting_slot_not_full() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5544,7 +5543,7 @@ pub mod tests {
         make_and_insert_slot(&blockstore, 6, 5);
 
         assert!(!blockstore.meta(4).unwrap().unwrap().is_full());
-        assert!(blockstore.slots_connected(4, 6));
+        assert!(blockstore.slot_range_connected(4, 6));
     }
 
     #[test]
