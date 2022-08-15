@@ -91,8 +91,8 @@ pub fn get_file_download_speed(url: &str) -> Result<usize, String> {
     let speed_test_time = (end_time - start_time).as_millis();
     if speed_test_time > 0 {
         let speed_test_download_speed = speed_test_bytes.saturating_div(speed_test_time as usize);
-        warn!(
-            "BWLOG: read {} bytes in {} ms ({} kB/s) from {}",
+        trace!(
+            "read {} bytes in {} ms ({} kB/s) from {}",
             speed_test_bytes,
             speed_test_time,
             speed_test_download_speed * 1000 / 1024,

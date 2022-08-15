@@ -608,15 +608,15 @@ pub fn rpc_bootstrap(
                                 let their_location = Location::new(lat, lon);
                                 let distance_meters =
                                     our_location.distance_to(&their_location).unwrap().meters();
-                                warn!(
-                                    "BWLOG: {} {} - {}, {} - {} meters away",
+                                debug!(
+                                    "{} {} - {}, {} - {} meters away",
                                     contact_info.id, ip.ip, ip.city, ip.country, distance_meters
                                 );
                                 distance_meters as usize
                             }
                             Err(error) => {
-                                warn!(
-                                    "BWLOG: couldn't get RPC node {} location - {}",
+                                debug!(
+                                    "couldn't get RPC node {} location - {}",
                                     contact_info.rpc.ip(),
                                     error
                                 );
@@ -668,7 +668,7 @@ pub fn rpc_bootstrap(
                         match get_file_download_speed(&full_snapshot_url) {
                             Ok(download_speed) => download_speed,
                             Err(err) => {
-                                warn!("BWLOG: error estimating snapshot download speed: {}", err);
+                                warn!("error estimating snapshot download speed: {}", err);
                                 0
                             }
                         };
@@ -683,14 +683,15 @@ pub fn rpc_bootstrap(
                         if num_viable_nodes_found >= MAX_VIABLE_NODES_TO_SPEED_TEST
                             || super_node_found
                         {
-                            //let mut x = found_sufficient_nodes.write().unwrap();
-                            //*x = true;
                             *found_sufficient_nodes.write().unwrap() = true;
                         }
                         true
                     } else {
                         fail_rpc_node(
-                            "BWLOG: RPC node failed speed test".to_string(),
+                            format!(
+                                "RPC node failed speed test - {} kB/s",
+                                rpc_node_connection_details.download_speed
+                            ),
                             &validator_config.known_validators,
                             &rpc_node_connection_details.contact_info.id,
                             &mut blacklisted_rpc_nodes.write().unwrap(),
@@ -1336,7 +1337,7 @@ fn download_snapshot(
         maximum_incremental_snapshot_archives_to_retain,
         use_progress_bar,
         &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
-            warn!("BWLOG: Download progress: {:?}", download_progress);
+            debug!("Download progress: {:?}", download_progress);
             if download_progress.last_throughput < minimal_snapshot_download_speed
                 && download_progress.notification_count <= 1
                 && download_progress.percentage_done <= 2_f32
