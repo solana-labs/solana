@@ -281,8 +281,8 @@ fn output_slot(
                 &mut contended_queue,
                 &mut address_book,
                 &muxed_receiver,
-                &pre_execute_env_sender,
                 &post_execute_env_receiver,
+                &pre_execute_env_sender,
                 Some(&post_schedule_env_sender),
             );
         })
