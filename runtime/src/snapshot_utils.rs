@@ -1783,8 +1783,8 @@ fn verify_slot_deltas(
     slot_deltas: &[BankSlotDelta],
     bank: &Bank,
 ) -> std::result::Result<(), VerifySlotDeltasError> {
-    verify_slot_deltas_structural(slot_deltas, bank.slot())?;
-    verify_slot_deltas_with_history(slot_deltas, &bank.get_slot_history(), bank.slot())
+    let info = verify_slot_deltas_structural(slot_deltas, bank.slot())?;
+    verify_slot_deltas_with_history(&info.slots, &bank.get_slot_history(), bank.slot())
 }
 
 /// Verify that the snapshot's slot deltas are not corrupt/invalid
@@ -1838,29 +1838,24 @@ struct VerifySlotDeltasStructuralInfo {
 /// Verify that the snapshot's slot deltas are not corrupt/invalid
 /// These checks use the slot history for verification
 fn verify_slot_deltas_with_history(
-    slot_deltas: &[BankSlotDelta],
+    slot_deltas: &HashSet<Slot>,
     slot_history: &SlotHistory,
     bank_slot: Slot,
 ) -> std::result::Result<(), VerifySlotDeltasError> {
     // all entries should be in the bank's slot history
     let entry_missing_from_history = slot_deltas
         .iter()
-        .find(|(slot, ..)| slot_history.check(*slot) != Check::Found);
-    if let Some((slot, ..)) = entry_missing_from_history {
+        .find(|slot| slot_history.check(**slot) != Check::Found);
+    if let Some(slot) = entry_missing_from_history {
         return Err(VerifySlotDeltasError::SlotNotFoundInHistory(*slot));
     }
 
     // all slots in the history should be in the slot deltas (up to MAX_CACHE_ENTRIES)
     // this ensures nothing was removed from the status cache
-
-    fn slot_deltas_contains_slot(slot_deltas: &[BankSlotDelta], slot: Slot) -> bool {
-        slot_deltas
-            .iter()
-            .any(|(slot_from_deltas, ..)| *slot_from_deltas == slot)
-    }
-
+    //
     // go through the slot history and make sure there's an entry for each slot
-    // note: it's important to go highest-to-lowest since the status cache is a fifo
+    // note: it's important to go highest-to-lowest since the status cache removes
+    // older entries first
     let mut entries_checked = 0;
     for slot in (0..=bank_slot).rev() {
         if entries_checked >= status_cache::MAX_CACHE_ENTRIES {
@@ -1873,7 +1868,7 @@ fn verify_slot_deltas_with_history(
             continue;
         }
 
-        if !slot_deltas_contains_slot(slot_deltas, slot) {
+        if !slot_deltas.contains(&slot) {
             return Err(VerifySlotDeltasError::SlotNotFoundInDeltas(slot));
         }
 
@@ -4005,7 +4000,7 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_slot_deltas_bad_slot_not_root() {
+    fn test_verify_slot_deltas_structural_bad_slot_not_root() {
         let slot_deltas = vec![
             (111, true, Status::default()),
             (222, false, Status::default()), // <-- slot is not a root
@@ -4018,7 +4013,7 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_slot_deltas_bad_slot_greater_than_bank() {
+    fn test_verify_slot_deltas_structural_bad_slot_greater_than_bank() {
         let slot_deltas = vec![
             (222, true, Status::default()),
             (111, true, Status::default()),
@@ -4036,7 +4031,7 @@ mod tests {
     }
 
     #[test]
-    fn test_verify_slot_deltas_bad_slot_has_multiple_entries() {
+    fn test_verify_slot_deltas_structural_bad_slot_has_multiple_entries() {
         let slot_deltas = vec![
             (111, true, Status::default()),
             (222, true, Status::default()),
@@ -4053,33 +4048,34 @@ mod tests {
 
     #[test]
     fn test_verify_slot_deltas_with_history_good() {
-        let mut slot_deltas = Vec::default();
+        let mut slot_deltas = HashSet::default();
         let mut slot_history = SlotHistory::default();
         // note: slot history expects slots to be added in numeric order
         for slot in [0, 111, 222, 333, 444] {
-            slot_deltas.push((slot, true, Status::default()));
+            slot_deltas.insert(slot);
             slot_history.add(slot);
         }
 
         let bank_slot = 444;
-        let result =
-            verify_slot_deltas_with_history(slot_deltas.as_slice(), &slot_history, bank_slot);
+        let result = verify_slot_deltas_with_history(&slot_deltas, &slot_history, bank_slot);
         assert_eq!(result, Ok(()));
     }
 
     #[test]
     fn test_verify_slot_deltas_with_history_bad_slot_not_in_history() {
-        let slot_deltas = vec![
-            (0, true, Status::default()), // slot history has slot 0 added by default
-            (444, true, Status::default()),
-            (222, true, Status::default()),
-        ];
+        /*
+         * let slot_deltas = vec![
+         *     (0, true, Status::default()), // slot history has slot 0 added by default
+         *     (444, true, Status::default()),
+         *     (222, true, Status::default()),
+         * ];
+         */
+        let slot_deltas = HashSet::from([0, 444, 222]);
         let mut slot_history = SlotHistory::default();
         slot_history.add(444); // <-- slot history is missing slot 222
 
         let bank_slot = 444;
-        let result =
-            verify_slot_deltas_with_history(slot_deltas.as_slice(), &slot_history, bank_slot);
+        let result = verify_slot_deltas_with_history(&slot_deltas, &slot_history, bank_slot);
 
         assert_eq!(
             result,
@@ -4089,20 +4085,22 @@ mod tests {
 
     #[test]
     fn test_verify_slot_deltas_with_history_bad_slot_not_in_deltas() {
-        let slot_deltas = vec![
-            (0, true, Status::default()), // slot history has slot 0 added by default
-            (444, true, Status::default()),
-            (222, true, Status::default()),
-            // <-- slot deltas is missing slot 333
-        ];
+        /*
+         * let slot_deltas = vec![
+         *     (0, true, Status::default()), // slot history has slot 0 added by default
+         *     (444, true, Status::default()),
+         *     (222, true, Status::default()),
+         *     // <-- slot deltas is missing slot 333
+         * ];
+         */
+        let slot_deltas = HashSet::from([0, 444, 222]);
         let mut slot_history = SlotHistory::default();
         slot_history.add(222);
         slot_history.add(333);
         slot_history.add(444);
 
         let bank_slot = 444;
-        let result =
-            verify_slot_deltas_with_history(slot_deltas.as_slice(), &slot_history, bank_slot);
+        let result = verify_slot_deltas_with_history(&slot_deltas, &slot_history, bank_slot);
 
         assert_eq!(
             result,
