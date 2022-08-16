@@ -1792,7 +1792,7 @@ fn verify_slot_deltas(
 fn verify_slot_deltas_structural(
     slot_deltas: &[BankSlotDelta],
     bank_slot: Slot,
-) -> std::result::Result<(), VerifySlotDeltasError> {
+) -> std::result::Result<VerifySlotDeltasStructuralInfo, VerifySlotDeltasError> {
     // there should not be more entries than that status cache's max
     let num_entries = slot_deltas.len();
     if num_entries > status_cache::MAX_CACHE_ENTRIES {
@@ -1823,7 +1823,16 @@ fn verify_slot_deltas_structural(
         }
     }
 
-    Ok(())
+    Ok(VerifySlotDeltasStructuralInfo {
+        slots: slots_seen_so_far,
+    })
+}
+
+/// Computed information from `verify_slot_deltas_structural()`, that may be reused/useful later.
+#[derive(Debug, PartialEq, Eq)]
+struct VerifySlotDeltasStructuralInfo {
+    /// All the slots in the slot deltas
+    slots: HashSet<Slot>,
 }
 
 /// Verify that the snapshot's slot deltas are not corrupt/invalid
@@ -3970,7 +3979,12 @@ mod tests {
 
         let bank_slot = 333;
         let result = verify_slot_deltas_structural(slot_deltas.as_slice(), bank_slot);
-        assert_eq!(result, Ok(()));
+        assert_eq!(
+            result,
+            Ok(VerifySlotDeltasStructuralInfo {
+                slots: HashSet::from([111, 222, 333])
+            })
+        );
     }
 
     #[test]
