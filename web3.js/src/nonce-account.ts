@@ -6,7 +6,7 @@ import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import type {FeeCalculator} from './fee-calculator';
 import {FeeCalculatorLayout} from './fee-calculator';
-import {toBuffer} from './util/to-buffer';
+import {toBuffer} from './utils/to-buffer';
 
 /**
  * See https://github.com/solana-labs/solana/blob/0ea2843ec9cdc517572b8e62c959f41b55cf4453/sdk/src/nonce_state.rs#L29-L32

@@ -1,4 +1,5 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     log::*,
     solana_cli_output::CliAccount,
@@ -115,6 +116,7 @@ pub struct TestValidatorGenesis {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
+    pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub max_ledger_shreds: Option<u64>,
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
@@ -122,6 +124,7 @@ pub struct TestValidatorGenesis {
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
+    pub transaction_account_lock_limit: Option<usize>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -144,6 +147,7 @@ impl Default for TestValidatorGenesis {
             validator_exit: Arc::<RwLock<Exit>>::default(),
             start_progress: Arc::<RwLock<ValidatorStartProgress>>::default(),
             authorized_voter_keypairs: Arc::<RwLock<Vec<Arc<Keypair>>>>::default(),
+            staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
@@ -151,6 +155,7 @@ impl Default for TestValidatorGenesis {
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
+            transaction_account_lock_limit: Option::<usize>::default(),
         }
     }
 }
@@ -292,7 +297,7 @@ impl TestValidatorGenesis {
                 warn!("Could not find {}, skipping.", address);
             } else {
                 error!("Failed to fetch {}: {}", address, res.unwrap_err());
-                solana_core::validator::abort();
+                Self::abort();
             }
         }
         self
@@ -303,7 +308,7 @@ impl TestValidatorGenesis {
             let account_path =
                 solana_program_test::find_file(account.filename).unwrap_or_else(|| {
                     error!("Unable to locate {}", account.filename);
-                    solana_core::validator::abort();
+                    Self::abort();
                 });
             let mut file = File::open(&account_path).unwrap();
             let mut account_info_raw = String::new();
@@ -317,7 +322,7 @@ impl TestValidatorGenesis {
                         account_path.to_str().unwrap(),
                         err
                     );
-                    solana_core::validator::abort();
+                    Self::abort();
                 }
                 Ok(deserialized) => deserialized,
             };
@@ -346,7 +351,7 @@ impl TestValidatorGenesis {
             let matched_files = fs::read_dir(&dir)
                 .unwrap_or_else(|err| {
                     error!("Cannot read directory {}: {}", dir, err);
-                    solana_core::validator::abort();
+                    Self::abort();
                 })
                 .flatten()
                 .map(|entry| entry.path())
@@ -506,6 +511,19 @@ impl TestValidatorGenesis {
             }
             Err(err) => panic!("Test validator failed to start: {}", err),
         }
+    }
+
+    fn abort() -> ! {
+        #[cfg(not(test))]
+        {
+            // standard error is usually redirected to a log file, cry for help on standard output as
+            // well
+            println!("Validator process aborted. The validator log may contain further details");
+            std::process::exit(1);
+        }
+
+        #[cfg(test)]
+        panic!("process::exit(1) is intercepted for friendly test failure...");
     }
 }
 
@@ -754,6 +772,7 @@ impl TestValidator {
                     ..ComputeBudget::default()
                 }),
             log_messages_bytes_limit: config.log_messages_bytes_limit,
+            transaction_account_lock_limit: config.transaction_account_lock_limit,
         };
 
         let mut validator_config = ValidatorConfig {
@@ -785,6 +804,7 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
+            staked_nodes_overrides: config.staked_nodes_overrides.clone(),
             accounts_db_config,
             runtime_config,
             ..ValidatorConfig::default_for_test()
@@ -806,7 +826,7 @@ impl TestValidator {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        ));
+        )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...

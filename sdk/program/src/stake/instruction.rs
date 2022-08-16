@@ -60,6 +60,12 @@ pub enum StakeError {
 
     #[error("delegation amount is less than the minimum")]
     InsufficientDelegation,
+
+    #[error("stake account with transient or inactive stake cannot be redelegated")]
+    RedelegateTransientOrInactiveStake,
+
+    #[error("stake redelegation to the same vote account is not permitted")]
+    RedelegateToSameVoteAccount,
 }
 
 impl<E> DecodeError<E> for StakeError {
@@ -261,6 +267,28 @@ pub enum StakeInstruction {
     ///   2. `[]` Reference vote account that has voted at least once in the last
     ///      `MINIMUM_DELINQUENT_EPOCHS_FOR_DEACTIVATION` epochs
     DeactivateDelinquent,
+
+    /// Redelegate activated stake to another vote account.
+    ///
+    /// Upon success:
+    ///   * the balance of the delegated stake account will be reduced to the undelegated amount in
+    ///     the account (rent exempt minimum and any additional lamports not part of the delegation),
+    ///     and scheduled for deactivation.
+    ///   * the provided uninitialized stake account will receive the original balance of the
+    ///     delegated stake account, minus the rent exempt minimum, and scheduled for activation to
+    ///     the provided vote account. Any existing lamports in the uninitialized stake account
+    ///     will also be included in the re-delegation.
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Delegated stake account to be redelegated. The account must be fully
+    ///      activated and carry a balance greater than or equal to the minimum delegation amount
+    ///      plus rent exempt minimum
+    ///   1. `[WRITE]` Uninitialized stake account that will hold the redelegated stake
+    ///   2. `[]` Vote account to which this stake will be re-delegated
+    ///   3. `[]` Address of config account that carries stake config
+    ///   4. `[SIGNER]` Stake authority
+    ///
+    Redelegate,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
@@ -736,6 +764,65 @@ pub fn deactivate_delinquent_stake(
         AccountMeta::new_readonly(*reference_vote_account, false),
     ];
     Instruction::new_with_bincode(id(), &StakeInstruction::DeactivateDelinquent, account_metas)
+}
+
+fn _redelegate(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+    uninitialized_stake_pubkey: &Pubkey,
+) -> Instruction {
+    let account_metas = vec![
+        AccountMeta::new(*stake_pubkey, false),
+        AccountMeta::new(*uninitialized_stake_pubkey, false),
+        AccountMeta::new_readonly(*vote_pubkey, false),
+        AccountMeta::new_readonly(config::id(), false),
+        AccountMeta::new_readonly(*authorized_pubkey, true),
+    ];
+    Instruction::new_with_bincode(id(), &StakeInstruction::Redelegate, account_metas)
+}
+
+pub fn redelegate(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+    uninitialized_stake_pubkey: &Pubkey,
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::allocate(uninitialized_stake_pubkey, StakeState::size_of() as u64),
+        system_instruction::assign(uninitialized_stake_pubkey, &id()),
+        _redelegate(
+            stake_pubkey,
+            authorized_pubkey,
+            vote_pubkey,
+            uninitialized_stake_pubkey,
+        ),
+    ]
+}
+
+pub fn redelegate_with_seed(
+    stake_pubkey: &Pubkey,
+    authorized_pubkey: &Pubkey,
+    vote_pubkey: &Pubkey,
+    uninitialized_stake_pubkey: &Pubkey, // derived using create_with_seed()
+    base: &Pubkey,                       // base
+    seed: &str,                          // seed
+) -> Vec<Instruction> {
+    vec![
+        system_instruction::allocate_with_seed(
+            uninitialized_stake_pubkey,
+            base,
+            seed,
+            StakeState::size_of() as u64,
+            &id(),
+        ),
+        _redelegate(
+            stake_pubkey,
+            authorized_pubkey,
+            vote_pubkey,
+            uninitialized_stake_pubkey,
+        ),
+    ]
 }
 
 #[cfg(test)]

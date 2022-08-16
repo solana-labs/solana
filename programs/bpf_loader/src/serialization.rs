@@ -22,7 +22,7 @@ pub fn serialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     should_cap_ix_accounts: bool,
-) -> Result<(AlignedMemory, Vec<usize>), InstructionError> {
+) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<usize>), InstructionError> {
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
     if should_cap_ix_accounts && num_ix_accounts > usize::from(MAX_INSTRUCTION_ACCOUNTS) {
         return Err(InstructionError::MaxAccountsExceeded);
@@ -80,7 +80,7 @@ pub fn deserialize_parameters(
 pub fn serialize_parameters_unaligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-) -> Result<AlignedMemory, InstructionError> {
+) -> Result<AlignedMemory<HOST_ALIGN>, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
@@ -106,7 +106,7 @@ pub fn serialize_parameters_unaligned(
     size += size_of::<u64>() // instruction data len
          + instruction_context.get_instruction_data().len() // instruction data
          + size_of::<Pubkey>(); // program id
-    let mut v = AlignedMemory::new(size, HOST_ALIGN);
+    let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
     v.write_u64::<LittleEndian>(instruction_context.get_number_of_instruction_accounts() as u64)
         .map_err(|_| InstructionError::InvalidArgument)?;
@@ -208,7 +208,7 @@ pub fn deserialize_parameters_unaligned(
 pub fn serialize_parameters_aligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-) -> Result<AlignedMemory, InstructionError> {
+) -> Result<AlignedMemory<HOST_ALIGN>, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
@@ -239,7 +239,7 @@ pub fn serialize_parameters_aligned(
     size += size_of::<u64>() // data len
     + instruction_context.get_instruction_data().len()
     + size_of::<Pubkey>(); // program id;
-    let mut v = AlignedMemory::new(size, HOST_ALIGN);
+    let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
     // Serialize into the buffer
     v.write_u64::<LittleEndian>(instruction_context.get_number_of_instruction_accounts() as u64)
@@ -275,7 +275,7 @@ pub fn serialize_parameters_aligned(
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_all(borrowed_account.get_data())
                 .map_err(|_| InstructionError::InvalidArgument)?;
-            v.resize(
+            v.fill_write(
                 MAX_PERMITTED_DATA_INCREASE
                     + (v.write_index() as *const u8).align_offset(BPF_ALIGN_OF_U128),
                 0,

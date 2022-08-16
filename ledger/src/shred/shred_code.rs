@@ -3,14 +3,16 @@ use {
         common::dispatch,
         legacy, merkle,
         traits::{Shred, ShredCode as ShredCodeTrait},
-        CodingShredHeader, Error, ShredCommonHeader, ShredType, MAX_DATA_SHREDS_PER_FEC_BLOCK,
+        CodingShredHeader, Error, ShredCommonHeader, ShredType, DATA_SHREDS_PER_FEC_BLOCK,
         MAX_DATA_SHREDS_PER_SLOT, SIZE_OF_NONCE,
     },
     solana_sdk::{clock::Slot, packet::PACKET_DATA_SIZE, signature::Signature},
     static_assertions::const_assert_eq,
 };
 
-pub(super) const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT;
+// See ERASURE_BATCH_SIZE.
+const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768 * 17);
+pub(crate) const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT * 17;
 
 const_assert_eq!(ShredCode::SIZE_OF_PAYLOAD, 1228);
 
@@ -132,8 +134,8 @@ pub(super) fn sanitize<T: ShredCodeTrait>(shred: &T) -> Result<(), Error> {
             common_header.index,
         ));
     }
-    let num_coding_shreds = u32::from(coding_header.num_coding_shreds);
-    if num_coding_shreds > 8 * MAX_DATA_SHREDS_PER_FEC_BLOCK {
+    let num_coding_shreds = usize::from(coding_header.num_coding_shreds);
+    if num_coding_shreds > 8 * DATA_SHREDS_PER_FEC_BLOCK {
         return Err(Error::InvalidNumCodingShreds(
             coding_header.num_coding_shreds,
         ));

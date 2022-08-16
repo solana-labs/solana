@@ -47,9 +47,12 @@ static RECYCLING: Emoji = Emoji("♻️  ", "");
 /// Creates a new process bar for processing that will take an unknown amount of time
 fn new_spinner_progress_bar() -> ProgressBar {
     let progress_bar = ProgressBar::new(42);
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
+    progress_bar.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .expect("ProgresStyle::template direct input to be correct"),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(100));
     progress_bar
 }
 
@@ -115,6 +118,7 @@ fn download_to_temp(
             .template(
                 "{spinner:.green}{wide_msg} [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})",
             )
+            .expect("ProgresStyle::template direct input to be correct")
             .progress_chars("=> "),
     );
     progress_bar.set_message(format!("{}Downloading", TRUCK));
@@ -831,6 +835,7 @@ pub fn gc(config_file: &str) -> Result<(), String> {
             progress_bar.set_style(
                 ProgressStyle::default_bar()
                     .template("{spinner:.green}{wide_msg} [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                    .expect("ProgresStyle::template direct input to be correct")
                     .progress_chars("=> "),
             );
             progress_bar.set_message(format!("{}Removing old releases", RECYCLING));

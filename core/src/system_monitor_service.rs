@@ -22,12 +22,15 @@ const SAMPLE_INTERVAL_UDP_MS: u64 = 2 * MS_PER_S;
 const SAMPLE_INTERVAL_OS_NETWORK_LIMITS_MS: u64 = MS_PER_H;
 const SAMPLE_INTERVAL_MEM_MS: u64 = MS_PER_S;
 const SAMPLE_INTERVAL_CPU_MS: u64 = MS_PER_S;
+const SAMPLE_INTERVAL_DISK_MS: u64 = MS_PER_S;
 const SLEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "linux")]
 const PROC_NET_SNMP_PATH: &str = "/proc/net/snmp";
 #[cfg(target_os = "linux")]
 const PROC_NET_DEV_PATH: &str = "/proc/net/dev";
+#[cfg(target_os = "linux")]
+const SYS_BLOCK_PATH: &str = "/sys/block";
 
 pub struct SystemMonitorService {
     thread_hdl: JoinHandle<()>,
@@ -96,6 +99,32 @@ struct CpuInfo {
     num_threads: u64,
 }
 
+#[derive(Default)]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+// These stats are aggregated across all storage devices excluding internal loopbacks.
+// Fields are cumulative since boot with the exception of 'num_disks' and 'io_in_progress'
+struct DiskStats {
+    reads_completed: u64,
+    reads_merged: u64,
+    sectors_read: u64,
+    time_reading_ms: u64,
+    writes_completed: u64,
+    writes_merged: u64,
+    sectors_written: u64,
+    time_writing_ms: u64,
+    io_in_progress: u64,
+    time_io_ms: u64,
+    // weighted time multiplies time performing IO by number of commands in the queue
+    time_io_weighted_ms: u64,
+    discards_completed: u64,
+    discards_merged: u64,
+    sectors_discarded: u64,
+    time_discarding: u64,
+    flushes_completed: u64,
+    time_flushing: u64,
+    num_disks: u64,
+}
+
 impl UdpStats {
     fn from_map(udp_stats: &HashMap<String, u64>) -> Self {
         Self {
@@ -108,6 +137,29 @@ impl UdpStats {
             in_csum_errors: *udp_stats.get("InCsumErrors").unwrap_or(&0),
             ignored_multi: *udp_stats.get("IgnoredMulti").unwrap_or(&0),
         }
+    }
+}
+
+impl DiskStats {
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    fn accumulate(&mut self, other: &DiskStats) {
+        self.reads_completed += other.reads_completed;
+        self.reads_merged += other.reads_merged;
+        self.sectors_read += other.sectors_read;
+        self.time_reading_ms += other.time_reading_ms;
+        self.writes_completed += other.writes_completed;
+        self.writes_merged += other.writes_merged;
+        self.sectors_written += other.sectors_written;
+        self.time_writing_ms += other.time_writing_ms;
+        self.io_in_progress += other.io_in_progress;
+        self.time_io_ms += other.time_io_ms;
+        self.time_io_weighted_ms += other.time_io_weighted_ms;
+        self.discards_completed += other.discards_completed;
+        self.discards_merged += other.discards_merged;
+        self.sectors_discarded += other.sectors_discarded;
+        self.time_discarding += other.time_discarding;
+        self.flushes_completed += other.flushes_completed;
+        self.time_flushing += other.time_flushing;
     }
 }
 
@@ -223,12 +275,91 @@ pub fn verify_net_stats_access() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
+fn read_disk_stats() -> Result<DiskStats, String> {
+    let mut stats = DiskStats::default();
+    let mut num_disks = 0;
+    let blk_device_dir_iter = std::fs::read_dir(SYS_BLOCK_PATH).map_err(|e| e.to_string())?;
+    blk_device_dir_iter
+        .filter_map(|blk_device_dir| {
+            match blk_device_dir {
+                Ok(blk_device_dir) => {
+                    let blk_device_dir_name = &blk_device_dir.file_name();
+                    let blk_device_dir_name = blk_device_dir_name.to_string_lossy();
+                    if blk_device_dir_name.starts_with("loop")
+                        || blk_device_dir_name.starts_with("dm")
+                        || blk_device_dir_name.starts_with("md")
+                    {
+                        // Filter out loopback devices, dmcrypt volumes, and mdraid volumes
+                        return None;
+                    }
+                    let mut path = blk_device_dir.path();
+                    path.push("stat");
+                    match File::open(path) {
+                        Ok(file_diskstats) => Some(file_diskstats),
+                        Err(_) => None,
+                    }
+                }
+                Err(_) => None,
+            }
+        })
+        .for_each(|file_diskstats| {
+            let mut reader_diskstats = BufReader::new(file_diskstats);
+            stats.accumulate(&parse_disk_stats(&mut reader_diskstats).unwrap_or_default());
+            num_disks += 1;
+        });
+    stats.num_disks = num_disks;
+    Ok(stats)
+}
+
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_disk_stats(reader_diskstats: &mut impl BufRead) -> Result<DiskStats, String> {
+    let mut stats = DiskStats::default();
+    let mut line = String::new();
+    reader_diskstats
+        .read_line(&mut line)
+        .map_err(|e| e.to_string())?;
+    let values: Vec<_> = line.split_ascii_whitespace().collect();
+    let num_elements = values.len();
+
+    if num_elements != 11 && num_elements != 15 && num_elements != 17 {
+        return Err("parse error, unknown number of disk stat elements".to_string());
+    }
+
+    stats.reads_completed = values[0].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.reads_merged = values[1].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.sectors_read = values[2].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.time_reading_ms = values[3].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.writes_completed = values[4].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.writes_merged = values[5].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.sectors_written = values[6].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.time_writing_ms = values[7].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.io_in_progress = values[8].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.time_io_ms = values[9].parse::<u64>().map_err(|e| e.to_string())?;
+    stats.time_io_weighted_ms = values[10].parse::<u64>().map_err(|e| e.to_string())?;
+    if num_elements > 11 {
+        // Kernel 4.18+ appends four more fields for discard
+        stats.discards_completed = values[11].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.discards_merged = values[12].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.sectors_discarded = values[13].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_discarding = values[14].parse::<u64>().map_err(|e| e.to_string())?;
+    }
+    if num_elements > 15 {
+        // Kernel 5.5+ appends two more fields for flush requests
+        stats.flushes_completed = values[15].parse::<u64>().map_err(|e| e.to_string())?;
+        stats.time_flushing = values[16].parse::<u64>().map_err(|e| e.to_string())?;
+    }
+
+    Ok(stats)
+}
+
 impl SystemMonitorService {
     pub fn new(
         exit: Arc<AtomicBool>,
         report_os_memory_stats: bool,
         report_os_network_stats: bool,
         report_os_cpu_stats: bool,
+        report_os_disk_stats: bool,
     ) -> Self {
         info!("Starting SystemMonitorService");
         let thread_hdl = Builder::new()
@@ -239,6 +370,7 @@ impl SystemMonitorService {
                     report_os_memory_stats,
                     report_os_network_stats,
                     report_os_cpu_stats,
+                    report_os_disk_stats,
                 );
             })
             .unwrap();
@@ -572,17 +704,155 @@ impl SystemMonitorService {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    fn process_disk_stats(disk_stats: &mut Option<DiskStats>) {
+        match read_disk_stats() {
+            Ok(new_stats) => {
+                if let Some(old_stats) = disk_stats {
+                    Self::report_disk_stats(old_stats, &new_stats);
+                }
+                *disk_stats = Some(new_stats);
+            }
+            Err(e) => warn!("read_disk_stats: {}", e),
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    fn process_disk_stats(_disk_stats: &mut Option<DiskStats>) {}
+
+    #[cfg(target_os = "linux")]
+    fn report_disk_stats(old_stats: &DiskStats, new_stats: &DiskStats) {
+        datapoint_info!(
+            "disk-stats",
+            (
+                "reads_completed",
+                new_stats
+                    .reads_completed
+                    .saturating_sub(old_stats.reads_completed),
+                i64
+            ),
+            (
+                "reads_merged",
+                new_stats
+                    .reads_merged
+                    .saturating_sub(old_stats.reads_merged),
+                i64
+            ),
+            (
+                "sectors_read",
+                new_stats
+                    .sectors_read
+                    .saturating_sub(old_stats.sectors_read),
+                i64
+            ),
+            (
+                "time_reading_ms",
+                new_stats
+                    .time_reading_ms
+                    .saturating_sub(old_stats.time_reading_ms),
+                i64
+            ),
+            (
+                "writes_completed",
+                new_stats
+                    .writes_completed
+                    .saturating_sub(old_stats.writes_completed),
+                i64
+            ),
+            (
+                "writes_merged",
+                new_stats
+                    .writes_merged
+                    .saturating_sub(old_stats.writes_merged),
+                i64
+            ),
+            (
+                "sectors_written",
+                new_stats
+                    .sectors_written
+                    .saturating_sub(old_stats.sectors_written),
+                i64
+            ),
+            (
+                "time_writing_ms",
+                new_stats
+                    .time_writing_ms
+                    .saturating_sub(old_stats.time_writing_ms),
+                i64
+            ),
+            ("io_in_progress", new_stats.io_in_progress, i64),
+            (
+                "time_io_ms",
+                new_stats.time_io_ms.saturating_sub(old_stats.time_io_ms),
+                i64
+            ),
+            (
+                "time_io_weighted_ms",
+                new_stats
+                    .time_io_weighted_ms
+                    .saturating_sub(old_stats.time_io_weighted_ms),
+                i64
+            ),
+            (
+                "discards_completed",
+                new_stats
+                    .discards_completed
+                    .saturating_sub(old_stats.discards_completed),
+                i64
+            ),
+            (
+                "discards_merged",
+                new_stats
+                    .discards_merged
+                    .saturating_sub(old_stats.discards_merged),
+                i64
+            ),
+            (
+                "sectors_discarded",
+                new_stats
+                    .sectors_discarded
+                    .saturating_sub(old_stats.sectors_discarded),
+                i64
+            ),
+            (
+                "time_discarding",
+                new_stats
+                    .time_discarding
+                    .saturating_sub(old_stats.time_discarding),
+                i64
+            ),
+            (
+                "flushes_completed",
+                new_stats
+                    .flushes_completed
+                    .saturating_sub(old_stats.flushes_completed),
+                i64
+            ),
+            (
+                "time_flushing",
+                new_stats
+                    .time_flushing
+                    .saturating_sub(old_stats.time_flushing),
+                i64
+            ),
+            ("num_disks", new_stats.num_disks, i64),
+        )
+    }
+
     pub fn run(
         exit: Arc<AtomicBool>,
         report_os_memory_stats: bool,
         report_os_network_stats: bool,
         report_os_cpu_stats: bool,
+        report_os_disk_stats: bool,
     ) {
         let mut udp_stats = None;
+        let mut disk_stats = None;
         let network_limits_timer = AtomicInterval::default();
         let udp_timer = AtomicInterval::default();
         let mem_timer = AtomicInterval::default();
         let cpu_timer = AtomicInterval::default();
+        let disk_timer = AtomicInterval::default();
 
         loop {
             if exit.load(Ordering::Relaxed) {
@@ -601,6 +871,9 @@ impl SystemMonitorService {
             }
             if report_os_cpu_stats && cpu_timer.should_update(SAMPLE_INTERVAL_CPU_MS) {
                 Self::report_cpu_stats();
+            }
+            if report_os_disk_stats && disk_timer.should_update(SAMPLE_INTERVAL_DISK_MS) {
+                Self::process_disk_stats(&mut disk_stats);
             }
             sleep(SLEEP_INTERVAL);
         }
@@ -667,6 +940,49 @@ data" as &[u8];
 
         let mut mock_dev = UNEXPECTED_DATA;
         let stats = parse_net_dev_stats(&mut mock_dev);
+        assert!(stats.is_err());
+    }
+
+    #[test]
+    fn test_parse_disk_stats() {
+        const MOCK_DISK_11: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738" as &[u8];
+        // Matches kernel 4.18+ format
+        const MOCK_DISK_15: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0" as &[u8];
+        // Matches kernel 5.5+ format
+        const MOCK_DISK_17: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0    70715     2922" as &[u8];
+        const UNEXPECTED_DATA_1: &[u8] =
+b" 2095701   479815 122620302  1904439 43496218 26953623 3935324729 283313376        0  6101780 285220738        0        0        0        0    70715" as &[u8];
+
+        const UNEXPECTED_DATA_2: &[u8] = b"un
+ex
+pec
+ted
+data" as &[u8];
+
+        let mut mock_disk = MOCK_DISK_11;
+        let stats = parse_disk_stats(&mut mock_disk).unwrap();
+        assert_eq!(stats.reads_completed, 2095701);
+        assert_eq!(stats.time_io_weighted_ms, 285220738);
+
+        let mut mock_disk = MOCK_DISK_15;
+        let stats = parse_disk_stats(&mut mock_disk).unwrap();
+        assert_eq!(stats.reads_completed, 2095701);
+        assert_eq!(stats.time_discarding, 0);
+
+        let mut mock_disk = MOCK_DISK_17;
+        let stats = parse_disk_stats(&mut mock_disk).unwrap();
+        assert_eq!(stats.reads_completed, 2095701);
+        assert_eq!(stats.time_flushing, 2922);
+
+        let mut mock_disk = UNEXPECTED_DATA_1;
+        let stats = parse_disk_stats(&mut mock_disk);
+        assert!(stats.is_err());
+
+        let mut mock_disk = UNEXPECTED_DATA_2;
+        let stats = parse_disk_stats(&mut mock_disk);
         assert!(stats.is_err());
     }
 

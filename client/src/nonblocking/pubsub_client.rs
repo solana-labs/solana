@@ -64,8 +64,14 @@ pub enum PubsubClientError {
     #[error("subscribe failed: {reason}")]
     SubscribeFailed { reason: String, message: String },
 
+    #[error("unexpected message format: {0}")]
+    UnexpectedMessageError(String),
+
     #[error("request failed: {reason}")]
     RequestFailed { reason: String, message: String },
+
+    #[error("request error: {0}")]
+    RequestError(String),
 }
 
 type UnsubscribeFn = Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>;

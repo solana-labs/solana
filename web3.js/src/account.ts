@@ -2,7 +2,7 @@ import nacl from 'tweetnacl';
 import type {SignKeyPair as KeyPair} from 'tweetnacl';
 import type {Buffer} from 'buffer';
 
-import {toBuffer} from './util/to-buffer';
+import {toBuffer} from './utils/to-buffer';
 import {PublicKey} from './publickey';
 
 /**

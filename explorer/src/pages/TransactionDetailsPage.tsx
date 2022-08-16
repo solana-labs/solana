@@ -193,8 +193,9 @@ function StatusCard({
     }
   }
 
-  const fee = details?.data?.transaction?.meta?.fee;
-  const transaction = details?.data?.transaction?.transaction;
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  const fee = transactionWithMeta?.meta?.fee;
+  const transaction = transactionWithMeta?.transaction;
   const blockhash = transaction?.message.recentBlockhash;
   const isNonce = (() => {
     if (!transaction || transaction.message.instructions.length < 1) {
@@ -338,7 +339,8 @@ function DetailsSection({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
   const fetchDetails = useFetchTransactionDetails();
   const status = useTransactionStatus(signature);
-  const transaction = details?.data?.transaction?.transaction;
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  const transaction = transactionWithMeta?.transaction;
   const message = transaction?.message;
   const { status: clusterStatus } = useCluster();
   const refreshDetails = () => fetchDetails(signature);
@@ -360,7 +362,7 @@ function DetailsSection({ signature }: SignatureProps) {
     return <LoadingCard />;
   } else if (details.status === FetchStatus.FetchFailed) {
     return <ErrorCard retry={refreshDetails} text="Failed to fetch details" />;
-  } else if (!details.data?.transaction || !message) {
+  } else if (!transactionWithMeta || !message) {
     return <ErrorCard text="Details are not available" />;
   }
 
@@ -377,11 +379,12 @@ function DetailsSection({ signature }: SignatureProps) {
 function AccountsCard({ signature }: SignatureProps) {
   const details = useTransactionDetails(signature);
 
-  if (!details?.data?.transaction) {
+  const transactionWithMeta = details?.data?.transactionWithMeta;
+  if (!transactionWithMeta) {
     return null;
   }
 
-  const { meta, transaction } = details.data.transaction;
+  const { meta, transaction } = transactionWithMeta;
   const { message } = transaction;
 
   if (!meta) {

@@ -696,6 +696,7 @@ struct CleanKeyTimings {
     dirty_store_processing_us: u64,
     delta_key_count: u64,
     dirty_pubkeys_count: u64,
+    oldest_dirty_slot: Slot,
 }
 
 /// Persistent storage structure holding the accounts
@@ -1901,7 +1902,7 @@ impl AccountsDb {
         num_hash_scan_passes: Option<usize>,
     ) -> Self {
         let num_threads = get_thread_count();
-        const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 200_000_000;
+        const MAX_READ_ONLY_CACHE_DATA_SIZE: usize = 400_000_000; // 400M bytes
 
         let mut temp_accounts_hash_cache_path = None;
         let accounts_hash_cache_path = accounts_hash_cache_path.unwrap_or_else(|| {
@@ -2446,7 +2447,9 @@ impl AccountsDb {
         });
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
-        for (_slot, store) in dirty_stores {
+        timings.oldest_dirty_slot = max_slot.saturating_add(1);
+        for (slot, store) in dirty_stores {
+            timings.oldest_dirty_slot = std::cmp::min(timings.oldest_dirty_slot, slot);
             store.accounts.account_iter().for_each(|account| {
                 pubkeys.insert(account.meta.pubkey);
             });
@@ -2774,6 +2777,7 @@ impl AccountsDb {
                 key_timings.collect_delta_keys_us,
                 i64
             ),
+            ("oldest_dirty_slot", key_timings.oldest_dirty_slot, i64),
             (
                 "dirty_store_processing_us",
                 key_timings.dirty_store_processing_us,
@@ -3727,14 +3731,7 @@ impl AccountsDb {
         let mut current_ancient = None;
         let mut dropped_roots = vec![];
 
-        if let Some(first_slot) = sorted_slots.first() {
-            info!(
-                "ancient_append_vec: combine_ancient_slots first slot: {}, num_roots: {}",
-                first_slot,
-                sorted_slots.len()
-            );
-        }
-
+        let len = sorted_slots.len();
         for slot in sorted_slots {
             let old_storages =
                 match self.get_storages_to_move_to_ancient_append_vec(slot, &mut current_ancient) {
@@ -3747,7 +3744,11 @@ impl AccountsDb {
 
             if guard.is_none() {
                 // we are now doing interesting work in squashing ancient
-                guard = Some(self.active_stats.activate(ActiveStatItem::SquashAncient))
+                guard = Some(self.active_stats.activate(ActiveStatItem::SquashAncient));
+                info!(
+                    "ancient_append_vec: combine_ancient_slots first slot: {}, num_roots: {}",
+                    slot, len
+                );
             }
 
             // this code is copied from shrink. I would like to combine it into a helper function, but the borrow checker has defeated my efforts so far.
@@ -6455,7 +6456,7 @@ impl AccountsDb {
         let range = snapshot_storages.range();
         let ancient_slots = snapshot_storages
             .iter_range(range.start..one_epoch_old_slot)
-            .map(|(slot, _)| slot)
+            .filter_map(|(slot, storages)| storages.map(|_| slot))
             .collect::<Vec<_>>();
         let ancient_slot_count = ancient_slots.len() as Slot;
         let slot0 = std::cmp::max(range.start, one_epoch_old_slot);
@@ -6496,7 +6497,8 @@ impl AccountsDb {
                     return scanner.scanning_complete();
                 }
 
-                let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data();
+                let should_cache_hash_data = CalcAccountsHashConfig::get_should_cache_hash_data()
+                    || config.store_detailed_debug_info_on_failure;
 
                 // if we're using the write cache, then we can't rely on cached append vecs since the append vecs may not include every account
                 // Single cached slots get cached and full chunks get cached.
@@ -6560,7 +6562,7 @@ impl AccountsDb {
                             amod.hash(&mut hasher);
                         }
                     }
-                    if load_from_cache && eligible_for_caching {
+                    if load_from_cache {
                         // we have a hash value for all the storages in this slot
                         // so, build a file name:
                         let hash = hasher.finish();
@@ -6569,14 +6571,15 @@ impl AccountsDb {
                             start, end_exclusive, bin_range.start, bin_range.end, hash
                         );
                         let mut retval = scanner.get_accum();
-                        if cache_hash_data
-                            .load(
-                                &Path::new(&file_name),
-                                &mut retval,
-                                start_bin_index,
-                                bin_calculator,
-                            )
-                            .is_ok()
+                        if eligible_for_caching
+                            && cache_hash_data
+                                .load(
+                                    &Path::new(&file_name),
+                                    &mut retval,
+                                    start_bin_index,
+                                    bin_calculator,
+                                )
+                                .is_ok()
                         {
                             return retval;
                         }
@@ -6742,6 +6745,7 @@ impl AccountsDb {
                     epoch_schedule,
                     rent_collector,
                     store_detailed_debug_info_on_failure: false,
+                    full_snapshot: None,
                 },
                 expected_capitalization,
             )
@@ -6879,6 +6883,8 @@ impl AccountsDb {
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
 
+        stats.oldest_root = storages.range().start;
+
         self.mark_old_slots_as_dirty(storages, Some(config.epoch_schedule.slots_per_epoch));
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
@@ -6989,10 +6995,12 @@ impl AccountsDb {
             rent_collector,
             can_cached_slot_be_unflushed,
             false,
+            false,
         )
     }
 
     /// Only called from startup or test code.
+    #[allow(clippy::too_many_arguments)]
     pub fn verify_bank_hash_and_lamports_new(
         &self,
         slot: Slot,
@@ -7003,6 +7011,7 @@ impl AccountsDb {
         rent_collector: &RentCollector,
         can_cached_slot_be_unflushed: bool,
         ignore_mismatch: bool,
+        store_hash_raw_data_for_debug: bool,
     ) -> Result<(), BankHashVerificationError> {
         use BankHashVerificationError::*;
 
@@ -7022,7 +7031,8 @@ impl AccountsDb {
                     use_write_cache: can_cached_slot_be_unflushed,
                     epoch_schedule,
                     rent_collector,
-                    store_detailed_debug_info_on_failure: false,
+                    store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
+                    full_snapshot: None,
                 },
                 None,
             )?;
@@ -7627,7 +7637,7 @@ impl AccountsDb {
 
     fn report_store_timings(&self) {
         if self.stats.last_store_report.should_update(1000) {
-            let (read_only_cache_hits, read_only_cache_misses) =
+            let (read_only_cache_hits, read_only_cache_misses, read_only_cache_evicts) =
                 self.read_only_accounts_cache.get_and_reset_stats();
             datapoint_info!(
                 "accounts_db_store_timings",
@@ -7692,6 +7702,11 @@ impl AccountsDb {
                 (
                     "read_only_accounts_cache_misses",
                     read_only_cache_misses,
+                    i64
+                ),
+                (
+                    "read_only_accounts_cache_evicts",
+                    read_only_cache_evicts,
                     i64
                 ),
                 (
@@ -11626,6 +11641,7 @@ pub mod tests {
                 epoch_schedule: &EPOCH_SCHEDULE,
                 rent_collector: &RENT_COLLECTOR,
                 store_detailed_debug_info_on_failure: false,
+                full_snapshot: None,
             }
         }
     }

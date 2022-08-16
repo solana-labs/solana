@@ -7,7 +7,7 @@ import { ParsedInfo } from "validators";
 import { reportError } from "utils/sentry";
 import {
   ConfirmedSignatureInfo,
-  ParsedConfirmedTransaction,
+  ParsedTransactionWithMeta,
   ParsedInstruction,
   PartiallyDecodedInstruction,
 } from "@solana/web3.js";
@@ -43,30 +43,31 @@ export interface InstructionItem {
 export class InstructionContainer {
   readonly instructions: InstructionItem[];
 
-  static create(parsedTransaction: ParsedConfirmedTransaction) {
-    return new InstructionContainer(parsedTransaction);
+  static create(transactionWithMeta: ParsedTransactionWithMeta) {
+    return new InstructionContainer(transactionWithMeta);
   }
 
-  constructor(parsedTransaction: ParsedConfirmedTransaction) {
-    this.instructions = parsedTransaction.transaction.message.instructions.map(
-      (instruction) => {
-        if ("parsed" in instruction) {
-          if (typeof instruction.parsed === "object") {
-            instruction.parsed = create(instruction.parsed, ParsedInfo);
-          } else if (typeof instruction.parsed !== "string") {
-            throw new Error("Unexpected parsed response");
+  constructor(transactionWithMeta: ParsedTransactionWithMeta) {
+    this.instructions =
+      transactionWithMeta.transaction.message.instructions.map(
+        (instruction) => {
+          if ("parsed" in instruction) {
+            if (typeof instruction.parsed === "object") {
+              instruction.parsed = create(instruction.parsed, ParsedInfo);
+            } else if (typeof instruction.parsed !== "string") {
+              throw new Error("Unexpected parsed response");
+            }
           }
+
+          return {
+            instruction,
+            inner: [],
+          };
         }
+      );
 
-        return {
-          instruction,
-          inner: [],
-        };
-      }
-    );
-
-    if (parsedTransaction.meta?.innerInstructions) {
-      for (let inner of parsedTransaction.meta.innerInstructions) {
+    if (transactionWithMeta.meta?.innerInstructions) {
+      for (let inner of transactionWithMeta.meta.innerInstructions) {
         this.instructions[inner.index].inner.push(...inner.instructions);
       }
     }
@@ -89,16 +90,16 @@ export function getTokenProgramInstructionName(
 }
 
 export function getTokenInstructionName(
-  transaction: ParsedConfirmedTransaction,
+  transactionWithMeta: ParsedTransactionWithMeta,
   ix: ParsedInstruction | PartiallyDecodedInstruction,
   signatureInfo: ConfirmedSignatureInfo
 ) {
   let name = "Unknown";
 
   let transactionInstruction;
-  if (transaction?.transaction) {
+  if (transactionWithMeta?.transaction) {
     transactionInstruction = intoTransactionInstruction(
-      transaction.transaction,
+      transactionWithMeta.transaction,
       ix
     );
   }
@@ -163,7 +164,7 @@ export function getTokenInstructionName(
 }
 
 export function getTokenInstructionType(
-  transaction: ParsedConfirmedTransaction,
+  transactionWithMeta: ParsedTransactionWithMeta,
   ix: ParsedInstruction | PartiallyDecodedInstruction,
   signatureInfo: ConfirmedSignatureInfo,
   index: number
@@ -171,8 +172,8 @@ export function getTokenInstructionType(
   const innerInstructions: (ParsedInstruction | PartiallyDecodedInstruction)[] =
     [];
 
-  if (transaction.meta?.innerInstructions) {
-    transaction.meta.innerInstructions.forEach((ix) => {
+  if (transactionWithMeta.meta?.innerInstructions) {
+    transactionWithMeta.meta.innerInstructions.forEach((ix) => {
       if (ix.index === index) {
         ix.instructions.forEach((inner) => {
           innerInstructions.push(inner);
@@ -182,7 +183,8 @@ export function getTokenInstructionType(
   }
 
   let name =
-    getTokenInstructionName(transaction, ix, signatureInfo) || "Unknown";
+    getTokenInstructionName(transactionWithMeta, ix, signatureInfo) ||
+    "Unknown";
 
   return {
     name,

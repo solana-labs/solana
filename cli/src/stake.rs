@@ -5,12 +5,14 @@ use {
             log_instruction_custom_error, CliCommand, CliCommandInfo, CliConfig, CliError,
             ProcessResult,
         },
+        compute_unit_price::WithComputeUnitPrice,
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
     },
     clap::{value_t, App, Arg, ArgGroup, ArgMatches, SubCommand},
     solana_clap_utils::{
+        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::{fee_payer_arg, FEE_PAYER_ARG},
         input_parsers::*,
         input_validators::*,
@@ -196,6 +198,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("create-stake-account-checked")
@@ -254,6 +257,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("delegate-stake")
@@ -284,7 +288,53 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
+        .subcommand(
+            SubCommand::with_name("redelegate-stake")
+                .about("Redelegate active stake to another vote account")
+                .arg(
+                    Arg::with_name("force")
+                        .long("force")
+                        .takes_value(false)
+                        .hidden(true) // Don't document this argument to discourage its use
+                        .help("Override vote account sanity checks (use carefully!)")
+                )
+                .arg(
+                    pubkey!(Arg::with_name("stake_account_pubkey")
+                        .index(1)
+                        .value_name("STAKE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "Existing delegated stake account that has been fully activated. \
+                        On success this stake account will be scheduled for deactivation and the rent-exempt balance \
+                        may be withdrawn once fully deactivated")
+                )
+                .arg(
+                    pubkey!(Arg::with_name("vote_account_pubkey")
+                        .index(2)
+                        .value_name("REDELEGATED_VOTE_ACCOUNT_ADDRESS")
+                        .required(true),
+                        "The vote account to which the stake will be redelegated")
+                )
+                .arg(
+                    Arg::with_name("redelegation_stake_account")
+                        .index(3)
+                        .value_name("REDELEGATION_STAKE_ACCOUNT")
+                        .takes_value(true)
+                        .required(true)
+                        .validator(is_valid_signer)
+                        .help("Stake account to create for the redelegation. \
+                               On success this stake account will be created and scheduled for activation with all \
+                               the stake in the existing stake account, exclusive of the rent-exempt balance retained \
+                               in the existing account")
+                )
+                .arg(stake_authority_arg())
+                .offline_args()
+                .nonce_args(false)
+                .arg(fee_payer_arg())
+                .arg(memo_arg())
+        )
+
         .subcommand(
             SubCommand::with_name("stake-authorize")
                 .about("Authorize a new signing keypair for the given stake account")
@@ -322,6 +372,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
                 )
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-authorize-checked")
@@ -362,6 +413,7 @@ impl StakeSubCommands for App<'_, '_> {
                         .help("Return signature immediately after submitting the transaction, instead of waiting for confirmations"),
                 )
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("deactivate-stake")
@@ -393,6 +445,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("split-stake")
@@ -435,6 +488,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("merge-stake")
@@ -459,6 +513,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("withdraw-stake")
@@ -500,6 +555,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .arg(fee_payer_arg())
                 .arg(custodian_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-set-lockup")
@@ -548,6 +604,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-set-lockup-checked")
@@ -598,6 +655,7 @@ impl StakeSubCommands for App<'_, '_> {
                 .nonce_args(false)
                 .arg(fee_payer_arg())
                 .arg(memo_arg())
+                .arg(compute_unit_price_arg())
         )
         .subcommand(
             SubCommand::with_name("stake-account")
@@ -713,6 +771,7 @@ pub fn parse_create_stake_account(
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::CreateStakeAccount {
@@ -739,6 +798,7 @@ pub fn parse_create_stake_account(
             memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             from: signer_info.index_of(from_pubkey).unwrap(),
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -753,6 +813,8 @@ pub fn parse_stake_delegate_stake(
         pubkey_of_signer(matches, "stake_account_pubkey", wallet_manager)?.unwrap();
     let vote_account_pubkey =
         pubkey_of_signer(matches, "vote_account_pubkey", wallet_manager)?.unwrap();
+    let (redelegation_stake_account, redelegation_stake_account_pubkey) =
+        signer_of(matches, "redelegation_stake_account", wallet_manager)?;
     let force = matches.is_present("force");
     let sign_only = matches.is_present(SIGN_ONLY_ARG.name);
     let dump_transaction_message = matches.is_present(DUMP_TRANSACTION_MESSAGE.name);
@@ -765,12 +827,13 @@ pub fn parse_stake_delegate_stake(
         signer_of(matches, NONCE_AUTHORITY_ARG.name, wallet_manager)?;
     let (fee_payer, fee_payer_pubkey) = signer_of(matches, FEE_PAYER_ARG.name, wallet_manager)?;
 
-    let mut bulk_signers = vec![stake_authority, fee_payer];
+    let mut bulk_signers = vec![stake_authority, fee_payer, redelegation_stake_account];
     if nonce_account.is_some() {
         bulk_signers.push(nonce_authority);
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::DelegateStake {
@@ -785,6 +848,8 @@ pub fn parse_stake_delegate_stake(
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            redelegation_stake_account_pubkey,
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -875,6 +940,7 @@ pub fn parse_stake_authorize(
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     let new_authorizations = new_authorizations
         .into_iter()
@@ -907,6 +973,7 @@ pub fn parse_stake_authorize(
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             custodian: custodian_pubkey.and_then(|_| signer_info.index_of(custodian_pubkey)),
             no_wait,
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -941,6 +1008,7 @@ pub fn parse_split_stake(
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::SplitStake {
@@ -956,6 +1024,7 @@ pub fn parse_split_stake(
             seed,
             lamports,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -988,6 +1057,7 @@ pub fn parse_merge_stake(
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::MergeStake {
@@ -1001,6 +1071,7 @@ pub fn parse_merge_stake(
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -1033,6 +1104,7 @@ pub fn parse_stake_deactivate_stake(
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::DeactivateStake {
@@ -1047,6 +1119,7 @@ pub fn parse_stake_deactivate_stake(
             memo,
             seed,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -1084,6 +1157,7 @@ pub fn parse_stake_withdraw_stake(
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::WithdrawStake {
@@ -1100,6 +1174,7 @@ pub fn parse_stake_withdraw_stake(
             seed,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
             custodian: custodian_pubkey.and_then(|_| signer_info.index_of(custodian_pubkey)),
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -1145,6 +1220,7 @@ pub fn parse_stake_set_lockup(
     }
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     Ok(CliCommandInfo {
         command: CliCommand::StakeSetLockup {
@@ -1167,6 +1243,7 @@ pub fn parse_stake_set_lockup(
             nonce_authority: signer_info.index_of(nonce_authority_pubkey).unwrap(),
             memo,
             fee_payer: signer_info.index_of(fee_payer_pubkey).unwrap(),
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -1235,6 +1312,7 @@ pub fn process_create_stake_account(
     memo: Option<&String>,
     fee_payer: SignerIndex,
     from: SignerIndex,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let stake_account = config.signers[stake_account];
     let stake_account_address = if let Some(seed) = seed {
@@ -1291,7 +1369,8 @@ pub fn process_create_stake_account(
                 lamports,
             ),
         }
-        .with_memo(memo);
+        .with_memo(memo)
+        .with_compute_unit_price(compute_unit_price);
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
                 ixs,
@@ -1383,6 +1462,7 @@ pub fn process_stake_authorize(
     memo: Option<&String>,
     fee_payer: SignerIndex,
     no_wait: bool,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let mut ixs = Vec::new();
     let custodian = custodian.map(|index| config.signers[index]);
@@ -1449,7 +1529,9 @@ pub fn process_stake_authorize(
             ));
         }
     }
-    ixs = ixs.with_memo(memo);
+    ixs = ixs
+        .with_memo(memo)
+        .with_compute_unit_price(compute_unit_price);
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
@@ -1517,6 +1599,7 @@ pub fn process_deactivate_stake_account(
     memo: Option<&String>,
     seed: Option<&String>,
     fee_payer: SignerIndex,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
@@ -1595,7 +1678,8 @@ pub fn process_deactivate_stake_account(
         let stake_authority = config.signers[stake_authority];
         stake_instruction::deactivate_stake(&stake_account_address, &stake_authority.pubkey())
     }]
-    .with_memo(memo);
+    .with_memo(memo)
+    .with_compute_unit_price(compute_unit_price);
 
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
@@ -1659,6 +1743,7 @@ pub fn process_withdraw_stake(
     memo: Option<&String>,
     seed: Option<&String>,
     fee_payer: SignerIndex,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let withdraw_authority = config.signers[withdraw_authority];
     let custodian = custodian.map(|index| config.signers[index]);
@@ -1682,7 +1767,8 @@ pub fn process_withdraw_stake(
             lamports,
             custodian.map(|signer| signer.pubkey()).as_ref(),
         )]
-        .with_memo(memo);
+        .with_memo(memo)
+        .with_compute_unit_price(compute_unit_price);
 
         if let Some(nonce_account) = &nonce_account {
             Message::new_with_nonce(
@@ -1755,6 +1841,7 @@ pub fn process_split_stake(
     split_stake_account_seed: &Option<String>,
     lamports: u64,
     fee_payer: SignerIndex,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let split_stake_account = config.signers[split_stake_account];
     let fee_payer = config.signers[fee_payer];
@@ -1828,6 +1915,7 @@ pub fn process_split_stake(
             seed,
         )
         .with_memo(memo)
+        .with_compute_unit_price(compute_unit_price)
     } else {
         stake_instruction::split(
             stake_account_pubkey,
@@ -1836,6 +1924,7 @@ pub fn process_split_stake(
             &split_stake_account_address,
         )
         .with_memo(memo)
+        .with_compute_unit_price(compute_unit_price)
     };
 
     let nonce_authority = config.signers[nonce_authority];
@@ -1896,6 +1985,7 @@ pub fn process_merge_stake(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let fee_payer = config.signers[fee_payer];
 
@@ -1941,7 +2031,8 @@ pub fn process_merge_stake(
         source_stake_account_pubkey,
         &stake_authority.pubkey(),
     )
-    .with_memo(memo);
+    .with_memo(memo)
+    .with_compute_unit_price(compute_unit_price);
 
     let nonce_authority = config.signers[nonce_authority];
 
@@ -2006,6 +2097,7 @@ pub fn process_stake_set_lockup(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
     let custodian = config.signers[custodian];
@@ -2015,7 +2107,8 @@ pub fn process_stake_set_lockup(
     } else {
         stake_instruction::set_lockup(stake_account_pubkey, lockup, &custodian.pubkey())
     }]
-    .with_memo(memo);
+    .with_memo(memo)
+    .with_compute_unit_price(compute_unit_price);
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
@@ -2414,11 +2507,29 @@ pub fn process_delegate_stake(
     nonce_authority: SignerIndex,
     memo: Option<&String>,
     fee_payer: SignerIndex,
+    redelegation_stake_account_pubkey: Option<&Pubkey>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     check_unique_pubkeys(
         (&config.signers[0].pubkey(), "cli keypair".to_string()),
         (stake_account_pubkey, "stake_account_pubkey".to_string()),
     )?;
+    if let Some(redelegation_stake_account_pubkey) = &redelegation_stake_account_pubkey {
+        check_unique_pubkeys(
+            (stake_account_pubkey, "stake_account_pubkey".to_string()),
+            (
+                redelegation_stake_account_pubkey,
+                "redelegation_stake_account".to_string(),
+            ),
+        )?;
+        check_unique_pubkeys(
+            (&config.signers[0].pubkey(), "cli keypair".to_string()),
+            (
+                redelegation_stake_account_pubkey,
+                "redelegation_stake_account".to_string(),
+            ),
+        )?;
+    }
     let stake_authority = config.signers[stake_authority];
 
     if !sign_only {
@@ -2471,12 +2582,23 @@ pub fn process_delegate_stake(
 
     let recent_blockhash = blockhash_query.get_blockhash(rpc_client, config.commitment)?;
 
-    let ixs = vec![stake_instruction::delegate_stake(
-        stake_account_pubkey,
-        &stake_authority.pubkey(),
-        vote_account_pubkey,
-    )]
-    .with_memo(memo);
+    let ixs = if let Some(redelegation_stake_account_pubkey) = &redelegation_stake_account_pubkey {
+        stake_instruction::redelegate(
+            stake_account_pubkey,
+            &stake_authority.pubkey(),
+            vote_account_pubkey,
+            redelegation_stake_account_pubkey,
+        )
+    } else {
+        vec![stake_instruction::delegate_stake(
+            stake_account_pubkey,
+            &stake_authority.pubkey(),
+            vote_account_pubkey,
+        )]
+    }
+    .with_memo(memo)
+    .with_compute_unit_price(compute_unit_price);
+
     let nonce_authority = config.signers[nonce_authority];
     let fee_payer = config.signers[fee_payer];
 
@@ -2626,6 +2748,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -2674,6 +2797,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2726,6 +2850,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2762,6 +2887,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -2795,6 +2921,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2834,6 +2961,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2870,6 +2998,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             },
@@ -2903,6 +3032,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -2942,6 +3072,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: true,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -2988,6 +3119,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3039,6 +3171,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3092,6 +3225,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3129,6 +3263,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3165,6 +3300,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3205,6 +3341,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3242,6 +3379,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3278,6 +3416,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3318,6 +3457,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: true,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3359,6 +3499,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -3404,6 +3545,7 @@ mod tests {
                     fee_payer: 1,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3459,6 +3601,7 @@ mod tests {
                     fee_payer: 1,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3500,6 +3643,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -3546,6 +3690,7 @@ mod tests {
                     fee_payer: 0,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3588,6 +3733,7 @@ mod tests {
                     fee_payer: 1,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3634,6 +3780,7 @@ mod tests {
                     fee_payer: 1,
                     custodian: None,
                     no_wait: false,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3684,6 +3831,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     from: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3724,6 +3872,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     from: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3763,6 +3912,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     from: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3835,6 +3985,7 @@ mod tests {
                     memo: None,
                     fee_payer: 0,
                     from: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     Presigner::new(&offline_pubkey, &offline_sig).into(),
@@ -3867,6 +4018,8 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -3898,6 +4051,8 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -3931,6 +4086,8 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -3965,6 +4122,8 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -3994,6 +4153,8 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    redelegation_stake_account_pubkey: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -4033,6 +4194,8 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 1,
+                    redelegation_stake_account_pubkey: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4081,6 +4244,8 @@ mod tests {
                     nonce_authority: 2,
                     memo: None,
                     fee_payer: 1,
+                    redelegation_stake_account_pubkey: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4117,10 +4282,58 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 1,
+                    redelegation_stake_account_pubkey: None,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
                     read_keypair_file(&fee_payer_keypair_file).unwrap().into()
+                ],
+            }
+        );
+
+        // Test RedelegateStake Subcommand (minimal test due to the significant implementation
+        // overlap with DelegateStake)
+        let (redelegation_stake_account_keypair_file, mut redelegation_stake_account_tmp_file) =
+            make_tmp_file();
+        let redelegation_stake_account_keypair = Keypair::new();
+        write_keypair(
+            &redelegation_stake_account_keypair,
+            redelegation_stake_account_tmp_file.as_file_mut(),
+        )
+        .unwrap();
+        let redelegation_stake_account_pubkey = redelegation_stake_account_keypair.pubkey();
+
+        let test_redelegate_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "redelegate-stake",
+            &stake_account_string,
+            &vote_account_string,
+            &redelegation_stake_account_keypair_file,
+        ]);
+        assert_eq!(
+            parse_command(&test_redelegate_stake, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::DelegateStake {
+                    stake_account_pubkey,
+                    vote_account_pubkey,
+                    stake_authority: 0,
+                    force: false,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::default(),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    fee_payer: 0,
+                    redelegation_stake_account_pubkey: Some(redelegation_stake_account_pubkey),
+                    compute_unit_price: None,
+                },
+                signers: vec![
+                    read_keypair_file(&default_keypair_file).unwrap().into(),
+                    read_keypair_file(&redelegation_stake_account_keypair_file)
+                        .unwrap()
+                        .into()
                 ],
             }
         );
@@ -4151,6 +4364,41 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
+                },
+                signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
+            }
+        );
+
+        // Test WithdrawStake Subcommand w/ ComputeUnitPrice
+        let test_withdraw_stake = test_commands.clone().get_matches_from(vec![
+            "test",
+            "withdraw-stake",
+            &stake_account_string,
+            &stake_account_string,
+            "42",
+            "--with-compute-unit-price",
+            "99",
+        ]);
+
+        assert_eq!(
+            parse_command(&test_withdraw_stake, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::WithdrawStake {
+                    stake_account_pubkey,
+                    destination_account_pubkey: stake_account_pubkey,
+                    amount: SpendAmount::Some(42_000_000_000),
+                    withdraw_authority: 0,
+                    custodian: None,
+                    sign_only: false,
+                    dump_transaction_message: false,
+                    blockhash_query: BlockhashQuery::All(blockhash_query::Source::Cluster),
+                    nonce_account: None,
+                    nonce_authority: 0,
+                    memo: None,
+                    seed: None,
+                    fee_payer: 0,
+                    compute_unit_price: Some(99),
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -4184,6 +4432,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4222,6 +4471,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4271,6 +4521,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 1,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&stake_authority_keypair_file)
@@ -4302,6 +4553,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -4329,6 +4581,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -4357,6 +4610,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4395,6 +4649,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -4423,6 +4678,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into()],
             }
@@ -4461,6 +4717,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 1,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4508,6 +4765,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 1,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4540,6 +4798,7 @@ mod tests {
                     memo: None,
                     seed: None,
                     fee_payer: 1,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4579,6 +4838,7 @@ mod tests {
                     seed: None,
                     lamports: 50_000_000_000,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     read_keypair_file(&default_keypair_file).unwrap().into(),
@@ -4645,6 +4905,7 @@ mod tests {
                     seed: None,
                     lamports: 50_000_000_000,
                     fee_payer: 1,
+                    compute_unit_price: None,
                 },
                 signers: vec![
                     Presigner::new(&stake_auth_pubkey, &stake_sig).into(),
@@ -4682,6 +4943,7 @@ mod tests {
                     nonce_authority: 0,
                     memo: None,
                     fee_payer: 0,
+                    compute_unit_price: None,
                 },
                 signers: vec![read_keypair_file(&default_keypair_file).unwrap().into(),],
             }

@@ -116,6 +116,7 @@ fn full_battery_tests(
         nonce_authority: optional_authority,
         memo: None,
         amount: SpendAmount::Some(sol_to_lamports(1000.0)),
+        compute_unit_price: None,
     };
 
     process_command(&config_payer).unwrap();
@@ -153,6 +154,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: index,
         memo: None,
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -173,6 +175,7 @@ fn full_battery_tests(
         memo: None,
         destination_account_pubkey: payee_pubkey,
         lamports: sol_to_lamports(100.0),
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
     check_balance!(
@@ -197,6 +200,7 @@ fn full_battery_tests(
         nonce_authority: index,
         memo: None,
         new_authority: new_authority.pubkey(),
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -205,6 +209,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: index,
         memo: None,
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap_err();
 
@@ -214,6 +219,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: 1,
         memo: None,
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -224,6 +230,7 @@ fn full_battery_tests(
         memo: None,
         destination_account_pubkey: payee_pubkey,
         lamports: sol_to_lamports(100.0),
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
     check_balance!(
@@ -302,6 +309,7 @@ fn test_create_account_with_seed() {
         nonce_authority: Some(authority_pubkey),
         memo: None,
         amount: SpendAmount::Some(sol_to_lamports(241.0)),
+        compute_unit_price: None,
     };
     process_command(&creator_config).unwrap();
     check_balance!(sol_to_lamports(241.0), &rpc_client, &nonce_address);
@@ -349,6 +357,7 @@ fn test_create_account_with_seed() {
         fee_payer: 0,
         derived_address_seed: None,
         derived_address_program_id: None,
+        compute_unit_price: None,
     };
     authority_config.output_format = OutputFormat::JsonCompact;
     let sign_only_reply = process_command(&authority_config).unwrap();
@@ -378,6 +387,7 @@ fn test_create_account_with_seed() {
         fee_payer: 0,
         derived_address_seed: None,
         derived_address_program_id: None,
+        compute_unit_price: None,
     };
     process_command(&submit_config).unwrap();
     check_balance!(sol_to_lamports(241.0), &rpc_client, &nonce_address);

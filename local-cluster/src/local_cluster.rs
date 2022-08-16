@@ -37,7 +37,7 @@ use {
         message::Message,
         poh_config::PohConfig,
         pubkey::Pubkey,
-        signature::{Keypair, Signer},
+        signature::{Keypair, KeypairInsecureClone, Signer},
         stake::{
             config as stake_config, instruction as stake_instruction,
             state::{Authorized, Lockup},
@@ -49,12 +49,13 @@ use {
     solana_streamer::socket::SocketAddrSpace,
     solana_vote_program::{
         vote_instruction,
-        vote_state::{VoteInit, VoteState},
+        vote_state::{self, VoteInit},
     },
     std::{
         collections::HashMap,
         io::{Error, ErrorKind, Result},
         iter,
+        ops::Deref,
         path::{Path, PathBuf},
         sync::{Arc, RwLock},
     },
@@ -203,10 +204,8 @@ impl LocalCluster {
                     if *in_genesis {
                         Some((
                             ValidatorVoteKeypairs {
-                                node_keypair: Keypair::from_bytes(&node_keypair.to_bytes())
-                                    .unwrap(),
-                                vote_keypair: Keypair::from_bytes(&vote_keypair.to_bytes())
-                                    .unwrap(),
+                                node_keypair: node_keypair.deref().clone(),
+                                vote_keypair: vote_keypair.deref().clone(),
                                 stake_keypair: Keypair::new(),
                             },
                             stake,
@@ -265,9 +264,8 @@ impl LocalCluster {
         let mut leader_config = safe_clone_config(&config.validator_configs[0]);
         leader_config.rpc_addrs = Some((leader_node.info.rpc, leader_node.info.rpc_pubsub));
         Self::sync_ledger_path_across_nested_config_fields(&mut leader_config, &leader_ledger_path);
-        let leader_keypair = Arc::new(Keypair::from_bytes(&leader_keypair.to_bytes()).unwrap());
-        let leader_vote_keypair =
-            Arc::new(Keypair::from_bytes(&leader_vote_keypair.to_bytes()).unwrap());
+        let leader_keypair = Arc::new(leader_keypair.clone());
+        let leader_vote_keypair = Arc::new(leader_vote_keypair.clone());
 
         let leader_server = Validator::new(
             leader_node,
@@ -282,7 +280,8 @@ impl LocalCluster {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        );
+        )
+        .expect("assume successful validator start");
 
         let mut validators = HashMap::new();
         let leader_info = ValidatorInfo {
@@ -315,7 +314,7 @@ impl LocalCluster {
             .map(|keypairs| {
                 (
                     keypairs.node_keypair.pubkey(),
-                    Arc::new(Keypair::from_bytes(&keypairs.vote_keypair.to_bytes()).unwrap()),
+                    Arc::new(keypairs.vote_keypair.clone()),
                 )
             })
             .collect();
@@ -426,7 +425,7 @@ impl LocalCluster {
         mut voting_keypair: Option<Arc<Keypair>>,
         socket_addr_space: SocketAddrSpace,
     ) -> Pubkey {
-        let (rpc, tpu) = self.entry_point_info.client_facing_addr();
+        let (rpc, tpu) = cluster_tests::get_client_facing_addr(&self.entry_point_info);
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
 
         // Must have enough tokens to fund vote account and set delegate
@@ -480,7 +479,8 @@ impl LocalCluster {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        );
+        )
+        .expect("assume successful validator start");
 
         let validator_pubkey = validator_keypair.pubkey();
         let validator_info = ClusterValidatorInfo::new(
@@ -512,7 +512,7 @@ impl LocalCluster {
     }
 
     pub fn transfer(&self, source_keypair: &Keypair, dest_pubkey: &Pubkey, lamports: u64) -> u64 {
-        let (rpc, tpu) = self.entry_point_info.client_facing_addr();
+        let (rpc, tpu) = cluster_tests::get_client_facing_addr(&self.entry_point_info);
         let client = ThinClient::new(rpc, tpu, self.connection_cache.clone());
         Self::transfer_with_client(&client, source_keypair, dest_pubkey, lamports)
     }
@@ -708,7 +708,7 @@ impl LocalCluster {
             (Ok(Some(stake_account)), Ok(Some(vote_account))) => {
                 match (
                     stake_state::stake_from(&stake_account),
-                    VoteState::from(&vote_account),
+                    vote_state::from(&vote_account),
                 ) {
                     (Some(stake_state), Some(vote_state)) => {
                         if stake_state.delegation.voter_pubkey != vote_account_pubkey
@@ -759,7 +759,7 @@ impl Cluster for LocalCluster {
 
     fn get_validator_client(&self, pubkey: &Pubkey) -> Option<ThinClient> {
         self.validators.get(pubkey).map(|f| {
-            let (rpc, tpu) = f.info.contact_info.client_facing_addr();
+            let (rpc, tpu) = cluster_tests::get_client_facing_addr(&f.info.contact_info);
             ThinClient::new(rpc, tpu, self.connection_cache.clone())
         })
     }
@@ -841,7 +841,8 @@ impl Cluster for LocalCluster {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        );
+        )
+        .expect("assume successful validator start");
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info
     }

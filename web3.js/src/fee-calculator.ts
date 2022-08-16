@@ -9,6 +9,8 @@ export const FeeCalculatorLayout = BufferLayout.nu64('lamportsPerSignature');
 
 /**
  * Calculator for transaction fees.
+ *
+ * @deprecated Deprecated since Solana v1.8.0.
  */
 export interface FeeCalculator {
   /** Cost in lamports to validate a signature. */

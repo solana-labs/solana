@@ -7,11 +7,10 @@ import {Connection} from '../src/connection';
 import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';
 import {Transaction, TransactionInstruction} from '../src/transaction';
-import {StakeProgram} from '../src/stake-program';
-import {SystemProgram} from '../src/system-program';
+import {StakeProgram, SystemProgram} from '../src/programs';
 import {Message} from '../src/message';
-import invariant from '../src/util/assert';
-import {toBuffer} from '../src/util/to-buffer';
+import invariant from '../src/utils/assert';
+import {toBuffer} from '../src/utils/to-buffer';
 import {helpers} from './mocks/rpc-http';
 import {url} from './url';
 

@@ -639,38 +639,6 @@ fn process_instruction(
         TEST_NESTED_INVOKE_TOO_DEEP => {
             let _ = do_nested_invokes(5, accounts);
         }
-        TEST_EXECUTABLE_LAMPORTS => {
-            msg!("Test executable lamports");
-            let mut accounts = accounts.to_vec();
-
-            // set account to executable and subtract lamports
-            accounts[ARGUMENT_INDEX].executable = true;
-            {
-                let mut lamports = (*accounts[ARGUMENT_INDEX].lamports).borrow_mut();
-                **lamports = (*lamports).saturating_sub(1);
-            }
-            // add lamports to dest account
-            {
-                let mut lamports = (*accounts[DERIVED_KEY1_INDEX].lamports).borrow_mut();
-                **lamports = (*lamports).saturating_add(1);
-            }
-
-            let instruction = create_instruction(
-                *program_id,
-                &[
-                    (accounts[ARGUMENT_INDEX].key, true, false),
-                    (accounts[DERIVED_KEY1_INDEX].key, true, false),
-                ],
-                vec![ADD_LAMPORTS, 0, 0, 0],
-            );
-            let _ = invoke(&instruction, &accounts);
-
-            // reset executable account
-            {
-                let mut lamports = (*accounts[ARGUMENT_INDEX].lamports).borrow_mut();
-                **lamports = (*lamports).saturating_add(1);
-            }
-        }
         TEST_CALL_PRECOMPILE => {
             msg!("Test calling precompiled program from cpi");
             let instruction =

@@ -38,7 +38,7 @@ use {
     solana_perf::recycler::enable_recycler_warming,
     solana_poh::poh_service,
     solana_rpc::{
-        rpc::{JsonRpcConfig, RpcBigtableConfig},
+        rpc::{JsonRpcConfig, RpcBigtableConfig, MAX_REQUEST_BODY_SIZE},
         rpc_pubsub_service::PubSubConfig,
     },
     solana_runtime::{
@@ -73,8 +73,12 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_validator::{
-        admin_rpc_service, bootstrap, dashboard::Dashboard, ledger_lockfile, lock_ledger,
-        new_spinner_progress_bar, println_name_value, redirect_stderr_to_file,
+        admin_rpc_service,
+        admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
+        bootstrap,
+        dashboard::Dashboard,
+        ledger_lockfile, lock_ledger, new_spinner_progress_bar, println_name_value,
+        redirect_stderr_to_file,
     },
     std::{
         collections::{HashSet, VecDeque},
@@ -469,6 +473,7 @@ pub fn main() {
     let default_rocksdb_fifo_shred_storage_size =
         &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
     let default_tpu_connection_pool_size = &DEFAULT_TPU_CONNECTION_POOL_SIZE.to_string();
+    let default_rpc_max_request_body_size = &MAX_REQUEST_BODY_SIZE.to_string();
 
     let matches = App::new(crate_name!()).about(crate_description!())
         .version(solana_version::version!())
@@ -972,6 +977,11 @@ pub fn main() {
                 .help("Disable reporting of OS CPU statistics.")
         )
         .arg(
+            Arg::with_name("no_os_disk_stats_reporting")
+                .long("no-os-disk-stats-reporting")
+                .help("Disable reporting of OS disk statistics.")
+        )
+        .arg(
             Arg::with_name("accounts-hash-interval-slots")
                 .long("accounts-hash-interval-slots")
                 .value_name("NUMBER")
@@ -1227,7 +1237,18 @@ pub fn main() {
                 .takes_value(true)
                 .default_value(default_tpu_connection_pool_size)
                 .validator(is_parsable::<usize>)
-                .help("Controls the TPU connection pool size per remote addresss"),
+                .help("Controls the TPU connection pool size per remote address"),
+        )
+        .arg(
+            Arg::with_name("staked_nodes_overrides")
+                .long("staked-nodes-overrides")
+                .value_name("PATH")
+                .takes_value(true)
+                .help("Provide path to a yaml file with custom overrides for stakes of specific
+                            identities. Overriding the amount of stake this validator considers
+                            as valid for other peers in network. The stake amount is used for calculating
+                            number of QUIC streams permitted from the peer and vote packet sender stage.
+                            Format of the file: `staked_map_id: {<pubkey>: <SOL stake amount>}"),
         )
         .arg(
             Arg::with_name("rocksdb_max_compaction_jitter")
@@ -1461,6 +1482,15 @@ pub fn main() {
                 .takes_value(false)
                 .requires("enable_rpc_transaction_history")
                 .help("Verifies blockstore roots on boot and fixes any gaps"),
+        )
+        .arg(
+            Arg::with_name("rpc_max_request_body_size")
+                .long("rpc-max-request-body-size")
+                .value_name("BYTES")
+                .takes_value(true)
+                .validator(is_parsable::<usize>)
+                .default_value(default_rpc_max_request_body_size)
+                .help("The maximum request body size accepted by rpc service"),
         )
         .arg(
             Arg::with_name("enable_accountsdb_repl")
@@ -1910,6 +1940,19 @@ pub fn main() {
             .after_help("Note: the new filter only applies to the currently running validator instance")
         )
         .subcommand(
+            SubCommand::with_name("staked-nodes-overrides")
+            .about("Overrides stakes of specific node identities.")
+            .arg(
+                Arg::with_name("path")
+                    .value_name("PATH")
+                    .takes_value(true)
+                    .required(true)
+                    .help("Provide path to a file with custom overrides for stakes of specific validator identities."),
+            )
+            .after_help("Note: the new staked nodes overrides only applies to the \
+                         currently running validator instance")
+        )
+        .subcommand(
             SubCommand::with_name("wait-for-restart-window")
             .about("Monitor the validator for a good time to restart")
             .arg(
@@ -2093,6 +2136,30 @@ pub fn main() {
             monitor_validator(&ledger_path);
             return;
         }
+        ("staked-nodes-overrides", Some(subcommand_matches)) => {
+            if !subcommand_matches.is_present("path") {
+                println!(
+                    "staked-nodes-overrides requires argument of location of the configuration"
+                );
+                exit(1);
+            }
+
+            let path = subcommand_matches.value_of("path").unwrap();
+
+            let admin_client = admin_rpc_service::connect(&ledger_path);
+            admin_rpc_service::runtime()
+                .block_on(async move {
+                    admin_client
+                        .await?
+                        .set_staked_nodes_overrides(path.to_string())
+                        .await
+                })
+                .unwrap_or_else(|err| {
+                    println!("setStakedNodesOverrides request failed: {}", err);
+                    exit(1);
+                });
+            return;
+        }
         ("set-identity", Some(subcommand_matches)) => {
             let require_tower = subcommand_matches.is_present("require_tower");
 
@@ -2222,6 +2289,24 @@ pub fn main() {
             )]
         });
     let authorized_voter_keypairs = Arc::new(RwLock::new(authorized_voter_keypairs));
+
+    let staked_nodes_overrides_path = matches
+        .value_of("staked_nodes_overrides")
+        .map(str::to_string);
+    let staked_nodes_overrides = Arc::new(RwLock::new(
+        match staked_nodes_overrides_path {
+            None => StakedNodesOverrides::default(),
+            Some(p) => load_staked_nodes_overrides(&p).unwrap_or_else(|err| {
+                error!("Failed to load stake-nodes-overrides from {}: {}", &p, err);
+                clap::Error::with_description(
+                    "Failed to load configuration of stake-nodes-overrides argument",
+                    clap::ErrorKind::InvalidValue,
+                )
+                .exit()
+            }),
+        }
+        .staked_map_id,
+    ));
 
     let init_complete_file = matches.value_of("init_complete_file");
 
@@ -2568,6 +2653,11 @@ pub fn main() {
             rpc_niceness_adj: value_t_or_exit!(matches, "rpc_niceness_adj", i8),
             account_indexes: account_indexes.clone(),
             rpc_scan_and_fix_roots: matches.is_present("rpc_scan_and_fix_roots"),
+            max_request_body_size: Some(value_t_or_exit!(
+                matches,
+                "rpc_max_request_body_size",
+                usize
+            )),
         },
         geyser_plugin_config_files,
         rpc_addrs: value_t!(matches, "rpc_port", u16).ok().map(|rpc_port| {
@@ -2641,6 +2731,7 @@ pub fn main() {
         no_os_memory_stats_reporting: matches.is_present("no_os_memory_stats_reporting"),
         no_os_network_stats_reporting: matches.is_present("no_os_network_stats_reporting"),
         no_os_cpu_stats_reporting: matches.is_present("no_os_cpu_stats_reporting"),
+        no_os_disk_stats_reporting: matches.is_present("no_os_disk_stats_reporting"),
         poh_pinned_cpu_core: value_of(&matches, "poh_pinned_cpu_core")
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
@@ -2659,6 +2750,7 @@ pub fn main() {
             ..RuntimeConfig::default()
         },
         enable_quic_servers,
+        staked_nodes_overrides: staked_nodes_overrides.clone(),
         ..ValidatorConfig::default()
     };
 
@@ -2929,6 +3021,7 @@ pub fn main() {
             authorized_voter_keypairs: authorized_voter_keypairs.clone(),
             post_init: admin_service_post_init.clone(),
             tower_storage: validator_config.tower_storage.clone(),
+            staked_nodes_overrides,
         },
     );
 
@@ -3083,7 +3176,11 @@ pub fn main() {
         socket_addr_space,
         tpu_use_quic,
         tpu_connection_pool_size,
-    );
+    )
+    .unwrap_or_else(|e| {
+        error!("Failed to start validator: {:?}", e);
+        exit(1);
+    });
     *admin_service_post_init.write().unwrap() =
         Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
             bank_forks: validator.bank_forks.clone(),

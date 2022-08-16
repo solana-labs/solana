@@ -564,25 +564,6 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
     env::set_var("OBJDUMP", llvm_bin.join("llvm-objdump"));
     env::set_var("OBJCOPY", llvm_bin.join("llvm-objcopy"));
 
-    let rustflags = env::var("RUSTFLAGS").ok();
-    let mut rustflags = Cow::Borrowed(rustflags.as_deref().unwrap_or_default());
-    if config.remap_cwd {
-        rustflags = Cow::Owned(format!("{} -Zremap-cwd-prefix=", &rustflags));
-    }
-    if config.debug {
-        // Replace with -Zsplit-debuginfo=packed when stabilized.
-        rustflags = Cow::Owned(format!("{} -g", &rustflags));
-    }
-    if let Cow::Owned(flags) = rustflags {
-        env::set_var("RUSTFLAGS", &flags);
-    }
-    if config.verbose {
-        debug!(
-            "RUSTFLAGS=\"{}\"",
-            env::var("RUSTFLAGS").ok().unwrap_or_default()
-        );
-    }
-
     // RUSTC variable overrides cargo +<toolchain> mechanism of
     // selecting the rust compiler and makes cargo run a rust compiler
     // other than the one linked in BPF toolchain. We have to prevent
@@ -593,15 +574,40 @@ fn build_sbf_package(config: &Config, target_directory: &Path, package: &cargo_m
         );
         env::remove_var("RUSTC")
     }
-
-    let mut target_rustflags = env::var("CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS")
-        .ok()
-        .unwrap_or_default();
+    let cargo_target = if config.arch == "bpf" {
+        "CARGO_TARGET_BPFEL_UNKNOWN_UNKNOWN_RUSTFLAGS"
+    } else {
+        "CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS"
+    };
+    let rustflags = env::var("RUSTFLAGS").ok().unwrap_or_default();
+    if env::var("RUSTFLAGS").is_ok() {
+        warn!(
+            "Removed RUSTFLAGS from cargo environment, because it overrides {}.",
+            cargo_target,
+        );
+        env::remove_var("RUSTFLAGS")
+    }
+    let target_rustflags = env::var(cargo_target).ok();
+    let mut target_rustflags = Cow::Borrowed(target_rustflags.as_deref().unwrap_or_default());
+    target_rustflags = Cow::Owned(format!("{} {}", &rustflags, &target_rustflags));
+    if config.remap_cwd {
+        target_rustflags = Cow::Owned(format!("{} -Zremap-cwd-prefix=", &target_rustflags));
+    }
+    if config.debug {
+        // Replace with -Zsplit-debuginfo=packed when stabilized.
+        target_rustflags = Cow::Owned(format!("{} -g", &target_rustflags));
+    }
     if config.arch == "sbfv2" {
-        target_rustflags = format!("{} {}", "-C target_cpu=sbfv2", target_rustflags);
-        env::set_var(
-            "CARGO_TARGET_SBF_SOLANA_SOLANA_RUSTFLAGS",
-            &target_rustflags,
+        target_rustflags = Cow::Owned(format!("{} -C target_cpu=sbfv2", &target_rustflags));
+    }
+    if let Cow::Owned(flags) = target_rustflags {
+        env::set_var(cargo_target, &flags);
+    }
+    if config.verbose {
+        debug!(
+            "{}=\"{}\"",
+            cargo_target,
+            env::var(cargo_target).ok().unwrap_or_default(),
         );
     }
 
@@ -826,7 +832,7 @@ fn main() {
 
     // The following line is scanned by CI configuration script to
     // separate cargo caches according to the version of sbf-tools.
-    let sbf_tools_version = "v1.28";
+    let sbf_tools_version = "v1.29";
     let version = format!("{}\nsbf-tools {}", crate_version!(), sbf_tools_version);
     let matches = clap::Command::new(crate_name!())
         .about(crate_description!())

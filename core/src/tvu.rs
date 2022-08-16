@@ -129,7 +129,7 @@ impl Tvu {
         accounts_background_request_sender: AbsRequestSender,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
@@ -152,6 +152,7 @@ impl Tvu {
             fetch_sender,
             tvu_config.shred_version,
             bank_forks.clone(),
+            cluster_info.clone(),
             exit,
         );
 
@@ -287,7 +288,7 @@ impl Tvu {
             drop_bank_sender,
             block_metadata_notifier,
             log_messages_bytes_limit,
-        );
+        )?;
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
             LedgerCleanupService::new(
@@ -300,7 +301,7 @@ impl Tvu {
             )
         });
 
-        Tvu {
+        Ok(Tvu {
             fetch_stage,
             shred_sigverify,
             retransmit_stage,
@@ -312,7 +313,7 @@ impl Tvu {
             voting_service,
             warm_quic_cache_service,
             drop_bank_service,
-        }
+        })
     }
 
     pub fn join(self) -> thread::Result<()> {
@@ -449,7 +450,8 @@ pub mod tests {
             AbsRequestSender::default(),
             None,
             &Arc::new(ConnectionCache::default()),
-        );
+        )
+        .expect("assume success");
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
         poh_service.join().unwrap();

@@ -1,5 +1,7 @@
 use {
-    crate::unprocessed_packet_batches::{self, ImmutableDeserializedPacket},
+    crate::{
+        immutable_deserialized_packet::ImmutableDeserializedPacket, unprocessed_packet_batches,
+    },
     solana_perf::packet::Packet,
     solana_runtime::{
         bank::Bank,
