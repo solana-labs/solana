@@ -26,7 +26,7 @@ function Home() {
                     <div className="card__header">
                       <h3>
                         <Translate description="start-building">
-                          ⛏ Start Building
+                          ⛏ Start Developing
                         </Translate>
                       </h3>
                     </div>
@@ -34,7 +34,7 @@ function Home() {
                       <p>
                         <Translate description="get-started-building">
                           Get started building your decentralized app or
-                          marketplace.
+                          marketplace with Solana.
                         </Translate>
                       </p>
                     </div>
@@ -129,7 +129,7 @@ function Home() {
                 </Link>
               </div>
               <div className={clsx("col col--4", styles.feature)}>
-                <Link className="navbar__link" to="cluster/overview">
+                <Link className="navbar__link" to="introduction">
                   <div className="card">
                     <div className="card__header">
                       <h3>
