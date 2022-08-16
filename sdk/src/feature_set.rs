@@ -510,6 +510,10 @@ pub mod vote_state_update_root_fix {
     solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
 }
 
+pub mod split_banking_threads {
+    solana_sdk::declare_id!("2D61LuTyDUJxERen6zWq8x5weqq9Yvk6cA1ffPx66aV6");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -632,6 +636,7 @@ lazy_static! {
         (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
         (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
         (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
+        (split_banking_threads::id(), "split out voting and tx processing threads in banking stage and consolidate votes when dealing with VoteStateUpdate"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

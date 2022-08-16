@@ -57,7 +57,7 @@ use {
             Slot, DEFAULT_TICKS_PER_SLOT, MAX_PROCESSING_AGE, MAX_TRANSACTION_FORWARDING_DELAY,
             MAX_TRANSACTION_FORWARDING_DELAY_GPU,
         },
-        feature_set::allow_votes_to_directly_update_vote_state,
+        feature_set::{allow_votes_to_directly_update_vote_state, split_banking_threads},
         pubkey::Pubkey,
         saturating_add_assign,
         timing::{duration_as_ms, timestamp, AtomicInterval},
@@ -692,12 +692,11 @@ impl BankingStage {
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
         let bank = poh_recorder.read().unwrap().bank();
-        // TODO: add a secondary feature flag and rework this to be able to hot swap into the new
-        // data structure
         let split_voting_threads = bank
             .map(|bank| {
                 bank.feature_set
                     .is_active(&allow_votes_to_directly_update_vote_state::id())
+                    && bank.feature_set.is_active(&split_banking_threads::id())
             })
             .unwrap_or(false);
         // Many banks that process transactions in parallel.
@@ -710,7 +709,8 @@ impl BankingStage {
                         (
                             verified_vote_receiver.clone(),
                             (
-                                split_voting_threads.then(|| latest_unprocessed_votes.clone()),
+                                split_voting_threads,
+                                Some(latest_unprocessed_votes.clone()),
                                 ThreadType::Voting(VoteSource::Gossip),
                             ),
                         )
@@ -718,11 +718,15 @@ impl BankingStage {
                     1 => (
                         tpu_verified_vote_receiver.clone(),
                         (
-                            split_voting_threads.then(|| latest_unprocessed_votes.clone()),
+                            split_voting_threads,
+                            Some(latest_unprocessed_votes.clone()),
                             ThreadType::Voting(VoteSource::Tpu),
                         ),
                     ),
-                    _ => (verified_receiver.clone(), (None, ThreadType::Transactions)),
+                    _ => (
+                        verified_receiver.clone(),
+                        (split_voting_threads, None, ThreadType::Transactions),
+                    ),
                 };
 
                 let poh_recorder = poh_recorder.clone();
@@ -1323,7 +1327,7 @@ impl BankingStage {
         log_messages_bytes_limit: Option<usize>,
         connection_cache: Arc<ConnectionCache>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        transaction_storage_options: (Option<Arc<LatestUnprocessedVotes>>, ThreadType),
+        transaction_storage_options: (bool, Option<Arc<LatestUnprocessedVotes>>, ThreadType),
     ) {
         let recorder = poh_recorder.read().unwrap().recorder();
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1335,16 +1339,25 @@ impl BankingStage {
         let mut last_metrics_update = Instant::now();
 
         let mut unprocessed_transaction_storage = match transaction_storage_options {
-            (Some(latest_unprocessed_votes), ThreadType::Voting(vote_source)) => {
+            (true, Some(latest_unprocessed_votes), ThreadType::Voting(vote_source)) => {
                 UnprocessedTransactionStorage::VoteStorage(latest_unprocessed_votes, vote_source)
             }
-            (_, thread_type) => UnprocessedTransactionStorage::TransactionStorage(
+            (_, _, thread_type) => UnprocessedTransactionStorage::TransactionStorage(
                 UnprocessedPacketBatches::with_capacity(batch_limit),
                 thread_type,
             ),
         };
 
         loop {
+            // Hotswap
+            unprocessed_transaction_storage = match unprocessed_transaction_storage {
+                UnprocessedTransactionStorage::TransactionStorage(
+                    unprocessed_packet_batches,
+                    ThreadType::Voting(vote_source),
+                ) => UnprocessedTransactionStorage::VoteStorage(latest_unprocessed_votes, vote_source),
+                _ => unprocessed_transaction_storage,
+            };
+
             let my_pubkey = cluster_info.id();
             if !unprocessed_transaction_storage.is_empty()
                 || last_metrics_update.elapsed() >= SLOT_BOUNDARY_CHECK_PERIOD
@@ -4815,11 +4828,11 @@ mod tests {
             mint_keypair,
             ..
         } = create_slow_genesis_config(10000);
-        // TODO: add second feature flag and activate that here as well
         activate_feature(
             &mut genesis_config,
-            feature_set::allow_votes_to_directly_update_vote_state::id(),
+            allow_votes_to_directly_update_vote_state::id(),
         );
+        activate_feature(&mut genesis_config, split_banking_threads::id());
         let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
         let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
         let bank = Arc::new(bank_forks.read().unwrap().get(0).unwrap());
@@ -4861,10 +4874,10 @@ mod tests {
 
             let keypairs = (0..100).map(|_| Keypair::new()).collect_vec();
             let vote_keypairs = (0..100).map(|_| Keypair::new()).collect_vec();
-            for i in 0..100_usize {
+            for keypair in keypairs.iter() {
                 bank.process_transaction(&system_transaction::transfer(
                     &mint_keypair,
-                    &keypairs[i].pubkey(),
+                    &keypair.pubkey(),
                     20,
                     start_hash,
                 ))
@@ -4944,4 +4957,7 @@ mod tests {
         }
         Blockstore::destroy(ledger_path.path()).unwrap();
     }
+
+    #[test]
+    fn test_unprocessed_transaction_storage_hotswap() {}
 }
