@@ -176,6 +176,7 @@ fn get_rpc_peers(
     blacklist_timeout: &Instant,
     retry_reason: &mut Option<String>,
     bootstrap_config: &RpcBootstrapConfig,
+    blacklist_reset: &mut bool,
 ) -> Option<Vec<ContactInfo>> {
     let shred_version = validator_config
         .expected_shred_version
@@ -239,6 +240,7 @@ fn get_rpc_peers(
             if !blacklisted_rpc_nodes.is_empty() && blacklist_timeout.elapsed().as_secs() > 60 {
                 // If all nodes are blacklisted and no additional nodes are discovered after 60 seconds,
                 // remove the blacklist and try them all again
+                *blacklist_reset = true;
                 blacklisted_rpc_nodes.clear();
                 Some("Blacklist timeout expired".to_owned())
             } else {
@@ -511,6 +513,7 @@ pub fn rpc_bootstrap(
     }
 
     let blacklisted_rpc_nodes = RwLock::new(HashSet::new());
+    let mut blacklist_reset = false;
     let mut gossip = None;
     let mut vetted_rpc_nodes: Vec<RpcNodeConnectionDetails> = vec![];
     let mut download_abort_count = 0;
@@ -556,6 +559,7 @@ pub fn rpc_bootstrap(
                 validator_config,
                 &mut blacklisted_rpc_nodes.write().unwrap(),
                 &bootstrap_config,
+                &mut blacklist_reset,
             );
             if rpc_node_details_vec.is_empty() {
                 return;
@@ -675,7 +679,10 @@ pub fn rpc_bootstrap(
                     rpc_node_connection_details
                 })
                 .filter(|rpc_node_connection_details| {
-                    if rpc_node_connection_details.download_speed >= MINIMUM_VIABLE_DOWNLOAD_SPEED {
+                    if blacklist_reset
+                        || rpc_node_connection_details.download_speed
+                            >= MINIMUM_VIABLE_DOWNLOAD_SPEED
+                    {
                         num_viable_nodes_found += 1;
                         if rpc_node_connection_details.download_speed >= SUPER_NODE_DOWNLOAD_SPEED {
                             super_node_found = true;
@@ -760,6 +767,7 @@ fn get_rpc_nodes(
     validator_config: &ValidatorConfig,
     blacklisted_rpc_nodes: &mut HashSet<Pubkey>,
     bootstrap_config: &RpcBootstrapConfig,
+    blacklist_reset: &mut bool,
 ) -> Vec<GetRpcNodeResult> {
     let mut blacklist_timeout = Instant::now();
     let mut newer_cluster_snapshot_timeout = None;
@@ -775,6 +783,7 @@ fn get_rpc_nodes(
             &blacklist_timeout,
             &mut retry_reason,
             bootstrap_config,
+            blacklist_reset,
         );
         if rpc_peers.is_none() {
             continue;
