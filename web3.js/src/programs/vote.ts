@@ -410,4 +410,25 @@ export class VoteProgram {
       data,
     });
   }
+
+  /**
+   * Generate a transaction to withdraw safely from a Vote account.
+   *
+   * This function was created as a safeguard for vote accounts running validators, `safeWithdraw`
+   * checks that the withdraw amount will not exceed the specified balance while leaving enough left
+   * to cover rent. If you wish to close the vote account by withdrawing the full amount, call the
+   * `withdraw` method directly.
+   */
+  static safeWithdraw(
+    params: WithdrawFromVoteAccountParams,
+    currentVoteAccountBalance: number,
+    rentExemptMinimum: number,
+  ): Transaction {
+    if (params.lamports > currentVoteAccountBalance - rentExemptMinimum) {
+      throw new Error(
+        'Withdraw will leave vote account with insuffcient funds.',
+      );
+    }
+    return VoteProgram.withdraw(params);
+  }
 }
