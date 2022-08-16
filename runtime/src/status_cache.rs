@@ -221,30 +221,15 @@ impl<T: Serialize + Clone> StatusCache<T> {
             .for_each(|(_, status)| status.lock().unwrap().clear());
     }
 
-    // returns the statuses for each slot in the slots provided
-    pub fn slot_deltas(&self, slots: &[Slot]) -> Vec<SlotDelta<T>> {
-        let empty = Arc::new(Mutex::new(HashMap::new()));
-        slots
-            .iter()
-            .map(|slot| {
-                (
-                    *slot,
-                    self.roots.contains(slot),
-                    Arc::clone(self.slot_deltas.get(slot).unwrap_or(&empty)),
-                )
-            })
-            .collect()
-    }
-
     /// Get the statuses for all the root slots
     pub fn root_slot_deltas(&self) -> Vec<SlotDelta<T>> {
-        self.roots
+        self.roots()
             .iter()
-            .map(|slot| {
+            .map(|root| {
                 (
-                    *slot,
-                    true,
-                    self.slot_deltas.get(slot).cloned().unwrap_or_default(),
+                    *root,
+                    true, // <-- is_root
+                    self.slot_deltas.get(root).cloned().unwrap_or_default(),
                 )
             })
             .collect()
@@ -444,10 +429,11 @@ mod tests {
         let blockhash = hash(Hash::default().as_ref());
         status_cache.clear();
         status_cache.insert(&blockhash, &sig, 0, ());
-        let slot_deltas = status_cache.slot_deltas(&[0]);
+        assert!(status_cache.roots().contains(&0));
+        let slot_deltas = status_cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
-        let slot_deltas = cache.slot_deltas(&[0]);
+        let slot_deltas = cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
     }
@@ -464,10 +450,9 @@ mod tests {
         for i in 0..(MAX_CACHE_ENTRIES + 1) {
             status_cache.add_root(i as u64);
         }
-        let slots: Vec<_> = (0..MAX_CACHE_ENTRIES as u64 + 1).collect();
         assert_eq!(status_cache.slot_deltas.len(), 1);
         assert!(status_cache.slot_deltas.get(&1).is_some());
-        let slot_deltas = status_cache.slot_deltas(&slots);
+        let slot_deltas = status_cache.root_slot_deltas();
         let cache = StatusCache::from_slot_deltas(&slot_deltas);
         assert_eq!(cache, status_cache);
     }
