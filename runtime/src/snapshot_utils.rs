@@ -1823,6 +1823,9 @@ fn verify_slot_deltas_structural(
         }
     }
 
+    // detect serious logic error for future careless changes. :)
+    assert_eq!(slots_seen_so_far.len(), slot_deltas.len());
+
     Ok(VerifySlotDeltasStructuralInfo {
         slots: slots_seen_so_far,
     })
