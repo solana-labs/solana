@@ -558,6 +558,7 @@
 extern crate self as solana_program;
 
 pub mod account_info;
+pub mod alt_bn128;
 pub(crate) mod atomic_u64;
 pub mod blake3;
 pub mod borsh;

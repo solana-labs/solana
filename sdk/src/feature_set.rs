@@ -415,6 +415,10 @@ pub mod sign_repair_requests {
     solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
 }
 
+pub mod alt_bn128_syscall_enabled {
+    solana_sdk::declare_id!("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXALTBN128");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -513,6 +517,7 @@ lazy_static! {
         (preserve_rent_epoch_for_rent_exempt_accounts::id(), "preserve rent epoch for rent exempt accounts #26479"),
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (sign_repair_requests::id(), "sign repair requests #26834"),
+        (alt_bn128_syscall_enabled::id(), "add alt_bn128 syscalls"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

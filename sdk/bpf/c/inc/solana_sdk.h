@@ -3,6 +3,7 @@
  * @brief Solana C-based BPF program types and utility functions
  */
 
+#include <sol/alt_bn128.h>
 #include <sol/assert.h>
 #include <sol/blake3.h>
 #include <sol/cpi.h>
