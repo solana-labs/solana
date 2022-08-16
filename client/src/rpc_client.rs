@@ -3904,11 +3904,18 @@ impl RpcClient {
     pub fn get_token_largest_accounts(
         &self,
         mint: &Pubkey,
+    ) -> ClientResult<Vec<RpcTokenAccountBalance>> {
+        self.invoke((self.rpc_client.as_ref()).get_token_largest_accounts(mint))
+    }
+
+    pub fn get_token_largest_accounts_with_commitment(
+        &self,
+        mint: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<Vec<RpcTokenAccountBalance>> {
         self.invoke(
-            self.rpc_client
-                .get_token_largest_accounts(mint, commitment_config),
+            (self.rpc_client.as_ref())
+                .get_token_largest_accounts_with_commitment(mint, commitment_config),
         )
     }
 

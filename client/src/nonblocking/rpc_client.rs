@@ -5019,6 +5019,16 @@ impl RpcClient {
     pub async fn get_token_largest_accounts(
         &self,
         mint: &Pubkey,
+    ) -> ClientResult<Vec<RpcTokenAccountBalance>> {
+        Ok(self
+            .get_token_largest_accounts_with_commitment(mint, self.commitment())
+            .await?
+            .value)
+    }
+
+    pub async fn get_token_largest_accounts_with_commitment(
+        &self,
+        mint: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> RpcResult<Vec<RpcTokenAccountBalance>> {
         self.send(
