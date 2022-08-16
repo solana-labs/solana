@@ -11,13 +11,13 @@ use {
             AncestorHashesRepairType, AncestorHashesResponse, RepairProtocol, ServeRepair,
         },
     },
-    bincode::serialize,
+    bincode::{deserialize_from, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
     dashmap::{mapref::entry::Entry::Occupied, DashMap},
     solana_gossip::{cluster_info::ClusterInfo, ping_pong::Pong},
     solana_ledger::blockstore::Blockstore,
     solana_perf::{
-        packet::{deserialize_from_with_limit, Packet, PacketBatch},
+        packet::{Packet, PacketBatch},
         recycler::Recycler,
     },
     solana_runtime::bank::Bank,
@@ -352,7 +352,7 @@ impl AncestorHashesService {
             }
         };
         let mut cursor = Cursor::new(packet_data);
-        let response = match deserialize_from_with_limit(&mut cursor) {
+        let response = match deserialize_from(&mut cursor) {
             Ok(response) => response,
             Err(_) => {
                 stats.invalid_packets += 1;
@@ -363,7 +363,7 @@ impl AncestorHashesService {
         match response {
             AncestorHashesResponse::Hashes(ref hashes) => {
                 // deserialize trailing nonce
-                let nonce = match deserialize_from_with_limit(&mut cursor) {
+                let nonce = match deserialize_from(&mut cursor) {
                     Ok(nonce) => nonce,
                     Err(_) => {
                         stats.invalid_packets += 1;

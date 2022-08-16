@@ -740,19 +740,14 @@ impl ServeRepair {
         stats: &mut ServeRepairStats,
     ) {
         let sign_repairs_epoch = Self::sign_repair_requests_activated_epoch(root_bank);
-<<<<<<< HEAD
+        let check_ping_ancestor_request_epoch =
+            Self::check_ping_ancestor_requests_activated_epoch(root_bank);
         let (identity_keypair, socket_addr_space) = {
             let me_r = me.read().unwrap();
             let keypair = me_r.cluster_info.keypair().clone();
             let socket_addr_space = *me_r.cluster_info.socket_addr_space();
             (keypair, socket_addr_space)
         };
-=======
-        let check_ping_ancestor_request_epoch =
-            Self::check_ping_ancestor_requests_activated_epoch(root_bank);
-        let identity_keypair = self.cluster_info.keypair().clone();
-        let socket_addr_space = *self.cluster_info.socket_addr_space();
->>>>>>> 370de8129 (ancestor hashes socket ping/pong support (#26866))
         let my_id = identity_keypair.pubkey();
         let mut pending_pings = Vec::default();
 
@@ -1981,15 +1976,12 @@ mod tests {
 
     #[test]
     fn test_run_ancestor_hashes() {
-<<<<<<< HEAD
-=======
         fn deserialize_ancestor_hashes_response(packet: &Packet) -> AncestorHashesResponse {
             packet
                 .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
                 .unwrap()
         }
 
->>>>>>> 370de8129 (ancestor hashes socket ping/pong support (#26866))
         solana_logger::setup();
         let recycler = PacketBatchRecycler::default();
         let ledger_path = get_tmp_ledger_path!();
@@ -2018,12 +2010,6 @@ mod tests {
             .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-<<<<<<< HEAD
-            let ancestor_hashes_response: AncestorHashesResponseVersion = packet
-                .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
-                .unwrap();
-            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
-=======
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             match ancestor_hashes_response {
                 AncestorHashesResponse::Hashes(hashes) => {
@@ -2033,7 +2019,6 @@ mod tests {
                     panic!("unexpected response: {:?}", &ancestor_hashes_response);
                 }
             }
->>>>>>> 370de8129 (ancestor hashes socket ping/pong support (#26866))
 
             // `slot + num_slots - 1` is not marked duplicate confirmed so nothing should return
             // empty
@@ -2047,12 +2032,6 @@ mod tests {
             .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-<<<<<<< HEAD
-            let ancestor_hashes_response: AncestorHashesResponseVersion = packet
-                .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
-                .unwrap();
-            assert!(ancestor_hashes_response.into_slot_hashes().is_empty());
-=======
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             match ancestor_hashes_response {
                 AncestorHashesResponse::Hashes(hashes) => {
@@ -2062,7 +2041,6 @@ mod tests {
                     panic!("unexpected response: {:?}", &ancestor_hashes_response);
                 }
             }
->>>>>>> 370de8129 (ancestor hashes socket ping/pong support (#26866))
 
             // Set duplicate confirmed
             let mut expected_ancestors = Vec::with_capacity(num_slots as usize);
@@ -2083,15 +2061,6 @@ mod tests {
             .expect("run_ancestor_hashes packets");
             assert_eq!(rv.len(), 1);
             let packet = &rv[0];
-<<<<<<< HEAD
-            let ancestor_hashes_response: AncestorHashesResponseVersion = packet
-                .deserialize_slice(..packet.meta.size - SIZE_OF_NONCE)
-                .unwrap();
-            assert_eq!(
-                ancestor_hashes_response.into_slot_hashes(),
-                expected_ancestors
-            );
-=======
             let ancestor_hashes_response = deserialize_ancestor_hashes_response(packet);
             match ancestor_hashes_response {
                 AncestorHashesResponse::Hashes(hashes) => {
@@ -2101,7 +2070,6 @@ mod tests {
                     panic!("unexpected response: {:?}", &ancestor_hashes_response);
                 }
             }
->>>>>>> 370de8129 (ancestor hashes socket ping/pong support (#26866))
         }
 
         Blockstore::destroy(&ledger_path).expect("Expected successful database destruction");
