@@ -83,6 +83,11 @@ module.exports = {
     },
     {
       type: "category",
+      label: "Getting Started",
+      items: ["developing/intro/programs", "developing/intro/rent"],
+    },
+    {
+      type: "category",
       label: "Core Concepts",
       // collapsed: false,
       items: [
