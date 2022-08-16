@@ -1,5 +1,5 @@
 use {
-    crate::bench_tps_client::{BenchTpsClient, Result},
+    crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
     solana_client::rpc_client::RpcClient,
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
@@ -83,5 +83,20 @@ impl BenchTpsClient for RpcClient {
 
     fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
         RpcClient::get_account(self, pubkey).map_err(|err| err.into())
+    }
+
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Account> {
+        RpcClient::get_account_with_commitment(self, pubkey, commitment_config)
+            .map(|res| res.value)
+            .map_err(|err| err.into())
+            .and_then(|account| {
+                account.ok_or_else(|| {
+                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={}", pubkey))
+                })
+            })
     }
 }
