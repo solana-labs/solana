@@ -138,19 +138,19 @@ impl TransactionContext {
     }
 
     /// Gets an InstructionContext by its nesting level in the stack
-    pub fn get_instruction_context_at(
+    pub fn get_instruction_context_at_nesting_level(
         &self,
-        level: usize,
+        nesting_level: usize,
     ) -> Result<&InstructionContext, InstructionError> {
         let index_in_trace = *self
             .instruction_stack
-            .get(level)
+            .get(nesting_level)
             .ok_or(InstructionError::CallDepth)?;
         let instruction_context = self
             .instruction_trace
             .get(index_in_trace)
             .ok_or(InstructionError::CallDepth)?;
-        debug_assert_eq!(instruction_context.nesting_level, level);
+        debug_assert_eq!(instruction_context.nesting_level, nesting_level);
         Ok(instruction_context)
     }
 
@@ -171,7 +171,7 @@ impl TransactionContext {
             .get_instruction_context_stack_height()
             .checked_sub(1)
             .ok_or(InstructionError::CallDepth)?;
-        self.get_instruction_context_at(level)
+        self.get_instruction_context_at_nesting_level(level)
     }
 
     /// Pushes a new InstructionContext

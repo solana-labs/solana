@@ -325,7 +325,7 @@ impl<'a> InvokeContext<'a> {
                 .get_instruction_context_stack_height())
                 .any(|level| {
                     self.transaction_context
-                        .get_instruction_context_at(level)
+                        .get_instruction_context_at_nesting_level(level)
                         .and_then(|instruction_context| {
                             instruction_context
                                 .try_borrow_last_program_account(self.transaction_context)
