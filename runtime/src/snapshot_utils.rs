@@ -256,6 +256,9 @@ pub enum VerifySlotDeltasError {
 
     #[error("slot {0} was in history but missing from slot deltas")]
     SlotNotFoundInDeltas(Slot),
+
+    #[error("slot history is bad and cannot be used to verify slot deltas")]
+    BadSlotHistory,
 }
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
@@ -1845,6 +1848,12 @@ fn verify_slot_deltas_with_history(
     slot_history: &SlotHistory,
     bank_slot: Slot,
 ) -> std::result::Result<(), VerifySlotDeltasError> {
+    // ensure the slot history is valid (as much as possible), since we're using it to verify the
+    // slot deltas
+    if slot_history.newest() != bank_slot {
+        return Err(VerifySlotDeltasError::BadSlotHistory);
+    }
+
     // all slots in the slot deltas should be in the bank's slot history
     let slot_missing_from_history = slots_from_slot_deltas
         .iter()
@@ -4063,6 +4072,17 @@ mod tests {
         let result =
             verify_slot_deltas_with_history(&slots_from_slot_deltas, &slot_history, bank_slot);
         assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_with_history_bad_slot_history() {
+        let bank_slot = 444;
+        let result = verify_slot_deltas_with_history(
+            &HashSet::default(),
+            &SlotHistory::default(), // <-- will only have an entry for slot 0
+            bank_slot,
+        );
+        assert_eq!(result, Err(VerifySlotDeltasError::BadSlotHistory));
     }
 
     #[test]
