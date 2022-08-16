@@ -1,5 +1,6 @@
 import {PublicKey} from '../publickey';
 
+export * from './account-keys';
 export * from './legacy';
 export * from './versioned';
 export * from './v0';
