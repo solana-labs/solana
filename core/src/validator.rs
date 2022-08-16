@@ -102,6 +102,7 @@ use {
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
+        ffi::OsString,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
@@ -2054,33 +2055,33 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     online_stake_percentage as u64
 }
 
-/*  Move the to-be-deleted path under top_delete_path directory
- *  If the path has the form <parent_path>/<file_or_dir>, move it to be
- *  <top_delete_path>/<parent_path>/<file_or_dir><timestamp>
- *  If parent_path is absolute (starting with /), strip '/'.
+/*  Rename to-be-deleted path to *_delete, and add it into the del_paths vector
+ *  If the _delete path exists (could happen if the previous process was killed),
+ *  then add .{count} to the path, and delete them together.  This avoids file
+ *  leaking and accumulation even the asyc deleting tasks were not successfully done
  */
-fn move_path_for_async_removal(top_delete_path: &str, timestamp: &String, path: &std::path::Path) {
-    let mut path_parent_from_top = std::path::PathBuf::from(top_delete_path);
-
-    if let Some(mut path_parent) = path.parent() {
-        if path_parent.has_root() {
-            path_parent = path_parent.strip_prefix("/").unwrap();
+fn move_path_for_async_removal(del_paths: &mut Vec<PathBuf>, path: &std::path::Path) {
+    let mut del_path_str = OsString::from(path);
+    del_path_str.push("_deleted");
+    info!("del_path_str = {del_path_str:?}");
+    let mut loop_count: i32 = 0;
+    loop {
+        let mut with_appendix = del_path_str.clone();
+        if loop_count > 0 {
+            with_appendix.push(format!("{loop_count}"));
         }
-        path_parent_from_top.push(path_parent);
+        let path_delete: PathBuf = PathBuf::from(with_appendix);
+
+        info!("loop_count {loop_count}, &path_delete {path_delete:?}");
+        if path_delete.exists() {
+            del_paths.push(path_delete);
+            loop_count += 1;
+        } else {
+            std::fs::rename(&path, &path_delete).unwrap();
+            del_paths.push(path_delete);
+            break;
+        }
     }
-
-    // Make sure delete_path_parent exists first to allow moving the
-    // to-be-deleted path under it.
-    std::fs::create_dir_all(&path_parent_from_top).unwrap();
-
-    let path_filename = path.file_name().unwrap();
-
-    // Appending the timestamp is to avoid name collision so that the fs::rename
-    // call won't fail due to the existing files there.
-    let delete_path = path_parent_from_top.join(path_filename).join(timestamp);
-
-    //println!("rename from {:?} to {:?}", path, delete_path);
-    std::fs::rename(&path, &delete_path).unwrap();
 }
 
 /*  Delete directories/files asynchronously to avoid blocking on it.
@@ -2094,21 +2095,14 @@ fn move_path_for_async_removal(top_delete_path: &str, timestamp: &String, path: 
     including the ones possibly left over by previous processes.
 */
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
-    // TBD this path to be changed to the actual one
-    let top_delete_path = "/tmp/to_be_deleted/";
-
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        .to_string();
+    let mut del_paths: Vec<PathBuf> = Vec::new();
 
     for accounts_path in &config.account_paths {
-        move_path_for_async_removal(top_delete_path, &timestamp, accounts_path);
+        move_path_for_async_removal(&mut del_paths, accounts_path);
     }
     if let Some(ref shrink_paths) = config.account_shrink_paths {
         for accounts_path in shrink_paths {
-            move_path_for_async_removal(top_delete_path, &timestamp, accounts_path);
+            move_path_for_async_removal(&mut del_paths, accounts_path);
         }
     }
 
@@ -2118,14 +2112,14 @@ fn cleanup_accounts_paths(config: &ValidatorConfig) {
     // some files may be left over.  The next process will resume the deleting work
     // from the top_delete_path to avoid accumulating and leftover files on disk.
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.spawn(async move {
-        if let Err(e) = tokio::fs::remove_dir_all(&top_delete_path).await {
-            warn!(
-                "encountered error deleting path: {:?}: {}",
-                top_delete_path, e
-            );
-        }
-    });
+
+    for del_path in del_paths {
+        rt.spawn(async move {
+            if let Err(e) = tokio::fs::remove_dir_all(&del_path).await {
+                warn!("encountered error deleting path: {:?}: {}", del_path, e);
+            }
+        });
+    }
 }
 
 pub fn is_snapshot_config_valid(
