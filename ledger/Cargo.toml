@@ -18,7 +18,7 @@ chrono-humanize = "0.2.1"
 crossbeam-channel = "0.5"
 dashmap = { version = "4.0.2", features = ["rayon", "raw-api"] }
 fs_extra = "1.2.0"
-futures = "0.3.21"
+futures = "0.3.23"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 libc = "0.2.131"
