@@ -543,12 +543,21 @@ fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: Arc<T>,
     nonce_account_pubkey: Pubkey,
 ) -> Hash {
-    let nonce_account = client
-        .get_account(&nonce_account_pubkey)
-        .unwrap_or_else(|error| panic!("{:?}", error));
-    let nonce_data = solana_rpc_client_nonce_utils::data_from_account(&nonce_account)
-        .unwrap_or_else(|error| panic!("{:?}", error));
-    nonce_data.blockhash()
+    loop {
+        match client.get_account(&nonce_account_pubkey) {
+            Ok(nonce_account) => match nonce_utils::data_from_account(&nonce_account) {
+                Ok(nonce_data) => return nonce_data.blockhash(),
+                Err(err) => {
+                    info!("Couldn't get data from durable nonce account: {:?}", err);
+                    sleep(Duration::from_secs(1));
+                }
+            },
+            Err(err) => {
+                info!("Couldn't get durable nonce account: {:?}", err);
+                sleep(Duration::from_secs(1));
+            }
+        }
+    }
 }
 
 fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
