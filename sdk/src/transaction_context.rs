@@ -233,26 +233,27 @@ impl TransactionContext {
             return Err(InstructionError::CallDepth);
         }
         // Verify (before we pop) that the total sum of all lamports in this instruction did not change
-        let detected_an_unbalanced_instruction = if self
-            .is_early_verification_of_account_modifications_enabled()
-        {
-            self.get_current_instruction_context()
-                .and_then(|instruction_context| {
-                    // Verify all executable accounts have no outstanding refs
-                    for account_index in instruction_context.program_accounts.iter() {
-                        self.get_account_at_index(*account_index)?
-                            .try_borrow_mut()
-                            .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
-                    }
-                    self.instruction_accounts_lamport_sum(instruction_context.instruction_accounts.iter())
+        let detected_an_unbalanced_instruction =
+            if self.is_early_verification_of_account_modifications_enabled() {
+                self.get_current_instruction_context()
+                    .and_then(|instruction_context| {
+                        // Verify all executable accounts have no outstanding refs
+                        for account_index in instruction_context.program_accounts.iter() {
+                            self.get_account_at_index(*account_index)?
+                                .try_borrow_mut()
+                                .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
+                        }
+                        self.instruction_accounts_lamport_sum(
+                            instruction_context.instruction_accounts.iter(),
+                        )
                         .map(|instruction_accounts_lamport_sum| {
                             instruction_context.instruction_accounts_lamport_sum
                                 != instruction_accounts_lamport_sum
                         })
-                })
-        } else {
-            Ok(false)
-        };
+                    })
+            } else {
+                Ok(false)
+            };
         // Always pop, even if we `detected_an_unbalanced_instruction`
         self.instruction_stack.pop();
         if detected_an_unbalanced_instruction? {
@@ -289,9 +290,7 @@ impl TransactionContext {
             return Ok(0);
         }
         let mut instruction_accounts_lamport_sum: u128 = 0;
-        for (instruction_account_index, instruction_account) in
-            instruction_accounts.enumerate()
-        {
+        for (instruction_account_index, instruction_account) in instruction_accounts.enumerate() {
             if instruction_account_index != instruction_account.index_in_callee {
                 continue; // Skip duplicate account
             }
@@ -891,7 +890,6 @@ impl<'a> BorrowedAccount<'a> {
 /// Everything that needs to be recorded from a TransactionContext after execution
 pub struct ExecutionRecord {
     pub accounts: Vec<TransactionAccount>,
-    pub instruction_trace: Vec<InstructionContext>,
     pub return_data: TransactionReturnData,
     pub changed_account_count: u64,
     pub total_size_of_all_accounts: u64,
@@ -934,7 +932,6 @@ impl From<TransactionContext> for ExecutionRecord {
                         .map(|account| account.into_inner()),
                 )
                 .collect(),
-            instruction_trace: context.instruction_trace,
             return_data: context.return_data,
             changed_account_count,
             total_size_of_all_accounts,

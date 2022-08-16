@@ -143,8 +143,7 @@ use {
             TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{
-            ExecutionRecord, InstructionContext, TransactionAccount, TransactionContext,
-            TransactionReturnData,
+            ExecutionRecord, TransactionAccount, TransactionContext, TransactionReturnData,
         },
     },
     solana_stake_program::stake_state::{
@@ -762,39 +761,45 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 /// a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
 
-/// Convert from an &[InstructionContext] to InnerInstructionsList
+/// Extract the InnerInstructionsList from a TransactionContext
 pub fn inner_instructions_list_from_instruction_trace(
-    instruction_trace: &[InstructionContext],
+    transaction_context: &TransactionContext,
 ) -> InnerInstructionsList {
-    debug_assert!(instruction_trace
-        .first()
+    debug_assert!(transaction_context
+        .get_instruction_context_at_index(0)
         .map(|instruction_context| instruction_context.get_stack_height()
             == TRANSACTION_LEVEL_STACK_HEIGHT)
         .unwrap_or(true));
     let mut outer_instructions = Vec::new();
-    for instruction_context in instruction_trace.iter() {
-        if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT {
-            outer_instructions.push(Vec::new());
-        } else if let Some(inner_instructions) = outer_instructions.last_mut() {
-            inner_instructions.push(CompiledInstruction::new_from_raw_parts(
-                instruction_context
-                    .get_index_of_program_account_in_transaction(
-                        instruction_context
-                            .get_number_of_program_accounts()
-                            .saturating_sub(1),
-                    )
-                    .unwrap_or_default() as u8,
-                instruction_context.get_instruction_data().to_vec(),
-                (0..instruction_context.get_number_of_instruction_accounts())
-                    .map(|instruction_account_index| {
-                        instruction_context
-                            .get_index_of_instruction_account_in_transaction(
-                                instruction_account_index,
-                            )
-                            .unwrap_or_default() as u8
-                    })
-                    .collect(),
-            ));
+    for index_in_trace in 0..transaction_context.get_instruction_trace_length() {
+        if let Ok(instruction_context) =
+            transaction_context.get_instruction_context_at_index(index_in_trace)
+        {
+            if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT {
+                outer_instructions.push(Vec::new());
+            } else if let Some(inner_instructions) = outer_instructions.last_mut() {
+                inner_instructions.push(CompiledInstruction::new_from_raw_parts(
+                    instruction_context
+                        .get_index_of_program_account_in_transaction(
+                            instruction_context
+                                .get_number_of_program_accounts()
+                                .saturating_sub(1),
+                        )
+                        .unwrap_or_default() as u8,
+                    instruction_context.get_instruction_data().to_vec(),
+                    (0..instruction_context.get_number_of_instruction_accounts())
+                        .map(|instruction_account_index| {
+                            instruction_context
+                                .get_index_of_instruction_account_in_transaction(
+                                    instruction_account_index,
+                                )
+                                .unwrap_or_default() as u8
+                        })
+                        .collect(),
+                ));
+            } else {
+                debug_assert!(false);
+            }
         } else {
             debug_assert!(false);
         }
@@ -4434,9 +4439,16 @@ impl Bank {
                     .ok()
             });
 
+        let inner_instructions = if enable_cpi_recording {
+            Some(inner_instructions_list_from_instruction_trace(
+                &transaction_context,
+            ))
+        } else {
+            None
+        };
+
         let ExecutionRecord {
             accounts,
-            instruction_trace,
             mut return_data,
             changed_account_count,
             total_size_of_all_accounts,
@@ -4463,14 +4475,6 @@ impl Bank {
             );
             accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
         }
-
-        let inner_instructions = if enable_cpi_recording {
-            Some(inner_instructions_list_from_instruction_trace(
-                &instruction_trace,
-            ))
-        } else {
-            None
-        };
 
         let return_data = if enable_return_data_recording {
             if let Some(end_index) = return_data.data.iter().rposition(|&x| x != 0) {
@@ -8049,7 +8053,6 @@ pub(crate) mod tests {
             system_program,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
-            transaction_context::InstructionContext,
         },
         solana_vote_program::{
             vote_instruction,
@@ -18841,17 +18844,19 @@ pub(crate) mod tests {
 
     #[test]
     fn test_inner_instructions_list_from_instruction_trace() {
-        let instruction_trace = vec![
-            InstructionContext::new(0, 0, &[], &[], &[0]),
-            InstructionContext::new(1, 0, &[], &[], &[1]),
-            InstructionContext::new(0, 0, &[], &[], &[2]),
-            InstructionContext::new(0, 0, &[], &[], &[3]),
-            InstructionContext::new(1, 0, &[], &[], &[4]),
-            InstructionContext::new(2, 0, &[], &[], &[5]),
-            InstructionContext::new(1, 0, &[], &[], &[6]),
-        ];
-
-        let inner_instructions = inner_instructions_list_from_instruction_trace(&instruction_trace);
+        let mut transaction_context = TransactionContext::new(vec![], None, 3, 3);
+        for (index_in_trace, stack_height) in [1, 2, 1, 1, 2, 3, 2].into_iter().enumerate() {
+            while stack_height <= transaction_context.get_instruction_context_stack_height() {
+                transaction_context.pop().unwrap();
+            }
+            if stack_height > transaction_context.get_instruction_context_stack_height() {
+                transaction_context
+                    .push(&[], &[], &[index_in_trace as u8])
+                    .unwrap();
+            }
+        }
+        let inner_instructions =
+            inner_instructions_list_from_instruction_trace(&transaction_context);
 
         assert_eq!(
             inner_instructions,
