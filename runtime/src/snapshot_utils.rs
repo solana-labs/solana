@@ -1817,8 +1817,8 @@ fn verify_slot_deltas_structural(
         }
 
         // there should only be one entry per slot
-        let inserted = slots_seen_so_far.insert(slot);
-        if !inserted {
+        let is_duplicate = !slots_seen_so_far.insert(slot);
+        if is_duplicate {
             return Err(VerifySlotDeltasError::SlotHasMultipleEntries(slot));
         }
     }
