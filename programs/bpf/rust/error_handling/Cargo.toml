@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-error-handling"
-version = "1.10.35"
+version = "1.10.36"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 num-derive = "0.3"
 num-traits = "0.2"
-solana-program = { path = "../../../../sdk/program", version = "=1.10.35" }
+solana-program = { path = "../../../../sdk/program", version = "=1.10.36" }
 thiserror = "1.0"
 
 [lib]

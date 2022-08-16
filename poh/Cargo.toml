@@ -1,6 +1,6 @@
 [package]
 name = "solana-poh"
-version = "1.10.35"
+version = "1.10.36"
 description = "Solana PoH"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -13,21 +13,21 @@ edition = "2021"
 core_affinity = "0.5.10"
 crossbeam-channel = "0.5"
 log = "0.4.14"
-solana-entry = { path = "../entry", version = "=1.10.35" }
-solana-ledger = { path = "../ledger", version = "=1.10.35" }
-solana-measure = { path = "../measure", version = "=1.10.35" }
-solana-metrics = { path = "../metrics", version = "=1.10.35" }
-solana-runtime = { path = "../runtime", version = "=1.10.35" }
-solana-sdk = { path = "../sdk", version = "=1.10.35" }
-solana-sys-tuner = { path = "../sys-tuner", version = "=1.10.35" }
+solana-entry = { path = "../entry", version = "=1.10.36" }
+solana-ledger = { path = "../ledger", version = "=1.10.36" }
+solana-measure = { path = "../measure", version = "=1.10.36" }
+solana-metrics = { path = "../metrics", version = "=1.10.36" }
+solana-runtime = { path = "../runtime", version = "=1.10.36" }
+solana-sdk = { path = "../sdk", version = "=1.10.36" }
+solana-sys-tuner = { path = "../sys-tuner", version = "=1.10.36" }
 thiserror = "1.0"
 
 [dev-dependencies]
 bincode = "1.3.3"
 matches = "0.1.9"
 rand = "0.7.0"
-solana-logger = { path = "../logger", version = "=1.10.35" }
-solana-perf = { path = "../perf", version = "=1.10.35" }
+solana-logger = { path = "../logger", version = "=1.10.36" }
+solana-perf = { path = "../perf", version = "=1.10.36" }
 
 [lib]
 crate-type = ["lib"]
