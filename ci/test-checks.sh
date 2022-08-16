@@ -75,7 +75,7 @@ nightly_clippy_allows=(
 
   # This link seems to incorrectly trigger in
   # `programs/bpf_loader/src/syscalls/{lib,cpi}.rs`
-  "--allow=clippy::explicit-auto-deref"
+  "--allow=clippy::explicit_auto_deref"
 )
 
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
