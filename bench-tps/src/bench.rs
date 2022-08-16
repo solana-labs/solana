@@ -11,6 +11,7 @@ use {
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
+        commitment_config::CommitmentConfig,
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
         instruction::{AccountMeta, Instruction},
@@ -544,7 +545,9 @@ fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     nonce_account_pubkey: Pubkey,
 ) -> Hash {
     loop {
-        match client.get_account(&nonce_account_pubkey) {
+        match client
+            .get_account_with_commitment(&nonce_account_pubkey, CommitmentConfig::processed())
+        {
             Ok(nonce_account) => match nonce_utils::data_from_account(&nonce_account) {
                 Ok(nonce_data) => return nonce_data.blockhash(),
                 Err(err) => {
