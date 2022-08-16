@@ -75,7 +75,7 @@ impl ShredData {
 
     // Maximum size of ledger data that can be embedded in a data-shred.
     // Also equal to:
-    //   ShredCode::size_of_erasure_encoded_slice(proof_size).unwrap()
+    //   ShredCode::capacity(proof_size).unwrap()
     //       - ShredData::SIZE_OF_HEADERS
     //       + SIZE_OF_SIGNATURE
     pub(super) fn capacity(proof_size: u8) -> Result<usize, Error> {
@@ -115,8 +115,8 @@ impl ShredCode {
         }
     }
 
-    // Size of the chunk of payload which will be erasure coded.
-    fn size_of_erasure_encoded_slice(proof_size: u8) -> Result<usize, Error> {
+    // Size of buffer embedding erasure codes.
+    fn capacity(proof_size: u8) -> Result<usize, Error> {
         // Merkle branch is generated and signed after coding shreds are
         // generated. Coding shred headers cannot be erasure coded either.
         Self::SIZE_OF_PAYLOAD
@@ -130,7 +130,7 @@ impl ShredCode {
 
     fn merkle_tree_node(&self) -> Result<Hash, Error> {
         let proof_size = self.proof_size()?;
-        let shard_size = Self::size_of_erasure_encoded_slice(proof_size)?;
+        let shard_size = Self::capacity(proof_size)?;
         let chunk = self
             .payload
             .get(SIZE_OF_SIGNATURE..Self::SIZE_OF_HEADERS + shard_size)
@@ -145,8 +145,7 @@ impl ShredCode {
     }
 
     pub(super) fn get_signed_message_range(proof_size: u8) -> Option<Range<usize>> {
-        let offset =
-            Self::SIZE_OF_HEADERS + Self::size_of_erasure_encoded_slice(proof_size).ok()?;
+        let offset = Self::SIZE_OF_HEADERS + Self::capacity(proof_size).ok()?;
         Some(offset..offset + SIZE_OF_MERKLE_ROOT)
     }
 
@@ -264,7 +263,7 @@ impl Shred for ShredCode {
         };
         let coding_header = deserialize_from_with_limit(&mut cursor)?;
         // Skip erasure code shard.
-        let shard_size = Self::size_of_erasure_encoded_slice(proof_size)?;
+        let shard_size = Self::capacity(proof_size)?;
         let shard_size = i64::try_from(shard_size).unwrap();
         cursor.seek(SeekFrom::Current(shard_size))?;
         // Deserialize merkle branch.
@@ -296,7 +295,7 @@ impl Shred for ShredCode {
             return Err(Error::InvalidPayloadSize(self.payload.len()));
         }
         let proof_size = self.proof_size()?;
-        let shard_size = Self::size_of_erasure_encoded_slice(proof_size)?;
+        let shard_size = Self::capacity(proof_size)?;
         let mut shard = self.payload;
         shard.drain(..Self::SIZE_OF_HEADERS);
         shard.truncate(shard_size);
@@ -308,7 +307,7 @@ impl Shred for ShredCode {
             return Err(Error::InvalidPayloadSize(self.payload.len()));
         }
         let proof_size = self.proof_size()?;
-        let shard_size = Self::size_of_erasure_encoded_slice(proof_size)?;
+        let shard_size = Self::capacity(proof_size)?;
         self.payload
             .get(Self::SIZE_OF_HEADERS..Self::SIZE_OF_HEADERS + shard_size)
             .ok_or(Error::InvalidPayloadSize(self.payload.len()))
@@ -454,8 +453,7 @@ mod test {
     fn shred_data_capacity(proof_size: u8) -> usize {
         const SIZE_OF_ERASURE_ENCODED_HEADER: usize =
             ShredData::SIZE_OF_HEADERS - SIZE_OF_SIGNATURE;
-        ShredCode::size_of_erasure_encoded_slice(proof_size).unwrap()
-            - SIZE_OF_ERASURE_ENCODED_HEADER
+        ShredCode::capacity(proof_size).unwrap() - SIZE_OF_ERASURE_ENCODED_HEADER
     }
 
     fn shred_data_size_of_erasure_encoded_slice(proof_size: u8) -> usize {
@@ -486,10 +484,10 @@ mod test {
     }
 
     #[test]
-    fn test_size_of_erasure_encoded_slice() {
+    fn test_shred_code_capacity() {
         for proof_size in 0..0x15 {
             assert_eq!(
-                ShredCode::size_of_erasure_encoded_slice(proof_size).unwrap(),
+                ShredCode::capacity(proof_size).unwrap(),
                 shred_data_size_of_erasure_encoded_slice(proof_size),
             );
         }
