@@ -29,12 +29,13 @@ use {
         cost_model::CostModel,
         vote_sender_types::{ReplayVoteReceiver, ReplayVoteSender},
     },
-    solana_sdk::signature::Keypair,
+    solana_sdk::{pubkey::Pubkey, signature::Keypair},
     solana_streamer::{
         quic::{spawn_server, StreamStats, MAX_STAKED_CONNECTIONS, MAX_UNSTAKED_CONNECTIONS},
         streamer::StakedNodes,
     },
     std::{
+        collections::HashMap,
         net::UdpSocket,
         sync::{atomic::AtomicBool, Arc, RwLock},
         thread,
@@ -97,6 +98,8 @@ impl Tpu {
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
         enable_quic_servers: bool,
+        staked_nodes: &Arc<RwLock<StakedNodes>>,
+        shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -124,12 +127,12 @@ impl Tpu {
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
         );
 
-        let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
             exit.clone(),
             cluster_info.clone(),
             bank_forks.clone(),
             staked_nodes.clone(),
+            shared_staked_nodes_overrides,
         );
 
         let (find_packet_sender_stake_sender, find_packet_sender_stake_receiver) = unbounded();
@@ -178,7 +181,7 @@ impl Tpu {
                 forwarded_packet_sender,
                 exit.clone(),
                 MAX_QUIC_CONNECTIONS_PER_PEER,
-                staked_nodes,
+                staked_nodes.clone(),
                 MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
                 0, // Prevent unstaked nodes from forwarding transactions
                 stats,

@@ -28,24 +28,10 @@ fn bench_status_cache_serialize(bencher: &mut Bencher) {
             status_cache.insert(&blockhash, &sig, 0, Ok(()));
         }
     }
+    assert!(status_cache.roots().contains(&0));
     bencher.iter(|| {
-        let _ = serialize(&status_cache.slot_deltas(&[0])).unwrap();
+        let _ = serialize(&status_cache.root_slot_deltas()).unwrap();
     });
-}
-
-#[bench]
-fn bench_status_cache_slot_deltas(bencher: &mut Bencher) {
-    let mut status_cache = BankStatusCache::default();
-
-    // fill the status cache
-    let slots: Vec<_> = (42..).take(MAX_CACHE_ENTRIES).collect();
-    for slot in &slots {
-        for _ in 0..5 {
-            status_cache.insert(&Hash::new_unique(), Hash::new_unique(), *slot, Ok(()));
-        }
-    }
-
-    bencher.iter(|| test::black_box(status_cache.slot_deltas(&slots)));
 }
 
 #[bench]

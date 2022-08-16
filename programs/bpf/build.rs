@@ -41,13 +41,13 @@ fn main() {
     if bpf_c {
         let install_dir = "OUT_DIR=../target/".to_string() + &env::var("PROFILE").unwrap() + "/bpf";
 
-        println!("cargo:warning=(not a warning) Building C-based BPF programs");
+        println!("cargo:warning=(not a warning) Building C-based SBF programs");
         assert!(Command::new("make")
             .current_dir("c")
             .arg("programs")
             .arg(&install_dir)
             .status()
-            .expect("Failed to build C-based BPF programs")
+            .expect("Failed to build C-based SBF programs")
             .success());
 
         rerun_if_changed(&["c/makefile"], &["c/src", "../../sdk"], &["/target/"]);
@@ -104,18 +104,18 @@ fn main() {
         ];
         for program in rust_programs.iter() {
             println!(
-                "cargo:warning=(not a warning) Building Rust-based BPF programs: solana_bpf_rust_{}",
+                "cargo:warning=(not a warning) Building Rust-based SBF programs: solana_bpf_rust_{}",
                 program
             );
-            assert!(Command::new("../../cargo-build-bpf")
+            assert!(Command::new("../../cargo-build-sbf")
                 .args(&[
                     "--manifest-path",
                     &format!("rust/{}/Cargo.toml", program),
-                    "--bpf-out-dir",
+                    "--sbf-out-dir",
                     &install_dir
                 ])
                 .status()
-                .expect("Error calling cargo-build-bpf from build.rs")
+                .expect("Error calling cargo-build-sbf from build.rs")
                 .success());
         }
 

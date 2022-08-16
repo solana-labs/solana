@@ -109,6 +109,10 @@ Each Github release features a tarball containing API documentation and a
 minified version of the module suitable for direct use in a browser environment
 (`<script>` tag)
 
+## Contributing
+
+If you have an issue to report or would like to contribute a pull request, please do so against the monorepo at https://github.com/solana-labs/solana. We are not able to merge pull requests into the mirror repo https://github.com/solana-labs/solana-web3.js and issues filed there may go unnoticed.
+
 ## Disclaimer
 
 All claims, content, designs, algorithms, estimates, roadmaps,

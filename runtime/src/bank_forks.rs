@@ -107,7 +107,7 @@ impl BankForks {
             .collect()
     }
 
-    pub fn active_banks(&self) -> Vec<Slot> {
+    pub fn active_bank_slots(&self) -> Vec<Slot> {
         self.banks
             .iter()
             .filter(|(_, v)| !v.is_frozen())
@@ -635,7 +635,7 @@ mod tests {
         let mut bank_forks = BankForks::new(bank);
         let child_bank = Bank::new_from_parent(&bank_forks[0u64], &Pubkey::default(), 1);
         bank_forks.insert(child_bank);
-        assert_eq!(bank_forks.active_banks(), vec![1]);
+        assert_eq!(bank_forks.active_bank_slots(), vec![1]);
     }
 
     #[test]

@@ -1909,7 +1909,7 @@ Returns all accounts owned by the provided program Pubkey
   - `offset: <usize>` - offset into program account data to start comparison
   - `bytes: <string>` - data to match, as encoded string
   - `encoding: <string>` - encoding for filter `bytes` data, either "base58" or "base64". Data is limited in size to 128 or fewer decoded bytes.
-    **NEW: This field, and base64 support generally, is only available in solana-core v1.11.5 or newer. Please omit when querying nodes on earlier versions**
+    **NEW: This field, and base64 support generally, is only available in solana-core v1.12.0 or newer. Please omit when querying nodes on earlier versions**
 
 - `dataSize: <u64>` - compares the program account data length with the provided data size
 
@@ -3128,7 +3128,7 @@ curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
 Result:
 
 ```json
-{ "jsonrpc": "2.0", "result": { "solana-core": "1.11.5" }, "id": 1 }
+{ "jsonrpc": "2.0", "result": { "solana-core": "1.12.0" }, "id": 1 }
 ```
 
 ### getVoteAccounts
@@ -3399,7 +3399,7 @@ submission.
   - `encoding: <string>` - (optional) Encoding used for the transaction data. Either `"base58"` (_slow_, **DEPRECATED**), or `"base64"`. (default: `"base58"`).
   - `maxRetries: <usize>` - (optional) Maximum number of times for the RPC node to retry sending the transaction to the leader.
     If this parameter not provided, the RPC node will retry the transaction until it is finalized or until the blockhash expires.
-  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
+  - (optional) `minContextSlot: <number>` - set the minimum slot at which to perform preflight transaction checks.
 
 #### Results:
 

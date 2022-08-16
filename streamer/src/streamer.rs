@@ -28,6 +28,8 @@ use {
 #[derive(Default)]
 pub struct StakedNodes {
     pub total_stake: u64,
+    pub max_stake: u64,
+    pub min_stake: u64,
     pub ip_stake_map: HashMap<IpAddr, u64>,
     pub pubkey_stake_map: HashMap<Pubkey, u64>,
 }

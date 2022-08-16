@@ -54,6 +54,8 @@ pub struct Config {
     pub external_client_type: ExternalClientType,
     pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
+    pub use_randomized_compute_unit_price: bool,
+    pub use_durable_nonce: bool,
 }
 
 impl Default for Config {
@@ -81,6 +83,8 @@ impl Default for Config {
             external_client_type: ExternalClientType::default(),
             use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            use_randomized_compute_unit_price: false,
+            use_durable_nonce: false,
         }
     }
 }
@@ -303,6 +307,12 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Controls the connection pool size per remote address; only affects ThinClient (default) \
                     or TpuClient sends"),
         )
+        .arg(
+            Arg::with_name("use_randomized_compute_unit_price")
+                .long("use-randomized-compute-unit-price")
+                .takes_value(false)
+                .help("Sets random compute-unit-price in range [0..100] to transfer transactions"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -431,6 +441,10 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
             .to_string()
             .parse()
             .expect("can't parse target slots per epoch");
+    }
+
+    if matches.is_present("use_randomized_compute_unit_price") {
+        args.use_randomized_compute_unit_price = true;
     }
 
     args

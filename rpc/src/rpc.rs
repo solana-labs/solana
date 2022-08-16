@@ -112,7 +112,7 @@ use {
 
 type RpcCustomResult<T> = std::result::Result<T, RpcCustomError>;
 
-pub const MAX_REQUEST_PAYLOAD_SIZE: usize = 50 * (1 << 10); // 50kB
+pub const MAX_REQUEST_BODY_SIZE: usize = 50 * (1 << 10); // 50kB
 pub const PERFORMANCE_SAMPLES_LIMIT: usize = 720;
 
 // Limit the length of the `epoch_credits` array for each validator in a `get_vote_accounts`
@@ -160,6 +160,7 @@ pub struct JsonRpcConfig {
     pub full_api: bool,
     pub obsolete_v1_7_api: bool,
     pub rpc_scan_and_fix_roots: bool,
+    pub max_request_body_size: Option<usize>,
 }
 
 impl JsonRpcConfig {
@@ -4616,7 +4617,7 @@ pub mod tests {
         },
         solana_vote_program::{
             vote_instruction,
-            vote_state::{Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
+            vote_state::{self, Vote, VoteInit, VoteStateVersions, MAX_LOCKOUT_HISTORY},
         },
         spl_token_2022::{
             extension::{
@@ -4936,7 +4937,7 @@ pub mod tests {
             let balance = bank.get_minimum_balance_for_rent_exemption(space);
             let mut vote_account =
                 AccountSharedData::new(balance, space, &solana_vote_program::id());
-            VoteState::to(&versioned, &mut vote_account).unwrap();
+            vote_state::to(&versioned, &mut vote_account).unwrap();
             bank.store_account(vote_pubkey, &vote_account);
         }
 
