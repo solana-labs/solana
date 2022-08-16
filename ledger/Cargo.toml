@@ -60,7 +60,7 @@ trees = "0.4.2"
 [dependencies.rocksdb]
 # Avoid the vendored bzip2 within rocksdb-sys that can cause linker conflicts
 # when also using the bzip2 crate
-version = "0.19.0"
+version = "0.18.0"
 default-features = false
 features = ["lz4"]
 
