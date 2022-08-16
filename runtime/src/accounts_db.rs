@@ -6861,12 +6861,17 @@ impl AccountsDb {
 
     /// normal code path returns the common cache path
     /// when called after a failure has been detected, redirect the cache storage to a separate folder for debugging later
-    fn get_cache_hash_data(&self, config: &CalcAccountsHashConfig<'_>) -> CacheHashData {
+    fn get_cache_hash_data(
+        &self,
+        config: &CalcAccountsHashConfig<'_>,
+        slot: Slot,
+    ) -> CacheHashData {
         if !config.store_detailed_debug_info_on_failure {
             CacheHashData::new(&self.accounts_hash_cache_path)
         } else {
             // this path executes when we are failing with a hash mismatch
             let mut new = self.accounts_hash_cache_path.clone();
+            new.push(slot.to_string());
             new.push("failed_calculate_accounts_hash_cache");
             let _ = std::fs::remove_dir_all(&new);
             CacheHashData::new(&new)
@@ -6893,7 +6898,7 @@ impl AccountsDb {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
-            let cache_hash_data = self.get_cache_hash_data(config);
+            let cache_hash_data = self.get_cache_hash_data(config, storages.max_slot_inclusive());
 
             for pass in 0..num_hash_scan_passes {
                 let bounds = Range {
