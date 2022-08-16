@@ -1838,15 +1838,15 @@ struct VerifySlotDeltasStructuralInfo {
 /// Verify that the snapshot's slot deltas are not corrupt/invalid
 /// These checks use the slot history for verification
 fn verify_slot_deltas_with_history(
-    slot_deltas: &HashSet<Slot>,
+    slots_from_slot_deltas: &HashSet<Slot>,
     slot_history: &SlotHistory,
     bank_slot: Slot,
 ) -> std::result::Result<(), VerifySlotDeltasError> {
-    // all entries should be in the bank's slot history
-    let entry_missing_from_history = slot_deltas
+    // all slots in the slot deltas should be in the bank's slot history
+    let slot_missing_from_history = slots_from_slot_deltas
         .iter()
         .find(|slot| slot_history.check(**slot) != Check::Found);
-    if let Some(slot) = entry_missing_from_history {
+    if let Some(slot) = slot_missing_from_history {
         return Err(VerifySlotDeltasError::SlotNotFoundInHistory(*slot));
     }
 
@@ -1868,7 +1868,7 @@ fn verify_slot_deltas_with_history(
             continue;
         }
 
-        if !slot_deltas.contains(&slot) {
+        if !slots_from_slot_deltas.contains(&slot) {
             return Err(VerifySlotDeltasError::SlotNotFoundInDeltas(slot));
         }
 
@@ -4048,34 +4048,32 @@ mod tests {
 
     #[test]
     fn test_verify_slot_deltas_with_history_good() {
-        let mut slot_deltas = HashSet::default();
+        let mut slots_from_slot_deltas = HashSet::default();
         let mut slot_history = SlotHistory::default();
         // note: slot history expects slots to be added in numeric order
         for slot in [0, 111, 222, 333, 444] {
-            slot_deltas.insert(slot);
+            slots_from_slot_deltas.insert(slot);
             slot_history.add(slot);
         }
 
         let bank_slot = 444;
-        let result = verify_slot_deltas_with_history(&slot_deltas, &slot_history, bank_slot);
+        let result =
+            verify_slot_deltas_with_history(&slots_from_slot_deltas, &slot_history, bank_slot);
         assert_eq!(result, Ok(()));
     }
 
     #[test]
     fn test_verify_slot_deltas_with_history_bad_slot_not_in_history() {
-        /*
-         * let slot_deltas = vec![
-         *     (0, true, Status::default()), // slot history has slot 0 added by default
-         *     (444, true, Status::default()),
-         *     (222, true, Status::default()),
-         * ];
-         */
-        let slot_deltas = HashSet::from([0, 444, 222]);
+        let slots_from_slot_deltas = HashSet::from([
+            0, // slot history has slot 0 added by default
+            444, 222,
+        ]);
         let mut slot_history = SlotHistory::default();
         slot_history.add(444); // <-- slot history is missing slot 222
 
         let bank_slot = 444;
-        let result = verify_slot_deltas_with_history(&slot_deltas, &slot_history, bank_slot);
+        let result =
+            verify_slot_deltas_with_history(&slots_from_slot_deltas, &slot_history, bank_slot);
 
         assert_eq!(
             result,
@@ -4085,22 +4083,19 @@ mod tests {
 
     #[test]
     fn test_verify_slot_deltas_with_history_bad_slot_not_in_deltas() {
-        /*
-         * let slot_deltas = vec![
-         *     (0, true, Status::default()), // slot history has slot 0 added by default
-         *     (444, true, Status::default()),
-         *     (222, true, Status::default()),
-         *     // <-- slot deltas is missing slot 333
-         * ];
-         */
-        let slot_deltas = HashSet::from([0, 444, 222]);
+        let slots_from_slot_deltas = HashSet::from([
+            0, // slot history has slot 0 added by default
+            444, 222,
+            // <-- slot deltas is missing slot 333
+        ]);
         let mut slot_history = SlotHistory::default();
         slot_history.add(222);
         slot_history.add(333);
         slot_history.add(444);
 
         let bank_slot = 444;
-        let result = verify_slot_deltas_with_history(&slot_deltas, &slot_history, bank_slot);
+        let result =
+            verify_slot_deltas_with_history(&slots_from_slot_deltas, &slot_history, bank_slot);
 
         assert_eq!(
             result,
