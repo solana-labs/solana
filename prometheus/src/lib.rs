@@ -38,6 +38,8 @@ pub fn render_prometheus(
         &mut out,
     )
     .expect("IO error");
-    snapshot_metrics::write_snapshot_metrics(snapshot_config, &mut out).expect("IO error");
+    if let Some(snapshot_config) = snapshot_config {
+        snapshot_metrics::write_snapshot_metrics(snapshot_config, &mut out).expect("IO error");
+    }
     out
 }
