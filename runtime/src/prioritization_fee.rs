@@ -5,7 +5,7 @@ use {
         clock::Slot,
         pubkey::Pubkey,
         saturating_add_assign,
-        transaction::{SanitizedTransaction, MAX_TX_ACCOUNT_LOCKS},
+        transaction::SanitizedTransaction,
     },
     std::collections::HashMap,
 };
@@ -117,10 +117,6 @@ impl PrioritizationFee {
     ) -> Result<(), PrioritizationFeeError> {
         let (_, update_time) = measure!(
             {
-                let account_locks = sanitized_tx
-                    .get_account_locks(MAX_TX_ACCOUNT_LOCKS)
-                    .or(Err(PrioritizationFeeError::FailGetTransactionAccountLocks))?;
-
                 let priority_details = sanitized_tx
                     .get_transaction_priority_details()
                     .ok_or(PrioritizationFeeError::FailGetTransactionPriorityDetails)?;
@@ -129,15 +125,25 @@ impl PrioritizationFee {
                     self.min_transaction_fee = priority_details.priority;
                 }
 
-                for write_account in account_locks.writable {
-                    self.min_writable_account_fees
-                        .entry(*write_account)
-                        .and_modify(|write_lock_fee| {
-                            *write_lock_fee =
-                                std::cmp::min(*write_lock_fee, priority_details.priority)
-                        })
-                        .or_insert(priority_details.priority);
-                }
+                let message = sanitized_tx.message();
+                message
+                    .account_keys()
+                    .iter()
+                    .enumerate()
+                    .for_each(|(i, write_account)| {
+                        let is_writable = message.is_writable(i);
+
+                        if is_writable {
+                            self.min_writable_account_fees
+                                .entry(*write_account)
+                                .and_modify(|write_lock_fee| {
+                                    *write_lock_fee =
+                                        std::cmp::min(*write_lock_fee, priority_details.priority)
+                                })
+                                .or_insert(priority_details.priority);
+                        }
+                    });
+
                 self.metrics
                     .increment_total_prioritization_fee(priority_details.priority);
             },
