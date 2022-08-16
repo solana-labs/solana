@@ -63,5 +63,6 @@ pub const MAX_WRITABLE_ACCOUNT_UNITS: u64 = MAX_BLOCK_REPLAY_TIME_US * COMPUTE_U
 /// sets at ~75% of MAX_BLOCK_UNITS to leave room for non-vote transactions
 pub const MAX_VOTE_UNITS: u64 = (MAX_BLOCK_UNITS as f64 * 0.75_f64) as u64;
 
-/// max length of account data in a block (bytes)
-pub const MAX_ACCOUNT_DATA_BLOCK_LEN: u64 = 100_000_000;
+/// The maximum allowed size, in bytes, that accounts data can grow, per block.
+/// This can also be thought of as the maximum size of new allocations per block.
+pub const MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA: u64 = 100_000_000;
