@@ -1,6 +1,6 @@
 [package]
 name = "solana-keygen"
-version = "1.10.35"
+version = "1.10.36"
 description = "Solana key generation utility"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,11 +14,11 @@ bs58 = "0.4.0"
 clap = "2.33"
 dirs-next = "2.0.0"
 num_cpus = "1.13.1"
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.35" }
-solana-cli-config = { path = "../cli-config", version = "=1.10.35" }
-solana-remote-wallet = { path = "../remote-wallet", version = "=1.10.35" }
-solana-sdk = { path = "../sdk", version = "=1.10.35" }
-solana-version = { path = "../version", version = "=1.10.35" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.10.36" }
+solana-cli-config = { path = "../cli-config", version = "=1.10.36" }
+solana-remote-wallet = { path = "../remote-wallet", version = "=1.10.36" }
+solana-sdk = { path = "../sdk", version = "=1.10.36" }
+solana-version = { path = "../version", version = "=1.10.36" }
 tiny-bip39 = "0.8.2"
 
 [[bin]]

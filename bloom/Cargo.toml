@@ -1,6 +1,6 @@
 [package]
 name = "solana-bloom"
-version = "1.10.35"
+version = "1.10.36"
 description = "Solana bloom filter"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -17,9 +17,9 @@ rand = "0.7.0"
 rayon = "1.5.1"
 serde = { version = "1.0.136", features = ["rc"] }
 serde_derive = "1.0.103"
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.35" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.35" }
-solana-sdk = { path = "../sdk", version = "=1.10.35" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.10.36" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.10.36" }
+solana-sdk = { path = "../sdk", version = "=1.10.36" }
 
 [lib]
 crate-type = ["lib"]
