@@ -35,5 +35,11 @@ cargo_audit_ignores=(
   # https://github.com/chronotope/chrono/issues/499
   --ignore RUSTSEC-2020-0159
 
+  # rocksdb: Out-of-bounds read when opening multiple column families with TTL
+  #
+  # blocked on rust update to 1.60
+  # https://rustsec.org/advisories/RUSTSEC-2022-0046
+  --ignore RUSTSEC-2022-0046
+
 )
 scripts/cargo-for-all-lock-files.sh stable audit "${cargo_audit_ignores[@]}"
