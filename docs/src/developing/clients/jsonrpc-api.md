@@ -4184,7 +4184,7 @@ Result:
 
 ### programSubscribe
 
-Subscribe to a program to receive notifications when the lamports or data for a given account owned by the program changes
+Subscribe to a program to receive notifications when the lamports or data for an account owned by the given program changes
 
 #### Parameters:
 
@@ -4352,7 +4352,7 @@ Result:
 
 ### signatureSubscribe
 
-Subscribe to a transaction signature to receive notification when the transaction is confirmed On `signatureNotification`, the subscription is automatically cancelled
+Subscribe to a transaction signature to receive notification when a given transaction is committed. On `signatureNotification`, the subscription is automatically cancelled.
 
 #### Parameters:
 

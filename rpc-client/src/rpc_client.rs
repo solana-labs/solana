@@ -5,6 +5,9 @@
 //! [JSON-RPC], using the [`RpcClient`] type.
 //!
 //! [JSON-RPC]: https://www.jsonrpc.org/specification
+//!
+//! This is a blocking API. For a non-blocking API use the asynchronous client
+//! in [`crate::nonblocking::rpc_client`].
 
 pub use crate::mock_sender::Mocks;
 #[allow(deprecated)]
