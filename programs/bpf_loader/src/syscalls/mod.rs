@@ -1712,25 +1712,34 @@ declare_syscall!(
         // Reverse iterate through the instruction trace,
         // ignoring anything except instructions on the same level
         let stack_height = invoke_context.get_stack_height();
-        let instruction_trace = invoke_context.transaction_context.get_instruction_trace();
-        let mut current_index = 0;
-        let mut instruction_context = None;
-        for current_instruction_context in instruction_trace.iter().rev() {
-            if current_instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT
+        let instruction_trace_length = invoke_context
+            .transaction_context
+            .get_instruction_trace_length();
+        let mut reverse_index_at_stack_height = 0;
+        let mut found_instruction_context = None;
+        for index_in_trace in (0..instruction_trace_length).rev() {
+            let instruction_context = question_mark!(
+                invoke_context
+                    .transaction_context
+                    .get_instruction_context_at_index_in_trace(index_in_trace)
+                    .map_err(SyscallError::InstructionError),
+                result
+            );
+            if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT
                 && stack_height > TRANSACTION_LEVEL_STACK_HEIGHT
             {
                 break;
             }
-            if current_instruction_context.get_stack_height() == stack_height {
-                if index.saturating_add(1) == current_index {
-                    instruction_context = Some(current_instruction_context);
+            if instruction_context.get_stack_height() == stack_height {
+                if index.saturating_add(1) == reverse_index_at_stack_height {
+                    found_instruction_context = Some(instruction_context);
                     break;
                 }
-                current_index = current_index.saturating_add(1);
+                reverse_index_at_stack_height = reverse_index_at_stack_height.saturating_add(1);
             }
         }
 
-        if let Some(instruction_context) = instruction_context {
+        if let Some(instruction_context) = found_instruction_context {
             let ProcessedSiblingInstruction {
                 data_len,
                 accounts_len,

@@ -137,6 +137,21 @@ impl TransactionContext {
         self.account_keys.iter().rposition(|key| key == pubkey)
     }
 
+    /// Returns instruction trace length
+    pub fn get_instruction_trace_length(&self) -> usize {
+        self.instruction_trace.len()
+    }
+
+    /// Gets an InstructionContext by its index in the trace
+    pub fn get_instruction_context_at_index_in_trace(
+        &self,
+        index_in_trace: usize,
+    ) -> Result<&InstructionContext, InstructionError> {
+        self.instruction_trace
+            .get(index_in_trace)
+            .ok_or(InstructionError::CallDepth)
+    }
+
     /// Gets an InstructionContext by its nesting level in the stack
     pub fn get_instruction_context_at_nesting_level(
         &self,
@@ -146,10 +161,7 @@ impl TransactionContext {
             .instruction_stack
             .get(nesting_level)
             .ok_or(InstructionError::CallDepth)?;
-        let instruction_context = self
-            .instruction_trace
-            .get(index_in_trace)
-            .ok_or(InstructionError::CallDepth)?;
+        let instruction_context = self.get_instruction_context_at_index_in_trace(index_in_trace)?;
         debug_assert_eq!(instruction_context.nesting_level, nesting_level);
         Ok(instruction_context)
     }
@@ -263,11 +275,6 @@ impl TransactionContext {
     ) -> Result<(), InstructionError> {
         self.return_data = TransactionReturnData { program_id, data };
         Ok(())
-    }
-
-    /// Returns instruction trace
-    pub fn get_instruction_trace(&self) -> &[InstructionContext] {
-        &self.instruction_trace
     }
 
     /// Calculates the sum of all lamports within an instruction
