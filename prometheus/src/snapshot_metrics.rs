@@ -23,8 +23,7 @@ pub fn write_snapshot_metrics<W: io::Write>(
             name: "solana_snapshot_last_full_snapshot_slot",
             help: "The slot height of the most recent full snapshot",
             type_: "gauge",
-            metrics: vec![Metric::new(full_snapshot_info.slot)
-                .with_label("hash", full_snapshot_info.hash.to_string())],
+            metrics: vec![Metric::new(full_snapshot_info.slot)],
         },
     )?;
 
@@ -46,8 +45,7 @@ pub fn write_snapshot_metrics<W: io::Write>(
             name: "solana_snapshot_last_incremental_snapshot_slot",
             help: "The slot height of the most recent incremental snapshot",
             type_: "gauge",
-            metrics: vec![Metric::new(incremental_snapshot_info.slot)
-                .with_label("hash", incremental_snapshot_info.hash.to_string())],
+            metrics: vec![Metric::new(incremental_snapshot_info.slot)],
         },
     )
 }
