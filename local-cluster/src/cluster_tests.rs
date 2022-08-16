@@ -43,7 +43,7 @@ use {
     },
 };
 
-fn get_client_facing_addr(contact_info: &ContactInfo) -> (SocketAddr, SocketAddr) {
+pub fn get_client_facing_addr(contact_info: &ContactInfo) -> (SocketAddr, SocketAddr) {
     let (rpc, mut tpu) = contact_info.client_facing_addr();
     // QUIC certificate authentication requires the IP Address to match. ContactInfo might have
     // 0.0.0.0 as the IP instead of 127.0.0.1.
