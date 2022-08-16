@@ -1,5 +1,5 @@
 module.exports = {
-  introductionSidebar: [
+  introdutionSidebar: [
     {
       type: "category",
       collapsed: false,
@@ -80,11 +80,6 @@ module.exports = {
       type: "doc",
       id: "developing/programming-model/overview",
       label: "Overview",
-    },
-    {
-      type: "category",
-      label: "Getting Started",
-      items: ["developing/intro/programs", "developing/intro/rent"],
     },
     {
       type: "category",
@@ -239,7 +234,6 @@ module.exports = {
         "cluster/fork-generation",
         "cluster/managing-forks",
         "cluster/turbine-block-propagation",
-        "cluster/commitments",
         "cluster/vote-signing",
         "cluster/stake-delegation-and-rewards",
       ],
