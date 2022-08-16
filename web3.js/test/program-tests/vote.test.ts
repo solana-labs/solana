@@ -167,6 +167,21 @@ describe('VoteProgram', () => {
 
       // Withdraw from Vote account
       let recipient = Keypair.generate();
+      const voteBalance = await connection.getBalance(newVoteAccount.publicKey);
+
+      expect(() =>
+        VoteProgram.safeWithdraw(
+          {
+            votePubkey: newVoteAccount.publicKey,
+            authorizedWithdrawerPubkey: authorized.publicKey,
+            lamports: voteBalance - minimumAmount + 1,
+            toPubkey: recipient.publicKey,
+          },
+          voteBalance,
+          minimumAmount,
+        ),
+      ).to.throw('Withdraw will leave vote account with insuffcient funds.');
+
       let withdraw = VoteProgram.withdraw({
         votePubkey: newVoteAccount.publicKey,
         authorizedWithdrawerPubkey: authorized.publicKey,
