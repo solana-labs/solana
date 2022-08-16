@@ -100,6 +100,7 @@ pub enum RpcRequest {
     GetTokenAccountBalance,
     GetTokenAccountsByDelegate,
     GetTokenAccountsByOwner,
+    GetTokenLargestAccounts,
     GetTokenSupply,
     GetTransaction,
     GetTransactionCount,
@@ -175,6 +176,7 @@ impl fmt::Display for RpcRequest {
             RpcRequest::GetTokenAccountsByDelegate => "getTokenAccountsByDelegate",
             RpcRequest::GetTokenAccountsByOwner => "getTokenAccountsByOwner",
             RpcRequest::GetTokenSupply => "getTokenSupply",
+            RpcRequest::GetTokenLargestAccounts => "getTokenLargestAccounts",
             RpcRequest::GetTransaction => "getTransaction",
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::GetVersion => "getVersion",
@@ -322,6 +324,10 @@ mod tests {
         let test_request = RpcRequest::SendTransaction;
         let request = test_request.build_request_json(1, Value::Null);
         assert_eq!(request["method"], "sendTransaction");
+
+        let test_request = RpcRequest::GetTokenLargestAccounts;
+        let request = test_request.build_request_json(1, Value::Null);
+        assert_eq!(request["method"], "getTokenLargestAccounts");
     }
 
     #[test]
