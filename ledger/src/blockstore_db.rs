@@ -254,6 +254,18 @@ struct Rocks {
     write_batch_perf_status: PerfSamplingStatus,
 }
 
+macro_rules! rocks_try {
+    ($expression:expr) => {{
+        match $expression {
+            Ok(output) => output,
+            Err(error) => {
+                $crate::blockstore_db::Rocks::print_error_handling_instruction(&error);
+                return Err($crate::blockstore_db::BlockstoreError::RocksDb(error));
+            }
+        }
+    }};
+}
+
 impl Rocks {
     fn open(path: &Path, options: BlockstoreOptions) -> Result<Rocks> {
         let access_type = options.access_type.clone();
@@ -441,17 +453,17 @@ impl Rocks {
     }
 
     fn get_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let opt = self.db.get_cf(cf, key)?;
+        let opt = rocks_try!(self.db.get_cf(cf, key));
         Ok(opt)
     }
 
     fn put_cf(&self, cf: &ColumnFamily, key: &[u8], value: &[u8]) -> Result<()> {
-        self.db.put_cf(cf, key, value)?;
+        rocks_try!(self.db.put_cf(cf, key, value));
         Ok(())
     }
 
     fn delete_cf(&self, cf: &ColumnFamily, key: &[u8]) -> Result<()> {
-        self.db.delete_cf(cf, key)?;
+        rocks_try!(self.db.delete_cf(cf, key));
         Ok(())
     }
 
@@ -461,7 +473,7 @@ impl Rocks {
         from_key: &[u8],
         to_key: &[u8],
     ) -> Result<()> {
-        self.db.delete_file_in_range_cf(cf, from_key, to_key)?;
+        rocks_try!(self.db.delete_file_in_range_cf(cf, from_key, to_key));
         Ok(())
     }
 
@@ -505,7 +517,10 @@ impl Rocks {
         }
         match result {
             Ok(_) => Ok(()),
-            Err(e) => Err(BlockstoreError::RocksDb(e)),
+            Err(e) => {
+                Rocks::print_error_handling_instruction(&e);
+                Err(BlockstoreError::RocksDb(e))
+            }
         }
     }
 
@@ -524,6 +539,21 @@ impl Rocks {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
             Ok(None) => Ok(0),
             Err(e) => Err(BlockstoreError::RocksDb(e)),
+        }
+    }
+
+    fn print_error_handling_instruction(rocks_error: &rocksdb::Error) {
+        let error_msg = format!("{:?}", rocks_error);
+        if error_msg.contains("Corruption:") {
+            error!(
+                "RocksDb detected data corruption. This usually means your \
+                    ledger integrity is irrevocably compromised due to \
+                    underlying hardware problem like silent data corruption \
+                    and can't continue to operate. If possible, bug report to \
+                    #9009 with the mentioned SST file attached. After that, \
+                    remove your current ledger to restore operation or restore \
+                    using your backup system."
+            );
         }
     }
 }
