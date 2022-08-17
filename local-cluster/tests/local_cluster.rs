@@ -151,6 +151,7 @@ fn test_spend_and_verify_all_nodes_3() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let num_nodes = 2;
@@ -303,6 +304,7 @@ fn test_two_unbalanced_stakes() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_forwarding() {
     // Set up a cluster where one node is never the leader, so all txs sent to this node
     // will be have to be forwarded in order to be confirmed
@@ -1085,6 +1087,7 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 #[allow(unused_attributes)]
 #[test]
 #[serial]
+#[ignore]
 fn test_snapshot_restart_tower() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 2 nodes
@@ -2145,6 +2148,7 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_votes_land_in_fork_during_long_partition() {
     let total_stake = 100;
     // Make `lighter_stake` insufficient for switching threshold

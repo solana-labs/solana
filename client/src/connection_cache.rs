@@ -32,7 +32,7 @@ static MAX_CONNECTIONS: usize = 1024;
 
 /// Used to decide whether the TPU and underlying connection cache should use
 /// QUIC connections.
-pub const DEFAULT_TPU_USE_QUIC: bool = false;
+pub const DEFAULT_TPU_USE_QUIC: bool = true;
 
 /// Default TPU connection pool size per remote address
 pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
@@ -683,6 +683,11 @@ mod tests {
         // be lazy and not connect until first use or handle connection errors somehow
         // (without crashing, as would be required in a real practical validator)
         let connection_cache = ConnectionCache::default();
+        let port_offset = if connection_cache.use_quic() {
+            QUIC_PORT_OFFSET
+        } else {
+            0
+        };
         let addrs = (0..MAX_CONNECTIONS)
             .into_iter()
             .map(|_| {
@@ -695,18 +700,29 @@ mod tests {
             let map = connection_cache.map.read().unwrap();
             assert!(map.len() == MAX_CONNECTIONS);
             addrs.iter().for_each(|a| {
-                let conn = &map.get(a).expect("Address not found").connections[0];
-                let conn = conn.new_blocking_connection(*a, connection_cache.stats.clone());
-                assert!(a.ip() == conn.tpu_addr().ip());
+                let port = a
+                    .port()
+                    .checked_add(port_offset)
+                    .unwrap_or_else(|| a.port());
+                let addr = &SocketAddr::new(a.ip(), port);
+
+                let conn = &map.get(addr).expect("Address not found").connections[0];
+                let conn = conn.new_blocking_connection(*addr, connection_cache.stats.clone());
+                assert!(addr.ip() == conn.tpu_addr().ip());
             });
         }
 
-        let addr = get_addr(&mut rng);
-        connection_cache.get_connection(&addr);
+        let addr = &get_addr(&mut rng);
+        connection_cache.get_connection(addr);
 
+        let port = addr
+            .port()
+            .checked_add(port_offset)
+            .unwrap_or_else(|| addr.port());
+        let addr_with_quic_port = SocketAddr::new(addr.ip(), port);
         let map = connection_cache.map.read().unwrap();
         assert!(map.len() == MAX_CONNECTIONS);
-        let _conn = map.get(&addr).expect("Address not found");
+        let _conn = map.get(&addr_with_quic_port).expect("Address not found");
     }
 
     #[test]
