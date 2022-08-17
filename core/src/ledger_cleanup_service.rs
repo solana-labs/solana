@@ -76,7 +76,7 @@ impl LedgerCleanupService {
         let blockstore_compact = blockstore.clone();
 
         let t_cleanup = Builder::new()
-            .name("sol-led-cleanup".to_string())
+            .name("solLedgerClean".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
@@ -98,7 +98,7 @@ impl LedgerCleanupService {
             .unwrap();
 
         let t_compact = Builder::new()
-            .name("sol-led-compact".to_string())
+            .name("solLedgerComp".to_string())
             .spawn(move || loop {
                 if exit_compact.load(Ordering::Relaxed) {
                     break;
@@ -242,7 +242,7 @@ impl LedgerCleanupService {
             let purge_complete1 = purge_complete.clone();
             let last_compact_slot1 = last_compact_slot.clone();
             let _t_purge = Builder::new()
-                .name("solana-ledger-purge".to_string())
+                .name("solLedgerPurge".to_string())
                 .spawn(move || {
                     let mut slot_update_time = Measure::start("slot_update");
                     *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;

@@ -46,7 +46,7 @@ impl ServeRepairService {
         );
         let (response_sender, response_receiver) = unbounded();
         let t_responder = streamer::responder(
-            "serve-repairs",
+            "Repair",
             serve_repair_socket,
             response_receiver,
             socket_addr_space,

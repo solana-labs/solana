@@ -137,7 +137,7 @@ impl Tpu {
             packet_receiver,
             find_packet_sender_stake_sender,
             staked_nodes.clone(),
-            "tpu-find-packet-sender-stake",
+            "Tpu",
         );
 
         let (vote_find_packet_sender_stake_sender, vote_find_packet_sender_stake_receiver) =
@@ -147,7 +147,7 @@ impl Tpu {
             vote_packet_receiver,
             vote_find_packet_sender_stake_sender,
             staked_nodes.clone(),
-            "tpu-vote-find-packet-sender-stake",
+            "Vote",
         );
 
         let (verified_sender, verified_receiver) = unbounded();

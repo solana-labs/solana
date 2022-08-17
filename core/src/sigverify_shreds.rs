@@ -37,7 +37,7 @@ pub(crate) fn spawn_shred_sigverify(
     let recycler_cache = RecyclerCache::warmed();
     let mut stats = ShredSigVerifyStats::new(Instant::now());
     Builder::new()
-        .name("shred-verifier".to_string())
+        .name("solShredVerifr".to_string())
         .spawn(move || loop {
             match run_shred_sigverify(
                 &self_pubkey,

@@ -303,11 +303,14 @@ pub fn spawn_server(
             stats,
         )
     }?;
-    let handle = thread::spawn(move || {
-        if let Err(e) = runtime.block_on(task) {
-            warn!("error from runtime.block_on: {:?}", e);
-        }
-    });
+    let handle = thread::Builder::new()
+        .name("solQuicServer".into())
+        .spawn(move || {
+            if let Err(e) = runtime.block_on(task) {
+                warn!("error from runtime.block_on: {:?}", e);
+            }
+        })
+        .unwrap();
     Ok(handle)
 }
 

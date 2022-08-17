@@ -65,15 +65,20 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
 
                 solana_logger::setup_with_default(filter);
                 redirect_stderr(&logfile);
-                Some(std::thread::spawn(move || {
-                    for signal in signals.forever() {
-                        info!(
-                            "received SIGUSR1 ({}), reopening log file: {:?}",
-                            signal, logfile
-                        );
-                        redirect_stderr(&logfile);
-                    }
-                }))
+                Some(
+                    std::thread::Builder::new()
+                        .name("solSigUsr1".into())
+                        .spawn(move || {
+                            for signal in signals.forever() {
+                                info!(
+                                    "received SIGUSR1 ({}), reopening log file: {:?}",
+                                    signal, logfile
+                                );
+                                redirect_stderr(&logfile);
+                            }
+                        })
+                        .unwrap(),
+                )
             }
             #[cfg(not(unix))]
             {
