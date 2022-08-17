@@ -26,7 +26,7 @@ const SIGN_SHRED_GPU_MIN: usize = 256;
 lazy_static! {
     static ref SIGVERIFY_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("sigverify_shreds_{}", ix))
+        .thread_name(|ix| format!("solSvrfyShred{:02}", ix))
         .build()
         .unwrap();
 }

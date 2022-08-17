@@ -30,7 +30,7 @@ impl StakedNodesUpdaterService {
         shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     ) -> Self {
         let thread_hdl = Builder::new()
-            .name("sol-sn-updater".to_string())
+            .name("solStakedNodeUd".to_string())
             .spawn(move || {
                 let mut last_stakes = Instant::now();
                 while !exit.load(Ordering::Relaxed) {
