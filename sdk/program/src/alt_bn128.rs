@@ -19,7 +19,6 @@ use {
 use {
     bytemuck::{Pod, Zeroable},
     consts::*,
-    core::convert::TryFrom,
     thiserror::Error,
 };
 
