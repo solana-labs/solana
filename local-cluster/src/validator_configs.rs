@@ -65,7 +65,6 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         accounts_db_config: config.accounts_db_config.clone(),
         wait_to_vote_slot: config.wait_to_vote_slot,
         ledger_column_options: config.ledger_column_options.clone(),
-        enable_quic_servers: config.enable_quic_servers,
     }
 }
 

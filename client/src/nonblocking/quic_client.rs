@@ -332,7 +332,7 @@ impl QuicClient {
                                         "Cannot make 0rtt connection to {}, error {:}",
                                         self.addr, err
                                     );
-                                    return Err(QuicError::WriteError(err));
+                                    return Err(err);
                                 }
                             }
                         } else {
