@@ -132,7 +132,7 @@ impl SnapshotStorageRebuilder {
         Ok(snapshot_storage_lengths_from_fields(&accounts_fields))
     }
 
-    /// Spawn threads for processing buffered append_vec_files, and then rececived files
+    /// Spawn threads for processing buffered append_vec_files, and then received files
     fn spawn_rebuilder_threads(
         file_receiver: Receiver<PathBuf>,
         num_threads: usize,
