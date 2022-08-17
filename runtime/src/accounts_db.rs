@@ -6871,8 +6871,8 @@ impl AccountsDb {
         } else {
             // this path executes when we are failing with a hash mismatch
             let mut new = self.accounts_hash_cache_path.clone();
-            new.push(slot.to_string());
             new.push("failed_calculate_accounts_hash_cache");
+            new.push(slot.to_string());
             let _ = std::fs::remove_dir_all(&new);
             CacheHashData::new(&new)
         }
