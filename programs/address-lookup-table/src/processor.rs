@@ -9,6 +9,7 @@ use {
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
     solana_sdk::{
         clock::Slot,
+        feature_set,
         instruction::InstructionError,
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
@@ -37,11 +38,31 @@ pub fn process_instruction(
             Processor::deactivate_lookup_table(invoke_context)
         }
         ProgramInstruction::CloseLookupTable => Processor::close_lookup_table(invoke_context),
+        ProgramInstruction::CreateLookupTableV2 {
+            recent_slot,
+            bump_seed,
+        } => {
+            if invoke_context
+                .feature_set
+                .is_active(&feature_set::enable_create_lookup_table_v2::id())
+            {
+                Processor::create_lookup_table_v2(invoke_context, recent_slot, bump_seed)
+            } else {
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }
     }
 }
 
 fn checked_add(a: usize, b: usize) -> Result<usize, InstructionError> {
     a.checked_add(b).ok_or(InstructionError::ArithmeticOverflow)
+}
+
+struct CreateLookupTableArgs {
+    lookup_table_lamports: u64,
+    payer_key: Pubkey,
+    authority_key: Pubkey,
+    table_key: Pubkey,
 }
 
 pub struct Processor;
@@ -116,6 +137,28 @@ impl Processor {
             return Err(InstructionError::InvalidArgument);
         }
 
+        Self::create_lookup_table_common(
+            invoke_context,
+            CreateLookupTableArgs {
+                lookup_table_lamports,
+                payer_key,
+                authority_key,
+                table_key,
+            },
+        )
+    }
+
+    fn create_lookup_table_common(
+        invoke_context: &mut InvokeContext,
+        args: CreateLookupTableArgs,
+    ) -> Result<(), InstructionError> {
+        let CreateLookupTableArgs {
+            lookup_table_lamports,
+            payer_key,
+            authority_key,
+            table_key,
+        } = args;
+
         let table_account_data_len = LOOKUP_TABLE_META_SIZE;
         let rent = invoke_context.get_sysvar_cache().get_rent()?;
         let required_lamports = rent
@@ -149,6 +192,83 @@ impl Processor {
         )))?;
 
         Ok(())
+    }
+
+    fn create_lookup_table_v2(
+        invoke_context: &mut InvokeContext,
+        untrusted_recent_slot: Slot,
+        bump_seed: u8,
+    ) -> Result<(), InstructionError> {
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = transaction_context.get_current_instruction_context()?;
+
+        let lookup_table_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, 0)?;
+        let lookup_table_lamports = lookup_table_account.get_lamports();
+        let table_key = *lookup_table_account.get_key();
+        if !lookup_table_account.get_data().is_empty() {
+            ic_msg!(invoke_context, "Table account must not be allocated");
+            return Err(InstructionError::AccountAlreadyInitialized);
+        }
+        drop(lookup_table_account);
+
+        let authority_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, 1)?;
+        let authority_key = *authority_account.get_key();
+        drop(authority_account);
+
+        let payer_account =
+            instruction_context.try_borrow_instruction_account(transaction_context, 2)?;
+        let payer_key = *payer_account.get_key();
+        if !payer_account.is_signer() {
+            ic_msg!(invoke_context, "Payer account must be a signer");
+            return Err(InstructionError::MissingRequiredSignature);
+        }
+        drop(payer_account);
+
+        let derivation_slot = {
+            let slot_hashes = invoke_context.get_sysvar_cache().get_slot_hashes()?;
+            if slot_hashes.get(&untrusted_recent_slot).is_some() {
+                Ok(untrusted_recent_slot)
+            } else {
+                ic_msg!(
+                    invoke_context,
+                    "{} is not a recent slot",
+                    untrusted_recent_slot
+                );
+                Err(InstructionError::InvalidInstructionData)
+            }
+        }?;
+
+        // Use a derived address to ensure that an address table can never be
+        // initialized more than once at the same address.
+        let derived_table_key = Pubkey::create_program_address(
+            &[
+                payer_key.as_ref(),
+                &derivation_slot.to_le_bytes(),
+                &[bump_seed],
+            ],
+            &crate::id(),
+        )?;
+
+        if table_key != derived_table_key {
+            ic_msg!(
+                invoke_context,
+                "Table address must match derived address: {}",
+                derived_table_key
+            );
+            return Err(InstructionError::InvalidArgument);
+        }
+
+        Self::create_lookup_table_common(
+            invoke_context,
+            CreateLookupTableArgs {
+                lookup_table_lamports,
+                payer_key,
+                authority_key,
+                table_key,
+            },
+        )
     }
 
     fn freeze_lookup_table(invoke_context: &mut InvokeContext) -> Result<(), InstructionError> {

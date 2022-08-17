@@ -65,6 +65,27 @@ pub enum ProgramInstruction {
     ///   1. `[SIGNER]` Current authority
     ///   2. `[WRITE]` Recipient of closed account lamports
     CloseLookupTable,
+
+    /// Create an address lookup table account without requiring
+    /// the authority to sign the transaction.
+    ///
+    /// # Account references
+    ///   0. `[WRITE]` Uninitialized address lookup table account
+    ///   1. `[]` Account authorized to control the new address lookup table.
+    ///   2. `[SIGNER, WRITE]` Account used to derive and fund the new address lookup table.
+    ///   3. `[]` System program for CPI.
+    CreateLookupTableV2 {
+        /// A recent slot must be used in the derivation path
+        /// for each initialized table. When closing table accounts,
+        /// the initialization slot must no longer be "recent" to prevent
+        /// address tables from being recreated with reordered or
+        /// otherwise malicious addresses.
+        recent_slot: Slot,
+        /// Address tables are always initialized at program-derived
+        /// addresses using the funding address, recent blockhash, and
+        /// the user-passed `bump_seed`.
+        bump_seed: u8,
+    },
 }
 
 /// Derives the address of an address table account from a wallet address and a recent block's slot.
@@ -96,6 +117,40 @@ pub fn create_lookup_table(
         vec![
             AccountMeta::new(lookup_table_address, false),
             AccountMeta::new_readonly(authority_address, true),
+            AccountMeta::new(payer_address, true),
+            AccountMeta::new_readonly(system_program::id(), false),
+        ],
+    );
+
+    (instruction, lookup_table_address)
+}
+
+/// Constructs an instruction to create a lookup table account and returns
+/// the instruction and the table account's derived address. This version
+/// differs from the original create lookup table instruction by not requiring
+/// the authority key to sign the transaction. This makes it possible to create
+/// lookup tables on behalf of another authority such as a PDA.
+///
+/// # Note
+///
+/// This instruction can only be processed by a cluster which has activated
+/// the `enable_create_lookup_table_v2` feature gate.
+pub fn create_lookup_table_v2(
+    authority_address: Pubkey,
+    payer_address: Pubkey,
+    recent_slot: Slot,
+) -> (Instruction, Pubkey) {
+    let (lookup_table_address, bump_seed) =
+        derive_lookup_table_address(&payer_address, recent_slot);
+    let instruction = Instruction::new_with_bincode(
+        id(),
+        &ProgramInstruction::CreateLookupTableV2 {
+            recent_slot,
+            bump_seed,
+        },
+        vec![
+            AccountMeta::new(lookup_table_address, false),
+            AccountMeta::new_readonly(authority_address, false),
             AccountMeta::new(payer_address, true),
             AccountMeta::new_readonly(system_program::id(), false),
         ],
