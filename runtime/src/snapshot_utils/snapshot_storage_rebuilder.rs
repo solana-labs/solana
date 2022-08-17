@@ -2,9 +2,7 @@
 
 use {
     crate::{
-        accounts_db::{
-            AccountStorageEntry, AccountStorageMap, AppendVecId, AtomicAppendVecId, SlotStores,
-        },
+        accounts_db::{AccountStorageEntry, AccountStorageMap, AppendVecId, AtomicAppendVecId},
         serde_snapshot::{
             self, remap_and_reconstruct_single_storage, snapshot_storage_lengths_from_fields,
             SerdeStyle, SerializedAppendVecId,

@@ -1,9 +1,10 @@
 #![cfg(test)]
+
 use {
     super::*,
     crate::{
         accounts::{test_utils::create_test_accounts, Accounts},
-        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
+        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
         append_vec::AppendVec,
         bank::{Bank, Rewrites},
         genesis_utils::{activate_all_features, activate_feature},
@@ -32,11 +33,11 @@ use {
 fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
-) -> std::io::Result<(AccountStorageMap, AtomicU32)> {
+) -> std::io::Result<StorageAndNextAppendVecId> {
     let storage_entries = accounts_db
         .get_snapshot_storages(Slot::max_value(), None, None)
         .0;
-    let storage: AccountStorageMap = DashMap::with_capacity(storage_entries.len());
+    let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
     let mut next_append_vec_id = 0;
     for storage_entry in storage_entries.into_iter().flatten() {
         // Copy file to new directory
@@ -66,7 +67,10 @@ fn copy_append_vecs<P: AsRef<Path>>(
             );
     }
 
-    Ok((storage, AtomicU32::new(next_append_vec_id + 1)))
+    Ok(StorageAndNextAppendVecId {
+        storage,
+        next_append_vec_id: AtomicAppendVecId::new(next_append_vec_id + 1),
+    })
 }
 
 fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
@@ -85,8 +89,7 @@ fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
 fn context_accountsdb_from_stream<'a, C, R>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
-    storage: AccountStorageMap,
-    next_append_vec_id: AtomicU32,
+    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
 ) -> Result<AccountsDb, Error>
 where
     C: TypeContext<'a>,
@@ -101,8 +104,7 @@ where
     reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
-        storage,
-        next_append_vec_id,
+        storage_and_next_append_vec_id,
         &GenesisConfig {
             cluster_type: ClusterType::Development,
             ..GenesisConfig::default()
@@ -122,8 +124,7 @@ fn accountsdb_from_stream<R>(
     serde_style: SerdeStyle,
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
-    storage: AccountStorageMap,
-    next_append_vec_id: AtomicU32,
+    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
 ) -> Result<AccountsDb, Error>
 where
     R: Read,
@@ -132,8 +133,7 @@ where
         SerdeStyle::Newer => context_accountsdb_from_stream::<newer::Context, R>(
             stream,
             account_paths,
-            storage,
-            next_append_vec_id,
+            storage_and_next_append_vec_id,
         ),
     }
 }
@@ -190,7 +190,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     let copied_accounts = TempDir::new().unwrap();
 
     // Simulate obtaining a copy of the AppendVecs from a tarball
-    let (storage, next_append_vec_id) =
+    let storage_and_next_append_vec_id =
         copy_append_vecs(&accounts.accounts_db, copied_accounts.path()).unwrap();
 
     let buf = writer.into_inner();
@@ -201,8 +201,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
             serde_style,
             &mut reader,
             &daccounts_paths,
-            storage,
-            next_append_vec_id,
+            storage_and_next_append_vec_id,
         )
         .unwrap(),
     );
@@ -330,7 +329,7 @@ fn test_bank_serialize_style(
     status_cache.add_root(2);
     // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
     let copied_accounts = TempDir::new().unwrap();
-    let (storage, next_append_vec_id) =
+    let storage_and_next_append_vec_id =
         copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
     let mut snapshot_streams = SnapshotStreams {
         full_snapshot_stream: &mut reader,
@@ -340,8 +339,7 @@ fn test_bank_serialize_style(
         serde_style,
         &mut snapshot_streams,
         &dbank_paths,
-        storage,
-        next_append_vec_id,
+        storage_and_next_append_vec_id,
         &genesis_config,
         &RuntimeConfig::default(),
         None,
@@ -384,13 +382,13 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     let copied_accounts = TempDir::new().unwrap();
 
     // Simulate obtaining a copy of the AppendVecs from a tarball
-    let (storage, next_append_vec_id) = copy_append_vecs(accounts, copied_accounts.path()).unwrap();
+    let storage_and_next_append_vec_id =
+        copy_append_vecs(accounts, copied_accounts.path()).unwrap();
     let mut accounts_db = accountsdb_from_stream(
         SerdeStyle::Newer,
         &mut reader,
         &[],
-        storage,
-        next_append_vec_id,
+        storage_and_next_append_vec_id,
     )
     .unwrap();
 
@@ -464,14 +462,13 @@ fn test_extra_fields_eof() {
     };
     let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
     let copied_accounts = TempDir::new().unwrap();
-    let (storage, next_append_vec_id) =
+    let storage_and_next_append_vec_id =
         copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
     let dbank = crate::serde_snapshot::bank_from_streams(
         SerdeStyle::Newer,
         &mut snapshot_streams,
         &dbank_paths,
-        storage,
-        next_append_vec_id,
+        storage_and_next_append_vec_id,
         &genesis_config,
         &RuntimeConfig::default(),
         None,
@@ -588,14 +585,13 @@ fn test_blank_extra_fields() {
     };
     let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
     let copied_accounts = TempDir::new().unwrap();
-    let (storage, next_append_vec_id) =
+    let storage_and_next_append_vec_id =
         copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
     let dbank = crate::serde_snapshot::bank_from_streams(
         SerdeStyle::Newer,
         &mut snapshot_streams,
         &dbank_paths,
-        storage,
-        next_append_vec_id,
+        storage_and_next_append_vec_id,
         &genesis_config,
         &RuntimeConfig::default(),
         None,

@@ -1,7 +1,7 @@
 use {
     crate::{
         accounts_db::{
-            AccountShrinkThreshold, AccountsDbConfig, SlotStores, SnapshotStorage, SnapshotStorages,
+            AccountShrinkThreshold, AccountsDbConfig, SnapshotStorage, SnapshotStorages,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -24,7 +24,6 @@ use {
     },
     bincode::{config::Options, serialize_into},
     bzip2::bufread::BzDecoder,
-    dashmap::DashMap,
     flate2::read::GzDecoder,
     lazy_static::lazy_static,
     log::*,
@@ -58,7 +57,10 @@ mod archive_format;
 mod snapshot_storage_rebuilder;
 pub use archive_format::*;
 use {
-    crate::hardened_unpack::streaming_unpack_snapshot,
+    crate::{
+        accounts_db::{AccountStorageMap, AtomicAppendVecId},
+        hardened_unpack::streaming_unpack_snapshot,
+    },
     crossbeam_channel::Sender,
     std::thread::{Builder, JoinHandle},
 };
@@ -198,6 +200,13 @@ struct UnarchivedSnapshot {
 struct UnpackedSnapshotsDirAndVersion {
     unpacked_snapshots_dir: PathBuf,
     snapshot_version: String,
+}
+
+/// Helper type for passing around account storage map and next append vec id
+/// for reconstructing accounts from a snapshot
+pub(crate) struct StorageAndNextAppendVecId {
+    pub storage: AccountStorageMap,
+    pub next_append_vec_id: AtomicAppendVecId,
 }
 
 #[derive(Error, Debug)]
@@ -972,6 +981,11 @@ pub fn bank_from_snapshot_archives(
         storage.extend(incremental_snapshot_storages.into_iter());
     }
 
+    let storage_and_next_append_vec_id = StorageAndNextAppendVecId {
+        storage,
+        next_append_vec_id,
+    };
+
     let mut measure_rebuild = Measure::start("rebuild bank from snapshots");
     let bank = rebuild_bank_from_snapshots(
         &unarchived_full_snapshot.unpacked_snapshots_dir_and_version,
@@ -981,8 +995,7 @@ pub fn bank_from_snapshot_archives(
                 &unarchive_preparation_result.unpacked_snapshots_dir_and_version
             }),
         account_paths,
-        storage,
-        next_append_vec_id,
+        storage_and_next_append_vec_id,
         genesis_config,
         runtime_config,
         debug_keys,
@@ -1768,8 +1781,7 @@ fn rebuild_bank_from_snapshots(
         &UnpackedSnapshotsDirAndVersion,
     >,
     account_paths: &[PathBuf],
-    storage: AccountStorageMap,
-    next_append_vec_id: AtomicU32,
+    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -1818,8 +1830,7 @@ fn rebuild_bank_from_snapshots(
                     SerdeStyle::Newer,
                     snapshot_streams,
                     account_paths,
-                    storage,
-                    next_append_vec_id,
+                    storage_and_next_append_vec_id,
                     genesis_config,
                     runtime_config,
                     debug_keys,

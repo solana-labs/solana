@@ -3,7 +3,7 @@ use {
         accounts::Accounts,
         accounts_db::{
             AccountShrinkThreshold, AccountStorageEntry, AccountsDb, AccountsDbConfig, AppendVecId,
-            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SlotStores, SnapshotStorage,
+            AtomicAppendVecId, BankHashInfo, IndexGenerationInfo, SnapshotStorage,
         },
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -19,7 +19,6 @@ use {
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
-    dashmap::DashMap,
     log::*,
     serde::{de::DeserializeOwned, Deserialize, Serialize},
     solana_measure::measure::Measure,
@@ -40,7 +39,7 @@ use {
         path::{Path, PathBuf},
         result::Result,
         sync::{
-            atomic::{AtomicU32, AtomicUsize, Ordering},
+            atomic::{AtomicUsize, Ordering},
             Arc,
         },
         thread::Builder,
@@ -53,6 +52,7 @@ mod storage;
 mod tests;
 mod utils;
 
+use crate::snapshot_utils::StorageAndNextAppendVecId;
 pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
@@ -305,8 +305,7 @@ pub(crate) fn bank_from_streams<R>(
     serde_style: SerdeStyle,
     snapshot_streams: &mut SnapshotStreams<R>,
     account_paths: &[PathBuf],
-    storage: AccountStorageMap,
-    next_append_vec_id: AtomicU32,
+    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -329,8 +328,7 @@ where
         genesis_config,
         runtime_config,
         account_paths,
-        storage,
-        next_append_vec_id,
+        storage_and_next_append_vec_id,
         debug_keys,
         additional_builtins,
         account_secondary_indexes,
@@ -519,8 +517,7 @@ fn reconstruct_bank_from_fields<E>(
     genesis_config: &GenesisConfig,
     runtime_config: &RuntimeConfig,
     account_paths: &[PathBuf],
-    storage: AccountStorageMap,
-    next_append_vec_id: AtomicU32,
+    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
@@ -537,8 +534,7 @@ where
     let (accounts_db, reconstructed_accounts_db_info) = reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
-        storage,
-        next_append_vec_id,
+        storage_and_next_append_vec_id,
         genesis_config,
         account_secondary_indexes,
         caching_enabled,
@@ -658,8 +654,7 @@ struct ReconstructedAccountsDbInfo {
 fn reconstruct_accountsdb_from_fields<E>(
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     account_paths: &[PathBuf],
-    storage: AccountStorageMap,
-    next_append_vec_id: AtomicU32,
+    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
     genesis_config: &GenesisConfig,
     account_secondary_indexes: AccountSecondaryIndexes,
     caching_enabled: bool,
@@ -702,6 +697,11 @@ where
         snapshot_historical_roots,
         snapshot_historical_roots_with_hash,
     );
+
+    let StorageAndNextAppendVecId {
+        storage,
+        next_append_vec_id,
+    } = storage_and_next_append_vec_id;
 
     // discard any slots with no storage entries
     // this can happen if a non-root slot was serialized
