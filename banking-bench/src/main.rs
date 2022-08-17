@@ -214,10 +214,10 @@ fn main() {
                 .help("Number of threads to use in the banking stage"),
         )
         .arg(
-            Arg::new("tpu_use_quic")
-                .long("tpu-use-quic")
+            Arg::new("tpu_disable_quic")
+                .long("tpu-disable-quic")
                 .takes_value(false)
-                .help("Forward messages to TPU using QUIC"),
+                .help("Disable forwarding messages to TPU using QUIC"),
         )
         .get_matches();
 

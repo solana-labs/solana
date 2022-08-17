@@ -201,6 +201,7 @@ fn test_leader_failure_4() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_ledger_cleanup_service() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     error!("test_ledger_cleanup_service");
