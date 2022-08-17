@@ -1,6 +1,6 @@
 [package]
 name = "solana-program-runtime"
-version = "1.11.6"
+version = "1.11.7"
 description = "Solana program runtime"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -20,16 +20,16 @@ log = "0.4.14"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
 serde = { version = "1.0.129", features = ["derive", "rc"] }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.6" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.6" }
-solana-measure = { path = "../measure", version = "=1.11.6" }
-solana-metrics = { path = "../metrics", version = "=1.11.6" }
-solana-sdk = { path = "../sdk", version = "=1.11.6" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.7" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.7" }
+solana-measure = { path = "../measure", version = "=1.11.7" }
+solana-metrics = { path = "../metrics", version = "=1.11.7" }
+solana-sdk = { path = "../sdk", version = "=1.11.7" }
 thiserror = "1.0"
 enum-iterator = "0.8.1"
 
 [dev-dependencies]
-solana-logger = { path = "../logger", version = "=1.11.6" }
+solana-logger = { path = "../logger", version = "=1.11.7" }
 
 [lib]
 crate-type = ["lib"]
