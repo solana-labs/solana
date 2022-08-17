@@ -6,9 +6,7 @@ use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        latest_unprocessed_votes::{
-            self, DeserializedVotePacket, LatestUnprocessedVotes, VoteSource,
-        },
+        latest_unprocessed_votes::{self, LatestUnprocessedVotes, VoteSource},
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
@@ -17,6 +15,7 @@ use {
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
         unprocessed_packet_batches::{self, *},
+        unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
     core::iter::repeat,
     crossbeam_channel::{
@@ -24,7 +23,6 @@ use {
     },
     histogram::Histogram,
     itertools::Itertools,
-    min_max_heap::MinMaxHeap,
     rand::{thread_rng, Rng},
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
@@ -388,250 +386,6 @@ pub struct FilterForwardingResults {
     total_forwardable_packets: usize,
     total_tracer_packets_in_buffer: usize,
     total_forwardable_tracer_packets: usize,
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum ThreadType {
-    Voting(VoteSource),
-    Transactions,
-}
-
-#[derive(Debug)]
-pub enum UnprocessedTransactionStorage {
-    VoteStorage(Arc<LatestUnprocessedVotes>, VoteSource),
-    TransactionStorage(UnprocessedPacketBatches, ThreadType),
-}
-
-impl UnprocessedTransactionStorage {
-    pub fn is_empty(&self) -> bool {
-        match self {
-            Self::VoteStorage(v, _) => v.is_empty(),
-            Self::TransactionStorage(t, _) => t.is_empty(),
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        match self {
-            Self::VoteStorage(v, _) => v.len(),
-            Self::TransactionStorage(t, _) => t.len(),
-        }
-    }
-
-    pub fn capacity(&self) -> usize {
-        match self {
-            Self::VoteStorage(_, _) => usize::MAX,
-            Self::TransactionStorage(t, _) => t.capacity(),
-        }
-    }
-
-    pub fn should_not_process(&self) -> bool {
-        // The gossip vote thread does not need to process or forward any votes, that is
-        // handled by the tpu vote thread
-        matches!(self, Self::VoteStorage(_, VoteSource::Gossip))
-    }
-
-    #[cfg(test)]
-    pub fn iter(&mut self) -> impl Iterator<Item = &DeserializedPacket> {
-        match self {
-            Self::TransactionStorage(t, _) => t.iter(),
-            _ => panic!(),
-        }
-    }
-
-    pub fn forward_option(&self) -> ForwardOption {
-        match self {
-            Self::TransactionStorage(_, ThreadType::Transactions) => {
-                ForwardOption::ForwardTransaction
-            }
-            Self::TransactionStorage(_, ThreadType::Voting(VoteSource::Tpu)) => {
-                ForwardOption::ForwardTpuVote
-            }
-            Self::TransactionStorage(_, ThreadType::Voting(VoteSource::Gossip)) => {
-                ForwardOption::NotForward
-            }
-            Self::VoteStorage(_, VoteSource::Tpu) => ForwardOption::ForwardTpuVote,
-            Self::VoteStorage(_, VoteSource::Gossip) => ForwardOption::NotForward,
-        }
-    }
-
-    pub fn clear_forwarded_packets(&mut self) {
-        match self {
-            Self::TransactionStorage(t, _) => t.clear(), // Since we set everything as forwarded this is the same
-            Self::VoteStorage(v, _) => v.clear_forwarded_packets(),
-        }
-    }
-
-    /// returns
-    /// num dropped packets,
-    /// num dropped gossip vote packets,
-    /// num dropped tpu vote packets,
-    /// num dropped tracer packets
-    pub fn deserialize_and_insert_batch(
-        &mut self,
-        packet_batch: &PacketBatch,
-        packet_indexes: &[usize],
-    ) -> (usize, usize, usize, usize) {
-        match self {
-            Self::VoteStorage(v, vote_source) => {
-                let (dropped_gossip, dropped_tpu) =
-                    v.insert_batch(latest_unprocessed_votes::deserialize_packets(
-                        packet_batch,
-                        packet_indexes,
-                        *vote_source,
-                    ));
-                (dropped_gossip + dropped_tpu, dropped_gossip, dropped_tpu, 0)
-            }
-            Self::TransactionStorage(t, _) => {
-                let (dropped_packets, dropped_tracer) = t.insert_batch(
-                    unprocessed_packet_batches::deserialize_packets(packet_batch, packet_indexes),
-                );
-                (dropped_packets, 0, 0, dropped_tracer)
-            }
-        }
-    }
-
-    pub fn filter_forwardable_packets_and_add_batches(
-        &mut self,
-        forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
-    ) -> FilterForwardingResults {
-        match self {
-            Self::TransactionStorage(t, _) => BankingStage::filter_valid_packets_for_forwarding(
-                t,
-                forward_packet_batches_by_accounts,
-            ),
-            Self::VoteStorage(v, VoteSource::Tpu) => {
-                let total_forwardable_packets =
-                    v.get_and_insert_forwardable_packets(forward_packet_batches_by_accounts);
-                FilterForwardingResults {
-                    total_forwardable_packets,
-                    ..FilterForwardingResults::default()
-                }
-            }
-            _ => FilterForwardingResults::default(),
-        }
-    }
-
-    /// The processing function takes a stream of packets ready to process, and returns the indices
-    /// of the unprocessed packets that are eligible for retry. A return value of None means that
-    /// all packets are unprocessed and eligible for retry.
-    pub fn process_packets<F>(
-        &mut self,
-        bank: Option<Arc<Bank>>,
-        batch_size: usize,
-        mut processing_function: F,
-    ) where
-        F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
-    {
-        match self {
-            Self::TransactionStorage(buffered_packet_batches, _) => {
-                let mut retryable_packets = {
-                    let capacity = buffered_packet_batches.capacity();
-                    std::mem::replace(
-                        &mut buffered_packet_batches.packet_priority_queue,
-                        MinMaxHeap::with_capacity(capacity),
-                    )
-                };
-                let retryable_packets: MinMaxHeap<Rc<ImmutableDeserializedPacket>> =
-                    retryable_packets
-                        .drain_desc()
-                        .chunks(batch_size)
-                        .into_iter()
-                        .flat_map(|packets_to_process| {
-                            let packets_to_process = packets_to_process.into_iter().collect_vec();
-                            if let Some(retryable_transaction_indexes) =
-                                processing_function(&packets_to_process)
-                            {
-                                // Remove the non-retryable packets, packets that were either:
-                                // 1) Successfully processed
-                                // 2) Failed but not retryable
-                                BankingStage::filter_processed_packets(
-                                    retryable_transaction_indexes
-                                        .iter()
-                                        .chain(std::iter::once(&packets_to_process.len())),
-                                    |start, end| {
-                                        for processed_packet in &packets_to_process[start..end] {
-                                            buffered_packet_batches
-                                                .message_hash_to_transaction
-                                                .remove(processed_packet.message_hash());
-                                        }
-                                    },
-                                );
-                                retryable_transaction_indexes
-                                    .iter()
-                                    .map(|i| packets_to_process[*i].clone())
-                                    .collect_vec()
-                            } else {
-                                packets_to_process
-                            }
-                        })
-                        .collect::<MinMaxHeap<_>>();
-
-                buffered_packet_batches.packet_priority_queue = retryable_packets;
-
-                // Assert unprocessed queue is still consistent
-                assert_eq!(
-                    buffered_packet_batches.packet_priority_queue.len(),
-                    buffered_packet_batches.message_hash_to_transaction.len()
-                );
-            }
-            Self::VoteStorage(latest_unprocessed_votes, VoteSource::Tpu) => {
-                // Based on the stake distribution present in the supplied bank, drain the unprocessed votes
-                // from each validator using a weighted random ordering. Votes from validators with
-                // 0 stake are ignored.
-                // TODO: Add proper error handling in case bank is missing?
-                let bank = bank.unwrap();
-
-                let latest_votes_per_pubkey = latest_unprocessed_votes
-                    .latest_votes_per_pubkey
-                    .read()
-                    .unwrap();
-
-                let retryable_votes = weighted_random_order_by_stake(&bank)
-                    .filter_map(|pubkey| {
-                        if let Some(lock) = latest_votes_per_pubkey.get(&pubkey) {
-                            if let Ok(latest_vote) = lock.write() {
-                                if let Ok(mut latest_vote) = latest_vote.try_borrow_mut() {
-                                    if !latest_vote.is_processed() {
-                                        let packet = latest_vote.clone();
-                                        latest_vote.clear();
-                                        latest_unprocessed_votes
-                                            .size
-                                            .fetch_sub(1, Ordering::AcqRel);
-                                        return Some(packet);
-                                    }
-                                }
-                            }
-                        }
-                        None
-                    })
-                    .chunks(batch_size)
-                    .into_iter()
-                    .flat_map(|vote_packets| {
-                        let vote_packets = vote_packets.into_iter().collect_vec();
-                        let packets_to_process = vote_packets
-                            .iter()
-                            .map(&DeserializedVotePacket::get_vote_packet)
-                            .collect_vec();
-                        if let Some(retryable_vote_indices) =
-                            processing_function(&packets_to_process)
-                        {
-                            retryable_vote_indices
-                                .iter()
-                                .map(|i| vote_packets[*i].clone())
-                                .collect_vec()
-                        } else {
-                            vote_packets
-                        }
-                    })
-                    .collect_vec();
-                // Insert the retryable votes back in
-                latest_unprocessed_votes.insert_batch(retryable_votes.into_iter());
-            }
-            Self::VoteStorage(_, VoteSource::Gossip) => {
-                panic!("Gossip vote thread should not be processing transactions")
-            }
-        }
-    }
 }
 
 impl BankingStage {
@@ -1354,7 +1108,10 @@ impl BankingStage {
                 UnprocessedTransactionStorage::TransactionStorage(
                     unprocessed_packet_batches,
                     ThreadType::Voting(vote_source),
-                ) => UnprocessedTransactionStorage::VoteStorage(latest_unprocessed_votes, vote_source),
+                ) => UnprocessedTransactionStorage::VoteStorage(
+                    latest_unprocessed_votes,
+                    vote_source,
+                ),
                 _ => unprocessed_transaction_storage,
             };
 
@@ -2110,25 +1867,6 @@ impl BankingStage {
         );
 
         Self::filter_valid_transaction_indexes(&results, transaction_to_packet_indexes)
-    }
-
-    fn filter_processed_packets<'a, F>(
-        retryable_transaction_indexes: impl Iterator<Item = &'a usize>,
-        mut f: F,
-    ) where
-        F: FnMut(usize, usize),
-    {
-        let mut prev_retryable_index = 0;
-        for (i, retryable_index) in retryable_transaction_indexes.enumerate() {
-            let start = if i == 0 { 0 } else { prev_retryable_index + 1 };
-
-            let end = *retryable_index;
-            prev_retryable_index = *retryable_index;
-
-            if start < end {
-                f(start, end)
-            }
-        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -4244,7 +3982,7 @@ mod tests {
                 unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
                     .unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
-            let mut buffered_packet_batches = UnprocessedTransactionStorage::TransactionStorage(
+            let mut buffered_packet_batches = UnprocessedTransactionStorage::new_transaction_storage(
                 UnprocessedPacketBatches::from_iter(
                     deserialized_packets.into_iter(),
                     num_conflicting_transactions,
@@ -4344,7 +4082,7 @@ mod tests {
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
                     let num_packets_to_process_per_iteration = 1;
                     let mut buffered_packet_batches =
-                        UnprocessedTransactionStorage::TransactionStorage(
+                        UnprocessedTransactionStorage::new_transaction_storage(
                             UnprocessedPacketBatches::from_iter(
                                 deserialized_packets.clone().into_iter(),
                                 num_conflicting_transactions,
@@ -4466,7 +4204,7 @@ mod tests {
                 let stats = BankingStageStats::default();
                 BankingStage::handle_forwarding(
                     &cluster_info,
-                    &mut UnprocessedTransactionStorage::TransactionStorage(
+                    &mut UnprocessedTransactionStorage::new_transaction_storage(
                         unprocessed_packet_batches,
                         ThreadType::Transactions,
                     ),
@@ -4520,7 +4258,7 @@ mod tests {
             DeserializedPacket::new(packet).unwrap()
         };
 
-        let mut unprocessed_packet_batches = UnprocessedTransactionStorage::TransactionStorage(
+        let mut unprocessed_packet_batches = UnprocessedTransactionStorage::new_transaction_storage(
             UnprocessedPacketBatches::from_iter(
                 vec![forwarded_packet, normal_packet].into_iter(),
                 2,
@@ -4793,7 +4531,7 @@ mod tests {
             ThreadType::Voting(VoteSource::Gossip),
             ThreadType::Voting(VoteSource::Tpu),
         ] {
-            let mut transaction_storage = UnprocessedTransactionStorage::TransactionStorage(
+            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
                 UnprocessedPacketBatches::with_capacity(100),
                 thread_type,
             );
@@ -4810,7 +4548,7 @@ mod tests {
         }
 
         for vote_source in [VoteSource::Gossip, VoteSource::Tpu] {
-            let mut transaction_storage = UnprocessedTransactionStorage::VoteStorage(
+            let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
                 Arc::new(LatestUnprocessedVotes::new()),
                 vote_source,
             );
