@@ -43,14 +43,6 @@ pub const DEFAULT_CLUSTER_LAMPORTS: u64 = 10_000_000 * LAMPORTS_PER_SOL;
 pub const DEFAULT_NODE_STAKE: u64 = 10 * LAMPORTS_PER_SOL;
 pub const DEFAULT_SHRED_VERSION: u16 = 44120;
 
-pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
-    let mut seed = [0u8; 32];
-    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
-    let mut rnd = GenKeys::new(seed);
-
-    (rnd.gen_n_keypairs(count), 0)
-}
-
 fn parse_matches() -> ArgMatches<'static> {
     App::new(crate_name!())
         .about(crate_description!())
@@ -135,6 +127,14 @@ fn parse_entrypoint(matches: &ArgMatches) -> Option<SocketAddr> {
             exit(1);
         })
     })
+}
+
+pub fn generate_keypairs(seed_keypair: &Keypair, count: u64) -> (Vec<Keypair>, u64) {
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&seed_keypair.to_bytes()[..32]);
+    let mut rnd = GenKeys::new(seed);
+
+    (rnd.gen_n_keypairs(count), 0)
 }
 
 fn parse_gossip_host(matches: &ArgMatches, entrypoint_addr: Option<SocketAddr>) -> IpAddr {
@@ -363,19 +363,6 @@ pub fn main() {
 
             cluster_info.set_entrypoints(cluster_entrypoints.clone());
             let cluster_info = Arc::new(cluster_info);
-
-            //Generate new bank and bank forks
-            let bank0 = Bank::new_with_paths_for_tests(
-                genesis_config,
-                Arc::<RuntimeConfig>::default(),
-                vec![ledger_path.clone()],
-                AccountSecondaryIndexes::default(),
-                false,
-                accounts_db::AccountShrinkThreshold::default(),
-            );
-            bank0.freeze();
-            let _bank_forks = BankForks::new(bank0);
-            let _bank_forks = Arc::new(RwLock::new(_bank_forks));
 
             let (stats_reporter_sender, _stats_reporter_receiver) = unbounded();
 
