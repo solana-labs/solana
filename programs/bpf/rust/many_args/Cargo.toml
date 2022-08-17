@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-many-args"
-version = "1.11.6"
+version = "1.11.7"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,8 +10,8 @@ documentation = "https://docs.rs/solana-bpf-rust-many-args"
 edition = "2021"
 
 [dependencies]
-solana-bpf-rust-many-args-dep = { path = "../many_args_dep", version = "=1.11.6" }
-solana-program = { path = "../../../../sdk/program", version = "=1.11.6" }
+solana-bpf-rust-many-args-dep = { path = "../many_args_dep", version = "=1.11.7" }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.7" }
 
 [lib]
 crate-type = ["cdylib"]

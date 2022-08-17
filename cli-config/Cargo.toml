@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-cli-config"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.11.6"
+version = "1.11.7"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -15,8 +15,8 @@ lazy_static = "1.4.0"
 serde = "1.0.138"
 serde_derive = "1.0.103"
 serde_yaml = "0.8.26"
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.6" }
-solana-sdk = { path = "../sdk", version = "=1.11.6" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.11.7" }
+solana-sdk = { path = "../sdk", version = "=1.11.7" }
 url = "2.2.2"
 
 [dev-dependencies]
