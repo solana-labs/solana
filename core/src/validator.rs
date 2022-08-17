@@ -364,6 +364,7 @@ pub struct Validator {
     ledger_metric_report_service: LedgerMetricReportService,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
+    pub async_runtime: Arc<tokio::runtime::Runtime>,
 }
 
 impl Validator {
@@ -454,12 +455,18 @@ impl Validator {
             }
         }
 
+        let async_runtime = tokio::runtime::Runtime::new().unwrap();
+
         info!("Cleaning accounts paths..");
         *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
         let mut start = Measure::start("clean_accounts_paths");
-        cleanup_accounts_paths(&config);
+        cleanup_accounts_paths(&async_runtime, &config);
         start.stop();
         info!("done. {}", start);
+
+        // This runtime is wrapped with arc, put into the validator self.
+        // It will stay during the lifetime of the validator.
+        let async_runtime = Arc::new(async_runtime);
 
         let exit = Arc::new(AtomicBool::new(false));
         {
@@ -1060,6 +1067,7 @@ impl Validator {
             ledger_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
+            async_runtime,
         })
     }
 
@@ -2057,13 +2065,12 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 
 /*  Rename to-be-deleted path to *_delete, and add it into the del_paths vector
  *  If the _delete path exists (could happen if the previous process was killed),
- *  then add .{count} to the path, and delete them together.  This avoids file
+ *  then append {count} to the path, and delete them together.  This avoids file
  *  leaking and accumulation even the asyc deleting tasks were not successfully done
  */
 fn move_path_for_async_removal(del_paths: &mut Vec<PathBuf>, path: &std::path::Path) {
     let mut del_path_str = OsString::from(path);
     del_path_str.push("_deleted");
-    info!("del_path_str = {del_path_str:?}");
     let mut loop_count: i32 = 0;
     loop {
         let mut with_appendix = del_path_str.clone();
@@ -2072,7 +2079,6 @@ fn move_path_for_async_removal(del_paths: &mut Vec<PathBuf>, path: &std::path::P
         }
         let path_delete: PathBuf = PathBuf::from(with_appendix);
 
-        info!("loop_count {loop_count}, &path_delete {path_delete:?}");
         if path_delete.exists() {
             del_paths.push(path_delete);
             loop_count += 1;
@@ -2087,16 +2093,14 @@ fn move_path_for_async_removal(del_paths: &mut Vec<PathBuf>, path: &std::path::P
 /*  Delete directories/files asynchronously to avoid blocking on it.
     Fist, in sync context, rename the original path into
     the top to_be_deleted/ directory, then in the async context
-    call remove_dir_all for the top to_be_deleted directory.
+    call the tokio async remove_dir_all.
     The async rmdir process may not finish if the process is
     unexpectly aborted, so the files may be left over undeleted.
-    causing the disk space resource leak.  Always calling rmdir at the
-    top to_be_deleted directory allows cleaning up all the files
-    including the ones possibly left over by previous processes.
+    causing the disk space resource leak.  This function finds all
+    the leftover files and also delete them.
 */
-fn cleanup_accounts_paths(config: &ValidatorConfig) {
+fn cleanup_accounts_paths(async_runtime: &tokio::runtime::Runtime, config: &ValidatorConfig) {
     let mut del_paths: Vec<PathBuf> = Vec::new();
-
     for accounts_path in &config.account_paths {
         move_path_for_async_removal(&mut del_paths, accounts_path);
     }
@@ -2110,11 +2114,10 @@ fn cleanup_accounts_paths(config: &ValidatorConfig) {
     // the async task to remove them.  Note that there is no waiting to ensure this
     // async task is done.  So if the process crashes or is aborted,
     // some files may be left over.  The next process will resume the deleting work
-    // from the top_delete_path to avoid accumulating and leftover files on disk.
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    // if it finds any leftover file.
 
     for del_path in del_paths {
-        rt.spawn(async move {
+        async_runtime.spawn(async move {
             if let Err(e) = tokio::fs::remove_dir_all(&del_path).await {
                 warn!("encountered error deleting path: {:?}: {}", del_path, e);
             }
