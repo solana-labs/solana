@@ -834,7 +834,6 @@ fn check_authorized_program(
     instruction_data: &[u8],
     invoke_context: &InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    #[allow(clippy::blocks_in_if_conditions)]
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
