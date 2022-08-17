@@ -12,6 +12,7 @@ export * from './message';
 export * from './nonce-account';
 export * from './programs';
 export * from './publickey';
+export * from './stake-account';
 export * from './transaction';
 export * from './validator-info';
 export * from './vote-account';
