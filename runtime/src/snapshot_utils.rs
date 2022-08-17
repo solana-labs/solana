@@ -2045,6 +2045,7 @@ pub fn package_and_archive_full_snapshot(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
         &bank.get_accounts_hash(),
+        None,
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
@@ -2097,6 +2098,7 @@ pub fn package_and_archive_incremental_snapshot(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
         &bank.get_accounts_hash(),
+        None,
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
