@@ -1626,7 +1626,7 @@ mod tests {
             .unwrap();
 
         // super fun time; callback chooses to .clean_accounts(None) or not
-        callback(&*bank);
+        callback(&bank);
 
         // create a normal account at the same pubkey as the zero-lamports account
         let lamports = genesis_config.rent.minimum_balance(len2);
