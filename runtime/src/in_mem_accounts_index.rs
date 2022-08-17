@@ -279,7 +279,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             m.stop();
 
             callback(if let Some(entry) = result {
-                entry.set_age(self.storage.future_age_to_flush());
+                self.set_age_to_future(entry);
                 Some(entry)
             } else {
                 drop(map);
@@ -303,6 +303,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// lookup 'pubkey' in index (in mem or on disk)
     pub fn get(&self, pubkey: &K) -> Option<AccountMapEntry<T>> {
         self.get_internal(pubkey, |entry| (true, entry.map(Arc::clone)))
+    }
+
+    fn set_age_to_future(&self, entry: &AccountMapEntry<T>) {
+        entry.set_age(self.storage.future_age_to_flush());
     }
 
     /// lookup 'pubkey' in index (in_mem or disk).
@@ -474,7 +478,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             reclaims,
                             reclaim,
                         );
-                        current.set_age(self.storage.future_age_to_flush());
+                        self.set_age_to_future(current);
                     }
                     Entry::Vacant(vacant) => {
                         // not in cache, look on disk
