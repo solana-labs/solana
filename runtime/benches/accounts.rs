@@ -178,7 +178,7 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
         accounts.add_root(i);
     }
     bencher.iter(|| {
-        accounts.accounts_db.clean_accounts(None, false, None);
+        accounts.accounts_db.clean_accounts_for_tests();
     });
 }
 

@@ -3081,7 +3081,7 @@ mod tests {
             }
         }
         info!("done..cleaning..");
-        accounts.accounts_db.clean_accounts(None, false, None);
+        accounts.accounts_db.clean_accounts_for_tests();
     }
 
     fn load_accounts_no_store(
