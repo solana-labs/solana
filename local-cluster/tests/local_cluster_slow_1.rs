@@ -49,6 +49,7 @@ mod common;
 
 #[test]
 #[serial]
+#[ignore]
 // Steps in this test:
 // We want to create a situation like:
 /*
@@ -587,6 +588,7 @@ fn test_duplicate_shreds_broadcast_leader() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_switch_threshold_uses_gossip_votes() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let total_stake = 100 * DEFAULT_NODE_STAKE;
