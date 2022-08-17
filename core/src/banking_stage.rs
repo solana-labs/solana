@@ -4123,6 +4123,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_forwarder_budget() {
         solana_logger::setup();
         // Create `PacketBatch` with 1 unprocessed packet
@@ -4210,6 +4211,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_handle_forwarding() {
         solana_logger::setup();
         // packets are deserialized upon receiving, failed packets will not be
