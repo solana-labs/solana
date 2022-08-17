@@ -580,6 +580,17 @@ impl CachedExecutors {
     }
 }
 
+/// Asynchronous epoch rewards calculator
+struct EpochRewardCalculator {}
+
+impl EpochRewardCalculator {
+    /// redeem rewards from previous epoch
+    pub fn get_rewards() {}
+
+    /// compute rewards for current epoch
+    pub fn compute_rewards() {}
+}
+
 #[derive(Debug)]
 pub struct BankRc {
     /// where all the Accounts are stored
@@ -1370,6 +1381,9 @@ pub struct Bank {
     pub fee_structure: FeeStructure,
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
+
+    /// Epoch rewards calculator
+    epoch_reward_calculator: Arc<RwLock<EpochRewardCalculator>>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1902,6 +1916,12 @@ impl Bank {
                         "thread_pool_creation",
                     );
 
+                    // redeem rewards from previous epoch
+                    let (_, redeem_rewards_time) = measure!(
+                        new.epoch_reward_calculator.redeem_rewards(),
+                        "redeem_rewards",
+                    );
+
                     let (_, apply_feature_activations_time) = measure!(
                         new.apply_feature_activations(
                             ApplyFeatureActivationsCaller::NewFromParent,
@@ -1923,6 +1943,12 @@ impl Bank {
                     let (_, update_epoch_stakes_time) = measure!(
                         new.update_epoch_stakes(leader_schedule_epoch),
                         "update_epoch_stakes",
+                    );
+
+                    // Compute rewards for current epoch achronously
+                    let (_, redeem_rewards_time) = measure!(
+                        new.epoch_reward_calculator.compute_rewards(),
+                        "redeem_rewards",
                     );
 
                     let mut metrics = RewardsMetrics::default();
@@ -7666,6 +7692,16 @@ impl Bank {
             const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
             self.accounts_data_size_initial = ACCOUNTS_DATA_LEN;
         }
+    }
+
+    fn redeem_rewards_from_previous_epoch(&mut self) {
+        // TODO: update accounts
+        let rewards = self.epoch_reward_calculator.get_rewards();
+    }
+
+    fn start_epoch_rewards_computation(&mut self) {
+        // TODO
+        self.epoch_reward_calculator.compute_rewards();
     }
 
     fn adjust_sysvar_balance_for_rent(&self, account: &mut AccountSharedData) {
