@@ -23,7 +23,7 @@ pub enum PurgeType {
 
 impl Blockstore {
     /// Performs cleanup based on the specified deletion range.  After this
-    /// function call, entries within \[`from_slot`, `to_slot`\] will become
+    /// function call, entries within \[`from_slot`, `to_slot`) will become
     /// unavailable to the reader immediately, while its disk space occupied
     /// by the deletion entries are reclaimed later via RocksDB's background
     /// compaction.

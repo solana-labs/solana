@@ -128,9 +128,9 @@ impl LedgerCleanupService {
     /// - `slots_to_clean` (bool): a boolean value indicating whether there
     /// are any slots to clean.  If true, then `cleanup_ledger` function
     /// will then proceed with the ledger cleanup.
-    /// - `lowest_slot_to_purge` (Slot): the lowest slot to purge.  Any
-    ///   slot which is older or equal to `lowest_slot_to_purge` will be
-    ///   cleaned up.
+    /// - `oldest_available_slot` (Slot): the oldest available slot after
+    ///   the purge.  Any slot which is older than `oldest_available_slot`
+    ///   will be cleaned up.
     /// - `total_shreds` (u64): the total estimated number of shreds before the
     ///   `root`.
     fn find_slots_to_clean(
@@ -164,16 +164,16 @@ impl LedgerCleanupService {
             return (false, 0, total_shreds);
         }
         let mut num_shreds_to_clean = 0;
-        let mut lowest_cleanup_slot = total_slots[0].0;
+        let mut oldest_available_slot = total_slots[0].0;
         for (slot, num_shreds) in total_slots.iter().rev() {
             num_shreds_to_clean += *num_shreds as u64;
             if num_shreds_to_clean > max_ledger_shreds {
-                lowest_cleanup_slot = *slot;
+                oldest_available_slot = *slot;
                 break;
             }
         }
 
-        (true, lowest_cleanup_slot, total_shreds)
+        (true, oldest_available_slot, total_shreds)
     }
 
     fn receive_new_roots(new_root_receiver: &Receiver<Slot>) -> Result<Slot, RecvTimeoutError> {
@@ -229,7 +229,7 @@ impl LedgerCleanupService {
 
         *last_purge_slot = root;
 
-        let (slots_to_clean, lowest_cleanup_slot, total_shreds) =
+        let (slots_to_clean, oldest_available_slot, total_shreds) =
             Self::find_slots_to_clean(blockstore, root, max_ledger_shreds);
 
         if slots_to_clean {
@@ -241,32 +241,32 @@ impl LedgerCleanupService {
                 .name("solana-ledger-purge".to_string())
                 .spawn(move || {
                     let mut slot_update_time = Measure::start("slot_update");
-                    *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
+                    *blockstore.oldest_available_slot.write().unwrap() = oldest_available_slot;
                     slot_update_time.stop();
 
-                    info!("purging data older than {}", lowest_cleanup_slot);
+                    info!("purging data older than {}", oldest_available_slot);
 
                     let mut purge_time = Measure::start("purge_slots");
 
-                    // purge any slots older than lowest_cleanup_slot.
-                    blockstore.purge_slots(0, lowest_cleanup_slot, PurgeType::CompactionFilter);
+                    // purge any slots older than oldest_available_slot.
+                    blockstore.purge_slots(0, oldest_available_slot, PurgeType::CompactionFilter);
                     // Update only after purge operation.
                     // Safety: This value can be used by compaction_filters shared via Arc<AtomicU64>.
                     // Compactions are async and run as a multi-threaded background job. However, this
                     // shouldn't cause consistency issues for iterators and getters because we have
-                    // already expired all affected keys (older than or equal to lowest_cleanup_slot)
+                    // already expired all affected keys (older than or equal to oldest_available_slot)
                     // by the above `purge_slots`. According to the general RocksDB design where SST
                     // files are immutable, even running iterators aren't affected; the database grabs
                     // a snapshot of the live set of sst files at iterator's creation.
                     // Also, we passed the PurgeType::CompactionFilter, meaning no delete_range for
                     // transaction_status and address_signatures CFs. These are fine because they
                     // don't require strong consistent view for their operation.
-                    blockstore.set_max_expired_slot(lowest_cleanup_slot);
+                    blockstore.set_max_expired_slot(oldest_available_slot);
 
                     purge_time.stop();
                     info!("{}", purge_time);
 
-                    last_compact_slot1.store(lowest_cleanup_slot, Ordering::Relaxed);
+                    last_compact_slot1.store(oldest_available_slot, Ordering::Relaxed);
 
                     purge_complete1.store(true, Ordering::Relaxed);
                 })

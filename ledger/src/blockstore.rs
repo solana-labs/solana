@@ -175,7 +175,7 @@ pub struct Blockstore {
     new_shreds_signals: Mutex<Vec<Sender<bool>>>,
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
-    pub lowest_cleanup_slot: RwLock<Slot>,
+    pub oldest_available_slot: RwLock<Slot>,
     no_compaction: bool,
     pub slots_stats: SlotsStats,
 }
@@ -333,7 +333,7 @@ impl Blockstore {
             shred_timing_point_sender: None,
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
-            lowest_cleanup_slot: RwLock::<Slot>::default(),
+            oldest_available_slot: RwLock::<Slot>::default(),
             no_compaction: false,
             slots_stats: SlotsStats::default(),
         };
@@ -1633,7 +1633,7 @@ impl Blockstore {
         to_index: u64,
         buffer: &mut [u8],
     ) -> Result<(u64, usize)> {
-        let _lock = self.check_lowest_cleanup_slot(slot)?;
+        let _lock = self.check_oldest_available_slot(slot)?;
         let meta_cf = self.db.column::<cf::SlotMeta>();
         let mut buffer_offset = 0;
         let mut last_index = 0;
@@ -1882,7 +1882,7 @@ impl Blockstore {
 
     pub fn get_block_time(&self, slot: Slot) -> Result<Option<UnixTimestamp>> {
         datapoint_info!("blockstore-rpc-api", ("method", "get_block_time", String));
-        let _lock = self.check_lowest_cleanup_slot(slot)?;
+        let _lock = self.check_oldest_available_slot(slot)?;
         self.blocktime_cf.get(slot)
     }
 
@@ -1892,7 +1892,7 @@ impl Blockstore {
 
     pub fn get_block_height(&self, slot: Slot) -> Result<Option<u64>> {
         datapoint_info!("blockstore-rpc-api", ("method", "get_block_height", String));
-        let _lock = self.check_lowest_cleanup_slot(slot)?;
+        let _lock = self.check_oldest_available_slot(slot)?;
         self.block_height_cf.get(slot)
     }
 
@@ -1921,7 +1921,7 @@ impl Blockstore {
         require_previous_blockhash: bool,
     ) -> Result<VersionedConfirmedBlock> {
         datapoint_info!("blockstore-rpc-api", ("method", "get_rooted_block", String));
-        let _lock = self.check_lowest_cleanup_slot(slot)?;
+        let _lock = self.check_oldest_available_slot(slot)?;
 
         if self.is_root(slot) {
             return self.get_complete_block(slot, require_previous_blockhash);
@@ -2180,30 +2180,30 @@ impl Blockstore {
         self.transaction_memos_cf.put(*signature, &memos)
     }
 
-    fn check_lowest_cleanup_slot(&self, slot: Slot) -> Result<std::sync::RwLockReadGuard<Slot>> {
-        // lowest_cleanup_slot is the last slot that was not cleaned up by LedgerCleanupService
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        if *lowest_cleanup_slot > 0 && *lowest_cleanup_slot >= slot {
+    fn check_oldest_available_slot(&self, slot: Slot) -> Result<std::sync::RwLockReadGuard<Slot>> {
+        // oldest_available_slot is the last slot that was not cleaned up by LedgerCleanupService
+        let oldest_available_slot = self.oldest_available_slot.read().unwrap();
+        if *oldest_available_slot > 0 && *oldest_available_slot >= slot {
             return Err(BlockstoreError::SlotCleanedUp);
         }
         // Make caller hold this lock properly; otherwise LedgerCleanupService can purge/compact
         // needed slots here at any given moment
-        Ok(lowest_cleanup_slot)
+        Ok(oldest_available_slot)
     }
 
-    fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
-        // Ensures consistent result by using lowest_cleanup_slot as the lower bound
+    fn ensure_oldest_available_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
+        // Ensures consistent result by using oldest_available_slot as the lower bound
         // for reading columns that do not employ strong read consistency with slot-based
         // delete_range
-        let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
-        let lowest_available_slot = (*lowest_cleanup_slot)
+        let oldest_available_slot = self.oldest_available_slot.read().unwrap();
+        let lowest_available_slot = (*oldest_available_slot)
             .checked_add(1)
             .expect("overflow from trusted value");
 
         // Make caller hold this lock properly; otherwise LedgerCleanupService can purge/compact
         // needed slots here at any given moment.
         // Blockstore callers, like rpc, can process concurrent read queries
-        (lowest_cleanup_slot, lowest_available_slot)
+        (oldest_available_slot, lowest_available_slot)
     }
 
     // Returns a transaction status, as well as a loop counter for unit testing
@@ -2213,7 +2213,7 @@ impl Blockstore {
         confirmed_unrooted_slots: &[Slot],
     ) -> Result<(Option<(Slot, TransactionStatusMeta)>, u64)> {
         let mut counter = 0;
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+        let (lock, lowest_available_slot) = self.ensure_oldest_available_slot();
 
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.transaction_status_cf.iter(IteratorMode::From(
@@ -2363,7 +2363,7 @@ impl Blockstore {
         start_slot: Slot,
         end_slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+        let (lock, lowest_available_slot) = self.ensure_oldest_available_slot();
 
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
@@ -2399,7 +2399,7 @@ impl Blockstore {
         pubkey: Pubkey,
         slot: Slot,
     ) -> Result<Vec<(Slot, Signature)>> {
-        let (lock, lowest_available_slot) = self.ensure_lowest_cleanup_slot();
+        let (lock, lowest_available_slot) = self.ensure_oldest_available_slot();
         let mut signatures: Vec<(Slot, Signature)> = vec![];
         for transaction_status_cf_primary_index in 0..=1 {
             let index_iterator = self.address_signatures_cf.iter(IteratorMode::From(
@@ -2817,7 +2817,7 @@ impl Blockstore {
         slot: Slot,
         start_index: u64,
     ) -> Result<(CompletedRanges, Option<SlotMeta>)> {
-        let _lock = self.check_lowest_cleanup_slot(slot)?;
+        let _lock = self.check_oldest_available_slot(slot)?;
 
         let slot_meta_cf = self.db.column::<cf::SlotMeta>();
         let slot_meta = slot_meta_cf.get(slot)?;
@@ -3207,8 +3207,8 @@ impl Blockstore {
         self.last_root()
     }
 
-    pub fn lowest_cleanup_slot(&self) -> Slot {
-        *self.lowest_cleanup_slot.read().unwrap()
+    pub fn oldest_available_slot(&self) -> Slot {
+        *self.oldest_available_slot.read().unwrap()
     }
 
     pub fn storage_size(&self) -> Result<u64> {
@@ -3240,7 +3240,7 @@ impl Blockstore {
 
     pub fn scan_and_fix_roots(&self, exit: &AtomicBool) -> Result<()> {
         let ancestor_iterator = AncestorIterator::new(self.last_root(), self)
-            .take_while(|&slot| slot >= self.lowest_cleanup_slot());
+            .take_while(|&slot| slot >= self.oldest_available_slot());
 
         let mut find_missing_roots = Measure::start("find_missing_roots");
         let mut roots_to_fix = vec![];
@@ -3264,7 +3264,7 @@ impl Blockstore {
         } else {
             debug!(
                 "No missing roots found in range {} to {}",
-                self.lowest_cleanup_slot(),
+                self.oldest_available_slot(),
                 self.last_root()
             );
         }
@@ -4679,7 +4679,7 @@ pub mod tests {
         blockstore
             .run_purge(0, max_purge_slot, PurgeType::PrimaryIndex)
             .unwrap();
-        *blockstore.lowest_cleanup_slot.write().unwrap() = max_purge_slot;
+        *blockstore.oldest_available_slot.write().unwrap() = max_purge_slot;
 
         let mut buf = [0; 4096];
         assert!(blockstore.get_data_shreds(slot, 0, 1, &mut buf).is_err());
@@ -7195,7 +7195,7 @@ pub mod tests {
         assert_eq!(counter, 2);
     }
 
-    fn do_test_lowest_cleanup_slot_and_special_cfs(
+    fn do_test_oldest_available_slot_and_special_cfs(
         simulate_compaction: bool,
         simulate_ledger_cleanup_service: bool,
     ) {
@@ -7240,11 +7240,11 @@ pub mod tests {
 
         blockstore.set_roots(vec![0, 1, 2, 3].iter()).unwrap();
 
-        let lowest_cleanup_slot = 1;
-        let lowest_available_slot = lowest_cleanup_slot + 1;
+        let oldest_available_slot = 1;
+        let lowest_available_slot = oldest_available_slot + 1;
 
         transaction_status_cf
-            .put_protobuf((0, signature1, lowest_cleanup_slot), &status)
+            .put_protobuf((0, signature1, oldest_available_slot), &status)
             .unwrap();
 
         transaction_status_cf
@@ -7255,7 +7255,7 @@ pub mod tests {
         let address1 = solana_sdk::pubkey::new_rand();
         blockstore
             .write_transaction_status(
-                lowest_cleanup_slot,
+                oldest_available_slot,
                 signature1,
                 vec![&address0],
                 vec![],
@@ -7280,11 +7280,11 @@ pub mod tests {
                     .0
                     .is_none(),
                 blockstore
-                    .find_address_signatures_for_slot(address0, lowest_cleanup_slot)
+                    .find_address_signatures_for_slot(address0, oldest_available_slot)
                     .unwrap()
                     .is_empty(),
                 blockstore
-                    .find_address_signatures(address0, lowest_cleanup_slot, lowest_cleanup_slot)
+                    .find_address_signatures(address0, oldest_available_slot, oldest_available_slot)
                     .unwrap()
                     .is_empty(),
             )
@@ -7315,7 +7315,7 @@ pub mod tests {
         assert_existing_always();
 
         if simulate_compaction {
-            blockstore.set_max_expired_slot(lowest_cleanup_slot);
+            blockstore.set_max_expired_slot(oldest_available_slot);
             // force compaction filters to run across whole key range.
             blockstore
                 .compact_storage(Slot::min_value(), Slot::max_value())
@@ -7323,7 +7323,7 @@ pub mod tests {
         }
 
         if simulate_ledger_cleanup_service {
-            *blockstore.lowest_cleanup_slot.write().unwrap() = lowest_cleanup_slot;
+            *blockstore.oldest_available_slot.write().unwrap() = oldest_available_slot;
         }
 
         let are_missing = check_for_missing();
@@ -7339,27 +7339,27 @@ pub mod tests {
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_compact_with_ledger_cleanup_service_simulation(
+    fn test_oldest_available_slot_and_special_cfs_with_compact_with_ledger_cleanup_service_simulation(
     ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(true, true);
+        do_test_oldest_available_slot_and_special_cfs(true, true);
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_with_compact_without_ledger_cleanup_service_simulation(
+    fn test_oldest_available_slot_and_special_cfs_with_compact_without_ledger_cleanup_service_simulation(
     ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(true, false);
+        do_test_oldest_available_slot_and_special_cfs(true, false);
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_compact_with_ledger_cleanup_service_simulation(
+    fn test_oldest_available_slot_and_special_cfs_without_compact_with_ledger_cleanup_service_simulation(
     ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(false, true);
+        do_test_oldest_available_slot_and_special_cfs(false, true);
     }
 
     #[test]
-    fn test_lowest_cleanup_slot_and_special_cfs_without_compact_without_ledger_cleanup_service_simulation(
+    fn test_oldest_available_slot_and_special_cfs_without_compact_without_ledger_cleanup_service_simulation(
     ) {
-        do_test_lowest_cleanup_slot_and_special_cfs(false, false);
+        do_test_oldest_available_slot_and_special_cfs(false, false);
     }
 
     #[test]
@@ -7459,7 +7459,7 @@ pub mod tests {
         }
 
         blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
-        *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
+        *blockstore.oldest_available_slot.write().unwrap() = slot;
         for VersionedTransactionWithStatusMeta { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
             assert_eq!(blockstore.get_rooted_transaction(signature).unwrap(), None,);
@@ -7562,7 +7562,7 @@ pub mod tests {
         }
 
         blockstore.run_purge(0, 2, PurgeType::PrimaryIndex).unwrap();
-        *blockstore.lowest_cleanup_slot.write().unwrap() = slot;
+        *blockstore.oldest_available_slot.write().unwrap() = slot;
         for VersionedTransactionWithStatusMeta { transaction, .. } in expected_transactions {
             let signature = transaction.signatures[0];
             assert_eq!(
@@ -9291,8 +9291,8 @@ pub mod tests {
                             let slot = shreds[0].slot();
                             // Grab this lock to block `get_slot_entries` before it fetches completed datasets
                             // and then mark the slot as dead, but full, by inserting carefully crafted shreds.
-                            let _lowest_cleanup_slot =
-                                blockstore.lowest_cleanup_slot.write().unwrap();
+                            let _oldest_available_slot =
+                                blockstore.oldest_available_slot.write().unwrap();
                             blockstore.insert_shreds(shreds, None, false).unwrap();
                             assert!(blockstore.get_duplicate_slot(slot).is_some());
                             assert!(blockstore.is_dead(slot));
