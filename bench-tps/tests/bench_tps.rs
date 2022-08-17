@@ -129,6 +129,7 @@ fn test_bench_tps_test_validator(config: Config) {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_bench_tps_local_cluster_solana() {
     test_bench_tps_local_cluster(Config {
         tx_count: 100,
