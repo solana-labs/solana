@@ -49,7 +49,7 @@ impl SnapshotPackagerService {
         );
 
         let t_snapshot_packager = Builder::new()
-            .name("snapshot-packager".to_string())
+            .name("solSnapshotPkgr".to_string())
             .spawn(move || {
                 renice_this_thread(snapshot_config.packager_thread_niceness_adj).unwrap();
                 let mut snapshot_gossip_manager = if enable_gossip_push {

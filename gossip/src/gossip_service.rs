@@ -80,7 +80,7 @@ impl GossipService {
             exit.clone(),
         );
         let t_responder = streamer::responder(
-            "gossip",
+            "Gossip",
             gossip_socket,
             response_receiver,
             socket_addr_space,

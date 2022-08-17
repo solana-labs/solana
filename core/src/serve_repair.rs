@@ -567,7 +567,7 @@ impl ServeRepair {
 
         let recycler = PacketBatchRecycler::default();
         Builder::new()
-            .name("solana-repair-listen".to_string())
+            .name("solRepairListen".to_string())
             .spawn(move || {
                 let mut last_print = Instant::now();
                 let mut stats = ServeRepairStats::default();

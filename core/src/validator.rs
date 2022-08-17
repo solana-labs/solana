@@ -302,7 +302,7 @@ impl BlockstoreRootScan {
             let exit = exit.clone();
             Some(
                 Builder::new()
-                    .name("blockstore-root-scan".to_string())
+                    .name("solBStoreRtScan".to_string())
                     .spawn(move || blockstore.scan_and_fix_roots(&exit))
                     .unwrap(),
             )
@@ -1588,34 +1588,23 @@ impl<'a> ProcessBlockStore<'a> {
             let previous_start_process = *self.start_progress.read().unwrap();
             *self.start_progress.write().unwrap() = ValidatorStartProgress::LoadingLedger;
 
-            /*
-            #[allow(clippy::too_many_arguments)]
-            fn process_blockstore(
-                blockstore: &Blockstore,
-                bank_forks: &Arc<RwLock<BankForks>>,
-                leader_schedule_cache: &LeaderScheduleCache,
-                process_options: &blockstore_processor::ProcessOptions,
-                transaction_status_sender: Option<&TransactionStatusSender>,
-                cache_block_meta_sender: Option<&CacheBlockMetaSender>,
-                blockstore_root_scan: BlockstoreRootScan,
-                accounts_background_request_sender: &AbsRequestSender,
-                start_progress: &Arc<RwLock<ValidatorStartProgress>>,
-            ) {
-            */
             let exit = Arc::new(AtomicBool::new(false));
             if let Some(max_slot) = highest_slot(self.blockstore) {
                 let bank_forks = self.bank_forks.clone();
                 let exit = exit.clone();
                 let start_progress = self.start_progress.clone();
 
-                let _ = std::thread::spawn(move || {
-                    while !exit.load(Ordering::Relaxed) {
-                        let slot = bank_forks.read().unwrap().working_bank().slot();
-                        *start_progress.write().unwrap() =
-                            ValidatorStartProgress::ProcessingLedger { slot, max_slot };
-                        sleep(Duration::from_secs(2));
-                    }
-                });
+                let _ = Builder::new()
+                    .name("solRptLdgrStat".to_string())
+                    .spawn(move || {
+                        while !exit.load(Ordering::Relaxed) {
+                            let slot = bank_forks.read().unwrap().working_bank().slot();
+                            *start_progress.write().unwrap() =
+                                ValidatorStartProgress::ProcessingLedger { slot, max_slot };
+                            sleep(Duration::from_secs(2));
+                        }
+                    })
+                    .unwrap();
             }
             if let Err(e) = blockstore_processor::process_blockstore_from_root(
                 self.blockstore,

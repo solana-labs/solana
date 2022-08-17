@@ -91,7 +91,7 @@ impl TransactionExecutor {
         let exit = exit.clone();
         let cleared = cleared.clone();
         Builder::new()
-            .name("sig_clear".to_string())
+            .name("solSigClear".to_string())
             .spawn(move || {
                 let client = RpcClient::new_socket_with_commitment(
                     entrypoint_addr,

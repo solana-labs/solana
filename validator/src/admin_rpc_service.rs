@@ -192,22 +192,25 @@ impl AdminRpc for AdminRpcImpl {
     fn exit(&self, meta: Self::Metadata) -> Result<()> {
         debug!("exit admin rpc request received");
 
-        thread::spawn(move || {
-            // Delay exit signal until this RPC request completes, otherwise the caller of `exit` might
-            // receive a confusing error as the validator shuts down before a response is sent back.
-            thread::sleep(Duration::from_millis(100));
+        thread::Builder::new()
+            .name("solProcessExit".into())
+            .spawn(move || {
+                // Delay exit signal until this RPC request completes, otherwise the caller of `exit` might
+                // receive a confusing error as the validator shuts down before a response is sent back.
+                thread::sleep(Duration::from_millis(100));
 
-            warn!("validator exit requested");
-            meta.validator_exit.write().unwrap().exit();
+                warn!("validator exit requested");
+                meta.validator_exit.write().unwrap().exit();
 
-            // TODO: Debug why Exit doesn't always cause the validator to fully exit
-            // (rocksdb background processing or some other stuck thread perhaps?).
-            //
-            // If the process is still alive after five seconds, exit harder
-            thread::sleep(Duration::from_secs(5));
-            warn!("validator exit timeout");
-            std::process::exit(0);
-        });
+                // TODO: Debug why Exit doesn't always cause the validator to fully exit
+                // (rocksdb background processing or some other stuck thread perhaps?).
+                //
+                // If the process is still alive after five seconds, exit harder
+                thread::sleep(Duration::from_secs(5));
+                warn!("validator exit timeout");
+                std::process::exit(0);
+            })
+            .unwrap();
         Ok(())
     }
 
@@ -375,14 +378,14 @@ pub fn run(ledger_path: &Path, metadata: AdminRpcRequestMetadata) {
     let admin_rpc_path = admin_rpc_path(ledger_path);
 
     let event_loop = tokio::runtime::Builder::new_multi_thread()
-        .thread_name("sol-adminrpc-el")
+        .thread_name("solAdminRpcEl")
         .worker_threads(3) // Three still seems like a lot, and better than the default of available core count
         .enable_all()
         .build()
         .unwrap();
 
     Builder::new()
-        .name("solana-adminrpc".to_string())
+        .name("solAdminRpc".to_string())
         .spawn(move || {
             let mut io = MetaIoHandler::default();
             io.extend_with(AdminRpcImpl.to_delegate());
