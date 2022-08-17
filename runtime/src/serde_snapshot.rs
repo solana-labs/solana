@@ -194,7 +194,7 @@ trait TypeContext<'a>: PartialEq {
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
-        incremental_snapshot_persistence: &Option<BankIncrementalSnapshotPersistence>,
+        incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,
@@ -372,7 +372,7 @@ fn reserialize_bank_fields_with_new_hash<W, R>(
     stream_reader: &mut BufReader<R>,
     stream_writer: &mut BufWriter<W>,
     accounts_hash: &Hash,
-    incremental_snapshot_persistence: &Option<BankIncrementalSnapshotPersistence>,
+    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<(), Error>
 where
     W: Write,
@@ -395,7 +395,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
     bank_snapshots_dir: impl AsRef<Path>,
     slot: Slot,
     accounts_hash: &Hash,
-    incremental_snapshot_persistence: &Option<BankIncrementalSnapshotPersistence>,
+    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
     let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));

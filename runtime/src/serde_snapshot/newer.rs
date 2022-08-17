@@ -96,7 +96,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             stakes: dvb.stakes,
             epoch_stakes: dvb.epoch_stakes,
             is_delta: dvb.is_delta,
-            incremental_snapshot_hash: None,
+            incremental_snapshot_persistence: None,
         }
     }
 }
@@ -317,8 +317,8 @@ impl<'a> TypeContext<'a> for Context {
             .fee_rate_governor
             .clone_with_lamports_per_signature(lamports_per_signature);
 
-        let incremental_snapshot_hash = ignore_eof_error(deserialize_from(stream))?;
-        bank_fields.incremental_snapshot_hash = incremental_snapshot_hash;
+        let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(stream))?;
+        bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
 
         Ok((bank_fields, accounts_db_fields))
     }
@@ -339,7 +339,7 @@ impl<'a> TypeContext<'a> for Context {
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
-        incremental_snapshot_persistence: &Option<BankIncrementalSnapshotPersistence>,
+        incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,

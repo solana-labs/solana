@@ -264,7 +264,7 @@ fn test_bank_serialize_style(
             temp_dir.path(),
             slot,
             &accounts_hash,
-            &incremental,
+            incremental.as_ref(),
         ));
         let previous_len = buf.len();
         // larger buffer than expected to make sure the file isn't larger than expected
@@ -333,7 +333,7 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
     assert_eq!(dbank.get_accounts_hash(), accounts_hash);
     assert!(bank2 == dbank);
-    assert_eq!(dbank.incremental_snapshot_hash, incremental);
+    assert_eq!(dbank.incremental_snapshot_persistence, incremental);
 }
 
 pub(crate) fn reconstruct_accounts_db_via_serialization(

@@ -995,7 +995,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
-    pub(crate) incremental_snapshot_hash: Option<BankIncrementalSnapshotPersistence>,
+    pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -1103,7 +1103,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_on_chain: _,
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
-            incremental_snapshot_hash: _,
+            incremental_snapshot_persistence: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this ParitalEq is accordingly updated.
@@ -1358,7 +1358,7 @@ pub struct Bank {
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
 
-    pub incremental_snapshot_hash: Option<BankIncrementalSnapshotPersistence>,
+    pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1489,7 +1489,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
-            incremental_snapshot_hash: None,
+            incremental_snapshot_persistence: None,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
@@ -1789,7 +1789,7 @@ impl Bank {
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
-            incremental_snapshot_hash: None,
+            incremental_snapshot_persistence: None,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc,
             status_cache,
@@ -2151,7 +2151,7 @@ impl Bank {
         }
         let feature_set = new();
         let mut bank = Self {
-            incremental_snapshot_hash: fields.incremental_snapshot_hash,
+            incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: bank_rc,
             status_cache: new(),
