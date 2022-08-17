@@ -6890,6 +6890,11 @@ impl AccountsDb {
 
         stats.oldest_root = storages.range().start;
 
+        assert!(
+            !(config.store_detailed_debug_info_on_failure && config.use_write_cache),
+            "cannot accurately capture all data for debugging if accounts cache is being used"
+        );
+
         self.mark_old_slots_as_dirty(storages, Some(config.epoch_schedule.slots_per_epoch));
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
