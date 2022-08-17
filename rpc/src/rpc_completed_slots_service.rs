@@ -24,7 +24,7 @@ impl RpcCompletedSlotsService {
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
         Builder::new()
-            .name("solana-rpc-completed-slots-service".to_string())
+            .name("solRpcComplSlot".to_string())
             .spawn(move || loop {
                 // received exit signal, shutdown the service
                 if exit.load(Ordering::Relaxed) {

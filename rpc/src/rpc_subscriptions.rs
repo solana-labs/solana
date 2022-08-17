@@ -632,11 +632,11 @@ impl RpcSubscriptions {
         } else {
             Some(
                 Builder::new()
-                    .name("solana-rpc-notifications".to_string())
+                    .name("solRpcNotifier".to_string())
                     .spawn(move || {
                         let pool = rayon::ThreadPoolBuilder::new()
                             .num_threads(notification_threads)
-                            .thread_name(|i| format!("sol-sub-notif-{}", i))
+                            .thread_name(|i| format!("solRpcNotify{:02}", i))
                             .build()
                             .unwrap();
                         pool.install(|| {

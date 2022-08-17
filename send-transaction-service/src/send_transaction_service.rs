@@ -410,7 +410,7 @@ impl SendTransactionService {
             config
         );
         Builder::new()
-            .name("send-tx-receive".to_string())
+            .name("solStxReceive".to_string())
             .spawn(move || loop {
                 let recv_timeout_ms = config.batch_send_rate_ms;
                 let stats = &stats_report.stats;
@@ -510,7 +510,7 @@ impl SendTransactionService {
             config
         );
         Builder::new()
-            .name("send-tx-retry".to_string())
+            .name("solStxRetry".to_string())
             .spawn(move || loop {
                 let retry_interval_ms = config.retry_rate_ms;
                 let stats = &stats_report.stats;

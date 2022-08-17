@@ -466,7 +466,7 @@ impl BankingStage {
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
                 Builder::new()
-                    .name(format!("solana-banking-stage-tx-{}", i))
+                    .name(format!("solBanknStgTx{:02}", i))
                     .spawn(move || {
                         Self::process_loop(
                             &verified_receiver,
