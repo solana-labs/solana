@@ -3,7 +3,8 @@
 use {
     lazy_static::lazy_static,
     solana_sdk::{
-        feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program, system_program,
+        ed25519_program, feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program,
+        system_program,
     },
     std::collections::HashMap,
 };
@@ -40,6 +41,7 @@ lazy_static! {
         (solana_vote_program::id(), COMPUTE_UNIT_TO_US_RATIO * 70),
         // secp256k1 is executed in banking stage, it should cost similar to sigverify
         (secp256k1_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
+        (ed25519_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
         (system_program::id(), COMPUTE_UNIT_TO_US_RATIO * 5),
     ]
     .iter()
