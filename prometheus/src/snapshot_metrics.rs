@@ -1,8 +1,7 @@
 use crate::utils::{write_metric, Metric, MetricFamily};
-use solana_runtime::snapshot_archive_info::{SnapshotArchiveInfo, SnapshotArchiveInfoGetter};
+use solana_runtime::snapshot_archive_info::SnapshotArchiveInfoGetter;
 use solana_runtime::snapshot_config::SnapshotConfig;
 use solana_runtime::snapshot_utils;
-use solana_sdk::clock::Slot;
 use std::io;
 
 pub fn write_snapshot_metrics<W: io::Write>(
@@ -11,9 +10,7 @@ pub fn write_snapshot_metrics<W: io::Write>(
 ) -> io::Result<()> {
     let full_snapshot_info = match snapshot_utils::get_highest_full_snapshot_archive_info(
         &snapshot_config.snapshot_archives_dir,
-    )
-    .map(|full_snapshot_info| full_snapshot_info.snapshot_archive_info())
-    {
+    ) {
         Some(info) => info,
         None => return Ok(()),
     };
@@ -23,7 +20,7 @@ pub fn write_snapshot_metrics<W: io::Write>(
             name: "solana_snapshot_last_full_snapshot_slot",
             help: "The slot height of the most recent full snapshot",
             type_: "gauge",
-            metrics: vec![Metric::new(full_snapshot_info.slot)],
+            metrics: vec![Metric::new(full_snapshot_info.slot())],
         },
     )?;
 
@@ -32,10 +29,8 @@ pub fn write_snapshot_metrics<W: io::Write>(
     let incremental_snapshot_info =
         match snapshot_utils::get_highest_incremental_snapshot_archive_info(
             &snapshot_config.snapshot_archives_dir,
-            slot,
-        )
-        .map(|inc_snapshot_info| inc_snapshot_info.snapshot_archive_info())
-        {
+            full_snapshot_info.slot(),
+        ) {
             None => return Ok(()),
             Some(info) => info,
         };
@@ -45,7 +40,7 @@ pub fn write_snapshot_metrics<W: io::Write>(
             name: "solana_snapshot_last_incremental_snapshot_slot",
             help: "The slot height of the most recent incremental snapshot",
             type_: "gauge",
-            metrics: vec![Metric::new(incremental_snapshot_info.slot)],
+            metrics: vec![Metric::new(incremental_snapshot_info.slot())],
         },
     )
 }
