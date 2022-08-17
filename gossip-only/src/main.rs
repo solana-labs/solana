@@ -41,7 +41,7 @@ use {
 
 pub const DEFAULT_CLUSTER_LAMPORTS: u64 = 10_000_000 * LAMPORTS_PER_SOL;
 pub const DEFAULT_NODE_STAKE: u64 = 10 * LAMPORTS_PER_SOL;
-// pub const DEFAULT_SHRED_VERSION: u16 = 0;
+pub const DEFAULT_SHRED_VERSION: u16 = 44120;
 
 fn parse_matches() -> ArgMatches<'static> {
     App::new(crate_name!())
@@ -195,7 +195,7 @@ pub fn main() {
     }
 
     let shred_version =
-        value_t!(matches, "shred_version", u16).unwrap_or_else(|_| 0);
+        value_t!(matches, "shred_version", u16).unwrap_or_else(|_| DEFAULT_SHRED_VERSION);
 
     // Read keys from file and spin up gossip nodes
     let bind_address = IpAddr::from_str("0.0.0.0").unwrap();
