@@ -19,7 +19,7 @@ pub fn parse_address_lookup_table(
         })
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", tag = "type", content = "info")]
 pub enum LookupTableAccountType {
     Uninitialized,

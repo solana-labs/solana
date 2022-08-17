@@ -1418,6 +1418,8 @@ impl<'a> FlushGuard<'a> {
     #[must_use = "if unused, the `flushing` flag will immediately clear"]
     fn lock(flushing: &'a AtomicBool) -> Option<Self> {
         let already_flushing = flushing.swap(true, Ordering::AcqRel);
+        // Eager evaluation here would result in dropping Self and clearing flushing flag
+        #[allow(clippy::unnecessary_lazy_evaluations)]
         (!already_flushing).then(|| Self { flushing })
     }
 }
