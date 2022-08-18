@@ -2,13 +2,13 @@
 mod tests {
     use {
         crossbeam_channel::{unbounded, Receiver},
-        solana_client::{
-            connection_cache::ConnectionCacheStats,
-            nonblocking::quic_client::QuicLazyInitializedEndpoint,
-        },
         solana_perf::packet::PacketBatch,
         solana_sdk::{packet::PACKET_DATA_SIZE, signature::Keypair},
         solana_streamer::{quic::StreamStats, streamer::StakedNodes},
+        solana_tpu_client::{
+            connection_cache::ConnectionCacheStats,
+            nonblocking::quic_client::QuicLazyInitializedEndpoint,
+        },
         std::{
             net::{IpAddr, SocketAddr, UdpSocket},
             sync::{
@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn test_quic_client_multiple_writes() {
-        use solana_client::{quic_client::QuicTpuConnection, tpu_connection::TpuConnection};
+        use solana_tpu_client::{quic_client::QuicTpuConnection, tpu_connection::TpuConnection};
         solana_logger::setup();
         let (sender, receiver) = unbounded();
         let staked_nodes = Arc::new(RwLock::new(StakedNodes::default()));
@@ -105,7 +105,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_nonblocking_quic_client_multiple_writes() {
-        use solana_client::nonblocking::{
+        use solana_tpu_client::nonblocking::{
             quic_client::QuicTpuConnection, tpu_connection::TpuConnection,
         };
         solana_logger::setup();

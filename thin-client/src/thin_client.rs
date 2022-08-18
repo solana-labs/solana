@@ -6,9 +6,7 @@
 use {
     log::*,
     solana_client::{
-        connection_cache::ConnectionCache, rpc_client::RpcClient,
-        rpc_config::RpcProgramAccountsConfig, rpc_response::Response,
-        tpu_connection::TpuConnection,
+        rpc_client::RpcClient, rpc_config::RpcProgramAccountsConfig, rpc_response::Response,
     },
     solana_sdk::{
         account::Account,
@@ -28,6 +26,7 @@ use {
         transaction::{self, Transaction, VersionedTransaction},
         transport::Result as TransportResult,
     },
+    solana_tpu_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     std::{
         io,
         net::SocketAddr,

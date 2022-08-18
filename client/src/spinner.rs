@@ -5,7 +5,7 @@ use {
     std::time::Duration,
 };
 
-pub(crate) fn new_progress_bar() -> ProgressBar {
+pub fn new_progress_bar() -> ProgressBar {
     let progress_bar = ProgressBar::new(42);
     progress_bar.set_style(
         ProgressStyle::default_spinner()
@@ -16,7 +16,7 @@ pub(crate) fn new_progress_bar() -> ProgressBar {
     progress_bar
 }
 
-pub(crate) fn set_message_for_confirmed_transactions(
+pub fn set_message_for_confirmed_transactions(
     progress_bar: &ProgressBar,
     confirmed_transactions: u32,
     total_transactions: usize,

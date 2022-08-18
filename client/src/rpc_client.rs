@@ -4064,11 +4064,11 @@ impl RpcClient {
         tokio::task::block_in_place(move || self.runtime.as_ref().expect("runtime").block_on(f))
     }
 
-    pub(crate) fn get_inner_client(&self) -> &Arc<nonblocking::rpc_client::RpcClient> {
+    pub fn get_inner_client(&self) -> &Arc<nonblocking::rpc_client::RpcClient> {
         &self.rpc_client
     }
 
-    pub(crate) fn runtime(&self) -> &tokio::runtime::Runtime {
+    pub fn runtime(&self) -> &tokio::runtime::Runtime {
         self.runtime.as_ref().expect("runtime")
     }
 }

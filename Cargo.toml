@@ -80,6 +80,7 @@ members = [
     "test-validator",
     "thin-client",
     "tokens",
+    "tpu-client",
     "transaction-dos",
     "transaction-status",
     "upload-perf",

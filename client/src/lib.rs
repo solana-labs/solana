@@ -2,9 +2,6 @@
 #[macro_use]
 extern crate serde_derive;
 
-#[macro_use]
-extern crate solana_metrics;
-
 pub mod blockhash_query;
 pub mod client_error;
 pub mod connection_cache;

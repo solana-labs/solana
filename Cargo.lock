@@ -6399,6 +6399,7 @@ dependencies = [
  "solana-client",
  "solana-logger 1.12.0",
  "solana-sdk 1.12.0",
+ "solana-tpu-client",
 ]
 
 [[package]]
@@ -6430,6 +6431,41 @@ dependencies = [
  "spl-token",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "solana-tpu-client"
+version = "1.12.0"
+dependencies = [
+ "async-mutex",
+ "async-trait",
+ "bincode",
+ "crossbeam-channel",
+ "enum_dispatch",
+ "futures 0.3.23",
+ "futures-util",
+ "indexmap",
+ "itertools",
+ "lazy_static",
+ "log",
+ "quinn",
+ "quinn-proto",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "rustls 0.20.6",
+ "solana-client",
+ "solana-logger 1.12.0",
+ "solana-measure",
+ "solana-metrics",
+ "solana-net-utils",
+ "solana-perf",
+ "solana-pubsub-client",
+ "solana-rpc-client",
+ "solana-sdk 1.12.0",
+ "solana-streamer",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
