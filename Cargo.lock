@@ -4874,6 +4874,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
+ "solana-address-lookup-table-program",
  "solana-bpf-loader-program",
  "solana-clap-utils",
  "solana-cli-config",
