@@ -1,7 +1,7 @@
 use {
     crate::{
-        clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*,
-        spend_utils::*, stake::*, validator_info::*, vote::*, wallet::*,
+        address_lookup_table::*, clap_app::*, cluster_query::*, feature::*, inflation::*, nonce::*,
+        program::*, spend_utils::*, stake::*, validator_info::*, vote::*, wallet::*,
     },
     clap::{crate_description, crate_name, value_t_or_exit, ArgMatches, Shell},
     log::*,
@@ -440,6 +440,8 @@ pub enum CliCommand {
     StakeMinimumDelegation {
         use_lamports_unit: bool,
     },
+    // Address lookup table commands
+    AddressLookupTable(AddressLookupTableCliCommand),
 }
 
 #[derive(Debug, PartialEq)]
@@ -686,6 +688,9 @@ pub fn parse_command(
         }
         ("program", Some(matches)) => {
             parse_program_subcommand(matches, default_signer, wallet_manager)
+        }
+        ("address-lookup-table", Some(matches)) => {
+            parse_address_lookup_table_subcommand(matches, default_signer, wallet_manager)
         }
         ("wait-for-max-stake", Some(matches)) => {
             let max_stake_percent = value_t_or_exit!(matches, "max_percent", f32);
@@ -1627,6 +1632,11 @@ pub fn process_command(config: &CliConfig) -> ProcessResult {
             derived_address_program_id.as_ref(),
             compute_unit_price.as_ref(),
         ),
+
+        // Address Lookup Table Commands
+        CliCommand::AddressLookupTable(subcommand) => {
+            process_address_lookup_table_subcommand(rpc_client, config, subcommand)
+        }
     }
 }
 
