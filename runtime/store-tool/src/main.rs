@@ -40,8 +40,12 @@ fn main() {
             break;
         }
         info!(
-            "  account: {:?} version: {} data: {} hash: {:?}",
-            account.meta.pubkey, account.meta.write_version, account.meta.data_len, account.hash
+            "  account: {:?} version: {} lamports: {} data: {} hash: {:?}",
+            account.meta.pubkey,
+            account.meta.write_version,
+            account.account_meta.lamports,
+            account.meta.data_len,
+            account.hash
         );
         num_accounts = num_accounts.saturating_add(1);
         stored_accounts_len = stored_accounts_len.saturating_add(account.stored_size);
