@@ -211,13 +211,13 @@ impl TransactionContext {
                 return Err(InstructionError::UnbalancedInstruction);
             }
         }
-        let instruction_context = InstructionContext {
-            nesting_level: self.instruction_stack.len(),
-            instruction_accounts_lamport_sum: callee_instruction_accounts_lamport_sum,
-            program_accounts: program_accounts.to_vec(),
-            instruction_accounts: instruction_accounts.to_vec(),
-            instruction_data: instruction_data.to_vec(),
-        };
+        let instruction_context = InstructionContext::new(
+            self.instruction_stack.len(),
+            callee_instruction_accounts_lamport_sum,
+            program_accounts.to_vec(),
+            instruction_accounts.to_vec(),
+            instruction_data.to_vec(),
+        );
         let index_in_trace = self.instruction_trace.len();
         self.instruction_trace.push(instruction_context);
         if self.instruction_stack.len() >= self.instruction_context_capacity {
@@ -335,19 +335,19 @@ pub struct InstructionContext {
 
 impl InstructionContext {
     /// New
-    pub fn new(
+    fn new(
         nesting_level: usize,
         instruction_accounts_lamport_sum: u128,
-        program_accounts: &[usize],
-        instruction_accounts: &[InstructionAccount],
-        instruction_data: &[u8],
+        program_accounts: Vec<usize>,
+        instruction_accounts: Vec<InstructionAccount>,
+        instruction_data: Vec<u8>,
     ) -> Self {
         InstructionContext {
             nesting_level,
             instruction_accounts_lamport_sum,
-            program_accounts: program_accounts.to_vec(),
-            instruction_accounts: instruction_accounts.to_vec(),
-            instruction_data: instruction_data.to_vec(),
+            program_accounts,
+            instruction_accounts,
+            instruction_data,
         }
     }
 

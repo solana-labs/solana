@@ -766,14 +766,14 @@ pub fn inner_instructions_list_from_instruction_trace(
     transaction_context: &TransactionContext,
 ) -> InnerInstructionsList {
     debug_assert!(transaction_context
-        .get_instruction_context_at_index(0)
+        .get_instruction_context_at_index_in_trace(0)
         .map(|instruction_context| instruction_context.get_stack_height()
             == TRANSACTION_LEVEL_STACK_HEIGHT)
         .unwrap_or(true));
     let mut outer_instructions = Vec::new();
     for index_in_trace in 0..transaction_context.get_instruction_trace_length() {
         if let Ok(instruction_context) =
-            transaction_context.get_instruction_context_at_index(index_in_trace)
+            transaction_context.get_instruction_context_at_index_in_trace(index_in_trace)
         {
             if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT {
                 outer_instructions.push(Vec::new());
