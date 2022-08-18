@@ -2138,11 +2138,11 @@ impl AccountsDb {
             .expect("Cluster type must be set at initialization")
     }
 
-    /// Reclaim older states of accounts older than max_clean_root for AccountsDb bloat mitigation
+    /// Reclaim older states of accounts older than max_clean_root_inclusive for AccountsDb bloat mitigation
     fn clean_accounts_older_than_root(
         &self,
         purges: Vec<Pubkey>,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
         ancient_account_cleans: &AtomicU64,
     ) -> ReclaimResult {
         if purges.is_empty() {
@@ -2160,8 +2160,11 @@ impl AccountsDb {
             .filter_map(|pubkeys: &[Pubkey]| {
                 let mut reclaims = Vec::new();
                 for pubkey in pubkeys {
-                    self.accounts_index
-                        .clean_rooted_entries(pubkey, &mut reclaims, max_clean_root);
+                    self.accounts_index.clean_rooted_entries(
+                        pubkey,
+                        &mut reclaims,
+                        max_clean_root_inclusive,
+                    );
                 }
                 (!reclaims.is_empty()).then(|| {
                     // figure out how many ancient accounts have been reclaimed
