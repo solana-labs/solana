@@ -412,7 +412,8 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
         account_info: T,
         storage: &Arc<BucketMapHolder<T>>,
     ) -> AccountMapEntry<T> {
-        let ref_count = if account_info.is_cached() { 0 } else { 1 };
+        let is_cached = account_info.is_cached();
+        let ref_count = if is_cached { 0 } else { 1 };
         let meta = AccountMapEntryMeta::new_dirty(storage);
         Arc::new(AccountMapEntryInner::new(
             vec![(slot, account_info)],
