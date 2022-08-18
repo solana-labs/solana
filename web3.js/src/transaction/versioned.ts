@@ -8,7 +8,7 @@ import {SIGNATURE_LENGTH_IN_BYTES} from './constants';
 import * as shortvec from '../utils/shortvec-encoding';
 import * as Layout from '../layout';
 
-export type TransactionVersion = 'legacy' | number;
+export type TransactionVersion = 'legacy' | 0;
 
 /**
  * Versioned transaction class
@@ -77,9 +77,8 @@ export class VersionedTransaction {
     const signaturesLength = shortvec.decodeLength(byteArray);
     for (let i = 0; i < signaturesLength; i++) {
       signatures.push(
-        new Uint8Array(byteArray.slice(0, SIGNATURE_LENGTH_IN_BYTES)),
+        new Uint8Array(byteArray.splice(0, SIGNATURE_LENGTH_IN_BYTES)),
       );
-      byteArray = byteArray.slice(SIGNATURE_LENGTH_IN_BYTES);
     }
 
     const message = deserializeMessage(new Uint8Array(byteArray));

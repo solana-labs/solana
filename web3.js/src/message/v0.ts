@@ -115,7 +115,7 @@ export class MessageV0 {
       ),
     ]);
 
-    let serializedMessage = Buffer.alloc(2048);
+    const serializedMessage = new Uint8Array(PACKET_DATA_SIZE);
     const MESSAGE_VERSION_0_PREFIX = 1 << 7;
     const serializedMessageLength = messageLayout.encode(
       {
@@ -279,24 +279,20 @@ export class MessageV0 {
     const staticAccountKeysLength = shortvec.decodeLength(byteArray);
     for (let i = 0; i < staticAccountKeysLength; i++) {
       staticAccountKeys.push(
-        new PublicKey(byteArray.slice(0, PUBLIC_KEY_LENGTH)),
+        new PublicKey(byteArray.splice(0, PUBLIC_KEY_LENGTH)),
       );
-      byteArray = byteArray.slice(PUBLIC_KEY_LENGTH);
     }
 
-    const recentBlockhash = bs58.encode(byteArray.slice(0, PUBLIC_KEY_LENGTH));
-    byteArray = byteArray.slice(PUBLIC_KEY_LENGTH);
+    const recentBlockhash = bs58.encode(byteArray.splice(0, PUBLIC_KEY_LENGTH));
 
     const instructionCount = shortvec.decodeLength(byteArray);
     const compiledInstructions: MessageCompiledInstruction[] = [];
     for (let i = 0; i < instructionCount; i++) {
       const programIdIndex = byteArray.shift() as number;
       const accountKeyIndexesLength = shortvec.decodeLength(byteArray);
-      const accountKeyIndexes = byteArray.slice(0, accountKeyIndexesLength);
-      byteArray = byteArray.slice(accountKeyIndexesLength);
+      const accountKeyIndexes = byteArray.splice(0, accountKeyIndexesLength);
       const dataLength = shortvec.decodeLength(byteArray);
-      const data = new Uint8Array(byteArray.slice(0, dataLength));
-      byteArray = byteArray.slice(dataLength);
+      const data = new Uint8Array(byteArray.splice(0, dataLength));
       compiledInstructions.push({
         programIdIndex,
         accountKeyIndexes,
@@ -307,17 +303,11 @@ export class MessageV0 {
     const addressTableLookupsCount = shortvec.decodeLength(byteArray);
     const addressTableLookups: MessageAddressTableLookup[] = [];
     for (let i = 0; i < addressTableLookupsCount; i++) {
-      const accountKey = new PublicKey(byteArray.slice(0, PUBLIC_KEY_LENGTH));
-      byteArray = byteArray.slice(PUBLIC_KEY_LENGTH);
-
+      const accountKey = new PublicKey(byteArray.splice(0, PUBLIC_KEY_LENGTH));
       const writableIndexesLength = shortvec.decodeLength(byteArray);
-      const writableIndexes = byteArray.slice(0, writableIndexesLength);
-      byteArray = byteArray.slice(writableIndexesLength);
-
+      const writableIndexes = byteArray.splice(0, writableIndexesLength);
       const readonlyIndexesLength = shortvec.decodeLength(byteArray);
-      const readonlyIndexes = byteArray.slice(0, readonlyIndexesLength);
-      byteArray = byteArray.slice(readonlyIndexesLength);
-
+      const readonlyIndexes = byteArray.splice(0, readonlyIndexesLength);
       addressTableLookups.push({
         accountKey,
         writableIndexes,
