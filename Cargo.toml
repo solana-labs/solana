@@ -78,6 +78,7 @@ members = [
     "streamer",
     "sys-tuner",
     "test-validator",
+    "thin-client",
     "tokens",
     "transaction-dos",
     "transaction-status",

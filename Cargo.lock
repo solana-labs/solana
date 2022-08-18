@@ -6390,6 +6390,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-thin-client"
+version = "1.12.0"
+dependencies = [
+ "bincode",
+ "log",
+ "rayon",
+ "solana-client",
+ "solana-logger 1.12.0",
+ "solana-sdk 1.12.0",
+]
+
+[[package]]
 name = "solana-tokens"
 version = "1.12.0"
 dependencies = [
