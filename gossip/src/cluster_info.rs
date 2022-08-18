@@ -92,6 +92,7 @@ use {
         thread::{sleep, Builder, JoinHandle},
         time::{Duration, Instant},
     },
+    thiserror::Error,
 };
 
 /// The Data plane fanout size, also used as the neighborhood size
@@ -138,12 +139,17 @@ const MIN_STAKE_FOR_GOSSIP: u64 = solana_sdk::native_token::LAMPORTS_PER_SOL;
 /// Minimum number of staked nodes for enforcing stakes in gossip.
 const MIN_NUM_STAKED_NODES: usize = 500;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum ClusterInfoError {
+    #[error("NoPeers")]
     NoPeers,
+    #[error("NoLeader")]
     NoLeader,
+    #[error("BadContactInfo")]
     BadContactInfo,
+    #[error("BadGossipAddress")]
     BadGossipAddress,
+    #[error("TooManyIncrementalSnapshotHashes")]
     TooManyIncrementalSnapshotHashes,
 }
 
