@@ -799,8 +799,16 @@ fn check_account_infos(
         .feature_set
         .is_active(&feature_set::loosen_cpi_size_restriction::id())
     {
+        let max_cpi_account_infos = if invoke_context
+            .feature_set
+            .is_active(&feature_set::increase_tx_account_lock_limit::id())
+        {
+            MAX_CPI_ACCOUNT_INFOS
+        } else {
+            64
+        };
         let num_account_infos = num_account_infos as u64;
-        let max_account_infos = MAX_CPI_ACCOUNT_INFOS as u64;
+        let max_account_infos = max_cpi_account_infos as u64;
         if num_account_infos > max_account_infos {
             return Err(SyscallError::MaxInstructionAccountInfosExceeded {
                 num_account_infos,
