@@ -2,10 +2,8 @@
 use solana_frozen_abi::abi_example::AbiExample;
 use {
     crate::system_instruction_processor,
-    solana_program_runtime::invoke_context::{InvokeContext, ProcessInstructionWithContext},
-    solana_sdk::{
-        feature_set, instruction::InstructionError, pubkey::Pubkey, stake, system_program,
-    },
+    solana_program_runtime::invoke_context::ProcessInstructionWithContext,
+    solana_sdk::{feature_set, pubkey::Pubkey, stake, system_program},
     std::fmt,
 };
 
@@ -141,14 +139,6 @@ fn genesis_builtins() -> Vec<Builtin> {
     ]
 }
 
-/// place holder for precompile programs, remove when the precompile program is deactivated via feature activation
-fn dummy_process_instruction(
-    _first_instruction_account: usize,
-    _invoke_context: &mut InvokeContext,
-) -> Result<(), InstructionError> {
-    Ok(())
-}
-
 /// Dynamic feature transitions for builtin programs
 fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
     vec![
@@ -159,24 +149,6 @@ fn builtin_feature_transitions() -> Vec<BuiltinFeatureTransition> {
                 solana_compute_budget_program::process_instruction,
             ),
             feature_id: feature_set::add_compute_budget_program::id(),
-        },
-        BuiltinFeatureTransition::RemoveOrRetain {
-            previously_added_builtin: Builtin::new(
-                "secp256k1_program",
-                solana_sdk::secp256k1_program::id(),
-                dummy_process_instruction,
-            ),
-            addition_feature_id: feature_set::secp256k1_program_enabled::id(),
-            removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
-        },
-        BuiltinFeatureTransition::RemoveOrRetain {
-            previously_added_builtin: Builtin::new(
-                "ed25519_program",
-                solana_sdk::ed25519_program::id(),
-                dummy_process_instruction,
-            ),
-            addition_feature_id: feature_set::ed25519_program_enabled::id(),
-            removal_feature_id: feature_set::prevent_calling_precompiles_as_programs::id(),
         },
         BuiltinFeatureTransition::Add {
             builtin: Builtin::new(

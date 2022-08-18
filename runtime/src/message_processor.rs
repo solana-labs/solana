@@ -10,7 +10,7 @@ use {
     },
     solana_sdk::{
         account::WritableAccount,
-        feature_set::{prevent_calling_precompiles_as_programs, FeatureSet},
+        feature_set::FeatureSet,
         hash::Hash,
         message::SanitizedMessage,
         precompiles::is_precompile,
@@ -86,10 +86,8 @@ impl MessageProcessor {
             .zip(program_indices.iter())
             .enumerate()
         {
-            let is_precompile = invoke_context
-                .feature_set
-                .is_active(&prevent_calling_precompiles_as_programs::id())
-                && is_precompile(program_id, |id| invoke_context.feature_set.is_active(id));
+            let is_precompile =
+                is_precompile(program_id, |id| invoke_context.feature_set.is_active(id));
 
             // Fixup the special instructions key if present
             // before the account pre-values are taken care of
