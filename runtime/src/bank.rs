@@ -7150,19 +7150,19 @@ impl Bank {
         &self,
         test_hash_calculation: bool,
         accounts_db_skip_shrink: bool,
-        last_full_snapshot_slot: Option<Slot>,
+        last_full_snapshot_slot: Slot,
     ) -> bool {
         let mut clean_time = Measure::start("clean");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("cleaning..");
-            self.clean_accounts(true, true, last_full_snapshot_slot);
+            self.clean_accounts(true, true, Some(last_full_snapshot_slot));
         }
         clean_time.stop();
 
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
-            self.shrink_all_slots(true, last_full_snapshot_slot);
+            self.shrink_all_slots(true, Some(last_full_snapshot_slot));
         }
         shrink_all_slots_time.stop();
 
@@ -11657,11 +11657,11 @@ pub(crate) mod tests {
         .unwrap();
         bank.freeze();
         bank.update_accounts_hash();
-        assert!(bank.verify_snapshot_bank(true, false, None));
+        assert!(bank.verify_snapshot_bank(true, false, bank.slot()));
 
         // tamper the bank after freeze!
         bank.increment_signature_count(1);
-        assert!(!bank.verify_snapshot_bank(true, false, None));
+        assert!(!bank.verify_snapshot_bank(true, false, bank.slot()));
     }
 
     // Test that two bank forks with the same accounts should not hash to the same value.
