@@ -2111,6 +2111,75 @@ impl fmt::Display for CliUpgradeableBuffers {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CliAddressLookupTable {
+    pub lookup_table_address: String,
+    pub authority: Option<String>,
+    pub deactivation_slot: u64,
+    pub last_extended_slot: u64,
+    pub addresses: Vec<String>,
+}
+impl QuietDisplay for CliAddressLookupTable {}
+impl VerboseDisplay for CliAddressLookupTable {}
+impl fmt::Display for CliAddressLookupTable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Lookup Table Address:", &self.lookup_table_address)?;
+        if let Some(authority) = &self.authority {
+            writeln_name_value(f, "Authority:", authority)?;
+        } else {
+            writeln_name_value(f, "Authority:", "None (frozen)")?;
+        }
+        if self.deactivation_slot == u64::MAX {
+            writeln_name_value(f, "Deactivation Slot:", "None (still active)")?;
+        } else {
+            writeln_name_value(f, "Deactivation Slot:", &self.deactivation_slot.to_string())?;
+        }
+        if self.last_extended_slot == 0 {
+            writeln_name_value(f, "Last Extended Slot:", "None (empty)")?;
+        } else {
+            writeln_name_value(
+                f,
+                "Last Extended Slot:",
+                &self.last_extended_slot.to_string(),
+            )?;
+        }
+        if self.addresses.is_empty() {
+            writeln_name_value(f, "Address Table Entries:", "None (empty)")?;
+        } else {
+            writeln!(f, "{}", style("Address Table Entries:".to_string()).bold())?;
+            writeln!(f)?;
+            writeln!(
+                f,
+                "{}",
+                style(format!("  {:<5}  {}", "Index", "Address")).bold()
+            )?;
+            for (index, address) in self.addresses.iter().enumerate() {
+                writeln!(f, "  {:<5}  {}", index, address)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliAddressLookupTableCreated {
+    pub lookup_table_address: String,
+    pub signature: String,
+}
+impl QuietDisplay for CliAddressLookupTableCreated {}
+impl VerboseDisplay for CliAddressLookupTableCreated {}
+impl fmt::Display for CliAddressLookupTableCreated {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f)?;
+        writeln_name_value(f, "Signature:", &self.signature)?;
+        writeln_name_value(f, "Lookup Table Address:", &self.lookup_table_address)?;
+        Ok(())
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ReturnSignersConfig {
     pub dump_transaction_message: bool,
