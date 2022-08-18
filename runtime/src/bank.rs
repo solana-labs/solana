@@ -12977,7 +12977,7 @@ pub(crate) mod tests {
                 #[cfg(not(target_os = "linux"))]
                 {
                     error!("{} banks, sleeping for 5 sec", num_banks);
-                    std::thread::sleep(Duration::new(5, 0));
+                    std::thread::sleep(Duration::from_secs(5));
                 }
             }
         }
