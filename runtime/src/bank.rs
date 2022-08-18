@@ -7621,7 +7621,6 @@ impl Bank {
             );
             self.reconfigure_token2_native_mint();
         }
-        self.ensure_no_storage_rewards_pool();
 
         if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
             const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
@@ -7794,36 +7793,6 @@ impl Bank {
                     old_account_data_size,
                     native_mint_account.data().len(),
                 );
-            }
-        }
-    }
-
-    fn ensure_no_storage_rewards_pool(&mut self) {
-        let purge_window_epoch = match self.cluster_type() {
-            ClusterType::Development => false,
-            // never do this for devnet; we're pristine here. :)
-            ClusterType::Devnet => false,
-            // schedule to remove at testnet/tds
-            ClusterType::Testnet => self.epoch() == 93,
-            // never do this for stable; we're pristine here. :)
-            ClusterType::MainnetBeta => false,
-        };
-
-        if purge_window_epoch {
-            for reward_pubkey in self.rewards_pool_pubkeys.iter() {
-                if let Some(mut reward_account) = self.get_account_with_fixed_root(reward_pubkey) {
-                    if reward_account.lamports() == u64::MAX {
-                        reward_account.set_lamports(0);
-                        self.store_account(reward_pubkey, &reward_account);
-                        // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport
-                        self.capitalization.fetch_add(1, Relaxed);
-                        info!(
-                            "purged rewards pool account: {}, new capitalization: {}",
-                            reward_pubkey,
-                            self.capitalization()
-                        );
-                    }
-                };
             }
         }
     }
@@ -15219,57 +15188,6 @@ pub(crate) mod tests {
             4200000000
         );
         assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
-    }
-
-    #[test]
-    fn test_ensure_no_storage_rewards_pool() {
-        solana_logger::setup();
-
-        let mut genesis_config =
-            create_genesis_config_with_leader(5, &solana_sdk::pubkey::new_rand(), 0).genesis_config;
-
-        // Testnet - Storage rewards pool is purged at epoch 93
-        // Also this is with bad capitalization
-        genesis_config.cluster_type = ClusterType::Testnet;
-        genesis_config.inflation = Inflation::default();
-        let reward_pubkey = solana_sdk::pubkey::new_rand();
-        genesis_config.rewards_pools.insert(
-            reward_pubkey,
-            Account::new(u64::MAX, 0, &solana_sdk::pubkey::new_rand()),
-        );
-        let bank0 = Bank::new_for_tests(&genesis_config);
-        // because capitalization has been reset with bogus capitalization calculation allowing overflows,
-        // deliberately substract 1 lamport to simulate it
-        bank0.capitalization.fetch_sub(1, Relaxed);
-        let bank0 = Arc::new(bank0);
-        assert_eq!(bank0.get_balance(&reward_pubkey), u64::MAX,);
-
-        let bank1 = Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            genesis_config.epoch_schedule.get_first_slot_in_epoch(93),
-        );
-
-        // assert that everything gets in order....
-        assert!(bank1.get_account(&reward_pubkey).is_none());
-        let sysvar_and_builtin_program_delta = 1;
-        assert_eq!(
-            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_builtin_program_delta,
-            bank1.capitalization()
-        );
-        assert_eq!(bank1.capitalization(), bank1.calculate_capitalization(true));
-
-        // Depending on RUSTFLAGS, this test exposes rust's checked math behavior or not...
-        // So do some convolted setup; anyway this test itself will just be temporary
-        let bank0 = std::panic::AssertUnwindSafe(bank0);
-        let overflowing_capitalization =
-            std::panic::catch_unwind(|| bank0.calculate_capitalization(true));
-        if let Ok(overflowing_capitalization) = overflowing_capitalization {
-            info!("asserting overflowing capitalization for bank0");
-            assert_eq!(overflowing_capitalization, bank0.capitalization());
-        } else {
-            info!("NOT-asserting overflowing capitalization for bank0");
-        }
     }
 
     #[derive(Debug)]
