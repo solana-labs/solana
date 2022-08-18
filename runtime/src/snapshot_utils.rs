@@ -986,7 +986,7 @@ pub fn bank_from_snapshot_archives(
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
         accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
-        Some(full_snapshot_archive_info.slot()),
+        full_snapshot_archive_info.slot(),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
