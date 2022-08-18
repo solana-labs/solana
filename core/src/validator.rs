@@ -2055,6 +2055,12 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     online_stake_percentage as u64
 }
 
+/// Delete directories/files asynchronously to avoid blocking on it.
+/// Fist, in sync context, rename the original path to *_deleted,
+/// then spawn a thread to delete the renamed path.
+/// If the process is killed and the deleting process is not done,
+/// the leftover path will be deleted in the next process life, so
+/// there is no file space leaking.
 fn move_and_async_delete_path(path: &std::path::Path) {
     let mut del_path_str = OsString::from(path);
     del_path_str.push("_deleted");
@@ -2076,15 +2082,6 @@ fn move_and_async_delete_path(path: &std::path::Path) {
         .unwrap();
 }
 
-/*  Delete directories/files asynchronously to avoid blocking on it.
-    Fist, in sync context, rename the original path into
-    the top to_be_deleted/ directory, then in the async context
-    call the tokio async remove_dir_all.
-    The async rmdir process may not finish if the process is
-    unexpectly aborted, so the files may be left over undeleted.
-    causing the disk space resource leak.  This function finds all
-    the leftover files and also delete them.
-*/
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
     for accounts_path in &config.account_paths {
         move_and_async_delete_path(accounts_path);
