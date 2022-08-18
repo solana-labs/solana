@@ -2160,6 +2160,7 @@ impl ClusterInfo {
         I: IntoIterator<Item = (SocketAddr, Ping)>,
     {
         let keypair = self.keypair();
+<<<<<<< HEAD
         let packets: Vec<_> = pings
             .into_iter()
             .filter_map(|(addr, ping)| {
@@ -2175,6 +2176,21 @@ impl ClusterInfo {
             })
             .collect();
         if packets.is_empty() {
+=======
+        let mut pongs_and_dests = Vec::new();
+        for (addr, ping) in pings {
+            // Respond both with and without domain so that the other node will
+            // accept the response regardless of its upgrade status.
+            // TODO: remove domain = false once cluster is upgraded.
+            for domain in [false, true] {
+                if let Ok(pong) = Pong::new(domain, &ping, &keypair) {
+                    let pong = Protocol::PongMessage(pong);
+                    pongs_and_dests.push((addr, pong));
+                }
+            }
+        }
+        if pongs_and_dests.is_empty() {
+>>>>>>> 6928b2a5a (adds hash domain to ping-pong protocol (#27193))
             None
         } else {
             let packet_batch = PacketBatch::new_unpinned_with_recycler_data(
@@ -3181,7 +3197,9 @@ mod tests {
         let pongs: Vec<(SocketAddr, Pong)> = pings
             .iter()
             .zip(&remote_nodes)
-            .map(|(ping, (keypair, socket))| (*socket, Pong::new(ping, keypair).unwrap()))
+            .map(|(ping, (keypair, socket))| {
+                (*socket, Pong::new(/*domain:*/ true, ping, keypair).unwrap())
+            })
             .collect();
         let now = now + Duration::from_millis(1);
         cluster_info.handle_batch_pong_messages(pongs, now);
@@ -3224,7 +3242,7 @@ mod tests {
             .collect();
         let pongs: Vec<_> = pings
             .iter()
-            .map(|ping| Pong::new(ping, &this_node).unwrap())
+            .map(|ping| Pong::new(/*domain:*/ false, ping, &this_node).unwrap())
             .collect();
         let recycler = PacketBatchRecycler::default();
         let packets = cluster_info
@@ -3236,9 +3254,9 @@ mod tests {
                 &recycler,
             )
             .unwrap();
-        assert_eq!(remote_nodes.len(), packets.len());
+        assert_eq!(remote_nodes.len() * 2, packets.len());
         for (packet, (_, socket), pong) in izip!(
-            packets.into_iter(),
+            packets.into_iter().step_by(2),
             remote_nodes.into_iter(),
             pongs.into_iter()
         ) {

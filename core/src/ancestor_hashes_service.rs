@@ -425,16 +425,21 @@ impl AncestorHashesService {
                     stats.invalid_packets += 1;
                     return None;
                 }
-                if ping.verify() {
-                    stats.ping_count += 1;
-                    if let Ok(pong) = Pong::new(&ping, keypair) {
+                if !ping.verify() {
+                    stats.ping_err_verify_count += 1;
+                    return None;
+                }
+                stats.ping_count += 1;
+                // Respond both with and without domain so that the other node
+                // will accept the response regardless of its upgrade status.
+                // TODO: remove domain = false once cluster is upgraded.
+                for domain in [false, true] {
+                    if let Ok(pong) = Pong::new(domain, &ping, keypair) {
                         let pong = RepairProtocol::Pong(pong);
                         if let Ok(pong_bytes) = serialize(&pong) {
                             let _ignore = ancestor_socket.send_to(&pong_bytes[..], from_addr);
                         }
                     }
-                } else {
-                    stats.ping_err_verify_count += 1;
                 }
                 None
             }
