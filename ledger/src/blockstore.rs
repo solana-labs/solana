@@ -5004,7 +5004,7 @@ pub mod tests {
         blockstore
             .insert_shreds(vec![shreds.remove(1)], None, false)
             .unwrap();
-        let timer = Duration::new(1, 0);
+        let timer = Duration::from_secs(1);
         assert!(recvr.recv_timeout(timer).is_err());
         // Insert first shred, now we've made a consecutive block
         blockstore
