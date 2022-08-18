@@ -194,7 +194,7 @@ impl TransactionContext {
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
         let callee_instruction_accounts_lamport_sum =
-            self.instruction_accounts_lamport_sum(instruction_accounts)?;
+            self.instruction_accounts_lamport_sum(instruction_accounts.iter())?;
         if !self.instruction_stack.is_empty()
             && self.is_early_verification_of_account_modifications_enabled()
         {
@@ -203,7 +203,7 @@ impl TransactionContext {
                 caller_instruction_context.instruction_accounts_lamport_sum;
             let current_caller_instruction_accounts_lamport_sum = self
                 .instruction_accounts_lamport_sum(
-                    &caller_instruction_context.instruction_accounts,
+                    caller_instruction_context.instruction_accounts.iter(),
                 )?;
             if original_caller_instruction_accounts_lamport_sum
                 != current_caller_instruction_accounts_lamport_sum
@@ -244,7 +244,7 @@ impl TransactionContext {
                             .try_borrow_mut()
                             .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                     }
-                    self.instruction_accounts_lamport_sum(&instruction_context.instruction_accounts)
+                    self.instruction_accounts_lamport_sum(instruction_context.instruction_accounts.iter())
                         .map(|instruction_accounts_lamport_sum| {
                             instruction_context.instruction_accounts_lamport_sum
                                 != instruction_accounts_lamport_sum
@@ -278,16 +278,19 @@ impl TransactionContext {
     }
 
     /// Calculates the sum of all lamports within an instruction
-    fn instruction_accounts_lamport_sum(
-        &self,
-        instruction_accounts: &[InstructionAccount],
-    ) -> Result<u128, InstructionError> {
+    fn instruction_accounts_lamport_sum<'a, I>(
+        &'a self,
+        instruction_accounts: I,
+    ) -> Result<u128, InstructionError>
+    where
+        I: Iterator<Item = &'a InstructionAccount>,
+    {
         if !self.is_early_verification_of_account_modifications_enabled() {
             return Ok(0);
         }
         let mut instruction_accounts_lamport_sum: u128 = 0;
         for (instruction_account_index, instruction_account) in
-            instruction_accounts.iter().enumerate()
+            instruction_accounts.enumerate()
         {
             if instruction_account_index != instruction_account.index_in_callee {
                 continue; // Skip duplicate account
