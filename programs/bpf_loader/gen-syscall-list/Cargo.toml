@@ -1,6 +1,6 @@
 [package]
 name = "gen-syscall-list"
-version = "1.11.7"
+version = "1.11.8"
 edition = "2021"
 license = "Apache-2.0"
 publish = false
