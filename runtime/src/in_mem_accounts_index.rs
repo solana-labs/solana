@@ -315,7 +315,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> RT {
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
-                entry.set_age(self.storage.future_age_to_flush());
                 callback(Some(entry)).1
             } else {
                 // not in cache, look on disk
