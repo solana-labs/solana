@@ -72,7 +72,7 @@ export class Message {
     );
   }
 
-  get version(): TransactionVersion {
+  get version(): 'legacy' {
     return 'legacy';
   }
 

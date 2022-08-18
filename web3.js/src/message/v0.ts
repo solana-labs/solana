@@ -45,7 +45,7 @@ export class MessageV0 {
     this.addressTableLookups = args.addressTableLookups;
   }
 
-  get version(): TransactionVersion {
+  get version(): 0 {
     return 0;
   }
 
