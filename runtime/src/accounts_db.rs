@@ -2387,12 +2387,12 @@ impl AccountsDb {
     /// Collect all the uncleaned slots, up to a max slot
     ///
     /// Search through the uncleaned Pubkeys and return all the slots, up to a maximum slot.
-    fn collect_uncleaned_slots_up_to_slot(&self, max_slot: Slot) -> Vec<Slot> {
+    fn collect_uncleaned_slots_up_to_slot(&self, max_slot_inclusive: Slot) -> Vec<Slot> {
         self.uncleaned_pubkeys
             .iter()
             .filter_map(|entry| {
                 let slot = *entry.key();
-                (slot <= max_slot).then(|| slot)
+                (slot <= max_slot_inclusive).then(|| slot)
             })
             .collect()
     }
@@ -2419,9 +2419,9 @@ impl AccountsDb {
     ///
     fn remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(
         &self,
-        max_slot: Slot,
+        max_slot_inclusive: Slot,
     ) -> Vec<Vec<Pubkey>> {
-        let uncleaned_slots = self.collect_uncleaned_slots_up_to_slot(max_slot);
+        let uncleaned_slots = self.collect_uncleaned_slots_up_to_slot(max_slot_inclusive);
         self.remove_uncleaned_slots_and_collect_pubkeys(uncleaned_slots)
     }
 
@@ -2435,10 +2435,11 @@ impl AccountsDb {
         timings: &mut CleanKeyTimings,
     ) -> Vec<Pubkey> {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
-        let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
+        let max_slot_inclusive =
+            max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
         self.dirty_stores.retain(|(slot, _store_id), store| {
-            if *slot > max_slot {
+            if *slot > max_slot_inclusive {
                 true
             } else {
                 dirty_stores.push((*slot, store.clone()));
@@ -2447,7 +2448,7 @@ impl AccountsDb {
         });
         let dirty_stores_len = dirty_stores.len();
         let pubkeys = DashSet::new();
-        timings.oldest_dirty_slot = max_slot.saturating_add(1);
+        timings.oldest_dirty_slot = max_slot_inclusive.saturating_add(1);
         for (slot, store) in dirty_stores {
             timings.oldest_dirty_slot = std::cmp::min(timings.oldest_dirty_slot, slot);
             store.accounts.account_iter().for_each(|account| {
@@ -2464,7 +2465,8 @@ impl AccountsDb {
         timings.dirty_store_processing_us += dirty_store_processing_time.as_us();
 
         let mut collect_delta_keys = Measure::start("key_create");
-        let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
+        let delta_keys =
+            self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot_inclusive);
         collect_delta_keys.stop();
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
 
@@ -2496,7 +2498,7 @@ impl AccountsDb {
             self.zero_lamport_accounts_to_purge_after_full_snapshot
                 .retain(|(slot, pubkey)| {
                     let is_candidate_for_clean =
-                        max_slot >= *slot && last_full_snapshot_slot >= *slot;
+                        max_slot_inclusive >= *slot && last_full_snapshot_slot >= *slot;
                     if is_candidate_for_clean {
                         pubkeys.push(*pubkey);
                     }
