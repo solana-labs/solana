@@ -1049,11 +1049,11 @@ impl Accounts {
         self.accounts_db.store_uncached(slot, &[(pubkey, account)]);
     }
 
-    fn lock_account(
+    fn lock_account<'a>(
         &self,
         account_locks: &mut AccountLocks,
-        writable_keys: Vec<&Pubkey>,
-        readonly_keys: Vec<&Pubkey>,
+        writable_keys: &[&'a Pubkey],
+        readonly_keys: &[&'a Pubkey],
     ) -> Result<()> {
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
@@ -1068,11 +1068,11 @@ impl Accounts {
             }
         }
 
-        for k in writable_keys {
-            account_locks.write_locks.insert(*k);
+        for k in writable_keys.iter() {
+            account_locks.write_locks.insert(**k);
         }
 
-        for k in readonly_keys {
+        for k in readonly_keys.iter() {
             if !account_locks.lock_readonly(k) {
                 account_locks.insert_new_readonly(k);
             }
@@ -1084,13 +1084,13 @@ impl Accounts {
     fn unlock_account(
         &self,
         account_locks: &mut AccountLocks,
-        writable_keys: Vec<&Pubkey>,
-        readonly_keys: Vec<&Pubkey>,
+        writable_keys: &[&Pubkey],
+        readonly_keys: &[&Pubkey],
     ) {
-        for k in writable_keys {
+        for k in writable_keys.iter() {
             account_locks.unlock_write(k);
         }
-        for k in readonly_keys {
+        for k in readonly_keys.iter() {
             account_locks.unlock_readonly(k);
         }
     }
@@ -1124,7 +1124,7 @@ impl Accounts {
         let tx_account_locks_results: Vec<Result<_>> = txs
             .map(|tx| tx.get_account_locks(tx_account_lock_limit))
             .collect();
-        self.lock_accounts_inner(tx_account_locks_results)
+        self.lock_these_accounts(&tx_account_locks_results)
     }
 
     #[must_use]
@@ -1142,24 +1142,24 @@ impl Accounts {
                 Err(err) => Err(err.clone()),
             })
             .collect();
-        self.lock_accounts_inner(tx_account_locks_results)
+        self.lock_these_accounts(&tx_account_locks_results)
     }
 
     #[must_use]
-    fn lock_accounts_inner(
+    pub fn lock_these_accounts(
         &self,
-        tx_account_locks_results: Vec<Result<TransactionAccountLocks>>,
+        tx_account_locks_results: &[Result<TransactionAccountLocks>],
     ) -> Vec<Result<()>> {
         let account_locks = &mut self.account_locks.lock().unwrap();
         tx_account_locks_results
-            .into_iter()
+            .iter()
             .map(|tx_account_locks_result| match tx_account_locks_result {
                 Ok(tx_account_locks) => self.lock_account(
                     account_locks,
-                    tx_account_locks.writable,
-                    tx_account_locks.readonly,
+                    &tx_account_locks.writable,
+                    &tx_account_locks.readonly,
                 ),
-                Err(err) => Err(err),
+                Err(err) => Err(err.clone()),
             })
             .collect()
     }
@@ -1189,7 +1189,7 @@ impl Accounts {
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
         keys.into_iter().for_each(|keys| {
-            self.unlock_account(&mut account_locks, keys.writable, keys.readonly);
+            self.unlock_account(&mut account_locks, &keys.writable, &keys.readonly);
         });
     }
 

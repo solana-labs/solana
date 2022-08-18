@@ -595,9 +595,17 @@ fn process_entries_with_callback(
                     (starting_index..starting_index.saturating_add(transactions.len())).collect()
                 };
 
+                let tx_account_locks_results: Vec<Result<_>> = transactions
+                    .iter()
+                    .map(|tx| tx.get_account_locks(bank.get_transaction_account_lock_limit()))
+                    .collect();
+
                 loop {
                     // try to lock the accounts
-                    let batch = bank.prepare_sanitized_batch(transactions);
+                    let batch = bank.prepare_sanitized_batch_with_account_locks(
+                        transactions,
+                        &tx_account_locks_results,
+                    );
                     let first_lock_err = first_err(batch.lock_results());
 
                     // if locking worked
