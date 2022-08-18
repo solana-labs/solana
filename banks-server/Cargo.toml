@@ -1,6 +1,6 @@
 [package]
 name = "solana-banks-server"
-version = "1.11.7"
+version = "1.11.8"
 description = "Solana banks server"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -13,11 +13,11 @@ edition = "2021"
 bincode = "1.3.3"
 crossbeam-channel = "0.5"
 futures = "0.3"
-solana-banks-interface = { path = "../banks-interface", version = "=1.11.7" }
-solana-client = { path = "../client", version = "=1.11.7" }
-solana-runtime = { path = "../runtime", version = "=1.11.7" }
-solana-sdk = { path = "../sdk", version = "=1.11.7" }
-solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.11.7" }
+solana-banks-interface = { path = "../banks-interface", version = "=1.11.8" }
+solana-client = { path = "../client", version = "=1.11.8" }
+solana-runtime = { path = "../runtime", version = "=1.11.8" }
+solana-sdk = { path = "../sdk", version = "=1.11.8" }
+solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.11.8" }
 tarpc = { version = "0.29.0", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
 tokio-serde = { version = "0.8", features = ["bincode"] }
