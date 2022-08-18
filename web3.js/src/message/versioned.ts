@@ -1,26 +1,7 @@
-import {Blockhash} from '../blockhash';
-import {
-  MessageAddressTableLookup,
-  MessageCompiledInstruction,
-  MessageHeader,
-} from './index';
 import {Message} from './legacy';
-import {PublicKey} from '../publickey';
 import {MessageV0} from './v0';
-import {TransactionVersion} from '../transaction/versioned';
 
-/**
- * Common interface for versioned messages and legacy messages
- */
-export interface VersionedMessage {
-  get version(): TransactionVersion;
-  get header(): MessageHeader;
-  get staticAccountKeys(): Array<PublicKey>;
-  get recentBlockhash(): Blockhash;
-  get compiledInstructions(): Array<MessageCompiledInstruction>;
-  get addressTableLookups(): Array<MessageAddressTableLookup>;
-  serialize(): Uint8Array;
-}
+export type VersionedMessage = Message | MessageV0;
 
 export function deserializeMessage(
   serializedMessage: Uint8Array,
