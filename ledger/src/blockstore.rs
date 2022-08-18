@@ -3245,28 +3245,29 @@ impl Blockstore {
                     .and_then(|serialized_shred| {
                         if serialized_shred.is_none() {
                             if let Some(slot_meta) = slot_meta {
-                                panic!(
-                                    "Shred with
-                                    slot: {},
-                                    index: {},
-                                    consumed: {},
-                                    completed_indexes: {:?}
-                                    must exist if shred index was included in a range: {} {}",
-                                    slot,
-                                    i,
-                                    slot_meta.consumed,
-                                    slot_meta.completed_data_indexes,
-                                    start_index,
-                                    end_index
-                                );
-                            } else {
-                                return Err(BlockstoreError::InvalidShredData(Box::new(
-                                    bincode::ErrorKind::Custom(format!(
-                                        "Missing shred for slot {}, index {}",
-                                        slot, i
-                                    )),
-                                )));
+                                if slot > self.lowest_cleanup_slot() {
+                                    panic!(
+                                        "Shred with
+                                        slot: {},
+                                        index: {},
+                                        consumed: {},
+                                        completed_indexes: {:?}
+                                        must exist if shred index was included in a range: {} {}",
+                                        slot,
+                                        i,
+                                        slot_meta.consumed,
+                                        slot_meta.completed_data_indexes,
+                                        start_index,
+                                        end_index
+                                    );
+                                }
                             }
+                            return Err(BlockstoreError::InvalidShredData(Box::new(
+                                bincode::ErrorKind::Custom(format!(
+                                    "Missing shred for slot {}, index {}",
+                                    slot, i
+                                )),
+                            )));
                         }
 
                         Shred::new_from_serialized_shred(serialized_shred.unwrap()).map_err(|err| {
