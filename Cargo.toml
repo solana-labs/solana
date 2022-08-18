@@ -58,6 +58,7 @@ members = [
     "programs/stake",
     "programs/vote",
     "programs/zk-token-proof",
+    "pubsub-client",
     "rayon-threadlimit",
     "rbpf-cli",
     "remote-wallet",

@@ -4,6 +4,7 @@ use {
     crate::{
         client_error::Result,
         rpc_custom_error,
+        rpc_error_object::RpcErrorObject,
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData},
         rpc_response::RpcSimulateTransactionResult,
         rpc_sender::*,
@@ -70,12 +71,6 @@ impl HttpSender {
             stats: RwLock::new(RpcTransportStats::default()),
         }
     }
-}
-
-#[derive(Deserialize, Debug)]
-pub(crate) struct RpcErrorObject {
-    pub code: i64,
-    pub message: String,
 }
 
 struct StatsUpdater<'a> {

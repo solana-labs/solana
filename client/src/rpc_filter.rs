@@ -259,7 +259,7 @@ impl From<RpcMemcmp> for Memcmp {
     }
 }
 
-pub(crate) fn maybe_map_filters(
+pub fn maybe_map_filters(
     node_version: Option<semver::Version>,
     filters: &mut [RpcFilterType],
 ) -> Result<(), String> {
