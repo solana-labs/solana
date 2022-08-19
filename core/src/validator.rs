@@ -175,7 +175,6 @@ pub struct ValidatorConfig {
     pub wait_to_vote_slot: Option<Slot>,
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
-    pub enable_quic_servers: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -239,7 +238,6 @@ impl Default for ValidatorConfig {
             wait_to_vote_slot: None,
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
-            enable_quic_servers: true,
         }
     }
 }
@@ -1025,7 +1023,6 @@ impl Validator {
             &connection_cache,
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
-            config.enable_quic_servers,
             &staked_nodes,
             config.staked_nodes_overrides.clone(),
         );
