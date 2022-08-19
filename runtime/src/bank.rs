@@ -7457,28 +7457,22 @@ impl Bank {
         debug!("Added precompiled program {:?}", program_id);
     }
 
+    // Call AccountsDb::clean_accounts()
+    //
+    // This fn is meant to be called by the snapshot handler in Accounts Background Service.  If
+    // calling from elsewhere, ensure the same invariants hold/expectations are met.
     pub(crate) fn clean_accounts(&self, last_full_snapshot_slot: Option<Slot>) {
         // Don't clean the slot we're snapshotting because it may have zero-lamport
         // accounts that were included in the bank delta hash when the bank was frozen,
         // and if we clean them here, any newly created snapshot's hash for this bank
         // may not match the frozen hash.
         //
-        // So when we're snapshotting, set `skip_last` to true so the highest slot to clean is
-        // lowered by one.
-        self._clean_accounts(true, false, last_full_snapshot_slot)
-    }
-
-    fn _clean_accounts(
-        &self,
-        skip_last: bool,
-        is_startup: bool,
-        last_full_snapshot_slot: Option<Slot>,
-    ) {
-        let max_clean_root = skip_last.then(|| self.slot().saturating_sub(1));
+        // So when we're snapshotting, the highest slot to clean is lowered by one.
+        let highest_slot_to_clean = self.slot().saturating_sub(1);
 
         self.rc.accounts.accounts_db.clean_accounts(
-            max_clean_root,
-            is_startup,
+            Some(highest_slot_to_clean),
+            false,
             last_full_snapshot_slot,
         );
     }
