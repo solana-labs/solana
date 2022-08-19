@@ -15,7 +15,7 @@ use {
         rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
-        snapshot_utils::{self, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
+        snapshot_utils::{self, StorageAndNextAppendVecId, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
         stakes::Stakes,
     },
     bincode::{self, config::Options, Error},
@@ -52,7 +52,6 @@ mod storage;
 mod tests;
 mod utils;
 
-use crate::snapshot_utils::StorageAndNextAppendVecId;
 pub(crate) use storage::SerializedAppendVecId;
 // a number of test cases in accounts_db use this
 #[cfg(test)]
