@@ -2252,11 +2252,14 @@ impl AccountsDb {
             };
             if no_delete {
                 let mut pending_store_ids = HashSet::new();
-                for (_bank_id, account_info) in account_infos {
-                    if !already_counted.contains(&account_info.store_id()) {
-                        pending_store_ids.insert(account_info.store_id());
-                    }
-                }
+                let mut insert_pending_stores = |account_infos: &SlotList<AccountInfo>| {
+                        for (_slot, account_info) in account_infos {
+                            if !already_counted.contains(&account_info.store_id()) {
+                                pending_store_ids.insert(account_info.store_id());
+                            }
+                        }
+                    };
+                insert_pending_stores(account_infos);
                 while !pending_store_ids.is_empty() {
                     let id = pending_store_ids.iter().next().cloned().unwrap();
                     pending_store_ids.remove(&id);
@@ -2265,13 +2268,8 @@ impl AccountsDb {
                     }
                     store_counts.get_mut(&id).unwrap().0 += 1;
 
-                    let affected_pubkeys = &store_counts.get(&id).unwrap().1;
-                    for key in affected_pubkeys {
-                        for (_slot, account_info) in &purges.get(key).unwrap().0 {
-                            if !already_counted.contains(&account_info.store_id()) {
-                                pending_store_ids.insert(account_info.store_id());
-                            }
-                        }
+                    for key in &store_counts.get(&id).unwrap().1 {
+                        insert_pending_stores(&purges.get(key).unwrap().0);
                     }
                 }
             }
