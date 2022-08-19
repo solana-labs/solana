@@ -5541,7 +5541,8 @@ impl AccountsDb {
             .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
     }
 
-    pub fn flush_accounts_cache_slot(&self, slot: Slot) {
+    #[cfg(test)]
+    pub(crate) fn flush_accounts_cache_slot_for_tests(&self, slot: Slot) {
         self.flush_slot_cache(slot);
     }
 

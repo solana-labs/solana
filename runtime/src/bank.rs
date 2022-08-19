@@ -6421,11 +6421,11 @@ impl Bank {
     }
 
     #[cfg(test)]
-    pub fn flush_accounts_cache_slot(&self) {
+    pub fn flush_accounts_cache_slot_for_tests(&self) {
         self.rc
             .accounts
             .accounts_db
-            .flush_accounts_cache_slot(self.slot())
+            .flush_accounts_cache_slot_for_tests(self.slot())
     }
 
     pub fn expire_old_recycle_stores(&self) {
@@ -14670,7 +14670,7 @@ pub(crate) mod tests {
         bank1.deposit(&pubkey0, some_lamports).unwrap();
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
         bank1.freeze();
-        bank1.flush_accounts_cache_slot();
+        bank1.flush_accounts_cache_slot_for_tests();
 
         bank1.print_accounts_stats();
 
