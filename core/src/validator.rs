@@ -102,7 +102,6 @@ use {
     solana_vote_program::vote_state,
     std::{
         collections::{HashMap, HashSet},
-        ffi::OsString,
         net::SocketAddr,
         path::{Path, PathBuf},
         sync::{
@@ -2061,18 +2060,25 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 /// If the process is killed and the deleting process is not done,
 /// the leftover path will be deleted in the next process life, so
 /// there is no file space leaking.
-fn move_and_async_delete_path(path: &Path) {
-    let mut del_path_str = OsString::from(path);
-    del_path_str.push("_deleted");
-    let path_delete = PathBuf::from(del_path_str);
+fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+    let mut path_delete = PathBuf::new();
+    path_delete.push(path);
+    path_delete.set_file_name(format!(
+        "{}{}",
+        path_delete.file_name().unwrap().to_str().unwrap(),
+        "_to_be_deleted"
+    ));
 
     if path_delete.exists() {
-        info!("{path_delete:?} exists, delete it first.");
+        debug!("{} exists, delete it first.", path_delete.display());
         std::fs::remove_dir_all(&path_delete).unwrap();
     }
 
-    if !path.exists() {
-        info!("move_and_async_delete_path: path {path:?} does not exist");
+    if !path.as_ref().exists() {
+        info!(
+            "move_and_async_delete_path: path {} does not exist",
+            path.as_ref().display()
+        );
         return;
     }
 
@@ -2082,7 +2088,10 @@ fn move_and_async_delete_path(path: &Path) {
         .name("delete_path".to_string())
         .spawn(move || {
             std::fs::remove_dir_all(&path_delete).unwrap();
-            info!("In the spawned thread, done deleting path {path_delete:?}");
+            info!(
+                "Cleaning path {} done asynchronously in a spawned thread",
+                path_delete.display()
+            );
         })
         .unwrap();
 }
