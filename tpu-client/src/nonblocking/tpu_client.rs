@@ -10,7 +10,7 @@ use {
     bincode::serialize,
     futures_util::{future::join_all, stream::StreamExt},
     log::*,
-    solana_client::{
+    solana_client_common::{
         client_error::{ClientError, Result as ClientResult},
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         rpc_response::{RpcContactInfo, SlotUpdate},

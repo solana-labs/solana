@@ -4680,12 +4680,17 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
+ "solana-client-common",
  "solana-faucet",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
+ "solana-pubsub-client",
+ "solana-rpc-client",
  "solana-sdk 1.12.0",
  "solana-streamer",
+ "solana-thin-client",
+ "solana-tpu-client",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -4696,6 +4701,28 @@ dependencies = [
  "tokio-tungstenite",
  "tungstenite",
  "url 2.2.2",
+]
+
+[[package]]
+name = "solana-client-common"
+version = "1.12.0"
+dependencies = [
+ "base64 0.13.0",
+ "bs58",
+ "indicatif",
+ "jsonrpc-core",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-faucet",
+ "solana-sdk 1.12.0",
+ "solana-transaction-status",
+ "solana-version",
+ "spl-token-2022",
+ "thiserror",
 ]
 
 [[package]]
@@ -5313,6 +5340,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-pubsub-client"
+version = "1.12.0"
+dependencies = [
+ "crossbeam-channel",
+ "futures-util",
+ "log",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-client-common",
+ "solana-sdk 1.12.0",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tungstenite",
+ "url 2.2.2",
+]
+
+[[package]]
 name = "solana-rayon-threadlimit"
 version = "1.12.0"
 dependencies = [
@@ -5386,6 +5436,29 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.6.9",
+]
+
+[[package]]
+name = "solana-rpc-client"
+version = "1.12.0"
+dependencies = [
+ "async-trait",
+ "base64 0.13.0",
+ "bincode",
+ "bs58",
+ "log",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-client-common",
+ "solana-sdk 1.12.0",
+ "solana-transaction-status",
+ "solana-version",
+ "solana-vote-program",
+ "tokio",
 ]
 
 [[package]]
@@ -5716,6 +5789,50 @@ dependencies = [
  "solana-runtime",
  "solana-sdk 1.12.0",
  "solana-streamer",
+ "tokio",
+]
+
+[[package]]
+name = "solana-thin-client"
+version = "1.12.0"
+dependencies = [
+ "bincode",
+ "log",
+ "solana-client-common",
+ "solana-rpc-client",
+ "solana-sdk 1.12.0",
+ "solana-tpu-client",
+]
+
+[[package]]
+name = "solana-tpu-client"
+version = "1.12.0"
+dependencies = [
+ "async-mutex",
+ "async-trait",
+ "bincode",
+ "enum_dispatch",
+ "futures 0.3.23",
+ "futures-util",
+ "indexmap",
+ "itertools",
+ "lazy_static",
+ "log",
+ "quinn",
+ "quinn-proto",
+ "quinn-udp",
+ "rand 0.7.3",
+ "rayon",
+ "rustls 0.20.6",
+ "solana-client-common",
+ "solana-measure",
+ "solana-metrics",
+ "solana-net-utils",
+ "solana-pubsub-client",
+ "solana-rpc-client",
+ "solana-sdk 1.12.0",
+ "solana-streamer",
+ "thiserror",
  "tokio",
 ]
 

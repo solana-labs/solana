@@ -5,7 +5,7 @@ use {
     async_trait::async_trait,
     serde_json::{json, Number, Value},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
-    solana_client::{
+    solana_client_common::{
         client_error::Result,
         rpc_config::RpcBlockProductionConfig,
         rpc_request::RpcRequest,

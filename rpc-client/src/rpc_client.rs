@@ -8,7 +8,7 @@
 
 pub use crate::mock_sender::Mocks;
 #[allow(deprecated)]
-use solana_client::rpc_deprecated_config::{
+use solana_client_common::rpc_deprecated_config::{
     RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
 };
 use {
@@ -23,7 +23,7 @@ use {
         parse_token::{UiTokenAccount, UiTokenAmount},
         UiAccount, UiAccountEncoding,
     },
-    solana_client::{
+    solana_client_common::{
         client_error::Result as ClientResult,
         rpc_config::{RpcAccountInfoConfig, *},
         rpc_request::{RpcRequest, TokenAccountsFilter},
@@ -4111,12 +4111,13 @@ pub fn create_rpc_client_mocks() -> crate::mock_sender::Mocks {
 mod tests {
     use {
         super::*,
-        crate::{client_error::ClientErrorKind, mock_sender::PUBKEY},
+        crate::mock_sender::PUBKEY,
         assert_matches::assert_matches,
         crossbeam_channel::unbounded,
         jsonrpc_core::{futures::prelude::*, Error, IoHandler, Params},
         jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder},
         serde_json::{json, Number},
+        solana_client_common::client_error::ClientErrorKind,
         solana_sdk::{
             instruction::InstructionError,
             signature::{Keypair, Signer},

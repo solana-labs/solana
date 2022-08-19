@@ -15,7 +15,7 @@ use {
         ClientConfig, ConnectError, ConnectionError, Endpoint, EndpointConfig, IdleTimeout,
         NewConnection, VarInt, WriteError,
     },
-    solana_client::client_error::ClientErrorKind,
+    solana_client_common::client_error::ClientErrorKind,
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_sdk::{

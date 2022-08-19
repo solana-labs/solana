@@ -1,6 +1,4 @@
 #![allow(clippy::integer_arithmetic)]
-#[macro_use]
-extern crate serde_derive;
 
 pub mod blockhash_query;
 pub mod client_error;
@@ -16,7 +14,6 @@ pub mod rpc_client;
 pub mod rpc_config;
 pub mod rpc_custom_error;
 pub mod rpc_deprecated_config;
-pub mod rpc_error_object;
 pub mod rpc_filter;
 pub mod rpc_request;
 pub mod rpc_response;

@@ -8,7 +8,7 @@
 
 pub use crate::mock_sender::Mocks;
 #[allow(deprecated)]
-use solana_client::rpc_deprecated_config::{
+use solana_client_common::rpc_deprecated_config::{
     RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
     RpcGetConfirmedSignaturesForAddress2Config,
 };
@@ -26,7 +26,7 @@ use {
         parse_token::{TokenAccountType, UiTokenAccount, UiTokenAmount},
         UiAccount, UiAccountData, UiAccountEncoding,
     },
-    solana_client::{
+    solana_client_common::{
         client_error::{ClientError, ClientErrorKind, Result as ClientResult},
         rpc_config::{RpcAccountInfoConfig, *},
         rpc_filter::{self, RpcFilterType},

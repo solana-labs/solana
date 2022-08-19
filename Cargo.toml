@@ -17,6 +17,7 @@ members = [
     "cli-config",
     "cli-output",
     "client",
+    "client-common",
     "client-test",
     "core",
     "dos",

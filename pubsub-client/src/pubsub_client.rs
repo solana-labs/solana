@@ -9,7 +9,7 @@ use {
         Map, Value,
     },
     solana_account_decoder::UiAccount,
-    solana_client::{
+    solana_client_common::{
         rpc_config::{
             RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
