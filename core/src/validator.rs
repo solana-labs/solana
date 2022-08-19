@@ -2071,6 +2071,11 @@ fn move_and_async_delete_path(path: &Path) {
         std::fs::remove_dir_all(&path_delete).unwrap();
     }
 
+    if !path.exists() {
+        info!("move_and_async_delete_path: path {path:?} does not exist");
+        return;
+    }
+
     std::fs::rename(&path, &path_delete).unwrap();
 
     Builder::new()
