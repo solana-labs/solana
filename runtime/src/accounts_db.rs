@@ -7563,17 +7563,15 @@ impl AccountsDb {
                 stores
                     .into_par_iter()
                     .map(|store| {
-                        let accounts = store.all_accounts();
                         let slot = store.slot();
-                        accounts
-                            .into_iter()
+                        store
+                            .accounts
+                            .account_iter()
                             .map(|account| (slot, account.meta.pubkey))
-                            .collect::<HashSet<(Slot, Pubkey)>>()
+                            .collect::<Vec<(Slot, Pubkey)>>()
                     })
-                    .reduce(HashSet::new, |mut reduced, store_pubkeys| {
-                        reduced.extend(store_pubkeys);
-                        reduced
-                    })
+                    .flatten()
+                    .collect::<HashSet<_>>()
             })
         };
         self.remove_dead_slots_metadata(
