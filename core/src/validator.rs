@@ -823,6 +823,7 @@ impl Validator {
                 leader_schedule_cache.clone(),
                 connection_cache.clone(),
                 max_complete_transaction_status_slot,
+                prioritization_fee_cache.clone(),
             )?;
 
             (

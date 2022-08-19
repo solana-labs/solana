@@ -48,6 +48,7 @@ use {
         inline_spl_token::{SPL_TOKEN_ACCOUNT_MINT_OFFSET, SPL_TOKEN_ACCOUNT_OWNER_OFFSET},
         inline_spl_token_2022::{self, ACCOUNTTYPE_ACCOUNT},
         non_circulating_supply::calculate_non_circulating_supply,
+        prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
@@ -211,6 +212,7 @@ pub struct JsonRpcRequestProcessor {
     max_slots: Arc<MaxSlots>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     max_complete_transaction_status_slot: Arc<AtomicU64>,
+    _prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -316,6 +318,7 @@ impl JsonRpcRequestProcessor {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
+        _prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = unbounded();
         (
@@ -336,6 +339,7 @@ impl JsonRpcRequestProcessor {
                 max_slots,
                 leader_schedule_cache,
                 max_complete_transaction_status_slot,
+                _prioritization_fee_cache,
             },
             receiver,
         )
@@ -400,6 +404,7 @@ impl JsonRpcRequestProcessor {
             max_slots: Arc::new(MaxSlots::default()),
             leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
+            _prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
         }
     }
 
@@ -4726,6 +4731,7 @@ pub mod tests {
                 max_slots.clone(),
                 Arc::new(LeaderScheduleCache::new_from_bank(&bank)),
                 max_complete_transaction_status_slot.clone(),
+                Arc::new(PrioritizationFeeCache::default()),
             )
             .0;
 
@@ -6300,6 +6306,7 @@ pub mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
+            Arc::new(PrioritizationFeeCache::default()),
         );
         let connection_cache = Arc::new(ConnectionCache::default());
         SendTransactionService::new::<NullTpuInfo>(
@@ -6569,6 +6576,7 @@ pub mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
+            Arc::new(PrioritizationFeeCache::default()),
         );
         let connection_cache = Arc::new(ConnectionCache::default());
         SendTransactionService::new::<NullTpuInfo>(
@@ -8196,6 +8204,7 @@ pub mod tests {
             Arc::new(MaxSlots::default()),
             Arc::new(LeaderScheduleCache::default()),
             Arc::new(AtomicU64::default()),
+            Arc::new(PrioritizationFeeCache::default()),
         );
 
         let mut io = MetaIoHandler::default();
