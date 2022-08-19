@@ -667,7 +667,7 @@ impl ScheduleStage {
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, guaranteed_count, lock_count, &unique_weight, next_task.contention_count);
-                    contended_queue.clear();
+                    contended_queue.tasks.clear();
                 }
 
                 continue;
