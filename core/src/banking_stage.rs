@@ -2000,15 +2000,25 @@ impl BankingStage {
         packet_count_upperbound: usize,
     ) -> Result<(Vec<PacketBatch>, Option<SigverifyTracerPacketStats>), RecvTimeoutError> {
         let start = Instant::now();
-        let (mut packet_batches, aggregated_tracer_packet_stats_option) =
+        let (mut packet_batches, mut aggregated_tracer_packet_stats_option) =
             verified_receiver.recv_timeout(recv_timeout)?;
 
         let mut num_packets_received: usize = packet_batches.iter().map(|batch| batch.len()).sum();
-        while let Ok((packet_batch, _tracer_packet_stats_option)) = verified_receiver.try_recv() {
+        while let Ok((packet_batch, tracer_packet_stats_option)) = verified_receiver.try_recv() {
             trace!("got more packet batches in banking stage");
             let (packets_received, packet_count_overflowed) = num_packets_received
                 .overflowing_add(packet_batch.iter().map(|batch| batch.len()).sum());
             packet_batches.extend(packet_batch);
+
+            if let Some(tracer_packet_stats) = &tracer_packet_stats_option {
+                if let Some(aggregated_tracer_packet_stats) =
+                    &mut aggregated_tracer_packet_stats_option
+                {
+                    aggregated_tracer_packet_stats.aggregate(tracer_packet_stats);
+                } else {
+                    aggregated_tracer_packet_stats_option = tracer_packet_stats_option;
+                }
+            }
 
             // Spend any leftover receive time budget to greedily receive more packet batches,
             // until the upperbound of the packet count is reached.
