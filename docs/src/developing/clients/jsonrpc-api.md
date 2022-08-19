@@ -205,6 +205,28 @@ Many methods that take a commitment parameter return an RpcResponse JSON object 
 - `context` : An RpcResponseContext JSON structure including a `slot` field at which the operation was evaluated.
 - `value` : The value returned by the operation itself.
 
+#### Parsed Responses
+
+Some methods support an `encoding` parameter, and can return account or
+instruction data in parsed JSON format if `"encoding":"jsonParsed"` is requested
+and the node has a parser for the owning program. Solana nodes currently support
+JSON parsing for the following native and SPL programs:
+
+| Program | Account State | Instructions |
+| --- | --- | --- |
+| Address Lookup | X |   |
+| BPF Loader | n/a | X |
+| BPF Upgradeable Loader | X | X |
+| Config | X |   |
+| SPL Associated Token Account | n/a | X |
+| SPL Memo | n/a | X |
+| SPL Token | X | X |
+| SPL Token 2022 | X | X |
+| Stake | X | X |
+| Vote | X | X |
+
+The list of account parsers can be found [here](https://github.com/solana-labs/solana/blob/master/account-decoder/src/parse_account_data.rs), and instruction parsers [here](https://github.com/solana-labs/solana/blob/master/transaction-status/src/parse_instruction.rs).
+
 ## Health Check
 
 Although not a JSON RPC API, a `GET /health` at the RPC HTTP Endpoint provides a
