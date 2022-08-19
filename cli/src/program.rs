@@ -137,7 +137,7 @@ impl ProgramSubCommands for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("deploy")
-                        .about("Deploy a program")
+                        .about("Deploy an upgradeable program")
                         .arg(
                             Arg::with_name("program_location")
                                 .index(1)
@@ -403,7 +403,7 @@ impl ProgramSubCommands for App<'_, '_> {
         )
         .subcommand(
             SubCommand::with_name("deploy")
-                .about("Deploy a program")
+                .about("Deploy a non-upgradeable program. Use `solana program deploy` instead to deploy upgradeable programs")
                 .setting(AppSettings::Hidden)
                 .arg(
                     Arg::with_name("program_location")
