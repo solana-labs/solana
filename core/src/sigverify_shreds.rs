@@ -151,7 +151,7 @@ fn get_slot_leaders(
             let leader = leaders.entry(slot).or_insert_with(|| {
                 let leader = leader_schedule_cache.slot_leader_at(slot, Some(bank))?;
                 // Discard the shred if the slot leader is the node itself.
-                (&leader != self_pubkey).then_some(leader)
+                (&leader != self_pubkey).then(|| leader)
             });
             if leader.is_none() {
                 packet.meta.set_discard(true);

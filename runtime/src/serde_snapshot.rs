@@ -65,7 +65,7 @@ pub(crate) enum SerdeStyle {
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq)]
 pub struct AccountsDbFields<T>(
     HashMap<Slot, Vec<T>>,
     StoredMetaWriteVersion,
@@ -120,7 +120,7 @@ impl<T> SnapshotAccountsDbFields<T> {
                 // There must not be any overlap in the slots of storages between the full snapshot and the incremental snapshot
                 incremental_snapshot_storages
                     .iter()
-                    .all(|storage_entry| !full_snapshot_storages.contains_key(storage_entry.0)).then_some(()).ok_or_else(|| {
+                    .all(|storage_entry| !full_snapshot_storages.contains_key(storage_entry.0)).then(|| ()).ok_or_else(|| {
                         io::Error::new(io::ErrorKind::InvalidData, "Snapshots are incompatible: There are storages for the same slot in both the full snapshot and the incremental snapshot!")
                     })?;
 

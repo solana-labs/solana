@@ -104,7 +104,7 @@ pub(crate) fn check_rent_state(
                 .get_account_at_index(index)
                 .expect(expect_msg)
                 .borrow(),
-            include_account_index_in_err.then_some(index),
+            include_account_index_in_err.then(|| index),
             prevent_crediting_accounts_that_end_rent_paying,
         )?;
     }

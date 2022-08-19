@@ -129,7 +129,7 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 /// Wrapper for rpc return types of methods that provide responses both with and without context.
 /// Main purpose of this is to fix methods that lack context information in their return type,
 /// without breaking backwards compatibility.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum OptionalContext<T> {
     Context(RpcResponse<T>),
@@ -3646,7 +3646,9 @@ pub mod rpc_full {
             }
 
             if !skip_preflight {
-                verify_transaction(&transaction, &preflight_bank.feature_set)?;
+                if let Err(e) = verify_transaction(&transaction, &preflight_bank.feature_set) {
+                    return Err(e);
+                }
 
                 match meta.health.check() {
                     RpcHealthStatus::Ok => (),

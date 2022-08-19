@@ -543,7 +543,7 @@ mod tests {
             .accounts
             .iter()
             .filter_map(|(pubkey, account)| {
-                stake::program::check_id(account.owner()).then_some(*pubkey)
+                stake::program::check_id(account.owner()).then(|| *pubkey)
             })
             .collect();
         expected_stake_accounts.push(bootstrap_validator_pubkey);

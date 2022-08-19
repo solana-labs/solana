@@ -201,7 +201,7 @@ impl<'a> TypeContext<'a> for Context {
         (
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
-                accounts_db: &serializable_bank.bank.rc.accounts.accounts_db,
+                accounts_db: &*serializable_bank.bank.rc.accounts.accounts_db,
                 slot: serializable_bank.bank.rc.slot,
                 account_storage_entries: serializable_bank.snapshot_storages,
                 phantom: std::marker::PhantomData::default(),
@@ -228,7 +228,7 @@ impl<'a> TypeContext<'a> for Context {
         (
             SerializableVersionedBank::from(fields),
             SerializableAccountsDb::<'a, Self> {
-                accounts_db: &serializable_bank.bank.rc.accounts.accounts_db,
+                accounts_db: &*serializable_bank.bank.rc.accounts.accounts_db,
                 slot: serializable_bank.bank.rc.slot,
                 account_storage_entries: serializable_bank.snapshot_storages,
                 phantom: std::marker::PhantomData::default(),
