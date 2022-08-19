@@ -33,7 +33,7 @@ const ERASURE_BATCH_SIZE: [usize; 33] = [
     55, 56, 58, 59, 60, 62, 63, 64, // 32
 ];
 
-type ReedSolomon = reed_solomon_erasure::ReedSolomon<Field>;
+pub(crate) type ReedSolomon = reed_solomon_erasure::ReedSolomon<Field>;
 
 #[derive(Debug)]
 pub struct Shredder {
