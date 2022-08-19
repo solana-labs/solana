@@ -71,14 +71,9 @@ features = ["lz4"]
 assert_matches = "1.5.0"
 bs58 = "0.4.0"
 matches = "0.1.9"
-<<<<<<< HEAD
 solana-account-decoder = { path = "../account-decoder", version = "=1.11.8" }
 solana-logger = { path = "../logger", version = "=1.11.8" }
-=======
-solana-account-decoder = { path = "../account-decoder", version = "=1.12.0" }
-solana-logger = { path = "../logger", version = "=1.12.0" }
 test-case = "2.1.0"
->>>>>>> c0b63351a (recovers merkle shreds from erasure codes (#27136))
 
 [build-dependencies]
 rustc_version = "0.4"
