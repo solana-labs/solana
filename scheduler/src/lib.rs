@@ -923,7 +923,7 @@ impl ScheduleStage {
                     break;
                 }
 
-                let prefer_immediate = executing_queue_count < max_executing_queue_count / 2;
+                let prefer_immediate = address_book.gurantee_timers.len() > executing_queue_count;
                 let maybe_ee =
                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book, prefer_immediate);
 
