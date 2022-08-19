@@ -143,7 +143,7 @@ pub mod tests {
             slot,
             &vec![(&pk, &account, slot), (&pk, &account, slot)][..],
         );
-        assert!(!test3.contains_multiple_slots());
+        assert!(!(&test3).contains_multiple_slots());
         let test3 = (
             slot,
             &vec![(&pk, &account, slot), (&pk, &account, slot + 1)][..],

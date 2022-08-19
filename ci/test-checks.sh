@@ -65,25 +65,11 @@ fi
 
  _ ci/order-crates-for-publishing.py
 
-nightly_clippy_allows=(
-  # This lint occurs all over the code base
-  "--allow=clippy::significant_drop_in_scrutinee"
-
-  # The prost crate, used by solana-storage-proto, generates Rust source that
-  # triggers this lint. Need to resolve upstream in prost
-  "--allow=clippy::derive_partial_eq_without_eq"
-
-  # This link seems to incorrectly trigger in
-  # `programs/bpf_loader/src/syscalls/{lib,cpi}.rs`
-  "--allow=clippy::explicit_auto_deref"
-)
-
 # -Z... is needed because of clippy bug: https://github.com/rust-lang/rust-clippy/issues/4612
 # run nightly clippy for `sdk/` as there's a moderate amount of nightly-only code there
  _ scripts/cargo-for-all-lock-files.sh -- nightly clippy -Zunstable-options --all-targets -- \
    --deny=warnings \
    --deny=clippy::integer_arithmetic \
-   "${nightly_clippy_allows[@]}"
 
 _ scripts/cargo-for-all-lock-files.sh -- nightly sort --workspace --check
 _ scripts/cargo-for-all-lock-files.sh -- nightly fmt --all -- --check

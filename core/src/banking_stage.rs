@@ -1335,7 +1335,7 @@ impl BankingStage {
             );
 
             retryable_transaction_indexes.extend(execution_results.iter().enumerate().filter_map(
-                |(index, execution_result)| execution_result.was_executed().then_some(index),
+                |(index, execution_result)| execution_result.was_executed().then(|| index),
             ));
 
             return ExecuteAndCommitTransactionsOutput {

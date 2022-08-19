@@ -411,7 +411,7 @@ lazy_static! {
 impl AbiExample for &Vec<u8> {
     fn example() -> Self {
         info!("AbiExample for (&Vec<u8>): {}", type_name::<Self>());
-        &VEC_U8
+        &*VEC_U8
     }
 }
 

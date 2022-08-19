@@ -505,7 +505,7 @@ impl PohRecorder {
             start: Arc::new(Instant::now()),
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.max_tick_height(),
-            transaction_index: track_transaction_indexes.then_some(0),
+            transaction_index: track_transaction_indexes.then(|| 0),
         };
         trace!("new working bank");
         assert_eq!(working_bank.bank.ticks_per_slot(), self.ticks_per_slot());
