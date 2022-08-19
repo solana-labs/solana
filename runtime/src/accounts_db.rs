@@ -2961,21 +2961,21 @@ impl AccountsDb {
     }
 
     /// During clean, some zero-lamport accounts that are marked for purge should *not* actually
-    /// get purged.  Filter out those accounts here.
+    /// get purged.  Filter out those accounts here by removing them from 'purges_zero_lamports'
     ///
     /// When using incremental snapshots, do not purge zero-lamport accounts if the slot is higher
     /// than the last full snapshot slot.  This is to protect against the following scenario:
     ///
     ///   ```text
-    ///   A full snapshot is taken, and it contains an account with a non-zero balance.  Later,
-    ///   that account's  goes to zero.  Evntually cleaning runs, and before, this account would be
-    ///   cleaned up.  Finally, an incremental snapshot is taken.
+    ///   A full snapshot is taken, including account 'alpha' with a non-zero balance.  In a later slot,
+    ///   alpha's lamports go to zero.  Eventually, cleaning runs.  Without this change,
+    ///   alpha would be cleaned up and removed completely. Finally, an incremental snapshot is taken.
     ///
-    ///   Later, the incremental (and full) snapshot is used to rebuild the bank and accounts
-    ///   database (e.x. if the node restarts).  The full snapshot _does_ contain the account (from
-    ///   above) and its balance is non-zero, however, since the account was cleaned up in a later
-    ///   slot, the incremental snapshot does not contain any info about this account, thus, the
-    ///   accounts database will contain the old info from this account, which has its old non-zero
+    ///   Later, the incremental and full snapshots are used to rebuild the bank and accounts
+    ///   database (e.x. if the node restarts).  The full snapshot _does_ contain alpha
+    ///   and its balance is non-zero.  However, since alpha was cleaned up in a slot after the full
+    ///   snapshot slot (due to having zero lamports), the incremental snapshot would not contain alpha.
+    ///   Thus, the accounts database will contain the old, incorrect info for alpha with a non-zero
     ///   balance.  Very bad!
     ///   ```
     ///
