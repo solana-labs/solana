@@ -1691,14 +1691,16 @@ impl<T: IndexValue> AccountsIndex<T> {
         reclaims: &mut SlotList<T>,
         max_clean_root: Option<Slot>,
     ) {
-        let roots_tracker = &self.roots_tracker.read().unwrap();
-        let newest_root_in_slot_list = Self::get_newest_root_in_slot_list(
-            &roots_tracker.alive_roots,
-            slot_list,
-            max_clean_root,
-        );
-        let max_clean_root =
-            max_clean_root.unwrap_or_else(|| roots_tracker.alive_roots.max_inclusive());
+        let newest_root_in_slot_list;
+        let max_clean_root = {
+            let roots_tracker = &self.roots_tracker.read().unwrap();
+            newest_root_in_slot_list = Self::get_newest_root_in_slot_list(
+                &roots_tracker.alive_roots,
+                slot_list,
+                max_clean_root,
+            );
+            max_clean_root.unwrap_or_else(|| roots_tracker.alive_roots.max_inclusive())
+        };
 
         slot_list.retain(|(slot, value)| {
             let should_purge =
