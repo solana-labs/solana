@@ -63,8 +63,8 @@ pub struct Tpu {
     banking_stage: BankingStage,
     cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_stage: BroadcastStage,
-    tpu_quic_t: Option<thread::JoinHandle<()>>,
-    tpu_forwards_quic_t: Option<thread::JoinHandle<()>>,
+    tpu_quic_t: thread::JoinHandle<()>,
+    tpu_forwards_quic_t: thread::JoinHandle<()>,
     find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     vote_find_packet_sender_stake_stage: FindPacketSenderStakeStage,
     staked_nodes_updater_service: StakedNodesUpdaterService,
@@ -97,7 +97,6 @@ impl Tpu {
         connection_cache: &Arc<ConnectionCache>,
         keypair: &Keypair,
         log_messages_bytes_limit: Option<usize>,
-        enable_quic_servers: bool,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
         shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     ) -> Self {
@@ -157,37 +156,33 @@ impl Tpu {
         let (verified_sender, verified_receiver) = unbounded();
 
         let stats = Arc::new(StreamStats::default());
-        let tpu_quic_t = enable_quic_servers.then(|| {
-            spawn_server(
-                transactions_quic_sockets,
-                keypair,
-                cluster_info.my_contact_info().tpu.ip(),
-                packet_sender,
-                exit.clone(),
-                MAX_QUIC_CONNECTIONS_PER_PEER,
-                staked_nodes.clone(),
-                MAX_STAKED_CONNECTIONS,
-                MAX_UNSTAKED_CONNECTIONS,
-                stats.clone(),
-            )
-            .unwrap()
-        });
+        let tpu_quic_t = spawn_server(
+            transactions_quic_sockets,
+            keypair,
+            cluster_info.my_contact_info().tpu.ip(),
+            packet_sender,
+            exit.clone(),
+            MAX_QUIC_CONNECTIONS_PER_PEER,
+            staked_nodes.clone(),
+            MAX_STAKED_CONNECTIONS,
+            MAX_UNSTAKED_CONNECTIONS,
+            stats.clone(),
+        )
+        .unwrap();
 
-        let tpu_forwards_quic_t = enable_quic_servers.then(|| {
-            spawn_server(
-                transactions_forwards_quic_sockets,
-                keypair,
-                cluster_info.my_contact_info().tpu_forwards.ip(),
-                forwarded_packet_sender,
-                exit.clone(),
-                MAX_QUIC_CONNECTIONS_PER_PEER,
-                staked_nodes.clone(),
-                MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
-                0, // Prevent unstaked nodes from forwarding transactions
-                stats,
-            )
-            .unwrap()
-        });
+        let tpu_forwards_quic_t = spawn_server(
+            transactions_forwards_quic_sockets,
+            keypair,
+            cluster_info.my_contact_info().tpu_forwards.ip(),
+            forwarded_packet_sender,
+            exit.clone(),
+            MAX_QUIC_CONNECTIONS_PER_PEER,
+            staked_nodes.clone(),
+            MAX_STAKED_CONNECTIONS.saturating_add(MAX_UNSTAKED_CONNECTIONS),
+            0, // Prevent unstaked nodes from forwarding transactions
+            stats,
+        )
+        .unwrap();
 
         let sigverify_stage = {
             let verifier = TransactionSigVerifier::new(verified_sender);
@@ -274,13 +269,9 @@ impl Tpu {
             self.find_packet_sender_stake_stage.join(),
             self.vote_find_packet_sender_stake_stage.join(),
             self.staked_nodes_updater_service.join(),
+            self.tpu_quic_t.join(),
+            self.tpu_forwards_quic_t.join(),
         ];
-        if let Some(tpu_quic_t) = self.tpu_quic_t {
-            tpu_quic_t.join()?;
-        }
-        if let Some(tpu_forwards_quic_t) = self.tpu_forwards_quic_t {
-            tpu_forwards_quic_t.join()?;
-        }
         let broadcast_result = self.broadcast_stage.join();
         for result in results {
             result?;
