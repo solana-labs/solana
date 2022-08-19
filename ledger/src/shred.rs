@@ -61,6 +61,7 @@ use {
     crate::blockstore::{self, MAX_DATA_SHREDS_PER_SLOT},
     bitflags::bitflags,
     num_enum::{IntoPrimitive, TryFromPrimitive},
+    reed_solomon_erasure::Error::TooFewShardsPresent,
     serde::{Deserialize, Serialize},
     solana_entry::entry::{create_ticks, Entry},
     solana_perf::packet::Packet,
@@ -144,6 +145,10 @@ pub enum Error {
     InvalidPayloadSize(/*payload size:*/ usize),
     #[error("Invalid proof size: {0}")]
     InvalidProofSize(/*proof_size:*/ u8),
+    #[error("Invalid recovered shred")]
+    InvalidRecoveredShred,
+    #[error("Invalid shard size: {0}")]
+    InvalidShardSize(/*shard_size:*/ usize),
     #[error("Invalid shred flags: {0}")]
     InvalidShredFlags(u8),
     #[error("Invalid {0:?} shred index: {1}")]
@@ -211,7 +216,7 @@ struct DataShredHeader {
 struct CodingShredHeader {
     num_data_shreds: u16,
     num_coding_shreds: u16,
-    position: u16,
+    position: u16, // [0..num_coding_shreds)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -293,6 +298,8 @@ macro_rules! dispatch {
         }
     }
 }
+
+use dispatch;
 
 impl Shred {
     dispatch!(fn common_header(&self) -> &ShredCommonHeader);
@@ -494,6 +501,7 @@ impl Shred {
         }
     }
 
+    #[must_use]
     pub fn verify(&self, pubkey: &Pubkey) -> bool {
         let message = self.signed_message();
         self.signature().verify(pubkey.as_ref(), message)
@@ -642,6 +650,28 @@ impl From<ShredData> for Shred {
     }
 }
 
+impl From<merkle::Shred> for Shred {
+    fn from(shred: merkle::Shred) -> Self {
+        match shred {
+            merkle::Shred::ShredCode(shred) => Self::ShredCode(ShredCode::Merkle(shred)),
+            merkle::Shred::ShredData(shred) => Self::ShredData(ShredData::Merkle(shred)),
+        }
+    }
+}
+
+impl TryFrom<Shred> for merkle::Shred {
+    type Error = Error;
+
+    fn try_from(shred: Shred) -> Result<Self, Self::Error> {
+        match shred {
+            Shred::ShredCode(ShredCode::Legacy(_)) => Err(Error::InvalidShredVariant),
+            Shred::ShredCode(ShredCode::Merkle(shred)) => Ok(Self::ShredCode(shred)),
+            Shred::ShredData(ShredData::Legacy(_)) => Err(Error::InvalidShredVariant),
+            Shred::ShredData(ShredData::Merkle(shred)) => Ok(Self::ShredData(shred)),
+        }
+    }
+}
+
 impl From<ShredVariant> for ShredType {
     #[inline]
     fn from(shred_variant: ShredVariant) -> Self {
@@ -678,6 +708,27 @@ impl TryFrom<u8> for ShredVariant {
                 0x80 => Ok(ShredVariant::MerkleData(shred_variant & 0x0F)),
                 _ => Err(Error::InvalidShredVariant),
             }
+        }
+    }
+}
+
+pub(crate) fn recover(shreds: Vec<Shred>) -> Result<Vec<Shred>, Error> {
+    match shreds
+        .first()
+        .ok_or(TooFewShardsPresent)?
+        .common_header()
+        .shred_variant
+    {
+        ShredVariant::LegacyData | ShredVariant::LegacyCode => Shredder::try_recovery(shreds),
+        ShredVariant::MerkleCode(_) | ShredVariant::MerkleData(_) => {
+            let shreds = shreds
+                .into_iter()
+                .map(merkle::Shred::try_from)
+                .collect::<Result<_, _>>()?;
+            Ok(merkle::recover(shreds)?
+                .into_iter()
+                .map(Shred::from)
+                .collect())
         }
     }
 }
