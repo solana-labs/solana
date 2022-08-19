@@ -3208,14 +3208,7 @@ impl Bank {
         m.stop();
         metrics.redeem_rewards_us += m.as_us();
 
-        // store stake account even if stakers_reward is 0
-        // because credits observed has changed
-        let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), &stake_rewards[..]));
-        m.stop();
-        metrics
-            .store_stake_accounts_us
-            .fetch_add(m.as_us(), Relaxed);
+        self.store_stake_accounts(&stake_rewards, metrics);
 
         let mut m = Measure::start("store_vote_accounts");
         let mut vote_rewards = vote_account_rewards
@@ -3263,6 +3256,17 @@ impl Bank {
         }
 
         point_value.rewards as f64 / point_value.points as f64
+    }
+
+    fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
+        // store stake account even if stakers_reward is 0
+        // because credits observed has changed
+        let mut m = Measure::start("store_stake_account");
+        self.store_accounts((self.slot(), stake_rewards));
+        m.stop();
+        metrics
+            .store_stake_accounts_us
+            .fetch_add(m.as_us(), Relaxed);
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
