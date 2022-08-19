@@ -1,5 +1,5 @@
 use {
-    crate::{rpc_config::RpcLargestAccountsFilter, rpc_response::RpcAccountBalance},
+    solana_client::{rpc_config::RpcLargestAccountsFilter, rpc_response::RpcAccountBalance},
     std::{
         collections::HashMap,
         time::{Duration, SystemTime},
@@ -20,14 +20,14 @@ struct LargestAccountsCacheValue {
 }
 
 impl LargestAccountsCache {
-    pub fn new(duration: u64) -> Self {
+    pub(crate) fn new(duration: u64) -> Self {
         Self {
             duration,
             cache: HashMap::new(),
         }
     }
 
-    pub fn get_largest_accounts(
+    pub(crate) fn get_largest_accounts(
         &self,
         filter: &Option<RpcLargestAccountsFilter>,
     ) -> Option<(u64, Vec<RpcAccountBalance>)> {
@@ -41,7 +41,7 @@ impl LargestAccountsCache {
         })
     }
 
-    pub fn set_largest_accounts(
+    pub(crate) fn set_largest_accounts(
         &mut self,
         filter: &Option<RpcLargestAccountsFilter>,
         slot: u64,

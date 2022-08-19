@@ -9,7 +9,6 @@ pub mod nonblocking;
 pub mod nonce_utils;
 pub mod pubsub_client;
 pub mod quic_client;
-pub mod rpc_cache;
 pub mod rpc_client;
 pub mod rpc_config;
 pub mod rpc_custom_error;

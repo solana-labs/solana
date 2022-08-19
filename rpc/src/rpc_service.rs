@@ -9,6 +9,7 @@ use {
             rpc_accounts::*, rpc_bank::*, rpc_deprecated_v1_7::*, rpc_deprecated_v1_9::*,
             rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *,
         },
+        rpc_cache::LargestAccountsCache,
         rpc_health::*,
     },
     crossbeam_channel::unbounded,
@@ -18,7 +19,7 @@ use {
         RequestMiddlewareAction, ServerBuilder,
     },
     regex::Regex,
-    solana_client::{connection_cache::ConnectionCache, rpc_cache::LargestAccountsCache},
+    solana_client::connection_cache::ConnectionCache,
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig,
