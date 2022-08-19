@@ -3183,18 +3183,8 @@ impl Bank {
         metrics.redeem_rewards_us += m.as_us();
 
         self.store_stake_accounts(&stake_rewards, metrics);
-        let mut vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
-
-        let additional_reserve = stake_rewards.len() + vote_rewards.len();
-        {
-            let mut rewards = self.rewards.write().unwrap();
-            rewards.reserve(additional_reserve);
-            rewards.append(&mut vote_rewards);
-            stake_rewards
-                .into_iter()
-                .filter(|x| x.get_stake_reward() > 0)
-                .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
-        }
+        let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
+        self.update_reward_history(stake_rewards, vote_rewards);
 
         point_value.rewards as f64 / point_value.points as f64
     }
@@ -3249,6 +3239,21 @@ impl Bank {
         m.stop();
         metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
         vote_rewards
+    }
+
+    fn update_reward_history(
+        &self,
+        stake_rewards: Vec<StakeReward>,
+        mut vote_rewards: Vec<(Pubkey, RewardInfo)>,
+    ) {
+        let additional_reserve = stake_rewards.len() + vote_rewards.len();
+        let mut rewards = self.rewards.write().unwrap();
+        rewards.reserve(additional_reserve);
+        rewards.append(&mut vote_rewards);
+        stake_rewards
+            .into_iter()
+            .filter(|x| x.get_stake_reward() > 0)
+            .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
