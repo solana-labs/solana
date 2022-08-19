@@ -43,6 +43,7 @@ members = [
     "metrics",
     "net-shaper",
     "net-utils",
+    "nonce-client",
     "notifier",
     "perf",
     "poh",

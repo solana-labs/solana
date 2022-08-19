@@ -1,0 +1,26 @@
+[package]
+name = "solana-nonce-client"
+version = "1.12.0"
+description = "Solana Nonce Client"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-nonce-client"
+edition = "2021"
+
+[dependencies]
+clap = "2.33.0"
+solana-clap-utils = { path = "../clap-utils", version = "=1.12.0" }
+solana-rpc-client = { path = "../rpc-client", version = "=1.12.0" }
+solana-sdk = { path = "../sdk", version = "=1.12.0" }
+thiserror = "1.0"
+
+[dev-dependencies]
+serde_json = "1.0.83"
+solana-account-decoder = { path = "../account-decoder", version = "=1.12.0" }
+solana-client-common = { path = "../client-common", version = "=1.12.0" }
+tokio = { version = "1", features = ["full"] }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
