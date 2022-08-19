@@ -153,9 +153,13 @@ fn verify_transaction(
     transaction: &Transaction,
     feature_set: &Arc<FeatureSet>,
 ) -> transaction::Result<()> {
-    transaction.verify()?;
-    transaction.verify_precompiles(feature_set)?;
-    Ok(())
+    if let Err(err) = transaction.verify() {
+        Err(err)
+    } else if let Err(err) = transaction.verify_precompiles(feature_set) {
+        Err(err)
+    } else {
+        Ok(())
+    }
 }
 
 fn simulate_transaction(

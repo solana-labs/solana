@@ -61,7 +61,7 @@ mod serde_compat {
         D: Deserializer<'de>,
     {
         let val = u64::deserialize(deserializer)?;
-        Ok((val != u64::MAX).then_some(val))
+        Ok((val != u64::MAX).then(|| val))
     }
 }
 

@@ -41,7 +41,7 @@ impl CloseAccountData {
         keypair: &ElGamalKeypair,
         ciphertext: &ElGamalCiphertext,
     ) -> Result<Self, ProofError> {
-        let pod_pubkey = pod::ElGamalPubkey(keypair.public.to_bytes());
+        let pod_pubkey = pod::ElGamalPubkey((&keypair.public).to_bytes());
         let pod_ciphertext = pod::ElGamalCiphertext(ciphertext.to_bytes());
 
         let mut transcript = CloseAccountProof::transcript_new(&pod_pubkey, &pod_ciphertext);
