@@ -1820,14 +1820,7 @@ impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for Sc
         // when we are scanning with bin ranges, we don't need to use exact bin numbers. Subtract to make first bin we care about at index 0.
         self.pubkey_to_bin_index -= self.bin_range.start;
 
-        let raw_lamports = loaded_account.lamports();
-        let zero_raw_lamports = raw_lamports == 0;
-        let balance = if zero_raw_lamports {
-            crate::accounts_hash::ZERO_RAW_LAMPORTS_SENTINEL
-        } else {
-            raw_lamports
-        };
-
+        let balance = loaded_account.lamports();
         let loaded_hash = loaded_account.loaded_hash();
         let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
             loaded_account,
