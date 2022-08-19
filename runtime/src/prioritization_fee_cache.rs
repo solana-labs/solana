@@ -2,12 +2,12 @@ use {
     crate::prioritization_fee::*,
     crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
+    lru::LruCache,
     solana_measure::measure,
     solana_sdk::{
         clock::Slot, pubkey::Pubkey, saturating_add_assign, transaction::SanitizedTransaction,
     },
     std::{
-        collections::HashMap,
         sync::{
             atomic::{AtomicU64, Ordering},
             Arc, Mutex, RwLock,
@@ -40,9 +40,6 @@ struct PrioritizationFeeCacheMetrics {
 
     // Accumulated time spent on acquiring each block entry's lock..
     total_entry_lock_elapsed_us: AtomicU64,
-
-    // Accumulated time spent on removing old block's data from cache
-    total_evict_old_blocks_elapsed_us: AtomicU64,
 }
 
 impl PrioritizationFeeCacheMetrics {
@@ -73,11 +70,6 @@ impl PrioritizationFeeCacheMetrics {
 
     fn accumulate_total_entry_lock_elapsed_us(&self, val: u64) {
         self.total_entry_lock_elapsed_us
-            .fetch_add(val, Ordering::Relaxed);
-    }
-
-    fn accumulate_total_evict_old_blocks_elapsed_us(&self, val: u64) {
-        self.total_evict_old_blocks_elapsed_us
             .fetch_add(val, Ordering::Relaxed);
     }
 
@@ -118,39 +110,7 @@ impl PrioritizationFeeCacheMetrics {
                 self.total_entry_lock_elapsed_us.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
-            (
-                "total_evict_old_blocks_elapsed_us",
-                self.total_evict_old_blocks_elapsed_us
-                    .swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
         );
-    }
-}
-
-/// Each block's PrioritizationFee entry is wrapped in Arc<Mutex<...>>
-/// Reader and writer should avoid to contend `PrioritizationFeeCache` but on individual block's PrioritizationFeeEntry.
-/// Each entry is assigned a unique incremental sequence_number, which is used to enforce eviction
-/// policy.
-struct PrioritizationFeeEntry {
-    entry: Arc<Mutex<PrioritizationFee>>,
-    sequence_number: u64,
-}
-
-impl PrioritizationFeeEntry {
-    pub fn new(entry: Arc<Mutex<PrioritizationFee>>, sequence_number: u64) -> Self {
-        PrioritizationFeeEntry {
-            entry,
-            sequence_number,
-        }
-    }
-
-    pub fn entry(&self) -> Arc<Mutex<PrioritizationFee>> {
-        self.entry.clone()
-    }
-
-    pub fn sequence_number(&self) -> u64 {
-        self.sequence_number
     }
 }
 
@@ -164,10 +124,9 @@ enum FinalizingServiceUpdate {
 
 /// Stores up to MAX_NUM_RECENT_BLOCKS recent block's prioritization fee,
 /// A separate internal thread `finalizing_thread` handles additional tasks when a bank is frozen,
-/// includes pruning PrioritizationFee's HashMap, collecting stats and reporting metrics.
+/// and collecting stats and reporting metrics.
 pub struct PrioritizationFeeCache {
-    cache: RwLock<HashMap<Slot, Arc<PrioritizationFeeEntry>>>,
-    current_sequence_number: AtomicU64,
+    cache: RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>,
     // Asynchronously finalize prioritization fee when a bank is completed replay.
     finalizing_thread: Option<JoinHandle<()>>,
     sender: Sender<FinalizingServiceUpdate>,
@@ -207,8 +166,7 @@ impl PrioritizationFeeCache {
         );
 
         PrioritizationFeeCache {
-            cache: RwLock::new(HashMap::with_capacity(capacity as usize)),
-            current_sequence_number: AtomicU64::default(),
+            cache: RwLock::new(LruCache::new(capacity as usize)),
             finalizing_thread,
             sender,
             metrics,
@@ -216,17 +174,13 @@ impl PrioritizationFeeCache {
     }
 
     /// Get prioritization fee entry, create new entry if necessary
-    fn get_prioritization_fee(&self, slot: &Slot) -> Arc<PrioritizationFeeEntry> {
+    fn get_prioritization_fee(&self, slot: &Slot) -> Arc<Mutex<PrioritizationFee>> {
         let mut cache = self.cache.write().unwrap();
         match cache.get(slot) {
             Some(entry) => Arc::clone(entry),
             None => {
-                let sequence_number = self.current_sequence_number.fetch_add(1, Ordering::Relaxed);
-                let entry = Arc::new(PrioritizationFeeEntry::new(
-                    Arc::new(Mutex::new(PrioritizationFee::default())),
-                    sequence_number,
-                ));
-                cache.insert(*slot, Arc::clone(&entry));
+                let entry = Arc::new(Mutex::new(PrioritizationFee::default()));
+                cache.put(*slot, Arc::clone(&entry));
                 entry
             }
         }
@@ -245,10 +199,8 @@ impl PrioritizationFeeCache {
 
         let ((cache_lock_time, entry_lock_time), cache_update_time) = measure!(
             {
-                let (block_prioritization_fee, cache_lock_time) = measure!(
-                    self.get_prioritization_fee(&slot).entry(),
-                    "cache_lock_time",
-                );
+                let (block_prioritization_fee, cache_lock_time) =
+                    measure!(self.get_prioritization_fee(&slot), "cache_lock_time",);
 
                 // Hold lock of slot's prioritization fee entry until all transactions are
                 // processed
@@ -295,9 +247,7 @@ impl PrioritizationFeeCache {
     /// Finalize prioritization fee when it's bank is completely replayed from blockstore,
     /// by pruning irrelevant accounts to save space, and marking its availability for queries.
     pub fn finalize_priority_fee(&self, slot: Slot) {
-        self.evict_old_blocks(MAX_NUM_RECENT_BLOCKS);
-
-        let prioritization_fee = self.get_prioritization_fee(&slot).entry();
+        let prioritization_fee = self.get_prioritization_fee(&slot);
         self.sender
             .send(FinalizingServiceUpdate::BankFrozen {
                 slot,
@@ -309,26 +259,6 @@ impl PrioritizationFeeCache {
                     err
                 )
             });
-    }
-
-    /// PrioritizationFeeCache holds up to MAX_NUM_RECENT_BLOCKS, older blocks are evicted by
-    /// checking its sequence number against cache current sequence.
-    fn evict_old_blocks(&self, max_age: u64) {
-        let (_, evict_old_blocks_time) = measure!(
-            {
-                let mut cache = self.cache.write().unwrap();
-                cache.retain(|_key, prioritization_fee| {
-                    self.current_sequence_number
-                        .load(Ordering::Relaxed)
-                        .saturating_sub(prioritization_fee.sequence_number())
-                        <= max_age
-                });
-            },
-            "evict_old_blocks_time"
-        );
-
-        self.metrics
-            .accumulate_total_evict_old_blocks_elapsed_us(evict_old_blocks_time.as_us());
     }
 
     fn finalizing_loop(
@@ -364,9 +294,7 @@ impl PrioritizationFeeCache {
             .read()
             .unwrap()
             .iter()
-            .filter(|(_slot, prioritization_fee)| {
-                prioritization_fee.entry().lock().unwrap().is_finalized()
-            })
+            .filter(|(_slot, prioritization_fee)| prioritization_fee.lock().unwrap().is_finalized())
             .count()
     }
 
@@ -379,7 +307,6 @@ impl PrioritizationFeeCache {
             .unwrap()
             .iter()
             .filter_map(|(_slot, prioritization_fee)| {
-                let prioritization_fee = prioritization_fee.entry();
                 let prioritization_fee_read = prioritization_fee.lock().unwrap();
                 prioritization_fee_read
                     .is_finalized()
@@ -398,7 +325,6 @@ impl PrioritizationFeeCache {
             .unwrap()
             .iter()
             .filter_map(|(_slot, prioritization_fee)| {
-                let prioritization_fee = prioritization_fee.entry();
                 let prioritization_fee_read = prioritization_fee.lock().unwrap();
                 prioritization_fee_read
                     .is_finalized()
@@ -441,9 +367,7 @@ mod tests {
         slot: Slot,
     ) {
         prioritization_fee_cache.finalize_priority_fee(slot);
-        let fee = prioritization_fee_cache
-            .get_prioritization_fee(&slot)
-            .entry();
+        let fee = prioritization_fee_cache.get_prioritization_fee(&slot);
 
         // wait till finalization is done
         while !fee.lock().unwrap().is_finalized() {
@@ -480,9 +404,7 @@ mod tests {
 
         // assert block minimum fee and account a, b, c fee accordingly
         {
-            let fee = prioritization_fee_cache
-                .get_prioritization_fee(&slot)
-                .entry();
+            let fee = prioritization_fee_cache.get_prioritization_fee(&slot);
             let fee = fee.lock().unwrap();
             assert_eq!(2, fee.get_min_transaction_fee().unwrap());
             assert_eq!(2, fee.get_writable_account_fee(&write_account_a).unwrap());
@@ -497,9 +419,7 @@ mod tests {
         // assert after prune, account a and c should be removed from cache to save space
         {
             sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, slot);
-            let fee = prioritization_fee_cache
-                .get_prioritization_fee(&slot)
-                .entry();
+            let fee = prioritization_fee_cache.get_prioritization_fee(&slot);
             let fee = fee.lock().unwrap();
             assert_eq!(2, fee.get_min_transaction_fee().unwrap());
             assert!(fee.get_writable_account_fee(&write_account_a).is_none());
@@ -514,14 +434,12 @@ mod tests {
 
         assert!(prioritization_fee_cache
             .get_prioritization_fee(&1)
-            .entry()
             .lock()
             .unwrap()
             .mark_block_completed()
             .is_ok());
         assert!(prioritization_fee_cache
             .get_prioritization_fee(&2)
-            .entry()
             .lock()
             .unwrap()
             .mark_block_completed()
@@ -565,7 +483,6 @@ mod tests {
                 5,
                 prioritization_fee_cache
                     .get_prioritization_fee(&1)
-                    .entry
                     .lock()
                     .unwrap()
                     .get_min_transaction_fee()
@@ -592,7 +509,6 @@ mod tests {
                 9,
                 prioritization_fee_cache
                     .get_prioritization_fee(&2)
-                    .entry
                     .lock()
                     .unwrap()
                     .get_min_transaction_fee()
@@ -620,7 +536,6 @@ mod tests {
                 2,
                 prioritization_fee_cache
                     .get_prioritization_fee(&3)
-                    .entry
                     .lock()
                     .unwrap()
                     .get_min_transaction_fee()
@@ -773,39 +688,6 @@ mod tests {
                 &mut vec![9, 2],
                 &mut prioritization_fee_cache.get_account_prioritization_fees(&write_account_c),
             );
-        }
-    }
-
-    #[test]
-    fn test_evict_old_blocks() {
-        let prioritization_fee_cache = PrioritizationFeeCache::default();
-
-        // add 3 blocks (slot 1, 3, 7) into cache
-        prioritization_fee_cache.get_prioritization_fee(&1);
-        prioritization_fee_cache.get_prioritization_fee(&3);
-        prioritization_fee_cache.get_prioritization_fee(&7);
-        prioritization_fee_cache.get_prioritization_fee(&3);
-        prioritization_fee_cache.get_prioritization_fee(&1);
-
-        // assert there are 3 blocks in cache
-        {
-            let cache = prioritization_fee_cache.cache.read().unwrap();
-            assert_eq!(3, cache.len());
-            assert!(cache.contains_key(&1));
-            assert!(cache.contains_key(&3));
-            assert!(cache.contains_key(&7));
-        }
-
-        // evict with up to 2 recent blocks
-        prioritization_fee_cache.evict_old_blocks(2);
-
-        // assert that oldest slot 1 is evicted
-        {
-            let cache = prioritization_fee_cache.cache.read().unwrap();
-            assert_eq!(2, cache.len());
-            assert!(!cache.contains_key(&1));
-            assert!(cache.contains_key(&3));
-            assert!(cache.contains_key(&7));
         }
     }
 }
