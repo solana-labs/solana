@@ -84,6 +84,7 @@ pub fn create_lookup_table(
     authority_address: Pubkey,
     payer_address: Pubkey,
     recent_slot: Slot,
+    authority_is_signer: bool,
 ) -> (Instruction, Pubkey) {
     let (lookup_table_address, bump_seed) =
         derive_lookup_table_address(&authority_address, recent_slot);
@@ -95,7 +96,7 @@ pub fn create_lookup_table(
         },
         vec![
             AccountMeta::new(lookup_table_address, false),
-            AccountMeta::new_readonly(authority_address, true),
+            AccountMeta::new_readonly(authority_address, authority_is_signer),
             AccountMeta::new(payer_address, true),
             AccountMeta::new_readonly(system_program::id(), false),
         ],

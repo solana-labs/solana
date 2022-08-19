@@ -531,7 +531,7 @@ fn process_create_lookup_table(
     let authority_address = authority_signer.pubkey();
     let payer_address = payer_signer.pubkey();
     let (create_lookup_table_ix, lookup_table_address) =
-        create_lookup_table(authority_address, payer_address, clock.slot);
+        create_lookup_table(authority_address, payer_address, clock.slot, true);
 
     let blockhash = rpc_client.get_latest_blockhash()?;
     let mut tx = Transaction::new_unsigned(Message::new(
