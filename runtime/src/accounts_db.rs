@@ -1820,14 +1820,7 @@ impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for Sc
         // when we are scanning with bin ranges, we don't need to use exact bin numbers. Subtract to make first bin we care about at index 0.
         self.pubkey_to_bin_index -= self.bin_range.start;
 
-        let raw_lamports = loaded_account.lamports();
-        let zero_raw_lamports = raw_lamports == 0;
-        let balance = if zero_raw_lamports {
-            crate::accounts_hash::ZERO_RAW_LAMPORTS_SENTINEL
-        } else {
-            raw_lamports
-        };
-
+        let balance = loaded_account.lamports();
         let loaded_hash = loaded_account.loaded_hash();
         let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
             loaded_account,
@@ -2387,12 +2380,12 @@ impl AccountsDb {
     /// Collect all the uncleaned slots, up to a max slot
     ///
     /// Search through the uncleaned Pubkeys and return all the slots, up to a maximum slot.
-    fn collect_uncleaned_slots_up_to_slot(&self, max_slot: Slot) -> Vec<Slot> {
+    fn collect_uncleaned_slots_up_to_slot(&self, max_slot_inclusive: Slot) -> Vec<Slot> {
         self.uncleaned_pubkeys
             .iter()
             .filter_map(|entry| {
                 let slot = *entry.key();
-                (slot <= max_slot).then(|| slot)
+                (slot <= max_slot_inclusive).then(|| slot)
             })
             .collect()
     }
@@ -2419,9 +2412,9 @@ impl AccountsDb {
     ///
     fn remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(
         &self,
-        max_slot: Slot,
+        max_slot_inclusive: Slot,
     ) -> Vec<Vec<Pubkey>> {
-        let uncleaned_slots = self.collect_uncleaned_slots_up_to_slot(max_slot);
+        let uncleaned_slots = self.collect_uncleaned_slots_up_to_slot(max_slot_inclusive);
         self.remove_uncleaned_slots_and_collect_pubkeys(uncleaned_slots)
     }
 
@@ -2436,10 +2429,11 @@ impl AccountsDb {
         timings: &mut CleanKeyTimings,
     ) -> Vec<Pubkey> {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
-        let max_slot = max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
+        let max_slot_inclusive =
+            max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
         self.dirty_stores.retain(|(slot, _store_id), store| {
-            if *slot > max_slot {
+            if *slot > max_slot_inclusive {
                 true
             } else {
                 dirty_stores.push((*slot, store.clone()));
@@ -2453,7 +2447,7 @@ impl AccountsDb {
             let oldest_dirty_slots: Vec<u64> = dirty_stores
                 .par_chunks(chunk_size)
                 .map(|dirty_store_chunk| {
-                    let mut oldest_dirty_slot = max_slot.saturating_add(1);
+                    let mut oldest_dirty_slot = max_slot_inclusive.saturating_add(1);
                     dirty_store_chunk.iter().for_each(|(slot, store)| {
                         oldest_dirty_slot = oldest_dirty_slot.min(*slot);
                         store.accounts.account_iter().for_each(|account| {
@@ -2466,7 +2460,7 @@ impl AccountsDb {
             timings.oldest_dirty_slot = *oldest_dirty_slots
                 .iter()
                 .min()
-                .unwrap_or(&max_slot.saturating_add(1));
+                .unwrap_or(&max_slot_inclusive.saturating_add(1));
         };
 
         if is_startup {
@@ -2487,7 +2481,8 @@ impl AccountsDb {
         timings.dirty_store_processing_us += dirty_store_processing_time.as_us();
 
         let mut collect_delta_keys = Measure::start("key_create");
-        let delta_keys = self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot);
+        let delta_keys =
+            self.remove_uncleaned_slots_and_collect_pubkeys_up_to_slot(max_slot_inclusive);
         collect_delta_keys.stop();
         timings.collect_delta_keys_us += collect_delta_keys.as_us();
 
@@ -2519,7 +2514,7 @@ impl AccountsDb {
             self.zero_lamport_accounts_to_purge_after_full_snapshot
                 .retain(|(slot, pubkey)| {
                     let is_candidate_for_clean =
-                        max_slot >= *slot && last_full_snapshot_slot >= *slot;
+                        max_slot_inclusive >= *slot && last_full_snapshot_slot >= *slot;
                     if is_candidate_for_clean {
                         pubkeys.push(*pubkey);
                     }
@@ -5565,7 +5560,8 @@ impl AccountsDb {
             .fetch_add(recycle_stores_write_elapsed.as_us(), Ordering::Relaxed);
     }
 
-    pub fn flush_accounts_cache_slot(&self, slot: Slot) {
+    #[cfg(test)]
+    pub(crate) fn flush_accounts_cache_slot_for_tests(&self, slot: Slot) {
         self.flush_slot_cache(slot);
     }
 
