@@ -8029,11 +8029,38 @@ impl Bank {
         _thread_pool: &ThreadPool,
         _metrics: &mut RewardsMetrics,
     ) {
-        // TODO
-        // self.epoch_reward_calculator
-        //    .write()
-        //    .unwrap()
-        //    .compute_rewards();
+        let capitalization = self.capitalization();
+        let PrevEpochInflationRewards {
+            validator_rewards,
+            prev_epoch_duration_in_years,
+            validator_rate,
+            foundation_rate,
+        } = self.calculate_previous_epoch_inflation_rewards(capitalization, prev_epoch);
+
+        let old_vote_balance_and_staked = self.stakes_cache.stakes().vote_balance_and_staked();
+        let update_rewards_from_cached_accounts = self
+            .feature_set
+            .is_active(&feature_set::update_rewards_from_cached_accounts::id());
+
+        // TODO: move thread into a seperate service, i.e. RewardCaclService, a bit like background
+        // account service. Here we will use a channel to sending the input parameters to the
+        // service. In redeem_rewards_from_previous_epoch, query the result from the service. The
+        // result should be stored in dict, with key as (epoch, block_height)...
+        let th = thread::spawn(move || {
+            (stake_rewards, vote_account_rewards) = self
+                .compute_validator_rewards_with_thread_pool(
+                    prev_epoch,
+                    validator_rewards,
+                    reward_calc_tracer,
+                    self.credits_auto_rewind(),
+                    thread_pool,
+                    metrics,
+                    update_rewards_from_cached_accounts,
+                );
+
+            let rewards = self.epoch_reward_calculator.write();
+            rewards.unwrap() = Some((stake_rewards, vote_account_rewards));
+        });
     }
 
     fn adjust_sysvar_balance_for_rent(&self, account: &mut AccountSharedData) {
