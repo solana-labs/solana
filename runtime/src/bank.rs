@@ -3232,11 +3232,11 @@ impl Bank {
         point_value.rewards as f64 / point_value.points as f64
     }
 
-    fn store_stake_accounts(&self, stake_rewards: &Vec<StakeReward>, metrics: &mut RewardsMetrics) {
+    fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
         // store stake account even if stakers_reward is 0
         // because credits observed has changed
         let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), &stake_rewards[..]));
+        self.store_accounts((self.slot(), stake_rewards));
         m.stop();
         metrics
             .store_stake_accounts_us
