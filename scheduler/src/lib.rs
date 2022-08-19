@@ -667,6 +667,7 @@ impl ScheduleStage {
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, guaranteed_count, lock_count, &unique_weight, next_task.contention_count);
+                    contended_queue.clear();
                 }
 
                 continue;
@@ -682,8 +683,8 @@ impl ScheduleStage {
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
 
-                return None;
-                //continue;
+                //return None;
+                continue;
             }
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
