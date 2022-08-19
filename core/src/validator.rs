@@ -457,7 +457,7 @@ impl Validator {
         info!("Cleaning accounts paths..");
         *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
         let mut start = Measure::start("clean_accounts_paths");
-        cleanup_accounts_paths(&config);
+        cleanup_accounts_paths(config);
         start.stop();
         info!("done. {}", start);
 
@@ -2061,7 +2061,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 /// If the process is killed and the deleting process is not done,
 /// the leftover path will be deleted in the next process life, so
 /// there is no file space leaking.
-fn move_and_async_delete_path(path: &std::path::Path) {
+fn move_and_async_delete_path(path: &Path) {
     let mut del_path_str = OsString::from(path);
     del_path_str.push("_deleted");
     let path_delete = PathBuf::from(del_path_str);
