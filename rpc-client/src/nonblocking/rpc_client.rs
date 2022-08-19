@@ -107,19 +107,19 @@ use {
 /// # Errors
 ///
 /// Methods on `RpcClient` return
-/// [`client_error::Result`][crate::client_error::Result], and many of them
-/// return the [`RpcResult`][crate::rpc_response::RpcResult] typedef, which
-/// contains [`Response<T>`][crate::rpc_response::Response] on `Ok`. Both
+/// [`client_error::Result`][solana_client_common::client_error::Result], and many of them
+/// return the [`RpcResult`][solana_client_common::rpc_response::RpcResult] typedef, which
+/// contains [`Response<T>`][solana_client_common::rpc_response::Response] on `Ok`. Both
 /// `client_error::Result` and [`RpcResult`] contain `ClientError` on error. In
 /// the case of `RpcResult`, the actual return value is in the
-/// [`value`][crate::rpc_response::Response::value] field, with RPC contextual
-/// information in the [`context`][crate::rpc_response::Response::context]
+/// [`value`][solana_client_common::rpc_response::Response::value] field, with RPC contextual
+/// information in the [`context`][solana_client_common::rpc_response::Response::context]
 /// field, so it is common for the value to be accessed with `?.value`, as in
 ///
 /// ```
 /// # use solana_sdk::system_transaction;
-/// # use solana_client::rpc_client::RpcClient;
-/// # use solana_client::client_error::ClientError;
+/// # use solana_client_common::client_error::ClientError;
+/// # use solana_rpc_client::rpc_client::RpcClient;
 /// # use solana_sdk::signature::{Keypair, Signer};
 /// # use solana_sdk::hash::Hash;
 /// # let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -135,8 +135,8 @@ use {
 ///
 /// Requests may timeout, in which case they return a [`ClientError`] where the
 /// [`ClientErrorKind`] is [`ClientErrorKind::Reqwest`], and where the interior
-/// [`reqwest::Error`](crate::client_error::reqwest::Error)s
-/// [`is_timeout`](crate::client_error::reqwest::Error::is_timeout) method
+/// [`reqwest::Error`](solana_client_common::client_error::reqwest::Error)s
+/// [`is_timeout`](solana_client_common::client_error::reqwest::Error::is_timeout) method
 /// returns `true`. The default timeout is 30 seconds, and may be changed by
 /// calling an appropriate constructor with a `timeout` parameter.
 pub struct RpcClient {
@@ -176,7 +176,7 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// let url = "http://localhost:8899".to_string();
     /// let client = RpcClient::new(url);
     /// ```
@@ -198,7 +198,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_sdk::commitment_config::CommitmentConfig;
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// let url = "http://localhost:8899".to_string();
     /// let commitment_config = CommitmentConfig::processed();
     /// let client = RpcClient::new_with_commitment(url, commitment_config);
@@ -224,7 +224,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use std::time::Duration;
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// let url = "http://localhost::8899".to_string();
     /// let timeout = Duration::from_secs(1);
     /// let client = RpcClient::new_with_timeout(url, timeout);
@@ -247,7 +247,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use std::time::Duration;
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// let url = "http://localhost::8899".to_string();
     /// let timeout = Duration::from_secs(1);
@@ -288,7 +288,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use std::time::Duration;
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// let url = "http://localhost::8899".to_string();
     /// let timeout = Duration::from_secs(1);
@@ -350,14 +350,14 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// // Create an `RpcClient` that always succeeds
     /// let url = "succeeds".to_string();
     /// let successful_client = RpcClient::new_mock(url);
     /// ```
     ///
     /// ```
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// // Create an `RpcClient` that always fails
     /// let url = "fails".to_string();
     /// let successful_client = RpcClient::new_mock(url);
@@ -412,11 +412,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// # use solana_client_common::{
     /// #     rpc_request::RpcRequest,
     /// #     rpc_response::{Response, RpcResponseContext},
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use std::collections::HashMap;
     /// # use serde_json::json;
     /// // Create a mock with a custom repsonse to the `GetBalance` request
@@ -449,7 +449,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use std::net::SocketAddr;
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
     /// let client = RpcClient::new_socket(addr);
     /// ```
@@ -468,7 +468,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use std::net::SocketAddr;
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
     /// let commitment_config = CommitmentConfig::processed();
@@ -495,7 +495,7 @@ impl RpcClient {
     /// ```
     /// # use std::net::SocketAddr;
     /// # use std::time::Duration;
-    /// # use solana_client::nonblocking::rpc_client::RpcClient;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// let addr = SocketAddr::from(([127, 0, 0, 1], 8899));
     /// let timeout = Duration::from_secs(1);
     /// let client = RpcClient::new_socket_with_timeout(addr, timeout);
@@ -619,9 +619,9 @@ impl RpcClient {
     /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`].
     ///
     /// [`RpcResponseError`]: RpcError::RpcResponseError
-    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
+    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
     ///
     /// # RPC Reference
     ///
@@ -634,10 +634,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -771,8 +769,8 @@ impl RpcClient {
     /// method.
     ///
     /// [`send_transaction_with_config`]: RpcClient::send_transaction_with_config
-    /// [`skip_preflight`]: crate::rpc_config::RpcSendTransactionConfig::skip_preflight
-    /// [`RpcSendTransactionConfig`]: crate::rpc_config::RpcSendTransactionConfig
+    /// [`skip_preflight`]: solana_client_common::rpc_config::RpcSendTransactionConfig::skip_preflight
+    /// [`RpcSendTransactionConfig`]: solana_client_common::rpc_config::RpcSendTransactionConfig
     /// [`send_and_confirm_transaction`]: RpcClient::send_and_confirm_transaction
     ///
     /// # Errors
@@ -791,9 +789,9 @@ impl RpcClient {
     /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`].
     ///
     /// [`RpcResponseError`]: RpcError::RpcResponseError
-    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
+    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
     ///
     /// # RPC Reference
     ///
@@ -804,10 +802,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -857,8 +853,8 @@ impl RpcClient {
     /// method.
     ///
     /// [`send_transaction_with_config`]: RpcClient::send_transaction_with_config
-    /// [`skip_preflight`]: crate::rpc_config::RpcSendTransactionConfig::skip_preflight
-    /// [`RpcSendTransactionConfig`]: crate::rpc_config::RpcSendTransactionConfig
+    /// [`skip_preflight`]: solana_client_common::rpc_config::RpcSendTransactionConfig::skip_preflight
+    /// [`RpcSendTransactionConfig`]: solana_client_common::rpc_config::RpcSendTransactionConfig
     /// [`send_and_confirm_transaction`]: RpcClient::send_and_confirm_transaction
     ///
     /// # Errors
@@ -879,9 +875,9 @@ impl RpcClient {
     /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`].
     ///
     /// [`RpcResponseError`]: RpcError::RpcResponseError
-    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: crate::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
+    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_client_common::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
     ///
     /// # RPC Reference
     ///
@@ -892,11 +888,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
     /// #     rpc_config::RpcSendTransactionConfig,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -1019,10 +1015,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -1080,10 +1074,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     commitment_config::CommitmentConfig,
     /// #     signature::Signer,
@@ -1239,8 +1231,8 @@ impl RpcClient {
     /// [`RpcSimulateTransactionResult`] will be `Some`. Any logs emitted from
     /// the transaction are returned in the [`logs`] field.
     ///
-    /// [`err`]: crate::rpc_response::RpcSimulateTransactionResult::err
-    /// [`logs`]: crate::rpc_response::RpcSimulateTransactionResult::logs
+    /// [`err`]: solana_client_common::rpc_response::RpcSimulateTransactionResult::err
+    /// [`logs`]: solana_client_common::rpc_response::RpcSimulateTransactionResult::logs
     ///
     /// Simulating a transaction is similar to the ["preflight check"] that is
     /// run by default when sending a transaction.
@@ -1253,7 +1245,7 @@ impl RpcClient {
     /// `true`.
     ///
     /// [`simulate_transaction_with_config`]: RpcClient::simulate_transaction_with_config
-    /// [`sig_verify`]: crate::rpc_config::RpcSimulateTransactionConfig::sig_verify
+    /// [`sig_verify`]: solana_client_common::rpc_config::RpcSimulateTransactionConfig::sig_verify
     ///
     /// # RPC Reference
     ///
@@ -1264,11 +1256,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
     /// #     rpc_response::RpcSimulateTransactionResult,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -1310,8 +1302,8 @@ impl RpcClient {
     /// [`RpcSimulateTransactionResult`] will be `Some`. Any logs emitted from
     /// the transaction are returned in the [`logs`] field.
     ///
-    /// [`err`]: crate::rpc_response::RpcSimulateTransactionResult::err
-    /// [`logs`]: crate::rpc_response::RpcSimulateTransactionResult::logs
+    /// [`err`]: solana_client_common::rpc_response::RpcSimulateTransactionResult::err
+    /// [`logs`]: solana_client_common::rpc_response::RpcSimulateTransactionResult::logs
     ///
     /// Simulating a transaction is similar to the ["preflight check"] that is
     /// run by default when sending a transaction.
@@ -1324,7 +1316,7 @@ impl RpcClient {
     /// `true`.
     ///
     /// [`simulate_transaction_with_config`]: RpcClient::simulate_transaction_with_config
-    /// [`sig_verify`]: crate::rpc_config::RpcSimulateTransactionConfig::sig_verify
+    /// [`sig_verify`]: solana_client_common::rpc_config::RpcSimulateTransactionConfig::sig_verify
     ///
     /// This method can additionally query information about accounts by
     /// including them in the [`accounts`] field of the
@@ -1332,8 +1324,8 @@ impl RpcClient {
     /// are reported in the [`accounts`][accounts2] field of the returned
     /// [`RpcSimulateTransactionResult`].
     ///
-    /// [`accounts`]: crate::rpc_config::RpcSimulateTransactionConfig::accounts
-    /// [accounts2]: crate::rpc_response::RpcSimulateTransactionResult::accounts
+    /// [`accounts`]: solana_client_common::rpc_config::RpcSimulateTransactionConfig::accounts
+    /// [accounts2]: solana_client_common::rpc_response::RpcSimulateTransactionResult::accounts
     ///
     /// # RPC Reference
     ///
@@ -1344,12 +1336,12 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
     /// #     rpc_config::RpcSimulateTransactionConfig,
     /// #     rpc_response::RpcSimulateTransactionResult,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -1416,10 +1408,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let snapshot_slot_info = rpc_client.get_highest_snapshot_slot().await?;
@@ -1484,10 +1474,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -1555,10 +1543,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -1637,10 +1623,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -1710,10 +1694,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     commitment_config::CommitmentConfig,
     /// #     signature::Signer,
@@ -1784,10 +1766,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     commitment_config::CommitmentConfig,
     /// #     signature::Signer,
@@ -1847,10 +1827,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let slot = rpc_client.get_slot().await?;
@@ -1875,10 +1853,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -1912,10 +1888,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let block_height = rpc_client.get_block_height().await?;
@@ -1941,10 +1915,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -1978,10 +1950,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::slot_history::Slot;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -2026,10 +1996,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let production = rpc_client.get_block_production().await?;
@@ -2052,12 +2020,12 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
     /// #     rpc_config::RpcBlockProductionConfig,
     /// #     rpc_config::RpcBlockProductionConfigRange,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -2108,11 +2076,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
     /// #     rpc_response::StakeActivationState,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signer::keypair::Keypair,
     /// #     signature::Signer,
@@ -2201,10 +2169,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let supply = rpc_client.supply().await?;
@@ -2227,10 +2193,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -2265,12 +2229,12 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
     /// #     rpc_config::RpcLargestAccountsConfig,
     /// #     rpc_config::RpcLargestAccountsFilter,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -2315,10 +2279,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let accounts = rpc_client.get_vote_accounts().await?;
@@ -2346,10 +2308,8 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_sdk::commitment_config::CommitmentConfig;
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let commitment_config = CommitmentConfig::processed();
@@ -2385,11 +2345,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
     /// #     rpc_config::RpcGetVoteAccountsConfig,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signer::keypair::Keypair,
     /// #     signature::Signer,
@@ -2465,10 +2425,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let cluster_nodes = rpc_client.get_cluster_nodes().await?;
@@ -2499,10 +2457,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// #     let slot = rpc_client.get_slot().await?;
@@ -2528,10 +2484,8 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_transaction_status::UiTransactionEncoding;
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// #     let slot = rpc_client.get_slot().await?;
@@ -2571,11 +2525,11 @@ impl RpcClient {
     /// #     TransactionDetails,
     /// #     UiTransactionEncoding,
     /// # };
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// # use solana_client_common::{
     /// #     rpc_config::RpcBlockConfig,
     /// #     client_error::ClientError,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// #     let slot = rpc_client.get_slot().await?;
@@ -2675,10 +2629,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// // Get up to the first 10 blocks
@@ -2740,10 +2692,8 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_sdk::commitment_config::CommitmentConfig;
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// // Get up to the first 10 blocks
@@ -2805,10 +2755,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// // Get the first 10 blocks
@@ -2857,10 +2805,8 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_sdk::commitment_config::CommitmentConfig;
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// // Get the first 10 blocks
@@ -2994,10 +2940,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -3046,8 +2990,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::{
     /// #     nonblocking::rpc_client::RpcClient,
     /// #     rpc_client::GetConfirmedSignaturesForAddress2Config,
     /// # };
@@ -3165,10 +3109,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -3226,11 +3168,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
     /// #     rpc_config::RpcTransactionConfig,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signature::Signature,
@@ -3317,10 +3259,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// // Get the time of the most recent finalized block
@@ -3362,10 +3302,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let epoch_info = rpc_client.get_epoch_info().await?;
@@ -3388,10 +3326,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -3429,10 +3365,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -3463,10 +3397,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -3506,11 +3438,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// #     rpc_config::RpcLeaderScheduleConfig,
     /// # };
-    /// # use solana_client::rpc_config::RpcLeaderScheduleConfig;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -3548,10 +3480,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let epoch_schedule = rpc_client.get_epoch_schedule().await?;
@@ -3577,10 +3507,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let limit = 10;
@@ -3610,10 +3538,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let identity = rpc_client.get_identity().await?;
@@ -3649,10 +3575,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let inflation_governor = rpc_client.get_inflation_governor().await?;
@@ -3676,10 +3600,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let inflation_rate = rpc_client.get_inflation_rate().await?;
@@ -3706,10 +3628,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::signature::{Keypair, Signer};
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -3760,10 +3680,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::signature::{Keypair, Signer};
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
@@ -3794,10 +3712,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     client_error::ClientError,
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let slot = rpc_client.minimum_ledger_slot().await?;
@@ -3836,10 +3752,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::{self, RpcClient},
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::{self, RpcClient};
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -3879,10 +3793,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::{self, RpcClient},
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::{self, RpcClient};
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -3936,11 +3848,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::{self, RpcClient},
+    /// # use solana_client_common::{
     /// #     rpc_config::RpcAccountInfoConfig,
     /// #     client_error::ClientError,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::{self, RpcClient};
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4019,10 +3931,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let slot = rpc_client.get_max_retransmit_slot().await?;
@@ -4046,10 +3956,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let slot = rpc_client.get_max_shred_insert_slot().await?;
@@ -4076,10 +3984,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4115,10 +4021,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4166,11 +4070,11 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// # use solana_client_common::{
     /// #     rpc_config::RpcAccountInfoConfig,
     /// #     client_error::ClientError,
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4240,10 +4144,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::{self, RpcClient},
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::{self, RpcClient};
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4275,10 +4177,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let data_len = 300;
@@ -4322,10 +4222,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4356,10 +4254,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4408,10 +4304,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4452,12 +4346,12 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
+    /// # use solana_client_common::{
     /// #     client_error::ClientError,
     /// #     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     /// #     rpc_filter::{MemcmpEncodedBytes, RpcFilterType, Memcmp},
     /// # };
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::{
     /// #     signature::Signer,
     /// #     signer::keypair::Keypair,
@@ -4534,10 +4428,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());
     /// let stake_minimum_delegation = rpc_client.get_stake_minimum_delegation().await?;
@@ -4561,10 +4453,8 @@ impl RpcClient {
     /// # Examples
     ///
     /// ```
-    /// # use solana_client::{
-    /// #     nonblocking::rpc_client::RpcClient,
-    /// #     client_error::ClientError,
-    /// # };
+    /// # use solana_client_common::client_error::ClientError;
+    /// # use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
     /// # futures::executor::block_on(async {
     /// #     let rpc_client = RpcClient::new_mock("succeeds".to_string());

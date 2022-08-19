@@ -5673,7 +5673,9 @@ dependencies = [
 name = "solana-nonce-client"
 version = "1.12.0"
 dependencies = [
+ "anyhow",
  "clap 2.33.3",
+ "futures 0.3.23",
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
@@ -6020,6 +6022,7 @@ dependencies = [
  "bincode",
  "bs58",
  "crossbeam-channel",
+ "futures 0.3.23",
  "jsonrpc-core",
  "jsonrpc-http-server",
  "log",
