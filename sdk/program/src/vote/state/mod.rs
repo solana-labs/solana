@@ -1,4 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
 //! Vote state
 
 #[cfg(test)]
@@ -76,6 +75,7 @@ impl Lockout {
     // The last slot at which a vote is still locked out. Validators should not
     // vote on a slot in another fork which is less than or equal to this slot
     // to avoid having their stake slashed.
+    #[allow(clippy::integer_arithmetic)]
     pub fn last_locked_out_slot(&self) -> Slot {
         self.slot + self.lockout()
     }
@@ -399,6 +399,7 @@ pub struct CircBuf<I> {
 }
 
 impl<I: Default + Copy> Default for CircBuf<I> {
+    #[allow(clippy::integer_arithmetic)]
     fn default() -> Self {
         Self {
             buf: [I::default(); MAX_ITEMS],
@@ -409,6 +410,7 @@ impl<I: Default + Copy> Default for CircBuf<I> {
 }
 
 impl<I> CircBuf<I> {
+    #[allow(clippy::integer_arithmetic)]
     pub fn append(&mut self, item: I) {
         // remember prior delegate and when we switched, to support later slashing
         self.idx += 1;
@@ -518,6 +520,7 @@ impl VoteState {
     ///
     ///  if commission calculation is 100% one way or other,
     ///   indicate with false for was_split
+    #[allow(clippy::integer_arithmetic)]
     pub fn commission_split(&self, on: u64) -> (u64, u64, bool) {
         match self.commission.min(100) {
             0 => (0, on, false),
@@ -585,6 +588,7 @@ impl VoteState {
     }
 
     /// increment credits, record credits for last epoch if new epoch
+    #[allow(clippy::integer_arithmetic)]
     pub fn increment_credits(&mut self, epoch: Epoch, credits: u64) {
         // increment credits, record by epoch
 
@@ -612,6 +616,7 @@ impl VoteState {
         self.epoch_credits.last_mut().unwrap().1 += credits;
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn nth_recent_vote(&self, position: usize) -> Option<&Lockout> {
         if position < self.votes.len() {
             let pos = self.votes.len() - 1 - position;
@@ -747,6 +752,7 @@ impl VoteState {
         }
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn double_lockouts(&mut self) {
         let stack_depth = self.votes.len();
         for (i, v) in self.votes.iter_mut().enumerate() {
@@ -774,6 +780,7 @@ impl VoteState {
         Ok(())
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn is_correct_size_and_initialized(data: &[u8]) -> bool {
         const VERSION_OFFSET: usize = 4;
         data.len() == VoteState::size_of()
