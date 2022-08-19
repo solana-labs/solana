@@ -670,7 +670,8 @@ impl ScheduleStage {
                     address_book.uncontended_task_ids.clear();
                 }
 
-                continue;
+                return None;
+                //continue;
             } else if guaranteed_count > 0 {
                 assert!(!from_runnable);
                 let lock_count = populated_lock_attempts.len();
@@ -683,7 +684,7 @@ impl ScheduleStage {
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
 
-                //return None;
+                return None;
                 continue;
             }
 
