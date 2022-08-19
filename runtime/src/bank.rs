@@ -7159,7 +7159,7 @@ impl Bank {
         let mut clean_time = Measure::start("clean");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("cleaning..");
-            self.clean_accounts(true, true, Some(last_full_snapshot_slot));
+            self._clean_accounts(true, true, Some(last_full_snapshot_slot));
         }
         clean_time.stop();
 
@@ -7443,12 +7443,7 @@ impl Bank {
         debug!("Added precompiled program {:?}", program_id);
     }
 
-    pub fn clean_accounts(
-        &self,
-        skip_last: bool,
-        is_startup: bool,
-        last_full_snapshot_slot: Option<Slot>,
-    ) {
+    pub(crate) fn clean_accounts(&self, last_full_snapshot_slot: Option<Slot>) {
         // Don't clean the slot we're snapshotting because it may have zero-lamport
         // accounts that were included in the bank delta hash when the bank was frozen,
         // and if we clean them here, any newly created snapshot's hash for this bank
@@ -7456,10 +7451,19 @@ impl Bank {
         //
         // So when we're snapshotting, set `skip_last` to true so the highest slot to clean is
         // lowered by one.
-        let highest_slot_to_clean = skip_last.then(|| self.slot().saturating_sub(1));
+        self._clean_accounts(true, false, last_full_snapshot_slot)
+    }
+
+    fn _clean_accounts(
+        &self,
+        skip_last: bool,
+        is_startup: bool,
+        last_full_snapshot_slot: Option<Slot>,
+    ) {
+        let max_clean_root = skip_last.then(|| self.slot().saturating_sub(1));
 
         self.rc.accounts.accounts_db.clean_accounts(
-            highest_slot_to_clean,
+            max_clean_root,
             is_startup,
             last_full_snapshot_slot,
         );
@@ -16260,7 +16264,7 @@ pub(crate) mod tests {
                         current_bank.squash();
                         if current_bank.slot() % 2 == 0 {
                             current_bank.force_flush_accounts_cache();
-                            current_bank.clean_accounts(true, false, None);
+                            current_bank.clean_accounts(None);
                         }
                         prev_bank = current_bank.clone();
                         current_bank = Arc::new(Bank::new_from_parent(
