@@ -8100,6 +8100,12 @@ pub(crate) mod tests {
         }
     }
 
+    impl Bank {
+        fn clean_accounts_for_tests(&self) {
+            self.rc.accounts.accounts_db.clean_accounts_for_tests()
+        }
+    }
+
     #[test]
     fn test_nonce_info() {
         let lamports_per_signature = 42;
@@ -10418,7 +10424,7 @@ pub(crate) mod tests {
         bank.squash();
         bank.force_flush_accounts_cache();
         let hash = bank.update_accounts_hash();
-        bank.clean_accounts(false, false, None);
+        bank.clean_accounts_for_tests();
         assert_eq!(bank.update_accounts_hash(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
@@ -10441,7 +10447,7 @@ pub(crate) mod tests {
 
         info!("bank0 purge");
         let hash = bank0.update_accounts_hash();
-        bank0.clean_accounts(false, false, None);
+        bank0.clean_accounts_for_tests();
         assert_eq!(bank0.update_accounts_hash(), hash);
 
         assert_eq!(
@@ -10451,7 +10457,7 @@ pub(crate) mod tests {
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank1 purge");
-        bank1.clean_accounts(false, false, None);
+        bank1.clean_accounts_for_tests();
 
         assert_eq!(
             bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
@@ -10475,7 +10481,7 @@ pub(crate) mod tests {
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
         bank1.force_flush_accounts_cache();
-        bank1.clean_accounts(false, false, None);
+        bank1.clean_accounts_for_tests();
 
         assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
@@ -14704,7 +14710,7 @@ pub(crate) mod tests {
 
         // Clean accounts, which should add earlier slots to the shrink
         // candidate set
-        bank2.clean_accounts(false, false, None);
+        bank2.clean_accounts_for_tests();
 
         let mut bank3 = Arc::new(Bank::new_from_parent(&bank2, &Pubkey::default(), 3));
         bank3.deposit(&pubkey1, some_lamports + 1).unwrap();
@@ -14713,7 +14719,7 @@ pub(crate) mod tests {
         bank3.squash();
         bank3.force_flush_accounts_cache();
 
-        bank3.clean_accounts(false, false, None);
+        bank3.clean_accounts_for_tests();
         assert_eq!(
             bank3.rc.accounts.accounts_db.ref_count_for_pubkey(&pubkey0),
             2
@@ -14782,7 +14788,7 @@ pub(crate) mod tests {
 
         // Clean accounts, which should add earlier slots to the shrink
         // candidate set
-        bank2.clean_accounts(false, false, None);
+        bank2.clean_accounts_for_tests();
 
         // Slots 0 and 1 should be candidates for shrinking, but slot 2
         // shouldn't because none of its accounts are outdated by a later
@@ -14836,7 +14842,7 @@ pub(crate) mod tests {
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
 
         bank.squash();
-        bank.clean_accounts(false, false, None);
+        bank.clean_accounts_for_tests();
         let force_to_return_alive_account = 0;
         assert_eq!(
             bank.process_stale_slot_with_budget(22, force_to_return_alive_account),
@@ -16221,7 +16227,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.squash();
                         // Try to get cache flush/clean to overlap with the scan
                         current_major_fork_bank.force_flush_accounts_cache();
-                        current_major_fork_bank.clean_accounts(false, false, None);
+                        current_major_fork_bank.clean_accounts_for_tests();
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
                         abs_request_handler.handle_pruned_banks(&current_major_fork_bank, true);
@@ -17350,7 +17356,7 @@ pub(crate) mod tests {
         bank2.squash();
 
         drop(bank1);
-        bank2.clean_accounts(false, false, None);
+        bank2.clean_accounts_for_tests();
 
         let expected_ref_count_for_cleaned_up_keys = 0;
         let expected_ref_count_for_keys_in_both_slot1_and_slot2 = 1;
