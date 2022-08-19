@@ -5452,6 +5452,7 @@ dependencies = [
  "spl-token-2022",
  "static_assertions",
  "tempfile",
+ "test-case",
  "thiserror",
  "tokio",
  "tokio-stream",
