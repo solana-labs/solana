@@ -3711,10 +3711,6 @@ impl AccountsDb {
         }
 
         if is_ancient(accounts) {
-            if current_ancient.is_some() {
-                info!("ancient_append_vec: shrinking full ancient: {}", slot);
-            }
-
             // this slot is ancient and can become the 'current' ancient for other slots to be squashed into
             *current_ancient = Some((slot, Arc::clone(storage)));
             return false; // we're done with this slot - this slot IS the ancient append vec
