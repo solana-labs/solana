@@ -7177,7 +7177,10 @@ impl Bank {
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
-            self.shrink_all_slots(true, Some(last_full_snapshot_slot));
+            self.rc
+                .accounts
+                .accounts_db
+                .shrink_all_slots(true, Some(last_full_snapshot_slot));
         }
         shrink_all_slots_time.stop();
 
@@ -7471,13 +7474,6 @@ impl Bank {
             is_startup,
             last_full_snapshot_slot,
         );
-    }
-
-    pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
-        self.rc
-            .accounts
-            .accounts_db
-            .shrink_all_slots(is_startup, last_full_snapshot_slot);
     }
 
     pub fn print_accounts_stats(&self) {
