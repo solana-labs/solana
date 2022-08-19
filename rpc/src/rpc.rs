@@ -212,7 +212,7 @@ pub struct JsonRpcRequestProcessor {
     max_slots: Arc<MaxSlots>,
     leader_schedule_cache: Arc<LeaderScheduleCache>,
     max_complete_transaction_status_slot: Arc<AtomicU64>,
-    _prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+    prioritization_fee_cache: Arc<PrioritizationFeeCache>,
 }
 impl Metadata for JsonRpcRequestProcessor {}
 
@@ -318,7 +318,7 @@ impl JsonRpcRequestProcessor {
         max_slots: Arc<MaxSlots>,
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         max_complete_transaction_status_slot: Arc<AtomicU64>,
-        _prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+        prioritization_fee_cache: Arc<PrioritizationFeeCache>,
     ) -> (Self, Receiver<TransactionInfo>) {
         let (sender, receiver) = unbounded();
         (
@@ -339,7 +339,7 @@ impl JsonRpcRequestProcessor {
                 max_slots,
                 leader_schedule_cache,
                 max_complete_transaction_status_slot,
-                _prioritization_fee_cache,
+                prioritization_fee_cache,
             },
             receiver,
         )
@@ -404,7 +404,7 @@ impl JsonRpcRequestProcessor {
             max_slots: Arc::new(MaxSlots::default()),
             leader_schedule_cache: Arc::new(LeaderScheduleCache::new_from_bank(bank)),
             max_complete_transaction_status_slot: Arc::new(AtomicU64::default()),
-            _prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
+            prioritization_fee_cache: Arc::new(PrioritizationFeeCache::default()),
         }
     }
 
@@ -2182,6 +2182,19 @@ impl JsonRpcRequestProcessor {
             solana_stake_program::get_minimum_delegation(&bank.feature_set);
         Ok(new_response(&bank, stake_minimum_delegation))
     }
+
+    fn get_recent_prioritization_fees(
+        &self,
+        pubkeys: Vec<Pubkey>,
+        config: RpcContextConfig,
+    ) -> Result<RpcResponse<Vec<u64>>> {
+        let bank = self.get_bank_with_config(config)?;
+        Ok(new_response(
+            &bank,
+            self.prioritization_fee_cache
+                .get_prioritization_fees_with_accounts(&pubkeys),
+        ))
+    }
 }
 
 fn optimize_filters(filters: &mut [RpcFilterType]) {
@@ -3421,6 +3434,14 @@ pub mod rpc_full {
             meta: Self::Metadata,
             config: Option<RpcContextConfig>,
         ) -> Result<RpcResponse<u64>>;
+
+        #[rpc(meta, name = "getRecentPrioritizationFees")]
+        fn get_recent_prioritization_fees(
+            &self,
+            meta: Self::Metadata,
+            pubkey_strs: Vec<String>,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<Vec<u64>>>;
     }
 
     pub struct FullImpl;
@@ -3996,6 +4017,30 @@ pub mod rpc_full {
         ) -> Result<RpcResponse<u64>> {
             debug!("get_stake_minimum_delegation rpc request received");
             meta.get_stake_minimum_delegation(config.unwrap_or_default())
+        }
+
+        fn get_recent_prioritization_fees(
+            &self,
+            meta: Self::Metadata,
+            pubkey_strs: Vec<String>,
+            config: Option<RpcContextConfig>,
+        ) -> Result<RpcResponse<Vec<u64>>> {
+            debug!(
+                "get_recent_prioritization_fees rpc request received: {:?} pubkeys",
+                pubkey_strs.len()
+            );
+            const MAX_FEE_ACCOUNTS: usize = 42; // TODO: what do we actually want here?
+            if pubkey_strs.len() > MAX_FEE_ACCOUNTS {
+                return Err(Error::invalid_params(format!(
+                    "Too many inputs provided; max {}",
+                    MAX_FEE_ACCOUNTS
+                )));
+            }
+            let pubkeys = pubkey_strs
+                .into_iter()
+                .map(|pubkey_str| verify_pubkey(&pubkey_str))
+                .collect::<Result<Vec<_>>>()?;
+            meta.get_recent_prioritization_fees(pubkeys, config.unwrap_or_default())
         }
     }
 }
