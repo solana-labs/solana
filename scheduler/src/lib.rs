@@ -937,6 +937,18 @@ impl ScheduleStage {
                     trace!("prefer emptying n_u_a");
                 } else */ if (executing_queue_count + address_book.gurantee_timers.len()) >= max_executing_queue_count {
                     trace!("skip scheduling; outgoing queue full");
+                    while from.len() > 0 && from_exec.len() == 0 {
+                       let i = from.recv().unwrap();
+                        match i {
+                            Multiplexed::FromPrevious(weighted_tx) => {
+                                trace!("recv from previous (after starvation)");
+                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
+                            }
+                            Multiplexed::FromPreviousBatched(vvv) => {
+                                unreachable!();
+                            }
+                        }
+                    }
                     break;
                 }
 
