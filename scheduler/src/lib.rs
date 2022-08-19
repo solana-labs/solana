@@ -670,8 +670,11 @@ impl ScheduleStage {
                     address_book.uncontended_task_ids.clear();
                 }
 
-                return None;
-                //continue;
+                if from_runnable {
+                    continue;
+                } else {
+                    return None;
+                }
             } else if guaranteed_count > 0 {
                 assert!(!from_runnable);
                 let lock_count = populated_lock_attempts.len();
