@@ -4,7 +4,7 @@ pub use crate::nonblocking::nonce_utils::{
     account_identity_ok, data_from_account, data_from_state, state_from_account, Error,
 };
 use {
-    crate::rpc_client::RpcClient,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{account::Account, commitment_config::CommitmentConfig, pubkey::Pubkey},
 };
 

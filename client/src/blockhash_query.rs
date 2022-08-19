@@ -1,11 +1,12 @@
 use {
-    crate::{nonce_utils, rpc_client::RpcClient},
+    crate::nonce_utils,
     clap::ArgMatches,
     solana_clap_utils::{
         input_parsers::{pubkey_of, value_of},
         nonce::*,
         offline::*,
     },
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig, fee_calculator::FeeCalculator, hash::Hash,
         pubkey::Pubkey,

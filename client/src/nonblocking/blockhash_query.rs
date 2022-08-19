@@ -1,11 +1,12 @@
 use {
-    crate::nonblocking::{nonce_utils, rpc_client::RpcClient},
+    crate::nonblocking::nonce_utils,
     clap::ArgMatches,
     solana_clap_utils::{
         input_parsers::{pubkey_of, value_of},
         nonce::*,
         offline::*,
     },
+    solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::{commitment_config::CommitmentConfig, hash::Hash, pubkey::Pubkey},
 };
 

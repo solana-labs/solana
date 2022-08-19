@@ -1713,10 +1713,10 @@ mod tests {
         serde_json::{json, Value},
         solana_client::{
             blockhash_query,
-            mock_sender_for_cli::SIGNATURE,
             rpc_request::RpcRequest,
             rpc_response::{Response, RpcResponseContext},
         },
+        solana_rpc_client::mock_sender_for_cli::SIGNATURE,
         solana_sdk::{
             pubkey::Pubkey,
             signature::{

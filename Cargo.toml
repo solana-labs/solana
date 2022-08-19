@@ -63,6 +63,7 @@ members = [
     "rbpf-cli",
     "remote-wallet",
     "rpc",
+    "rpc-client",
     "rpc-test",
     "runtime",
     "runtime/store-tool",

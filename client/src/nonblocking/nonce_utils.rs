@@ -1,7 +1,7 @@
 //! Durable transaction nonce helpers.
 
 use {
-    crate::nonblocking::rpc_client::RpcClient,
+    solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::{
         account::{Account, ReadableAccount},
         account_utils::StateMut,

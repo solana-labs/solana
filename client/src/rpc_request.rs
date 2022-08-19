@@ -208,7 +208,7 @@ pub const MAX_GET_SLOT_LEADERS: usize = 5000;
 pub const DELINQUENT_VALIDATOR_SLOT_DISTANCE: u64 = 128;
 
 impl RpcRequest {
-    pub(crate) fn build_request_json(self, id: u64, params: Value) -> Value {
+    pub fn build_request_json(self, id: u64, params: Value) -> Value {
         let jsonrpc = "2.0";
         json!({
            "jsonrpc": jsonrpc,

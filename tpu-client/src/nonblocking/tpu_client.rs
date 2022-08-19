@@ -12,12 +12,12 @@ use {
     log::*,
     solana_client::{
         client_error::{ClientError, Result as ClientResult},
-        nonblocking::rpc_client::RpcClient,
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         rpc_response::{RpcContactInfo, SlotUpdate},
         spinner,
     },
     solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
+    solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::{
         clock::Slot,
         commitment_config::CommitmentConfig,

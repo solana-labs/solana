@@ -4,7 +4,7 @@ use {
         connection_cache::ConnectionCache,
         nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
     },
-    solana_client::rpc_client::RpcClient,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         clock::Slot,
         message::Message,

@@ -4884,6 +4884,7 @@ dependencies = [
  "solana-logger 1.12.0",
  "solana-program-runtime",
  "solana-remote-wallet",
+ "solana-rpc-client",
  "solana-sdk 1.12.0",
  "solana-streamer",
  "solana-test-validator",
@@ -6013,6 +6014,33 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.6.9",
+]
+
+[[package]]
+name = "solana-rpc-client"
+version = "1.12.0"
+dependencies = [
+ "assert_matches",
+ "async-trait",
+ "base64 0.13.0",
+ "bincode",
+ "bs58",
+ "crossbeam-channel",
+ "jsonrpc-core",
+ "jsonrpc-http-server",
+ "log",
+ "reqwest",
+ "semver 1.0.13",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-sdk 1.12.0",
+ "solana-transaction-status",
+ "solana-version",
+ "solana-vote-program",
+ "tokio",
 ]
 
 [[package]]
