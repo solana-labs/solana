@@ -1257,10 +1257,9 @@ where
         parallel_divisions,
     );
 
-    let num_rebuilder_threads = std::cmp::max(
-        1,
-        num_cpus::get_physical().saturating_sub(parallel_divisions),
-    );
+    let num_rebuilder_threads = num_cpus::get_physical()
+        .saturating_sub(parallel_divisions)
+        .max(1);
     let (storage, measure_untar) = measure!(
         SnapshotStorageRebuilder::rebuild_storage(
             file_receiver,
