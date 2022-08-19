@@ -934,6 +934,18 @@ impl ScheduleStage {
                     to_execute_substage.send(ee).unwrap();
                 } else {
                     trace!("incoming queue starved");
+                    while from.len() > 0 && from_exec.len() == 0 {
+                       let i = from.recv().unwrap();
+                        match i {
+                            Multiplexed::FromPrevious(weighted_tx) => {
+                                trace!("recv from previous (after starvation)");
+                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
+                            }
+                            Multiplexed::FromPreviousBatched(vvv) => {
+                                unreachable!();
+                            }
+                        }
+                    }
                     break;
                 }
             }
