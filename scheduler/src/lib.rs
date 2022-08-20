@@ -289,7 +289,7 @@ impl AddressBook {
     #[inline(never)]
     fn forget_address_contention(unique_weight: &UniqueWeight, a: &mut LockAttempt) {
         if a.remembered {
-            a.target.page_ref().contended_unique_weights.remove(unique_weight);
+            a.target.page_ref().contended_unique_weights.remove_task_ids(unique_weight);
         }
     }
 
