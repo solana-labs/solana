@@ -625,7 +625,7 @@ impl Blockstore {
         index: &mut Index,
         erasure_meta: &ErasureMeta,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
-        recovered_data_shreds: &mut Vec<Shred>,
+        recovered_shreds: &mut Vec<Shred>,
         data_cf: &LedgerColumn<cf::ShredData>,
         code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
@@ -646,9 +646,9 @@ impl Blockstore {
             code_cf,
         ))
         .collect();
-        if let Ok(mut result) = Shredder::try_recovery(available_shreds) {
+        if let Ok(mut result) = shred::recover(available_shreds) {
             Self::submit_metrics(slot, erasure_meta, true, "complete".into(), result.len());
-            recovered_data_shreds.append(&mut result);
+            recovered_shreds.append(&mut result);
         } else {
             Self::submit_metrics(slot, erasure_meta, true, "incomplete".into(), 0);
         }
@@ -709,7 +709,7 @@ impl Blockstore {
     ) -> Vec<Shred> {
         let data_cf = db.column::<cf::ShredData>();
         let code_cf = db.column::<cf::ShredCode>();
-        let mut recovered_data_shreds = vec![];
+        let mut recovered_shreds = vec![];
         // Recovery rules:
         // 1. Only try recovery around indexes for which new data or coding shreds are received
         // 2. For new data shreds, check if an erasure set exists. If not, don't try recovery
@@ -725,7 +725,7 @@ impl Blockstore {
                         index,
                         erasure_meta,
                         prev_inserted_shreds,
-                        &mut recovered_data_shreds,
+                        &mut recovered_shreds,
                         &data_cf,
                         &code_cf,
                     );
@@ -744,7 +744,7 @@ impl Blockstore {
                 }
             };
         }
-        recovered_data_shreds
+        recovered_shreds
     }
 
     /// The main helper function that performs the shred insertion logic
@@ -888,15 +888,18 @@ impl Blockstore {
         metrics.insert_shreds_elapsed_us += start.as_us();
         let mut start = Measure::start("Shred recovery");
         if let Some(leader_schedule_cache) = leader_schedule {
-            let recovered_data_shreds = Self::try_shred_recovery(
+            let recovered_shreds = Self::try_shred_recovery(
                 db,
                 &erasure_metas,
                 &mut index_working_set,
                 &just_inserted_shreds,
             );
 
-            metrics.num_recovered += recovered_data_shreds.len();
-            let recovered_data_shreds: Vec<_> = recovered_data_shreds
+            metrics.num_recovered += recovered_shreds
+                .iter()
+                .filter(|shred| shred.is_data())
+                .count();
+            let recovered_shreds: Vec<_> = recovered_shreds
                 .into_iter()
                 .filter_map(|shred| {
                     let leader =
@@ -904,6 +907,12 @@ impl Blockstore {
                     if !shred.verify(&leader) {
                         metrics.num_recovered_failed_sig += 1;
                         return None;
+                    }
+                    // Since the data shreds are fully recovered from the
+                    // erasure batch, no need to store coding shreds in
+                    // blockstore.
+                    if shred.is_code() {
+                        return Some(shred);
                     }
                     match self.check_insert_data_shred(
                         shred.clone(),
@@ -941,10 +950,10 @@ impl Blockstore {
                 // Always collect recovered-shreds so that above insert code is
                 // executed even if retransmit-sender is None.
                 .collect();
-            if !recovered_data_shreds.is_empty() {
+            if !recovered_shreds.is_empty() {
                 if let Some(retransmit_sender) = retransmit_sender {
                     let _ = retransmit_sender.send(
-                        recovered_data_shreds
+                        recovered_shreds
                             .into_iter()
                             .map(Shred::into_payload)
                             .collect(),
