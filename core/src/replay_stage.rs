@@ -97,7 +97,7 @@ const MAX_CONCURRENT_FORKS_TO_REPLAY: usize = 4;
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(MAX_CONCURRENT_FORKS_TO_REPLAY)
-        .thread_name(|ix| format!("replay_{}", ix))
+        .thread_name(|ix| format!("solReplay{:02}", ix))
         .build()
         .unwrap();
 }
@@ -436,7 +436,7 @@ impl ReplayStage {
 
         #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
-            .name("solana-replay-stage".to_string())
+            .name("solReplayStage".to_string())
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());

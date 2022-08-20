@@ -50,7 +50,7 @@ impl BigTableUploadService {
     ) -> Self {
         info!("Starting BigTable upload service");
         let thread = Builder::new()
-            .name("bigtable-upload".to_string())
+            .name("solBigTUpload".to_string())
             .spawn(move || {
                 Self::run(
                     runtime,

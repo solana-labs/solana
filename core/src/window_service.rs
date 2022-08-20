@@ -375,7 +375,7 @@ impl WindowService {
             inc_new_counter_error!("solana-check-duplicate-error", 1, 1);
         };
         Builder::new()
-            .name("solana-check-duplicate".to_string())
+            .name("solWinCheckDup".to_string())
             .spawn(move || {
                 while !exit.load(Ordering::Relaxed) {
                     if let Err(e) = run_check_duplicate(
@@ -408,11 +408,11 @@ impl WindowService {
         };
         let thread_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
-            .thread_name(|i| format!("window-insert-{}", i))
+            .thread_name(|i| format!("solWinInsert{:02}", i))
             .build()
             .unwrap();
         Builder::new()
-            .name("solana-window-insert".to_string())
+            .name("solWinInsert".to_string())
             .spawn(move || {
                 let handle_duplicate = |shred| {
                     let _ = check_duplicate_sender.send(shred);

@@ -255,7 +255,7 @@ impl BroadcastStage {
             let blockstore = blockstore.clone();
             let cluster_info = cluster_info.clone();
             Builder::new()
-                .name("solana-broadcaster".to_string())
+                .name("solBroadcast".to_string())
                 .spawn(move || {
                     let _finalizer = Finalizer::new(exit);
                     Self::run(
@@ -277,7 +277,7 @@ impl BroadcastStage {
             let cluster_info = cluster_info.clone();
             let bank_forks = bank_forks.clone();
             let t = Builder::new()
-                .name("solana-broadcaster-transmit".to_string())
+                .name("solBroadcastTx".to_string())
                 .spawn(move || loop {
                     let res =
                         bs_transmit.transmit(&socket_receiver, &cluster_info, &sock, &bank_forks);
@@ -295,7 +295,7 @@ impl BroadcastStage {
             let mut bs_record = broadcast_stage_run.clone();
             let btree = blockstore.clone();
             let t = Builder::new()
-                .name("solana-broadcaster-record".to_string())
+                .name("solBroadcastRec".to_string())
                 .spawn(move || loop {
                     let res = bs_record.record(&blockstore_receiver, &btree);
                     let res = Self::handle_error(res, "solana-broadcaster-record");
@@ -308,7 +308,7 @@ impl BroadcastStage {
         }
 
         let retransmit_thread = Builder::new()
-            .name("solana-broadcaster-retransmit".to_string())
+            .name("solBroadcastRtx".to_string())
             .spawn(move || loop {
                 if let Some(res) = Self::handle_error(
                     Self::check_retransmit_signals(

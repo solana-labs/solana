@@ -215,7 +215,7 @@ impl AncestorHashesService {
         ancestor_socket: Arc<UdpSocket>,
     ) -> JoinHandle<()> {
         Builder::new()
-            .name("solana-ancestor-hashes-responses-service".to_string())
+            .name("solAncHashesSvc".to_string())
             .spawn(move || {
                 let mut last_stats_report = Instant::now();
                 let mut stats = AncestorHashesResponsesStats::default();
@@ -538,7 +538,7 @@ impl AncestorHashesService {
         // to MAX_ANCESTOR_HASHES_SLOT_REQUESTS_PER_SECOND/second
         let mut request_throttle = vec![];
         Builder::new()
-            .name("solana-manage-ancestor-requests".to_string())
+            .name("solManAncReqs".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     return;

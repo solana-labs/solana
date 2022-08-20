@@ -1682,11 +1682,11 @@ impl ClusterInfo {
     ) -> JoinHandle<()> {
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(std::cmp::min(get_thread_count(), 8))
-            .thread_name(|i| format!("ClusterInfo::gossip-{}", i))
+            .thread_name(|i| format!("solRunGossip{:02}", i))
             .build()
             .unwrap();
         Builder::new()
-            .name("solana-gossip".to_string())
+            .name("solGossip".to_string())
             .spawn(move || {
                 let mut last_push = timestamp();
                 let mut last_contact_info_trace = timestamp();
@@ -2560,7 +2560,7 @@ impl ClusterInfo {
     ) -> JoinHandle<()> {
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
-            .thread_name(|i| format!("gossip-consume-{}", i))
+            .thread_name(|i| format!("solGossipCons{:02}", i))
             .build()
             .unwrap();
         let run_consume = move || {
@@ -2576,7 +2576,7 @@ impl ClusterInfo {
                 }
             }
         };
-        let thread_name = String::from("gossip-consume");
+        let thread_name = String::from("solGossipConsum");
         Builder::new().name(thread_name).spawn(run_consume).unwrap()
     }
 
@@ -2592,11 +2592,11 @@ impl ClusterInfo {
         let recycler = PacketBatchRecycler::default();
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(get_thread_count().min(8))
-            .thread_name(|i| format!("sol-gossip-work-{}", i))
+            .thread_name(|i| format!("solGossipWork{:02}", i))
             .build()
             .unwrap();
         Builder::new()
-            .name("solana-listen".to_string())
+            .name("solGossipListen".to_string())
             .spawn(move || {
                 while !exit.load(Ordering::Relaxed) {
                     if let Err(err) = self.run_listen(

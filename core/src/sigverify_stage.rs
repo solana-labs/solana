@@ -412,7 +412,7 @@ impl SigVerifyStage {
         const MAX_DEDUPER_AGE: Duration = Duration::from_secs(2);
         const MAX_DEDUPER_ITEMS: u32 = 1_000_000;
         Builder::new()
-            .name("solana-verifier".to_string())
+            .name("solSigVerifier".to_string())
             .spawn(move || {
                 let mut deduper = Deduper::new(MAX_DEDUPER_ITEMS, MAX_DEDUPER_AGE);
                 loop {

@@ -385,7 +385,7 @@ impl JsonRpcService {
             tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(rpc_threads)
                 .on_thread_start(move || renice_this_thread(rpc_niceness_adj).unwrap())
-                .thread_name("sol-rpc-el")
+                .thread_name("solRpcEl")
                 .enable_all()
                 .build()
                 .expect("Runtime"),
@@ -480,7 +480,7 @@ impl JsonRpcService {
 
         let (close_handle_sender, close_handle_receiver) = unbounded();
         let thread_hdl = Builder::new()
-            .name("solana-jsonrpc".to_string())
+            .name("solJsonRpcSvc".to_string())
             .spawn(move || {
                 renice_this_thread(rpc_niceness_adj).unwrap();
 
@@ -643,7 +643,7 @@ mod tests {
             Arc::new(AtomicU64::default()),
         );
         let thread = rpc_service.thread_hdl.thread();
-        assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
+        assert_eq!(thread.name().unwrap(), "solJsonRpcSvc");
 
         assert_eq!(
             10_000,
