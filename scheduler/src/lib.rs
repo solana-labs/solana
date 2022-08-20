@@ -343,7 +343,7 @@ impl AddressBook {
 
         if newly_uncontended {
             page.current_usage = Usage::Unused;
-            if !page.contended_unique_weights.is_empty() {
+            if !page.contended_unique_weights.has_no_task_id() {
                 still_queued = true;
             }
         }
