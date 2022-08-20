@@ -54,6 +54,10 @@ impl PageRc {
     fn page_mut(&mut self) -> &mut Page {
         unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
     }
+
+    fn page_ref(&self) -> &Page {
+        MyRcInner::get_ref(&mut self.0)
+    }
 }
 
 #[derive(Clone, Debug)]
