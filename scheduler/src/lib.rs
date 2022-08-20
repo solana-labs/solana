@@ -51,7 +51,7 @@ impl ExecutionEnvironment {
 }
 
 impl PageRc {
-    fn page(&mut self) -> &mut Page {
+    fn page_mut(&mut self) -> &mut Page {
         unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
     }
 }
