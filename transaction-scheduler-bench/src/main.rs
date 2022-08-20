@@ -345,7 +345,7 @@ fn handle_transaction_batch(
         .fetch_add(priority_collected, Ordering::Relaxed);
 
     let uq = transaction_batch.unique_weight;
-    for lock_attempt in transaction_batch.lock_attempts {
+    for lock_attempt in transaction_batch.lock_attempts.iter() {
         lock_attempt.target.page_ref();
     }
     completed_transaction_sender.0
