@@ -254,11 +254,7 @@ impl SnapshotRequestHandler {
                 };
 
                 let mut clean_time = Measure::start("clean_time");
-                // Don't clean the slot we're snapshotting because it may have zero-lamport
-                // accounts that were included in the bank delta hash when the bank was frozen,
-                // and if we clean them here, the newly created snapshot's hash may not match
-                // the frozen hash.
-                snapshot_root_bank.clean_accounts(true, false, *last_full_snapshot_slot);
+                snapshot_root_bank.clean_accounts(*last_full_snapshot_slot);
                 clean_time.stop();
 
                 if accounts_db_caching_enabled {
@@ -370,6 +366,7 @@ impl SnapshotRequestHandler {
             SnapshotError::MismatchedBaseSlot(..) => true,
             SnapshotError::NoSnapshotArchives => true,
             SnapshotError::MismatchedSlotHash(..) => true,
+            SnapshotError::VerifySlotDeltas(..) => true,
         }
     }
 }
@@ -563,7 +560,7 @@ impl AccountsBackgroundService {
                                 // slots >= bank.slot()
                                 bank.force_flush_accounts_cache();
                             }
-                            bank.clean_accounts(true, false, last_full_snapshot_slot);
+                            bank.clean_accounts(last_full_snapshot_slot);
                             last_cleaned_block_height = bank.block_height();
                         }
                     }

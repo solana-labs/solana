@@ -19,6 +19,7 @@ use {
         snapshot_package::{
             AccountsPackage, PendingAccountsPackage, SnapshotPackage, SnapshotType,
         },
+        status_cache,
     },
     bincode::{config::Options, serialize_into},
     bzip2::bufread::BzDecoder,
@@ -28,7 +29,13 @@ use {
     rayon::prelude::*,
     regex::Regex,
     solana_measure::measure::Measure,
-    solana_sdk::{clock::Slot, genesis_config::GenesisConfig, hash::Hash, pubkey::Pubkey},
+    solana_sdk::{
+        clock::Slot,
+        genesis_config::GenesisConfig,
+        hash::Hash,
+        pubkey::Pubkey,
+        slot_history::{Check, SlotHistory},
+    },
     std::{
         cmp::Ordering,
         collections::{HashMap, HashSet},
@@ -223,8 +230,36 @@ pub enum SnapshotError {
 
     #[error("snapshot has mismatch: deserialized bank: {:?}, snapshot archive info: {:?}", .0, .1)]
     MismatchedSlotHash((Slot, Hash), (Slot, Hash)),
+
+    #[error("snapshot slot deltas are invalid: {0}")]
+    VerifySlotDeltas(#[from] VerifySlotDeltasError),
 }
 pub type Result<T> = std::result::Result<T, SnapshotError>;
+
+/// Errors that can happen in `verify_slot_deltas()`
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum VerifySlotDeltasError {
+    #[error("too many entries: {0} (max: {1})")]
+    TooManyEntries(usize, usize),
+
+    #[error("slot {0} is not a root")]
+    SlotIsNotRoot(Slot),
+
+    #[error("slot {0} is greater than bank slot {1}")]
+    SlotGreaterThanMaxRoot(Slot, Slot),
+
+    #[error("slot {0} has multiple entries")]
+    SlotHasMultipleEntries(Slot),
+
+    #[error("slot {0} was not found in slot history")]
+    SlotNotFoundInHistory(Slot),
+
+    #[error("slot {0} was in history but missing from slot deltas")]
+    SlotNotFoundInDeltas(Slot),
+
+    #[error("slot history is bad and cannot be used to verify slot deltas")]
+    BadSlotHistory,
+}
 
 /// If the validator halts in the middle of `archive_snapshot_package()`, the temporary staging
 /// directory won't be cleaned up.  Call this function to clean them up.
@@ -345,10 +380,12 @@ pub fn archive_snapshot_package(
 
         let do_archive_files = |encoder: &mut dyn Write| -> Result<()> {
             let mut archive = tar::Builder::new(encoder);
+            // Serialize the version and snapshots files before accounts so we can quickly determine the version
+            // and other bank fields. This is necessary if we want to interleave unpacking with reconstruction
+            archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
             for dir in ["snapshots", "accounts"] {
                 archive.append_dir_all(dir, staging_dir.as_ref().join(dir))?;
             }
-            archive.append_path_with_name(staging_dir.as_ref().join("version"), "version")?;
             archive.into_inner()?;
             Ok(())
         };
@@ -949,7 +986,7 @@ pub fn bank_from_snapshot_archives(
     if !bank.verify_snapshot_bank(
         test_hash_calculation,
         accounts_db_skip_shrink || !full_snapshot_archive_info.is_remote(),
-        Some(full_snapshot_archive_info.slot()),
+        full_snapshot_archive_info.slot(),
     ) && limit_load_slot_count_from_snapshot.is_none()
     {
         panic!("Snapshot bank for slot {} failed to verify", bank.slot());
@@ -1736,12 +1773,114 @@ fn rebuild_bank_from_snapshots(
         Ok(slot_deltas)
     })?;
 
+    verify_slot_deltas(slot_deltas.as_slice(), &bank)?;
+
     bank.status_cache.write().unwrap().append(&slot_deltas);
 
     bank.prepare_rewrites_for_hash();
 
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
+}
+
+/// Verify that the snapshot's slot deltas are not corrupt/invalid
+fn verify_slot_deltas(
+    slot_deltas: &[BankSlotDelta],
+    bank: &Bank,
+) -> std::result::Result<(), VerifySlotDeltasError> {
+    let info = verify_slot_deltas_structural(slot_deltas, bank.slot())?;
+    verify_slot_deltas_with_history(&info.slots, &bank.get_slot_history(), bank.slot())
+}
+
+/// Verify that the snapshot's slot deltas are not corrupt/invalid
+/// These checks are simple/structural
+fn verify_slot_deltas_structural(
+    slot_deltas: &[BankSlotDelta],
+    bank_slot: Slot,
+) -> std::result::Result<VerifySlotDeltasStructuralInfo, VerifySlotDeltasError> {
+    // there should not be more entries than that status cache's max
+    let num_entries = slot_deltas.len();
+    if num_entries > status_cache::MAX_CACHE_ENTRIES {
+        return Err(VerifySlotDeltasError::TooManyEntries(
+            num_entries,
+            status_cache::MAX_CACHE_ENTRIES,
+        ));
+    }
+
+    let mut slots_seen_so_far = HashSet::new();
+    for &(slot, is_root, ..) in slot_deltas {
+        // all entries should be roots
+        if !is_root {
+            return Err(VerifySlotDeltasError::SlotIsNotRoot(slot));
+        }
+
+        // all entries should be for slots less than or equal to the bank's slot
+        if slot > bank_slot {
+            return Err(VerifySlotDeltasError::SlotGreaterThanMaxRoot(
+                slot, bank_slot,
+            ));
+        }
+
+        // there should only be one entry per slot
+        let is_duplicate = !slots_seen_so_far.insert(slot);
+        if is_duplicate {
+            return Err(VerifySlotDeltasError::SlotHasMultipleEntries(slot));
+        }
+    }
+
+    // detect serious logic error for future careless changes. :)
+    assert_eq!(slots_seen_so_far.len(), slot_deltas.len());
+
+    Ok(VerifySlotDeltasStructuralInfo {
+        slots: slots_seen_so_far,
+    })
+}
+
+/// Computed information from `verify_slot_deltas_structural()`, that may be reused/useful later.
+#[derive(Debug, PartialEq, Eq)]
+struct VerifySlotDeltasStructuralInfo {
+    /// All the slots in the slot deltas
+    slots: HashSet<Slot>,
+}
+
+/// Verify that the snapshot's slot deltas are not corrupt/invalid
+/// These checks use the slot history for verification
+fn verify_slot_deltas_with_history(
+    slots_from_slot_deltas: &HashSet<Slot>,
+    slot_history: &SlotHistory,
+    bank_slot: Slot,
+) -> std::result::Result<(), VerifySlotDeltasError> {
+    // ensure the slot history is valid (as much as possible), since we're using it to verify the
+    // slot deltas
+    if slot_history.newest() != bank_slot {
+        return Err(VerifySlotDeltasError::BadSlotHistory);
+    }
+
+    // all slots in the slot deltas should be in the bank's slot history
+    let slot_missing_from_history = slots_from_slot_deltas
+        .iter()
+        .find(|slot| slot_history.check(**slot) != Check::Found);
+    if let Some(slot) = slot_missing_from_history {
+        return Err(VerifySlotDeltasError::SlotNotFoundInHistory(*slot));
+    }
+
+    // all slots in the history should be in the slot deltas (up to MAX_CACHE_ENTRIES)
+    // this ensures nothing was removed from the status cache
+    //
+    // go through the slot history and make sure there's an entry for each slot
+    // note: it's important to go highest-to-lowest since the status cache removes
+    // older entries first
+    // note: we already checked above that `bank_slot == slot_history.newest()`
+    let slot_missing_from_deltas = (slot_history.oldest()..=slot_history.newest())
+        .rev()
+        .filter(|slot| slot_history.check(*slot) == Check::Found)
+        .take(status_cache::MAX_CACHE_ENTRIES)
+        .find(|slot| !slots_from_slot_deltas.contains(slot));
+    if let Some(slot) = slot_missing_from_deltas {
+        return Err(VerifySlotDeltasError::SlotNotFoundInDeltas(slot));
+    }
+
+    Ok(())
 }
 
 pub(crate) fn get_snapshot_file_name(slot: Slot) -> String {
@@ -1939,7 +2078,7 @@ pub fn bank_to_full_snapshot_archive(
     assert!(bank.is_complete());
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
-    bank.clean_accounts(true, false, Some(bank.slot()));
+    bank.clean_accounts(Some(bank.slot()));
     bank.update_accounts_hash();
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
@@ -1986,7 +2125,7 @@ pub fn bank_to_incremental_snapshot_archive(
     assert!(bank.slot() > full_snapshot_slot);
     bank.squash(); // Bank may not be a root
     bank.force_flush_accounts_cache();
-    bank.clean_accounts(true, false, Some(full_snapshot_slot));
+    bank.clean_accounts(Some(full_snapshot_slot));
     bank.update_accounts_hash();
     bank.rehash(); // Bank accounts may have been manually modified by the caller
 
@@ -2043,6 +2182,7 @@ pub fn package_and_archive_full_snapshot(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
         &bank.get_accounts_hash(),
+        None,
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
@@ -2095,6 +2235,7 @@ pub fn package_and_archive_incremental_snapshot(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
         &bank.get_accounts_hash(),
+        None,
     );
 
     let snapshot_package = SnapshotPackage::new(accounts_package, bank.get_accounts_hash());
@@ -2163,13 +2304,14 @@ fn can_submit_accounts_package(
 mod tests {
     use {
         super::*,
-        crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING,
+        crate::{accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, status_cache::Status},
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
             genesis_config::create_genesis_config,
             native_token::sol_to_lamports,
             signature::{Keypair, Signer},
+            slot_history::SlotHistory,
             system_transaction,
             transaction::SanitizedTransaction,
         },
@@ -3629,7 +3771,7 @@ mod tests {
 
         // Ensure account1 has been cleaned/purged from everywhere
         bank4.squash();
-        bank4.clean_accounts(true, false, Some(full_snapshot_slot));
+        bank4.clean_accounts(Some(full_snapshot_slot));
         assert!(
             bank4.get_account_modified_slot(&key1.pubkey()).is_none(),
             "Ensure Account1 has been cleaned and purged from AccountsDb"
@@ -3826,5 +3968,156 @@ mod tests {
                 can_submit_accounts_package(&new_accounts_package, &pending_accounts_package);
             assert_eq!(expected_result, actual_result);
         }
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_structural_good() {
+        // NOTE: slot deltas do not need to be sorted
+        let slot_deltas = vec![
+            (222, true, Status::default()),
+            (333, true, Status::default()),
+            (111, true, Status::default()),
+        ];
+
+        let bank_slot = 333;
+        let result = verify_slot_deltas_structural(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(
+            result,
+            Ok(VerifySlotDeltasStructuralInfo {
+                slots: HashSet::from([111, 222, 333])
+            })
+        );
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_structural_bad_too_many_entries() {
+        let bank_slot = status_cache::MAX_CACHE_ENTRIES as Slot + 1;
+        let slot_deltas: Vec<_> = (0..bank_slot)
+            .map(|slot| (slot, true, Status::default()))
+            .collect();
+
+        let result = verify_slot_deltas_structural(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(
+            result,
+            Err(VerifySlotDeltasError::TooManyEntries(
+                status_cache::MAX_CACHE_ENTRIES + 1,
+                status_cache::MAX_CACHE_ENTRIES
+            )),
+        );
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_structural_bad_slot_not_root() {
+        let slot_deltas = vec![
+            (111, true, Status::default()),
+            (222, false, Status::default()), // <-- slot is not a root
+            (333, true, Status::default()),
+        ];
+
+        let bank_slot = 333;
+        let result = verify_slot_deltas_structural(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(result, Err(VerifySlotDeltasError::SlotIsNotRoot(222)));
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_structural_bad_slot_greater_than_bank() {
+        let slot_deltas = vec![
+            (222, true, Status::default()),
+            (111, true, Status::default()),
+            (555, true, Status::default()), // <-- slot is greater than the bank slot
+        ];
+
+        let bank_slot = 444;
+        let result = verify_slot_deltas_structural(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(
+            result,
+            Err(VerifySlotDeltasError::SlotGreaterThanMaxRoot(
+                555, bank_slot
+            )),
+        );
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_structural_bad_slot_has_multiple_entries() {
+        let slot_deltas = vec![
+            (111, true, Status::default()),
+            (222, true, Status::default()),
+            (111, true, Status::default()), // <-- slot is a duplicate
+        ];
+
+        let bank_slot = 222;
+        let result = verify_slot_deltas_structural(slot_deltas.as_slice(), bank_slot);
+        assert_eq!(
+            result,
+            Err(VerifySlotDeltasError::SlotHasMultipleEntries(111)),
+        );
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_with_history_good() {
+        let mut slots_from_slot_deltas = HashSet::default();
+        let mut slot_history = SlotHistory::default();
+        // note: slot history expects slots to be added in numeric order
+        for slot in [0, 111, 222, 333, 444] {
+            slots_from_slot_deltas.insert(slot);
+            slot_history.add(slot);
+        }
+
+        let bank_slot = 444;
+        let result =
+            verify_slot_deltas_with_history(&slots_from_slot_deltas, &slot_history, bank_slot);
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_with_history_bad_slot_history() {
+        let bank_slot = 444;
+        let result = verify_slot_deltas_with_history(
+            &HashSet::default(),
+            &SlotHistory::default(), // <-- will only have an entry for slot 0
+            bank_slot,
+        );
+        assert_eq!(result, Err(VerifySlotDeltasError::BadSlotHistory));
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_with_history_bad_slot_not_in_history() {
+        let slots_from_slot_deltas = HashSet::from([
+            0, // slot history has slot 0 added by default
+            444, 222,
+        ]);
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(444); // <-- slot history is missing slot 222
+
+        let bank_slot = 444;
+        let result =
+            verify_slot_deltas_with_history(&slots_from_slot_deltas, &slot_history, bank_slot);
+
+        assert_eq!(
+            result,
+            Err(VerifySlotDeltasError::SlotNotFoundInHistory(222)),
+        );
+    }
+
+    #[test]
+    fn test_verify_slot_deltas_with_history_bad_slot_not_in_deltas() {
+        let slots_from_slot_deltas = HashSet::from([
+            0, // slot history has slot 0 added by default
+            444, 222,
+            // <-- slot deltas is missing slot 333
+        ]);
+        let mut slot_history = SlotHistory::default();
+        slot_history.add(222);
+        slot_history.add(333);
+        slot_history.add(444);
+
+        let bank_slot = 444;
+        let result =
+            verify_slot_deltas_with_history(&slots_from_slot_deltas, &slot_history, bank_slot);
+
+        assert_eq!(
+            result,
+            Err(VerifySlotDeltasError::SlotNotFoundInDeltas(333)),
+        );
     }
 }

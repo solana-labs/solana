@@ -26,8 +26,9 @@ fn main() {
             args.remove(0);
         }
     }
-    args.push("--arch".to_string());
-    args.push("bpf".to_string());
+    let index = args.iter().position(|x| x == "--").unwrap_or(args.len());
+    args.insert(index, "bpf".to_string());
+    args.insert(index, "--arch".to_string());
     print!("cargo-build-bpf child: {}", program.display());
     for a in &args {
         print!(" {}", a);

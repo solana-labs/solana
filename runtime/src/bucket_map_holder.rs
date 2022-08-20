@@ -31,6 +31,7 @@ pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<(Slot, T)>>,
 
     pub count_buckets_flushed: AtomicUsize,
+    /// rolling 'current' age
     pub age: AtomicU8,
     pub stats: BucketMapHolderStats,
 

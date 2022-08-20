@@ -767,27 +767,41 @@ fn main() {
         .rpc_port(rpc_port)
         .add_programs_with_path(&programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
+        .unwrap_or_else(|e| {
+            println!("Error: add_accounts_from_json_files failed: {}", e);
+            exit(1);
+        })
         .add_accounts_from_directories(&accounts_from_dirs)
+        .unwrap_or_else(|e| {
+            println!("Error: add_accounts_from_directories failed: {}", e);
+            exit(1);
+        })
         .deactivate_features(&features_to_deactivate);
 
     if !accounts_to_clone.is_empty() {
-        genesis.clone_accounts(
+        if let Err(e) = genesis.clone_accounts(
             accounts_to_clone,
             cluster_rpc_client
                 .as_ref()
                 .expect("bug: --url argument missing?"),
             false,
-        );
+        ) {
+            println!("Error: clone_accounts failed: {}", e);
+            exit(1);
+        }
     }
 
     if !accounts_to_maybe_clone.is_empty() {
-        genesis.clone_accounts(
+        if let Err(e) = genesis.clone_accounts(
             accounts_to_maybe_clone,
             cluster_rpc_client
                 .as_ref()
                 .expect("bug: --url argument missing?"),
             true,
-        );
+        ) {
+            println!("Error: clone_accounts failed: {}", e);
+            exit(1);
+        }
     }
 
     if let Some(warp_slot) = warp_slot {

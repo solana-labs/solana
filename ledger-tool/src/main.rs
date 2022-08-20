@@ -955,9 +955,9 @@ fn load_bank_forks(
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
-        // Check if we have the slot data necessary to replay from starting_slot to halt_slot.
+        // Check if we have the slot data necessary to replay from starting_slot to >= halt_slot.
         //  - This will not catch the case when loading from genesis without a full slot 0.
-        if !blockstore.slots_connected(starting_slot, halt_slot) {
+        if !blockstore.slot_range_connected(starting_slot, halt_slot) {
             eprintln!(
                 "Unable to load bank forks at slot {} due to disconnected blocks.",
                 halt_slot,
@@ -2816,6 +2816,11 @@ fn main() {
                 } else {
                     value_t_or_exit!(arg_matches, "snapshot_slot", Slot)
                 };
+
+                assert!(
+                    blockstore.meta(snapshot_slot).unwrap().is_some(),
+                    "snapshot slot doesn't exist"
+                );
 
                 let ending_slot = if is_minimized {
                     let ending_slot = value_t_or_exit!(arg_matches, "ending_slot", Slot);
