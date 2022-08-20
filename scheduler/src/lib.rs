@@ -162,6 +162,13 @@ impl TaskIds {
         self.task_ids.back().map(|e| *(e.value()))
         //self.cached_heaviest.as_ref()
     }
+
+    #[inline(never)]
+    fn heaviest_task_cursor(&self) -> Option<TaskId> {
+        //self.task_ids.last()
+        self.task_ids.back()
+        //self.cached_heaviest.as_ref()
+    }
 }
 
 #[derive(Debug)]
@@ -785,7 +792,7 @@ impl ScheduleStage {
 
             let page = l.target.page_mut();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
-                if let Some(uw) = page.contended_unique_weights.heaviest_task_id() {
+                if let Some(uw) = page.contended_unique_weights.heaviest_task_cursor() {
                     address_book.uncontended_task_ids.insert(uw, ());
                 }
             }
