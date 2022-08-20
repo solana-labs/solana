@@ -3272,6 +3272,7 @@ impl Bank {
         m.stop();
         metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
         vote_rewards
+<<<<<<< HEAD
     }
 
     fn update_reward_history(
@@ -3298,6 +3299,8 @@ impl Bank {
         metrics
             .store_stake_accounts_us
             .fetch_add(m.as_us(), Relaxed);
+=======
+>>>>>>> c17f15a34f (Refactor epoch reward 2 (#27257))
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
