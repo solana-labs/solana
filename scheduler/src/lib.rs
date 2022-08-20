@@ -460,7 +460,7 @@ impl TaskQueue {
     }
 
     fn has_task(&self, unique_weight: &UniqueWeight) -> bool {
-        self.tasks.has_key(unique_weight)
+        self.tasks.includes_key(unique_weight)
     }
 
     #[inline(never)]
