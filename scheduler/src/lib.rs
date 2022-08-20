@@ -72,7 +72,7 @@ pub struct LockAttempt {
     pub target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
-    remembered: bool,
+    //remembered: bool,
 }
 
 impl LockAttempt {
@@ -81,7 +81,7 @@ impl LockAttempt {
             target,
             status: LockStatus::Succeded,
             requested_usage,
-            remembered: false,
+            //remembered: false,
         }
     }
 }
@@ -222,7 +222,7 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let LockAttempt {target, requested_usage, status, remembered} = attempt;
+        let LockAttempt {target, requested_usage, status/*, remembered*/} = attempt;
 
                 let mut page = target.page_mut();
 
@@ -288,6 +288,7 @@ impl AddressBook {
                 }
     }
 
+    /*
     #[inline(never)]
     fn remember_address_contention(page: &mut Page, unique_weight: &UniqueWeight) {
         page.contended_unique_weights.insert_task_id(*unique_weight);
@@ -299,6 +300,7 @@ impl AddressBook {
             a.target.page_ref().contended_unique_weights.remove_task_id(unique_weight);
         }
     }
+    */
 
     fn reset_lock(&mut self, attempt: &mut LockAttempt, after_execution: bool) -> bool {
         match attempt.status {
@@ -777,8 +779,8 @@ impl ScheduleStage {
     ) {
         for l in lock_attempts {
             if from_runnable {
-                AddressBook::remember_address_contention(&mut l.target.page_mut(), unique_weight);
-                l.remembered = true;
+                //AddressBook::remember_address_contention(&mut l.target.page_mut(), unique_weight);
+                //l.remembered = true;
             }
             address_book.reset_lock(l, false);
             //if let Some(uw) = l.target.page().contended_unique_weights.last() {
