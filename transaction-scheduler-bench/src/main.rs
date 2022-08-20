@@ -456,7 +456,7 @@ fn send_packets(
             for v in vv {
                 let p = solana_scheduler::get_transaction_priority_details(&v.0);
                 for lock_attempt in v.1.iter() {
-                    lock_attempt.target.page_ref()
+                    lock_attempt.target.page_ref().contended_unique_weights.insert_task_id(p);
                 }
                 packet_batch_sender.send(solana_scheduler::Multiplexed::FromPrevious((p, v))).unwrap();
             }
