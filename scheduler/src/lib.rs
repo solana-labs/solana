@@ -176,7 +176,7 @@ pub struct Page {
     current_usage: Usage,
     next_usage: Usage,
     pub contended_unique_weights: TaskIds,
-    provional_task_ids: WeightedTaskIds,
+    provisional_task_ids: WeightedTaskIds,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
@@ -188,7 +188,7 @@ impl Page {
             current_usage,
             next_usage: Usage::Unused,
             contended_unique_weights: Default::default(),
-            provional_task_ids: Default::default(),
+            provisional_task_ids: Default::default(),
         }
     }
 
@@ -210,7 +210,7 @@ type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
-    runnable_provional_task_ids: WeightedTaskIds,
+    runnable_provisional_task_ids: WeightedTaskIds,
     gurantee_timers: std::collections::HashMap<UniqueWeight, usize>, 
 }
 
@@ -488,7 +488,7 @@ fn attempt_lock_for_execution<'a>(
 ) -> (usize, usize, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
-    let mut provional_count = 0;
+    let mut provisional_count = 0;
 
     for attempt in placeholder_attempts.iter_mut() {
         AddressBook::attempt_lock_address(from_runnable, prefer_immediate, unique_weight, attempt);
@@ -498,12 +498,12 @@ fn attempt_lock_for_execution<'a>(
                 unlockable_count += 1;
             },
             LockStatus::Guaranteed => {
-                provional_count += 1;
+                provisional_count += 1;
             },
         }
     }
 
-    (unlockable_count, provional_count, placeholder_attempts)
+    (unlockable_count, provisional_count, placeholder_attempts)
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
@@ -642,8 +642,8 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         prefer_immediate: bool,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        if let Some(a) = address_book.runnable_provional_task_ids.pop_last() {
-            trace!("expediate pop from provisional queue [rest: {}]", address_book.runnable_provional_task_ids.len());
+        if let Some(a) = address_book.runnable_provisional_task_ids.pop_last() {
+            trace!("expediate pop from provisional queue [rest: {}]", address_book.runnable_provisional_task_ids.len());
             let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
             let ll = std::mem::take(&mut task.tx.1);
@@ -663,7 +663,7 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (unlockable_count, provional_count, mut populated_lock_attempts) = attempt_lock_for_execution(
+            let (unlockable_count, provisional_count, mut populated_lock_attempts) = attempt_lock_for_execution(
                 from_runnable,
                 prefer_immediate,
                 address_book,
@@ -685,13 +685,13 @@ impl ScheduleStage {
                 next_task.contention_count += 1;
 
                 if from_runnable {
-                    trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provional_count, lock_count);
+                    trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
                     reborrowed_contended_queue
                         .unwrap()
                         .add_to_schedule(*queue_entry.key(), queue_entry.remove());
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
-                    trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provional_count, lock_count, &unique_weight, next_task.contention_count);
+                    trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
                     //address_book.uncontended_task_ids.clear();
                 }
 
@@ -700,15 +700,15 @@ impl ScheduleStage {
                 } else {
                     return None;
                 }
-            } else if provional_count > 0 {
+            } else if provisional_count > 0 {
                 assert!(!from_runnable);
                 let lock_count = populated_lock_attempts.len();
-                trace!("provisional exec: [{}/{}]", provional_count, lock_count);
-                Self::finalize_lock_for_provional_execution(
+                trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
+                Self::finalize_lock_for_provisional_execution(
                     address_book,
                     &unique_weight,
                     &mut populated_lock_attempts,
-                    provional_count,
+                    provisional_count,
                 );
                 std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
 
@@ -746,17 +746,17 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn finalize_lock_for_provional_execution(
+    fn finalize_lock_for_provisional_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut Vec<LockAttempt>,
-        provional_count: usize,
+        provisional_count: usize,
     ) {
         for mut l in lock_attempts {
             //AddressBook::forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Guaranteed => {
-                    l.target.page_mut().provional_task_ids.insert(*unique_weight, ());
+                    l.target.page_mut().provisional_task_ids.insert(*unique_weight, ());
                 }
                 LockStatus::Succeded => {
                     // do nothing
@@ -766,7 +766,7 @@ impl ScheduleStage {
                 }
             }
         }
-        address_book.gurantee_timers.insert(*unique_weight, provional_count);
+        address_book.gurantee_timers.insert(*unique_weight, provisional_count);
         trace!("gurantee_timers: {}", address_book.gurantee_timers.len());
     }
 
@@ -815,7 +815,7 @@ impl ScheduleStage {
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for task_id in std::mem::take(&mut page.provional_task_ids).keys() {
+                for task_id in std::mem::take(&mut page.provisional_task_ids).keys() {
                     match address_book.gurantee_timers.entry(*task_id) {
                         std::collections::hash_map::Entry::Occupied(mut timer_entry) => {
                             let count = timer_entry.get_mut();
@@ -823,7 +823,7 @@ impl ScheduleStage {
                             if *count == 0 {
                                 trace!("provisional lock decrease: {} => {} (!)", *count + 1, *count);
                                 timer_entry.remove();
-                                address_book.runnable_provional_task_ids.insert(*task_id, ());
+                                address_book.runnable_provisional_task_ids.insert(*task_id, ());
                             } else {
                                 trace!("provisional lock decrease: {} => {}", *count + 1, *count);
                             }
