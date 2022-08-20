@@ -738,7 +738,7 @@ impl ScheduleStage {
             AddressBook::forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Guaranteed => {
-                    l.target.page().guaranteed_task_ids.insert(*unique_weight, ());
+                    l.target.page_mut().guaranteed_task_ids.insert(*unique_weight, ());
                 }
                 LockStatus::Succeded => {
                     // do nothing
@@ -761,7 +761,7 @@ impl ScheduleStage {
     ) {
         for l in lock_attempts {
             if from_runnable {
-                AddressBook::remember_address_contention(&mut l.target.page(), unique_weight);
+                AddressBook::remember_address_contention(&mut l.target.page_mut(), unique_weight);
                 l.remembered = true;
             }
             address_book.reset_lock(l, false);
@@ -778,7 +778,7 @@ impl ScheduleStage {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended_while_queued = address_book.reset_lock(&mut l, true);
 
-            let page = l.target.page();
+            let page = l.target.page_mut();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
                 if let Some(uw) = page.contended_unique_weights.last() {
                     address_book.uncontended_task_ids.insert(uw, ());
