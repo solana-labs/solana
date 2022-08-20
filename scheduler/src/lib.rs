@@ -788,12 +788,12 @@ impl ScheduleStage {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.guaranteed_task_ids).keys() {
                     match address_book.gurantee_timers.entry(*task_id) {
-                        std::collections::hash_map::Entry::Occupied(mut entry) => {
-                            let count = entry.get_mut();
+                        std::collections::hash_map::Entry::Occupied(mut timer_entry) => {
+                            let count = timer_entry.get_mut();
                             *count = count.checked_sub(1).unwrap();
                             if *count == 0 {
                                 trace!("guaranteed lock decrease: {} => {} (!)", *count + 1, *count);
-                                entry.remove();
+                                timer_entry.remove();
                                 address_book.runnable_guaranteed_task_ids.insert(*task_id, ());
                             } else {
                                 trace!("guaranteed lock decrease: {} => {}", *count + 1, *count);
