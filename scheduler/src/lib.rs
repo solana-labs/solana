@@ -459,6 +459,10 @@ impl TaskQueue {
         }
     }
 
+    fn has_task(&self, unique_weight: &UniqueWeight) -> bool {
+        self.tasks.has_key(unique_weight)
+    }
+
     #[inline(never)]
     fn heaviest_entry_to_execute(
         &mut self,
