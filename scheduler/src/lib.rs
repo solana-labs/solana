@@ -213,7 +213,7 @@ impl AddressBook {
     ) {
         let LockAttempt {target, requested_usage, status, remembered} = attempt;
 
-                let mut page = unsafe { MyRcInner::get_mut_unchecked(&mut target.0) };
+                let mut page = target.page();
 
                 match page.current_usage {
                     Usage::Unused => {
