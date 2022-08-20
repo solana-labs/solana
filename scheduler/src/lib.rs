@@ -126,7 +126,7 @@ pub struct TaskIds {
 
 impl TaskIds {
     #[inline(never)]
-    fn insert(&self, u: UniqueWeight) {
+    fn insert_task_id(&self, u: TaskId) {
         /*
         match self.cached_heaviest {
             Some(c) if u > c => { self.cached_heaviest = Some(u) },
@@ -139,7 +139,7 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    pub fn remove(&self, u: &UniqueWeight) {
+    pub fn remove_task_id(&self, u: &TaskId) {
         let a = self.task_ids.remove(u);
         /*
         match self.cached_heaviest {
@@ -152,12 +152,12 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    fn is_empty(&self) -> bool {
+    fn has_no_task_id(&self) -> bool {
         self.task_ids.is_empty()
     }
 
     #[inline(never)]
-    fn last(&self) -> Option<UniqueWeight> {
+    fn heaviest_task_id(&self) -> Option<TaskId> {
         //self.task_ids.last()
         self.task_ids.back().map(|e| *(e.value()))
         //self.cached_heaviest.as_ref()
