@@ -283,7 +283,7 @@ impl AddressBook {
 
     #[inline(never)]
     fn remember_address_contention(page: &mut Page, unique_weight: &UniqueWeight) {
-        page.contended_unique_weights.insert(*unique_weight);
+        page.contended_unique_weights.insert_task_id(*unique_weight);
     }
 
     #[inline(never)]
