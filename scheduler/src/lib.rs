@@ -152,8 +152,8 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    fn has_no_task_id(&self) -> bool {
-        self.task_ids.is_empty()
+    fn has_task_ids(&self) -> bool {
+        !self.task_ids.is_empty()
     }
 
     #[inline(never)]
@@ -343,7 +343,7 @@ impl AddressBook {
 
         if newly_uncontended {
             page.current_usage = Usage::Unused;
-            if !page.contended_unique_weights.has_no_task_id() {
+            if page.contended_unique_weights.has_task_ids() {
                 still_queued = true;
             }
         }
