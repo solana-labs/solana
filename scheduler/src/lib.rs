@@ -55,7 +55,7 @@ impl PageRc {
         unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
     }
 
-    fn page_ref(&self) -> &Page {
+    pub fn page_ref(&self) -> &Page {
         <MyRcInner as std::borrow::Borrow<_>>::borrow(&self.0)
     }
 }
