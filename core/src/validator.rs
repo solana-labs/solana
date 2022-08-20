@@ -454,14 +454,7 @@ impl Validator {
         info!("Cleaning accounts paths..");
         *start_progress.write().unwrap() = ValidatorStartProgress::CleaningAccounts;
         let mut start = Measure::start("clean_accounts_paths");
-        for accounts_path in &config.account_paths {
-            cleanup_accounts_path(accounts_path);
-        }
-        if let Some(ref shrink_paths) = config.account_shrink_paths {
-            for accounts_path in shrink_paths {
-                cleanup_accounts_path(accounts_path);
-            }
-        }
+        cleanup_accounts_paths(config);
         start.stop();
         info!("done. {}", start);
 
@@ -2058,13 +2051,56 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
     online_stake_percentage as u64
 }
 
-// Cleanup anything that looks like an accounts append-vec
-fn cleanup_accounts_path(account_path: &std::path::Path) {
-    if let Err(e) = std::fs::remove_dir_all(account_path) {
-        warn!(
-            "encountered error removing accounts path: {:?}: {}",
-            account_path, e
+/// Delete directories/files asynchronously to avoid blocking on it.
+/// Fist, in sync context, rename the original path to *_deleted,
+/// then spawn a thread to delete the renamed path.
+/// If the process is killed and the deleting process is not done,
+/// the leftover path will be deleted in the next process life, so
+/// there is no file space leaking.
+fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+    let mut path_delete = PathBuf::new();
+    path_delete.push(path);
+    path_delete.set_file_name(format!(
+        "{}{}",
+        path_delete.file_name().unwrap().to_str().unwrap(),
+        "_to_be_deleted"
+    ));
+
+    if path_delete.exists() {
+        debug!("{} exists, delete it first.", path_delete.display());
+        std::fs::remove_dir_all(&path_delete).unwrap();
+    }
+
+    if !path.as_ref().exists() {
+        info!(
+            "move_and_async_delete_path: path {} does not exist",
+            path.as_ref().display()
         );
+        return;
+    }
+
+    std::fs::rename(&path, &path_delete).unwrap();
+
+    Builder::new()
+        .name("delete_path".to_string())
+        .spawn(move || {
+            std::fs::remove_dir_all(&path_delete).unwrap();
+            info!(
+                "Cleaning path {} done asynchronously in a spawned thread",
+                path_delete.display()
+            );
+        })
+        .unwrap();
+}
+
+fn cleanup_accounts_paths(config: &ValidatorConfig) {
+    for accounts_path in &config.account_paths {
+        move_and_async_delete_path(accounts_path);
+    }
+    if let Some(ref shrink_paths) = config.account_shrink_paths {
+        for accounts_path in shrink_paths {
+            move_and_async_delete_path(accounts_path);
+        }
     }
 }
 
