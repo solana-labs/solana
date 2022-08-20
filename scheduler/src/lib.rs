@@ -126,7 +126,7 @@ pub struct TaskIds {
 
 impl TaskIds {
     #[inline(never)]
-    fn insert_task_id(&self, u: TaskId) {
+    pub fn insert_task_id(&self, u: TaskId) {
         /*
         match self.cached_heaviest {
             Some(c) if u > c => { self.cached_heaviest = Some(u) },
