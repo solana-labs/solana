@@ -56,7 +56,7 @@ impl PageRc {
     }
 
     fn page_ref(&self) -> &Page {
-        <MyRcInner<_> as std::borrow::Borrow<_>>::borrow(&self.0)
+        <MyRcInner as std::borrow::Borrow<_>>::borrow(&self.0)
     }
 }
 
