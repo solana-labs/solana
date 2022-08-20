@@ -786,7 +786,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: Vec<LockAttempt>) {
+    fn unlock_after_execution(address_book: &mut AddressBook, contended_queue: &TaskQueue, lock_attempts: Vec<LockAttempt>) {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended_while_queued = address_book.reset_lock(&mut l, true);
 
