@@ -852,7 +852,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, contended_queue: &ContendedQueue) {
+    fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, contended_queue: &TaskQueue) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         // do par()-ly?
         Self::unlock_after_execution(address_book, contended_queue, lock_attempts);
