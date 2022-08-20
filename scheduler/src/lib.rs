@@ -210,7 +210,7 @@ type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
-    runnable_provisional_task_ids: WeightedTaskIds,
+    fulfilled_provisional_task_ids: WeightedTaskIds,
     provisioning_trackers: std::collections::HashMap<UniqueWeight, usize>, 
 }
 
@@ -642,8 +642,8 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         prefer_immediate: bool,
     ) -> Option<(UniqueWeight, Task, Vec<LockAttempt>)> {
-        if let Some(a) = address_book.runnable_provisional_task_ids.pop_last() {
-            trace!("expediate pop from provisional queue [rest: {}]", address_book.runnable_provisional_task_ids.len());
+        if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
+            trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
             let ll = std::mem::take(&mut task.tx.1);
@@ -817,13 +817,13 @@ impl ScheduleStage {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.provisional_task_ids).keys() {
                     match address_book.provisioning_trackers.entry(*task_id) {
-                        std::collections::hash_map::Entry::Occupied(mut timer_entry) => {
-                            let count = timer_entry.get_mut();
+                        std::collections::hash_map::Entry::Occupied(mut tracker_entry) => {
+                            let count = tracker_entry.get_mut();
                             *count = count.checked_sub(1).unwrap();
                             if *count == 0 {
                                 trace!("provisional lock decrease: {} => {} (!)", *count + 1, *count);
-                                timer_entry.remove();
-                                address_book.runnable_provisional_task_ids.insert(*task_id, ());
+                                tracker_entry.remove();
+                                address_book.fulfilled_provisional_task_ids.insert(*task_id, ());
                             } else {
                                 trace!("provisional lock decrease: {} => {}", *count + 1, *count);
                             }
