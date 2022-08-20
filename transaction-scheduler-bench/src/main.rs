@@ -347,7 +347,7 @@ fn handle_transaction_batch(
     let uq = transaction_batch.unique_weight;
     for lock_attempt in transaction_batch.lock_attempts.iter() {
         let page = lock_attempt.target.page_ref();
-        page.contended_unique_weights.remove(&uq);
+        page.contended_unique_weights.remove_task_id(&uq);
     }
     completed_transaction_sender.0
         .send(transaction_batch)
