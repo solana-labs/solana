@@ -139,7 +139,7 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    pub fn remove(&mut self, u: &UniqueWeight) {
+    pub fn remove(&self, u: &UniqueWeight) {
         let a = self.task_ids.remove(u);
         /*
         match self.cached_heaviest {
