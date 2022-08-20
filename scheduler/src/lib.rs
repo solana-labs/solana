@@ -137,7 +137,7 @@ impl TaskIds {
         let a = self.task_ids.remove(u);
         match self.cached_heaviest {
             //Some(ref c) if u == c => { self.cached_heaviest = self.task_ids.last().copied() },
-            Some(ref c) if u == c => { self.cached_heaviest = self.task_ids.back().value() },
+            Some(ref c) if u == c => { self.cached_heaviest = self.task_ids.back().map(|e| e.value()) },
             _ => {},
         }
         a;
