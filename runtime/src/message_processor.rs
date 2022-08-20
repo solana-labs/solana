@@ -680,6 +680,6 @@ mod tests {
                 InstructionError::Custom(0xbabb1e)
             ))
         );
-        assert_eq!(transaction_context.get_instruction_trace().len(), 2);
+        assert_eq!(transaction_context.get_instruction_trace_length(), 2);
     }
 }

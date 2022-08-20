@@ -497,21 +497,20 @@ mod tests {
                 &program_indices,
             )
             .instruction_accounts;
-
-            let transaction_context =
-                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             let instruction_data = vec![];
-            let instruction_context = InstructionContext::new(
-                0,
-                0,
-                &program_indices,
-                &instruction_accounts,
-                &instruction_data,
-            );
+
+            let mut transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
+            transaction_context
+                .push(&program_indices, &instruction_accounts, &instruction_data)
+                .unwrap();
+            let instruction_context = transaction_context
+                .get_instruction_context_at_index_in_trace(0)
+                .unwrap();
 
             let serialization_result = serialize_parameters(
                 &transaction_context,
-                &instruction_context,
+                instruction_context,
                 should_cap_ix_accounts,
             );
             assert_eq!(
