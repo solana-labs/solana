@@ -69,7 +69,7 @@ enum LockStatus {
 
 #[derive(Clone, Debug)]
 pub struct LockAttempt {
-    target: PageRc,
+    pub target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
     remembered: bool,
