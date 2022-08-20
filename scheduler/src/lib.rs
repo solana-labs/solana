@@ -315,7 +315,7 @@ impl AddressBook {
         let mut newly_uncontended = false;
         let mut still_queued = false;
 
-        let mut page = attempt.target.page();
+        let mut page = attempt.target.page_mut();
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match &attempt.requested_usage {
@@ -349,7 +349,7 @@ impl AddressBook {
 
     #[inline(never)]
     fn cancel(&mut self, attempt: &mut LockAttempt) {
-        let mut page = attempt.target.page();
+        let mut page = attempt.target.page_mut();
 
         match page.next_usage {
             Usage::Unused => {
