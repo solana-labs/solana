@@ -784,7 +784,7 @@ impl ScheduleStage {
 
             let page = l.target.page_mut();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
-                if let Some(uw) = page.contended_unique_weights.last() {
+                if let Some(uw) = page.contended_unique_weights.heaviest_task_id() {
                     address_book.uncontended_task_ids.insert(uw, ());
                 }
             }
