@@ -2705,13 +2705,11 @@ impl Bank {
             "distributed inflation: {} (rounded from: {})",
             validator_rewards_paid, validator_rewards
         );
-        // TODO: staked_nodes forces an eager stakes calculation. remove it!
-        let (num_stake_accounts, num_vote_accounts, num_staked_nodes) = {
+        let (num_stake_accounts, num_vote_accounts) = {
             let stakes = self.stakes_cache.stakes();
             (
                 stakes.stake_delegations().len(),
                 stakes.vote_accounts().len(),
-                stakes.staked_nodes().len(),
             )
         };
         self.capitalization
@@ -2738,7 +2736,6 @@ impl Bank {
             ("post_capitalization", self.capitalization(), i64),
             ("num_stake_accounts", num_stake_accounts as i64, i64),
             ("num_vote_accounts", num_vote_accounts as i64, i64),
-            ("num_staked_nodes", num_staked_nodes as i64, i64)
         );
     }
 
@@ -2776,9 +2773,26 @@ impl Bank {
                         None => {
                             invalid_stake_keys
                                 .insert(*stake_pubkey, InvalidCacheEntryReason::Missing);
+                            invalid_cached_stake_accounts.fetch_add(1, Relaxed);
                             return;
                         }
                     };
+                    if cached_stake_account.account() != &stake_account {
+                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
+                        let cached_stake_account = cached_stake_account.account();
+                        if cached_stake_account.lamports() == stake_account.lamports()
+                            && cached_stake_account.data() == stake_account.data()
+                            && cached_stake_account.owner() == stake_account.owner()
+                            && cached_stake_account.executable() == stake_account.executable()
+                        {
+                            invalid_cached_stake_accounts_rent_epoch.fetch_add(1, Relaxed);
+                        } else {
+                            debug!(
+                                "cached stake account mismatch: {}: {:?}, {:?}",
+                                stake_pubkey, stake_account, cached_stake_account
+                            );
+                        }
+                    }
                     let stake_account = match StakeAccount::<()>::try_from(stake_account) {
                         Ok(stake_account) => stake_account,
                         Err(stake_account::Error::InvalidOwner { .. }) => {
@@ -2801,33 +2815,6 @@ impl Bank {
                             return;
                         }
                     };
-                    if cached_stake_account != &stake_account {
-                        invalid_cached_stake_accounts.fetch_add(1, Relaxed);
-                        let mut cached_account = cached_stake_account.account().clone();
-                        // We could have collected rent on the loaded account already in this new epoch (we could be at partition_index 12, for example).
-                        // So, we may need to adjust the rent_epoch of the cached account. So, update rent_epoch and compare just the accounts.
-                        ExpectedRentCollection::maybe_update_rent_epoch_on_load(
-                            &mut cached_account,
-                            &SlotInfoInEpoch::new_small(self.slot()),
-                            &SlotInfoInEpoch::new_small(self.slot()),
-                            self.epoch_schedule(),
-                            self.rent_collector(),
-                            stake_pubkey,
-                            &self.rewrites_skipped_this_slot,
-                        );
-                        if &cached_account != stake_account.account() {
-                            info!(
-                                "cached stake account mismatch: {}: {:?}, {:?}",
-                                stake_pubkey,
-                                cached_account,
-                                stake_account.account()
-                            );
-                        } else {
-                            // track how many of 'invalid_cached_stake_accounts' were due to rent_epoch changes
-                            // subtract these to find real invalid cached accounts
-                            invalid_cached_stake_accounts_rent_epoch.fetch_add(1, Relaxed);
-                        }
-                    }
                     let stake_delegation = (*stake_pubkey, stake_account);
                     let mut vote_delegations = if let Some(vote_delegations) =
                         vote_with_stake_delegations_map.get_mut(vote_pubkey)
@@ -2837,16 +2824,12 @@ impl Bank {
                         let cached_vote_account = cached_vote_accounts.get(vote_pubkey);
                         let vote_account = match self.get_account_with_fixed_root(vote_pubkey) {
                             Some(vote_account) => {
-                                match cached_vote_account {
-                                    Some(cached_vote_account)
-                                        if cached_vote_account == &vote_account => {}
-                                    _ => {
-                                        invalid_cached_vote_accounts.fetch_add(1, Relaxed);
-                                    }
-                                };
                                 if vote_account.owner() != &solana_vote_program::id() {
                                     invalid_vote_keys
                                         .insert(*vote_pubkey, InvalidCacheEntryReason::WrongOwner);
+                                    if cached_vote_account.is_some() {
+                                        invalid_cached_vote_accounts.fetch_add(1, Relaxed);
+                                    }
                                     return;
                                 }
                                 vote_account
@@ -2868,9 +2851,18 @@ impl Bank {
                         } else {
                             invalid_vote_keys
                                 .insert(*vote_pubkey, InvalidCacheEntryReason::BadState);
+                            if cached_vote_account.is_some() {
+                                invalid_cached_vote_accounts.fetch_add(1, Relaxed);
+                            }
                             return;
                         };
-
+                        match cached_vote_account {
+                            Some(cached_vote_account)
+                                if cached_vote_account.account() == &vote_account => {}
+                            _ => {
+                                invalid_cached_vote_accounts.fetch_add(1, Relaxed);
+                            }
+                        };
                         vote_with_stake_delegations_map
                             .entry(*vote_pubkey)
                             .or_insert_with(|| VoteWithStakeDelegations {
