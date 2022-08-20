@@ -117,19 +117,17 @@ pub enum RequestedUsage {
 pub struct TaskIds {
     //task_ids: std::collections::BTreeSet<UniqueWeight>,
     task_ids: crossbeam_skiplist::SkipSet<UniqueWeight>,
-    //cached_heaviest: Option<UniqueWeight>,
+    cached_heaviest: Option<UniqueWeight>,
 }
 
 impl TaskIds {
     #[inline(never)]
     fn insert(&mut self, u: UniqueWeight) {
-        /*
         match self.cached_heaviest {
             Some(c) if u > c => { self.cached_heaviest = Some(u) },
             None => { self.cached_heaviest = Some(u); }
             _ => {},
         }
-        */
              
         self.task_ids.insert(u);
     }
@@ -137,13 +135,11 @@ impl TaskIds {
     #[inline(never)]
     fn remove(&mut self, u: &UniqueWeight) {
         let a = self.task_ids.remove(u);
-        /*
         match self.cached_heaviest {
             //Some(ref c) if u == c => { self.cached_heaviest = self.task_ids.last().copied() },
             Some(ref c) if u == c => { self.cached_heaviest = self.task_ids.back().map(|e| *(e.value())) },
             _ => {},
         }
-        */
         a;
     }
 
@@ -153,10 +149,9 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    fn last(&self) -> Option<UniqueWeight> {
+    fn last(&self) -> Option<&UniqueWeight> {
         //self.task_ids.last()
-        self.task_ids.back().map(|e| *(e.value()))
-        //self.cached_heaviest.as_ref()
+        self.cached_heaviest.as_ref()
     }
 }
 
@@ -781,7 +776,7 @@ impl ScheduleStage {
             let page = l.target.page();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
                 if let Some(uw) = page.contended_unique_weights.last() {
-                    address_book.uncontended_task_ids.insert(uw, ());
+                    address_book.uncontended_task_ids.insert(*uw, ());
                 }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
