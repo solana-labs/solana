@@ -12,7 +12,7 @@ publish = true
 
 [dependencies]
 clap = "2.33.1"
-libc = "0.2.129"
+libc = "0.2.131"
 log = "0.4.17"
 solana-logger = { path = "../logger", version = "=1.12.0" }
 solana-version = { path = "../version", version = "=1.12.0" }
@@ -20,7 +20,7 @@ solana-version = { path = "../version", version = "=1.12.0" }
 [target."cfg(unix)".dependencies]
 unix_socket2 = "0.5.4"
 users = "0.10.0"
-nix = "0.24.2"
+nix = "0.25.0"
 sysctl = "0.4.4"
 
 [lib]

@@ -834,7 +834,6 @@ fn check_authorized_program(
     instruction_data: &[u8],
     invoke_context: &InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    #[allow(clippy::blocks_in_if_conditions)]
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
@@ -842,12 +841,9 @@ fn check_authorized_program(
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_close_instruction(instruction_data)))
-        || (invoke_context
-            .feature_set
-            .is_active(&prevent_calling_precompiles_as_programs::id())
-            && is_precompile(program_id, |feature_id: &Pubkey| {
-                invoke_context.feature_set.is_active(feature_id)
-            }))
+        || is_precompile(program_id, |feature_id: &Pubkey| {
+            invoke_context.feature_set.is_active(feature_id)
+        })
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }

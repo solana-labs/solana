@@ -1626,6 +1626,7 @@ mod tests {
             .unwrap();
 
         // super fun time; callback chooses to .clean_accounts(None) or not
+        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
         callback(&*bank);
 
         // create a normal account at the same pubkey as the zero-lamports account
@@ -1651,9 +1652,9 @@ mod tests {
             bank.squash();
             bank.force_flush_accounts_cache();
             // do clean and assert that it actually did its job
+            assert_eq!(4, bank.get_snapshot_storages(None).len());
+            bank.clean_accounts(None);
             assert_eq!(3, bank.get_snapshot_storages(None).len());
-            bank.clean_accounts(false, false, None);
-            assert_eq!(2, bank.get_snapshot_storages(None).len());
         });
     }
 

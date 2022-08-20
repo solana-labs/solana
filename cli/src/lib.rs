@@ -23,6 +23,7 @@ extern crate const_format;
 
 extern crate serde_derive;
 
+pub mod address_lookup_table;
 pub mod checks;
 pub mod clap_app;
 pub mod cli;

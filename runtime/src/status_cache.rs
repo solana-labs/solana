@@ -137,7 +137,7 @@ impl<T: Serialize + Clone> StatusCache<T> {
         if let Some(stored_forks) = keymap.get(key_slice) {
             let res = stored_forks
                 .iter()
-                .find(|(f, _)| ancestors.get(f) || self.roots.get(f).is_some())
+                .find(|(f, _)| ancestors.contains_key(f) || self.roots.get(f).is_some())
                 .cloned();
             if res.is_some() {
                 return res;

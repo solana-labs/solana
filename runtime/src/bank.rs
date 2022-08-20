@@ -120,7 +120,7 @@ use {
         hash::{extend_and_hash, hashv, Hash},
         incinerator,
         inflation::Inflation,
-        instruction::CompiledInstruction,
+        instruction::{CompiledInstruction, TRANSACTION_LEVEL_STACK_HEIGHT},
         lamports::LamportsError,
         message::{AccountKeys, SanitizedMessage},
         native_loader,
@@ -143,8 +143,7 @@ use {
             TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
         transaction_context::{
-            ExecutionRecord, InstructionTrace, TransactionAccount, TransactionContext,
-            TransactionReturnData,
+            ExecutionRecord, TransactionAccount, TransactionContext, TransactionReturnData,
         },
     },
     solana_stake_program::stake_state::{
@@ -234,6 +233,25 @@ impl RentDebit {
             commission: None, // Not applicable
         })
     }
+}
+
+/// Incremental snapshots only calculate their accounts hash based on the account changes WITHIN the incremental slot range.
+/// So, we need to keep track of the full snapshot expected accounts hash results.
+/// We also need to keep track of the hash and capitalization specific to the incremental snapshot slot range.
+/// The capitalization we calculate for the incremental slot will NOT be consistent with the bank's capitalization.
+/// It is not feasible to calculate a capitalization delta that is correct given just incremental slots account data and the full snapshot's capitalization.
+#[derive(Serialize, Deserialize, AbiExample, Clone, Debug, Default, PartialEq, Eq)]
+pub struct BankIncrementalSnapshotPersistence {
+    /// slot of full snapshot
+    pub full_slot: Slot,
+    /// accounts hash from the full snapshot
+    pub full_hash: Hash,
+    /// capitalization from the full snapshot
+    pub full_capitalization: u64,
+    /// hash of the accounts in the incremental snapshot slot range, including zero-lamport accounts
+    pub incremental_hash: Hash,
+    /// capitalization of the accounts in the incremental snapshot slot range
+    pub incremental_capitalization: u64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -743,40 +761,50 @@ pub type InnerInstructions = Vec<CompiledInstruction>;
 /// a transaction
 pub type InnerInstructionsList = Vec<InnerInstructions>;
 
-/// Convert from an InstructionTrace to InnerInstructionsList
+/// Extract the InnerInstructionsList from a TransactionContext
 pub fn inner_instructions_list_from_instruction_trace(
-    instruction_trace: &InstructionTrace,
+    transaction_context: &TransactionContext,
 ) -> InnerInstructionsList {
-    instruction_trace
-        .iter()
-        .map(|inner_instructions_trace| {
-            inner_instructions_trace
-                .iter()
-                .skip(1)
-                .map(|instruction_context| {
-                    CompiledInstruction::new_from_raw_parts(
-                        instruction_context
-                            .get_index_of_program_account_in_transaction(
-                                instruction_context
-                                    .get_number_of_program_accounts()
-                                    .saturating_sub(1),
-                            )
-                            .unwrap_or_default() as u8,
-                        instruction_context.get_instruction_data().to_vec(),
-                        (0..instruction_context.get_number_of_instruction_accounts())
-                            .map(|instruction_account_index| {
-                                instruction_context
-                                    .get_index_of_instruction_account_in_transaction(
-                                        instruction_account_index,
-                                    )
-                                    .unwrap_or_default() as u8
-                            })
-                            .collect(),
-                    )
-                })
-                .collect()
-        })
-        .collect()
+    debug_assert!(transaction_context
+        .get_instruction_context_at_index_in_trace(0)
+        .map(|instruction_context| instruction_context.get_stack_height()
+            == TRANSACTION_LEVEL_STACK_HEIGHT)
+        .unwrap_or(true));
+    let mut outer_instructions = Vec::new();
+    for index_in_trace in 0..transaction_context.get_instruction_trace_length() {
+        if let Ok(instruction_context) =
+            transaction_context.get_instruction_context_at_index_in_trace(index_in_trace)
+        {
+            if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT {
+                outer_instructions.push(Vec::new());
+            } else if let Some(inner_instructions) = outer_instructions.last_mut() {
+                inner_instructions.push(CompiledInstruction::new_from_raw_parts(
+                    instruction_context
+                        .get_index_of_program_account_in_transaction(
+                            instruction_context
+                                .get_number_of_program_accounts()
+                                .saturating_sub(1),
+                        )
+                        .unwrap_or_default() as u8,
+                    instruction_context.get_instruction_data().to_vec(),
+                    (0..instruction_context.get_number_of_instruction_accounts())
+                        .map(|instruction_account_index| {
+                            instruction_context
+                                .get_index_of_instruction_account_in_transaction(
+                                    instruction_account_index,
+                                )
+                                .unwrap_or_default() as u8
+                        })
+                        .collect(),
+                ));
+            } else {
+                debug_assert!(false);
+            }
+        } else {
+            debug_assert!(false);
+        }
+    }
+    outer_instructions
 }
 
 /// A list of log messages emitted during a transaction
@@ -976,6 +1004,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) epoch_stakes: HashMap<Epoch, EpochStakes>,
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
+    pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -1083,6 +1112,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_on_chain: _,
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
+            incremental_snapshot_persistence: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this ParitalEq is accordingly updated.
@@ -1336,6 +1366,8 @@ pub struct Bank {
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
+
+    pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 }
 
 struct VoteWithStakeDelegations {
@@ -1466,6 +1498,7 @@ impl Bank {
 
     fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
+            incremental_snapshot_persistence: None,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: BankRc::new(accounts, Slot::default()),
             status_cache: Arc::<RwLock<BankStatusCache>>::default(),
@@ -1765,6 +1798,7 @@ impl Bank {
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
+            incremental_snapshot_persistence: None,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc,
             status_cache,
@@ -2126,6 +2160,7 @@ impl Bank {
         }
         let feature_set = new();
         let mut bank = Self {
+            incremental_snapshot_persistence: fields.incremental_snapshot_persistence,
             rewrites_skipped_this_slot: Rewrites::default(),
             rc: bank_rc,
             status_cache: new(),
@@ -3185,7 +3220,6 @@ impl Bank {
         self.store_stake_accounts(&stake_rewards, metrics);
         let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
         self.update_reward_history(stake_rewards, vote_rewards);
-
         point_value.rewards as f64 / point_value.points as f64
     }
 
@@ -4417,9 +4451,16 @@ impl Bank {
                     .ok()
             });
 
+        let inner_instructions = if enable_cpi_recording {
+            Some(inner_instructions_list_from_instruction_trace(
+                &transaction_context,
+            ))
+        } else {
+            None
+        };
+
         let ExecutionRecord {
             accounts,
-            instruction_trace,
             mut return_data,
             changed_account_count,
             total_size_of_all_accounts,
@@ -4446,14 +4487,6 @@ impl Bank {
             );
             accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
         }
-
-        let inner_instructions = if enable_cpi_recording {
-            Some(inner_instructions_list_from_instruction_trace(
-                &instruction_trace,
-            ))
-        } else {
-            None
-        };
 
         let return_data = if enable_return_data_recording {
             if let Some(end_index) = return_data.data.iter().rposition(|&x| x != 0) {
@@ -6412,11 +6445,11 @@ impl Bank {
     }
 
     #[cfg(test)]
-    pub fn flush_accounts_cache_slot(&self) {
+    pub fn flush_accounts_cache_slot_for_tests(&self) {
         self.rc
             .accounts
             .accounts_db
-            .flush_accounts_cache_slot(self.slot())
+            .flush_accounts_cache_slot_for_tests(self.slot())
     }
 
     pub fn expire_old_recycle_stores(&self) {
@@ -7141,19 +7174,22 @@ impl Bank {
         &self,
         test_hash_calculation: bool,
         accounts_db_skip_shrink: bool,
-        last_full_snapshot_slot: Option<Slot>,
+        last_full_snapshot_slot: Slot,
     ) -> bool {
         let mut clean_time = Measure::start("clean");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("cleaning..");
-            self.clean_accounts(true, true, last_full_snapshot_slot);
+            self._clean_accounts(true, true, Some(last_full_snapshot_slot));
         }
         clean_time.stop();
 
         let mut shrink_all_slots_time = Measure::start("shrink_all_slots");
         if !accounts_db_skip_shrink && self.slot() > 0 {
             info!("shrinking..");
-            self.shrink_all_slots(true, last_full_snapshot_slot);
+            self.rc
+                .accounts
+                .accounts_db
+                .shrink_all_slots(true, Some(last_full_snapshot_slot));
         }
         shrink_all_slots_time.stop();
 
@@ -7427,12 +7463,7 @@ impl Bank {
         debug!("Added precompiled program {:?}", program_id);
     }
 
-    pub fn clean_accounts(
-        &self,
-        skip_last: bool,
-        is_startup: bool,
-        last_full_snapshot_slot: Option<Slot>,
-    ) {
+    pub(crate) fn clean_accounts(&self, last_full_snapshot_slot: Option<Slot>) {
         // Don't clean the slot we're snapshotting because it may have zero-lamport
         // accounts that were included in the bank delta hash when the bank was frozen,
         // and if we clean them here, any newly created snapshot's hash for this bank
@@ -7440,20 +7471,22 @@ impl Bank {
         //
         // So when we're snapshotting, set `skip_last` to true so the highest slot to clean is
         // lowered by one.
-        let highest_slot_to_clean = skip_last.then(|| self.slot().saturating_sub(1));
+        self._clean_accounts(true, false, last_full_snapshot_slot)
+    }
+
+    fn _clean_accounts(
+        &self,
+        skip_last: bool,
+        is_startup: bool,
+        last_full_snapshot_slot: Option<Slot>,
+    ) {
+        let max_clean_root = skip_last.then(|| self.slot().saturating_sub(1));
 
         self.rc.accounts.accounts_db.clean_accounts(
-            highest_slot_to_clean,
+            max_clean_root,
             is_startup,
             last_full_snapshot_slot,
         );
-    }
-
-    pub fn shrink_all_slots(&self, is_startup: bool, last_full_snapshot_slot: Option<Slot>) {
-        self.rc
-            .accounts
-            .accounts_db
-            .shrink_all_slots(is_startup, last_full_snapshot_slot);
     }
 
     pub fn print_accounts_stats(&self) {
@@ -7612,7 +7645,6 @@ impl Bank {
             );
             self.reconfigure_token2_native_mint();
         }
-        self.ensure_no_storage_rewards_pool();
 
         if new_feature_activations.contains(&feature_set::cap_accounts_data_len::id()) {
             const ACCOUNTS_DATA_LEN: u64 = 50_000_000_000;
@@ -7785,36 +7817,6 @@ impl Bank {
                     old_account_data_size,
                     native_mint_account.data().len(),
                 );
-            }
-        }
-    }
-
-    fn ensure_no_storage_rewards_pool(&mut self) {
-        let purge_window_epoch = match self.cluster_type() {
-            ClusterType::Development => false,
-            // never do this for devnet; we're pristine here. :)
-            ClusterType::Devnet => false,
-            // schedule to remove at testnet/tds
-            ClusterType::Testnet => self.epoch() == 93,
-            // never do this for stable; we're pristine here. :)
-            ClusterType::MainnetBeta => false,
-        };
-
-        if purge_window_epoch {
-            for reward_pubkey in self.rewards_pool_pubkeys.iter() {
-                if let Some(mut reward_account) = self.get_account_with_fixed_root(reward_pubkey) {
-                    if reward_account.lamports() == u64::MAX {
-                        reward_account.set_lamports(0);
-                        self.store_account(reward_pubkey, &reward_account);
-                        // Adjust capitalization.... it has been wrapping, reducing the real capitalization by 1-lamport
-                        self.capitalization.fetch_add(1, Relaxed);
-                        info!(
-                            "purged rewards pool account: {}, new capitalization: {}",
-                            reward_pubkey,
-                            self.capitalization()
-                        );
-                    }
-                };
             }
         }
     }
@@ -8067,7 +8069,6 @@ pub(crate) mod tests {
             system_program,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
-            transaction_context::InstructionContext,
         },
         solana_vote_program::{
             vote_instruction,
@@ -8104,6 +8105,12 @@ pub(crate) mod tests {
                 accounts_data_len_delta: 0,
             },
             executors: Rc::new(RefCell::new(Executors::default())),
+        }
+    }
+
+    impl Bank {
+        fn clean_accounts_for_tests(&self) {
+            self.rc.accounts.accounts_db.clean_accounts_for_tests()
         }
     }
 
@@ -10425,7 +10432,7 @@ pub(crate) mod tests {
         bank.squash();
         bank.force_flush_accounts_cache();
         let hash = bank.update_accounts_hash();
-        bank.clean_accounts(false, false, None);
+        bank.clean_accounts_for_tests();
         assert_eq!(bank.update_accounts_hash(), hash);
 
         let bank0 = Arc::new(new_from_parent(&bank));
@@ -10448,7 +10455,7 @@ pub(crate) mod tests {
 
         info!("bank0 purge");
         let hash = bank0.update_accounts_hash();
-        bank0.clean_accounts(false, false, None);
+        bank0.clean_accounts_for_tests();
         assert_eq!(bank0.update_accounts_hash(), hash);
 
         assert_eq!(
@@ -10458,7 +10465,7 @@ pub(crate) mod tests {
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
 
         info!("bank1 purge");
-        bank1.clean_accounts(false, false, None);
+        bank1.clean_accounts_for_tests();
 
         assert_eq!(
             bank0.get_account(&keypair.pubkey()).unwrap().lamports(),
@@ -10482,7 +10489,7 @@ pub(crate) mod tests {
         assert_eq!(bank0.get_account(&keypair.pubkey()), None);
         assert_eq!(bank1.get_account(&keypair.pubkey()), None);
         bank1.force_flush_accounts_cache();
-        bank1.clean_accounts(false, false, None);
+        bank1.clean_accounts_for_tests();
 
         assert!(bank1.verify_bank_hash(VerifyBankHash::default_for_test()));
     }
@@ -11648,11 +11655,11 @@ pub(crate) mod tests {
         .unwrap();
         bank.freeze();
         bank.update_accounts_hash();
-        assert!(bank.verify_snapshot_bank(true, false, None));
+        assert!(bank.verify_snapshot_bank(true, false, bank.slot()));
 
         // tamper the bank after freeze!
         bank.increment_signature_count(1);
-        assert!(!bank.verify_snapshot_bank(true, false, None));
+        assert!(!bank.verify_snapshot_bank(true, false, bank.slot()));
     }
 
     // Test that two bank forks with the same accounts should not hash to the same value.
@@ -12968,7 +12975,7 @@ pub(crate) mod tests {
                 #[cfg(not(target_os = "linux"))]
                 {
                     error!("{} banks, sleeping for 5 sec", num_banks);
-                    std::thread::sleep(Duration::new(5, 0));
+                    std::thread::sleep(Duration::from_secs(5));
                 }
             }
         }
@@ -14562,25 +14569,25 @@ pub(crate) mod tests {
             if bank.slot == 0 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "9tLrxkBoNE7zEUZ2g72ZwE4fTfhUQnhC8A4Xt4EmYhP1"
+                    "5gY6TCgB9NymbbxgFgAjvYLpXjyXiVyyruS1aEwbWKLK"
                 );
             }
             if bank.slot == 32 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "AxphC8xDj9gmFosor5gyiovNvPVMydJCFRUTxn2wFiQf"
+                    "6uJ5C4QDXWCN39EjJ5Frcz73nnS2jMJ55KgkQff12Fqp"
                 );
             }
             if bank.slot == 64 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "4vZCSbBuL8xjE43rCy9Cm3dCh1BMj45heMiMb6n6qgzA"
+                    "4u8bxZRLYdQBkWRBwmpcwcQVMCJoEpzY7hCuAzxr3kCe"
                 );
             }
             if bank.slot == 128 {
                 assert_eq!(
                     bank.hash().to_string(),
-                    "46LUpeBdJuisnfwgYisvh4x7jnxzBaLfHF614GtcTs59"
+                    "4c5F8UbcDD8FM7qXcfv6BPPo6nHNYJQmN5gHiCMTdEzX"
                 );
                 break;
             }
@@ -14692,7 +14699,7 @@ pub(crate) mod tests {
         bank1.deposit(&pubkey0, some_lamports).unwrap();
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank1).unwrap());
         bank1.freeze();
-        bank1.flush_accounts_cache_slot();
+        bank1.flush_accounts_cache_slot_for_tests();
 
         bank1.print_accounts_stats();
 
@@ -14711,7 +14718,7 @@ pub(crate) mod tests {
 
         // Clean accounts, which should add earlier slots to the shrink
         // candidate set
-        bank2.clean_accounts(false, false, None);
+        bank2.clean_accounts_for_tests();
 
         let mut bank3 = Arc::new(Bank::new_from_parent(&bank2, &Pubkey::default(), 3));
         bank3.deposit(&pubkey1, some_lamports + 1).unwrap();
@@ -14720,7 +14727,7 @@ pub(crate) mod tests {
         bank3.squash();
         bank3.force_flush_accounts_cache();
 
-        bank3.clean_accounts(false, false, None);
+        bank3.clean_accounts_for_tests();
         assert_eq!(
             bank3.rc.accounts.accounts_db.ref_count_for_pubkey(&pubkey0),
             2
@@ -14789,7 +14796,7 @@ pub(crate) mod tests {
 
         // Clean accounts, which should add earlier slots to the shrink
         // candidate set
-        bank2.clean_accounts(false, false, None);
+        bank2.clean_accounts_for_tests();
 
         // Slots 0 and 1 should be candidates for shrinking, but slot 2
         // shouldn't because none of its accounts are outdated by a later
@@ -14808,7 +14815,7 @@ pub(crate) mod tests {
         // No more slots should be shrunk
         assert_eq!(bank2.shrink_candidate_slots(), 0);
         // alive_counts represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(alive_counts, vec![9, 1, 7]);
+        assert_eq!(alive_counts, vec![11, 1, 7]);
     }
 
     #[test]
@@ -14843,7 +14850,7 @@ pub(crate) mod tests {
         goto_end_of_slot(Arc::<Bank>::get_mut(&mut bank).unwrap());
 
         bank.squash();
-        bank.clean_accounts(false, false, None);
+        bank.clean_accounts_for_tests();
         let force_to_return_alive_account = 0;
         assert_eq!(
             bank.process_stale_slot_with_budget(22, force_to_return_alive_account),
@@ -14854,7 +14861,7 @@ pub(crate) mod tests {
             .map(|_| bank.process_stale_slot_with_budget(0, force_to_return_alive_account))
             .sum();
         // consumed_budgets represents the count of alive accounts in the three slots 0,1,2
-        assert_eq!(consumed_budgets, 10);
+        assert_eq!(consumed_budgets, 12);
     }
 
     #[test]
@@ -15210,57 +15217,6 @@ pub(crate) mod tests {
             4200000000
         );
         assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
-    }
-
-    #[test]
-    fn test_ensure_no_storage_rewards_pool() {
-        solana_logger::setup();
-
-        let mut genesis_config =
-            create_genesis_config_with_leader(5, &solana_sdk::pubkey::new_rand(), 0).genesis_config;
-
-        // Testnet - Storage rewards pool is purged at epoch 93
-        // Also this is with bad capitalization
-        genesis_config.cluster_type = ClusterType::Testnet;
-        genesis_config.inflation = Inflation::default();
-        let reward_pubkey = solana_sdk::pubkey::new_rand();
-        genesis_config.rewards_pools.insert(
-            reward_pubkey,
-            Account::new(u64::MAX, 0, &solana_sdk::pubkey::new_rand()),
-        );
-        let bank0 = Bank::new_for_tests(&genesis_config);
-        // because capitalization has been reset with bogus capitalization calculation allowing overflows,
-        // deliberately substract 1 lamport to simulate it
-        bank0.capitalization.fetch_sub(1, Relaxed);
-        let bank0 = Arc::new(bank0);
-        assert_eq!(bank0.get_balance(&reward_pubkey), u64::MAX,);
-
-        let bank1 = Bank::new_from_parent(
-            &bank0,
-            &Pubkey::default(),
-            genesis_config.epoch_schedule.get_first_slot_in_epoch(93),
-        );
-
-        // assert that everything gets in order....
-        assert!(bank1.get_account(&reward_pubkey).is_none());
-        let sysvar_and_builtin_program_delta = 1;
-        assert_eq!(
-            bank0.capitalization() + 1 + 1_000_000_000 + sysvar_and_builtin_program_delta,
-            bank1.capitalization()
-        );
-        assert_eq!(bank1.capitalization(), bank1.calculate_capitalization(true));
-
-        // Depending on RUSTFLAGS, this test exposes rust's checked math behavior or not...
-        // So do some convolted setup; anyway this test itself will just be temporary
-        let bank0 = std::panic::AssertUnwindSafe(bank0);
-        let overflowing_capitalization =
-            std::panic::catch_unwind(|| bank0.calculate_capitalization(true));
-        if let Ok(overflowing_capitalization) = overflowing_capitalization {
-            info!("asserting overflowing capitalization for bank0");
-            assert_eq!(overflowing_capitalization, bank0.capitalization());
-        } else {
-            info!("NOT-asserting overflowing capitalization for bank0");
-        }
     }
 
     #[derive(Debug)]
@@ -16279,7 +16235,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.squash();
                         // Try to get cache flush/clean to overlap with the scan
                         current_major_fork_bank.force_flush_accounts_cache();
-                        current_major_fork_bank.clean_accounts(false, false, None);
+                        current_major_fork_bank.clean_accounts_for_tests();
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
                         abs_request_handler.handle_pruned_banks(&current_major_fork_bank, true);
@@ -16327,7 +16283,7 @@ pub(crate) mod tests {
                         current_bank.squash();
                         if current_bank.slot() % 2 == 0 {
                             current_bank.force_flush_accounts_cache();
-                            current_bank.clean_accounts(true, false, None);
+                            current_bank.clean_accounts(None);
                         }
                         prev_bank = current_bank.clone();
                         current_bank = Arc::new(Bank::new_from_parent(
@@ -17408,7 +17364,7 @@ pub(crate) mod tests {
         bank2.squash();
 
         drop(bank1);
-        bank2.clean_accounts(false, false, None);
+        bank2.clean_accounts_for_tests();
 
         let expected_ref_count_for_cleaned_up_keys = 0;
         let expected_ref_count_for_keys_in_both_slot1_and_slot2 = 1;
@@ -18904,26 +18860,24 @@ pub(crate) mod tests {
 
     #[test]
     fn test_inner_instructions_list_from_instruction_trace() {
-        let instruction_trace = vec![
-            vec![
-                InstructionContext::new(0, 0, &[], &[], &[1]),
-                InstructionContext::new(1, 0, &[], &[], &[2]),
-            ],
-            vec![],
-            vec![
-                InstructionContext::new(0, 0, &[], &[], &[3]),
-                InstructionContext::new(1, 0, &[], &[], &[4]),
-                InstructionContext::new(2, 0, &[], &[], &[5]),
-                InstructionContext::new(1, 0, &[], &[], &[6]),
-            ],
-        ];
-
-        let inner_instructions = inner_instructions_list_from_instruction_trace(&instruction_trace);
+        let mut transaction_context = TransactionContext::new(vec![], None, 3, 3);
+        for (index_in_trace, stack_height) in [1, 2, 1, 1, 2, 3, 2].into_iter().enumerate() {
+            while stack_height <= transaction_context.get_instruction_context_stack_height() {
+                transaction_context.pop().unwrap();
+            }
+            if stack_height > transaction_context.get_instruction_context_stack_height() {
+                transaction_context
+                    .push(&[], &[], &[index_in_trace as u8])
+                    .unwrap();
+            }
+        }
+        let inner_instructions =
+            inner_instructions_list_from_instruction_trace(&transaction_context);
 
         assert_eq!(
             inner_instructions,
             vec![
-                vec![CompiledInstruction::new_from_raw_parts(0, vec![2], vec![])],
+                vec![CompiledInstruction::new_from_raw_parts(0, vec![1], vec![])],
                 vec![],
                 vec![
                     CompiledInstruction::new_from_raw_parts(0, vec![4], vec![]),

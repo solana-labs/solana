@@ -201,8 +201,6 @@ pub mod do_support_realloc {
     solana_sdk::declare_id!("75m6ysz33AfLA5DDEzWM1obBrnPQRSsdVQ2nRmc8Vuu1");
 }
 
-// Note: when this feature is cleaned up, also remove the secp256k1 program from
-// the list of builtins and remove its files from /programs
 pub mod prevent_calling_precompiles_as_programs {
     solana_sdk::declare_id!("4ApgRX3ud6p7LNMJmsuaAcZY5HWctGPr5obAsjB3A54d");
 }

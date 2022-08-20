@@ -93,4 +93,18 @@ impl BenchTpsClient for BankClient {
                 })
             })
     }
+
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Account> {
+        SyncClient::get_account_with_commitment(self, pubkey, commitment_config)
+            .map_err(|err| err.into())
+            .and_then(|account| {
+                account.ok_or_else(|| {
+                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={}", pubkey))
+                })
+            })
+    }
 }

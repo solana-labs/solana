@@ -83,6 +83,13 @@ pub trait BenchTpsClient {
 
     /// Returns all information associated with the account of the provided pubkey
     fn get_account(&self, pubkey: &Pubkey) -> Result<Account>;
+
+    /// Returns all information associated with the account of the provided pubkey, using explicit commitment
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Account>;
 }
 
 mod bank_client;
