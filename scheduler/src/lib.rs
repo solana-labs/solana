@@ -948,7 +948,7 @@ impl ScheduleStage {
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                         executing_queue_count -= 1;
 
-                        Self::commit_result(&mut processed_execution_environment, address_book);
+                        Self::commit_result(&mut processed_execution_environment, address_book, contended_queue);
                         // async-ly propagate the result to rpc subsystems
                         if let Some(to_next_stage) = to_next_stage {
                             to_next_stage.send(processed_execution_environment).unwrap();
