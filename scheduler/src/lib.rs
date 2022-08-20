@@ -727,7 +727,7 @@ impl ScheduleStage {
     ) {
         for mut l in lock_attempts {
             // ensure to remove remaining refs of this unique_weight
-            AddressBook::forget_address_contention(&unique_weight, &mut l);
+            //AddressBook::forget_address_contention(&unique_weight, &mut l);
         }
     }
 
@@ -739,7 +739,7 @@ impl ScheduleStage {
         guaranteed_count: usize,
     ) {
         for mut l in lock_attempts {
-            AddressBook::forget_address_contention(&unique_weight, &mut l);
+            //AddressBook::forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Guaranteed => {
                     l.target.page_mut().guaranteed_task_ids.insert(*unique_weight, ());
