@@ -168,7 +168,7 @@ impl TaskIds {
 pub struct Page {
     current_usage: Usage,
     next_usage: Usage,
-    contended_unique_weights: TaskIds,
+    pub contended_unique_weights: TaskIds,
     guaranteed_task_ids: WeightedTaskIds,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
