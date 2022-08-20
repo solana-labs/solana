@@ -165,7 +165,7 @@ impl TaskIds {
 }
 
 #[derive(Debug)]
-struct Page {
+pub struct Page {
     current_usage: Usage,
     next_usage: Usage,
     contended_unique_weights: TaskIds,
