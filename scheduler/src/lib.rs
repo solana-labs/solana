@@ -211,7 +211,7 @@ pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
     runnable_provisional_task_ids: WeightedTaskIds,
-    gurantee_timers: std::collections::HashMap<UniqueWeight, usize>, 
+    provisioning_trackers: std::collections::HashMap<UniqueWeight, usize>, 
 }
 
 impl AddressBook {
@@ -766,8 +766,8 @@ impl ScheduleStage {
                 }
             }
         }
-        address_book.gurantee_timers.insert(*unique_weight, provisional_count);
-        trace!("gurantee_timers: {}", address_book.gurantee_timers.len());
+        address_book.provisioning_trackers.insert(*unique_weight, provisional_count);
+        trace!("provisioning_trackers: {}", address_book.provisioning_trackers.len());
     }
 
     #[inline(never)]
@@ -816,7 +816,7 @@ impl ScheduleStage {
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.provisional_task_ids).keys() {
-                    match address_book.gurantee_timers.entry(*task_id) {
+                    match address_book.provisioning_trackers.entry(*task_id) {
                         std::collections::hash_map::Entry::Occupied(mut timer_entry) => {
                             let count = timer_entry.get_mut();
                             *count = count.checked_sub(1).unwrap();
@@ -907,7 +907,7 @@ impl ScheduleStage {
         let mut current_unique_key = u64::max_value();
 
         loop {
-            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.gurantee_timers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
+            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
 
             crossbeam_channel::select! {
                recv(from) -> maybe_from => {
@@ -971,7 +971,7 @@ impl ScheduleStage {
             loop {
                 /* if !address_book.uncontended_task_ids.is_empty() {
                     trace!("prefer emptying n_u_a");
-                } else */ if (executing_queue_count + address_book.gurantee_timers.len()) >= max_executing_queue_count {
+                } else */ if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
                     trace!("skip scheduling; outgoing queue full");
                     while from.len() > 0 {
                        let i = from.recv().unwrap();
@@ -988,7 +988,7 @@ impl ScheduleStage {
                     break;
                 }
 
-                let prefer_immediate = address_book.gurantee_timers.len()/4 > executing_queue_count;
+                let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
                     Self::schedule_next_execution(runnable_queue, contended_queue, address_book, prefer_immediate);
 
