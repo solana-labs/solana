@@ -56,7 +56,7 @@ impl PageRc {
     }
 
     fn page_ref(&self) -> &Page {
-        MyRcInner::get_ref(&mut self.0)
+        MyRcInner::ref(&mut self.0)
     }
 }
 
