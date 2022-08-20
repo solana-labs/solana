@@ -803,7 +803,7 @@ impl ScheduleStage {
                         }
                     }
                     if found {
-                        address_book.uncontended_task_ids.insert(cursor.value(), ());
+                        address_book.uncontended_task_ids.insert(*(cursor.value()), ());
                     }
                 }
             }
