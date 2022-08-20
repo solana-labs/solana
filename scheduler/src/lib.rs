@@ -852,10 +852,10 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
+    fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, contended_queue: &ContendedQueue) {
         let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         // do par()-ly?
-        Self::unlock_after_execution(address_book, lock_attempts);
+        Self::unlock_after_execution(address_book, contended_queue, lock_attempts);
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
@@ -915,7 +915,7 @@ impl ScheduleStage {
                                 trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                                 executing_queue_count -= 1;
 
-                                Self::commit_result(&mut processed_execution_environment, address_book);
+                                Self::commit_result(&mut processed_execution_environment, address_book, contended_queue);
                                 // async-ly propagate the result to rpc subsystems
                                 if let Some(to_next_stage) = to_next_stage {
                                     to_next_stage.send(processed_execution_environment).unwrap();
