@@ -153,7 +153,7 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    fn last(&self) -> Option<UniqueWeight> {
+    fn last(&self) -> Option<&UniqueWeight> {
         //self.task_ids.last()
         self.task_ids.back().map(|e| e.value())
         //self.cached_heaviest.as_ref()
