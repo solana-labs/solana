@@ -56,7 +56,7 @@ impl PageRc {
     }
 
     fn page_ref(&self) -> &Page {
-        Arc::borrow(self.0)
+        MyRcInner::borrow(self.0)
     }
 }
 
