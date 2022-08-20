@@ -30,7 +30,7 @@ pub struct PageRc(MyRcInner);
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
-    lock_attempts: Vec<LockAttempt>,
+    pub lock_attempts: Vec<LockAttempt>,
     //accounts: Vec<i8>,
     pub cu: usize,
     pub unique_weight: UniqueWeight,
