@@ -3218,9 +3218,40 @@ impl Bank {
         metrics.redeem_rewards_us += m.as_us();
 
         self.store_stake_accounts(&stake_rewards, metrics);
+        let mut vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
 
+        let additional_reserve = stake_rewards.len() + vote_rewards.len();
+        {
+            let mut rewards = self.rewards.write().unwrap();
+            rewards.reserve(additional_reserve);
+            rewards.append(&mut vote_rewards);
+            stake_rewards
+                .into_iter()
+                .filter(|x| x.get_stake_reward() > 0)
+                .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
+        }
+
+        point_value.rewards as f64 / point_value.points as f64
+    }
+
+    fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
+        // store stake account even if stakers_reward is 0
+        // because credits observed has changed
+        let mut m = Measure::start("store_stake_account");
+        self.store_accounts((self.slot(), stake_rewards));
+        m.stop();
+        metrics
+            .store_stake_accounts_us
+            .fetch_add(m.as_us(), Relaxed);
+    }
+
+    fn store_vote_accounts(
+        &self,
+        vote_account_rewards: DashMap<Pubkey, (AccountSharedData, u8, u64, bool)>,
+        metrics: &mut RewardsMetrics,
+    ) -> Vec<(Pubkey, RewardInfo)> {
         let mut m = Measure::start("store_vote_accounts");
-        let mut vote_rewards = vote_account_rewards
+        let vote_rewards = vote_account_rewards
             .into_iter()
             .filter_map(
                 |(vote_pubkey, (mut vote_account, commission, vote_rewards, vote_needs_store))| {
@@ -3252,30 +3283,7 @@ impl Bank {
 
         m.stop();
         metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
-
-        let additional_reserve = stake_rewards.len() + vote_rewards.len();
-        {
-            let mut rewards = self.rewards.write().unwrap();
-            rewards.reserve(additional_reserve);
-            rewards.append(&mut vote_rewards);
-            stake_rewards
-                .into_iter()
-                .filter(|x| x.get_stake_reward() > 0)
-                .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
-        }
-
-        point_value.rewards as f64 / point_value.points as f64
-    }
-
-    fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
-        // store stake account even if stakers_reward is 0
-        // because credits observed has changed
-        let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), stake_rewards));
-        m.stop();
-        metrics
-            .store_stake_accounts_us
-            .fetch_add(m.as_us(), Relaxed);
+        vote_rewards
     }
 
     fn update_recent_blockhashes_locked(&self, locked_blockhash_queue: &BlockhashQueue) {
