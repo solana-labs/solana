@@ -213,7 +213,7 @@ impl AddressBook {
     ) {
         let LockAttempt {target, requested_usage, status, remembered} = attempt;
 
-                let mut page = target.page();
+                let mut page = target.page_mut();
 
                 match page.current_usage {
                     Usage::Unused => {
