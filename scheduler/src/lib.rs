@@ -63,7 +63,7 @@ impl PageRc {
 #[derive(Clone, Debug)]
 enum LockStatus {
     Succeded,
-    Guaranteed, 
+    Provisional, 
     Failed,
 }
 
@@ -253,7 +253,7 @@ impl AddressBook {
                             } else {
                                 match page.next_usage {
                                     Usage::Unused => {
-                                        *status = LockStatus::Guaranteed;
+                                        *status = LockStatus::Provisional;
                                         page.next_usage = Usage::renew(*requested_usage);
                                     },
                                     // support multiple readonly locks!
@@ -274,7 +274,7 @@ impl AddressBook {
                         } else {
                             match page.next_usage {
                                 Usage::Unused => {
-                                    *status = LockStatus::Guaranteed;
+                                    *status = LockStatus::Provisional;
                                     page.next_usage = Usage::renew(*requested_usage);
                                 },
                                 // support multiple readonly locks!
@@ -307,7 +307,7 @@ impl AddressBook {
             LockStatus::Succeded => {
                 self.unlock(attempt)
             },
-            LockStatus::Guaranteed => {
+            LockStatus::Provisional => {
                 if after_execution {
                     self.unlock(attempt)
                 } else {
@@ -497,7 +497,7 @@ fn attempt_lock_for_execution<'a>(
             LockStatus::Failed => {
                 unlockable_count += 1;
             },
-            LockStatus::Guaranteed => {
+            LockStatus::Provisional => {
                 provisional_count += 1;
             },
         }
@@ -755,7 +755,7 @@ impl ScheduleStage {
         for mut l in lock_attempts {
             //AddressBook::forget_address_contention(&unique_weight, &mut l);
             match l.status {
-                LockStatus::Guaranteed => {
+                LockStatus::Provisional => {
                     l.target.page_mut().provisional_task_ids.insert(*unique_weight, ());
                 }
                 LockStatus::Succeded => {
