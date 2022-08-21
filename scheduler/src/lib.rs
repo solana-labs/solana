@@ -660,7 +660,7 @@ impl ScheduleStage {
             let from_runnable = reborrowed_contended_queue.is_some();
             let unique_weight = *queue_entry.key();
             let next_task = queue_entry.get_mut();
-            let next_task = unsafe { MyRcInner::get_mut_unchecked(&mut next_task) };
+            let next_task = unsafe { Arc::get_mut_unchecked(&mut next_task) };
             let message_hash = next_task.tx.0.message_hash();
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
