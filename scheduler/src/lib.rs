@@ -727,7 +727,7 @@ impl ScheduleStage {
                 &mut populated_lock_attempts,
             );
             let task = queue_entry.remove();
-            return Some((unique_weight, std::sync::Arc::get_mut(&mut task).unwrap(), populated_lock_attempts));
+            return Some((unique_weight, *std::sync::Arc::get_mut(&mut task).unwrap(), populated_lock_attempts));
         } else {
             break;
         }
