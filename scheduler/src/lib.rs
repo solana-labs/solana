@@ -650,8 +650,9 @@ impl ScheduleStage {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
+            let mut task = *std::sync::Arc::get_mut(&mut task).unwrap();
             let ll = std::mem::take(&mut task.tx.1);
-            return Some((a.0, *std::sync::Arc::get_mut(&mut task).unwrap(), ll));
+            return Some((a.0, task, ll));
         }
 
         trace!("pop begin");
