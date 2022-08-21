@@ -82,6 +82,7 @@ impl LockAttempt {
             target,
             status: LockStatus::Succeded,
             requested_usage,
+            heaviest_uncontended: Default::default(),
             //remembered: false,
         }
     }
