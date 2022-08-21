@@ -472,7 +472,7 @@ impl TaskQueue {
     #[inline(never)]
     fn heaviest_entry_to_execute(
         &mut self,
-    ) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
+    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, std::sync::Arc<Task>>> {
         panic!()//self.tasks.last_entry()
     }
 
