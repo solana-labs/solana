@@ -33,7 +33,7 @@ pub struct ExecutionEnvironment {
     //accounts: Vec<i8>,
     pub cu: usize,
     pub unique_weight: UniqueWeight,
-    pub task: Task,
+    pub task: TaskInQueue,
 }
 
 impl ExecutionEnvironment {
