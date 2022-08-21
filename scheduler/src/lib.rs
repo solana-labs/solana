@@ -72,6 +72,7 @@ pub struct LockAttempt {
     pub target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
+    heaviest_uncontended: AtomicU64,
     //remembered: bool,
 }
 
