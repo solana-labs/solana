@@ -439,9 +439,10 @@ pub struct Task {
 #[derive(Default)]
 pub struct TaskQueue {
     //tasks: std::collections::BTreeMap<UniqueWeight, Task>,
-    tasks: im::OrdMap<UniqueWeight, std::sync::Arc<Task>>,
+    tasks: im::OrdMap<UniqueWeight, TaskInQueue,
 }
 
+type TaskInQueue = std::sync::Arc<Task>;
 type TaskQueueEntry<'a, K, V> = im::ordmap::Entry<'a, K, V>;
 type TaskQueueOccupiedEntry<'a, K, V> = im::ordmap::OccupiedEntry<'a, K, V>;
 
