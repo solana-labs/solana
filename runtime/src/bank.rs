@@ -3264,35 +3264,6 @@ impl Bank {
         m.stop();
         metrics.store_vote_accounts_us.fetch_add(m.as_us(), Relaxed);
         vote_rewards
-<<<<<<< HEAD
-    }
-
-    fn update_reward_history(
-        &self,
-        stake_rewards: Vec<StakeReward>,
-        mut vote_rewards: Vec<(Pubkey, RewardInfo)>,
-    ) {
-        let additional_reserve = stake_rewards.len() + vote_rewards.len();
-        let mut rewards = self.rewards.write().unwrap();
-        rewards.reserve(additional_reserve);
-        rewards.append(&mut vote_rewards);
-        stake_rewards
-            .into_iter()
-            .filter(|x| x.get_stake_reward() > 0)
-            .for_each(|x| rewards.push((x.stake_pubkey, x.stake_reward_info)));
-    }
-
-    fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
-        // store stake account even if stakers_reward is 0
-        // because credits observed has changed
-        let mut m = Measure::start("store_stake_account");
-        self.store_accounts((self.slot(), stake_rewards));
-        m.stop();
-        metrics
-            .store_stake_accounts_us
-            .fetch_add(m.as_us(), Relaxed);
-=======
->>>>>>> c17f15a34f (Refactor epoch reward 2 (#27257))
     }
 
     fn update_reward_history(
