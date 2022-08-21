@@ -562,7 +562,7 @@ impl ScheduleStage {
             },
             */
             unique_weight,
-            Task { tx, contention_count: 0 },
+            Arc::new(Task { tx, contention_count: 0 }),
         );
         *unique_key -= 1;
     }
