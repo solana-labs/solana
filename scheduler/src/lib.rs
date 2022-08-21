@@ -448,7 +448,7 @@ impl TaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: Task) {
         //trace!("TaskQueue::add(): {:?}", unique_weight);
-        let pre_existed = self.tasks.insert(unique_weight, task);
+        let pre_existed = self.tasks.insert(unique_weight, Arc::new(task));
         debug_assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
