@@ -490,7 +490,7 @@ fn attempt_lock_for_execution<'a>(
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     placeholder_attempts: &mut Vec<LockAttempt>,
-) -> (usize, usize, Vec<LockAttempt>) {
+) -> (usize, usize) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
     let mut provisional_count = 0;
@@ -508,7 +508,7 @@ fn attempt_lock_for_execution<'a>(
         }
     }
 
-    (unlockable_count, provisional_count, placeholder_attempts)
+    (unlockable_count, provisional_count)
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
