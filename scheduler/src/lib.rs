@@ -800,20 +800,6 @@ impl ScheduleStage {
 
             let page = l.target.page_mut();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
-                if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
-                    let mut found = true;
-                    while !contended_queue.has_task(task_cursor.value()) {
-                        if let Some(new_cursor) = task_cursor.prev() {
-                            task_cursor = new_cursor;
-                        } else {
-                            found = false;
-                            break;
-                        }
-                    }
-                    if found {
-                        address_book.uncontended_task_ids.insert(*(task_cursor.value()), ());
-                    }
-                }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
