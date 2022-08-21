@@ -439,7 +439,7 @@ pub struct Task {
 #[derive(Default)]
 pub struct TaskQueue {
     //tasks: std::collections::BTreeMap<UniqueWeight, Task>,
-    tasks: im::OrdMap<UniqueWeight, Task>,
+    tasks: im::OrdMap<UniqueWeight, std::sync::Arc<Task>>,
 }
 
 impl TaskQueue {
