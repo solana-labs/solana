@@ -662,6 +662,7 @@ impl ScheduleStage {
             let from_runnable = reborrowed_contended_queue.is_some();
             let unique_weight = *queue_entry.key();
             let next_task = queue_entry.get_mut();
+            let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut next_task) };
             let message_hash = next_task.tx.0.message_hash();
             let placeholder_lock_attempts = std::mem::take(&mut next_task.tx.1);
 
