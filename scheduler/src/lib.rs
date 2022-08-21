@@ -457,7 +457,7 @@ impl TaskQueue {
     fn entry_to_execute(
         &mut self,
         unique_weight: UniqueWeight,
-    ) -> TaskQueueOccupiedEntry<'_, UniqueWeight, Arc<Task>> {
+    ) -> TaskQueueOccupiedEntry<'_, UniqueWeight, std::sync::Arc<Task>> {
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
             TaskQueueEntry::Occupied(queue_entry) => queue_entry,
