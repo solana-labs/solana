@@ -489,7 +489,7 @@ fn attempt_lock_for_execution<'a>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
-    mut placeholder_attempts: Vec<LockAttempt>,
+    placeholder_attempts: &mut Vec<LockAttempt>,
 ) -> (usize, usize, Vec<LockAttempt>) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
@@ -651,9 +651,8 @@ impl ScheduleStage {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
-            let mut task = unsafe { TaskInQueue::get_mut_unchecked(&mut task) };
             let ll = std::mem::take(&mut task.tx.1);
-            return Some((a.0, *task, ll));
+            return Some((a.0, *std::sync::Arc::get_mut(&mut task).unwrap(), ll));
         }
 
         trace!("pop begin");
@@ -663,9 +662,7 @@ impl ScheduleStage {
             let from_runnable = reborrowed_contended_queue.is_some();
             let unique_weight = *queue_entry.key();
             let next_task = queue_entry.get_mut();
-            let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut next_task) };
             let message_hash = next_task.tx.0.message_hash();
-            let placeholder_lock_attempts = std::mem::take(&mut next_task.tx.1);
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
@@ -676,7 +673,7 @@ impl ScheduleStage {
                 address_book,
                 &unique_weight,
                 &message_hash,
-                placeholder_lock_attempts,
+                &mut next_task.tx.1,
             );
 
             if unlockable_count > 0 {
