@@ -651,8 +651,7 @@ impl ScheduleStage {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
-            let ll = std::mem::take(&mut task.tx.1);
-            return Some((a.0, *std::sync::Arc::get_mut(&mut task).unwrap(), ll));
+            return Some((a.0, *std::sync::Arc::get_mut(&mut task).unwrap()));
         }
 
         trace!("pop begin");
@@ -667,7 +666,7 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (unlockable_count, provisional_count, mut populated_lock_attempts) = attempt_lock_for_execution(
+            let (unlockable_count, provisional_count) = attempt_lock_for_execution(
                 from_runnable,
                 prefer_immediate,
                 address_book,
@@ -681,11 +680,10 @@ impl ScheduleStage {
                 Self::reset_lock_for_failed_execution(
                     address_book,
                     &unique_weight,
-                    &mut populated_lock_attempts,
+                    &mut next_task.tx.1,
                     from_runnable,
                 );
-                let lock_count = populated_lock_attempts.len();
-                std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
+                let lock_count = next_task.tx.1.len();
                 next_task.contention_count += 1;
 
                 if from_runnable {
@@ -706,15 +704,14 @@ impl ScheduleStage {
                 }
             } else if provisional_count > 0 {
                 assert!(!from_runnable);
-                let lock_count = populated_lock_attempts.len();
+                let lock_count = next_task.tx.1.len();
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
                     &unique_weight,
-                    &mut populated_lock_attempts,
+                    &mut next_task.tx.1,
                     provisional_count,
                 );
-                std::mem::swap(&mut next_task.tx.1, &mut populated_lock_attempts);
 
                 return None;
                 continue;
@@ -724,10 +721,10 @@ impl ScheduleStage {
             Self::finalize_lock_before_execution(
                 address_book,
                 &unique_weight,
-                &mut populated_lock_attempts,
+                &mut next_task.tx.1,
             );
             let task = queue_entry.remove();
-            return Some((unique_weight, *std::sync::Arc::get_mut(&mut task).unwrap(), populated_lock_attempts));
+            return Some((unique_weight, *std::sync::Arc::get_mut(&mut task).unwrap()));
         } else {
             break;
         }
