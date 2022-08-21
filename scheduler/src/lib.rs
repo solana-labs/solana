@@ -833,7 +833,7 @@ impl ScheduleStage {
     fn prepare_scheduled_execution(
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
-        task: Task,
+        task: TaskInQueue,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
