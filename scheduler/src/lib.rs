@@ -692,7 +692,7 @@ impl ScheduleStage {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
                     reborrowed_contended_queue
                         .unwrap()
-                        .add_to_schedule(*queue_entry.key(), std::sync::Arc::get_mut(&mut queue_entry.remove()));
+                        .add_to_schedule(*queue_entry.key(), std::sync::Arc::get_mut(&mut queue_entry.remove()).unwrap());
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
