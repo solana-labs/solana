@@ -442,6 +442,8 @@ pub struct TaskQueue {
     tasks: im::OrdMap<UniqueWeight, std::sync::Arc<Task>>,
 }
 
+type TaskQueueEntry = im::ordmap::Entry;
+
 impl TaskQueue {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: Task) {
@@ -455,12 +457,10 @@ impl TaskQueue {
         &mut self,
         unique_weight: UniqueWeight,
     ) -> std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task> {
-        use std::collections::btree_map::Entry;
-
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
-            Entry::Occupied(queue_entry) => queue_entry,
-            Entry::Vacant(_queue_entry) => unreachable!(),
+            TaskQueueEntry::Occupied(queue_entry) => queue_entry,
+            TaskQueueEntry::Vacant(_queue_entry) => unreachable!(),
         }
     }
 
