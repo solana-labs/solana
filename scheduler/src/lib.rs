@@ -650,7 +650,7 @@ impl ScheduleStage {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
-            return Some((a.0, task);
+            return Some((a.0, task));
         }
 
         trace!("pop begin");
