@@ -347,7 +347,7 @@ fn handle_transaction_batch(
     let uq = transaction_batch.unique_weight;
     for lock_attempt in transaction_batch.lock_attempts.iter() {
         lock_attempt.target.page_ref().contended_unique_weights.remove_task_id(&uq);
-        lock_attempt.heaviest_uncontended.store(3, std::sync::atomic::Ordering::Seq);
+        lock_attempt.heaviest_uncontended.store(3, std::sync::atomic::Ordering::SeqAcl);
     }
     completed_transaction_sender.0
         .send(transaction_batch)
