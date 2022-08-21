@@ -358,10 +358,9 @@ fn handle_transaction_batch(
                 }
             }
             if found {
-                address_book.uncontended_task_ids.insert(*(task_cursor.value()), ());
+                lock_attempt.heaviest_uncontended.store(*(task_cursor.value()), std::sync::atomic::Ordering::SeqCst);
             }
         }
-        lock_attempt.heaviest_uncontended.store(3, std::sync::atomic::Ordering::SeqCst);
     }
     completed_transaction_sender.0
         .send(transaction_batch)
