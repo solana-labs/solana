@@ -443,6 +443,7 @@ pub struct TaskQueue {
 }
 
 type TaskQueueEntry<'a, K, V> = im::ordmap::Entry<'a, K, V>;
+type TaskQueueOccupiedEntry<'a, K, V> = im::ordmap::OccupiedEntry<'a, K, V>;
 
 impl TaskQueue {
     #[inline(never)]
@@ -456,7 +457,7 @@ impl TaskQueue {
     fn entry_to_execute(
         &mut self,
         unique_weight: UniqueWeight,
-    ) -> std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task> {
+    ) -> TaskQueueOccupiedEntry<'_, UniqueWeight, Task> {
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
             TaskQueueEntry::Occupied(queue_entry) => queue_entry,
