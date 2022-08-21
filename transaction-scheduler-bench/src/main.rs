@@ -346,7 +346,8 @@ fn handle_transaction_batch(
 
     let uq = transaction_batch.unique_weight;
     for lock_attempt in transaction_batch.lock_attempts.iter() {
-        lock_attempt.target.page_ref().contended_unique_weights.remove_task_id(&uq);
+        let page = lock_attempt.target.page_ref();
+        page.contended_unique_weights.remove_task_id(&uq);
         if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
             let mut found = true;
             while !contended_queue.has_task(task_cursor.value()) {
