@@ -723,7 +723,7 @@ impl ScheduleStage {
                 &mut next_task.tx.1,
             );
             let task = queue_entry.remove();
-            return Some((unique_weight, *std::sync::Arc::get_mut(&mut task).unwrap()));
+            return Some((unique_weight, task));
         } else {
             break;
         }
