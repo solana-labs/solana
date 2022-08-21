@@ -594,7 +594,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(
         Option<&'a mut TaskQueue>,
-        TaskQueueOccupiedEntry<'a, UniqueWeight, Task>,
+        TaskQueueOccupiedEntry<'a, UniqueWeight, std::sync::Arc<Task>>,
     )> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
