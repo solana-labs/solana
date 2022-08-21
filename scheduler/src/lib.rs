@@ -645,12 +645,12 @@ impl ScheduleStage {
         contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         prefer_immediate: bool,
-    ) -> Option<(UniqueWeight, Task)> {
+    ) -> Option<(UniqueWeight, TaskInQueue)> {
         if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
-            return Some((a.0, *std::sync::Arc::get_mut(&mut task).unwrap()));
+            return Some((a.0, task);
         }
 
         trace!("pop begin");
