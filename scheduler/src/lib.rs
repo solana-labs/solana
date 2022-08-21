@@ -442,7 +442,7 @@ pub struct TaskQueue {
     tasks: im::OrdMap<UniqueWeight, std::sync::Arc<Task>>,
 }
 
-type TaskQueueEntry = im::ordmap::Entry;
+type TaskQueueEntry<'a> = im::ordmap::Entry<'a>;
 
 impl TaskQueue {
     #[inline(never)]
