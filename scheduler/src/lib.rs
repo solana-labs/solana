@@ -473,7 +473,7 @@ impl TaskQueue {
     fn heaviest_entry_to_execute(
         &mut self,
     ) -> Option<std::collections::btree_map::OccupiedEntry<'_, UniqueWeight, Task>> {
-        self.tasks.last_entry()
+        panic!()//self.tasks.last_entry()
     }
 
     fn task_count(&self) -> usize {
