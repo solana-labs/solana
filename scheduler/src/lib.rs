@@ -594,7 +594,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(
         Option<&'a mut TaskQueue>,
-        std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, Task>,
+        TaskQueueOccupiedEntry<'a, UniqueWeight, Task>,
     )> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
