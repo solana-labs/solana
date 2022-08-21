@@ -224,7 +224,7 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) {
-        let LockAttempt {target, requested_usage, status/*, remembered*/} = attempt;
+        let LockAttempt {target, requested_usage, status/*, remembered*/, ..} = attempt;
 
                 let mut page = target.page_mut();
 
