@@ -835,13 +835,11 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
         task: Task,
-        lock_attempts: Vec<LockAttempt>,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
 
         Box::new(ExecutionEnvironment {
-            lock_attempts,
             task,
             unique_weight,
             cu: rng.gen_range(3, 1000),
@@ -850,9 +848,8 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, contended_queue: &TaskQueue) {
-        let lock_attempts = std::mem::take(&mut ee.lock_attempts);
         // do par()-ly?
-        Self::unlock_after_execution(address_book, contended_queue, lock_attempts);
+        Self::unlock_after_execution(address_book, contended_queue, ee.task.lock_attempts);
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
@@ -871,7 +868,7 @@ impl ScheduleStage {
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book, prefer_immediate)
-                .map(|(uw, t, ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
+                .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t));
         maybe_ee
     }
 
