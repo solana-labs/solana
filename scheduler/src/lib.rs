@@ -793,7 +793,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution(address_book: &mut AddressBook, contended_queue: &TaskQueue, lock_attempts: Vec<LockAttempt>) {
+    fn unlock_after_execution(address_book: &mut AddressBook, contended_queue: &TaskQueue, lock_attempts: &mut Vec<LockAttempt>) {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended_while_queued = address_book.reset_lock(&mut l, true);
 
@@ -849,7 +849,8 @@ impl ScheduleStage {
     #[inline(never)]
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, contended_queue: &TaskQueue) {
         // do par()-ly?
-        Self::unlock_after_execution(address_book, contended_queue, ee.task.tx.1);
+        let mut task = unsafe { TaskInQueue::get_mut_unchecked(&mut ee.task) };
+        Self::unlock_after_execution(address_book, contended_queue, &mut task.tx.1);
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
