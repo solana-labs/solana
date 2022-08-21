@@ -800,6 +800,10 @@ impl ScheduleStage {
 
             let page = l.target.page_mut();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
+                let task_id = l.heaviest_uncontended.load(std::sync::atomic::Ordering::SeqCst);
+                if task_id != 0 {
+                    address_book.uncontended_task_ids.insert(task_id);
+                }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
