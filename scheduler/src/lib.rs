@@ -848,7 +848,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, contended_queue: &TaskQueue) {
         // do par()-ly?
-        Self::unlock_after_execution(address_book, contended_queue, ee.task.lock_attempts);
+        Self::unlock_after_execution(address_book, contended_queue, ee.task.1.lock_attempts);
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
