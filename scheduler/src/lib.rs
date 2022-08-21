@@ -653,7 +653,7 @@ impl ScheduleStage {
             let mut task = queue_entry.remove();
             let mut task = unsafe { TaskInQueue::get_mut_unchecked(&mut task) };
             let ll = std::mem::take(&mut task.tx.1);
-            return Some((a.0, task, ll));
+            return Some((a.0, *task, ll));
         }
 
         trace!("pop begin");
