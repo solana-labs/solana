@@ -651,7 +651,7 @@ impl ScheduleStage {
             let queue_entry = contended_queue.entry_to_execute(a.0);
             let mut task = queue_entry.remove();
             let ll = std::mem::take(&mut task.tx.1);
-            return Some((a.0, task, ll));
+            return Some((a.0, Arc::get_mut(&mut task), ll));
         }
 
         trace!("pop begin");
