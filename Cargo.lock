@@ -6107,6 +6107,7 @@ dependencies = [
  "crossbeam-channel",
  "crossbeam-skiplist",
  "dashmap",
+ "im",
  "log",
  "rand 0.7.3",
  "rayon",
