@@ -896,11 +896,11 @@ impl ScheduleStage {
         from: &crossbeam_channel::Receiver<Multiplexed>,
         from_exec: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
-        to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
     ) {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
-        let background_ee_reaper = to_next_stage.is_none().then_some(|| {
+        let background_ee_reaper = maybe_to_next_stage.is_none().then_some(|| {
             let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
                 while let a = ee_receiver.recv().unwrap() {
@@ -910,6 +910,12 @@ impl ScheduleStage {
 
             (h, ee_sender)
         });
+
+        let to_next_stage = if let Some(to_next_stage) = maybe_to_next_stage {
+            to_next_stage
+        } else {
+            background_ee_reaper.unwrap().1
+        }
 
         loop {
             trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
@@ -928,11 +934,7 @@ impl ScheduleStage {
 
                                 Self::commit_result(&mut processed_execution_environment, address_book, contended_queue);
                                 // async-ly propagate the result to rpc subsystems
-                                if let Some(to_next_stage) = to_next_stage {
-                                    to_next_stage.send(processed_execution_environment).unwrap();
-                                } else {
-                                    panic!();
-                                }
+                                to_next_stage.send(processed_execution_environment).unwrap();
                             }
 
                             Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
@@ -963,11 +965,7 @@ impl ScheduleStage {
 
                         Self::commit_result(&mut processed_execution_environment, address_book, contended_queue);
                         // async-ly propagate the result to rpc subsystems
-                        if let Some(to_next_stage) = to_next_stage {
-                            to_next_stage.send(processed_execution_environment).unwrap();
-                        } else {
-                            to_background_reaper.send(processed_execution_environment).unwrap();
-                        }
+                        to_next_stage.send(processed_execution_environment).unwrap();
                         if false && from_exec.len() > 0 {
                             processed_execution_environment = from_exec.recv().unwrap();
                         } else {
