@@ -34,6 +34,7 @@ pub struct ExecutionEnvironment {
     pub cu: usize,
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
+    pub checkpointed_contended_queeu: TaskQueue,
 }
 
 impl ExecutionEnvironment {
