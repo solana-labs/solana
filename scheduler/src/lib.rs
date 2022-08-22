@@ -791,7 +791,7 @@ impl ScheduleStage {
             //AddressBook::forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Provisional => {
-                    l.target.page_mut().provisional_task_ids.insert(*unique_weight, ());
+                    l.target.page_mut().provisional_task_ids.insert(*unique_weight);
                 }
                 LockStatus::Succeded => {
                     // do nothing
@@ -840,7 +840,7 @@ impl ScheduleStage {
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for task_id in std::mem::take(&mut page.provisional_task_ids).keys().into_iter() {
+                for task_id in std::mem::take(&mut page.provisional_task_ids).into_iter() {
                     match address_book.provisioning_trackers.entry(*task_id) {
                         std::collections::hash_map::Entry::Occupied(mut tracker_entry) => {
                             let tracker = tracker_entry.get_mut();
