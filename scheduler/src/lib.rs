@@ -911,7 +911,7 @@ impl ScheduleStage {
                 }
             }).unwrap();
 
-            (Some(h), ee_sender)
+            (Some(h, ee_sender, ee_receiver), &ee_sender)
         };
 
         loop {
