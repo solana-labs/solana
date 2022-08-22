@@ -213,7 +213,24 @@ pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
     fulfilled_provisional_task_ids: WeightedTaskIds,
-    provisioning_trackers: std::collections::HashMap<UniqueWeight, usize>, 
+    provisioning_trackers: std::collections::HashMap<UniqueWeight, ProvisioningTracker>, 
+}
+
+struct ProvisioningTracker {
+    remaining_count: usize,
+}
+
+impl ProvisioningTracker {
+    fn new(remaining_count) -> Self {
+        Self { remaining_count }
+    }
+
+    fn is_fulfilled(&self) -> bool {
+        self.remaining_count == 0
+    }
+
+    fn tick(&mut self) {
+    }
 }
 
 impl AddressBook {
