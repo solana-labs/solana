@@ -487,7 +487,7 @@ impl TaskQueue {
     fn entry_to_execute(
         &mut self,
         unique_weight: UniqueWeight,
-    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue, _>> {
+    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
             TaskQueueEntry::Occupied(queue_entry) => Some(queue_entry),
@@ -502,7 +502,7 @@ impl TaskQueue {
     #[inline(never)]
     fn heaviest_entry_to_execute(
         &mut self,
-    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue, _>> {
+    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
         //panic!()//self.tasks.last_entry()
         let k = self.tasks.get_max().map(|(k, _v)| *k);
         k.map(|k| self.entry_to_execute(k).unwrap())
@@ -626,7 +626,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(
         Option<&'a mut TaskQueue>,
-        TaskQueueOccupiedEntry<'a, UniqueWeight, TaskInQueue, _>,
+        TaskQueueOccupiedEntry<'a, UniqueWeight, TaskInQueue>,
     )> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
