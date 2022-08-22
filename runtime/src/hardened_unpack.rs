@@ -2,6 +2,7 @@ use {
     bzip2::bufread::BzDecoder,
     log::*,
     rand::{thread_rng, Rng},
+    regex::Regex,
     solana_sdk::genesis_config::{GenesisConfig, DEFAULT_GENESIS_ARCHIVE, DEFAULT_GENESIS_FILE},
     std::{
         collections::HashMap,
@@ -109,6 +110,7 @@ where
 
     let mut total_entries = 0;
     let mut last_log_update = Instant::now();
+    let re_appendvec_filename = Regex::new(r#"^accounts/\d+\.\d+$"#).unwrap();
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;
@@ -170,8 +172,15 @@ where
         }
         let target = target.unwrap();
 
-        let unpack = entry.unpack(target);
-        check_unpack_result(unpack.map(|_unpack| true)?, path_str)?;
+        if re_appendvec_filename.is_match(&*path_str) && target.exists() {
+            info!(
+                "The accounts target {} exists.  Skip unpacking",
+                target.display()
+            );
+        } else {
+            let unpack = entry.unpack(target);
+            check_unpack_result(unpack.map(|_unpack| true)?, path_str)?;
+        }
 
         // Sanitize permissions.
         let mode = match entry.header().entry_type() {

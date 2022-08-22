@@ -19,9 +19,7 @@ use {
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
-    solana_core::{
-        system_monitor_service::SystemMonitorService, validator::move_and_async_delete_path,
-    },
+    solana_core::system_monitor_service::SystemMonitorService,
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
@@ -1070,11 +1068,14 @@ fn load_bank_forks(
         );
 
         if non_primary_accounts_path.exists() {
+            info!("Skip accounts clearing, to save the snapshot unpacking work.")
+            /*
             info!("Clearing {:?}", non_primary_accounts_path);
             let mut measure_time = Measure::start("clean_non_primary_accounts_paths");
             move_and_async_delete_path(&non_primary_accounts_path);
             measure_time.stop();
             info!("done. {}", measure_time);
+            */
         }
 
         vec![non_primary_accounts_path]

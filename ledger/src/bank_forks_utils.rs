@@ -199,7 +199,9 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+    // The first try is to skip unpacking the appendvec files from the snapshot
+    // if they already exist on disk.
+    let result_try_using_existing_accounts_files =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.full_snapshot_archives_dir,
@@ -219,10 +221,49 @@ fn bank_forks_from_snapshot(
             process_options.accounts_db_skip_shrink,
             process_options.verify_index,
             process_options.accounts_db_config.clone(),
-            accounts_update_notifier,
+            accounts_update_notifier.clone(),
             exit,
-        )
-        .expect("Load from snapshot failed");
+        );
+    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+        match result_try_using_existing_accounts_files {
+            Ok(val) => val,
+            Err(e) => {
+                info!("bank_from_latest_snapshot_archives failed with error {}, clear the accounts files and try again", e);
+                // Clear the account path and try again with the appendvec files unpacked from the snapshot
+                for path in &account_paths {
+                    let mut top_path = path.clone();
+                    top_path.push("accounts");
+                    if let Err(err) = std::fs::remove_dir_all(top_path) {
+                        panic!("error deleting accounts path {:?}: {}", path, err);
+                    }
+                }
+
+                let val = snapshot_utils::bank_from_latest_snapshot_archives(
+                    &snapshot_config.bank_snapshots_dir,
+                    &snapshot_config.full_snapshot_archives_dir,
+                    &snapshot_config.incremental_snapshot_archives_dir,
+                    &account_paths,
+                    genesis_config,
+                    &process_options.runtime_config,
+                    process_options.debug_keys.clone(),
+                    Some(&crate::builtins::get(
+                        process_options.runtime_config.bpf_jit,
+                    )),
+                    process_options.account_indexes.clone(),
+                    process_options.accounts_db_caching_enabled,
+                    process_options.limit_load_slot_count_from_snapshot,
+                    process_options.shrink_ratio,
+                    process_options.accounts_db_test_hash_calculation,
+                    process_options.accounts_db_skip_shrink,
+                    process_options.verify_index,
+                    process_options.accounts_db_config.clone(),
+                    accounts_update_notifier,
+                    exit,
+                )
+                .expect("Load from snapshot failed");
+                val
+            }
+        };
 
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);

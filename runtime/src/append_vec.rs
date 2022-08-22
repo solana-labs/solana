@@ -192,6 +192,7 @@ pub struct AppendVec {
 
 impl Drop for AppendVec {
     fn drop(&mut self) {
+        /*
         if self.remove_on_drop {
             if let Err(_e) = remove_file(&self.path) {
                 // promote this to panic soon.
@@ -200,7 +201,7 @@ impl Drop for AppendVec {
                 //error!("AppendVec failed to remove {:?}: {:?}", &self.path, e);
                 inc_new_counter_info!("append_vec_drop_fail", 1);
             }
-        }
+        }*/
     }
 }
 
