@@ -900,7 +900,10 @@ impl ScheduleStage {
     ) {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
-        let background_ee_reaper = maybe_to_next_stage.is_none().then(|| {
+
+        let to_next_stage = if let Some(to_next_stage) = maybe_to_next_stage {
+            (None, *to_next_stage)
+        } else {
             let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
                 while let a = ee_receiver.recv().unwrap() {
@@ -908,13 +911,7 @@ impl ScheduleStage {
                 }
             }).unwrap();
 
-            (h, ee_sender)
-        });
-
-        let to_next_stage = if let Some(to_next_stage) = maybe_to_next_stage {
-            *to_next_stage
-        } else {
-            background_ee_reaper.unwrap().1
+            (Some(h), ee_sender)
         };
 
         loop {
