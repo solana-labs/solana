@@ -900,7 +900,12 @@ impl ScheduleStage {
     ) {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
-        let background_ee_reaper = to_next_stage.is_some().then_some(|| 3);
+        let background_ee_reaper = to_next_stage.is_none().then_some(|| {
+            let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
+            }).unwrap();
+
+            (h)
+        });
 
         loop {
             trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
