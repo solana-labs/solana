@@ -350,7 +350,7 @@ fn handle_transaction_batch(
         page.contended_unique_weights.remove_task_id(&uq);
         if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
             let mut found = true;
-            while !contended_queue.has_task(task_cursor.value()) {
+            while !transaction_batch.checkpointed_contended_queue.has_task(task_cursor.value()) {
                 if let Some(new_cursor) = task_cursor.prev() {
                     task_cursor = new_cursor;
                 } else {
