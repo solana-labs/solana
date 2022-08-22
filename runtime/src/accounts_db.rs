@@ -2252,7 +2252,7 @@ impl AccountsDb {
             };
             if no_delete {
                 let mut pending_store_ids = HashSet::new();
-                for (_bank_id, account_info) in account_infos {
+                for (_slot, account_info) in account_infos {
                     if !already_counted.contains(&account_info.store_id()) {
                         pending_store_ids.insert(account_info.store_id());
                     }
