@@ -6156,7 +6156,7 @@ impl AccountsDb {
         AccountsHash::checked_cast_for_capitalization(balances.map(|b| b as u128).sum::<u128>())
     }
 
-    fn calculate_accounts_hash(
+    pub fn calculate_accounts_hash(
         &self,
         max_slot: Slot,
         config: &CalcAccountsHashConfig<'_>,
