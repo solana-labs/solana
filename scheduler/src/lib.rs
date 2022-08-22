@@ -458,7 +458,7 @@ impl TaskQueue {
     fn entry_to_execute(
         &mut self,
         unique_weight: UniqueWeight,
-    ) -> TaskQueueOccupiedEntry<'_, UniqueWeight, std::sync::Arc<Task>> {
+    ) -> TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue> {
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
             TaskQueueEntry::Occupied(queue_entry) => queue_entry,
@@ -473,8 +473,8 @@ impl TaskQueue {
     #[inline(never)]
     fn heaviest_entry_to_execute(
         &mut self,
-    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, std::sync::Arc<Task>>> {
-        self.tasks.last_entry()
+    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
+        panic!()//self.tasks.last_entry()
     }
 
     fn task_count(&self) -> usize {
@@ -595,7 +595,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(
         Option<&'a mut TaskQueue>,
-        TaskQueueOccupiedEntry<'a, UniqueWeight, std::sync::Arc<Task>>,
+        TaskQueueOccupiedEntry<'a, UniqueWeight, TaskInQueue>,
     )> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
