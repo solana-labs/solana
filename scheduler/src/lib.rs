@@ -473,7 +473,7 @@ type TaskInQueue = std::sync::Arc<Task>;
 //type TaskQueueEntry<'a, K, V> = im::ordmap::Entry<'a, K, V>;
 //type TaskQueueOccupiedEntry<'a, K, V> = im::ordmap::OccupiedEntry<'a, K, V>;
 type TaskQueueEntry<'a, K, V, S> = im::hashmap::Entry<'a, K, V, S>;
-type TaskQueueOccupiedEntry<'a> = im::hashmap::OccupiedEntry<'a, UniqueWeight, TaskQueue, std::collections::hash_map::RandomState>;
+type TaskQueueOccupiedEntry<'a> = im::hashmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
 
 impl TaskQueue {
     #[inline(never)]
