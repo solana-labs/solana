@@ -4650,36 +4650,14 @@ name = "solana-client"
 version = "1.12.0"
 dependencies = [
  "log",
- "solana-client-common",
  "solana-measure",
  "solana-nonce-client",
  "solana-pubsub-client",
  "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-thin-client",
  "solana-tpu-client",
-]
-
-[[package]]
-name = "solana-client-common"
-version = "1.12.0"
-dependencies = [
- "base64 0.13.0",
- "bs58",
- "indicatif",
- "jsonrpc-core",
- "reqwest",
- "semver",
- "serde",
- "serde_derive",
- "serde_json",
- "solana-account-decoder",
- "solana-faucet",
- "solana-sdk 1.12.0",
- "solana-transaction-status",
- "solana-version",
- "spl-token-2022",
- "thiserror",
 ]
 
 [[package]]
@@ -5320,7 +5298,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
- "solana-client-common",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "thiserror",
  "tokio",
@@ -5414,6 +5392,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bs58",
+ "indicatif",
  "log",
  "reqwest",
  "semver",
@@ -5421,12 +5400,33 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
- "solana-client-common",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
  "tokio",
+]
+
+[[package]]
+name = "solana-rpc-client-api"
+version = "1.12.0"
+dependencies = [
+ "base64 0.13.0",
+ "bs58",
+ "jsonrpc-core",
+ "reqwest",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-faucet",
+ "solana-sdk 1.12.0",
+ "solana-transaction-status",
+ "solana-version",
+ "spl-token-2022",
+ "thiserror",
 ]
 
 [[package]]
@@ -5766,8 +5766,8 @@ version = "1.12.0"
 dependencies = [
  "bincode",
  "log",
- "solana-client-common",
  "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-tpu-client",
 ]
@@ -5783,6 +5783,7 @@ dependencies = [
  "futures 0.3.23",
  "futures-util",
  "indexmap",
+ "indicatif",
  "itertools",
  "lazy_static",
  "log",
@@ -5792,12 +5793,12 @@ dependencies = [
  "rand 0.7.3",
  "rayon",
  "rustls 0.20.6",
- "solana-client-common",
  "solana-measure",
  "solana-metrics",
  "solana-net-utils",
  "solana-pubsub-client",
  "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-streamer",
  "thiserror",

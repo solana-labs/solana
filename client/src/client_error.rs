@@ -1,1 +1,1 @@
-pub use solana_client_common::client_error::*;
+pub use solana_rpc_client_api::client_error::*;

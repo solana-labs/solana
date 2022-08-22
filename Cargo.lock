@@ -4944,35 +4944,14 @@ name = "solana-client"
 version = "1.12.0"
 dependencies = [
  "log",
- "solana-client-common",
  "solana-measure",
  "solana-nonce-client",
  "solana-pubsub-client",
  "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-thin-client",
  "solana-tpu-client",
-]
-
-[[package]]
-name = "solana-client-common"
-version = "1.12.0"
-dependencies = [
- "base64 0.13.0",
- "bs58",
- "jsonrpc-core",
- "reqwest",
- "semver 1.0.13",
- "serde",
- "serde_derive",
- "serde_json",
- "solana-account-decoder",
- "solana-faucet",
- "solana-sdk 1.12.0",
- "solana-transaction-status",
- "solana-version",
- "spl-token-2022",
- "thiserror",
 ]
 
 [[package]]
@@ -5678,8 +5657,8 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-clap-utils",
- "solana-client-common",
  "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "thiserror",
  "tokio",
@@ -5920,7 +5899,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
- "solana-client-common",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "thiserror",
  "tokio",
@@ -6032,12 +6011,33 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
- "solana-client-common",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
  "tokio",
+]
+
+[[package]]
+name = "solana-rpc-client-api"
+version = "1.12.0"
+dependencies = [
+ "base64 0.13.0",
+ "bs58",
+ "jsonrpc-core",
+ "reqwest",
+ "semver 1.0.13",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-faucet",
+ "solana-sdk 1.12.0",
+ "solana-transaction-status",
+ "solana-version",
+ "spl-token-2022",
+ "thiserror",
 ]
 
 [[package]]
@@ -6444,9 +6444,9 @@ dependencies = [
  "bincode",
  "log",
  "rayon",
- "solana-client-common",
  "solana-logger 1.12.0",
  "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-tpu-client",
 ]
@@ -6505,7 +6505,6 @@ dependencies = [
  "rand_chacha 0.2.2",
  "rayon",
  "rustls 0.20.6",
- "solana-client-common",
  "solana-logger 1.12.0",
  "solana-measure",
  "solana-metrics",
@@ -6513,6 +6512,7 @@ dependencies = [
  "solana-perf",
  "solana-pubsub-client",
  "solana-rpc-client",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-streamer",
  "thiserror",

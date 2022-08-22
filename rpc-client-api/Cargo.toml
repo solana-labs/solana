@@ -1,12 +1,12 @@
 [package]
-name = "solana-client-common"
+name = "solana-rpc-client-api"
 version = "1.12.0"
 description = "Solana Client Common Utilities"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
-documentation = "https://docs.rs/solana-client-common"
+documentation = "https://docs.rs/solana-rpc-client-api"
 edition = "2021"
 
 [dependencies]

@@ -190,7 +190,7 @@ mod tests {
         clap::App,
         serde_json::{self, json},
         solana_account_decoder::{UiAccount, UiAccountEncoding},
-        solana_client_common::{
+        solana_rpc_client_api::{
             rpc_request::RpcRequest,
             rpc_response::{Response, RpcFeeCalculator, RpcFees, RpcResponseContext},
         },

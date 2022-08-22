@@ -5,8 +5,8 @@
 
 use {
     log::*,
-    solana_client_common::{rpc_config::RpcProgramAccountsConfig, rpc_response::Response},
     solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{rpc_config::RpcProgramAccountsConfig, rpc_response::Response},
     solana_sdk::{
         account::Account,
         client::{AsyncClient, Client, SyncClient},

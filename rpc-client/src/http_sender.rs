@@ -9,7 +9,7 @@ use {
         header::{self, CONTENT_TYPE, RETRY_AFTER},
         StatusCode,
     },
-    solana_client_common::{
+    solana_rpc_client_api::{
         client_error::Result,
         rpc_custom_error,
         rpc_error_object::RpcErrorObject,

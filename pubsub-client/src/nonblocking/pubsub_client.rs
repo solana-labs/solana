@@ -8,7 +8,7 @@ use {
     serde::de::DeserializeOwned,
     serde_json::{json, Map, Value},
     solana_account_decoder::UiAccount,
-    solana_client_common::{
+    solana_rpc_client_api::{
         rpc_config::{
             RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,

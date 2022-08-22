@@ -1,1 +1,1 @@
-pub use solana_client_common::rpc_deprecated_config::*;
+pub use solana_rpc_client_api::rpc_deprecated_config::*;

@@ -11,13 +11,13 @@ use {
     futures_util::{future::join_all, stream::StreamExt},
     indicatif::ProgressBar,
     log::*,
-    solana_client_common::{
+    solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
+    solana_rpc_client::{nonblocking::rpc_client::RpcClient, spinner},
+    solana_rpc_client_api::{
         client_error::{ClientError, Result as ClientResult},
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         rpc_response::{RpcContactInfo, SlotUpdate},
     },
-    solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
-    solana_rpc_client::{nonblocking::rpc_client::RpcClient, spinner},
     solana_sdk::{
         clock::Slot,
         commitment_config::CommitmentConfig,
