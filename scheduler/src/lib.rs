@@ -34,7 +34,7 @@ pub struct ExecutionEnvironment {
     pub cu: usize,
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
-    pub checkpointed_contended_queeu: TaskQueue,
+    pub checkpointed_contended_queue: TaskQueue,
 }
 
 impl ExecutionEnvironment {
@@ -836,14 +836,17 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
         task: TaskInQueue,
+        contended_queue: &TaskQueue,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
+        let checkpointed_contended_queue = contended_queue.clone();
 
         Box::new(ExecutionEnvironment {
             task,
             unique_weight,
             cu: rng.gen_range(3, 1000),
+            checkpointed_contended_queue,
         })
     }
 
@@ -870,7 +873,7 @@ impl ScheduleStage {
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book, prefer_immediate)
-                .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t));
+                .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t, contended_queue));
         maybe_ee
     }
 
