@@ -11,7 +11,7 @@ import {
 import {PublicKey, PUBLIC_KEY_LENGTH} from '../publickey';
 import * as shortvec from '../utils/shortvec-encoding';
 import assert from '../utils/assert';
-import {PACKET_DATA_SIZE} from '../transaction/constants';
+import {PACKET_DATA_SIZE, VERSION_PREFIX_MASK} from '../transaction/constants';
 
 /**
  * Message constructor arguments
@@ -255,8 +255,7 @@ export class MessageV0 {
     let byteArray = [...serializedMessage];
 
     const prefix = byteArray.shift() as number;
-    const MESSAGE_VERSION_PREFIX_MASK = 0x7f;
-    const maskedPrefix = prefix & MESSAGE_VERSION_PREFIX_MASK;
+    const maskedPrefix = prefix & VERSION_PREFIX_MASK;
     assert(
       prefix !== maskedPrefix,
       `Expected versioned message but received legacy message`,

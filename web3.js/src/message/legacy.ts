@@ -5,7 +5,7 @@ import * as BufferLayout from '@solana/buffer-layout';
 import {PublicKey, PUBLIC_KEY_LENGTH} from '../publickey';
 import type {Blockhash} from '../blockhash';
 import * as Layout from '../layout';
-import {PACKET_DATA_SIZE} from '../transaction/constants';
+import {PACKET_DATA_SIZE, VERSION_PREFIX_MASK} from '../transaction/constants';
 import * as shortvec from '../utils/shortvec-encoding';
 import {toBuffer} from '../utils/to-buffer';
 import {
@@ -233,6 +233,15 @@ export class Message {
     let byteArray = [...buffer];
 
     const numRequiredSignatures = byteArray.shift() as number;
+    if (
+      numRequiredSignatures !==
+      (numRequiredSignatures & VERSION_PREFIX_MASK)
+    ) {
+      throw new Error(
+        'Versioned messages must be deserialized with VersionedMessage.deserialize()',
+      );
+    }
+
     const numReadonlySignedAccounts = byteArray.shift() as number;
     const numReadonlyUnsignedAccounts = byteArray.shift() as number;
 

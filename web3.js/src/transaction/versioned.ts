@@ -3,7 +3,7 @@ import * as BufferLayout from '@solana/buffer-layout';
 
 import {Signer} from '../keypair';
 import assert from '../utils/assert';
-import {VersionedMessage, deserializeMessage} from '../message/versioned';
+import {VersionedMessage} from '../message/versioned';
 import {SIGNATURE_LENGTH_IN_BYTES} from './constants';
 import * as shortvec from '../utils/shortvec-encoding';
 import * as Layout from '../layout';
@@ -81,7 +81,7 @@ export class VersionedTransaction {
       );
     }
 
-    const message = deserializeMessage(new Uint8Array(byteArray));
+    const message = VersionedMessage.deserialize(new Uint8Array(byteArray));
     return new VersionedTransaction(message, signatures);
   }
 
