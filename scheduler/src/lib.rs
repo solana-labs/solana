@@ -472,8 +472,8 @@ pub struct TaskQueue {
 type TaskInQueue = std::sync::Arc<Task>;
 //type TaskQueueEntry<'a, K, V> = im::ordmap::Entry<'a, K, V>;
 //type TaskQueueOccupiedEntry<'a, K, V> = im::ordmap::OccupiedEntry<'a, K, V>;
-type TaskQueueEntry<'a, K, V> = im::hashmap::Entry<'a, K, V>;
-type TaskQueueOccupiedEntry<'a, K, V> = im::hashmap::OccupiedEntry<'a, K, V>;
+type TaskQueueEntry<'a, K, V, S> = im::hashmap::Entry<'a, K, V, S>;
+type TaskQueueOccupiedEntry<'a, K, V, S> = im::hashmap::OccupiedEntry<'a, K, V, S>;
 
 impl TaskQueue {
     #[inline(never)]
