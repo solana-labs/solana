@@ -891,38 +891,22 @@ impl<'a> BorrowedAccount<'a> {
 pub struct ExecutionRecord {
     pub accounts: Vec<TransactionAccount>,
     pub return_data: TransactionReturnData,
-    pub changed_account_count: u64,
-    pub total_size_of_all_accounts: u64,
-    pub total_size_of_touched_accounts: u64,
+    pub touched_account_count: u64,
     pub accounts_resize_delta: i64,
 }
 
 /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
-        let mut changed_account_count = 0u64;
-        let mut total_size_of_all_accounts = 0u64;
-        let mut total_size_of_touched_accounts = 0u64;
         let account_touched_flags = context
             .account_touched_flags
             .try_borrow()
             .expect("borrowing transaction_context.account_touched_flags failed");
-        for (index_in_transaction, was_touched) in account_touched_flags.iter().enumerate() {
-            let account_data_size = context
-                .get_account_at_index(index_in_transaction)
-                .expect("index_in_transaction out of bounds")
-                .try_borrow()
-                .expect("borrowing a transaction_context.account failed")
-                .data()
-                .len() as u64;
-            total_size_of_all_accounts =
-                total_size_of_all_accounts.saturating_add(account_data_size);
-            if *was_touched {
-                changed_account_count = changed_account_count.saturating_add(1);
-                total_size_of_touched_accounts =
-                    total_size_of_touched_accounts.saturating_add(account_data_size);
-            }
-        }
+        let touched_account_count = account_touched_flags
+            .iter()
+            .fold(0u64, |accumulator, was_touched| {
+                accumulator.saturating_add(*was_touched as u64)
+            });
         Self {
             accounts: Vec::from(Pin::into_inner(context.account_keys))
                 .into_iter()
@@ -933,9 +917,7 @@ impl From<TransactionContext> for ExecutionRecord {
                 )
                 .collect(),
             return_data: context.return_data,
-            changed_account_count,
-            total_size_of_all_accounts,
-            total_size_of_touched_accounts,
+            touched_account_count,
             accounts_resize_delta: RefCell::into_inner(context.accounts_resize_delta),
         }
     }
