@@ -599,13 +599,14 @@ impl ScheduleStage {
         Option<&'a mut TaskQueue>,
         TaskQueueOccupiedEntry<'a, UniqueWeight, TaskInQueue>,
     )> {
+        loop {
         match (
             runnable_queue.heaviest_entry_to_execute(),
             Self::get_heaviest_from_contended(address_book),
         ) {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
-                Some((Some(contended_queue), heaviest_runnable_entry))
+                return Some((Some(contended_queue), heaviest_runnable_entry))
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
@@ -613,7 +614,7 @@ impl ScheduleStage {
                 weight_from_contended.remove();
 
                 if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
-                    Some(( None, queue_entry))
+                    return Some(( None, queue_entry))
                 } else {
                     continue;
                 }
@@ -624,13 +625,13 @@ impl ScheduleStage {
 
                 if true || weight_from_runnable > uw {
                     trace!("select: runnable > contended");
-                    Some((Some(contended_queue), heaviest_runnable_entry))
+                    return Some((Some(contended_queue), heaviest_runnable_entry))
                 } else if false && uw > weight_from_runnable {
                     trace!("select: contended > runnnable");
                     let uw = *uw;
                     weight_from_contended.remove();
                     if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
-                        Some(( None, queue_entry))
+                        return Some(( None, queue_entry))
                     } else {
                         continue;
                     }
@@ -642,8 +643,9 @@ impl ScheduleStage {
             }
             (None, None) => {
                 trace!("select: none");
-                None
+                return None
             }
+        }
         }
     }
 
