@@ -221,7 +221,7 @@ struct ProvisioningTracker {
 }
 
 impl ProvisioningTracker {
-    fn new(remaining_count) -> Self {
+    fn new(remaining_count: usize) -> Self {
         Self { remaining_count }
     }
 
