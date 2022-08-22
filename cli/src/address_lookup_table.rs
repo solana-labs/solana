@@ -71,15 +71,20 @@ impl AddressLookupTableSubCommands for App<'_, '_> {
                                 .value_name("AUTHORITY_PUBKEY")
                                 .takes_value(true)
                                 .validator(is_pubkey)
-                                .help("Lookup table authority [default: the default configured keypair]")
+                                .help(
+                                    "Lookup table authority address [default: the default configured keypair]. \
+                                    WARNING: Cannot be used for creating a lookup table for a cluster running v1.11
+                                    or earlier which requires the authority to sign for lookup table creation.",
+                                )
                         )
                         .arg(
                             Arg::with_name("authority_signer")
                                 .long("authority-signer")
                                 .value_name("AUTHORITY_SIGNER")
                                 .takes_value(true)
+                                .conflicts_with("authority")
                                 .validator(is_valid_signer)
-                                .help("Lookup table authority [default: the default configured keypair]")
+                                .help("Lookup table authority keypair [default: the default configured keypair].")
                         )
                         .arg(
                             Arg::with_name("payer")
