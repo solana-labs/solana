@@ -475,7 +475,7 @@ impl TaskQueue {
         &mut self,
     ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
         //panic!()//self.tasks.last_entry()
-        self.tasks.get_max().map(|(k, _v)| self.entry_to_execute(v))
+        self.tasks.get_max().map(|(k, _v)| self.entry_to_execute(k))
     }
 
     fn task_count(&self) -> usize {
