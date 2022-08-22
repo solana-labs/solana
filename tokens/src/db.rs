@@ -4,7 +4,12 @@ use {
     serde::{Deserialize, Serialize},
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature, transaction::Transaction},
     solana_transaction_status::TransactionStatus,
-    std::{cmp::Ordering, fs, io, path::Path},
+    std::{
+        cmp::Ordering,
+        fs,
+        io::{self, Write},
+        path::Path,
+    },
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -145,7 +150,7 @@ pub fn update_finalized_transaction(
                 "Signature not found {} and blockhash expired. Transaction either dropped or the validator purged the transaction status.",
                 signature
             );
-            eprintln!();
+            let _ = std::io::stderr().flush();
 
             // Don't discard the transaction, because we are not certain the
             // blockhash is expired. Instead, return None to signal that
@@ -167,7 +172,7 @@ pub fn update_finalized_transaction(
         // The transaction was finalized, but execution failed. Drop it.
         eprintln!("Error in transaction with signature {}: {}", signature, e);
         eprintln!("Discarding transaction record");
-        eprintln!();
+        let _ = std::io::stderr().flush();
         db.rem(&signature.to_string())?;
         return Ok(None);
     }
