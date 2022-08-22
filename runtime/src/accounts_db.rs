@@ -3668,6 +3668,25 @@ impl AccountsDb {
         })
     }
 
+    /// unref each account in 'accounts' that already exists in 'ancient_store'
+    fn unref_accounts_already_in_storage(
+        &self,
+        accounts: &[(&Pubkey, &StoredAccountMeta<'_>, u64)],
+        ancient_store: &Arc<AccountStorageEntry>,
+    ) {
+        // make a hashset of all keys we're about to add to this storage
+        let mut accounts_to_add = accounts.iter().map(|entry| entry.0).collect::<HashSet<_>>();
+        // for each key that we're about to add that already exists in this storage, we need to unref. The account was in a different storage.
+        // Now it is being put into an ancient storage, but it is already there, so maintain max of 1 ref per storage in the accounts index.
+        ancient_store.accounts.account_iter().for_each(|account| {
+            // remove here is so we don't unref the same key more than once in this loop if it is in the existing storage 2 times already
+            let key = &account.meta.pubkey;
+            if accounts_to_add.remove(key) {
+                self.accounts_index.unref_from_storage(key);
+            }
+        })
+    }
+
     /// helper function to cleanup call to 'store_accounts_frozen'
     fn store_ancient_accounts(
         &self,
@@ -3675,8 +3694,14 @@ impl AccountsDb {
         ancient_store: &Arc<AccountStorageEntry>,
         accounts: &AccountsToStore,
         storage_selector: StorageSelector,
+        unref_if_already_exists: bool,
     ) -> StoreAccountsTiming {
         let (accounts, hashes) = accounts.get(storage_selector);
+
+        if unref_if_already_exists {
+            self.unref_accounts_already_in_storage(accounts, ancient_store);
+        }
+
         self.store_accounts_frozen(
             (ancient_slot, accounts),
             Some(hashes),
@@ -3850,6 +3875,8 @@ impl AccountsDb {
                 ancient_store,
                 &to_store,
                 StorageSelector::Primary,
+                // we are adding accounts to an existing append vec from a different slot. We need to unref each account that exists already in 'ancient_store'.
+                slot != ancient_slot,
             );
 
             // handle accounts from 'slot' which did not fit into the current ancient append vec
@@ -3876,6 +3903,7 @@ impl AccountsDb {
                     ancient_store,
                     &to_store,
                     StorageSelector::Overflow,
+                    false, // we do not want to unref any accounts. these remaining accounts are going into a new append vec, so we need to keep the refs they already have
                 );
                 store_accounts_timing.store_accounts_elapsed = timing.store_accounts_elapsed;
                 store_accounts_timing.update_index_elapsed = timing.update_index_elapsed;
