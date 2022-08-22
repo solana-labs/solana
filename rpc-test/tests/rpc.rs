@@ -402,7 +402,7 @@ fn test_rpc_subscriptions() {
         }
     }
 
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + Duration::from_secs(60);
     let mut account_notifications = transactions.len();
     while account_notifications > 0 {
         let timeout = deadline.saturating_duration_since(Instant::now());
