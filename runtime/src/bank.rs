@@ -3059,7 +3059,7 @@ impl Bank {
         thread_pool: &ThreadPool,
         metrics: &mut RewardsMetrics,
         update_rewards_from_cached_accounts: bool,
-    ) -> f64 {
+    ) {
         let stake_history = self.stakes_cache.stakes().history().clone();
         let vote_with_stake_delegations_map = {
             let mut m = Measure::start("load_vote_and_stake_accounts_us");
@@ -3125,7 +3125,7 @@ impl Bank {
         metrics.calculate_points_us.fetch_add(m.as_us(), Relaxed);
 
         if points == 0 {
-            return 0.0;
+            return;
         }
 
         // pay according to point value
@@ -3212,7 +3212,6 @@ impl Bank {
         self.store_stake_accounts(&stake_rewards, metrics);
         let vote_rewards = self.store_vote_accounts(vote_account_rewards, metrics);
         self.update_reward_history(stake_rewards, vote_rewards);
-        point_value.rewards as f64 / point_value.points as f64
     }
 
     fn store_stake_accounts(&self, stake_rewards: &[StakeReward], metrics: &mut RewardsMetrics) {
