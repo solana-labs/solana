@@ -36,7 +36,8 @@ use {
             self, blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
             curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
             disable_fees_sysvar, enable_early_verification_of_account_modifications,
-            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id, syscall_saturated_math,
+            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
+            stop_sibling_instruction_search_at_parent, syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -1708,6 +1709,9 @@ declare_syscall!(
                 .consume(budget.syscall_base_cost),
             result
         );
+        let stop_sibling_instruction_search_at_parent = invoke_context
+            .feature_set
+            .is_active(&stop_sibling_instruction_search_at_parent::id());
 
         // Reverse iterate through the instruction trace,
         // ignoring anything except instructions on the same level
@@ -1725,8 +1729,9 @@ declare_syscall!(
                     .map_err(SyscallError::InstructionError),
                 result
             );
-            if instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT
-                && stack_height > TRANSACTION_LEVEL_STACK_HEIGHT
+            if (stop_sibling_instruction_search_at_parent
+                || instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT)
+                && instruction_context.get_stack_height() < stack_height
             {
                 break;
             }
