@@ -914,7 +914,7 @@ impl ScheduleStage {
         let to_next_stage = if let Some(to_next_stage) = maybe_to_next_stage {
             to_next_stage
         } else {
-            background_ee_reaper.unwrap().1
+            &background_ee_reaper.unwrap().1
         }
 
         loop {
