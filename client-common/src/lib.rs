@@ -8,7 +8,6 @@ pub mod rpc_error_object;
 pub mod rpc_filter;
 pub mod rpc_request;
 pub mod rpc_response;
-pub mod spinner;
 
 #[macro_use]
 extern crate serde_derive;

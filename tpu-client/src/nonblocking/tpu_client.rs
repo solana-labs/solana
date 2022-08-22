@@ -9,15 +9,15 @@ use {
     },
     bincode::serialize,
     futures_util::{future::join_all, stream::StreamExt},
+    indicatif::ProgressBar,
     log::*,
     solana_client_common::{
         client_error::{ClientError, Result as ClientResult},
         rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         rpc_response::{RpcContactInfo, SlotUpdate},
-        spinner,
     },
     solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
-    solana_rpc_client::nonblocking::rpc_client::RpcClient,
+    solana_rpc_client::{nonblocking::rpc_client::RpcClient, spinner},
     solana_sdk::{
         clock::Slot,
         commitment_config::CommitmentConfig,
@@ -366,7 +366,7 @@ impl TpuClient {
                         if !self.send_transaction(transaction).await {
                             let _result = self.rpc_client.send_transaction(transaction).await.ok();
                         }
-                        spinner::set_message_for_confirmed_transactions(
+                        set_message_for_confirmed_transactions(
                             &progress_bar,
                             confirmed_transactions,
                             total_transactions,
@@ -381,7 +381,7 @@ impl TpuClient {
 
                 // Wait for the next block before checking for transaction statuses
                 let mut block_height_refreshes = 10;
-                spinner::set_message_for_confirmed_transactions(
+                set_message_for_confirmed_transactions(
                     &progress_bar,
                     confirmed_transactions,
                     total_transactions,
@@ -430,7 +430,7 @@ impl TpuClient {
                             }
                         }
                     }
-                    spinner::set_message_for_confirmed_transactions(
+                    set_message_for_confirmed_transactions(
                         &progress_bar,
                         confirmed_transactions,
                         total_transactions,
@@ -665,4 +665,27 @@ async fn maybe_fetch_cache_info(
         maybe_epoch_info,
         maybe_slot_leaders,
     }
+}
+
+fn set_message_for_confirmed_transactions(
+    progress_bar: &ProgressBar,
+    confirmed_transactions: u32,
+    total_transactions: usize,
+    block_height: Option<u64>,
+    last_valid_block_height: u64,
+    status: &str,
+) {
+    progress_bar.set_message(format!(
+        "{:>5.1}% | {:<40}{}",
+        confirmed_transactions as f64 * 100. / total_transactions as f64,
+        status,
+        match block_height {
+            Some(block_height) => format!(
+                " [block height {}; re-sign in {} blocks]",
+                block_height,
+                last_valid_block_height.saturating_sub(block_height),
+            ),
+            None => String::new(),
+        },
+    ));
 }

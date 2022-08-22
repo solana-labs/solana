@@ -4960,7 +4960,6 @@ version = "1.12.0"
 dependencies = [
  "base64 0.13.0",
  "bs58",
- "indicatif",
  "jsonrpc-core",
  "reqwest",
  "semver 1.0.13",
@@ -6023,6 +6022,7 @@ dependencies = [
  "bs58",
  "crossbeam-channel",
  "futures 0.3.23",
+ "indicatif",
  "jsonrpc-core",
  "jsonrpc-http-server",
  "log",
@@ -6494,6 +6494,7 @@ dependencies = [
  "futures 0.3.23",
  "futures-util",
  "indexmap",
+ "indicatif",
  "itertools",
  "lazy_static",
  "log",

@@ -18,6 +18,7 @@ use {
         mock_sender::MockSender,
         rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClientConfig},
         rpc_sender::*,
+        spinner,
     },
     bincode::serialize,
     log::*,
@@ -32,7 +33,6 @@ use {
         rpc_filter::{self, RpcFilterType},
         rpc_request::{RpcError, RpcRequest, RpcResponseErrorData, TokenAccountsFilter},
         rpc_response::*,
-        spinner,
     },
     solana_sdk::{
         account::Account,
