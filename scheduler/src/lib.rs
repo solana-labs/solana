@@ -902,6 +902,8 @@ impl ScheduleStage {
         let mut current_unique_key = u64::max_value();
         let background_ee_reaper = to_next_stage.is_none().then_some(|| {
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
+                while a = to_reaper.recv().unwrap() {
+                }
             }).unwrap();
 
             (h)
