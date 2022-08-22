@@ -920,6 +920,8 @@ impl ScheduleStage {
                                 // async-ly propagate the result to rpc subsystems
                                 if let Some(to_next_stage) = to_next_stage {
                                     to_next_stage.send(processed_execution_environment).unwrap();
+                                } else {
+                                    panic!();
                                 }
                             }
 
@@ -953,6 +955,8 @@ impl ScheduleStage {
                         // async-ly propagate the result to rpc subsystems
                         if let Some(to_next_stage) = to_next_stage {
                             to_next_stage.send(processed_execution_environment).unwrap();
+                        } else {
+                            panic!();
                         }
                         if false && from_exec.len() > 0 {
                             processed_execution_environment = from_exec.recv().unwrap();
