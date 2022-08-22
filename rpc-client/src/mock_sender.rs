@@ -7,9 +7,9 @@ use {
     solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_rpc_client_api::{
         client_error::Result,
-        rpc_config::RpcBlockProductionConfig,
-        rpc_request::RpcRequest,
-        rpc_response::{
+        config::RpcBlockProductionConfig,
+        request::RpcRequest,
+        response::{
             Response, RpcAccountBalance, RpcBlockProduction, RpcBlockProductionRange, RpcBlockhash,
             RpcConfirmedTransactionStatusWithSignature, RpcContactInfo, RpcFees, RpcIdentity,
             RpcInflationGovernor, RpcInflationRate, RpcInflationReward, RpcKeyedAccount,

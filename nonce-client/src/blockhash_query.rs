@@ -191,8 +191,8 @@ mod tests {
         serde_json::{self, json},
         solana_account_decoder::{UiAccount, UiAccountEncoding},
         solana_rpc_client_api::{
-            rpc_request::RpcRequest,
-            rpc_response::{Response, RpcFeeCalculator, RpcFees, RpcResponseContext},
+            request::RpcRequest,
+            response::{Response, RpcFeeCalculator, RpcFees, RpcResponseContext},
         },
         solana_sdk::{
             account::Account,

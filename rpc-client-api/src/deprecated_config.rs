@@ -1,6 +1,6 @@
 #![allow(deprecated)]
 use {
-    crate::rpc_config::{
+    crate::config::{
         EncodingConfig, RpcBlockConfig, RpcEncodingConfigWrapper, RpcTransactionConfig,
     },
     solana_sdk::{clock::Slot, commitment_config::CommitmentConfig},

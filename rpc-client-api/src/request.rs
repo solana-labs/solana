@@ -1,5 +1,5 @@
 use {
-    crate::rpc_response::RpcSimulateTransactionResult,
+    crate::response::RpcSimulateTransactionResult,
     serde_json::{json, Value},
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::fmt,
@@ -274,7 +274,7 @@ pub enum TokenAccountsFilter {
 mod tests {
     use {
         super::*,
-        crate::rpc_config::RpcTokenAccountsFilter,
+        crate::config::RpcTokenAccountsFilter,
         solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel},
     };
 

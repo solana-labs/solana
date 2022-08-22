@@ -1,6 +1,6 @@
 //! Implementation defined RPC server errors
 use {
-    crate::rpc_response::RpcSimulateTransactionResult,
+    crate::response::RpcSimulateTransactionResult,
     jsonrpc_core::{Error, ErrorCode},
     solana_sdk::clock::Slot,
     solana_transaction_status::EncodeError,

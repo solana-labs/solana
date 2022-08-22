@@ -15,8 +15,8 @@ use {
     solana_rpc_client::{nonblocking::rpc_client::RpcClient, spinner},
     solana_rpc_client_api::{
         client_error::{ClientError, Result as ClientResult},
-        rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
-        rpc_response::{RpcContactInfo, SlotUpdate},
+        request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+        response::{RpcContactInfo, SlotUpdate},
     },
     solana_sdk::{
         clock::Slot,

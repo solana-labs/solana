@@ -9,14 +9,14 @@ use {
     serde_json::{json, Map, Value},
     solana_account_decoder::UiAccount,
     solana_rpc_client_api::{
-        rpc_config::{
+        config::{
             RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
             RpcTransactionLogsFilter,
         },
-        rpc_error_object::RpcErrorObject,
-        rpc_filter::maybe_map_filters,
-        rpc_response::{
+        error_object::RpcErrorObject,
+        filter::maybe_map_filters,
+        response::{
             Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
             RpcSignatureResult, RpcVersionInfo, RpcVote, SlotInfo, SlotUpdate,
         },

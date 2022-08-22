@@ -1,5 +1,5 @@
 use {
-    crate::rpc_filter::RpcFilterType,
+    crate::filter::RpcFilterType,
     solana_account_decoder::{UiAccountEncoding, UiDataSliceConfig},
     solana_sdk::{
         clock::{Epoch, Slot},

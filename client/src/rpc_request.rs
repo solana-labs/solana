@@ -1,1 +1,1 @@
-pub use solana_rpc_client_api::rpc_request::*;
+pub use solana_rpc_client_api::request::*;

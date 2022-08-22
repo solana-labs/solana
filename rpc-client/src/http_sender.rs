@@ -11,10 +11,10 @@ use {
     },
     solana_rpc_client_api::{
         client_error::Result,
-        rpc_custom_error,
-        rpc_error_object::RpcErrorObject,
-        rpc_request::{RpcError, RpcRequest, RpcResponseErrorData},
-        rpc_response::RpcSimulateTransactionResult,
+        custom_error,
+        error_object::RpcErrorObject,
+        request::{RpcError, RpcRequest, RpcResponseErrorData},
+        response::RpcSimulateTransactionResult,
     },
     std::{
         sync::{
@@ -164,7 +164,7 @@ impl RpcSender for HttpSender {
                 return match serde_json::from_value::<RpcErrorObject>(json["error"].clone()) {
                     Ok(rpc_error_object) => {
                         let data = match rpc_error_object.code {
-                                    rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE => {
+                                    custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE => {
                                         match serde_json::from_value::<RpcSimulateTransactionResult>(json["error"]["data"].clone()) {
                                             Ok(data) => RpcResponseErrorData::SendTransactionPreflightFailure(data),
                                             Err(err) => {
@@ -173,9 +173,9 @@ impl RpcSender for HttpSender {
                                             }
                                         }
                                     },
-                                    rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY => {
-                                        match serde_json::from_value::<rpc_custom_error::NodeUnhealthyErrorData>(json["error"]["data"].clone()) {
-                                            Ok(rpc_custom_error::NodeUnhealthyErrorData {num_slots_behind}) => RpcResponseErrorData::NodeUnhealthy {num_slots_behind},
+                                    custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY => {
+                                        match serde_json::from_value::<custom_error::NodeUnhealthyErrorData>(json["error"]["data"].clone()) {
+                                            Ok(custom_error::NodeUnhealthyErrorData {num_slots_behind}) => RpcResponseErrorData::NodeUnhealthy {num_slots_behind},
                                             Err(_err) => {
                                                 RpcResponseErrorData::Empty
                                             }

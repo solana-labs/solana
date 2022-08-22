@@ -10,13 +10,13 @@ use {
     },
     solana_account_decoder::UiAccount,
     solana_rpc_client_api::{
-        rpc_config::{
+        config::{
             RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
             RpcTransactionLogsFilter,
         },
-        rpc_filter,
-        rpc_response::{
+        filter,
+        response::{
             Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
             RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
         },
@@ -396,7 +396,7 @@ impl PubsubClient {
                 let node_version = PubsubProgramClientSubscription::get_version(&socket_clone).ok();
                 // If node does not support the pubsub `getVersion` method, assume version is old
                 // and filters should be mapped (node_version.is_none()).
-                rpc_filter::maybe_map_filters(node_version, filters)
+                filter::maybe_map_filters(node_version, filters)
                     .map_err(PubsubClientError::RequestError)?;
             }
         }

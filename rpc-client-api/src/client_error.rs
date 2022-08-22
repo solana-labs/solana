@@ -1,13 +1,13 @@
 pub use reqwest;
 use {
-    crate::{rpc_request, rpc_response},
+    crate::{request, response},
     solana_faucet::faucet::FaucetError,
     solana_sdk::{
         signature::SignerError, transaction::TransactionError, transport::TransportError,
     },
     std::io,
     thiserror::Error,
-}; // export `reqwest` for clients
+};
 
 #[derive(Error, Debug)]
 pub enum ClientErrorKind {
@@ -16,7 +16,7 @@ pub enum ClientErrorKind {
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
     #[error(transparent)]
-    RpcError(#[from] rpc_request::RpcError),
+    RpcError(#[from] request::RpcError),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::error::Error),
     #[error(transparent)]
@@ -32,10 +32,10 @@ pub enum ClientErrorKind {
 impl ClientErrorKind {
     pub fn get_transaction_error(&self) -> Option<TransactionError> {
         match self {
-            Self::RpcError(rpc_request::RpcError::RpcResponseError {
+            Self::RpcError(request::RpcError::RpcResponseError {
                 data:
-                    rpc_request::RpcResponseErrorData::SendTransactionPreflightFailure(
-                        rpc_response::RpcSimulateTransactionResult {
+                    request::RpcResponseErrorData::SendTransactionPreflightFailure(
+                        response::RpcSimulateTransactionResult {
                             err: Some(tx_err), ..
                         },
                     ),
@@ -75,28 +75,28 @@ impl From<ClientErrorKind> for TransportError {
 #[derive(Error, Debug)]
 #[error("{kind}")]
 pub struct ClientError {
-    pub request: Option<rpc_request::RpcRequest>,
+    pub request: Option<request::RpcRequest>,
 
     #[source]
     pub kind: ClientErrorKind,
 }
 
 impl ClientError {
-    pub fn new_with_request(kind: ClientErrorKind, request: rpc_request::RpcRequest) -> Self {
+    pub fn new_with_request(kind: ClientErrorKind, request: request::RpcRequest) -> Self {
         Self {
             request: Some(request),
             kind,
         }
     }
 
-    pub fn into_with_request(self, request: rpc_request::RpcRequest) -> Self {
+    pub fn into_with_request(self, request: request::RpcRequest) -> Self {
         Self {
             request: Some(request),
             ..self
         }
     }
 
-    pub fn request(&self) -> Option<&rpc_request::RpcRequest> {
+    pub fn request(&self) -> Option<&request::RpcRequest> {
         self.request.as_ref()
     }
 
@@ -151,8 +151,8 @@ impl From<reqwest::Error> for ClientError {
     }
 }
 
-impl From<rpc_request::RpcError> for ClientError {
-    fn from(err: rpc_request::RpcError) -> Self {
+impl From<request::RpcError> for ClientError {
+    fn from(err: request::RpcError) -> Self {
         Self {
             request: None,
             kind: err.into(),

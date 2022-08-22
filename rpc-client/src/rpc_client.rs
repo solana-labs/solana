@@ -8,7 +8,7 @@
 
 pub use crate::mock_sender::Mocks;
 #[allow(deprecated)]
-use solana_rpc_client_api::rpc_deprecated_config::{
+use solana_rpc_client_api::deprecated_config::{
     RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
 };
 use {
@@ -25,9 +25,9 @@ use {
     },
     solana_rpc_client_api::{
         client_error::Result as ClientResult,
-        rpc_config::{RpcAccountInfoConfig, *},
-        rpc_request::{RpcRequest, TokenAccountsFilter},
-        rpc_response::*,
+        config::{RpcAccountInfoConfig, *},
+        request::{RpcRequest, TokenAccountsFilter},
+        response::*,
     },
     solana_sdk::{
         account::Account,
@@ -119,12 +119,12 @@ pub struct GetConfirmedSignaturesForAddress2Config {
 ///
 /// Methods on `RpcClient` return
 /// [`client_error::Result`][solana_rpc_client_api::client_error::Result], and many of them
-/// return the [`RpcResult`][solana_rpc_client_api::rpc_response::RpcResult] typedef, which
-/// contains [`Response<T>`][solana_rpc_client_api::rpc_response::Response] on `Ok`. Both
+/// return the [`RpcResult`][solana_rpc_client_api::response::RpcResult] typedef, which
+/// contains [`Response<T>`][solana_rpc_client_api::response::Response] on `Ok`. Both
 /// `client_error::Result` and [`RpcResult`] contain `ClientError` on error. In
 /// the case of `RpcResult`, the actual return value is in the
-/// [`value`][solana_rpc_client_api::rpc_response::Response::value] field, with RPC contextual
-/// information in the [`context`][solana_rpc_client_api::rpc_response::Response::context]
+/// [`value`][solana_rpc_client_api::response::Response::value] field, with RPC contextual
+/// information in the [`context`][solana_rpc_client_api::response::Response::context]
 /// field, so it is common for the value to be accessed with `?.value`, as in
 ///
 /// ```
@@ -445,8 +445,8 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_rpc_client_api::{
-    /// #     rpc_request::RpcRequest,
-    /// #     rpc_response::{Response, RpcResponseContext},
+    /// #     request::RpcRequest,
+    /// #     response::{Response, RpcResponseContext},
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use std::collections::HashMap;
@@ -590,11 +590,11 @@ impl RpcClient {
     /// containing an [`RpcResponseError`] with `code` set to
     /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`].
     ///
-    /// [`RpcError`]: solana_rpc_client_api::rpc_request::RpcError
-    /// [`RpcResponseError`]: solana_rpc_client_api::rpc_request::RpcError::RpcResponseError
-    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
+    /// [`RpcError`]: solana_rpc_client_api::request::RpcError
+    /// [`RpcResponseError`]: solana_rpc_client_api::request::RpcError::RpcResponseError
+    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
     ///
     /// # RPC Reference
     ///
@@ -681,8 +681,8 @@ impl RpcClient {
     /// method.
     ///
     /// [`send_transaction_with_config`]: RpcClient::send_transaction_with_config
-    /// [`skip_preflight`]: solana_rpc_client_api::rpc_config::RpcSendTransactionConfig::skip_preflight
-    /// [`RpcSendTransactionConfig`]: solana_rpc_client_api::rpc_config::RpcSendTransactionConfig
+    /// [`skip_preflight`]: solana_rpc_client_api::config::RpcSendTransactionConfig::skip_preflight
+    /// [`RpcSendTransactionConfig`]: solana_rpc_client_api::config::RpcSendTransactionConfig
     /// [`send_and_confirm_transaction`]: RpcClient::send_and_confirm_transaction
     ///
     /// # Errors
@@ -700,11 +700,11 @@ impl RpcClient {
     /// containing an [`RpcResponseError`] with `code` set to
     /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`].
     ///
-    /// [`RpcError`]: solana_rpc_client_api::rpc_request::RpcError
-    /// [`RpcResponseError`]: solana_rpc_client_api::rpc_request::RpcError::RpcResponseError
-    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
+    /// [`RpcError`]: solana_rpc_client_api::request::RpcError
+    /// [`RpcResponseError`]: solana_rpc_client_api::request::RpcError::RpcResponseError
+    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
     ///
     /// # RPC Reference
     ///
@@ -752,8 +752,8 @@ impl RpcClient {
     /// method.
     ///
     /// [`send_transaction_with_config`]: RpcClient::send_transaction_with_config
-    /// [`skip_preflight`]: solana_rpc_client_api::rpc_config::RpcSendTransactionConfig::skip_preflight
-    /// [`RpcSendTransactionConfig`]: solana_rpc_client_api::rpc_config::RpcSendTransactionConfig
+    /// [`skip_preflight`]: solana_rpc_client_api::config::RpcSendTransactionConfig::skip_preflight
+    /// [`RpcSendTransactionConfig`]: solana_rpc_client_api::config::RpcSendTransactionConfig
     /// [`send_and_confirm_transaction`]: RpcClient::send_and_confirm_transaction
     ///
     /// # Errors
@@ -773,11 +773,11 @@ impl RpcClient {
     /// containing an [`RpcResponseError`] with `code` set to
     /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`].
     ///
-    /// [`RpcError`]: solana_rpc_client_api::rpc_request::RpcError
-    /// [`RpcResponseError`]: solana_rpc_client_api::rpc_request::RpcError::RpcResponseError
-    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
-    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_rpc_client_api::rpc_custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
+    /// [`RpcError`]: solana_rpc_client_api::request::RpcError
+    /// [`RpcResponseError`]: solana_rpc_client_api::request::RpcError::RpcResponseError
+    /// [`JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_TRANSACTION_SIGNATURE_VERIFICATION_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
+    /// [`JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY`]: solana_rpc_client_api::custom_error::JSON_RPC_SERVER_ERROR_NODE_UNHEALTHY
     ///
     /// # RPC Reference
     ///
@@ -790,7 +790,7 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_config::RpcSendTransactionConfig,
+    /// #     config::RpcSendTransactionConfig,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::{
@@ -968,8 +968,8 @@ impl RpcClient {
     /// [`RpcSimulateTransactionResult`] will be `Some`. Any logs emitted from
     /// the transaction are returned in the [`logs`] field.
     ///
-    /// [`err`]: solana_rpc_client_api::rpc_response::RpcSimulateTransactionResult::err
-    /// [`logs`]: solana_rpc_client_api::rpc_response::RpcSimulateTransactionResult::logs
+    /// [`err`]: solana_rpc_client_api::response::RpcSimulateTransactionResult::err
+    /// [`logs`]: solana_rpc_client_api::response::RpcSimulateTransactionResult::logs
     ///
     /// Simulating a transaction is similar to the ["preflight check"] that is
     /// run by default when sending a transaction.
@@ -982,7 +982,7 @@ impl RpcClient {
     /// `true`.
     ///
     /// [`simulate_transaction_with_config`]: RpcClient::simulate_transaction_with_config
-    /// [`sig_verify`]: solana_rpc_client_api::rpc_config::RpcSimulateTransactionConfig::sig_verify
+    /// [`sig_verify`]: solana_rpc_client_api::config::RpcSimulateTransactionConfig::sig_verify
     ///
     /// # RPC Reference
     ///
@@ -995,7 +995,7 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_response::RpcSimulateTransactionResult,
+    /// #     response::RpcSimulateTransactionResult,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::{
@@ -1029,8 +1029,8 @@ impl RpcClient {
     /// [`RpcSimulateTransactionResult`] will be `Some`. Any logs emitted from
     /// the transaction are returned in the [`logs`] field.
     ///
-    /// [`err`]: solana_rpc_client_api::rpc_response::RpcSimulateTransactionResult::err
-    /// [`logs`]: solana_rpc_client_api::rpc_response::RpcSimulateTransactionResult::logs
+    /// [`err`]: solana_rpc_client_api::response::RpcSimulateTransactionResult::err
+    /// [`logs`]: solana_rpc_client_api::response::RpcSimulateTransactionResult::logs
     ///
     /// Simulating a transaction is similar to the ["preflight check"] that is
     /// run by default when sending a transaction.
@@ -1043,7 +1043,7 @@ impl RpcClient {
     /// `true`.
     ///
     /// [`simulate_transaction_with_config`]: RpcClient::simulate_transaction_with_config
-    /// [`sig_verify`]: solana_rpc_client_api::rpc_config::RpcSimulateTransactionConfig::sig_verify
+    /// [`sig_verify`]: solana_rpc_client_api::config::RpcSimulateTransactionConfig::sig_verify
     ///
     /// This method can additionally query information about accounts by
     /// including them in the [`accounts`] field of the
@@ -1051,8 +1051,8 @@ impl RpcClient {
     /// are reported in the [`accounts`][accounts2] field of the returned
     /// [`RpcSimulateTransactionResult`].
     ///
-    /// [`accounts`]: solana_rpc_client_api::rpc_config::RpcSimulateTransactionConfig::accounts
-    /// [accounts2]: solana_rpc_client_api::rpc_response::RpcSimulateTransactionResult::accounts
+    /// [`accounts`]: solana_rpc_client_api::config::RpcSimulateTransactionConfig::accounts
+    /// [accounts2]: solana_rpc_client_api::response::RpcSimulateTransactionResult::accounts
     ///
     /// # RPC Reference
     ///
@@ -1065,8 +1065,8 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_config::RpcSimulateTransactionConfig,
-    /// #     rpc_response::RpcSimulateTransactionResult,
+    /// #     config::RpcSimulateTransactionConfig,
+    /// #     response::RpcSimulateTransactionResult,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::{
@@ -1635,7 +1635,7 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_config::{RpcBlockProductionConfig, RpcBlockProductionConfigRange},
+    /// #     config::{RpcBlockProductionConfig, RpcBlockProductionConfigRange},
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::{
@@ -1686,7 +1686,7 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_response::StakeActivationState,
+    /// #     response::StakeActivationState,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::{
@@ -1815,7 +1815,7 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
+    /// #     config::{RpcLargestAccountsConfig, RpcLargestAccountsFilter},
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
@@ -1909,7 +1909,7 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_config::RpcGetVoteAccountsConfig,
+    /// #     config::RpcGetVoteAccountsConfig,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::{
@@ -2042,7 +2042,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_rpc_client_api::{
-    /// #     rpc_config::RpcBlockConfig,
+    /// #     config::RpcBlockConfig,
     /// #     client_error::ClientError,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
@@ -2574,7 +2574,7 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_config::RpcTransactionConfig,
+    /// #     config::RpcTransactionConfig,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::{
@@ -2793,7 +2793,7 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_config::RpcLeaderScheduleConfig,
+    /// #     config::RpcLeaderScheduleConfig,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::commitment_config::CommitmentConfig;
@@ -3042,7 +3042,7 @@ impl RpcClient {
     /// [`RpcError::ForUser`]. This is unlike [`get_account_with_commitment`],
     /// which returns `Ok(None)` if the account does not exist.
     ///
-    /// [`RpcError::ForUser`]: solana_rpc_client_api::rpc_request::RpcError::ForUser
+    /// [`RpcError::ForUser`]: solana_rpc_client_api::request::RpcError::ForUser
     /// [`get_account_with_commitment`]: RpcClient::get_account_with_commitment
     ///
     /// # RPC Reference
@@ -3137,7 +3137,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_rpc_client_api::{
-    /// #     rpc_config::RpcAccountInfoConfig,
+    /// #     config::RpcAccountInfoConfig,
     /// #     client_error::ClientError,
     /// # };
     /// # use solana_rpc_client::rpc_client::{self, RpcClient};
@@ -3299,7 +3299,7 @@ impl RpcClient {
     ///
     /// ```
     /// # use solana_rpc_client_api::{
-    /// #     rpc_config::RpcAccountInfoConfig,
+    /// #     config::RpcAccountInfoConfig,
     /// #     client_error::ClientError,
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
@@ -3502,8 +3502,8 @@ impl RpcClient {
     /// ```
     /// # use solana_rpc_client_api::{
     /// #     client_error::ClientError,
-    /// #     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    /// #     rpc_filter::{MemcmpEncodedBytes, RpcFilterType, Memcmp},
+    /// #     config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    /// #     filter::{MemcmpEncodedBytes, RpcFilterType, Memcmp},
     /// # };
     /// # use solana_rpc_client::rpc_client::RpcClient;
     /// # use solana_sdk::{
