@@ -465,15 +465,15 @@ pub struct Task {
 #[derive(Default, Debug, Clone)]
 pub struct TaskQueue {
     //tasks: std::collections::BTreeMap<UniqueWeight, Task>,
-    //tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
-    tasks: im::HashMap<UniqueWeight, TaskInQueue>,
+    tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
+    //tasks: im::HashMap<UniqueWeight, TaskInQueue>,
 }
 
 type TaskInQueue = std::sync::Arc<Task>;
-//type TaskQueueEntry<'a, K, V> = im::ordmap::Entry<'a, K, V>;
-//type TaskQueueOccupiedEntry<'a, K, V> = im::ordmap::OccupiedEntry<'a, K, V>;
-type TaskQueueEntry<'a, K, V, S> = im::hashmap::Entry<'a, K, V, S>;
-type TaskQueueOccupiedEntry<'a> = im::hashmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
+type TaskQueueEntry<'a, K, V> = im::ordmap::Entry<'a, K, V>;
+type TaskQueueOccupiedEntry<'a> = im::ordmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
+//type TaskQueueEntry<'a, K, V, S> = im::hashmap::Entry<'a, K, V, S>;
+//type TaskQueueOccupiedEntry<'a> = im::hashmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
 
 impl TaskQueue {
     #[inline(never)]
