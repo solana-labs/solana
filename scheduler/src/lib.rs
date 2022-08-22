@@ -473,7 +473,7 @@ type TaskInQueue = std::sync::Arc<Task>;
 //type TaskQueueEntry<'a, K, V> = im::ordmap::Entry<'a, K, V>;
 //type TaskQueueOccupiedEntry<'a, K, V> = im::ordmap::OccupiedEntry<'a, K, V>;
 type TaskQueueEntry<'a, K, V, S> = im::hashmap::Entry<'a, K, V, S>;
-type TaskQueueOccupiedEntry<'a, K, V> = im::hashmap::OccupiedEntry<'a, K, V, std::collections::hash_map::RandomState>;
+type TaskQueueOccupiedEntry<'a> = im::hashmap::OccupiedEntry<'a, UniqueWeight, TaskQueue, std::collections::hash_map::RandomState>;
 
 impl TaskQueue {
     #[inline(never)]
@@ -487,7 +487,7 @@ impl TaskQueue {
     fn entry_to_execute(
         &mut self,
         unique_weight: UniqueWeight,
-    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
+    ) -> Option<TaskQueueOccupiedEntry<'_>> {
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
             TaskQueueEntry::Occupied(queue_entry) => Some(queue_entry),
@@ -502,10 +502,10 @@ impl TaskQueue {
     #[inline(never)]
     fn heaviest_entry_to_execute(
         &mut self,
-    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
+    ) -> Option<TaskQueueOccupiedEntry<'_>> {
         //panic!()//self.tasks.last_entry()
-        //let k = self.tasks.get_max().map(|(k, _v)| *k);
-        let k = self.tasks.iter().next().map(|(k, _v)| *k);
+        let k = self.tasks.get_max().map(|(k, _v)| *k);
+        //let k = self.tasks.iter().next().map(|(k, _v)| *k);
         k.map(|k| self.entry_to_execute(k).unwrap())
     }
 
@@ -627,7 +627,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(
         Option<&'a mut TaskQueue>,
-        TaskQueueOccupiedEntry<'a, UniqueWeight, TaskInQueue>,
+        TaskQueueOccupiedEntry<'a>,
     )> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
