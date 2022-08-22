@@ -846,7 +846,7 @@ impl ScheduleStage {
                                 tracker_entry.remove();
                                 address_book.fulfilled_provisional_task_ids.insert(*task_id, ());
                             } else {
-                                trace!("provisional lock decrease: {} => {}", tracker.count() + 1, tracker.count();
+                                trace!("provisional lock decrease: {} => {}", tracker.count() + 1, tracker.count());
                             }
                         },
                         std::collections::hash_map::Entry::Vacant(_) => {
