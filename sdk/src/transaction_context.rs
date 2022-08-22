@@ -897,12 +897,9 @@ pub struct ExecutionRecord {
     pub accounts_resize_delta: i64,
 }
 
-impl ExecutionRecord {
-    /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
-    pub fn from_transaction_context(
-        context: TransactionContext,
-        number_of_message_accounts: usize,
-    ) -> Self {
+/// Used by the bank in the runtime to write back the processed accounts and recorded instructions
+impl From<TransactionContext> for ExecutionRecord {
+    fn from(context: TransactionContext) -> Self {
         let mut changed_account_count = 0u64;
         let mut total_size_of_all_accounts = 0u64;
         let mut total_size_of_touched_accounts = 0u64;
@@ -910,11 +907,7 @@ impl ExecutionRecord {
             .account_touched_flags
             .try_borrow()
             .expect("borrowing transaction_context.account_touched_flags failed");
-        for (index_in_transaction, was_touched) in account_touched_flags
-            .iter()
-            .take(number_of_message_accounts)
-            .enumerate()
-        {
+        for (index_in_transaction, was_touched) in account_touched_flags.iter().enumerate() {
             let account_data_size = context
                 .get_account_at_index(index_in_transaction)
                 .expect("index_in_transaction out of bounds")
