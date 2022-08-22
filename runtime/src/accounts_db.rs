@@ -2218,24 +2218,30 @@ impl AccountsDb {
     fn calc_delete_dependencies(
         purges: &HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
         store_counts: &mut HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
+        min_store_id: Option<AppendVecId>,
     ) {
         // Another pass to check if there are some filtered accounts which
         // do not match the criteria of deleting all appendvecs which contain them
         // then increment their storage count.
         let mut already_counted = HashSet::new();
+        let mut failed_store_id = None;
         for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
-            if account_infos.len() as RefCount == *ref_count_from_storage {
+            let all_stores_being_deleted =
+                account_infos.len() as RefCount == *ref_count_from_storage;
+            if all_stores_being_deleted {
                 let mut delete = true;
                 for (_slot, account_info) in account_infos {
+                    let store_id = account_info.store_id();
+                    let count = store_counts.get(&store_id).unwrap().0;
                     debug!(
                         "calc_delete_dependencies()
                         storage id: {},
                         count len: {}",
-                        account_info.store_id(),
-                        store_counts.get(&account_info.store_id()).unwrap().0,
+                        store_id, count,
                     );
-                    if store_counts.get(&account_info.store_id()).unwrap().0 != 0 {
+                    if count != 0 {
                         // one of the pubkeys in the store has account info to a store whose store count is not going to zero
+                        failed_store_id = Some(store_id);
                         delete = false;
                         break;
                     }
@@ -2268,6 +2274,14 @@ impl AccountsDb {
             }
             while !pending_store_ids.is_empty() {
                 let id = pending_store_ids.iter().next().cloned().unwrap();
+                if Some(id) == min_store_id {
+                    if let Some(failed_store_id) = failed_store_id.take() {
+                        info!("calc_delete_dependencies, oldest store is not able to be deleted because of {pubkey} in store {failed_store_id}");
+                    } else {
+                        info!("calc_delete_dependencies, oldest store is not able to be deleted because of {pubkey}, account infos len: {}, ref count: {ref_count_from_storage}", account_infos.len());
+                    }
+                }
+
                 pending_store_ids.remove(&id);
                 if !already_counted.insert(id) {
                     continue;
@@ -2436,15 +2450,23 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
-    ) -> Vec<Pubkey> {
+    ) -> (Vec<Pubkey>, Option<AppendVecId>) {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot_inclusive =
             max_clean_root_inclusive.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
-        self.dirty_stores.retain(|(slot, _store_id), store| {
+        // find the oldest append vec older than one epoch old
+        // we'll add logging if that append vec cannot be marked dead
+        let mut min_dirty_slot = self.get_accounts_hash_complete_one_epoch_old();
+        let mut min_dirty_store_id = None;
+        self.dirty_stores.retain(|(slot, store_id), store| {
             if *slot > max_slot_inclusive {
                 true
             } else {
+                if *slot < min_dirty_slot {
+                    min_dirty_slot = *slot;
+                    min_dirty_store_id = Some(*store_id);
+                }
                 dirty_stores.push((*slot, store.clone()));
                 false
             }
@@ -2531,7 +2553,7 @@ impl AccountsDb {
                 });
         }
 
-        pubkeys
+        (pubkeys, min_dirty_store_id)
     }
 
     /// Call clean_accounts() with the common parameters that tests/benches use.
@@ -2563,7 +2585,7 @@ impl AccountsDb {
         self.report_store_stats();
 
         let mut key_timings = CleanKeyTimings::default();
-        let mut pubkeys = self.construct_candidate_clean_keys(
+        let (mut pubkeys, min_dirty_store_id) = self.construct_candidate_clean_keys(
             max_clean_root,
             is_startup,
             last_full_snapshot_slot,
@@ -2758,7 +2780,11 @@ impl AccountsDb {
         store_counts_time.stop();
 
         let mut calc_deps_time = Measure::start("calc_deps");
-        Self::calc_delete_dependencies(&purges_zero_lamports, &mut store_counts);
+        Self::calc_delete_dependencies(
+            &purges_zero_lamports,
+            &mut store_counts,
+            min_dirty_store_id,
+        );
         calc_deps_time.stop();
 
         let mut purge_filter = Measure::start("purge_filter");
@@ -12997,7 +13023,7 @@ pub mod tests {
         store_counts.insert(1, (0, HashSet::from_iter(vec![key0, key1])));
         store_counts.insert(2, (0, HashSet::from_iter(vec![key1, key2])));
         store_counts.insert(3, (1, HashSet::from_iter(vec![key2])));
-        AccountsDb::calc_delete_dependencies(&purges, &mut store_counts);
+        AccountsDb::calc_delete_dependencies(&purges, &mut store_counts, None);
         let mut stores: Vec<_> = store_counts.keys().cloned().collect();
         stores.sort_unstable();
         for store in &stores {
