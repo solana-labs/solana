@@ -495,6 +495,7 @@ impl TaskQueue {
         }
     }
 
+    #[inline(never)]
     pub fn has_task(&self, unique_weight: &UniqueWeight) -> bool {
         self.tasks.contains_key(unique_weight)
     }
