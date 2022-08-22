@@ -85,6 +85,12 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .help("Show additional information"),
         )
         .arg(
+            Arg::with_name("use_quic")
+                .long("use-quic")
+                .global(true)
+                .help("Use QUIC when sending transactions."),
+        )
+        .arg(
             Arg::with_name("no_address_labels")
                 .long("no-address-labels")
                 .global(true)
