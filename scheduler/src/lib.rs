@@ -599,7 +599,6 @@ impl ScheduleStage {
         Option<&'a mut TaskQueue>,
         TaskQueueOccupiedEntry<'a, UniqueWeight, TaskInQueue>,
     )> {
-        loop {
         match (
             runnable_queue.heaviest_entry_to_execute(),
             Self::get_heaviest_from_contended(address_book),
@@ -616,7 +615,7 @@ impl ScheduleStage {
                 if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
                     return Some(( None, queue_entry))
                 } else {
-                    continue;
+                    return None;
                 }
             },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
@@ -633,7 +632,7 @@ impl ScheduleStage {
                     if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
                         return Some(( None, queue_entry))
                     } else {
-                        continue;
+                        return None;
                     }
                 } else {
                     unreachable!(
@@ -645,7 +644,6 @@ impl ScheduleStage {
                 trace!("select: none");
                 return None
             }
-        }
         }
     }
 
