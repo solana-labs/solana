@@ -904,6 +904,7 @@ impl ScheduleStage {
             let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
                 while let a = ee_receiver.recv().unwrap() {
+                    drop(a);
                 }
             }).unwrap();
 
