@@ -2071,7 +2071,7 @@ fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
     std::fs::rename(&path, &path_delete).unwrap();
 
     Builder::new()
-        .name("delete_path".to_string())
+        .name("solDeletePath".to_string())
         .spawn(move || {
             std::fs::remove_dir_all(&path_delete).unwrap();
             info!(
