@@ -14,6 +14,7 @@ use {
         solana_program::{system_instruction::SystemInstruction, system_program},
         sysvar::instructions::{BorrowedAccountMeta, BorrowedInstruction},
     },
+    std::collections::HashSet,
     std::convert::TryFrom,
     thiserror::Error,
 };
@@ -25,6 +26,11 @@ pub enum SanitizedMessage {
     Legacy(LegacyMessage),
     /// Sanitized version #0 message with dynamically loaded addresses
     V0(v0::LoadedMessage<'static>),
+    ///
+    SanitizedWithWritableAccountsIndexCache {
+        sanitized_message: Box<SanitizedMessage>,
+        writable_accounts_cache: HashSet<usize>,
+    },
 }
 
 #[derive(PartialEq, Debug, Error, Eq, Clone)]
@@ -61,6 +67,10 @@ impl SanitizedMessage {
         match self {
             SanitizedMessage::Legacy(message) => message.has_duplicates(),
             SanitizedMessage::V0(message) => message.has_duplicates(),
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message,
+                writable_accounts_cache: _,
+            } => sanitized_message.has_duplicates(),
         }
     }
 
@@ -70,6 +80,10 @@ impl SanitizedMessage {
         match self {
             Self::Legacy(message) => &message.header,
             Self::V0(loaded_msg) => &loaded_msg.message.header,
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message,
+                writable_accounts_cache: _,
+            } => sanitized_message.header(),
         }
     }
 
@@ -94,6 +108,10 @@ impl SanitizedMessage {
         match self {
             Self::Legacy(message) => &message.recent_blockhash,
             Self::V0(loaded_msg) => &loaded_msg.message.recent_blockhash,
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message,
+                writable_accounts_cache: _,
+            } => sanitized_message.recent_blockhash(),
         }
     }
 
@@ -103,6 +121,10 @@ impl SanitizedMessage {
         match self {
             Self::Legacy(message) => &message.instructions,
             Self::V0(loaded_msg) => &loaded_msg.message.instructions,
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message,
+                writable_accounts_cache: _,
+            } => sanitized_message.instructions(),
         }
     }
 
@@ -126,6 +148,10 @@ impl SanitizedMessage {
         match self {
             Self::Legacy(message) => AccountKeys::new(&message.account_keys, None),
             Self::V0(message) => message.account_keys(),
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message,
+                writable_accounts_cache: _,
+            } => sanitized_message.account_keys(),
         }
     }
 
@@ -147,6 +173,10 @@ impl SanitizedMessage {
         match self {
             Self::Legacy(message) => message.is_key_called_as_program(key_index),
             Self::V0(message) => message.is_key_called_as_program(key_index),
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message,
+                writable_accounts_cache: _,
+            } => sanitized_message.is_invoked(key_index),
         }
     }
 
@@ -156,12 +186,32 @@ impl SanitizedMessage {
         !self.is_invoked(key_index) || self.is_key_passed_to_program(key_index)
     }
 
+    /// Caches writable accounts index
+    fn get_writable_accounts_indexes(&self) -> HashSet<usize> {
+        let account_keys = self.account_keys();
+        let num_readonly_accounts = self.num_readonly_accounts();
+        let num_writable_accounts = account_keys.len().saturating_sub(num_readonly_accounts);
+        let mut writable_accounts = HashSet::with_capacity(num_writable_accounts);
+
+        for (i, _key) in account_keys.iter().enumerate() {
+            if self.is_writable(i) {
+                writable_accounts.insert(i);
+            }
+        }
+
+        writable_accounts
+    }
+
     /// Returns true if the account at the specified index is writable by the
     /// instructions in this message.
     pub fn is_writable(&self, index: usize) -> bool {
         match self {
             Self::Legacy(message) => message.is_writable(index),
             Self::V0(message) => message.is_writable(index),
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message: _,
+                writable_accounts_cache,
+            } => writable_accounts_cache.contains(&index),
         }
     }
 
@@ -175,6 +225,10 @@ impl SanitizedMessage {
     fn loaded_lookup_table_addresses(&self) -> Option<&LoadedAddresses> {
         match &self {
             SanitizedMessage::V0(message) => Some(&message.loaded_addresses),
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message,
+                writable_accounts_cache: _,
+            } => sanitized_message.loaded_lookup_table_addresses(),
             _ => None,
         }
     }
@@ -222,6 +276,10 @@ impl SanitizedMessage {
         match self {
             Self::Legacy(message) => message.is_upgradeable_loader_present(),
             Self::V0(message) => message.is_upgradeable_loader_present(),
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                sanitized_message,
+                writable_accounts_cache: _,
+            } => sanitized_message.is_upgradeable_loader_present(),
         }
     }
 
@@ -390,5 +448,104 @@ mod tests {
             message.get_ix_signers(3).collect::<HashSet<_>>(),
             HashSet::default()
         );
+    }
+
+    #[test]
+    fn test_writable_accounts_cache() {
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        let key3 = Pubkey::new_unique();
+        let key4 = Pubkey::new_unique();
+        let key5 = Pubkey::new_unique();
+
+        let legacy_message = SanitizedMessage::try_from(LegacyMessage {
+            header: MessageHeader {
+                num_required_signatures: 2,
+                num_readonly_signed_accounts: 1,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![key0, key1, key2, key3],
+            ..LegacyMessage::default()
+        })
+        .unwrap();
+        match legacy_message {
+            SanitizedMessage::Legacy(_) => {}
+            _ => panic!("Expect a SanitizedMessage::Legacy"),
+        }
+
+        // assert can convert sanitized legacy message to have writable accounts cache
+        {
+            let writable_accounts_cache = legacy_message.get_writable_accounts_indexes();
+            let legacy_message_sanitized_with_writable_accounts_index_cache =
+                SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                    sanitized_message: Box::new(legacy_message),
+                    writable_accounts_cache,
+                };
+
+            match legacy_message_sanitized_with_writable_accounts_index_cache {
+                SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                    sanitized_message: _,
+                    writable_accounts_cache,
+                } => {
+                    assert_eq!(writable_accounts_cache.len(), 2);
+                    assert!(writable_accounts_cache.contains(&0));
+                    assert!(!writable_accounts_cache.contains(&1));
+                    assert!(writable_accounts_cache.contains(&2));
+                    assert!(!writable_accounts_cache.contains(&3));
+                }
+                _ => {
+                    panic!("Expect to be SanitizedMessage::SanitizedWithWritableAccountsIndexCache")
+                }
+            }
+        }
+
+        let v0_message = SanitizedMessage::V0(v0::LoadedMessage::new(
+            v0::Message {
+                header: MessageHeader {
+                    num_required_signatures: 2,
+                    num_readonly_signed_accounts: 1,
+                    num_readonly_unsigned_accounts: 1,
+                },
+                account_keys: vec![key0, key1, key2, key3],
+                ..v0::Message::default()
+            },
+            LoadedAddresses {
+                writable: vec![key4],
+                readonly: vec![key5],
+            },
+        ));
+        match v0_message {
+            SanitizedMessage::V0(_) => {}
+            _ => panic!("Expect a SanitizedMessage::Legacy"),
+        }
+
+        // assert can convert sanitized versioned message to have writable accounts cache
+        {
+            let writable_accounts_cache = v0_message.get_writable_accounts_indexes();
+            let v0_message_sanitized_with_writable_accounts_index_cache =
+                SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                    sanitized_message: Box::new(v0_message),
+                    writable_accounts_cache,
+                };
+
+            match v0_message_sanitized_with_writable_accounts_index_cache {
+                SanitizedMessage::SanitizedWithWritableAccountsIndexCache {
+                    sanitized_message: _,
+                    writable_accounts_cache,
+                } => {
+                    assert_eq!(writable_accounts_cache.len(), 3);
+                    assert!(writable_accounts_cache.contains(&0));
+                    assert!(!writable_accounts_cache.contains(&1));
+                    assert!(writable_accounts_cache.contains(&2));
+                    assert!(!writable_accounts_cache.contains(&3));
+                    assert!(writable_accounts_cache.contains(&4));
+                    assert!(!writable_accounts_cache.contains(&5));
+                }
+                _ => {
+                    panic!("Expect to be SanitizedMessage::SanitizedWithWritableAccountsIndexCache")
+                }
+            }
+        }
     }
 }

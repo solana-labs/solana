@@ -204,6 +204,7 @@ impl SanitizedTransaction {
                 signatures,
                 message: VersionedMessage::Legacy(message.clone()),
             },
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {sanitized_message, writable_accounts_cache: _} => todo!(),
         }
     }
 
@@ -249,6 +250,7 @@ impl SanitizedTransaction {
         match &self.message {
             SanitizedMessage::Legacy(_) => LoadedAddresses::default(),
             SanitizedMessage::V0(message) => LoadedAddresses::clone(&message.loaded_addresses),
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {sanitized_message, writable_accounts_cache: _} => todo!(),
         }
     }
 
@@ -262,6 +264,7 @@ impl SanitizedTransaction {
         match &self.message {
             SanitizedMessage::Legacy(message) => message.serialize(),
             SanitizedMessage::V0(loaded_msg) => loaded_msg.message.serialize(),
+            SanitizedMessage::SanitizedWithWritableAccountsIndexCache {sanitized_message, writable_accounts_cache: _} => todo!(),
         }
     }
 
