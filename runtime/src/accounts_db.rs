@@ -3835,6 +3835,10 @@ impl AccountsDb {
                 current_ancient.as_ref().map(|(a, b)| (*a, b)).unwrap();
             let available_bytes = ancient_store.accounts.remaining_bytes();
             let mut start = Measure::start("find_alive_elapsed");
+            // todo for every account that is moving slots into an ancient append vec, if the account already exists IN the ancient append vec, then it needs to be deref'd
+            // also, we need to remove dups when we rewrite the append vec
+            // ancient append vecs can easily create append vecs with the same pubkey in it multiple times
+            // then, shrink needs to expect that there could be multiple accounts for the same pubkey
             let to_store = AccountsToStore::new(available_bytes, &alive_accounts, slot);
             start.stop();
             let find_alive_elapsed = start.as_us();
