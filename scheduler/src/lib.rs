@@ -792,7 +792,7 @@ impl ScheduleStage {
                 }
             }
         }
-        address_book.provisioning_trackers.insert(*unique_weight, provisional_count);
+        address_book.provisioning_trackers.insert(*unique_weight, ProvisioningTracker::new(provisional_count));
         trace!("provisioning_trackers: {}", address_book.provisioning_trackers.len());
     }
 
