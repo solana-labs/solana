@@ -901,12 +901,13 @@ impl ScheduleStage {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
         let background_ee_reaper = to_next_stage.is_none().then_some(|| {
+            let (ee_sender, ee_receiver) = crossbeam_channel::unbound();
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
-                while let a = to_reaper.recv().unwrap() {
+                while let a = ee_receiver.recv().unwrap() {
                 }
             }).unwrap();
 
-            (h)
+            (h, ee_sender)
         });
 
         loop {
