@@ -212,8 +212,8 @@ type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
-    fulfilled_provisional_task_ids: WeightedTaskIds,
     provisioning_trackers: std::collections::HashMap<UniqueWeight, ProvisioningTracker>, 
+    fulfilled_provisional_task_ids: WeightedTaskIds,
 }
 
 struct ProvisioningTracker {
