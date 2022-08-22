@@ -458,11 +458,11 @@ impl TaskQueue {
     fn entry_to_execute(
         &mut self,
         unique_weight: UniqueWeight,
-    ) -> TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue> {
+    ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
             TaskQueueEntry::Occupied(queue_entry) => queue_entry,
-            TaskQueueEntry::Vacant(_queue_entry) => unreachable!(),
+            TaskQueueEntry::Vacant(_queue_entry) => None,
         }
     }
 
@@ -476,7 +476,7 @@ impl TaskQueue {
     ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
         //panic!()//self.tasks.last_entry()
         let k = self.tasks.get_max().map(|(k, _v)| *k);
-        k.map(|k| self.entry_to_execute(k))
+        k.map(|k| self.entry_to_execute(k).unwrap())
     }
 
     fn task_count(&self) -> usize {
@@ -612,7 +612,11 @@ impl ScheduleStage {
                 let uw = *weight_from_contended.key();
                 weight_from_contended.remove();
 
-                Some(( None, contended_queue.entry_to_execute(uw)))
+                if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
+                    Some(( None, queue_entry))
+                } else {
+                    continue;
+                }
             },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
@@ -625,10 +629,11 @@ impl ScheduleStage {
                     trace!("select: contended > runnnable");
                     let uw = *uw;
                     weight_from_contended.remove();
-                    Some((
-                        None,
-                        contended_queue.entry_to_execute(uw),
-                    ))
+                    if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
+                        Some(( None, queue_entry))
+                    } else {
+                        continue;
+                    }
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
@@ -651,7 +656,7 @@ impl ScheduleStage {
     ) -> Option<(UniqueWeight, TaskInQueue)> {
         if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
-            let queue_entry = contended_queue.entry_to_execute(a.0);
+            let queue_entry = contended_queue.entry_to_execute(a.0).unwrap();
             let mut task = queue_entry.remove();
             return Some((a.0, task));
         }
