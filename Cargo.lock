@@ -6032,7 +6032,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "solana-account-decoder",
- "solana-faucet",
  "solana-sdk 1.12.0",
  "solana-transaction-status",
  "solana-version",
