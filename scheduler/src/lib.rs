@@ -436,7 +436,7 @@ pub struct Task {
 }
 
 // RunnableQueue, ContendedQueue?
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TaskQueue {
     //tasks: std::collections::BTreeMap<UniqueWeight, Task>,
     tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
