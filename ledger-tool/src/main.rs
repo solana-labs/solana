@@ -334,6 +334,25 @@ fn output_slot(
                             .send(solana_scheduler::Multiplexed::FromExecute(ee))
                             .unwrap();
                         */
+                        let uq = ee.unique_weight;
+                        for lock_attempt in ee.task.tx.1.iter() {
+                            let page = lock_attempt.target.page_ref();
+                            page.contended_unique_weights.remove_task_id(&uq);
+                            if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
+                                let mut found = true;
+                                while !ee.checkpointed_contended_queue.has_task(task_cursor.value()) {
+                                    if let Some(new_cursor) = task_cursor.prev() {
+                                        task_cursor = new_cursor;
+                                    } else {
+                                        found = false;
+                                        break;
+                                    }
+                                }
+                                if found {
+                                    lock_attempt.heaviest_uncontended.store(*(task_cursor.value()), std::sync::atomic::Ordering::SeqCst);
+                                }
+                            }
+                        }
                         post_execute_env_sender.send(ee).unwrap();
                     }
                 })
