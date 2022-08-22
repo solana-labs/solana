@@ -461,7 +461,7 @@ impl TaskQueue {
     ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
         let queue_entry = self.tasks.entry(unique_weight);
         match queue_entry {
-            TaskQueueEntry::Occupied(queue_entry) => queue_entry,
+            TaskQueueEntry::Occupied(queue_entry) => Some(queue_entry),
             TaskQueueEntry::Vacant(_queue_entry) => None,
         }
     }
