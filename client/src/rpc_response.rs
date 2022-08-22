@@ -191,7 +191,7 @@ pub struct SlotTransactionStats {
     pub max_transactions_per_entry: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum SlotUpdate {
     FirstShredReceived {
@@ -511,7 +511,7 @@ pub enum RpcBlockUpdateError {
     UnsupportedTransactionVersion(u8),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockUpdate {
     pub slot: Slot,
