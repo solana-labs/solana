@@ -3,8 +3,8 @@ use {
     clap::{App, AppSettings, Arg, ArgMatches, SubCommand},
     solana_address_lookup_table_program::{
         instruction::{
-            close_lookup_table, create_lookup_table, deactivate_lookup_table, extend_lookup_table,
-            freeze_lookup_table,
+            close_lookup_table, create_lookup_table, create_lookup_table_signed,
+            deactivate_lookup_table, extend_lookup_table, freeze_lookup_table,
         },
         state::AddressLookupTable,
     },
@@ -542,12 +542,11 @@ fn process_create_lookup_table(
     })?;
 
     let payer_address = payer_signer.pubkey();
-    let (create_lookup_table_ix, lookup_table_address) = create_lookup_table(
-        authority_address,
-        payer_address,
-        clock.slot,
-        authority_signer.is_some(),
-    );
+    let (create_lookup_table_ix, lookup_table_address) = if authority_signer.is_some() {
+        create_lookup_table_signed(authority_address, payer_address, clock.slot)
+    } else {
+        create_lookup_table(authority_address, payer_address, clock.slot)
+    };
 
     let blockhash = rpc_client.get_latest_blockhash()?;
     let mut tx = Transaction::new_unsigned(Message::new(

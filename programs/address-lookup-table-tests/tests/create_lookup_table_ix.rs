@@ -3,7 +3,7 @@ use {
     common::{assert_ix_error, overwrite_slot_hashes_with_slots, setup_test_context},
     solana_address_lookup_table_program::{
         id,
-        instruction::create_lookup_table,
+        instruction::{create_lookup_table, create_lookup_table_signed},
         processor::process_instruction,
         state::{AddressLookupTable, LOOKUP_TABLE_META_SIZE},
     },
@@ -36,7 +36,7 @@ async fn test_create_lookup_table_idempotent() {
     let recent_blockhash = context.last_blockhash;
     let authority_address = Pubkey::new_unique();
     let (create_lookup_table_ix, lookup_table_address) =
-        create_lookup_table(authority_address, payer.pubkey(), test_recent_slot, false);
+        create_lookup_table(authority_address, payer.pubkey(), test_recent_slot);
 
     // First create should succeed
     {
@@ -97,7 +97,7 @@ async fn test_create_lookup_table_not_idempotent() {
     let authority_keypair = Keypair::new();
     let authority_address = authority_keypair.pubkey();
     let (create_lookup_table_ix, ..) =
-        create_lookup_table(authority_address, payer.pubkey(), test_recent_slot, true);
+        create_lookup_table_signed(authority_address, payer.pubkey(), test_recent_slot);
 
     let transaction = Transaction::new_signed_with_payer(
         &[create_lookup_table_ix.clone()],
@@ -136,7 +136,7 @@ async fn test_create_lookup_table_use_payer_as_authority() {
     let recent_blockhash = context.last_blockhash;
     let authority_address = payer.pubkey();
     let transaction = Transaction::new_signed_with_payer(
-        &[create_lookup_table(authority_address, payer.pubkey(), test_recent_slot, false).0],
+        &[create_lookup_table(authority_address, payer.pubkey(), test_recent_slot).0],
         Some(&payer.pubkey()),
         &[payer],
         recent_blockhash,
@@ -150,11 +150,10 @@ async fn test_create_lookup_table_missing_signer() {
     let mut context = setup_test_context_without_authority_feature().await;
     let unsigned_authority_address = Pubkey::new_unique();
 
-    let mut ix = create_lookup_table(
+    let mut ix = create_lookup_table_signed(
         unsigned_authority_address,
         context.payer.pubkey(),
         Slot::MAX,
-        true,
     )
     .0;
     ix.accounts[1].is_signer = false;
@@ -174,7 +173,7 @@ async fn test_create_lookup_table_not_recent_slot() {
     let payer = &context.payer;
     let authority_address = Pubkey::new_unique();
 
-    let ix = create_lookup_table(authority_address, payer.pubkey(), Slot::MAX, false).0;
+    let ix = create_lookup_table(authority_address, payer.pubkey(), Slot::MAX).0;
 
     assert_ix_error(
         &mut context,
@@ -193,7 +192,7 @@ async fn test_create_lookup_table_pda_mismatch() {
     let payer = &context.payer;
     let authority_address = Pubkey::new_unique();
 
-    let mut ix = create_lookup_table(authority_address, payer.pubkey(), test_recent_slot, false).0;
+    let mut ix = create_lookup_table(authority_address, payer.pubkey(), test_recent_slot).0;
     ix.accounts[0].pubkey = Pubkey::new_unique();
 
     assert_ix_error(&mut context, ix, None, InstructionError::InvalidArgument).await;
