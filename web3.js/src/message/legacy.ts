@@ -13,7 +13,6 @@ import {
   MessageAddressTableLookup,
   MessageCompiledInstruction,
 } from './index';
-import {TransactionVersion} from '../transaction/versioned';
 
 /**
  * An instruction to execute by a program

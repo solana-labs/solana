@@ -12,7 +12,6 @@ import {PublicKey, PUBLIC_KEY_LENGTH} from '../publickey';
 import * as shortvec from '../utils/shortvec-encoding';
 import assert from '../utils/assert';
 import {PACKET_DATA_SIZE} from '../transaction/constants';
-import {TransactionVersion} from '../transaction/versioned';
 
 /**
  * Message constructor arguments
