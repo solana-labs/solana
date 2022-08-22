@@ -387,6 +387,10 @@ fn output_slot(
                     std::thread::sleep(std::time::Duration::from_micros(10));
                 }
 
+                for lock_attempt in tx.1.iter() {
+                    lock_attempt.target.page_ref().contended_unique_weights.insert_task_id(weight);
+                }
+
                 muxed_sender
                     .send(solana_scheduler::Multiplexed::FromPrevious((
                         //Weight { ix: weight },
