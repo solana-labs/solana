@@ -840,7 +840,7 @@ impl ScheduleStage {
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
-        let checkpointed_contended_queue = contended_queue.clone();
+        let checkpointed_contended_queue = (*contended_queue).clone();
 
         Box::new(ExecutionEnvironment {
             task,
