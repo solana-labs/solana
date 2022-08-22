@@ -2432,14 +2432,14 @@ impl AccountsDb {
     //   dirty_stores - set of stores which had accounts removed or recently rooted
     fn construct_candidate_clean_keys(
         &self,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
     ) -> Vec<Pubkey> {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot_inclusive =
-            max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
+            max_clean_root_inclusive.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
         self.dirty_stores.retain(|(slot, _store_id), store| {
             if *slot > max_slot_inclusive {
