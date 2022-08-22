@@ -511,7 +511,7 @@ pub enum RpcBlockUpdateError {
     UnsupportedTransactionVersion(u8),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockUpdate {
     pub slot: Slot,
