@@ -833,7 +833,11 @@ fn check_payer_balances(
     Ok(())
 }
 
-pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), Error> {
+pub fn process_balances(
+    client: &RpcClient,
+    args: &BalancesArgs,
+    exit: Arc<AtomicBool>,
+) -> Result<(), Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, None, false, args.spl_token_args.is_some())?;
     let allocations = merge_allocations(&allocations);
@@ -855,6 +859,10 @@ pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), E
     );
 
     for allocation in &allocations {
+        if exit.load(Ordering::SeqCst) {
+            return Err(Error::ExitSignal);
+        }
+
         if let Some(spl_token_args) = &args.spl_token_args {
             print_token_balances(client, allocation, spl_token_args)?;
         } else {
