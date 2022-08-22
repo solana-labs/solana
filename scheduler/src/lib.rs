@@ -230,6 +230,11 @@ impl ProvisioningTracker {
     }
 
     fn tick(&mut self) {
+        self.remaining_count = self.remaining_count.checked_sub(1).unwrap();
+    }
+
+    fn count(&self) -> usize {
+        self.remaining_count
     }
 }
 
@@ -834,14 +839,14 @@ impl ScheduleStage {
                 for task_id in std::mem::take(&mut page.provisional_task_ids).keys() {
                     match address_book.provisioning_trackers.entry(*task_id) {
                         std::collections::hash_map::Entry::Occupied(mut tracker_entry) => {
-                            let count = tracker_entry.get_mut();
-                            *count = count.checked_sub(1).unwrap();
-                            if *count == 0 {
-                                trace!("provisional lock decrease: {} => {} (!)", *count + 1, *count);
+                            let tracker = tracker_entry.get_mut();
+                            tracker.tick();
+                            if tracker.is_fulfilled() {
+                                trace!("provisional lock decrease: {} => {} (!)", tracker.count() + 1, tracker.count());
                                 tracker_entry.remove();
                                 address_book.fulfilled_provisional_task_ids.insert(*task_id, ());
                             } else {
-                                trace!("provisional lock decrease: {} => {}", *count + 1, *count);
+                                trace!("provisional lock decrease: {} => {}", tracker.count() + 1, tracker.count();
                             }
                         },
                         std::collections::hash_map::Entry::Vacant(_) => {
