@@ -14,7 +14,7 @@ use {
     solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
     solana_rpc_client::{nonblocking::rpc_client::RpcClient, spinner},
     solana_rpc_client_api::{
-        client_error::{ClientError, Result as ClientResult},
+        client_error::{Error as ClientError, Result as ClientResult},
         request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         response::{RpcContactInfo, SlotUpdate},
     },

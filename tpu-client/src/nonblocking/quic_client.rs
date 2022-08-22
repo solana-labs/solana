@@ -17,7 +17,7 @@ use {
     },
     solana_measure::measure::Measure,
     solana_net_utils::VALIDATOR_PORT_RANGE,
-    solana_rpc_client_api::client_error::ClientErrorKind,
+    solana_rpc_client_api::client_error::ErrorKind as ClientErrorKind,
     solana_sdk::{
         quic::{
             QUIC_CONNECTION_HANDSHAKE_TIMEOUT_MS, QUIC_KEEP_ALIVE_MS, QUIC_MAX_TIMEOUT_MS,

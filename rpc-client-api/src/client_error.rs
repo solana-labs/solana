@@ -5,11 +5,11 @@ use {
         signature::SignerError, transaction::TransactionError, transport::TransportError,
     },
     std::io,
-    thiserror::Error,
+    thiserror::Error as ThisError,
 };
 
-#[derive(Error, Debug)]
-pub enum ClientErrorKind {
+#[derive(ThisError, Debug)]
+pub enum ErrorKind {
     #[error(transparent)]
     Io(#[from] io::Error),
     #[error(transparent)]
@@ -26,7 +26,7 @@ pub enum ClientErrorKind {
     Custom(String),
 }
 
-impl ClientErrorKind {
+impl ErrorKind {
     pub fn get_transaction_error(&self) -> Option<TransactionError> {
         match self {
             Self::RpcError(request::RpcError::RpcResponseError {
@@ -44,7 +44,7 @@ impl ClientErrorKind {
     }
 }
 
-impl From<TransportError> for ClientErrorKind {
+impl From<TransportError> for ErrorKind {
     fn from(err: TransportError) -> Self {
         match err {
             TransportError::IoError(err) => Self::Io(err),
@@ -54,31 +54,31 @@ impl From<TransportError> for ClientErrorKind {
     }
 }
 
-impl From<ClientErrorKind> for TransportError {
-    fn from(client_error_kind: ClientErrorKind) -> Self {
+impl From<ErrorKind> for TransportError {
+    fn from(client_error_kind: ErrorKind) -> Self {
         match client_error_kind {
-            ClientErrorKind::Io(err) => Self::IoError(err),
-            ClientErrorKind::TransactionError(err) => Self::TransactionError(err),
-            ClientErrorKind::Reqwest(err) => Self::Custom(format!("{:?}", err)),
-            ClientErrorKind::RpcError(err) => Self::Custom(format!("{:?}", err)),
-            ClientErrorKind::SerdeJson(err) => Self::Custom(format!("{:?}", err)),
-            ClientErrorKind::SigningError(err) => Self::Custom(format!("{:?}", err)),
-            ClientErrorKind::Custom(err) => Self::Custom(format!("{:?}", err)),
+            ErrorKind::Io(err) => Self::IoError(err),
+            ErrorKind::TransactionError(err) => Self::TransactionError(err),
+            ErrorKind::Reqwest(err) => Self::Custom(format!("{:?}", err)),
+            ErrorKind::RpcError(err) => Self::Custom(format!("{:?}", err)),
+            ErrorKind::SerdeJson(err) => Self::Custom(format!("{:?}", err)),
+            ErrorKind::SigningError(err) => Self::Custom(format!("{:?}", err)),
+            ErrorKind::Custom(err) => Self::Custom(format!("{:?}", err)),
         }
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(ThisError, Debug)]
 #[error("{kind}")]
-pub struct ClientError {
+pub struct Error {
     pub request: Option<request::RpcRequest>,
 
     #[source]
-    pub kind: ClientErrorKind,
+    pub kind: ErrorKind,
 }
 
-impl ClientError {
-    pub fn new_with_request(kind: ClientErrorKind, request: request::RpcRequest) -> Self {
+impl Error {
+    pub fn new_with_request(kind: ErrorKind, request: request::RpcRequest) -> Self {
         Self {
             request: Some(request),
             kind,
@@ -96,7 +96,7 @@ impl ClientError {
         self.request.as_ref()
     }
 
-    pub fn kind(&self) -> &ClientErrorKind {
+    pub fn kind(&self) -> &ErrorKind {
         &self.kind
     }
 
@@ -105,8 +105,8 @@ impl ClientError {
     }
 }
 
-impl From<ClientErrorKind> for ClientError {
-    fn from(kind: ClientErrorKind) -> Self {
+impl From<ErrorKind> for Error {
+    fn from(kind: ErrorKind) -> Self {
         Self {
             request: None,
             kind,
@@ -114,7 +114,7 @@ impl From<ClientErrorKind> for ClientError {
     }
 }
 
-impl From<TransportError> for ClientError {
+impl From<TransportError> for Error {
     fn from(err: TransportError) -> Self {
         Self {
             request: None,
@@ -123,13 +123,13 @@ impl From<TransportError> for ClientError {
     }
 }
 
-impl From<ClientError> for TransportError {
-    fn from(client_error: ClientError) -> Self {
+impl From<Error> for TransportError {
+    fn from(client_error: Error) -> Self {
         client_error.kind.into()
     }
 }
 
-impl From<std::io::Error> for ClientError {
+impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Self {
             request: None,
@@ -138,7 +138,7 @@ impl From<std::io::Error> for ClientError {
     }
 }
 
-impl From<reqwest::Error> for ClientError {
+impl From<reqwest::Error> for Error {
     fn from(err: reqwest::Error) -> Self {
         Self {
             request: None,
@@ -147,7 +147,7 @@ impl From<reqwest::Error> for ClientError {
     }
 }
 
-impl From<request::RpcError> for ClientError {
+impl From<request::RpcError> for Error {
     fn from(err: request::RpcError) -> Self {
         Self {
             request: None,
@@ -156,7 +156,7 @@ impl From<request::RpcError> for ClientError {
     }
 }
 
-impl From<serde_json::error::Error> for ClientError {
+impl From<serde_json::error::Error> for Error {
     fn from(err: serde_json::error::Error) -> Self {
         Self {
             request: None,
@@ -165,7 +165,7 @@ impl From<serde_json::error::Error> for ClientError {
     }
 }
 
-impl From<SignerError> for ClientError {
+impl From<SignerError> for Error {
     fn from(err: SignerError) -> Self {
         Self {
             request: None,
@@ -174,7 +174,7 @@ impl From<SignerError> for ClientError {
     }
 }
 
-impl From<TransactionError> for ClientError {
+impl From<TransactionError> for Error {
     fn from(err: TransactionError) -> Self {
         Self {
             request: None,
@@ -183,4 +183,4 @@ impl From<TransactionError> for ClientError {
     }
 }
 
-pub type Result<T> = std::result::Result<T, ClientError>;
+pub type Result<T> = std::result::Result<T, Error>;
