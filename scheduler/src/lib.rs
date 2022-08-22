@@ -901,7 +901,7 @@ impl ScheduleStage {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
 
-        let (maybe_handle, to_next_stage) = if let Some(to_next_stage) = maybe_to_next_stage {
+        let (to_next_stage, maybe_jon_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
             (to_next_stage, None)
         } else {
             let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
