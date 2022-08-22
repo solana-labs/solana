@@ -504,7 +504,8 @@ impl TaskQueue {
         &mut self,
     ) -> Option<TaskQueueOccupiedEntry<'_, UniqueWeight, TaskInQueue>> {
         //panic!()//self.tasks.last_entry()
-        let k = self.tasks.get_max().map(|(k, _v)| *k);
+        //let k = self.tasks.get_max().map(|(k, _v)| *k);
+        let k = self.tasks.iter().next().map(|(k, _v)| *k);
         k.map(|k| self.entry_to_execute(k).unwrap())
     }
 
