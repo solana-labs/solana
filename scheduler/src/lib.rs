@@ -466,7 +466,7 @@ pub struct Task {
 pub struct TaskQueue {
     //tasks: std::collections::BTreeMap<UniqueWeight, Task>,
     //tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
-    tasks: im::Map<UniqueWeight, TaskInQueue>,
+    tasks: im::HashMap<UniqueWeight, TaskInQueue>,
 }
 
 type TaskInQueue = std::sync::Arc<Task>;
