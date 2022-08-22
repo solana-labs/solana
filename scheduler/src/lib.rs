@@ -915,7 +915,7 @@ impl ScheduleStage {
             to_next_stage
         } else {
             &background_ee_reaper.unwrap().1
-        }
+        };
 
         loop {
             trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
