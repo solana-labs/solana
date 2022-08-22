@@ -436,6 +436,14 @@ impl Validator {
             info!("entrypoint: {:?}", cluster_entrypoint);
         }
 
+        if rayon::ThreadPoolBuilder::new()
+            .thread_name(|ix| format!("solRayonGlob{:02}", ix))
+            .build_global()
+            .is_err()
+        {
+            warn!("Rayon global thread pool already initialized");
+        }
+
         if solana_perf::perf_libs::api().is_some() {
             info!("Initializing sigverify, this could take a while...");
         } else {
