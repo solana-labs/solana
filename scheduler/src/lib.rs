@@ -587,7 +587,7 @@ pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
 pub struct ScheduleStage {}
 
 impl ScheduleStage {
-    fn push_to_queue(
+    fn push_to_runnable_queue(
         (weight, tx): (Weight, Box<(SanitizedTransaction, Vec<LockAttempt>)>),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
@@ -746,9 +746,11 @@ impl ScheduleStage {
 
                 if from_runnable {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
+                    let task = queue_entry.remove();
+                    task.mark_as_contended();
                     reborrowed_contended_queue
                         .unwrap()
-                        .add_to_schedule(*queue_entry.key(), queue_entry.remove());
+                        .add_to_schedule(*queue_entry.key(), task);
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
@@ -943,7 +945,7 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
-        Self::push_to_queue(weighted_tx, runnable_queue, unique_key)
+        Self::push_to_runnable_queue(weighted_tx, runnable_queue, unique_key)
     }
 
     pub fn run(
