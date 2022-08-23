@@ -777,13 +777,14 @@ impl ScheduleStage {
                 assert!(!from_runnable);
                 let lock_count = next_task.tx.1.len();
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
-                drop(next_task);
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
                     &unique_weight,
-                    &mut arc_next_task,
+                    &mut next_task,
                     provisional_count,
                 );
+                drop(next_task);
+                address_book.provisioning_trackers.insert(*unique_weight, (ProvisioningTracker::new(provisional_count), arc_next_task));
 
                 return None;
                 continue;
@@ -839,7 +840,6 @@ impl ScheduleStage {
                 }
             }
         }
-        address_book.provisioning_trackers.insert(*unique_weight, ProvisioningTracker::new(provisional_count));
         trace!("provisioning_trackers: {}", address_book.provisioning_trackers.len());
     }
 
