@@ -300,7 +300,7 @@ fn output_slot(
                     let send_metrics = std::env::var("SEND_METRICS").is_ok();
 
                     for step in 0.. {
-                        let ee = pre_execute_env_receiver.recv().unwrap();
+                        let mut ee = pre_execute_env_receiver.recv().unwrap();
                         if step % 1966 == 0 {
                             error!("executing!: {} {}", step, pre_execute_env_receiver.len());
                         }
