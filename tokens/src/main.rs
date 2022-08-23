@@ -44,7 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         Command::Balances(mut args) => {
             spl_token::update_decimals(&client, &mut args.spl_token_args)?;
-            commands::process_balances(&client, &args)?;
+            commands::process_balances(&client, &args, exit)?;
         }
         Command::TransactionLog(args) => {
             commands::process_transaction_log(&args)?;
