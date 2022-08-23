@@ -498,10 +498,10 @@ impl TaskQueue {
 
     #[inline(never)]
     pub fn has_task(&self, unique_weight: &UniqueWeight) -> bool {
-        let queue_entry = self.tasks.get(*unique_weight);
-        match queue_entry {
-            TaskQueueEntry::Occupied(queue_entry) => queue_entry.get().uncontended.load(std::sync::atomic::Ordering::SeqCst),
-            TaskQueueEntry::Vacant(_queue_entry) => false,
+        let maybe_task = self.tasks.get(*unique_weight);
+        match maybe_task {
+            Some(task) => task.uncontended.load(std::sync::atomic::Ordering::SeqCst),
+            None => false,
         }
     }
 
