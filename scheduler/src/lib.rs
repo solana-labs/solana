@@ -831,8 +831,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         // do par()-ly?
-        let mut task = unsafe { TaskInQueue::get_mut_unchecked(&mut ee.task) };
-        Self::unlock_after_execution(address_book, &mut task.tx.1);
+        Self::unlock_after_execution(address_book, &mut ee.lock_attempts);
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
