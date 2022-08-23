@@ -346,7 +346,7 @@ fn handle_transaction_batch(
     for mut lock_attempt in transaction_batch.lock_attempts.iter_mut() {
         let contended_unique_weights = lock_attempt.contended_unique_weights();
         contended_unique_weights.remove_task_id(&uq);
-        if let Some(mut task_cursor) = contended_unique_weights.heaviest_task_cursor() {
+        let maybe_task = if let Some(mut task_cursor) = contended_unique_weights.heaviest_task_cursor() {
             let mut found = true;
             assert_ne!(task_cursor.key(), &uq);
             while !task_cursor.value().currently_contended() {
@@ -359,11 +359,10 @@ fn handle_transaction_batch(
                     break;
                 }
             }
-            drop(contended_unique_weights);
-            drop(task_cursor);
-            if found {
-                lock_attempt.heaviest_uncontended = Some(solana_scheduler::TaskInQueue::clone(task_cursor.value()));
-            }
+            found.and_then(Some(solana_scheduler::TaskInQueue::clone(task_cursor.value())));
+        };
+        if let Some(task) = maybe_task {
+            lock_attempt.heaviest_uncontended = Some(task);
         }
     }
     completed_transaction_sender.0
