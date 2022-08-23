@@ -669,14 +669,15 @@ impl ScheduleStage {
         ) {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
-                return Some((Some(heaviest_runnable_entry.get()), None))
+                let t = heaviest_runnable_entry.remove();
+                return Some((true, t))
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
                 let uw = *weight_from_contended.key();
                 let t = weight_from_contended.remove();
 
-                return Some(( false, t));
+                return Some(( false, t))
             },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
