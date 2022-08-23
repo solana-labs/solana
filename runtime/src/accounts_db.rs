@@ -2182,7 +2182,6 @@ impl AccountsDb {
             })
             .collect::<Vec<_>>();
         clean_rooted.stop();
-        inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
         self.clean_accounts_stats
             .clean_old_root_us
             .fetch_add(clean_rooted.as_us(), Ordering::Relaxed);
@@ -2202,7 +2201,6 @@ impl AccountsDb {
         );
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
-        inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
         self.clean_accounts_stats
             .clean_old_root_reclaim_us
             .fetch_add(measure.as_us(), Ordering::Relaxed);
