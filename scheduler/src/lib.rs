@@ -823,6 +823,7 @@ impl ScheduleStage {
             task,
             unique_weight,
             cu: rng.gen_range(3, 1000),
+            lock_attempts,
         })
     }
 
