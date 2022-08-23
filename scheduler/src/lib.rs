@@ -728,8 +728,8 @@ impl ScheduleStage {
             trace!("pop loop iteration");
             let from_runnable = reborrowed_contended_queue.is_some();
             let unique_weight = *queue_entry.key();
-            let mut next_task = queue_entry.get_mut();
-            let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut next_task) };
+            let mut arc_next_task = queue_entry.get_mut();
+            let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
             let message_hash = next_task.tx.0.message_hash();
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
@@ -777,10 +777,11 @@ impl ScheduleStage {
                 assert!(!from_runnable);
                 let lock_count = next_task.tx.1.len();
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
+                drop(next_task);
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
                     &unique_weight,
-                    &mut next_task,
+                    &mut next_task_arc,
                     provisional_count,
                 );
 
