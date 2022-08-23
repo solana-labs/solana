@@ -26,11 +26,10 @@ use {
         return_signers_with_config, CliAccount, CliBalance, CliSignatureVerificationStatus,
         CliTransaction, CliTransactionConfirmation, OutputFormat, ReturnSignersConfig,
     },
-    solana_client::{
-        blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
-        rpc_config::RpcTransactionConfig, rpc_response::RpcKeyedAccount,
-    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{config::RpcTransactionConfig, response::RpcKeyedAccount},
+    solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         message::Message,
@@ -763,7 +762,7 @@ pub fn process_transfer(
         )
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,

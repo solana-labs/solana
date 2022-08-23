@@ -8,12 +8,9 @@ use {
         test_utils::check_ready,
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
-    solana_client::{
-        blockhash_query::{self, BlockhashQuery},
-        nonce_utils,
-        rpc_client::RpcClient,
-    },
     solana_faucet::faucet::run_local_faucet,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_nonce_utils::blockhash_query::{self, BlockhashQuery},
     solana_sdk::{
         commitment_config::CommitmentConfig,
         fee::FeeStructure,
@@ -198,12 +195,12 @@ fn test_transfer() {
     );
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -236,12 +233,12 @@ fn test_transfer() {
         &sender_pubkey,
     );
     check_balance!(sol_to_lamports(2.5), &rpc_client, &recipient_pubkey);
-    let new_nonce_hash = nonce_utils::get_account_with_commitment(
+    let new_nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
     assert_ne!(nonce_hash, new_nonce_hash);
@@ -263,12 +260,12 @@ fn test_transfer() {
     );
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
