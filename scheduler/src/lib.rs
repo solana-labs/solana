@@ -650,10 +650,11 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
-    ) -> Option<(UniqueWeight, TaskInQueue)> {
+    ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
-            return Some((a.0, a.1));
+            panic!();
+            //return Some((a.0, a.1));
         }
 
         trace!("pop begin");
