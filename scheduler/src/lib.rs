@@ -598,7 +598,7 @@ pub struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_runnable_queue(
-        (weight, tx): (Weight, std::sync::Arc<(SanitizedTransaction, Vec<LockAttempt>)>),
+        task: TaskInQueue,
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
@@ -625,7 +625,7 @@ impl ScheduleStage {
             },
             */
             unique_weight,
-            TaskInQueue::new(Task { tx, contention_count: 0, uncontended: Default::default() }),
+            task,
         );
         *unique_key -= 1;
     }
