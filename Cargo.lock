@@ -6102,6 +6102,7 @@ dependencies = [
 name = "solana-scheduler"
 version = "1.11.5"
 dependencies = [
+ "arc-swap",
  "atomic_enum",
  "by_address",
  "crossbeam-channel",
