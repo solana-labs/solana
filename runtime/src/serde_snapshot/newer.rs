@@ -307,6 +307,10 @@ impl<'a> TypeContext<'a> for Context {
         bank_fields.fee_rate_governor = bank_fields
             .fee_rate_governor
             .clone_with_lamports_per_signature(lamports_per_signature);
+
+        let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(stream))?;
+        bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
+
         Ok((bank_fields, accounts_db_fields))
     }
 
