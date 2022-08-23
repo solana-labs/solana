@@ -96,6 +96,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             stakes: dvb.stakes,
             epoch_stakes: dvb.epoch_stakes,
             is_delta: dvb.is_delta,
+            incremental_snapshot_persistence: None,
         }
     }
 }
@@ -209,6 +210,7 @@ impl<'a> TypeContext<'a> for Context {
             // we can grab it on restart.
             // TODO: if we do a snapshot version bump, consider moving this out.
             lamports_per_signature,
+            None::<BankIncrementalSnapshotPersistence>,
         )
             .serialize(serializer)
     }
@@ -314,6 +316,10 @@ impl<'a> TypeContext<'a> for Context {
         bank_fields.fee_rate_governor = bank_fields
             .fee_rate_governor
             .clone_with_lamports_per_signature(lamports_per_signature);
+
+        let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(stream))?;
+        bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
+
         Ok((bank_fields, accounts_db_fields))
     }
 
@@ -327,12 +333,13 @@ impl<'a> TypeContext<'a> for Context {
     }
 
     /// deserialize the bank from 'stream_reader'
-    /// modify the accounts_hash
+    /// modify the accounts_hash and incremental_snapshot_persistence
     /// reserialize the bank to 'stream_writer'
     fn reserialize_bank_fields_with_hash<R, W>(
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
+        incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,
@@ -345,6 +352,7 @@ impl<'a> TypeContext<'a> for Context {
         let blockhash_queue = RwLock::new(rhs.blockhash_queue.clone());
         let hard_forks = RwLock::new(rhs.hard_forks.clone());
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
+
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
             ancestors: &rhs.ancestors,
@@ -382,7 +390,12 @@ impl<'a> TypeContext<'a> for Context {
 
         bincode::serialize_into(
             stream_writer,
-            &(bank, accounts_db_fields, lamports_per_signature),
+            &(
+                bank,
+                accounts_db_fields,
+                lamports_per_signature,
+                incremental_snapshot_persistence,
+            ),
         )
     }
 }
