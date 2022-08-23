@@ -467,7 +467,7 @@ impl Task {
         TaskInQueue::new(Self { tx, contention_count: 0, uncontended: Default::default() })
     }
 
-    fn currently_contended(&self) -> bool {
+    pub fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
 
