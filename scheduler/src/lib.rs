@@ -122,13 +122,13 @@ pub enum RequestedUsage {
 #[derive(Debug, Default)]
 pub struct TaskIds {
     //task_ids: std::collections::BTreeSet<UniqueWeight>,
-    task_ids: crossbeam_skiplist::SkipSet<UniqueWeight>,
+    task_ids: crossbeam_skiplist::SkipSet<UniqueWeight, TaskInQueue>,
     //cached_heaviest: Option<UniqueWeight>,
 }
 
 impl TaskIds {
     #[inline(never)]
-    pub fn insert_task_id(&self, u: TaskId) {
+    pub fn insert_task_id(&self, u: TaskId, task: TaskInQueue) {
         /*
         match self.cached_heaviest {
             Some(c) if u > c => { self.cached_heaviest = Some(u) },
@@ -137,7 +137,7 @@ impl TaskIds {
         }
         */
              
-        self.task_ids.insert(u);
+        self.task_ids.insert(u, task);
     }
 
     #[inline(never)]
