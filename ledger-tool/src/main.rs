@@ -397,7 +397,12 @@ fn output_slot(
         }
 
         let mut weight = 10_000_000;
-        for i in 0..100 {
+        let loop_count = if std::env::var("INFINITE").is_ok() {
+            100000
+        } else {
+            100
+        }
+        for i in 0..loop_count {
             error!("started!: {} {}", i, txes.len());
             for tx in txes.iter().map(|t| Box::new((t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))) {
                 while depth.load(Ordering::Relaxed) > 10_000 {
