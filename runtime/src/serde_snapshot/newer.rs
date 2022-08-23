@@ -210,7 +210,7 @@ impl<'a> TypeContext<'a> for Context {
             // we can grab it on restart.
             // TODO: if we do a snapshot version bump, consider moving this out.
             lamports_per_signature,
-            None::<BankIncrementalSnapshotPersistence>,
+            // None::<BankIncrementalSnapshotPersistence>, this will be saved starting in 1.12
         )
             .serialize(serializer)
     }
@@ -339,7 +339,7 @@ impl<'a> TypeContext<'a> for Context {
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
-        incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+        _incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,
@@ -394,7 +394,7 @@ impl<'a> TypeContext<'a> for Context {
                 bank,
                 accounts_db_fields,
                 lamports_per_signature,
-                incremental_snapshot_persistence,
+                // incremental_snapshot_persistence, this will be saved starting in 1.12
             ),
         )
     }

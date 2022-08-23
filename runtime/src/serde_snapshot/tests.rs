@@ -190,9 +190,12 @@ fn test_bank_serialize_style(
     serde_style: SerdeStyle,
     reserialize_accounts_hash: bool,
     update_accounts_hash: bool,
-    incremental_snapshot_persistence: bool,
+    _incremental_snapshot_persistence: bool,
 ) {
     solana_logger::setup();
+
+    // in 1.11, don't test incremental snapshot persistence because we are not writing it - only reading it and ignoring it
+    let incremental_snapshot_persistence = false;
     let (genesis_config, _) = create_genesis_config(500);
     let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
     let bank1 = Bank::new_from_parent(&bank0, &Pubkey::default(), 1);
@@ -581,7 +584,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "5py4Wkuj5fV2sLyA1MrPg4pGNwMEaygQLnpLyY8MMLGC")]
+    #[frozen_abi(digest = "9vGBt7YfymKUTPWLHVVpQbDtPD7dFDwXRMFkCzwujNqJ")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]
