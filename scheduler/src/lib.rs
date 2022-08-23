@@ -454,7 +454,7 @@ struct Bundle {
     // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Task {
     unique_weight: UniqueWeight,
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
