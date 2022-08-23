@@ -365,8 +365,9 @@ fn output_slot(
     let d = depth.clone();
     let handles3 = (0..4).map(|thx| {
         let t3 = std::thread::Builder::new()
-            .name("sol-consumer".to_string())
+            .name("sol-consumer{}".to_string())
             .spawn(move || {
+                let post_schedule_env_receiver = post_schedule_env_receiver.clone();
                 for step in 0.. {
                     let ee = post_schedule_env_receiver.recv().unwrap();
                     d.fetch_sub(1, Ordering::Relaxed);
