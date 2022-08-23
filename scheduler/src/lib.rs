@@ -812,6 +812,7 @@ impl ScheduleStage {
         unique_weight: UniqueWeight,
         task: TaskInQueue,
         contended_count: &mut usize,
+        lock_attempts: Vec<LockAttempt>,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
@@ -848,7 +849,7 @@ impl ScheduleStage {
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate)
-                .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t, contended_count));
+                .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, contended_count, ll));
         maybe_ee
     }
 
