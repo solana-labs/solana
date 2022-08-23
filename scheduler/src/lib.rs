@@ -657,7 +657,7 @@ impl ScheduleStage {
                 if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
                     return Some(( None, queue_entry))
                 } else {
-                    return None;
+                    unreachable!();
                 }
             },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
@@ -674,7 +674,7 @@ impl ScheduleStage {
                     if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
                         return Some(( None, queue_entry))
                     } else {
-                        return None;
+                        unreachable!();
                     }
                 } else {
                     unreachable!(
