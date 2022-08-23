@@ -359,7 +359,7 @@ fn handle_transaction_batch(
                 }
             }
             if found {
-                lock_attempt.heaviest_uncontended.store(*(task_cursor.key()), std::sync::atomic::Ordering::SeqCst);
+                lock_attempt.heaviest_uncontended.store(Some(task_cursor.value()));
             }
         }
     }
