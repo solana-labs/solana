@@ -161,7 +161,7 @@ impl TaskIds {
     #[inline(never)]
     fn heaviest_task_id(&self) -> Option<TaskId> {
         //self.task_ids.last()
-        self.task_ids.back().map(|e| *(e.value()))
+        self.task_ids.back().map(|e| *(e.key()))
         //self.cached_heaviest.as_ref()
     }
 
