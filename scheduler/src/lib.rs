@@ -669,7 +669,7 @@ impl ScheduleStage {
         ) {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
-                return Some((true, TaskInQueue::clone(heaviest_runnable_entry.get())))
+                return Some((Some(heaviest_runnable_entry.get()), None))
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
