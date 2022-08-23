@@ -480,7 +480,7 @@ impl Task {
     pub fn clone_for_test(&self) {
         Self {
             unique_weight: self.unique_weight,
-            tx: self.tx.clone(),
+            tx: Box::new(self.tx.0.clone(), self.tx.1.clone_for_test()),
             contention_count: Default:default(),
             uncontended: Default::default(),
         }
