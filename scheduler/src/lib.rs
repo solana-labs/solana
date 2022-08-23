@@ -462,6 +462,12 @@ pub struct Task {
     pub uncontended: std::sync::atomic::AtomicBool,
 }
 
+impl Task {
+    fn still_contended(&self) -> bool {
+        !self.uncontended.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
 // RunnableQueue, ContendedQueue?
 #[derive(Default, Debug, Clone)]
 pub struct TaskQueue {
@@ -500,7 +506,7 @@ impl TaskQueue {
     pub fn has_task(&self, unique_weight: &UniqueWeight) -> bool {
         let maybe_task = self.tasks.get(unique_weight);
         match maybe_task {
-            Some(task) => task.uncontended.load(std::sync::atomic::Ordering::SeqCst),
+            Some(task) => task.still_contended(),
             None => false,
         }
     }
