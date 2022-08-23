@@ -4932,7 +4932,7 @@ dependencies = [
  "solana-account-decoder",
  "solana-clap-utils",
  "solana-cli-config",
- "solana-client",
+ "solana-rpc-client-api",
  "solana-sdk 1.12.0",
  "solana-transaction-status",
  "solana-vote-program",
