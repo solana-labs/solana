@@ -154,7 +154,7 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    fn has_task_ids(&self) -> bool {
+    fn has_more(&self) -> bool {
         !self.task_ids.is_empty()
     }
 
@@ -380,7 +380,7 @@ impl AddressBook {
 
         if newly_uncontended {
             page.current_usage = Usage::Unused;
-            if page.contended_unique_weights.has_task_ids() {
+            if page.contended_unique_weights.has_more() {
                 still_queued = true;
             }
         }
@@ -657,7 +657,6 @@ impl ScheduleStage {
                 if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
                     return Some(( None, queue_entry))
                 } else {
-                    dbg!(&uw);
                     unreachable!();
                 }
             },
@@ -852,7 +851,9 @@ impl ScheduleStage {
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
                 let task_id = l.heaviest_uncontended.load(std::sync::atomic::Ordering::SeqCst);
                 if task_id != 0 {
-                    address_book.uncontended_task_ids.insert(task_id, ());
+                    if contended_queue.has_task(task_id) {
+                        address_book.uncontended_task_ids.insert(task_id, ());
+                    }
                 }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
