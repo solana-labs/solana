@@ -71,6 +71,7 @@ pub type StorageSizeQuartileStats = [usize; 6];
 
 #[derive(Debug, Default)]
 pub struct HashStats {
+    pub mark_time_us: u64,
     pub scan_time_total_us: u64,
     pub zeros_time_total_us: u64,
     pub hash_time_total_us: u64,
@@ -80,6 +81,7 @@ pub struct HashStats {
     pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
     pub num_slots: usize,
+    pub num_dirty_slots: usize,
     pub collect_snapshots_us: u64,
     pub storage_sort_us: u64,
     pub min_bin_size: usize,
@@ -133,7 +135,7 @@ impl HashStats {
         };
     }
 
-    fn log(&mut self) {
+    pub fn log(&mut self) {
         let total_time_us = self.scan_time_total_us
             + self.zeros_time_total_us
             + self.hash_time_total_us
@@ -141,6 +143,7 @@ impl HashStats {
             + self.storage_sort_us;
         datapoint_info!(
             "calculate_accounts_hash_without_index",
+            ("mark_time_us", self.mark_time_us, i64),
             ("accounts_scan", self.scan_time_total_us, i64),
             ("eliminate_zeros", self.zeros_time_total_us, i64),
             ("hash", self.hash_time_total_us, i64),
@@ -160,6 +163,7 @@ impl HashStats {
                 i64
             ),
             ("num_slots", self.num_slots as i64, i64),
+            ("num_dirty_slots", self.num_dirty_slots as i64, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
             (
@@ -994,10 +998,6 @@ impl AccountsHash {
         } else {
             Hash::default()
         };
-
-        if is_last_pass {
-            stats.log();
-        }
         (hash, total_lamports, next_pass)
     }
 }
