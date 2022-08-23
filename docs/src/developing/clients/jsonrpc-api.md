@@ -214,16 +214,16 @@ JSON parsing for the following native and SPL programs:
 
 | Program | Account State | Instructions |
 | --- | --- | --- |
-| Address Lookup | X |   |
-| BPF Loader | n/a | X |
-| BPF Upgradeable Loader | X | X |
+| Address Lookup | v1.12.0 |   |
+| BPF Loader | n/a | stable |
+| BPF Upgradeable Loader | stable | stable |
 | Config | X |   |
-| SPL Associated Token Account | n/a | X |
-| SPL Memo | n/a | X |
-| SPL Token | X | X |
-| SPL Token 2022 | X | X |
-| Stake | X | X |
-| Vote | X | X |
+| SPL Associated Token Account | n/a | stable |
+| SPL Memo | n/a | stable |
+| SPL Token | stable | stable |
+| SPL Token 2022 | stable | stable |
+| Stake | stable | stable |
+| Vote | stable | stable |
 
 The list of account parsers can be found [here](https://github.com/solana-labs/solana/blob/master/account-decoder/src/parse_account_data.rs), and instruction parsers [here](https://github.com/solana-labs/solana/blob/master/transaction-status/src/parse_instruction.rs).
 
