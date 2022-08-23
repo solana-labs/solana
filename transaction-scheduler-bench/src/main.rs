@@ -359,7 +359,7 @@ fn handle_transaction_batch(
                     break;
                 }
             }
-            found.then_some(solana_scheduler::TaskInQueue::clone(task_cursor.value()))
+            found.then_else(solana_scheduler::TaskInQueue::clone(task_cursor.value()))
         }).map(|task| {
             lock_attempt.heaviest_uncontended = task;
             ()
