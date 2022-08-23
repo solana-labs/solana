@@ -1,7 +1,9 @@
 use {
     crate::result::Result,
+    bincode::serialized_size,
     crossbeam_channel::Receiver,
     solana_entry::entry::Entry,
+    solana_ledger::shred::shred_data::ShredData,
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::bank::Bank,
     solana_sdk::clock::Slot,
@@ -26,44 +28,85 @@ pub struct UnfinishedSlotInfo {
     pub parent: Slot,
 }
 
-/// This parameter tunes how many entries are received in one iteration of recv loop
-/// This will prevent broadcast stage from consuming more entries, that could have led
-/// to delays in shredding, and broadcasting shreds to peer validators
-const RECEIVE_ENTRY_COUNT_THRESHOLD: usize = 8;
+#[derive(Default)]
+pub(crate) struct RecvEntriesContext {
+    pending_entry: Option<WorkingBankEntry>,
+}
 
-pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result<ReceiveResults> {
+pub(super) fn recv_slot_entries(
+    ctx: &mut RecvEntriesContext,
+    receiver: &Receiver<WorkingBankEntry>,
+    receiver_coalesce_ms: u64,
+) -> Result<ReceiveResults> {
+    let target_batch_byte_count: u64 =
+        32 * ShredData::capacity(/*merkle_proof_size*/ None).unwrap() as u64;
+    let mut batch_byte_count: u64 = 8; // Vec len
     let timer = Duration::new(1, 0);
     let recv_start = Instant::now();
-    let (mut bank, (entry, mut last_tick_height)) = receiver.recv_timeout(timer)?;
+    let mut entries = Vec::default();
+    let mut pending_state = None;
 
-    let mut entries = vec![entry];
+    if let Some((bank, (entry, last_tick_height))) = ctx.pending_entry.take() {
+        assert!(last_tick_height <= bank.max_tick_height());
+        batch_byte_count += serialized_size(&entry)?;
+        entries.push(entry);
+        pending_state = Some((bank, last_tick_height));
+    }
+
+    let (mut bank, (entry, mut last_tick_height)) = match receiver.recv_timeout(timer) {
+        Ok(working_bank_entry) => working_bank_entry,
+        Err(e) => {
+            if !entries.is_empty() {
+                let (bank, last_tick_height) = pending_state.unwrap();
+                return Ok(ReceiveResults {
+                    entries,
+                    time_elapsed: recv_start.elapsed(),
+                    bank,
+                    last_tick_height,
+                });
+            }
+            Err(e)?
+        }
+    };
+
+    batch_byte_count += serialized_size(&entry)?;
+    entries.push(entry);
     let mut slot = bank.slot();
     let mut max_tick_height = bank.max_tick_height();
 
     assert!(last_tick_height <= max_tick_height);
 
-    if last_tick_height != max_tick_height {
-        while let Ok((try_bank, (entry, tick_height))) = receiver.try_recv() {
+    if last_tick_height != max_tick_height && batch_byte_count < target_batch_byte_count {
+        let mut max_wait = Duration::from_millis(receiver_coalesce_ms);
+        let mut now = Instant::now();
+        while let Ok((try_bank, (entry, tick_height))) = receiver.recv_timeout(max_wait) {
+            let entry_bytes = serialized_size(&entry)?;
+            if batch_byte_count + entry_bytes > target_batch_byte_count {
+                ctx.pending_entry = Some((try_bank, (entry, tick_height)));
+                break;
+            }
+
             // If the bank changed, that implies the previous slot was interrupted and we do not have to
             // broadcast its entries.
             if try_bank.slot() != slot {
                 warn!("Broadcast for slot: {} interrupted", bank.slot());
                 entries.clear();
+                batch_byte_count = 8; // Vec len
                 bank = try_bank;
                 slot = bank.slot();
                 max_tick_height = bank.max_tick_height();
             }
             last_tick_height = tick_height;
+            batch_byte_count += entry_bytes;
             entries.push(entry);
-
-            if entries.len() >= RECEIVE_ENTRY_COUNT_THRESHOLD {
-                break;
-            }
 
             assert!(last_tick_height <= max_tick_height);
             if last_tick_height == max_tick_height {
                 break;
             }
+
+            max_wait = max_wait.saturating_sub(now.elapsed());
+            now = Instant::now();
         }
     }
 
@@ -80,6 +123,7 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
 mod tests {
     use {
         super::*,
+        crate::broadcast_stage::DEFAULT_ENTRY_COALESCE_MS,
         crossbeam_channel::unbounded,
         solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
         solana_sdk::{
@@ -125,7 +169,10 @@ mod tests {
 
         let mut res_entries = vec![];
         let mut last_tick_height = 0;
-        while let Ok(result) = recv_slot_entries(&r) {
+        let mut recv_entries_ctx = RecvEntriesContext::default();
+        while let Ok(result) =
+            recv_slot_entries(&mut recv_entries_ctx, &r, DEFAULT_ENTRY_COALESCE_MS)
+        {
             assert_eq!(result.bank.slot(), bank1.slot());
             last_tick_height = result.last_tick_height;
             res_entries.extend(result.entries);
@@ -167,7 +214,10 @@ mod tests {
         let mut res_entries = vec![];
         let mut last_tick_height = 0;
         let mut bank_slot = 0;
-        while let Ok(result) = recv_slot_entries(&r) {
+        let mut recv_entries_ctx = RecvEntriesContext::default();
+        while let Ok(result) =
+            recv_slot_entries(&mut recv_entries_ctx, &r, DEFAULT_ENTRY_COALESCE_MS)
+        {
             bank_slot = result.bank.slot();
             last_tick_height = result.last_tick_height;
             res_entries = result.entries;

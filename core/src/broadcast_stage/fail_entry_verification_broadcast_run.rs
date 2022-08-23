@@ -1,6 +1,8 @@
 use {
     super::*,
-    crate::cluster_nodes::ClusterNodesCache,
+    crate::{
+        broadcast_stage::broadcast_utils::RecvEntriesContext, cluster_nodes::ClusterNodesCache,
+    },
     solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
     std::{thread::sleep, time::Duration},
@@ -39,14 +41,17 @@ impl FailEntryVerificationBroadcastRun {
 impl BroadcastRun for FailEntryVerificationBroadcastRun {
     fn run(
         &mut self,
+        recv_entries_ctx: &mut RecvEntriesContext,
         keypair: &Keypair,
         blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
+        receiver_coalesce_ms: u64,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
+        let mut receive_results =
+            broadcast_utils::recv_slot_entries(recv_entries_ctx, receiver, receiver_coalesce_ms)?;
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 

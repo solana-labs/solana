@@ -80,7 +80,7 @@ mod common;
 mod legacy;
 mod merkle;
 mod shred_code;
-mod shred_data;
+pub mod shred_data;
 mod stats;
 mod traits;
 

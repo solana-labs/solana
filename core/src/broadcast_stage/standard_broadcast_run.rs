@@ -6,7 +6,8 @@ use {
         *,
     },
     crate::{
-        broadcast_stage::broadcast_utils::UnfinishedSlotInfo, cluster_nodes::ClusterNodesCache,
+        broadcast_stage::broadcast_utils::{RecvEntriesContext, UnfinishedSlotInfo},
+        cluster_nodes::ClusterNodesCache,
     },
     solana_entry::entry::Entry,
     solana_ledger::shred::{ProcessShredsStats, Shred, ShredFlags, Shredder},
@@ -410,13 +411,16 @@ impl StandardBroadcastRun {
 impl BroadcastRun for StandardBroadcastRun {
     fn run(
         &mut self,
+        recv_entries_ctx: &mut RecvEntriesContext,
         keypair: &Keypair,
         blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
+        receiver_coalesce_ms: u64,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
-        let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
+        let receive_results =
+            broadcast_utils::recv_slot_entries(recv_entries_ctx, receiver, receiver_coalesce_ms)?;
         // TODO: Confirm that last chunk of coding shreds
         // will not be lost or delayed for too long.
         self.process_receive_results(

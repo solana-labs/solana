@@ -1,5 +1,6 @@
 use {
     super::*,
+    crate::broadcast_stage::broadcast_utils::RecvEntriesContext,
     solana_entry::entry::Entry,
     solana_ledger::shred::{ProcessShredsStats, Shredder},
     solana_sdk::{hash::Hash, signature::Keypair},
@@ -27,14 +28,17 @@ impl BroadcastFakeShredsRun {
 impl BroadcastRun for BroadcastFakeShredsRun {
     fn run(
         &mut self,
+        recv_entries_ctx: &mut RecvEntriesContext,
         keypair: &Keypair,
         blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
+        receiver_coalesce_ms: u64,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let receive_results = broadcast_utils::recv_slot_entries(receiver)?;
+        let receive_results =
+            broadcast_utils::recv_slot_entries(recv_entries_ctx, receiver, receiver_coalesce_ms)?;
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 
