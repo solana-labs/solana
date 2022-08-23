@@ -55,6 +55,10 @@ pub fn parse_address_lookup_table(
         }
         ProgramInstruction::ExtendLookupTable { new_addresses } => {
             check_num_address_lookup_table_accounts(&instruction.accounts, 2)?;
+            let new_addresses: Vec<String> = new_addresses
+                .into_iter()
+                .map(|address| address.to_string())
+                .collect();
             let mut value = json!({
                 "lookupTableAccount": account_keys[instruction.accounts[0] as usize].to_string(),
                 "lookupTableAuthority": account_keys[instruction.accounts[1] as usize].to_string(),
@@ -72,7 +76,7 @@ pub fn parse_address_lookup_table(
                 );
             }
             Ok(ParsedInstructionEnum {
-                instruction_type: "freezeLookupTable".to_string(),
+                instruction_type: "extendLookupTable".to_string(),
                 info: value,
             })
         }
@@ -185,6 +189,92 @@ mod test {
         )
         .is_err());
         let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_address_lookup_table(
+            &message.instructions[0],
+            &AccountKeys::new(&keys, None)
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn test_parse_extend_lookup_table_ix() {
+        let lookup_table_pubkey = Pubkey::new_unique();
+        let authority = Pubkey::new_unique();
+        let from_pubkey = Pubkey::new_unique();
+        let no_addresses = vec![];
+        let address0 = Pubkey::new_unique();
+        let address1 = Pubkey::new_unique();
+        let some_addresses = vec![address0, address1];
+
+        // No payer, no addresses
+        let instruction =
+            instruction::extend_lookup_table(lookup_table_pubkey, authority, None, no_addresses);
+        let mut message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_address_lookup_table(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "extendLookupTable".to_string(),
+                info: json!({
+                    "lookupTableAccount": lookup_table_pubkey.to_string(),
+                    "lookupTableAuthority": authority.to_string(),
+                    "newAddresses": [],
+                }),
+            }
+        );
+        assert!(parse_address_lookup_table(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..1], None)
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        assert!(parse_address_lookup_table(
+            &message.instructions[0],
+            &AccountKeys::new(&keys, None)
+        )
+        .is_err());
+
+        // Some payer, some addresses
+        let instruction = instruction::extend_lookup_table(
+            lookup_table_pubkey,
+            authority,
+            Some(from_pubkey),
+            some_addresses,
+        );
+        let mut message = Message::new(&[instruction], None);
+        assert_eq!(
+            parse_address_lookup_table(
+                &message.instructions[0],
+                &AccountKeys::new(&message.account_keys, None)
+            )
+            .unwrap(),
+            ParsedInstructionEnum {
+                instruction_type: "extendLookupTable".to_string(),
+                info: json!({
+                    "lookupTableAccount": lookup_table_pubkey.to_string(),
+                    "lookupTableAuthority": authority.to_string(),
+                    "source": from_pubkey.to_string(),
+                    "systemProgram": system_program::id().to_string(),
+                    "newAddresses": [
+                        address0.to_string(),
+                        address1.to_string(),
+                    ],
+                }),
+            }
+        );
+        assert!(parse_address_lookup_table(
+            &message.instructions[0],
+            &AccountKeys::new(&message.account_keys[0..1], None)
+        )
+        .is_err());
+        let keys = message.account_keys.clone();
+        message.instructions[0].accounts.pop();
+        message.instructions[0].accounts.pop();
         message.instructions[0].accounts.pop();
         assert!(parse_address_lookup_table(
             &message.instructions[0],
