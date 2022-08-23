@@ -67,12 +67,12 @@ enum LockStatus {
     Failed,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LockAttempt {
     pub target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
-    pub heaviest_uncontended: arc_swap::ArcSwap<TaskInQueue>,
+    pub heaviest_uncontended: arc_swap::ArcSwapOption<TaskInQueue>,
     //remembered: bool,
 }
 
