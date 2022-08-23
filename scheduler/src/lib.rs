@@ -439,7 +439,7 @@ impl Task {
     }
 
     pub fn queue_time(&self) -> usize {
-        self.queue_time.load(std::sync::atomic::Ordering::SeqCst);
+        self.queue_time.load(std::sync::atomic::Ordering::SeqCst)
     }
 
 
