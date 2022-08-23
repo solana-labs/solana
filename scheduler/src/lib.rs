@@ -784,7 +784,7 @@ impl ScheduleStage {
                     provisional_count,
                 );
                 drop(next_task);
-                address_book.provisioning_trackers.insert(*unique_weight, (ProvisioningTracker::new(provisional_count), arc_next_task));
+                address_book.provisioning_trackers.insert(unique_weight, (ProvisioningTracker::new(provisional_count), arc_next_task));
 
                 return None;
                 continue;
