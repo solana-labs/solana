@@ -1230,12 +1230,16 @@ impl<T: IndexValue> AccountsIndex<T> {
         )
     }
 
-    pub fn get_rooted_entries(&self, slice: SlotSlice<T>, max: Option<Slot>) -> SlotList<T> {
-        let max = max.unwrap_or(Slot::MAX);
+    pub fn get_rooted_entries(
+        &self,
+        slice: SlotSlice<T>,
+        max_inclusive: Option<Slot>,
+    ) -> SlotList<T> {
+        let max_inclusive = max_inclusive.unwrap_or(Slot::MAX);
         let lock = &self.roots_tracker.read().unwrap().alive_roots;
         slice
             .iter()
-            .filter(|(slot, _)| *slot <= max && lock.contains(slot))
+            .filter(|(slot, _)| *slot <= max_inclusive && lock.contains(slot))
             .cloned()
             .collect()
     }
@@ -1244,10 +1248,10 @@ impl<T: IndexValue> AccountsIndex<T> {
     pub fn roots_and_ref_count(
         &self,
         locked_account_entry: &ReadAccountMapEntry<T>,
-        max: Option<Slot>,
+        max_inclusive: Option<Slot>,
     ) -> (SlotList<T>, RefCount) {
         (
-            self.get_rooted_entries(locked_account_entry.slot_list(), max),
+            self.get_rooted_entries(locked_account_entry.slot_list(), max_inclusive),
             locked_account_entry.ref_count(),
         )
     }
