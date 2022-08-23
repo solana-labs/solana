@@ -674,13 +674,9 @@ impl ScheduleStage {
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
                 let uw = *weight_from_contended.key();
-                weight_from_contended.remove();
+                let t = weight_from_contended.remove();
 
-                if let Some (queue_entry) = contended_queue.entry_to_execute(uw) {
-                    return Some(( None, queue_entry))
-                } else {
-                    unreachable!();
-                }
+                return Some(( false, t));
             },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
