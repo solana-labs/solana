@@ -2,7 +2,6 @@
 #![feature(get_mut_unchecked)]
 
 use {
-    atomic_enum::atomic_enum,
     crossbeam_channel::{bounded, unbounded},
     log::*,
     rand::Rng,
