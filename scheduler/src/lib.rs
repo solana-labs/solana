@@ -471,8 +471,8 @@ impl Task {
         Self {
             unique_weight: self.unique_weight,
             tx: self.tx.clone(),
-            contention_count: self.contention_count,
-            uncontended: std::sync::atomic::AtomicUsize::default(),
+            contention_count: Default:default()
+            uncontended: Default::default(),
         }
     }
 
