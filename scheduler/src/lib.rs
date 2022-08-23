@@ -903,10 +903,12 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
         task: TaskInQueue,
+        contended_count: &mut usize,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
         task.mark_as_uncontended();
+        *contended_count -= 1;
 
         Box::new(ExecutionEnvironment {
             task,
@@ -938,7 +940,7 @@ impl ScheduleStage {
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate)
-                .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t));
+                .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t, contended_count));
         maybe_ee
     }
 
