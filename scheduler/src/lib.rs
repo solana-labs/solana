@@ -937,7 +937,7 @@ impl ScheduleStage {
         prefer_immediate: bool,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(runnable_queue, contended_count, address_book, prefer_immediate)
+            Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate)
                 .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t));
         maybe_ee
     }
