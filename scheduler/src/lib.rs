@@ -203,7 +203,7 @@ impl Page {
 //type AddressMap = std::collections::HashMap<Pubkey, PageRc>;
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 type TaskId = UniqueWeight;
-type WeightedTaskIds = std::collections::BTreeMap<TaskId, ()>;
+type WeightedTaskIds = std::collections::BTreeMap<TaskId, TaskInQueue>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 
@@ -869,10 +869,10 @@ impl ScheduleStage {
 
             let page = l.target.page_mut();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
-                let task_id = l.heaviest_uncontended.load_full().unwrap().load(std::sync::atomic::Ordering::SeqCst);
-                if task_id != 0 {
-                    if contended_queue.has_contended_task(&task_id) {
-                        address_book.uncontended_task_ids.insert(task_id, ());
+                let maybe_task = l.heaviest_uncontended.load_full();
+                if let Some(task) = maybe_task {
+                    if task.currently_contended() {
+                        address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     }
                 }
             }
