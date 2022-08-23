@@ -29,12 +29,15 @@
 //! reliably. For a non-blocking, cancelable API, use the asynchronous client
 //! in [`crate::nonblocking::pubsub_client`].
 //!
-//! By default the [`PubsubClient::block_subscribe`] and
-//! [`PubsubClient::vote_subscribe`] events are disabled on RPC nodes. They can
-//! be enabled by passing `--rpc-pubsub-enable-block-subscription` and
+//! By default the [`block_subscribe`] and [`vote_subscribe`] events are
+//! disabled on RPC nodes. They can be enabled by passing
+//! `--rpc-pubsub-enable-block-subscription` and
 //! `--rpc-pubsub-enable-vote-subscription` to `solana-validator`. When these
 //! methods are disabled, the RPC server will return a "Method not found" error
 //! message.
+//!
+//! [`block_subscribe`]: https://docs.rs/solana-rpc/latest/solana_rpc/rpc_pubsub/trait.RpcSolPubSub.html#tymethod.block_subscribe
+//! [`vote_subscribe`]: https://docs.rs/solana-rpc/latest/solana_rpc/rpc_pubsub/trait.RpcSolPubSub.html#tymethod.vote_subscribe
 //!
 //! # Examples
 //!
