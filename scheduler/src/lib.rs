@@ -719,7 +719,7 @@ impl ScheduleStage {
                 return None;
                 continue;
             }
-            let lock_attempts = std::mem::take(next_task.tx.1);
+            let lock_attempts = std::mem::take(&mut next_task.tx.1);
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
             return Some((unique_weight, arc_next_task, lock_attempts));
