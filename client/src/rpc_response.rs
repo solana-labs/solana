@@ -79,28 +79,28 @@ pub struct Response<T> {
     pub value: T,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockCommitment<T> {
     pub commitment: Option<T>,
     pub total_stake: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockhashFeeCalculator {
     pub blockhash: String,
     pub fee_calculator: FeeCalculator,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockhash {
     pub blockhash: String,
     pub last_valid_block_height: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcFees {
     pub blockhash: String,
@@ -109,7 +109,7 @@ pub struct RpcFees {
     pub last_valid_block_height: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DeprecatedRpcFees {
     pub blockhash: String,
@@ -117,7 +117,7 @@ pub struct DeprecatedRpcFees {
     pub last_valid_slot: Slot,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct Fees {
     pub blockhash: Hash,
@@ -125,13 +125,13 @@ pub struct Fees {
     pub last_valid_block_height: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcFeeCalculator {
     pub fee_calculator: FeeCalculator,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcFeeRateGovernor {
     pub fee_rate_governor: FeeRateGovernor,
@@ -191,7 +191,7 @@ pub struct SlotTransactionStats {
     pub max_transactions_per_entry: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum SlotUpdate {
     FirstShredReceived {
@@ -241,14 +241,14 @@ impl SlotUpdate {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum RpcSignatureResult {
     ProcessedSignature(ProcessedSignatureResult),
     ReceivedSignature(ReceivedSignatureResult),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcLogsResponse {
     pub signature: String, // Signature as base58 string
@@ -256,19 +256,19 @@ pub struct RpcLogsResponse {
     pub logs: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessedSignatureResult {
     pub err: Option<TransactionError>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ReceivedSignatureResult {
     ReceivedSignature,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcContactInfo {
     /// Pubkey of the node as a base-58 string
@@ -305,7 +305,7 @@ pub struct RpcBlockProduction {
     pub range: RpcBlockProductionRange,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct RpcVersionInfo {
     /// The current version of solana-core
@@ -331,14 +331,14 @@ impl fmt::Display for RpcVersionInfo {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct RpcIdentity {
     /// The current node identity pubkey
     pub identity: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcVote {
     /// Vote account address, as base-58 encoded string
@@ -349,14 +349,14 @@ pub struct RpcVote {
     pub signature: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcVoteAccountStatus {
     pub current: Vec<RpcVoteAccountInfo>,
     pub delinquent: Vec<RpcVoteAccountInfo>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcVoteAccountInfo {
     /// Vote account address, as base-58 encoded string
@@ -385,14 +385,14 @@ pub struct RpcVoteAccountInfo {
     pub root_slot: Slot,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSignatureConfirmation {
     pub confirmations: usize,
     pub status: Result<()>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcSimulateTransactionResult {
     pub err: Option<TransactionError>,
@@ -402,7 +402,7 @@ pub struct RpcSimulateTransactionResult {
     pub return_data: Option<RpcTransactionReturnData>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcTransactionReturnData {
     pub program_id: String,
@@ -424,7 +424,7 @@ pub enum ReturnDataEncoding {
     Base64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcStorageTurn {
     pub blockhash: String,
@@ -511,7 +511,7 @@ pub enum RpcBlockUpdateError {
     UnsupportedTransactionVersion(u8),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct RpcBlockUpdate {
     pub slot: Slot,
