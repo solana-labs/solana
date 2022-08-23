@@ -434,7 +434,7 @@ pub struct Task {
     unique_weight: UniqueWeight,
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
     pub contention_count: usize,
-    pub uncontended: std::sync::atomic::AtomicUsize,
+    pub uncontended: usize,
 }
 
 impl Task {
@@ -452,15 +452,15 @@ impl Task {
     }
 
     pub fn currently_contended(&self) -> bool {
-        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
+        self.uncontended == 1
     }
 
-    fn mark_as_contended(&self) {
-        self.uncontended.store(1, std::sync::atomic::Ordering::SeqCst)
+    fn mark_as_contended(&mut self) {
+        self.uncontended = 1;
     }
 
-    fn mark_as_uncontended(&self) {
-        self.uncontended.store(2, std::sync::atomic::Ordering::SeqCst)
+    fn mark_as_uncontended(&mut self) {
+        self.uncontended = 2;
     }
 }
 
