@@ -5833,7 +5833,6 @@ dependencies = [
  "enum-iterator",
  "itertools",
  "libc",
- "libloading",
  "log",
  "num-derive",
  "num-traits",
