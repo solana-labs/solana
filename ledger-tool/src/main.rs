@@ -334,7 +334,7 @@ fn output_slot(
                             .unwrap();
                         */
                         let uq = ee.unique_weight;
-                        for mut lock_attempt in ee.task.tx.1.iter_mut() {
+                        for mut lock_attempt in ee.lock_attempts.iter_mut() {
                             let page = lock_attempt.target.page_ref();
                             page.contended_unique_weights.remove_task_id(&uq);
                             if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
