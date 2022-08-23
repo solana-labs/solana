@@ -484,10 +484,10 @@ impl Task {
 // RunnableQueue, ContendedQueue?
 #[derive(Default, Debug, Clone)]
 pub struct TaskQueue {
-    //tasks: std::collections::BTreeMap<UniqueWeight, Task>,
+    tasks: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
     //tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
     //tasks: im::HashMap<UniqueWeight, TaskInQueue>,
-    tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
+    //tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
 }
 
 pub type TaskInQueue = std::sync::Arc<Task>;
