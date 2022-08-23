@@ -460,7 +460,7 @@ impl Task {
     }
 
     fn mark_as_finished(&self) {
-        assert!(self.already_finished());
+        assert!(!self.already_finished());
         self.uncontended.store(3, std::sync::atomic::Ordering::SeqCst)
     }
 }
