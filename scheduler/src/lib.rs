@@ -459,16 +459,20 @@ struct Bundle {
 pub struct Task {
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
     pub contention_count: usize,
-    pub uncontended: std::sync::atomic::AtomicBool,
+    pub uncontended: std::sync::atomic::AtomicUsize,
 }
 
 impl Task {
     fn still_contended(&self) -> bool {
-        !self.uncontended.load(std::sync::atomic::Ordering::SeqCst)
+        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) < 2
+    }
+
+    fn mark_as_contended(&self) {
+        self.uncontended.store(1, std::sync::atomic::Ordering::SeqCst)
     }
 
     fn mark_as_uncontended(&self) {
-        self.uncontended.store(true, std::sync::atomic::Ordering::SeqCst)
+        self.uncontended.store(2, std::sync::atomic::Ordering::SeqCst)
     }
 }
 
