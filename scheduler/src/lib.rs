@@ -143,8 +143,8 @@ impl TaskIds {
 
     #[inline(never)]
     pub fn remove_task_id(&self, u: &TaskId) {
-        let removed_now = self.task_ids.remove(u);
-        assert!(removed_now);
+        let removed_entry = self.task_ids.remove(u);
+        assert!(removed_entry.is_removed());
     }
 
     #[inline(never)]
