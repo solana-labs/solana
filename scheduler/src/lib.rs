@@ -654,6 +654,7 @@ impl ScheduleStage {
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
+            let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut a.1) };
             return Some((a.0, a.1));
         }
 
