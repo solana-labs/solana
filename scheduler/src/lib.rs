@@ -888,7 +888,7 @@ impl ScheduleStage {
                             if tracker.is_fulfilled() {
                                 trace!("provisioning tracker tick: {} => {} (!)", tracker.prev_count(), tracker.count());
                                 tracker_entry.remove();
-                                panic!()//address_book.fulfilled_provisional_task_ids.insert(task_id, ());
+                                address_book.fulfilled_provisional_task_ids.insert(task_id, task);
                             } else {
                                 trace!("provisioning tracker tick: {} => {}", tracker.prev_count(), tracker.count());
                             }
