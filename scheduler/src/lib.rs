@@ -54,7 +54,7 @@ impl PageRc {
         unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
     }
 
-    pub fn page_ref(&self) -> &Page {
+    fn page_ref(&self) -> &Page {
         //<MyRcInner as std::borrow::Borrow<_>>::borrow(&self.0)
         &*(self.0)
     }
@@ -96,6 +96,10 @@ impl LockAttempt {
             heaviest_uncontended: Default::default(),
             //remembered: false,
         }
+    }
+
+    pub fn contended_unique_weights() -> &TaskIds {
+        self.target.page_ref().contended_unique_weights
     }
 }
 
