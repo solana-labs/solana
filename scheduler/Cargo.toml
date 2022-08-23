@@ -11,7 +11,6 @@ documentation = "https://docs.rs/solana-scheduler"
 publish = true
 
 [dependencies]
-arc-swap = "1.5.0"
 crossbeam-channel = "0.5.5"
 crossbeam-skiplist = { path = "../../../crossbeam/crossbeam-skiplist" }
 dashmap = { version = "4.0.2" }
