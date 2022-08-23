@@ -36,7 +36,7 @@ pub fn parse_address_lookup_table(
                 info: json!({
                     "lookupTableAccount": account_keys[instruction.accounts[0] as usize].to_string(),
                     "lookupTableAuthority": account_keys[instruction.accounts[1] as usize].to_string(),
-                    "source": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "payerAccount": account_keys[instruction.accounts[2] as usize].to_string(),
                     "systemProgram": account_keys[instruction.accounts[3] as usize].to_string(),
                     "recentSlot": recent_slot,
                     "bumpSeed": bump_seed,
@@ -67,7 +67,7 @@ pub fn parse_address_lookup_table(
             let map = value.as_object_mut().unwrap();
             if instruction.accounts.len() >= 4 {
                 map.insert(
-                    "source".to_string(),
+                    "payerAccount".to_string(),
                     json!(account_keys[instruction.accounts[2] as usize].to_string()),
                 );
                 map.insert(
@@ -97,7 +97,7 @@ pub fn parse_address_lookup_table(
                 info: json!({
                     "lookupTableAccount": account_keys[instruction.accounts[0] as usize].to_string(),
                     "lookupTableAuthority": account_keys[instruction.accounts[1] as usize].to_string(),
-                    "destination": account_keys[instruction.accounts[2] as usize].to_string(),
+                    "recipient": account_keys[instruction.accounts[2] as usize].to_string(),
                 }),
             })
         }
@@ -141,7 +141,7 @@ mod test {
                 info: json!({
                     "lookupTableAccount": lookup_table_pubkey.to_string(),
                     "lookupTableAuthority": authority.to_string(),
-                    "source": from_pubkey.to_string(),
+                    "payerAccount": from_pubkey.to_string(),
                     "systemProgram": system_program::id().to_string(),
                     "recentSlot": slot,
                     "bumpSeed": 254,
@@ -258,7 +258,7 @@ mod test {
                 info: json!({
                     "lookupTableAccount": lookup_table_pubkey.to_string(),
                     "lookupTableAuthority": authority.to_string(),
-                    "source": from_pubkey.to_string(),
+                    "payerAccount": from_pubkey.to_string(),
                     "systemProgram": system_program::id().to_string(),
                     "newAddresses": [
                         address0.to_string(),
@@ -338,7 +338,7 @@ mod test {
                 info: json!({
                     "lookupTableAccount": lookup_table_pubkey.to_string(),
                     "lookupTableAuthority": authority.to_string(),
-                    "destination": recipient.to_string(),
+                    "recipient": recipient.to_string(),
                 }),
             }
         );
