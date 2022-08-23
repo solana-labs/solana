@@ -2227,8 +2227,8 @@ impl AccountsDb {
         // do not match the criteria of deleting all appendvecs which contain them
         // then increment their storage count.
         let mut already_counted = HashSet::new();
-        let mut failed_store_id = None;
         for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
+            let mut failed_store_id = None;
             let all_stores_being_deleted =
                 account_infos.len() as RefCount == *ref_count_from_storage;
             if all_stores_being_deleted {
