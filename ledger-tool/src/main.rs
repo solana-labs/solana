@@ -292,7 +292,8 @@ fn output_slot(
             //let muxed_sender = muxed_sender.clone();
 
             let t2 = std::thread::Builder::new()
-                .name(format!("blockstore_processor_{}", thx))
+                //.name(format!("blockstore_processor_{}", thx))
+                .name(format!("sol-lane{}", thx))
                 .spawn(move || {
                     use solana_metrics::datapoint_info;
                     let current_thread_name = std::thread::current().name().unwrap().to_string();
