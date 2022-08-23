@@ -1413,17 +1413,17 @@ impl<T: IndexValue> AccountsIndex<T> {
     fn get_newest_root_in_slot_list(
         alive_roots: &RollingBitField,
         slice: SlotSlice<T>,
-        max_allowed_root: Option<Slot>,
+        max_allowed_root_inclusive: Option<Slot>,
     ) -> Slot {
         let mut max_root = 0;
-        for (f, _) in slice.iter() {
-            if let Some(max_allowed_root) = max_allowed_root {
-                if *f > max_allowed_root {
+        for (slot, _) in slice.iter() {
+            if let Some(max_allowed_root_inclusive) = max_allowed_root_inclusive {
+                if *slot > max_allowed_root_inclusive {
                     continue;
                 }
             }
-            if *f > max_root && alive_roots.contains(f) {
-                max_root = *f;
+            if *slot > max_root && alive_roots.contains(slot) {
+                max_root = *slot;
             }
         }
         max_root
