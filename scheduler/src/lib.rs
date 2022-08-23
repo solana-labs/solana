@@ -438,6 +438,11 @@ impl Task {
         self.queue_time.store(clock, std::sync::atomic::Ordering::SeqCst);
     }
 
+    pub fn queue_time(&self) -> usize {
+        self.queue_time.load(std::sync::atomic::Ordering::SeqCst);
+    }
+
+
     pub fn clone_for_test(&self) -> Self {
         Self {
             unique_weight: self.unique_weight,
