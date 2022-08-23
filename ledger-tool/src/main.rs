@@ -396,6 +396,7 @@ fn output_slot(
                 skip_voting,
             );
         }
+        let txes = Arc::new(txes);
 
         let mut weight = 10_000_000;
         let loop_count = if std::env::var("INFINITE").is_ok() {
