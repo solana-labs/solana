@@ -99,4 +99,8 @@ impl BenchTpsClient for RpcClient {
                 })
             })
     }
+
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
+        RpcClient::get_multiple_accounts(self, pubkeys).map_err(|err| err.into())
+    }
 }
