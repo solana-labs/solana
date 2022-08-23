@@ -401,7 +401,7 @@ fn output_slot(
             100000
         } else {
             100
-        }
+        };
         for i in 0..loop_count {
             error!("started!: {} {}", i, txes.len());
             for tx in txes.iter().map(|t| Box::new((t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))) {
