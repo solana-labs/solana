@@ -364,7 +364,7 @@ fn output_slot(
 
     let d = depth.clone();
     let consumer_count = std::env::var("CONSUMER_COUNT")
-        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
+        .unwrap_or(format!("{}", 4))
         .parse::<usize>()
         .unwrap();
     let step = Arc::new(std::sync::atomic::AtomicUsize::default());
@@ -417,7 +417,7 @@ fn output_slot(
             100
         };
         let producer_count = std::env::var("PRODUCER_COUNT")
-            .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
+            .unwrap_or(format!("{}", 4))
             .parse::<usize>()
             .unwrap();
         let handles2 = (0..producer_count)
