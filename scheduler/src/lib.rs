@@ -131,36 +131,18 @@ pub enum RequestedUsage {
 
 #[derive(Debug, Default)]
 pub struct TaskIds {
-    //task_ids: std::collections::BTreeSet<UniqueWeight>,
     task_ids: crossbeam_skiplist::SkipMap<UniqueWeight, TaskInQueue>,
-    //cached_heaviest: Option<UniqueWeight>,
 }
 
 impl TaskIds {
     #[inline(never)]
     pub fn insert_task_id(&self, u: TaskId, task: TaskInQueue) {
-        /*
-        match self.cached_heaviest {
-            Some(c) if u > c => { self.cached_heaviest = Some(u) },
-            None => { self.cached_heaviest = Some(u); }
-            _ => {},
-        }
-        */
-             
         self.task_ids.insert(u, task);
     }
 
     #[inline(never)]
     pub fn remove_task_id(&self, u: &TaskId) {
-        let a = self.task_ids.remove(u);
-        /*
-        match self.cached_heaviest {
-            //Some(ref c) if u == c => { self.cached_heaviest = self.task_ids.last().copied() },
-            Some(ref c) if u == c => { self.cached_heaviest = self.task_ids.back().map(|e| *(e.value())) },
-            _ => {},
-        }
-        */
-        a;
+        self.task_ids.remove(u);
     }
 
     #[inline(never)]
@@ -170,16 +152,12 @@ impl TaskIds {
 
     #[inline(never)]
     fn heaviest_task_id(&self) -> Option<TaskId> {
-        //self.task_ids.last()
         self.task_ids.back().map(|e| *(e.key()))
-        //self.cached_heaviest.as_ref()
     }
 
     #[inline(never)]
     pub fn heaviest_task_cursor(&self) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue>> {
-        //self.task_ids.last()
         self.task_ids.back()
-        //self.cached_heaviest.as_ref()
     }
 }
 
@@ -285,8 +263,6 @@ impl AddressBook {
                         }
                         RequestedUsage::Writable => {
                             if from_runnable || prefer_immediate {
-                                //Self::remember_address_contention(&mut page, unique_weight);
-                                //*remembered = true;
                                 *status = LockStatus::Failed;
                             } else {
                                 match page.next_usage {
@@ -299,15 +275,11 @@ impl AddressBook {
                                         *status = LockStatus::Failed;
                                     },
                                 }
-                                
-                                //*status = LockStatus::Failed;
                             }
                         }
                     },
                     Usage::Writable => {
                         if from_runnable || prefer_immediate {
-                            //Self::remember_address_contention(&mut page, unique_weight);
-                            //*remembered = true;
                             *status = LockStatus::Failed;
                         } else {
                             match page.next_usage {
@@ -320,25 +292,10 @@ impl AddressBook {
                                     *status = LockStatus::Failed;
                                 },
                             }
-                            //*status = LockStatus::Failed;
                         }
                     },
                 }
     }
-
-    /*
-    #[inline(never)]
-    fn remember_address_contention(page: &mut Page, unique_weight: &UniqueWeight) {
-        page.contended_unique_weights.insert_task_id(*unique_weight);
-    }
-
-    #[inline(never)]
-    fn forget_address_contention(unique_weight: &UniqueWeight, a: &mut LockAttempt) {
-        if a.remembered {
-            a.target.page_ref().contended_unique_weights.remove_task_id(unique_weight);
-        }
-    }
-    */
 
     fn reset_lock(&mut self, attempt: &mut LockAttempt, after_execution: bool) -> bool {
         match attempt.status {
@@ -653,21 +610,6 @@ impl ScheduleStage {
         *unique_key -= 1;
     }
 
-    /*
-    #[inline(never)]
-    fn get_newly_u_u_w<'a>(
-        address: &'a Pubkey,
-        address_book: &'a AddressBook,
-    ) -> &'a std::collections::BTreeSet<UniqueWeight> {
-        &address_book
-            .book
-            .get(address)
-            .unwrap()
-            .0
-            .contended_unique_weights
-    }
-    */
-
     #[inline(never)]
     fn get_heaviest_from_contended<'a>(address_book: &'a mut AddressBook) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>> {
         address_book.uncontended_task_ids.last_entry()
@@ -806,11 +748,6 @@ impl ScheduleStage {
             }
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
-            Self::finalize_lock_before_execution(
-                address_book,
-                &unique_weight,
-                &mut next_task.tx.1,
-            );
             return Some((unique_weight, arc_next_task));
         } else {
             break;
@@ -821,19 +758,6 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    // naming: relock_before_execution() / update_address_book() / update_uncontended_addresses()?
-    fn finalize_lock_before_execution(
-        address_book: &mut AddressBook,
-        unique_weight: &UniqueWeight,
-        lock_attempts: &mut Vec<LockAttempt>,
-    ) {
-        for mut l in lock_attempts {
-            // ensure to remove remaining refs of this unique_weight
-            //AddressBook::forget_address_contention(&unique_weight, &mut l);
-        }
-    }
-
-    #[inline(never)]
     fn finalize_lock_for_provisional_execution(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
@@ -841,7 +765,6 @@ impl ScheduleStage {
         provisional_count: usize,
     ) {
         for mut l in lock_attempts {
-            //AddressBook::forget_address_contention(&unique_weight, &mut l);
             match l.status {
                 LockStatus::Provisional => {
                     l.target.page_mut().provisional_task_ids.insert(*unique_weight);
@@ -865,16 +788,7 @@ impl ScheduleStage {
         from_runnable: bool,
     ) {
         for l in lock_attempts {
-            if from_runnable {
-                //AddressBook::remember_address_contention(&mut l.target.page_mut(), unique_weight);
-                //l.remembered = true;
-            }
             address_book.reset_lock(l, false);
-            //if let Some(uw) = l.target.page().contended_unique_weights.last() {
-            //    address_book.uncontended_task_ids.remove(uw);
-            //}
-
-            // todo: mem::forget and panic in LockAttempt::drop()
         }
     }
 
