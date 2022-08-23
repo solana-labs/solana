@@ -466,6 +466,10 @@ impl Task {
     fn still_contended(&self) -> bool {
         !self.uncontended.load(std::sync::atomic::Ordering::SeqCst)
     }
+
+    fn mark_as_uncontended(&self) {
+        self.uncontended.store(true, std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 // RunnableQueue, ContendedQueue?
@@ -892,7 +896,7 @@ impl ScheduleStage {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
         let checkpointed_contended_queue = contended_queue.clone();
-        task.uncontended.store(true, std::sync::atomic::Ordering::SeqCst);
+        task.mark_as_uncontended();
 
         Box::new(ExecutionEnvironment {
             task,
