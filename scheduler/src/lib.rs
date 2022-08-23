@@ -731,7 +731,7 @@ impl ScheduleStage {
         if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, contended_queue, address_book) {
             trace!("pop loop iteration");
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
-            let unique_weight = *next_task.unique_weight;
+            let unique_weight = next_task.unique_weight;
             let message_hash = next_task.tx.0.message_hash();
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
@@ -782,7 +782,7 @@ impl ScheduleStage {
                     provisional_count,
                 );
                 drop(next_task);
-                address_book.provisioning_trackers.insert(unique_weight, (ProvisioningTracker::new(provisional_count), TaskInQueue::clone(arc_next_task)));
+                address_book.provisioning_trackers.insert(unique_weight, (ProvisioningTracker::new(provisional_count), arc_next_task));
 
                 return None;
                 continue;
