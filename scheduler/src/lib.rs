@@ -869,7 +869,7 @@ impl ScheduleStage {
 
             let page = l.target.page_mut();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
-                let task_id = l.heaviest_uncontended.load().load(std::sync::atomic::Ordering::SeqCst);
+                let task_id = l.heaviest_uncontended.load().unwrap().load(std::sync::atomic::Ordering::SeqCst);
                 if task_id != 0 {
                     if contended_queue.has_contended_task(&task_id) {
                         address_book.uncontended_task_ids.insert(task_id, ());
