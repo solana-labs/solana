@@ -661,7 +661,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
     ) -> Option<(
         bool,
-        &'a TaskInQueue,
+        TaskInQueue,
     )> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
@@ -669,7 +669,7 @@ impl ScheduleStage {
         ) {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
-                return Some((true, heaviest_runnable_entry.get()))
+                return Some((true, TaskInQueue::clone(heaviest_runnable_entry.get())))
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
