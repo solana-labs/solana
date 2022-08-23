@@ -775,7 +775,7 @@ impl ScheduleStage {
             let page = l.target.page_mut();
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
                 //let maybe_task = l.heaviest_uncontended.load_full();
-                if let Some(task) = l.heaviest_uncontended { //maybe_task {
+                if let Some(task) = &l.heaviest_uncontended { //maybe_task {
                     if task.currently_contended() {
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     }
