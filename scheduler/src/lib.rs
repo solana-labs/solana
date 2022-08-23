@@ -830,7 +830,7 @@ impl ScheduleStage {
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
-        *contended_count -= 1;
+        *contended_count = contended_count.checked_sub(1).unwrap();
 
         Box::new(ExecutionEnvironment {
             task,
