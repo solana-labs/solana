@@ -862,7 +862,7 @@ impl ScheduleStage {
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate)
-                .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, contended_count, ll));
+                .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
         maybe_ee
     }
 
