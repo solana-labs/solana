@@ -1,5 +1,4 @@
 use {
-    crate::nonce_utils,
     clap::ArgMatches,
     solana_clap_utils::{
         input_parsers::{pubkey_of, value_of},
@@ -36,8 +35,8 @@ impl Source {
             }
             Self::NonceAccount(ref pubkey) => {
                 #[allow(clippy::redundant_closure)]
-                let data = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
-                    .and_then(|ref a| nonce_utils::data_from_account(a))?;
+                let data = crate::get_account_with_commitment(rpc_client, pubkey, commitment)
+                    .and_then(|ref a| crate::data_from_account(a))?;
                 Ok((data.blockhash(), data.fee_calculator))
             }
         }
@@ -62,8 +61,8 @@ impl Source {
                 Ok(res)
             }
             Self::NonceAccount(ref pubkey) => {
-                let res = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)?;
-                let res = nonce_utils::data_from_account(&res)?;
+                let res = crate::get_account_with_commitment(rpc_client, pubkey, commitment)?;
+                let res = crate::data_from_account(&res)?;
                 Ok(Some(res)
                     .filter(|d| d.blockhash() == *blockhash)
                     .map(|d| d.fee_calculator))
@@ -83,8 +82,8 @@ impl Source {
             }
             Self::NonceAccount(ref pubkey) => {
                 #[allow(clippy::redundant_closure)]
-                let data = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
-                    .and_then(|ref a| nonce_utils::data_from_account(a))?;
+                let data = crate::get_account_with_commitment(rpc_client, pubkey, commitment)
+                    .and_then(|ref a| crate::data_from_account(a))?;
                 Ok(data.blockhash())
             }
         }
@@ -100,8 +99,8 @@ impl Source {
             Self::Cluster => rpc_client.is_blockhash_valid(blockhash, commitment)?,
             Self::NonceAccount(ref pubkey) => {
                 #[allow(clippy::redundant_closure)]
-                let _ = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
-                    .and_then(|ref a| nonce_utils::data_from_account(a))?;
+                let _ = crate::get_account_with_commitment(rpc_client, pubkey, commitment)
+                    .and_then(|ref a| crate::data_from_account(a))?;
                 true
             }
         })

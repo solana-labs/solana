@@ -1,5 +1,7 @@
 //! Durable transaction nonce helpers.
 
+pub mod blockhash_query;
+
 use {
     solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::{
@@ -97,7 +99,7 @@ pub fn account_identity_ok<T: ReadableAccount>(account: &T) -> Result<(), Error>
 /// Determine if a nonce account is initialized:
 ///
 /// ```no_run
-/// use solana_nonce_client::nonblocking::nonce_utils;
+/// use solana_rpc_client_nonce_utils::nonblocking;
 /// use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 /// use solana_sdk::{
 ///     nonce::State,
@@ -114,7 +116,7 @@ pub fn account_identity_ok<T: ReadableAccount>(account: &T) -> Result<(), Error>
 ///     // Sign the tx with nonce_account's `blockhash` instead of the
 ///     // network's latest blockhash.
 ///     let nonce_account = client.get_account(nonce_account_pubkey).await?;
-///     let nonce_state = nonce_utils::state_from_account(&nonce_account)?;
+///     let nonce_state = nonblocking::state_from_account(&nonce_account)?;
 ///
 ///     Ok(!matches!(nonce_state, State::Uninitialized))
 /// }
@@ -147,7 +149,7 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
 /// Create and sign a transaction with a durable nonce:
 ///
 /// ```no_run
-/// use solana_nonce_client::nonblocking::nonce_utils;
+/// use solana_rpc_client_nonce_utils::nonblocking;
 /// use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 /// use solana_sdk::{
 ///     message::Message,
@@ -197,7 +199,7 @@ pub fn state_from_account<T: ReadableAccount + StateMut<Versions>>(
 ///     // Sign the tx with nonce_account's `blockhash` instead of the
 ///     // network's latest blockhash.
 ///     let nonce_account = client.get_account(nonce_account_pubkey).await?;
-///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
+///     let nonce_data = nonblocking::data_from_account(&nonce_account)?;
 ///     let blockhash = nonce_data.blockhash();
 ///
 ///     tx.try_sign(&[payer], blockhash)?;

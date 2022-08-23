@@ -1,5 +1,5 @@
 use {
-    crate::nonblocking::nonce_utils,
+    crate::nonblocking,
     clap::ArgMatches,
     solana_clap_utils::{
         input_parsers::{pubkey_of, value_of},
@@ -31,9 +31,9 @@ impl Source {
             }
             Self::NonceAccount(ref pubkey) => {
                 #[allow(clippy::redundant_closure)]
-                let data = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
+                let data = nonblocking::get_account_with_commitment(rpc_client, pubkey, commitment)
                     .await
-                    .and_then(|ref a| nonce_utils::data_from_account(a))?;
+                    .and_then(|ref a| nonblocking::data_from_account(a))?;
                 Ok(data.blockhash())
             }
         }
@@ -49,9 +49,9 @@ impl Source {
             Self::Cluster => rpc_client.is_blockhash_valid(blockhash, commitment).await?,
             Self::NonceAccount(ref pubkey) => {
                 #[allow(clippy::redundant_closure)]
-                let _ = nonce_utils::get_account_with_commitment(rpc_client, pubkey, commitment)
+                let _ = nonblocking::get_account_with_commitment(rpc_client, pubkey, commitment)
                     .await
-                    .and_then(|ref a| nonce_utils::data_from_account(a))?;
+                    .and_then(|ref a| nonblocking::data_from_account(a))?;
                 true
             }
         })

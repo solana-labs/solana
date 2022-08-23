@@ -4651,10 +4651,10 @@ version = "1.12.0"
 dependencies = [
  "log",
  "solana-measure",
- "solana-nonce-client",
  "solana-pubsub-client",
  "solana-rpc-client",
  "solana-rpc-client-api",
+ "solana-rpc-client-nonce-utils",
  "solana-sdk 1.12.0",
  "solana-thin-client",
  "solana-tpu-client",
@@ -5090,17 +5090,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "solana-nonce-client"
-version = "1.12.0"
-dependencies = [
- "clap 2.33.3",
- "solana-clap-utils",
- "solana-rpc-client",
- "solana-sdk 1.12.0",
- "thiserror",
-]
-
-[[package]]
 name = "solana-perf"
 version = "1.12.0"
 dependencies = [
@@ -5425,6 +5414,17 @@ dependencies = [
  "solana-transaction-status",
  "solana-version",
  "spl-token-2022",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-rpc-client-nonce-utils"
+version = "1.12.0"
+dependencies = [
+ "clap 2.33.3",
+ "solana-clap-utils",
+ "solana-rpc-client",
+ "solana-sdk 1.12.0",
  "thiserror",
 ]
 

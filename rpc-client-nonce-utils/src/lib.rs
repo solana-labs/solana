@@ -1,6 +1,9 @@
 //! Durable transaction nonce helpers.
 
-pub use crate::nonblocking::nonce_utils::{
+pub mod blockhash_query;
+pub mod nonblocking;
+
+pub use crate::nonblocking::{
     account_identity_ok, data_from_account, data_from_state, state_from_account, Error,
 };
 use {

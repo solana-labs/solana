@@ -3,7 +3,7 @@
 pub mod transaction_executor;
 
 pub mod blockhash_query {
-    pub use solana_nonce_client::blockhash_query::*;
+    pub use solana_rpc_client_nonce_utils::blockhash_query::*;
 }
 pub mod client_error {
     pub use solana_rpc_client_api::client_error::{
@@ -15,11 +15,11 @@ pub mod connection_cache {
 }
 pub mod nonblocking {
     pub mod blockhash_query {
-        pub use solana_nonce_client::nonblocking::blockhash_query::*;
+        pub use solana_rpc_client_nonce_utils::nonblocking::blockhash_query::*;
     }
     /// Durable transaction nonce helpers.
     pub mod nonce_utils {
-        pub use solana_nonce_client::nonblocking::nonce_utils::*;
+        pub use solana_rpc_client_nonce_utils::nonblocking::*;
     }
     pub mod pubsub_client {
         pub use solana_pubsub_client::nonblocking::pubsub_client::*;
@@ -55,7 +55,7 @@ pub mod nonblocking {
 }
 /// Durable transaction nonce helpers.
 pub mod nonce_utils {
-    pub use solana_nonce_client::nonce_utils::*;
+    pub use solana_rpc_client_nonce_utils::*;
 }
 pub mod pubsub_client {
     pub use solana_pubsub_client::pubsub_client::*;
