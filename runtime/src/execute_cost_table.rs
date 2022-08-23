@@ -44,7 +44,6 @@ impl ExecuteCostTable {
         self.table.len()
     }
 
-    /// default program cost, set to ComputeBudget::DEFAULT_COMPUTE_UNIT_LIMIT
     pub fn get_default_compute_unit_limit(&self) -> u64 {
         DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64
     }
