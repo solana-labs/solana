@@ -463,7 +463,7 @@ pub struct Task {
 }
 
 impl Task {
-    fn new_for_queue(tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
+    pub fn new_for_queue(tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
         TaskInQueue::new(Self { tx, contention_count: 0, uncontended: Default::default() })
     }
 
