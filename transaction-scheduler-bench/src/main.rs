@@ -350,6 +350,7 @@ fn handle_transaction_batch(
             let mut found = true;
             while !task_cursor.value().currently_contended() {
                 if let Some(new_cursor) = task_cursor.prev() {
+                    assert!(new_cursor.key() < task_cursor.key());
                     task_cursor = new_cursor;
                 } else {
                     found = false;
