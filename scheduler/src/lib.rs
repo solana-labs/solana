@@ -463,6 +463,10 @@ pub struct Task {
 }
 
 impl Task {
+    fn new_for_queue(v: usize) -> std::sync::Arc<Self> {
+        TaskInQueue::new(v)
+    }
+
     fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
