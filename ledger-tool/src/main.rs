@@ -363,14 +363,20 @@ fn output_slot(
     let depth = Arc::new(std::sync::atomic::AtomicUsize::default());
 
     let d = depth.clone();
-    let handles3 = (0..4).map(|thx| {
+    let consumer_count = std::env::var("CONSUMER_COUNT")
+        .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
+        .parse::<usize>()
+        .unwrap();
+    let step = Arc::new(std::sync::atomic::AtomicUsize::default());
+    let handles3 = (0..consumer_count).map(|thx| {
         let post_schedule_env_receiver = post_schedule_env_receiver.clone();
         let d = d.clone();
+        let step = step.clone();
 
         let t3 = std::thread::Builder::new()
             .name("sol-consumer{}".to_string())
             .spawn(move || {
-                for step in 0.. {
+                loop {
                     let ee = post_schedule_env_receiver.recv().unwrap();
                     d.fetch_sub(1, Ordering::Relaxed);
                     trace!(
@@ -410,7 +416,11 @@ fn output_slot(
         } else {
             100
         };
-        let handles2 = (0..4)
+        let producer_count = std::env::var("PRODUCER_COUNT")
+            .unwrap_or(format!("{}", std::thread::available_parallelism().unwrap()))
+            .parse::<usize>()
+            .unwrap();
+        let handles2 = (0..producer_count)
             .map(|thx| {
                 let depth = depth.clone();
                 let txes = txes.clone();
