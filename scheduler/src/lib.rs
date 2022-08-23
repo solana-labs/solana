@@ -597,7 +597,7 @@ impl ScheduleStage {
             },
             */
             unique_weight,
-            TaskInQueue::new(Task { tx, contention_count: 0 }),
+            TaskInQueue::new(Task { tx, contention_count: 0, uncontended: Default::default() }),
         );
         *unique_key -= 1;
     }
