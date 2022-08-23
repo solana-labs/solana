@@ -348,7 +348,7 @@ fn output_slot(
                                     }
                                 }
                                 if found {
-                                    lock_attempt.heaviest_uncontended.store(Some(solana_scheduler::TaskInQueue::clone(task_cursor.value())));
+                                    lock_attempt.heaviest_uncontended = Some(solana_scheduler::TaskInQueue::clone(task_cursor.value()));
                                 }
                             }
                         }
