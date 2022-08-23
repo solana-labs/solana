@@ -6739,8 +6739,13 @@ impl AccountsDb {
         for (slot, storages) in storages.iter_range(..in_epoch_range_start) {
             if let Some(storages) = storages {
                 storages.iter().for_each(|store| {
-                    self.dirty_stores
-                        .insert((slot, store.append_vec_id()), store.clone());
+                    if !is_ancient(&store.accounts) {
+                        // ancient stores are managed separately - we expect them to be old and keeping accounts
+                        // We can expect the normal processes will keep them cleaned.
+                        // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
+                        self.dirty_stores
+                            .insert((slot, store.append_vec_id()), store.clone());
+                    }
                 });
             }
         }
