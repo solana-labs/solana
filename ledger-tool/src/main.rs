@@ -407,6 +407,7 @@ fn output_slot(
         let handles2 = (0..lane_count)
             .map(|thx| {
                 let depth = depth.clone();
+                let txes = txes.clone();
                 let t1 = std::thread::Builder::new()
                     .name("sol-producer{}".to_string())
                     .spawn(move || loop {
