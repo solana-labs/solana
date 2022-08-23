@@ -484,38 +484,10 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn entry_to_execute(
-        &mut self,
-        unique_weight: UniqueWeight,
-    ) -> Option<TaskQueueOccupiedEntry<'_>> {
-        let queue_entry = self.tasks.entry(unique_weight);
-        match queue_entry {
-            TaskQueueEntry::Occupied(queue_entry) => Some(queue_entry),
-            TaskQueueEntry::Vacant(_queue_entry) => None,
-        }
-    }
-
-    #[inline(never)]
-    pub fn has_contended_task(&self, unique_weight: &UniqueWeight) -> bool {
-        let maybe_task = self.tasks.get(unique_weight);
-        match maybe_task {
-            Some(task) => task.currently_contended(),
-            None => false,
-        }
-    }
-
-    #[inline(never)]
     fn heaviest_entry_to_execute(
         &mut self,
     ) -> Option<TaskQueueOccupiedEntry<'_>> {
-        //panic!()
         self.tasks.last_entry()
-        //let k = self.tasks.get_max().map(|(k, _v)| *k);
-        //panic!();
-        //let k = self.tasks.iter().next().map(|(k, _v)| *k);
-        //let k = self.tasks.iter().next().map(|r| *r.key());
-
-        //k.map(|k| self.entry_to_execute(k).unwrap())
     }
 
     fn task_count(&self) -> usize {
