@@ -477,7 +477,7 @@ impl Task {
         TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default() })
     }
 
-    pub fn clone_for_test(&self) {
+    pub fn clone_for_test(&self) -> Self {
         Self {
             unique_weight: self.unique_weight,
             tx: Box::new((self.tx.0.clone(), self.tx.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>())),
