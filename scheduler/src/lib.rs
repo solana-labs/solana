@@ -897,7 +897,9 @@ impl ScheduleStage {
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
                 while let mut a = ee_receiver.recv().unwrap() {
                     assert!(a.task.tx.1.is_empty());
-                    let lock_attempts = std::mem::take(&mut a.lock_attempts);
+                    //let lock_attempts = std::mem::take(&mut a.lock_attempts);
+                    //drop(lock_attempts);
+                    TaskInQueue::into(a.task)
                 }
             }).unwrap();
 
