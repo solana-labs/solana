@@ -431,7 +431,7 @@ pub struct Task {
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), queue_time: std::sync::atomic::AtomicUsize(usize::max_value()) })
+        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
     }
 
     pub fn observe_clock(&self, clock: usize) {
@@ -444,7 +444,7 @@ impl Task {
             tx: Box::new((self.tx.0.clone(), self.tx.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>())),
             contention_count: Default::default(),
             uncontended: Default::default(),
-            queue_time: queue_time: std::sync::atomic::AtomicUsize(usize::max_value()),
+            queue_time: queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
         }
     }
 
