@@ -1,6 +1,6 @@
 use {
     solana_cli_config::{Config, CONFIG_FILE},
-    solana_client::rpc_client::RpcClient,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_tokens::{arg_parser::parse_args, args::Command, commands, spl_token},
     std::{
         env,

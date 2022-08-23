@@ -2,12 +2,12 @@ use {
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
-    solana_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
+    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 
