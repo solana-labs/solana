@@ -58,8 +58,6 @@ windows)
     git config core.symlinks true
     find . -type l -delete
     git reset --hard
-    # patched crossbeam doesn't build on windows
-    sed -i 's/^crossbeam-epoch/#crossbeam-epoch/' Cargo.toml
   )
   ;;
 *)
