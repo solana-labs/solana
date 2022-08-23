@@ -480,8 +480,9 @@ impl Task {
 #[derive(Default, Debug, Clone)]
 pub struct TaskQueue {
     //tasks: std::collections::BTreeMap<UniqueWeight, Task>,
-    tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
+    //tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
     //tasks: im::HashMap<UniqueWeight, TaskInQueue>,
+    tasks: Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
 }
 
 type TaskInQueue = std::sync::Arc<Task>;
