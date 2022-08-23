@@ -343,7 +343,7 @@ fn handle_transaction_batch(
         .fetch_add(priority_collected, Ordering::Relaxed);
 
     let uq = transaction_batch.unique_weight;
-    for lock_attempt in transaction_batch.task.tx.1.iter() {
+    for lock_attempt in transaction_batch.task.tx.1.iter_mut() {
         let page = lock_attempt.target.page_ref();
         page.contended_unique_weights.remove_task_id(&uq);
         if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
