@@ -2575,7 +2575,7 @@ impl AccountsDb {
     // can be purged because there are no live append vecs in the ancestors
     pub fn clean_accounts(
         &self,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
@@ -2584,7 +2584,7 @@ impl AccountsDb {
         let ancient_account_cleans = AtomicU64::default();
 
         let mut measure_all = Measure::start("clean_accounts");
-        let max_clean_root = self.max_clean_root(max_clean_root);
+        let max_clean_root_inclusive = self.max_clean_root(max_clean_root_inclusive);
 
         // hold a lock to prevent slot shrinking from running because it might modify some rooted
         // slot storages which can not happen as long as we're cleaning accounts because we're also
@@ -2594,7 +2594,7 @@ impl AccountsDb {
 
         let mut key_timings = CleanKeyTimings::default();
         let (mut pubkeys, min_dirty_store_id) = self.construct_candidate_clean_keys(
-            max_clean_root,
+            max_clean_root_inclusive,
             is_startup,
             last_full_snapshot_slot,
             &mut key_timings,
@@ -2636,7 +2636,7 @@ impl AccountsDb {
                                     let index_in_slot_list = self.accounts_index.latest_slot(
                                         None,
                                         slot_list,
-                                        max_clean_root,
+                                        max_clean_root_inclusive,
                                     );
 
                                     match index_in_slot_list {
@@ -2651,7 +2651,7 @@ impl AccountsDb {
                                                     (
                                                         self.accounts_index.get_rooted_entries(
                                                             slot_list,
-                                                            max_clean_root,
+                                                            max_clean_root_inclusive,
                                                         ),
                                                         ref_count,
                                                     ),
@@ -2662,8 +2662,10 @@ impl AccountsDb {
                                             if uncleaned_roots.contains(slot) {
                                                 // Assertion enforced by `accounts_index.get()`, the latest slot
                                                 // will not be greater than the given `max_clean_root`
-                                                if let Some(max_clean_root) = max_clean_root {
-                                                    assert!(slot <= &max_clean_root);
+                                                if let Some(max_clean_root_inclusive) =
+                                                    max_clean_root_inclusive
+                                                {
+                                                    assert!(slot <= &max_clean_root_inclusive);
                                                 }
                                                 purges_old_accounts.push(*pubkey);
                                                 useless = false;
@@ -2720,14 +2722,14 @@ impl AccountsDb {
         let mut clean_old_rooted = Measure::start("clean_old_roots");
         let (purged_account_slots, removed_accounts) = self.clean_accounts_older_than_root(
             purges_old_accounts,
-            max_clean_root,
+            max_clean_root_inclusive,
             &ancient_account_cleans,
         );
 
         if self.caching_enabled {
-            self.do_reset_uncleaned_roots(max_clean_root);
+            self.do_reset_uncleaned_roots(max_clean_root_inclusive);
         } else {
-            self.do_reset_uncleaned_roots_v1(&mut candidates_v1, max_clean_root);
+            self.do_reset_uncleaned_roots_v1(&mut candidates_v1, max_clean_root_inclusive);
         }
         clean_old_rooted.stop();
 
@@ -2797,7 +2799,7 @@ impl AccountsDb {
 
         let mut purge_filter = Measure::start("purge_filter");
         self.filter_zero_lamport_clean_for_incremental_snapshots(
-            max_clean_root,
+            max_clean_root_inclusive,
             last_full_snapshot_slot,
             &store_counts,
             &mut purges_zero_lamports,
