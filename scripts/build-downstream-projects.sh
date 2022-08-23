@@ -51,7 +51,7 @@ spl() {
       memo/program
       name-service/program
       stake-pool/program
-      )
+    )
     set -x
     rm -rf spl
     git clone https://github.com/solana-labs/solana-program-library.git spl
