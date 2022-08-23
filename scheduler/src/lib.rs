@@ -138,7 +138,12 @@ pub struct TaskIds {
 impl TaskIds {
     #[inline(never)]
     pub fn insert_task_id(&self, u: TaskId, task: TaskInQueue) {
-        self.task_ids.insert(u, task);
+        let is_inserted = false;
+        self.task_ids.get_or_insert_with(u, || {
+            is_inserted = true;
+            task
+        });
+        assert!(is_inserted);
     }
 
     #[inline(never)]
