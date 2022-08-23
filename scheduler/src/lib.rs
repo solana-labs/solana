@@ -489,7 +489,7 @@ impl TaskQueue {
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
         //trace!("TaskQueue::add(): {:?}", unique_weight);
         let pre_existed = self.tasks.insert(unique_weight, task);
-        debug_assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
+        assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
     }
 
     #[inline(never)]
@@ -575,7 +575,6 @@ impl ScheduleStage {
         //tx.foo();
         //let unique_weight = (weight << 32) | (*unique_key & 0x0000_0000_ffff_ffff);
         let unique_weight = weight;
-        let mut unarced_task = TaskInQueue::get_mut(&mut task).unwrap();
 
         runnable_queue.add_to_schedule(
             /*
