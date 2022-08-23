@@ -428,7 +428,7 @@ fn output_slot(
                 let muxed_sender = muxed_sender.clone();
                 let t1 = std::thread::Builder::new()
                     .name(format!("sol-producer{}", thx))
-                    .spawn(move || loop {
+                    .spawn(move || {
                         for i in 0..loop_count {
                             error!("started!: {} {}", i, txes.len());
                             for tx in txes.iter().map(|t| Box::new((t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))) {
