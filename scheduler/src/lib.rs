@@ -702,7 +702,7 @@ impl ScheduleStage {
                 if from_runnable {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
                     next_task.mark_as_contended();
-                    *contended_count = contention_count.checked_add(1).unwrap();
+                    *contended_count = contended_count.checked_add(1).unwrap();
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
