@@ -750,7 +750,7 @@ impl ScheduleStage {
                     task.mark_as_contended();
                     reborrowed_contended_queue
                         .unwrap()
-                        .add_to_schedule(*queue_entry.key(), task);
+                        .add_to_schedule(unique_weight, task);
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
