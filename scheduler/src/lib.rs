@@ -882,7 +882,7 @@ impl ScheduleStage {
         unique_key: &mut u64,
         queue_clock: &mut usize,
     ) {
-        weighted_tx.1.observe_clock(queue_clock);
+        weighted_tx.1.observe_clock(*queue_clock);
         *queue_clock = queue_clock.checked_add(1).unwrap();
         Self::push_to_runnable_queue(weighted_tx, runnable_queue, unique_key)
     }
