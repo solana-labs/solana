@@ -455,6 +455,10 @@ impl Task {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
 
+    pub fn already_finished(&self) -> bool {
+        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 3
+    }
+
     fn mark_as_contended(&self) {
         self.uncontended.store(1, std::sync::atomic::Ordering::SeqCst)
     }
@@ -797,6 +801,7 @@ impl ScheduleStage {
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
                 //let maybe_task = l.heaviest_uncontended.load_full();
                 if let Some(task) = l.heaviest_uncontended.take() { //maybe_task {
+                    assert!(!task.already_finished());
                     if task.currently_contended() {
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     }
