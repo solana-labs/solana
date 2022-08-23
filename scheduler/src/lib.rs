@@ -34,7 +34,6 @@ pub struct ExecutionEnvironment {
     pub cu: usize,
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
-    pub checkpointed_contended_queue: TaskQueue,
 }
 
 impl ExecutionEnvironment {
@@ -657,7 +656,6 @@ impl ScheduleStage {
     #[inline(never)]
     fn select_next_task<'a>(
         runnable_queue: &'a mut TaskQueue,
-        contended_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
     ) -> Option<(
         bool,
@@ -715,20 +713,17 @@ impl ScheduleStage {
     #[inline(never)]
     fn pop_from_queue_then_lock(
         runnable_queue: &mut TaskQueue,
-        contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         prefer_immediate: bool,
     ) -> Option<(UniqueWeight, TaskInQueue)> {
         if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
-            let queue_entry = contended_queue.entry_to_execute(a.0).unwrap();
-            let mut task = queue_entry.remove();
-            return Some((a.0, task));
+            return Some((a.0, a.1));
         }
 
         trace!("pop begin");
         loop {
-        if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, contended_queue, address_book) {
+        if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, address_book) {
             trace!("pop loop iteration");
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
             let unique_weight = next_task.unique_weight;
@@ -862,7 +857,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution(address_book: &mut AddressBook, contended_queue: &TaskQueue, lock_attempts: &mut Vec<LockAttempt>) {
+    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>) {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended_while_queued = address_book.reset_lock(&mut l, true);
 
@@ -906,26 +901,23 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
         task: TaskInQueue,
-        contended_queue: &TaskQueue,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
-        let checkpointed_contended_queue = contended_queue.clone();
         task.mark_as_uncontended();
 
         Box::new(ExecutionEnvironment {
             task,
             unique_weight,
             cu: rng.gen_range(3, 1000),
-            checkpointed_contended_queue,
         })
     }
 
     #[inline(never)]
-    fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, contended_queue: &TaskQueue) {
+    fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         // do par()-ly?
         let mut task = unsafe { TaskInQueue::get_mut_unchecked(&mut ee.task) };
-        Self::unlock_after_execution(address_book, contended_queue, &mut task.tx.1);
+        Self::unlock_after_execution(address_book, &mut task.tx.1);
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
@@ -938,13 +930,12 @@ impl ScheduleStage {
     #[inline(never)]
     fn schedule_next_execution(
         runnable_queue: &mut TaskQueue,
-        contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         prefer_immediate: bool,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(runnable_queue, contended_queue, address_book, prefer_immediate)
-                .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t, contended_queue));
+            Self::pop_from_queue_then_lock(runnable_queue, address_book, prefer_immediate)
+                .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t));
         maybe_ee
     }
 
@@ -998,7 +989,7 @@ impl ScheduleStage {
                                 trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                                 executing_queue_count -= 1;
 
-                                Self::commit_result(&mut processed_execution_environment, address_book, contended_queue);
+                                Self::commit_result(&mut processed_execution_environment, address_book);
                                 // async-ly propagate the result to rpc subsystems
                                 to_next_stage.send(processed_execution_environment).unwrap();
                             }
@@ -1029,7 +1020,7 @@ impl ScheduleStage {
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                         executing_queue_count -= 1;
 
-                        Self::commit_result(&mut processed_execution_environment, address_book, contended_queue);
+                        Self::commit_result(&mut processed_execution_environment, address_book);
                         // async-ly propagate the result to rpc subsystems
                         to_next_stage.send(processed_execution_environment).unwrap();
                         if false && from_exec.len() > 0 {
@@ -1063,7 +1054,7 @@ impl ScheduleStage {
 
                 let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
-                    Self::schedule_next_execution(runnable_queue, contended_queue, address_book, prefer_immediate);
+                    Self::schedule_next_execution(runnable_queue, address_book, prefer_immediate);
 
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
