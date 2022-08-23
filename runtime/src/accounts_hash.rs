@@ -144,9 +144,9 @@ impl HashStats {
         datapoint_info!(
             "calculate_accounts_hash_without_index",
             ("mark_time_us", self.mark_time_us, i64),
-            ("accounts_scan", self.scan_time_total_us, i64),
-            ("eliminate_zeros", self.zeros_time_total_us, i64),
-            ("hash", self.hash_time_total_us, i64),
+            ("accounts_scan_us", self.scan_time_total_us, i64),
+            ("eliminate_zeros_us", self.zeros_time_total_us, i64),
+            ("hash_us", self.hash_time_total_us, i64),
             ("hash_time_pre_us", self.hash_time_pre_us, i64),
             ("sort", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
@@ -196,7 +196,7 @@ impl HashStats {
                 self.storage_size_quartiles[5] as i64,
                 i64
             ),
-            ("total", total_time_us as i64, i64),
+            ("total_us", total_time_us as i64, i64),
             (
                 "rehashed_rewrites",
                 self.rehash_required.load(Ordering::Relaxed) as i64,
