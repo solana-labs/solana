@@ -598,7 +598,7 @@ pub struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_runnable_queue(
-        (weight, tx): (Weight, TaskInQueue),
+        (weight, task): (Weight, TaskInQueue),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
