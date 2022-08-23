@@ -359,7 +359,7 @@ fn handle_transaction_batch(
                     break;
                 }
             }
-            found.then(Some(solana_scheduler::TaskInQueue::clone(task_cursor.value())));
+            found.then_some(solana_scheduler::TaskInQueue::clone(task_cursor.value()));
         };
         if let Some(task) = maybe_task {
             lock_attempt.heaviest_uncontended = Some(task);
