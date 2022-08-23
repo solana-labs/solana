@@ -685,8 +685,11 @@ impl ScheduleStage {
 
                 if true || weight_from_runnable > uw {
                     trace!("select: runnable > contended");
-                    return Some((Some(contended_queue), heaviest_runnable_entry))
+                    let t = heaviest_runnable_entry.remove();
+                    return Some((true, t))
                 } else if false && uw > weight_from_runnable {
+                    panic!();
+                    /*
                     trace!("select: contended > runnnable");
                     let uw = *uw;
                     weight_from_contended.remove();
@@ -695,6 +698,7 @@ impl ScheduleStage {
                     } else {
                         unreachable!();
                     }
+                    */
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
