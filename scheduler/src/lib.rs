@@ -122,7 +122,7 @@ pub enum RequestedUsage {
 #[derive(Debug, Default)]
 pub struct TaskIds {
     //task_ids: std::collections::BTreeSet<UniqueWeight>,
-    task_ids: crossbeam_skiplist::SkipSet<UniqueWeight, TaskInQueue>,
+    task_ids: crossbeam_skiplist::SkipMap<UniqueWeight, TaskInQueue>,
     //cached_heaviest: Option<UniqueWeight>,
 }
 
