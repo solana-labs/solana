@@ -1689,23 +1689,25 @@ impl<T: IndexValue> AccountsIndex<T> {
         &self,
         slot_list: &mut SlotList<T>,
         reclaims: &mut SlotList<T>,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
     ) {
         let newest_root_in_slot_list;
-        let max_clean_root = {
+        let max_clean_root_inclusive = {
             let roots_tracker = &self.roots_tracker.read().unwrap();
             newest_root_in_slot_list = Self::get_newest_root_in_slot_list(
                 &roots_tracker.alive_roots,
                 slot_list,
-                max_clean_root,
+                max_clean_root_inclusive,
             );
-            max_clean_root.unwrap_or_else(|| roots_tracker.alive_roots.max_inclusive())
+            max_clean_root_inclusive.unwrap_or_else(|| roots_tracker.alive_roots.max_inclusive())
         };
 
         slot_list.retain(|(slot, value)| {
-            let should_purge =
-                Self::can_purge_older_entries(max_clean_root, newest_root_in_slot_list, *slot)
-                    && !value.is_cached();
+            let should_purge = Self::can_purge_older_entries(
+                max_clean_root_inclusive,
+                newest_root_in_slot_list,
+                *slot,
+            ) && !value.is_cached();
             if should_purge {
                 reclaims.push((*slot, *value));
             }
