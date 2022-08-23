@@ -480,18 +480,18 @@ impl Task {
 #[derive(Default, Debug, Clone)]
 pub struct TaskQueue {
     //tasks: std::collections::BTreeMap<UniqueWeight, Task>,
-    //tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
+    tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
     //tasks: im::HashMap<UniqueWeight, TaskInQueue>,
-    tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
+    //tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
 }
 
 type TaskInQueue = std::sync::Arc<Task>;
-//type TaskQueueEntry<'a> = im::ordmap::Entry<'a, UniqueWeight, TaskInQueue>;
-//type TaskQueueOccupiedEntry<'a> = im::ordmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
+type TaskQueueEntry<'a> = im::ordmap::Entry<'a, UniqueWeight, TaskInQueue>;
+type TaskQueueOccupiedEntry<'a> = im::ordmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueEntry<'a> = im::hashmap::Entry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
 //type TaskQueueOccupiedEntry<'a> = im::hashmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
-type TaskQueueEntry<'a> = dashmap::mapref::entry::Entry<'a, UniqueWeight, TaskInQueue>;
-type TaskQueueOccupiedEntry<'a> = dashmap::mapref::entry::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
+//type TaskQueueEntry<'a> = dashmap::mapref::entry::Entry<'a, UniqueWeight, TaskInQueue>;
+//type TaskQueueOccupiedEntry<'a> = dashmap::mapref::entry::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
 
 impl TaskQueue {
     #[inline(never)]
@@ -514,7 +514,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    pub fn has_task(&self, unique_weight: &UniqueWeight) -> bool {
+    pub fn has_contended_task(&self, unique_weight: &UniqueWeight) -> bool {
         let maybe_task = self.tasks.get(unique_weight);
         match maybe_task {
             Some(task) => task.currently_contended(),
@@ -527,10 +527,11 @@ impl TaskQueue {
         &mut self,
     ) -> Option<TaskQueueOccupiedEntry<'_>> {
         //panic!()//self.tasks.last_entry()
-        //let k = self.tasks.get_max().map(|(k, _v)| *k);
+        let k = self.tasks.get_max().map(|(k, _v)| *k);
         //panic!();
         //let k = self.tasks.iter().next().map(|(k, _v)| *k);
-        let k = self.tasks.iter().next().map(|r| *r.key());
+        //let k = self.tasks.iter().next().map(|r| *r.key());
+
         k.map(|k| self.entry_to_execute(k).unwrap())
     }
 
@@ -866,7 +867,7 @@ impl ScheduleStage {
             if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
                 let task_id = l.heaviest_uncontended.load(std::sync::atomic::Ordering::SeqCst);
                 if task_id != 0 {
-                    if contended_queue.has_task(&task_id) {
+                    if contended_queue.has_contended_task(&task_id) {
                         address_book.uncontended_task_ids.insert(task_id, ());
                     }
                 }
