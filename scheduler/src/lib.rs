@@ -951,7 +951,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn register_runnable_task(
-        weighted_tx: (Weight, std::sync::Arc<(SanitizedTransaction, Vec<LockAttempt>)>),
+        weighted_tx: (Weight, TaskInQueue)>),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
