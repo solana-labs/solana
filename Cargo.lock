@@ -249,17 +249,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atomic_enum"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a57588a20357c74ee9036656b7fad5c54328ee8657c6ff29ba31fd5ea503a1c"
-dependencies = [
- "proc-macro2 1.0.41",
- "quote 1.0.18",
- "syn 1.0.98",
-]
-
-[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -580,12 +569,6 @@ dependencies = [
  "feature-probe",
  "serde",
 ]
-
-[[package]]
-name = "by_address"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e245704f60eb4eb45810d65cf14eb54d2eb50a6f3715fe2d7cd01ee905c2944f"
 
 [[package]]
 name = "byte-tools"
@@ -6103,15 +6086,10 @@ name = "solana-scheduler"
 version = "1.11.5"
 dependencies = [
  "arc-swap",
- "atomic_enum",
- "by_address",
  "crossbeam-channel",
  "crossbeam-skiplist",
  "dashmap",
- "im",
  "log",
- "rand 0.7.3",
- "rayon",
  "sha2 0.10.2",
  "solana-entry",
  "solana-logger 1.11.5",
