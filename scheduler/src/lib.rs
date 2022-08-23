@@ -781,7 +781,7 @@ impl ScheduleStage {
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
                     &unique_weight,
-                    &mut next_task_arc,
+                    &mut arc_next_task,
                     provisional_count,
                 );
 
