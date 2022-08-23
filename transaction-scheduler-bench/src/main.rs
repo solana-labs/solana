@@ -359,8 +359,8 @@ fn handle_transaction_batch(
                     break;
                 }
             }
-            drop(task_cursor);
             drop(contended_unique_weights);
+            drop(task_cursor);
             if found {
                 lock_attempt.heaviest_uncontended = Some(solana_scheduler::TaskInQueue::clone(task_cursor.value()));
             }
