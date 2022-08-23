@@ -896,7 +896,7 @@ impl ScheduleStage {
         } else {
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
                 while let a = ee_receiver.recv().unwrap() {
-                    a.task.tx.1.is_empty() == 0;
+                    assert!(a.task.tx.1.is_empty());
                     drop(a);
                 }
             }).unwrap();
