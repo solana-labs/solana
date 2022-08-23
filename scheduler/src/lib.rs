@@ -728,9 +728,8 @@ impl ScheduleStage {
 
         trace!("pop begin");
         loop {
-        if let Some((reborrowed_contended_queue, mut queue_entry)) = Self::select_next_task(runnable_queue, contended_queue, address_book) {
+        if let Some((from_runnable, mut queue_entry)) = Self::select_next_task(runnable_queue, contended_queue, address_book) {
             trace!("pop loop iteration");
-            let from_runnable = reborrowed_contended_queue.is_some();
             let unique_weight = *queue_entry.key();
             let mut arc_next_task = queue_entry.get_mut();
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
@@ -763,9 +762,6 @@ impl ScheduleStage {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
                     let task = queue_entry.remove();
                     task.mark_as_contended();
-                    reborrowed_contended_queue
-                        .unwrap()
-                        .add_to_schedule(unique_weight, task);
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
