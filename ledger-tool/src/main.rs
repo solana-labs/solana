@@ -338,7 +338,7 @@ fn output_slot(
                             page.contended_unique_weights.remove_task_id(&uq);
                             if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
                                 let mut found = true;
-                                while !ee.checkpointed_contended_queue.has_task(task_cursor.value()) {
+                                while !task_cursor.value().currently_contended() {
                                     if let Some(new_cursor) = task_cursor.prev() {
                                         task_cursor = new_cursor;
                                     } else {
@@ -347,7 +347,7 @@ fn output_slot(
                                     }
                                 }
                                 if found {
-                                    lock_attempt.heaviest_uncontended.store(*(task_cursor.value()), std::sync::atomic::Ordering::SeqCst);
+                                    lock_attempt.heaviest_uncontended.store(Some(solana_scheduler::TaskInQueue::clone(task_cursor.value())));
                                 }
                             }
                         }
