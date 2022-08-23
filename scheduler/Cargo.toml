@@ -12,6 +12,7 @@ publish = true
 
 [dependencies]
 atomic_enum = "0.1.1"
+arc-swap = "1.5.0"
 by_address = "1.0.4"
 crossbeam-channel = "0.5.5"
 crossbeam-skiplist = { path = "../../../crossbeam/crossbeam-skiplist" }

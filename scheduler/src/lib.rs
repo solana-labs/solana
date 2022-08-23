@@ -72,7 +72,7 @@ pub struct LockAttempt {
     pub target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
-    pub heaviest_uncontended: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    pub heaviest_uncontended: ArcSwap<TaskInQueue>,
     //remembered: bool,
 }
 
