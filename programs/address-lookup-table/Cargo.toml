@@ -13,8 +13,6 @@ edition = "2021"
 bincode = "1.3.3"
 bytemuck = "1.11.0"
 log = "0.4.17"
-num-derive = "0.3"
-num-traits = "0.2"
 serde = { version = "1.0.144", features = ["derive"] }
 solana-frozen-abi = { path = "../../frozen-abi", version = "=1.15.0" }
 solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.15.0" }
