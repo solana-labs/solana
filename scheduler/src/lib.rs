@@ -426,11 +426,16 @@ pub struct Task {
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
+    pub queue_time: std::sync::atomic::AtomicUsize,
 }
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
         TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default() })
+    }
+
+    pub fn observe_clock(&self, clock: usize) {
+        self.queue_time.store(clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn clone_for_test(&self) -> Self {
