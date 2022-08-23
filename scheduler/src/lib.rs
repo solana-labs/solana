@@ -459,6 +459,7 @@ struct Bundle {
 pub struct Task {
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
     pub contention_count: usize,
+    pub uncontended: std::sync::atomic::AtomicBool,
 }
 
 // RunnableQueue, ContendedQueue?
@@ -879,6 +880,7 @@ impl ScheduleStage {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
         let checkpointed_contended_queue = contended_queue.clone();
+        task.uncontended.store(true, std::sync::atomic::Ordering::SeqCst);
 
         Box::new(ExecutionEnvironment {
             task,
