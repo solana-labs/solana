@@ -360,8 +360,8 @@ fn handle_transaction_batch(
                 }
             }
             found.then_some(solana_scheduler::TaskInQueue::clone(task_cursor.value()))
-        }).and_then(|task| {
-            lock_attempt.heaviest_uncontended = task
+        }).then(|task| {
+            lock_attempt.heaviest_uncontended = task;
         });
     }
     completed_transaction_sender.0
