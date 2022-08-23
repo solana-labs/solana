@@ -1057,7 +1057,7 @@ impl ScheduleStage {
 
                 let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
-                    Self::schedule_next_execution(runnable_queue, address_book, prefer_immediate);
+                    Self::schedule_next_execution(runnable_queue, address_book, &mut contended_count, prefer_immediate);
 
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
