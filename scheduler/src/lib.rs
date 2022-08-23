@@ -444,6 +444,7 @@ impl Task {
             tx: Box::new((self.tx.0.clone(), self.tx.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>())),
             contention_count: Default::default(),
             uncontended: Default::default(),
+            queue_time: queue_time: std::sync::atomic::AtomicUsize(usize::max_value()),
         }
     }
 
