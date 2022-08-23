@@ -794,7 +794,7 @@ impl ScheduleStage {
                 &unique_weight,
                 &mut next_task.tx.1,
             );
-            return Some((unique_weight, next_task));
+            return Some((unique_weight, arc_next_task));
         } else {
             break;
         }
