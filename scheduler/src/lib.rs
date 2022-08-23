@@ -144,7 +144,7 @@ impl TaskIds {
     #[inline(never)]
     pub fn remove_task_id(&self, u: &TaskId) {
         let removed_entry = self.task_ids.remove(u);
-        assert!(removed_entry.is_removed());
+        assert!(removed_entry.is_some());
     }
 
     #[inline(never)]
