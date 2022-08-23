@@ -463,8 +463,8 @@ pub struct Task {
 }
 
 impl Task {
-    fn still_contended(&self) -> bool {
-        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) < 2
+    fn currently_contended(&self) -> bool {
+        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
 
     fn mark_as_contended(&self) {
@@ -514,7 +514,7 @@ impl TaskQueue {
     pub fn has_task(&self, unique_weight: &UniqueWeight) -> bool {
         let maybe_task = self.tasks.get(unique_weight);
         match maybe_task {
-            Some(task) => task.still_contended(),
+            Some(task) => task.currently_contended(),
             None => false,
         }
     }
