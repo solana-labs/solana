@@ -462,6 +462,10 @@ impl Task {
     fn mark_as_uncontended(&self) {
         self.uncontended.store(2, std::sync::atomic::Ordering::SeqCst)
     }
+
+    fn mark_as_finished(&self) {
+        self.uncontended.store(3, std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 // RunnableQueue, ContendedQueue?
@@ -846,6 +850,7 @@ impl ScheduleStage {
     fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         // do par()-ly?
         Self::unlock_after_execution(address_book, &mut ee.lock_attempts);
+        ee.task.mark_as_finished();
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
