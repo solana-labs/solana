@@ -575,7 +575,7 @@ impl ScheduleStage {
         //tx.foo();
         //let unique_weight = (weight << 32) | (*unique_key & 0x0000_0000_ffff_ffff);
         let unique_weight = weight;
-        let mut task = TaskInQueue::get_mut(&mut task).unwrap();
+        let mut unarced_task = TaskInQueue::get_mut(&mut task).unwrap();
 
         runnable_queue.add_to_schedule(
             /*
