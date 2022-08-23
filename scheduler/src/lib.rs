@@ -67,7 +67,7 @@ enum LockStatus {
     Failed,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct LockAttempt {
     pub target: PageRc,
     status: LockStatus,
