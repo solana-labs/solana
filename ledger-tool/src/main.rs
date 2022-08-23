@@ -403,31 +403,41 @@ fn output_slot(
         } else {
             100
         };
-        for i in 0..loop_count {
-            error!("started!: {} {}", i, txes.len());
-            for tx in txes.iter().map(|t| Box::new((t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))) {
-                while depth.load(Ordering::Relaxed) > 10_000 {
-                    std::thread::sleep(std::time::Duration::from_micros(10));
-                }
+        let handles2 = (0..lane_count)
+            .map(|thx| {
+                let t1 = std::thread::Builder::new()
+                    .name("sol-producer{}".to_string())
+                    .spawn(move || loop {
+                        for i in 0..loop_count {
+                            error!("started!: {} {}", i, txes.len());
+                            for tx in txes.iter().map(|t| Box::new((t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))) {
+                                while depth.load(Ordering::Relaxed) > 10_000 {
+                                    std::thread::sleep(std::time::Duration::from_micros(10));
+                                }
 
-                let t = solana_scheduler::Task::new_for_queue(weight, tx);
-                for lock_attempt in t.tx.1.iter() {
-                    lock_attempt.target.page_ref().contended_unique_weights.insert_task_id(weight, solana_scheduler::TaskInQueue::clone(&t));
-                }
+                                let t = solana_scheduler::Task::new_for_queue(weight, tx);
+                                for lock_attempt in t.tx.1.iter() {
+                                    lock_attempt.target.page_ref().contended_unique_weights.insert_task_id(weight, solana_scheduler::TaskInQueue::clone(&t));
+                                }
 
-                muxed_sender
-                    .send(solana_scheduler::Multiplexed::FromPrevious((
-                        //Weight { ix: weight },
-                        weight,
-                        t,
-                    )))
-                    .unwrap();
-                depth.fetch_add(1, Ordering::Relaxed);
-                weight -= 1;
-            }
-        }
+                                muxed_sender
+                                    .send(solana_scheduler::Multiplexed::FromPrevious((
+                                        //Weight { ix: weight },
+                                        weight,
+                                        t,
+                                    )))
+                                    .unwrap();
+                                depth.fetch_add(1, Ordering::Relaxed);
+                                weight -= 1;
+                            }
+                        }
+                    }).unwrap();
+                t1
+        }.collect::<Vec<_>>();
+
         t1.join().unwrap();
         handles.into_iter().for_each(|t| t.join().unwrap());
+        handles2.into_iter().for_each(|t| t.join().unwrap());
         t3.join().unwrap();
 
         output_slot_rewards(blockstore, slot, method);
