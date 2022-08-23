@@ -6783,7 +6783,14 @@ impl AccountsDb {
 
     /// storages are sorted by slot and have range info.
     /// add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
-    fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Slot) {
+    fn mark_old_slots_as_dirty(
+        &self,
+        storages: &SortedStorages,
+        slots_per_epoch: Slot,
+        mut stats: &mut crate::accounts_hash::HashStats,
+    ) {
+        let mut mark_time = Measure::start("mark_time");
+        let mut num_dirty_slots: usize = 0;
         let max = storages.max_slot_inclusive();
         let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
         let sub = slots_per_epoch + acceptable_straggler_slot_count;
@@ -6797,10 +6804,14 @@ impl AccountsDb {
                         // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
                         self.dirty_stores
                             .insert((slot, store.append_vec_id()), store.clone());
+                        num_dirty_slots += 1;
                     }
                 });
             }
         }
+        mark_time.stop();
+        stats.mark_time_us = mark_time.as_us();
+        stats.num_dirty_slots = num_dirty_slots;
     }
 
     pub(crate) fn calculate_accounts_hash_helper(
@@ -7029,7 +7040,6 @@ impl AccountsDb {
         mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
-        let mut total_time = Measure::start("total_time");
         stats.oldest_root = storages.range().start;
 
         assert!(
@@ -7037,13 +7047,11 @@ impl AccountsDb {
             "cannot accurately capture all data for debugging if accounts cache is being used"
         );
 
-        let mut mark_time = Measure::start("mark_time");
-        self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch);
-        mark_time.stop();
+        self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch, &mut stats);
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
         let use_bg_thread_pool = config.use_bg_thread_pool;
-        let mut scan_and_hash = move || {
+        let mut scan_and_hash = || {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
@@ -7092,25 +7100,16 @@ impl AccountsDb {
             Ok(final_result)
         };
 
-        let mut calc_time = Measure::start("calc_time");
         let result = if use_bg_thread_pool {
             self.thread_pool_clean.install(scan_and_hash)
         } else {
             scan_and_hash()
         };
-        calc_time.stop();
         self.assert_safe_squashing_accounts_hash(
             storages.max_slot_inclusive(),
             config.epoch_schedule,
         );
-        total_time.stop();
-
-        datapoint_info!(
-            "accounts_hash_with_cache",
-            ("total_time_ms", total_time.as_ms(), i64),
-            ("mark_time_ms", mark_time.as_ms(), i64),
-            ("calc_time_ms", calc_time.as_ms(), i64),
-        );
+        stats.log();
         result
     }
 
