@@ -1001,10 +1001,7 @@ impl RpcSubscriptions {
                             let mut slots_to_notify: Vec<_> =
                                 (*w_last_unnotified_slot..slot).collect();
                             let ancestors = bank.proper_ancestors_set();
-                            slots_to_notify = slots_to_notify
-                                .into_iter()
-                                .filter(|slot| ancestors.contains(slot))
-                                .collect();
+                            slots_to_notify.retain(|slot| ancestors.contains(slot));
                             slots_to_notify.push(slot);
                             for s in slots_to_notify {
                                 // To avoid skipping a slot that fails this condition,

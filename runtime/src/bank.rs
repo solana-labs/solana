@@ -2294,7 +2294,7 @@ impl Bank {
             hash: *self.hash.read().unwrap(),
             parent_hash: self.parent_hash,
             parent_slot: self.parent_slot,
-            hard_forks: &*self.hard_forks,
+            hard_forks: &self.hard_forks,
             transaction_count: self.transaction_count.load(Relaxed),
             tick_height: self.tick_height.load(Relaxed),
             signature_count: self.signature_count.load(Relaxed),
@@ -3309,7 +3309,7 @@ impl Bank {
             let vote_state = account.vote_state();
             let vote_state = vote_state.as_ref().ok()?;
             let slot_delta = self.slot().checked_sub(vote_state.last_timestamp.slot)?;
-            (slot_delta <= slots_per_epoch).then(|| {
+            (slot_delta <= slots_per_epoch).then_some({
                 (
                     *pubkey,
                     (
@@ -3979,10 +3979,10 @@ impl Bank {
     }
 
     /// Prepare a transaction batch without locking accounts for transaction simulation.
-    pub(crate) fn prepare_simulation_batch<'a>(
-        &'a self,
+    pub(crate) fn prepare_simulation_batch(
+        &self,
         transaction: SanitizedTransaction,
-    ) -> TransactionBatch<'a, '_> {
+    ) -> TransactionBatch<'_, '_> {
         let tx_account_lock_limit = self.get_transaction_account_lock_limit();
         let lock_result = transaction
             .get_account_locks(tx_account_lock_limit)
@@ -4383,7 +4383,7 @@ impl Bank {
             self.feature_set.clone(),
             compute_budget,
             timings,
-            &*self.sysvar_cache.read().unwrap(),
+            &self.sysvar_cache.read().unwrap(),
             blockhash,
             lamports_per_signature,
             prev_accounts_data_len,
@@ -4453,9 +4453,7 @@ impl Bank {
         let ExecutionRecord {
             accounts,
             mut return_data,
-            changed_account_count,
-            total_size_of_all_accounts,
-            total_size_of_touched_accounts,
+            touched_account_count,
             accounts_resize_delta,
         } = transaction_context.into();
         loaded_transaction.accounts = accounts;
@@ -4467,15 +4465,7 @@ impl Bank {
                 timings.details.total_account_count,
                 loaded_transaction.accounts.len() as u64
             );
-            saturating_add_assign!(timings.details.changed_account_count, changed_account_count);
-            saturating_add_assign!(
-                timings.details.total_data_size,
-                total_size_of_all_accounts as usize
-            );
-            saturating_add_assign!(
-                timings.details.data_size_changed,
-                total_size_of_touched_accounts as usize
-            );
+            saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
             accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
         }
 
@@ -7457,28 +7447,22 @@ impl Bank {
         debug!("Added precompiled program {:?}", program_id);
     }
 
+    // Call AccountsDb::clean_accounts()
+    //
+    // This fn is meant to be called by the snapshot handler in Accounts Background Service.  If
+    // calling from elsewhere, ensure the same invariants hold/expectations are met.
     pub(crate) fn clean_accounts(&self, last_full_snapshot_slot: Option<Slot>) {
         // Don't clean the slot we're snapshotting because it may have zero-lamport
         // accounts that were included in the bank delta hash when the bank was frozen,
         // and if we clean them here, any newly created snapshot's hash for this bank
         // may not match the frozen hash.
         //
-        // So when we're snapshotting, set `skip_last` to true so the highest slot to clean is
-        // lowered by one.
-        self._clean_accounts(true, false, last_full_snapshot_slot)
-    }
-
-    fn _clean_accounts(
-        &self,
-        skip_last: bool,
-        is_startup: bool,
-        last_full_snapshot_slot: Option<Slot>,
-    ) {
-        let max_clean_root = skip_last.then(|| self.slot().saturating_sub(1));
+        // So when we're snapshotting, the highest slot to clean is lowered by one.
+        let highest_slot_to_clean = self.slot().saturating_sub(1);
 
         self.rc.accounts.accounts_db.clean_accounts(
-            max_clean_root,
-            is_startup,
+            Some(highest_slot_to_clean),
+            false,
             last_full_snapshot_slot,
         );
     }

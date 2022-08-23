@@ -2138,11 +2138,11 @@ impl AccountsDb {
             .expect("Cluster type must be set at initialization")
     }
 
-    /// Reclaim older states of accounts older than max_clean_root for AccountsDb bloat mitigation
+    /// Reclaim older states of accounts older than max_clean_root_inclusive for AccountsDb bloat mitigation
     fn clean_accounts_older_than_root(
         &self,
         purges: Vec<Pubkey>,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
         ancient_account_cleans: &AtomicU64,
     ) -> ReclaimResult {
         if purges.is_empty() {
@@ -2160,14 +2160,17 @@ impl AccountsDb {
             .filter_map(|pubkeys: &[Pubkey]| {
                 let mut reclaims = Vec::new();
                 for pubkey in pubkeys {
-                    self.accounts_index
-                        .clean_rooted_entries(pubkey, &mut reclaims, max_clean_root);
+                    self.accounts_index.clean_rooted_entries(
+                        pubkey,
+                        &mut reclaims,
+                        max_clean_root_inclusive,
+                    );
                 }
                 (!reclaims.is_empty()).then(|| {
                     // figure out how many ancient accounts have been reclaimed
                     let old_reclaims = reclaims
                         .iter()
-                        .filter_map(|(slot, _)| (slot < &one_epoch_old).then(|| 1))
+                        .filter_map(|(slot, _)| (slot < &one_epoch_old).then_some(1))
                         .sum();
                     ancient_account_cleans.fetch_add(old_reclaims, Ordering::Relaxed);
                     reclaims
@@ -2218,27 +2221,37 @@ impl AccountsDb {
     fn calc_delete_dependencies(
         purges: &HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
         store_counts: &mut HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
+        min_store_id: Option<AppendVecId>,
     ) {
         // Another pass to check if there are some filtered accounts which
         // do not match the criteria of deleting all appendvecs which contain them
         // then increment their storage count.
         let mut already_counted = HashSet::new();
+        let mut failed_store_id = None;
         for (pubkey, (account_infos, ref_count_from_storage)) in purges.iter() {
-            if account_infos.len() as RefCount == *ref_count_from_storage {
+            let all_stores_being_deleted =
+                account_infos.len() as RefCount == *ref_count_from_storage;
+            if all_stores_being_deleted {
                 let mut delete = true;
                 for (_slot, account_info) in account_infos {
-                    debug!(
-                        "calc_delete_dependencies()
-                        storage id: {},
-                        count len: {}",
-                        account_info.store_id(),
-                        store_counts.get(&account_info.store_id()).unwrap().0,
-                    );
-                    if store_counts.get(&account_info.store_id()).unwrap().0 != 0 {
-                        // one of the pubkeys in the store has account info to a store whose store count is not going to zero
-                        delete = false;
-                        break;
+                    let store_id = account_info.store_id();
+                    if let Some(count) = store_counts.get(&store_id).map(|s| s.0) {
+                        debug!(
+                            "calc_delete_dependencies()
+                            storage id: {},
+                            count len: {}",
+                            store_id, count,
+                        );
+                        if count == 0 {
+                            // this store CAN be removed
+                            continue;
+                        }
                     }
+                    // One of the pubkeys in the store has account info to a store whose store count is not going to zero.
+                    // If the store cannot be found, that also means store isn't being deleted.
+                    failed_store_id = Some(store_id);
+                    delete = false;
+                    break;
                 }
                 if delete {
                     // this pubkey can be deleted from all stores it is in
@@ -2268,18 +2281,27 @@ impl AccountsDb {
             }
             while !pending_store_ids.is_empty() {
                 let id = pending_store_ids.iter().next().cloned().unwrap();
+                if Some(id) == min_store_id {
+                    if let Some(failed_store_id) = failed_store_id.take() {
+                        info!("calc_delete_dependencies, oldest store is not able to be deleted because of {pubkey} in store {failed_store_id}");
+                    } else {
+                        info!("calc_delete_dependencies, oldest store is not able to be deleted because of {pubkey}, account infos len: {}, ref count: {ref_count_from_storage}", account_infos.len());
+                    }
+                }
+
                 pending_store_ids.remove(&id);
                 if !already_counted.insert(id) {
                     continue;
                 }
-                // the point of all this code: increment the store count to non-zero
-                store_counts.get_mut(&id).unwrap().0 += 1;
-
-                let affected_pubkeys = &store_counts.get(&id).unwrap().1;
-                for key in affected_pubkeys {
-                    for (_slot, account_info) in &purges.get(key).unwrap().0 {
-                        if !already_counted.contains(&account_info.store_id()) {
-                            pending_store_ids.insert(account_info.store_id());
+                // the point of all this code: remove the store count for all stores we cannot remove
+                if let Some(store_count) = store_counts.remove(&id) {
+                    // all pubkeys in this store also cannot be removed from all stores they are in
+                    let affected_pubkeys = &store_count.1;
+                    for key in affected_pubkeys {
+                        for (_slot, account_info) in &purges.get(key).unwrap().0 {
+                            if !already_counted.contains(&account_info.store_id()) {
+                                pending_store_ids.insert(account_info.store_id());
+                            }
                         }
                     }
                 }
@@ -2394,7 +2416,7 @@ impl AccountsDb {
             .iter()
             .filter_map(|entry| {
                 let slot = *entry.key();
-                (slot <= max_slot_inclusive).then(|| slot)
+                (slot <= max_slot_inclusive).then_some(slot)
             })
             .collect()
     }
@@ -2432,19 +2454,27 @@ impl AccountsDb {
     //   dirty_stores - set of stores which had accounts removed or recently rooted
     fn construct_candidate_clean_keys(
         &self,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
         timings: &mut CleanKeyTimings,
-    ) -> Vec<Pubkey> {
+    ) -> (Vec<Pubkey>, Option<AppendVecId>) {
         let mut dirty_store_processing_time = Measure::start("dirty_store_processing");
         let max_slot_inclusive =
-            max_clean_root.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
+            max_clean_root_inclusive.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
         let mut dirty_stores = Vec::with_capacity(self.dirty_stores.len());
-        self.dirty_stores.retain(|(slot, _store_id), store| {
+        // find the oldest append vec older than one epoch old
+        // we'll add logging if that append vec cannot be marked dead
+        let mut min_dirty_slot = self.get_accounts_hash_complete_one_epoch_old();
+        let mut min_dirty_store_id = None;
+        self.dirty_stores.retain(|(slot, store_id), store| {
             if *slot > max_slot_inclusive {
                 true
             } else {
+                if *slot < min_dirty_slot {
+                    min_dirty_slot = *slot;
+                    min_dirty_store_id = Some(*store_id);
+                }
                 dirty_stores.push((*slot, store.clone()));
                 false
             }
@@ -2531,7 +2561,7 @@ impl AccountsDb {
                 });
         }
 
-        pubkeys
+        (pubkeys, min_dirty_store_id)
     }
 
     /// Call clean_accounts() with the common parameters that tests/benches use.
@@ -2563,7 +2593,7 @@ impl AccountsDb {
         self.report_store_stats();
 
         let mut key_timings = CleanKeyTimings::default();
-        let mut pubkeys = self.construct_candidate_clean_keys(
+        let (mut pubkeys, min_dirty_store_id) = self.construct_candidate_clean_keys(
             max_clean_root,
             is_startup,
             last_full_snapshot_slot,
@@ -2758,7 +2788,11 @@ impl AccountsDb {
         store_counts_time.stop();
 
         let mut calc_deps_time = Measure::start("calc_deps");
-        Self::calc_delete_dependencies(&purges_zero_lamports, &mut store_counts);
+        Self::calc_delete_dependencies(
+            &purges_zero_lamports,
+            &mut store_counts,
+            min_dirty_store_id,
+        );
         calc_deps_time.stop();
 
         let mut purge_filter = Measure::start("purge_filter");
@@ -3013,16 +3047,16 @@ impl AccountsDb {
     ///   ```
     ///
     /// This filtering step can be skipped if there is no `last_full_snapshot_slot`, or if the
-    /// `max_clean_root` is less-than-or-equal-to the `last_full_snapshot_slot`.
+    /// `max_clean_root_inclusive` is less-than-or-equal-to the `last_full_snapshot_slot`.
     fn filter_zero_lamport_clean_for_incremental_snapshots(
         &self,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
         last_full_snapshot_slot: Option<Slot>,
         store_counts: &HashMap<AppendVecId, (usize, HashSet<Pubkey>)>,
         purges_zero_lamports: &mut HashMap<Pubkey, (SlotList<AccountInfo>, RefCount)>,
     ) {
-        let should_filter_for_incremental_snapshots =
-            max_clean_root.unwrap_or(Slot::MAX) > last_full_snapshot_slot.unwrap_or(Slot::MAX);
+        let should_filter_for_incremental_snapshots = max_clean_root_inclusive.unwrap_or(Slot::MAX)
+            > last_full_snapshot_slot.unwrap_or(Slot::MAX);
         assert!(
             last_full_snapshot_slot.is_some() || !should_filter_for_incremental_snapshots,
             "if filtering for incremental snapshots, then snapshots should be enabled",
@@ -3032,7 +3066,13 @@ impl AccountsDb {
             // Only keep purges_zero_lamports where the entire history of the account in the root set
             // can be purged. All AppendVecs for those updates are dead.
             for (_slot, account_info) in slot_account_infos.iter() {
-                if store_counts.get(&account_info.store_id()).unwrap().0 != 0 {
+                if let Some(store_count) = store_counts.get(&account_info.store_id()) {
+                    if store_count.0 != 0 {
+                        // one store this pubkey is in is not being removed, so this pubkey cannot be removed at all
+                        return false;
+                    }
+                } else {
+                    // store is not being removed, so this pubkey cannot be removed at all
                     return false;
                 }
             }
@@ -3677,6 +3717,25 @@ impl AccountsDb {
         })
     }
 
+    /// unref each account in 'accounts' that already exists in 'ancient_store'
+    fn unref_accounts_already_in_storage(
+        &self,
+        accounts: &[(&Pubkey, &StoredAccountMeta<'_>, u64)],
+        ancient_store: &Arc<AccountStorageEntry>,
+    ) {
+        // make a hashset of all keys we're about to add to this storage
+        let mut accounts_to_add = accounts.iter().map(|entry| entry.0).collect::<HashSet<_>>();
+        // for each key that we're about to add that already exists in this storage, we need to unref. The account was in a different storage.
+        // Now it is being put into an ancient storage, but it is already there, so maintain max of 1 ref per storage in the accounts index.
+        ancient_store.accounts.account_iter().for_each(|account| {
+            // remove here is so we don't unref the same key more than once in this loop if it is in the existing storage 2 times already
+            let key = &account.meta.pubkey;
+            if accounts_to_add.remove(key) {
+                self.accounts_index.unref_from_storage(key);
+            }
+        })
+    }
+
     /// helper function to cleanup call to 'store_accounts_frozen'
     fn store_ancient_accounts(
         &self,
@@ -3684,8 +3743,14 @@ impl AccountsDb {
         ancient_store: &Arc<AccountStorageEntry>,
         accounts: &AccountsToStore,
         storage_selector: StorageSelector,
+        unref_if_already_exists: bool,
     ) -> StoreAccountsTiming {
         let (accounts, hashes) = accounts.get(storage_selector);
+
+        if unref_if_already_exists {
+            self.unref_accounts_already_in_storage(accounts, ancient_store);
+        }
+
         self.store_accounts_frozen(
             (ancient_slot, accounts),
             Some(hashes),
@@ -3704,7 +3769,7 @@ impl AccountsDb {
     ) -> Option<SnapshotStorage> {
         self.get_storages_for_slot(slot).and_then(|all_storages| {
             self.should_move_to_ancient_append_vec(&all_storages, current_ancient, slot)
-                .then(|| all_storages)
+                .then_some(all_storages)
         })
     }
 
@@ -3859,6 +3924,8 @@ impl AccountsDb {
                 ancient_store,
                 &to_store,
                 StorageSelector::Primary,
+                // we are adding accounts to an existing append vec from a different slot. We need to unref each account that exists already in 'ancient_store'.
+                slot != ancient_slot,
             );
 
             // handle accounts from 'slot' which did not fit into the current ancient append vec
@@ -3885,6 +3952,7 @@ impl AccountsDb {
                     ancient_store,
                     &to_store,
                     StorageSelector::Overflow,
+                    false, // we do not want to unref any accounts. these remaining accounts are going into a new append vec, so we need to keep the refs they already have
                 );
                 store_accounts_timing.store_accounts_elapsed = timing.store_accounts_elapsed;
                 store_accounts_timing.update_index_elapsed = timing.update_index_elapsed;
@@ -5333,7 +5401,7 @@ impl AccountsDb {
                     // with the same slot.
                     let is_being_flushed = !currently_contended_slots.insert(*remove_slot);
                     // If the cache is currently flushing this slot, add it to the list
-                    is_being_flushed.then(|| remove_slot)
+                    is_being_flushed.then_some(remove_slot)
                 })
                 .cloned()
                 .collect();
@@ -6682,8 +6750,13 @@ impl AccountsDb {
         for (slot, storages) in storages.iter_range(..in_epoch_range_start) {
             if let Some(storages) = storages {
                 storages.iter().for_each(|store| {
-                    self.dirty_stores
-                        .insert((slot, store.append_vec_id()), store.clone());
+                    if !is_ancient(&store.accounts) {
+                        // ancient stores are managed separately - we expect them to be old and keeping accounts
+                        // We can expect the normal processes will keep them cleaned.
+                        // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
+                        self.dirty_stores
+                            .insert((slot, store.append_vec_id()), store.clone());
+                    }
                 });
             }
         }
@@ -12997,7 +13070,7 @@ pub mod tests {
         store_counts.insert(1, (0, HashSet::from_iter(vec![key0, key1])));
         store_counts.insert(2, (0, HashSet::from_iter(vec![key1, key2])));
         store_counts.insert(3, (1, HashSet::from_iter(vec![key2])));
-        AccountsDb::calc_delete_dependencies(&purges, &mut store_counts);
+        AccountsDb::calc_delete_dependencies(&purges, &mut store_counts, None);
         let mut stores: Vec<_> = store_counts.keys().cloned().collect();
         stores.sort_unstable();
         for store in &stores {
@@ -13008,7 +13081,11 @@ pub mod tests {
             );
         }
         for x in 0..3 {
-            assert!(store_counts[&x].0 >= 1);
+            // if the store count doesn't exist for this id, then it is implied to be > 0
+            assert!(store_counts
+                .get(&x)
+                .map(|entry| entry.0 >= 1)
+                .unwrap_or(true));
         }
     }
 

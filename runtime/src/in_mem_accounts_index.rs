@@ -322,7 +322,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 callback(Some(entry)).1
             } else {
                 // not in cache, look on disk
-                let stats = &self.stats();
+                let stats = self.stats();
                 let disk_entry = self.load_account_entry_from_disk(pubkey);
                 if disk_entry.is_none() {
                     return callback(None).1;
@@ -530,7 +530,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     fn update_entry_stats(&self, stopped_measure: Measure, found: bool) {
-        let stats = &self.stats();
+        let stats = self.stats();
         let (count, time) = if found {
             (&stats.entries_from_mem, &stats.entry_mem_us)
         } else {
@@ -1421,6 +1421,8 @@ impl<'a> FlushGuard<'a> {
     #[must_use = "if unused, the `flushing` flag will immediately clear"]
     fn lock(flushing: &'a AtomicBool) -> Option<Self> {
         let already_flushing = flushing.swap(true, Ordering::AcqRel);
+        // Eager evaluation here would result in dropping Self and clearing flushing flag
+        #[allow(clippy::unnecessary_lazy_evaluations)]
         (!already_flushing).then(|| Self { flushing })
     }
 }

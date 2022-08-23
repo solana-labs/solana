@@ -2067,28 +2067,26 @@ fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
     ));
 
     if path_delete.exists() {
-        debug!("{} exists, delete it first.", path_delete.display());
         std::fs::remove_dir_all(&path_delete).unwrap();
     }
 
     if !path.as_ref().exists() {
-        info!(
-            "move_and_async_delete_path: path {} does not exist",
-            path.as_ref().display()
-        );
         return;
     }
 
-    std::fs::rename(&path, &path_delete).unwrap();
+    if let Err(err) = std::fs::rename(&path, &path_delete) {
+        warn!(
+            "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
+            err.to_string()
+        );
+        std::fs::remove_dir_all(&path).unwrap();
+        return;
+    }
 
     Builder::new()
         .name("solDeletePath".to_string())
         .spawn(move || {
             std::fs::remove_dir_all(&path_delete).unwrap();
-            info!(
-                "Cleaning path {} done asynchronously in a spawned thread",
-                path_delete.display()
-            );
         })
         .unwrap();
 }

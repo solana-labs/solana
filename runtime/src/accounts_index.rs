@@ -1230,12 +1230,16 @@ impl<T: IndexValue> AccountsIndex<T> {
         )
     }
 
-    pub fn get_rooted_entries(&self, slice: SlotSlice<T>, max: Option<Slot>) -> SlotList<T> {
-        let max = max.unwrap_or(Slot::MAX);
+    pub fn get_rooted_entries(
+        &self,
+        slice: SlotSlice<T>,
+        max_inclusive: Option<Slot>,
+    ) -> SlotList<T> {
+        let max_inclusive = max_inclusive.unwrap_or(Slot::MAX);
         let lock = &self.roots_tracker.read().unwrap().alive_roots;
         slice
             .iter()
-            .filter(|(slot, _)| *slot <= max && lock.contains(slot))
+            .filter(|(slot, _)| *slot <= max_inclusive && lock.contains(slot))
             .cloned()
             .collect()
     }
@@ -1244,10 +1248,10 @@ impl<T: IndexValue> AccountsIndex<T> {
     pub fn roots_and_ref_count(
         &self,
         locked_account_entry: &ReadAccountMapEntry<T>,
-        max: Option<Slot>,
+        max_inclusive: Option<Slot>,
     ) -> (SlotList<T>, RefCount) {
         (
-            self.get_rooted_entries(locked_account_entry.slot_list(), max),
+            self.get_rooted_entries(locked_account_entry.slot_list(), max_inclusive),
             locked_account_entry.ref_count(),
         )
     }
@@ -1286,7 +1290,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         &self,
         ancestors: Option<&Ancestors>,
         slice: SlotSlice<T>,
-        max_root: Option<Slot>,
+        max_root_inclusive: Option<Slot>,
     ) -> Option<usize> {
         let mut current_max = 0;
         let mut rv = None;
@@ -1301,11 +1305,11 @@ impl<T: IndexValue> AccountsIndex<T> {
             }
         }
 
-        let max_root = max_root.unwrap_or(Slot::MAX);
+        let max_root_inclusive = max_root_inclusive.unwrap_or(Slot::MAX);
         let mut tracker = None;
 
         for (i, (slot, _t)) in slice.iter().rev().enumerate() {
-            if (rv.is_none() || *slot > current_max) && *slot <= max_root {
+            if (rv.is_none() || *slot > current_max) && *slot <= max_root_inclusive {
                 let lock = match tracker {
                     Some(inner) => inner,
                     None => self.roots_tracker.read().unwrap(),
@@ -1413,17 +1417,17 @@ impl<T: IndexValue> AccountsIndex<T> {
     fn get_newest_root_in_slot_list(
         alive_roots: &RollingBitField,
         slice: SlotSlice<T>,
-        max_allowed_root: Option<Slot>,
+        max_allowed_root_inclusive: Option<Slot>,
     ) -> Slot {
         let mut max_root = 0;
-        for (f, _) in slice.iter() {
-            if let Some(max_allowed_root) = max_allowed_root {
-                if *f > max_allowed_root {
+        for (slot, _) in slice.iter() {
+            if let Some(max_allowed_root_inclusive) = max_allowed_root_inclusive {
+                if *slot > max_allowed_root_inclusive {
                     continue;
                 }
             }
-            if *f > max_root && alive_roots.contains(f) {
-                max_root = *f;
+            if *slot > max_root && alive_roots.contains(slot) {
+                max_root = *slot;
             }
         }
         max_root
@@ -1689,23 +1693,25 @@ impl<T: IndexValue> AccountsIndex<T> {
         &self,
         slot_list: &mut SlotList<T>,
         reclaims: &mut SlotList<T>,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
     ) {
         let newest_root_in_slot_list;
-        let max_clean_root = {
+        let max_clean_root_inclusive = {
             let roots_tracker = &self.roots_tracker.read().unwrap();
             newest_root_in_slot_list = Self::get_newest_root_in_slot_list(
                 &roots_tracker.alive_roots,
                 slot_list,
-                max_clean_root,
+                max_clean_root_inclusive,
             );
-            max_clean_root.unwrap_or_else(|| roots_tracker.alive_roots.max_inclusive())
+            max_clean_root_inclusive.unwrap_or_else(|| roots_tracker.alive_roots.max_inclusive())
         };
 
         slot_list.retain(|(slot, value)| {
-            let should_purge =
-                Self::can_purge_older_entries(max_clean_root, newest_root_in_slot_list, *slot)
-                    && !value.is_cached();
+            let should_purge = Self::can_purge_older_entries(
+                max_clean_root_inclusive,
+                newest_root_in_slot_list,
+                *slot,
+            ) && !value.is_cached();
             if should_purge {
                 reclaims.push((*slot, *value));
             }
@@ -1717,11 +1723,11 @@ impl<T: IndexValue> AccountsIndex<T> {
         &self,
         pubkey: &Pubkey,
         reclaims: &mut SlotList<T>,
-        max_clean_root: Option<Slot>,
+        max_clean_root_inclusive: Option<Slot>,
     ) {
         let mut is_slot_list_empty = false;
         self.slot_list_mut(pubkey, |slot_list| {
-            self.purge_older_root_entries(slot_list, reclaims, max_clean_root);
+            self.purge_older_root_entries(slot_list, reclaims, max_clean_root_inclusive);
             is_slot_list_empty = slot_list.is_empty();
         });
 

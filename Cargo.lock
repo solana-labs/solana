@@ -3620,13 +3620,12 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.1.0"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f7996776e9ee3fc0e5c14476c1a640a17e993c847ae9c81191c2c102fbef903"
+checksum = "9f832d8958db3e84d2ec93b5eb2272b45aa23cf7f8fe6e79f578896f4e6c231b"
 dependencies = [
  "futures-util",
  "libc",
- "mio",
  "quinn-proto",
  "socket2",
  "tokio",
@@ -4965,6 +4964,7 @@ dependencies = [
  "log",
  "quinn",
  "quinn-proto",
+ "quinn-udp",
  "rand 0.7.3",
  "rand_chacha 0.2.2",
  "rayon",
@@ -6337,6 +6337,7 @@ dependencies = [
  "pkcs8",
  "quinn",
  "quinn-proto",
+ "quinn-udp",
  "rand 0.7.3",
  "rcgen",
  "rustls 0.20.6",
