@@ -405,7 +405,7 @@ fn output_slot(
                 }
 
                 let t = solana_scheduler::Task::new_for_queue(weight, tx);
-                for lock_attempt in tx.1.iter() {
+                for lock_attempt in t.1.iter() {
                     lock_attempt.target.page_ref().contended_unique_weights.insert_task_id(weight, solana_scheduler::TaskInQueue::clone(&t));
                 }
 
