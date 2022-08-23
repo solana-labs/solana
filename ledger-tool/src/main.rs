@@ -363,23 +363,26 @@ fn output_slot(
     let depth = Arc::new(std::sync::atomic::AtomicUsize::default());
 
     let d = depth.clone();
-    let t3 = std::thread::Builder::new()
-        .name("sol-consumer".to_string())
-        .spawn(move || {
-            for step in 0.. {
-                let ee = post_schedule_env_receiver.recv().unwrap();
-                d.fetch_sub(1, Ordering::Relaxed);
-                trace!(
-                    "post schedule stage: #{} {:#?}",
-                    step,
-                    ee.task.tx.0.signature()
-                );
-                if step % 1966 == 0 {
-                    error!("finished!: {} {}", step, post_schedule_env_receiver.len());
+    let handles3 = (0..4).map(|thx| {
+        let t3 = std::thread::Builder::new()
+            .name("sol-consumer".to_string())
+            .spawn(move || {
+                for step in 0.. {
+                    let ee = post_schedule_env_receiver.recv().unwrap();
+                    d.fetch_sub(1, Ordering::Relaxed);
+                    trace!(
+                        "post schedule stage: #{} {:#?}",
+                        step,
+                        ee.task.tx.0.signature()
+                    );
+                    if step % 1966 == 0 {
+                        error!("finished!: {} {}", step, post_schedule_env_receiver.len());
+                    }
                 }
-            }
-        })
-        .unwrap();
+            })
+            .unwrap();
+            t3
+    }).collect::<Vec<_>>();
 
     if verbose_level >= 2 {
         let mut txes = Vec::new();
@@ -442,7 +445,7 @@ fn output_slot(
         t1.join().unwrap();
         handles.into_iter().for_each(|t| t.join().unwrap());
         handles2.into_iter().for_each(|t| t.join().unwrap());
-        t3.join().unwrap();
+        handles3.into_iter().for_each(|t| t.join().unwrap());
 
         output_slot_rewards(blockstore, slot, method);
     } else if verbose_level >= 1 {
