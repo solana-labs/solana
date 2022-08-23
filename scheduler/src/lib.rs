@@ -895,7 +895,7 @@ impl ScheduleStage {
             (to_next_stage, None)
         } else {
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
-                while let a = ee_receiver.recv().unwrap() {
+                while let mut a = ee_receiver.recv().unwrap() {
                     assert!(a.task.tx.1.is_empty());
                     let lock_attempts = std::mem::take(&mut a.lock_attempts);
                 }
