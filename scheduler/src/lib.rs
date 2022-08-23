@@ -88,7 +88,7 @@ impl LockAttempt {
 
     pub fn clone_for_test(&self) -> Self {
         Self {
-            target: self.target.clone,,
+            target: self.target.clone(),
             status: LockStatus::Succeded,
             requested_usage: self.requested_usage,
             heaviest_uncontended: Default::default(),
