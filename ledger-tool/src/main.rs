@@ -374,7 +374,7 @@ fn output_slot(
         let step = step.clone();
 
         let t3 = std::thread::Builder::new()
-            .name("sol-consumer{}".to_string())
+            .name(format!("sol-consumer{}", thx))
             .spawn(move || {
                 loop {
                     let ee = post_schedule_env_receiver.recv().unwrap();
@@ -427,7 +427,7 @@ fn output_slot(
                 let txes = txes.clone();
                 let muxed_sender = muxed_sender.clone();
                 let t1 = std::thread::Builder::new()
-                    .name("sol-producer{}".to_string())
+                    .name(format!("sol-producer{}", thx))
                     .spawn(move || loop {
                         for i in 0..loop_count {
                             error!("started!: {} {}", i, txes.len());
