@@ -4453,9 +4453,7 @@ impl Bank {
         let ExecutionRecord {
             accounts,
             mut return_data,
-            changed_account_count,
-            total_size_of_all_accounts,
-            total_size_of_touched_accounts,
+            touched_account_count,
             accounts_resize_delta,
         } = transaction_context.into();
         loaded_transaction.accounts = accounts;
@@ -4467,15 +4465,7 @@ impl Bank {
                 timings.details.total_account_count,
                 loaded_transaction.accounts.len() as u64
             );
-            saturating_add_assign!(timings.details.changed_account_count, changed_account_count);
-            saturating_add_assign!(
-                timings.details.total_data_size,
-                total_size_of_all_accounts as usize
-            );
-            saturating_add_assign!(
-                timings.details.data_size_changed,
-                total_size_of_touched_accounts as usize
-            );
+            saturating_add_assign!(timings.details.changed_account_count, touched_account_count);
             accounts_data_len_delta = status.as_ref().map_or(0, |_| accounts_resize_delta);
         }
 
