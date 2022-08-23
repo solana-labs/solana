@@ -2235,19 +2235,23 @@ impl AccountsDb {
                 let mut delete = true;
                 for (_slot, account_info) in account_infos {
                     let store_id = account_info.store_id();
-                    let count = store_counts.get(&store_id).unwrap().0;
-                    debug!(
-                        "calc_delete_dependencies()
-                        storage id: {},
-                        count len: {}",
-                        store_id, count,
-                    );
-                    if count != 0 {
-                        // one of the pubkeys in the store has account info to a store whose store count is not going to zero
-                        failed_store_id = Some(store_id);
-                        delete = false;
-                        break;
+                    if let Some(count) = store_counts.get(&store_id).map(|s| s.0) {
+                        debug!(
+                            "calc_delete_dependencies()
+                            storage id: {},
+                            count len: {}",
+                            store_id, count,
+                        );
+                        if count == 0 {
+                            // this store CAN be removed
+                            continue;
+                        }
                     }
+                    // One of the pubkeys in the store has account info to a store whose store count is not going to zero.
+                    // If the store cannot be found, that also means store isn't being deleted.
+                    failed_store_id = Some(store_id);
+                    delete = false;
+                    break;
                 }
                 if delete {
                     // this pubkey can be deleted from all stores it is in
@@ -2289,14 +2293,15 @@ impl AccountsDb {
                 if !already_counted.insert(id) {
                     continue;
                 }
-                // the point of all this code: increment the store count to non-zero
-                store_counts.get_mut(&id).unwrap().0 += 1;
-
-                let affected_pubkeys = &store_counts.get(&id).unwrap().1;
-                for key in affected_pubkeys {
-                    for (_slot, account_info) in &purges.get(key).unwrap().0 {
-                        if !already_counted.contains(&account_info.store_id()) {
-                            pending_store_ids.insert(account_info.store_id());
+                // the point of all this code: remove the store count for all stores we cannot remove
+                if let Some(store_count) = store_counts.remove(&id) {
+                    // all pubkeys in this store also cannot be removed from all stores they are in
+                    let affected_pubkeys = &store_count.1;
+                    for key in affected_pubkeys {
+                        for (_slot, account_info) in &purges.get(key).unwrap().0 {
+                            if !already_counted.contains(&account_info.store_id()) {
+                                pending_store_ids.insert(account_info.store_id());
+                            }
                         }
                     }
                 }
@@ -3061,7 +3066,13 @@ impl AccountsDb {
             // Only keep purges_zero_lamports where the entire history of the account in the root set
             // can be purged. All AppendVecs for those updates are dead.
             for (_slot, account_info) in slot_account_infos.iter() {
-                if store_counts.get(&account_info.store_id()).unwrap().0 != 0 {
+                if let Some(store_count) = store_counts.get(&account_info.store_id()) {
+                    if store_count.0 != 0 {
+                        // one store this pubkey is in is not being removed, so this pubkey cannot be removed at all
+                        return false;
+                    }
+                } else {
+                    // store is not being removed, so this pubkey cannot be removed at all
                     return false;
                 }
             }
@@ -13070,7 +13081,11 @@ pub mod tests {
             );
         }
         for x in 0..3 {
-            assert!(store_counts[&x].0 >= 1);
+            // if the store count doesn't exist for this id, then it is implied to be > 0
+            assert!(store_counts
+                .get(&x)
+                .map(|entry| entry.0 >= 1)
+                .unwrap_or(true));
         }
     }
 
