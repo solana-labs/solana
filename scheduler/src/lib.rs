@@ -166,7 +166,7 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    pub fn heaviest_task_cursor(&self) -> Option<crossbeam_skiplist::set::Entry<'_, u64>> {
+    pub fn heaviest_task_cursor(&self) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue>> {
         //self.task_ids.last()
         self.task_ids.back()
         //self.cached_heaviest.as_ref()
