@@ -932,14 +932,14 @@ impl ScheduleStage {
                                 to_next_stage.send(processed_execution_environment).unwrap();
                             }
 
-                            Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
+                            Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut queue_clock);
 
                             while from.len() > 0 && from_exec.len() == 0 {
                                let i = from.recv().unwrap();
                                 match i {
                                     Multiplexed::FromPrevious(weighted_tx) => {
                                         trace!("recv from previous (after starvation)");
-                                        Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
+                                        Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut queue_clock);
                                     }
                                     Multiplexed::FromPreviousBatched(vvv) => {
                                         unreachable!();
@@ -980,7 +980,7 @@ impl ScheduleStage {
                         match i {
                             Multiplexed::FromPrevious(weighted_tx) => {
                                 trace!("recv from previous (after starvation)");
-                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
+                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut queue_clock);
                             }
                             Multiplexed::FromPreviousBatched(vvv) => {
                                 unreachable!();
@@ -1006,7 +1006,7 @@ impl ScheduleStage {
                         match i {
                             Multiplexed::FromPrevious(weighted_tx) => {
                                 trace!("recv from previous (after starvation)");
-                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key);
+                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut queue_clock);
                             }
                             Multiplexed::FromPreviousBatched(vvv) => {
                                 unreachable!();
