@@ -728,11 +728,10 @@ impl ScheduleStage {
 
         trace!("pop begin");
         loop {
-        if let Some((from_runnable, mut queue_entry)) = Self::select_next_task(runnable_queue, contended_queue, address_book) {
+        if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, contended_queue, address_book) {
             trace!("pop loop iteration");
-            let unique_weight = *queue_entry.key();
-            let mut arc_next_task = queue_entry.get_mut();
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
+            let unique_weight = *next_task.unique_weight;
             let message_hash = next_task.tx.0.message_hash();
 
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
@@ -760,7 +759,6 @@ impl ScheduleStage {
 
                 if from_runnable {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
-                    let task = queue_entry.remove();
                     task.mark_as_contended();
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
@@ -796,7 +794,6 @@ impl ScheduleStage {
                 &unique_weight,
                 &mut next_task.tx.1,
             );
-            let task = queue_entry.remove();
             return Some((unique_weight, task));
         } else {
             break;
