@@ -321,7 +321,7 @@ fn handle_transaction_batch(
     metrics: &TransactionSchedulerBenchMetrics,
     thread_index: usize,
     completed_transaction_sender: &(Sender<CompletedTransactionMessage>, Sender<solana_scheduler::Multiplexed>),
-    transaction_batch: TransactionBatchMessage,
+    mut transaction_batch: TransactionBatchMessage,
     execution_per_tx_us: u64,
 ) {
     let num_transactions = 1; //transaction_batch.len() as u64;
