@@ -433,7 +433,7 @@ fn output_slot(
                         }
                     }).unwrap();
                 t1
-        }.collect::<Vec<_>>();
+        }).collect::<Vec<_>>();
 
         t1.join().unwrap();
         handles.into_iter().for_each(|t| t.join().unwrap());
