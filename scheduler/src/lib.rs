@@ -153,11 +153,6 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    fn has_more(&self) -> bool {
-        !self.task_ids.is_empty()
-    }
-
-    #[inline(never)]
     fn heaviest_task_id(&self) -> Option<TaskId> {
         self.task_ids.back().map(|e| *(e.key()))
     }
@@ -328,7 +323,6 @@ impl AddressBook {
         //debug_assert!(attempt.is_success());
 
         let mut newly_uncontended = false;
-        let mut still_queued = false;
 
         let mut page = attempt.target.page_mut();
 
@@ -354,12 +348,9 @@ impl AddressBook {
 
         if newly_uncontended {
             page.current_usage = Usage::Unused;
-            if page.contended_unique_weights.has_more() {
-                still_queued = true;
-            }
         }
 
-        still_queued
+        newly_uncontended
     }
 
     #[inline(never)]
@@ -795,10 +786,10 @@ impl ScheduleStage {
     #[inline(never)]
     fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>) {
         for mut l in lock_attempts.into_iter() {
-            let newly_uncontended_while_queued = address_book.reset_lock(&mut l, true);
+            let newly_uncontended = address_book.reset_lock(&mut l, true);
 
             let page = l.target.page_mut();
-            if newly_uncontended_while_queued && page.next_usage == Usage::Unused {
+            if newly_uncontended && page.next_usage == Usage::Unused {
                 //let maybe_task = l.heaviest_uncontended.load_full();
                 if let Some(task) = l.heaviest_uncontended.take() { //maybe_task {
                     assert!(!task.already_finished());
