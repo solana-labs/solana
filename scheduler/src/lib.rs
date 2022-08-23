@@ -574,7 +574,7 @@ type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
 // adaptive relative load between sigverify stage and execution substage
 // switched from crossbeam_channel::select! due to observed poor performance
 pub enum Multiplexed {
-    FromPrevious((Weight, Box<PreprocessedTransaction>)),
+    FromPrevious((Weight, std::sync::Arc<PreprocessedTransaction>)),
     FromPreviousBatched(Vec<Vec<Box<PreprocessedTransaction>>>),
 }
 
