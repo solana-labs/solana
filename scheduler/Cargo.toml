@@ -11,14 +11,10 @@ documentation = "https://docs.rs/solana-scheduler"
 publish = true
 
 [dependencies]
-atomic_enum = "0.1.1"
 arc-swap = "1.5.0"
-by_address = "1.0.4"
 crossbeam-channel = "0.5.5"
 crossbeam-skiplist = { path = "../../../crossbeam/crossbeam-skiplist" }
 dashmap = { version = "4.0.2" }
-rayon = "1.5.3"
-im = { version = "15.1.0", features = ["rayon", "serde"] }
 log = "0.4.17"
 solana-entry = { path = "../entry", version = "=1.11.5" }
 solana-runtime = { path = "../runtime", version = "=1.11.5" }
@@ -29,8 +25,6 @@ solana-version = { path = "../version", version = "=1.11.5" }
 solana-metrics = { path = "../metrics", version = "=1.11.5" }
 solana-measure = { path = "../measure", version = "=1.11.5" }
 sha2 = { version = "0.10.2" }
-rand = "0.7.0"
-
 
 [[bin]]
 name = "solana-scheduler"
