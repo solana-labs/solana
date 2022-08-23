@@ -662,6 +662,7 @@ impl ScheduleStage {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut a.1) };
 
+            *contended_count = contended_count.checked_sub(1).unwrap();
             next_task.mark_as_uncontended();
             let lock_attempts = std::mem::take(&mut next_task.tx.1);
 
@@ -733,6 +734,7 @@ impl ScheduleStage {
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
 
+            *contended_count = contended_count.checked_sub(1).unwrap();
             next_task.mark_as_uncontended();
             let lock_attempts = std::mem::take(&mut next_task.tx.1);
 
@@ -825,12 +827,10 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
         task: TaskInQueue,
-        contended_count: &mut usize,
         lock_attempts: Vec<LockAttempt>,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
-        *contended_count = contended_count.checked_sub(1).unwrap();
 
         Box::new(ExecutionEnvironment {
             task,
