@@ -714,6 +714,7 @@ impl ScheduleStage {
     fn pop_from_queue_then_lock(
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
+        contended_count: &mut usize,
         prefer_immediate: bool,
     ) -> Option<(UniqueWeight, TaskInQueue)> {
         if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
@@ -755,6 +756,7 @@ impl ScheduleStage {
                 if from_runnable {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
                     next_task.mark_as_contended();
+                    contended_count += 1;
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
@@ -931,10 +933,11 @@ impl ScheduleStage {
     fn schedule_next_execution(
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
+        contended_count: &mut usize,
         prefer_immediate: bool,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(runnable_queue, address_book, prefer_immediate)
+            Self::pop_from_queue_then_lock(runnable_queue, contended_count, address_book, prefer_immediate)
                 .map(|(uw, t)| Self::prepare_scheduled_execution(address_book, uw, t));
         maybe_ee
     }
@@ -951,7 +954,6 @@ impl ScheduleStage {
     pub fn run(
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
-        contended_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         from: &crossbeam_channel::Receiver<Multiplexed>,
         from_exec: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
@@ -960,6 +962,7 @@ impl ScheduleStage {
     ) {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
+        let mut contended_count = 0;
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
 
         let (to_next_stage, maybe_jon_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
@@ -975,7 +978,7 @@ impl ScheduleStage {
         };
 
         loop {
-            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_queue.task_count(), executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
+            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
 
             crossbeam_channel::select! {
                recv(from) -> maybe_from => {
