@@ -399,7 +399,7 @@ fn output_slot(
         let mut weight = 10_000_000;
         for i in 0..100 {
             error!("started!: {} {}", i, txes.len());
-            for tx in txes.clone() {
+            for tx in txes.iter().map(|t| t.clone_for_test()) {
                 while depth.load(Ordering::Relaxed) > 10_000 {
                     std::thread::sleep(std::time::Duration::from_micros(10));
                 }
