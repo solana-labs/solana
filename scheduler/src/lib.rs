@@ -212,7 +212,7 @@ type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
-    provisioning_trackers: std::collections::HashMap<UniqueWeight, ProvisioningTracker>, 
+    provisioning_trackers: std::collections::HashMap<UniqueWeight, (ProvisioningTracker, TaskInQueue)>, 
     fulfilled_provisional_task_ids: WeightedTaskIds,
 }
 
