@@ -883,7 +883,7 @@ impl ScheduleStage {
                 for task_id in std::mem::take(&mut page.provisional_task_ids).into_iter() {
                     match address_book.provisioning_trackers.entry(task_id) {
                         std::collections::hash_map::Entry::Occupied(mut tracker_entry) => {
-                            let tracker = tracker_entry.get_mut();
+                            let (tracker, task) = tracker_entry.get_mut();
                             tracker.tick();
                             if tracker.is_fulfilled() {
                                 trace!("provisioning tracker tick: {} => {} (!)", tracker.prev_count(), tracker.count());
