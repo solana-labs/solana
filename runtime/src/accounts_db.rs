@@ -7029,7 +7029,7 @@ impl AccountsDb {
         mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
-
+        let mut total_time = Measure::start("total_time");
         stats.oldest_root = storages.range().start;
 
         assert!(
@@ -7037,7 +7037,9 @@ impl AccountsDb {
             "cannot accurately capture all data for debugging if accounts cache is being used"
         );
 
+        let mut mark_time = Measure::start("mark_time");
         self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch);
+        mark_time.stop();
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
         let use_bg_thread_pool = config.use_bg_thread_pool;
@@ -7089,14 +7091,25 @@ impl AccountsDb {
             );
             Ok(final_result)
         };
+
+        let mut calc_time = Measure::start("calc_time");
         let result = if use_bg_thread_pool {
             self.thread_pool_clean.install(scan_and_hash)
         } else {
             scan_and_hash()
         };
+        calc_time.stop();
         self.assert_safe_squashing_accounts_hash(
             storages.max_slot_inclusive(),
             config.epoch_schedule,
+        );
+        total_time.stop();
+
+        datapoint_info!(
+            "accounts_hash_with_cache",
+            ("total_time_ms", total_time.as_ms(), i64),
+            ("mark_time_ms", mark_time.as_ms(), i64),
+            ("calc_time_ms", calc_time.as_ms(), i64),
         );
         result
     }
