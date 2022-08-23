@@ -269,7 +269,6 @@ fn output_slot(
     //
     let (post_schedule_env_sender, post_schedule_env_receiver) = crossbeam_channel::unbounded();
     let mut runnable_queue = TaskQueue::default();
-    let mut contended_queue = TaskQueue::default();
     let mut address_book = AddressBook::default();
     let preloader = address_book.preloader();
     let t1 = std::thread::Builder::new()
@@ -278,7 +277,6 @@ fn output_slot(
             ScheduleStage::run(
                 lane_count * lane_channel_factor,
                 &mut runnable_queue,
-                &mut contended_queue,
                 &mut address_book,
                 &muxed_receiver,
                 &post_execute_env_receiver,
@@ -406,15 +404,16 @@ fn output_slot(
                     std::thread::sleep(std::time::Duration::from_micros(10));
                 }
 
+                let t = solana_scheduler::Task::new_for_queue(weight, tx);
                 for lock_attempt in tx.1.iter() {
-                    lock_attempt.target.page_ref().contended_unique_weights.insert_task_id(weight);
+                    lock_attempt.target.page_ref().contended_unique_weights.insert_task_id(weight, solana_scheduler::TaskInQueue::clone(&t));
                 }
 
                 muxed_sender
                     .send(solana_scheduler::Multiplexed::FromPrevious((
                         //Weight { ix: weight },
                         weight,
-                        tx,
+                        t,
                     )))
                     .unwrap();
                 depth.fetch_add(1, Ordering::Relaxed);
