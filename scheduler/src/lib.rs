@@ -219,7 +219,7 @@ impl ProvisioningTracker {
         self.remaining_count == 0
     }
 
-    fn tick(&mut self) {
+    fn progress(&mut self) {
         self.remaining_count = self.remaining_count.checked_sub(1).unwrap();
     }
 
@@ -805,13 +805,13 @@ impl ScheduleStage {
                     match address_book.provisioning_trackers.entry(task_id) {
                         std::collections::hash_map::Entry::Occupied(mut tracker_entry) => {
                             let (tracker, task) = tracker_entry.get_mut();
-                            tracker.tick();
+                            tracker.progress();
                             if tracker.is_fulfilled() {
-                                trace!("provisioning tracker tick: {} => {} (!)", tracker.prev_count(), tracker.count());
+                                trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
                                 let (tracker, task) = tracker_entry.remove();
                                 address_book.fulfilled_provisional_task_ids.insert(task_id, task);
                             } else {
-                                trace!("provisioning tracker tick: {} => {}", tracker.prev_count(), tracker.count());
+                                trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
                             }
                         },
                         std::collections::hash_map::Entry::Vacant(_) => {
