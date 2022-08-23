@@ -1,8 +1,6 @@
 use {
     super::*,
-    crate::{
-        broadcast_stage::broadcast_utils::RecvEntriesContext, cluster_nodes::ClusterNodesCache,
-    },
+    crate::cluster_nodes::ClusterNodesCache,
     itertools::Itertools,
     solana_entry::entry::Entry,
     solana_gossip::contact_info::ContactInfo,
@@ -65,17 +63,14 @@ impl BroadcastDuplicatesRun {
 impl BroadcastRun for BroadcastDuplicatesRun {
     fn run(
         &mut self,
-        recv_entries_ctx: &mut RecvEntriesContext,
         keypair: &Keypair,
         _blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
-        receiver_coalesce_ms: u64,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let mut receive_results =
-            broadcast_utils::recv_slot_entries(recv_entries_ctx, receiver, receiver_coalesce_ms)?;
+        let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 

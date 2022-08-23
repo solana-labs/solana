@@ -23,7 +23,6 @@ use {
         rpc_config::RpcLeaderScheduleConfig, rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_core::{
-        broadcast_stage::DEFAULT_ENTRY_COALESCE_MS,
         ledger_cleanup_service::{DEFAULT_MAX_LEDGER_SHREDS, DEFAULT_MIN_MAX_LEDGER_SHREDS},
         system_monitor_service::SystemMonitorService,
         tower_storage,
@@ -1216,14 +1215,6 @@ pub fn main() {
                 .help("Milliseconds to wait in the TPU receiver for packet coalescing."),
         )
         .arg(
-            Arg::with_name("entry_coalesce_ms")
-                .long("entry-coalesce-ms")
-                .value_name("MILLISECS")
-                .takes_value(true)
-                .validator(is_parsable::<u64>)
-                .help("Milliseconds to wait in the entry receiver for entry coalescing."),
-        )
-        .arg(
             Arg::with_name("tpu_use_quic")
                 .long("tpu-use-quic")
                 .takes_value(false)
@@ -2353,8 +2344,6 @@ pub fn main() {
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let tpu_coalesce_ms =
         value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
-    let entry_coalesce_ms =
-        value_t!(matches, "entry_coalesce_ms", u64).unwrap_or(DEFAULT_ENTRY_COALESCE_MS);
     let wal_recovery_mode = matches
         .value_of("wal_recovery_mode")
         .map(BlockstoreRecoveryMode::from);
@@ -2763,7 +2752,6 @@ pub fn main() {
         accounts_db_config,
         accounts_db_skip_shrink: matches.is_present("accounts_db_skip_shrink"),
         tpu_coalesce_ms,
-        entry_coalesce_ms,
         no_wait_for_vote_to_start_leader: matches.is_present("no_wait_for_vote_to_start_leader"),
         accounts_shrink_ratio,
         runtime_config: RuntimeConfig {

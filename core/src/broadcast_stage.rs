@@ -9,7 +9,6 @@ use {
         standard_broadcast_run::StandardBroadcastRun,
     },
     crate::{
-        broadcast_stage::broadcast_utils::RecvEntriesContext,
         cluster_nodes::{ClusterNodes, ClusterNodesCache},
         result::{Error, Result},
     },
@@ -56,8 +55,6 @@ mod standard_broadcast_run;
 const CLUSTER_NODES_CACHE_NUM_EPOCH_CAP: usize = 8;
 const CLUSTER_NODES_CACHE_TTL: Duration = Duration::from_secs(5);
 
-pub const DEFAULT_ENTRY_COALESCE_MS: u64 = 5;
-
 pub(crate) const NUM_INSERT_THREADS: usize = 2;
 pub(crate) type RetransmitSlotsSender = Sender<Slot>;
 pub(crate) type RetransmitSlotsReceiver = Receiver<Slot>;
@@ -84,7 +81,6 @@ impl BroadcastStageType {
         sock: Vec<UdpSocket>,
         cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
-        receiver_coalesce_ms: u64,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit_sender: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
@@ -96,7 +92,6 @@ impl BroadcastStageType {
                 sock,
                 cluster_info,
                 receiver,
-                receiver_coalesce_ms,
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
@@ -108,7 +103,6 @@ impl BroadcastStageType {
                 sock,
                 cluster_info,
                 receiver,
-                receiver_coalesce_ms,
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
@@ -120,7 +114,6 @@ impl BroadcastStageType {
                 sock,
                 cluster_info,
                 receiver,
-                receiver_coalesce_ms,
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
@@ -132,7 +125,6 @@ impl BroadcastStageType {
                 sock,
                 cluster_info,
                 receiver,
-                receiver_coalesce_ms,
                 retransmit_slots_receiver,
                 exit_sender,
                 blockstore,
@@ -146,11 +138,9 @@ impl BroadcastStageType {
 trait BroadcastRun {
     fn run(
         &mut self,
-        recv_entries_ctx: &mut RecvEntriesContext,
         keypair: &Keypair,
         blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
-        receiver_coalesce_ms: u64,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()>;
@@ -192,19 +182,15 @@ impl BroadcastStage {
         cluster_info: Arc<ClusterInfo>,
         blockstore: &Blockstore,
         receiver: &Receiver<WorkingBankEntry>,
-        receiver_coalesce_ms: u64,
         socket_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
         mut broadcast_stage_run: impl BroadcastRun,
     ) -> BroadcastStageReturnType {
-        let mut recv_entries_ctx = RecvEntriesContext::default();
         loop {
             let res = broadcast_stage_run.run(
-                &mut recv_entries_ctx,
                 &cluster_info.keypair(),
                 blockstore,
                 receiver,
-                receiver_coalesce_ms,
                 socket_sender,
                 blockstore_sender,
             );
@@ -254,7 +240,6 @@ impl BroadcastStage {
         socks: Vec<UdpSocket>,
         cluster_info: Arc<ClusterInfo>,
         receiver: Receiver<WorkingBankEntry>,
-        receiver_coalesce_ms: u64,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         exit: Arc<AtomicBool>,
         blockstore: Arc<Blockstore>,
@@ -277,7 +262,6 @@ impl BroadcastStage {
                         cluster_info,
                         &blockstore,
                         &receiver,
-                        receiver_coalesce_ms,
                         &socket_sender_,
                         &blockstore_sender,
                         bs_run,
@@ -633,7 +617,6 @@ pub mod test {
             leader_info.sockets.broadcast,
             cluster_info,
             entry_receiver,
-            DEFAULT_ENTRY_COALESCE_MS,
             retransmit_slots_receiver,
             exit_sender,
             blockstore.clone(),

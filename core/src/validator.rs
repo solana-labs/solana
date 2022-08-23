@@ -4,7 +4,7 @@ pub use solana_perf::report_target_features;
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
-        broadcast_stage::{BroadcastStageType, DEFAULT_ENTRY_COALESCE_MS},
+        broadcast_stage::BroadcastStageType,
         cache_block_meta_service::{CacheBlockMetaSender, CacheBlockMetaService},
         cluster_info_vote_listener::VoteTracker,
         completed_data_sets_service::CompletedDataSetsService,
@@ -168,7 +168,6 @@ pub struct ValidatorConfig {
     pub accounts_db_test_hash_calculation: bool,
     pub accounts_db_skip_shrink: bool,
     pub tpu_coalesce_ms: u64,
-    pub entry_coalesce_ms: u64,
     pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub validator_exit: Arc<RwLock<Exit>>,
     pub no_wait_for_vote_to_start_leader: bool,
@@ -231,7 +230,6 @@ impl Default for ValidatorConfig {
             accounts_db_test_hash_calculation: false,
             accounts_db_skip_shrink: false,
             tpu_coalesce_ms: DEFAULT_TPU_COALESCE_MS,
-            entry_coalesce_ms: DEFAULT_ENTRY_COALESCE_MS,
             staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
             validator_exit: Arc::new(RwLock::new(Exit::default())),
             no_wait_for_vote_to_start_leader: true,
@@ -998,7 +996,6 @@ impl Validator {
             &cluster_info,
             &poh_recorder,
             entry_receiver,
-            config.entry_coalesce_ms,
             retransmit_slots_receiver,
             TpuSockets {
                 transactions: node.sockets.tpu,
