@@ -490,7 +490,7 @@ pub struct TaskQueue {
     tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
 }
 
-type TaskInQueue = std::sync::Arc<Task>;
+pub type TaskInQueue = std::sync::Arc<Task>;
 //type TaskQueueEntry<'a> = im::ordmap::Entry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueOccupiedEntry<'a> = im::ordmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueEntry<'a> = im::hashmap::Entry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
