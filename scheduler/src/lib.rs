@@ -457,14 +457,15 @@ struct Bundle {
 
 #[derive(Debug)]
 pub struct Task {
+    unique_weight: UniqueWeight,
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
 }
 
 impl Task {
-    pub fn new_for_queue(tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { tx, contention_count: 0, uncontended: Default::default() })
+    pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
+        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default() })
     }
 
     pub fn currently_contended(&self) -> bool {
