@@ -379,6 +379,7 @@ fn output_slot(
                 loop {
                     let ee = post_schedule_env_receiver.recv().unwrap();
                     d.fetch_sub(1, Ordering::Relaxed);
+                    let step = step.fetch_add(1, Ordering::Relaxed);
                     trace!(
                         "post schedule stage: #{} {:#?}",
                         step,
