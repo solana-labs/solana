@@ -8,7 +8,7 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         append_vec::{AppendVec, StoredMetaWriteVersion},
-        bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
+        bank::{Bank, BankFieldsToDeserialize, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
         epoch_stakes::EpochStakes,
@@ -76,7 +76,6 @@ pub struct AccountsDbFields<T>(
     /// slots that were roots within the last epoch for which we care about the hash value
     #[serde(deserialize_with = "default_on_eof")]
     Vec<(Slot, Hash)>,
-    // here?
 );
 
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a
@@ -193,7 +192,6 @@ trait TypeContext<'a>: PartialEq {
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
-        incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,
@@ -369,18 +367,12 @@ fn reserialize_bank_fields_with_new_hash<W, R>(
     stream_reader: &mut BufReader<R>,
     stream_writer: &mut BufWriter<W>,
     accounts_hash: &Hash,
-    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<(), Error>
 where
     W: Write,
     R: Read,
 {
-    newer::Context::reserialize_bank_fields_with_hash(
-        stream_reader,
-        stream_writer,
-        accounts_hash,
-        incremental_snapshot_persistence,
-    )
+    newer::Context::reserialize_bank_fields_with_hash(stream_reader, stream_writer, accounts_hash)
 }
 
 /// effectively updates the accounts hash in the serialized bank file on disk
@@ -392,7 +384,6 @@ pub fn reserialize_bank_with_new_accounts_hash(
     bank_snapshots_dir: impl AsRef<Path>,
     slot: Slot,
     accounts_hash: &Hash,
-    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
     let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
@@ -410,7 +401,6 @@ pub fn reserialize_bank_with_new_accounts_hash(
                 &mut BufReader::new(file),
                 &mut BufWriter::new(file_out),
                 accounts_hash,
-                incremental_snapshot_persistence,
             )
             .unwrap();
         }

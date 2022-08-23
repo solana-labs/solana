@@ -190,7 +190,6 @@ fn test_bank_serialize_style(
     serde_style: SerdeStyle,
     reserialize_accounts_hash: bool,
     update_accounts_hash: bool,
-    incremental_snapshot_persistence: bool,
 ) {
     solana_logger::setup();
     let (genesis_config, _) = create_genesis_config(500);
@@ -237,18 +236,8 @@ fn test_bank_serialize_style(
     } else {
         bank2.get_accounts_hash()
     };
-
-    let slot = bank2.slot();
-    let incremental =
-        incremental_snapshot_persistence.then(|| BankIncrementalSnapshotPersistence {
-            full_slot: slot + 1,
-            full_hash: Hash::new(&[1; 32]),
-            full_capitalization: 31,
-            incremental_hash: Hash::new(&[2; 32]),
-            incremental_capitalization: 32,
-        });
-
-    if reserialize_accounts_hash || incremental_snapshot_persistence {
+    if reserialize_accounts_hash {
+        let slot = bank2.slot();
         let temp_dir = TempDir::new().unwrap();
         let slot_dir = temp_dir.path().join(slot.to_string());
         let post_path = slot_dir.join(slot.to_string());
@@ -259,32 +248,21 @@ fn test_bank_serialize_style(
             let mut f = std::fs::File::create(&pre_path).unwrap();
             f.write_all(&buf).unwrap();
         }
-
         assert!(reserialize_bank_with_new_accounts_hash(
             temp_dir.path(),
             slot,
-            &accounts_hash,
-            incremental.as_ref(),
+            &accounts_hash
         ));
         let previous_len = buf.len();
         // larger buffer than expected to make sure the file isn't larger than expected
-        let sizeof_none = std::mem::size_of::<u64>();
-        let sizeof_incremental_snapshot_persistence =
-            std::mem::size_of::<Option<BankIncrementalSnapshotPersistence>>();
-        let mut buf_reserialized =
-            vec![0; previous_len + sizeof_incremental_snapshot_persistence + 1];
+        let mut buf_reserialized = vec![0; previous_len + 1];
         {
             let mut f = std::fs::File::open(post_path).unwrap();
             let size = f.read(&mut buf_reserialized).unwrap();
-            let expected = if !incremental_snapshot_persistence {
-                previous_len
-            } else {
-                previous_len + sizeof_incremental_snapshot_persistence - sizeof_none
-            };
-            assert_eq!(size, expected);
+            assert_eq!(size, previous_len);
             buf_reserialized.truncate(size);
         }
-        if update_accounts_hash || incremental_snapshot_persistence {
+        if update_accounts_hash {
             // We cannot guarantee buffer contents are exactly the same if hash is the same.
             // Things like hashsets/maps have randomness in their in-mem representations.
             // This make serialized bytes not deterministic.
@@ -332,7 +310,6 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_balance(&key3.pubkey()), 0);
     assert_eq!(dbank.get_accounts_hash(), accounts_hash);
     assert!(bank2 == dbank);
-    assert_eq!(dbank.incremental_snapshot_persistence, incremental);
 }
 
 pub(crate) fn reconstruct_accounts_db_via_serialization(
@@ -381,18 +358,11 @@ fn test_bank_serialize_newer() {
     for (reserialize_accounts_hash, update_accounts_hash) in
         [(false, false), (true, false), (true, true)]
     {
-        for incremental_snapshot_persistence in if reserialize_accounts_hash {
-            [false, true].to_vec()
-        } else {
-            [false].to_vec()
-        } {
-            test_bank_serialize_style(
-                SerdeStyle::Newer,
-                reserialize_accounts_hash,
-                update_accounts_hash,
-                incremental_snapshot_persistence,
-            )
-        }
+        test_bank_serialize_style(
+            SerdeStyle::Newer,
+            reserialize_accounts_hash,
+            update_accounts_hash,
+        )
     }
 }
 
@@ -581,7 +551,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "5py4Wkuj5fV2sLyA1MrPg4pGNwMEaygQLnpLyY8MMLGC")]
+    #[frozen_abi(digest = "9vGBt7YfymKUTPWLHVVpQbDtPD7dFDwXRMFkCzwujNqJ")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

@@ -190,7 +190,6 @@ impl AccountsHashVerifier {
             accounts_package.snapshot_links.path(),
             accounts_package.slot,
             &accounts_hash,
-            None,
         );
         datapoint_info!(
             "accounts_hash_verifier",
