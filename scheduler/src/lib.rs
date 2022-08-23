@@ -655,7 +655,8 @@ impl ScheduleStage {
         if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut a.1) };
-            return Some((a.0, a.1));
+            let lock_attempts = std::mem::take(&mut next_task.tx.1);
+            return Some((a.0, a.1, lock_attempts));
         }
 
         trace!("pop begin");
