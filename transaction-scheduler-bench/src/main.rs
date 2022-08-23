@@ -129,12 +129,10 @@ fn spawn_unified_scheduler(
 ) -> JoinHandle<()> {
     std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
         let mut runnable_queue = solana_scheduler::TaskQueue::default();
-        let mut contended_queue = solana_scheduler::TaskQueue::default();
 
         solana_scheduler::ScheduleStage::run(
             num_execution_threads * 10,
             &mut runnable_queue,
-            &mut contended_queue,
             &mut address_book,
             &packet_batch_receiver.clone(),
             &completed_transaction_receiver,
