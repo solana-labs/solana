@@ -6085,7 +6085,6 @@ dependencies = [
 name = "solana-scheduler"
 version = "1.11.5"
 dependencies = [
- "arc-swap",
  "crossbeam-channel",
  "crossbeam-skiplist",
  "dashmap",
