@@ -498,7 +498,7 @@ pub type TaskInQueue = std::sync::Arc<Task>;
 //type TaskQueueEntry<'a> = dashmap::mapref::entry::Entry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueOccupiedEntry<'a> = dashmap::mapref::entry::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
 type TaskQueueEntry<'a> = std::collections::btree_map::Entry<'a, UniqueWeight, TaskInQueue>;
-type TaskQueueOccupiedEntry<'a> = std::collections::btree_map::EntryEntry<'a, UniqueWeight, TaskInQueue>;
+type TaskQueueOccupiedEntry<'a> = std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
 
 impl TaskQueue {
     #[inline(never)]
