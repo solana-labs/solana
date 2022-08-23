@@ -558,7 +558,7 @@ pub struct ScheduleStage {}
 
 impl ScheduleStage {
     fn push_to_runnable_queue(
-        (weight, task): (Weight, TaskInQueue),
+        (weight, mut task): (Weight, TaskInQueue),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
     ) {
@@ -575,6 +575,7 @@ impl ScheduleStage {
         //tx.foo();
         //let unique_weight = (weight << 32) | (*unique_key & 0x0000_0000_ffff_ffff);
         let unique_weight = weight;
+        TaskInQueue::get_mut(&mut task.tx).unwrap();
 
         runnable_queue.add_to_schedule(
             /*
