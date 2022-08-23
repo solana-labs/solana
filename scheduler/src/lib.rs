@@ -454,7 +454,7 @@ struct Bundle {
     // what about bundle1{tx1a, tx2} and bundle2{tx1b, tx2}?
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
@@ -465,6 +465,15 @@ pub struct Task {
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
         TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default() })
+    }
+
+    pub fn clone_for_test(&self) {
+        Self {
+            unique_weight: self.unique_weight,
+            tx: self.tx.clone(),
+            contention_count: self.contention_count,
+            uncontended: std::sync::atomic::AtomicUsize::default(),
+        }
     }
 
     pub fn currently_contended(&self) -> bool {
