@@ -348,9 +348,11 @@ fn handle_transaction_batch(
         page.contended_unique_weights.remove_task_id(&uq);
         if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
             let mut found = true;
+            assert_ne!(task_cursor.key(), uq);
             while !task_cursor.value().currently_contended() {
                 if let Some(new_cursor) = task_cursor.prev() {
                     assert!(new_cursor.key() < task_cursor.key());
+                    assert_ne!(new_cursor.key(), uq);
                     task_cursor = new_cursor;
                 } else {
                     found = false;

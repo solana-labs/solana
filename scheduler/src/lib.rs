@@ -899,7 +899,7 @@ impl ScheduleStage {
                     assert!(a.task.tx.1.is_empty());
                     //let lock_attempts = std::mem::take(&mut a.lock_attempts);
                     //drop(lock_attempts);
-                    TaskInQueue::get_mut(&mut a.task).unwrap();
+                    //TaskInQueue::get_mut(&mut a.task).unwrap();
                 }
             }).unwrap();
 
