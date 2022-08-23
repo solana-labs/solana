@@ -119,7 +119,7 @@ pub(super) fn erasure_shard_index<T: ShredCodeTrait>(shred: &T) -> Option<usize>
     let position = usize::from(coding_header.position);
     let fec_set_size = num_data_shreds.checked_add(num_coding_shreds)?;
     let index = position.checked_add(num_data_shreds)?;
-    (index < fec_set_size).then(|| index)
+    (index < fec_set_size).then_some(index)
 }
 
 pub(super) fn sanitize<T: ShredCodeTrait>(shred: &T) -> Result<(), Error> {
