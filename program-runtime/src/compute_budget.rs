@@ -88,9 +88,10 @@ pub struct ComputeBudget {
     pub alt_bn128_addition_cost: u64,
     /// Number of compute units consumed to call alt_bn128_multiplication.
     pub alt_bn128_multiplication_cost: u64,
-    /// Number of compute units consumed to pairing one pair of input elements.
-    /// Total cost will be one_pair_cost * (num_elems - 1)
-    pub alt_bn128_pairing_one_pair_cost: u64,
+    /// Total cost will be alt_bn128_pairing_one_pair_cost_first
+    /// + alt_bn128_pairing_one_pair_cost_other * (num_elems - 1)
+    pub alt_bn128_pairing_one_pair_cost_first: u64,
+    pub alt_bn128_pairing_one_pair_cost_other: u64
 }
 
 impl Default for ComputeBudget {
@@ -132,7 +133,8 @@ impl ComputeBudget {
             mem_op_base_cost: 10,
             alt_bn128_addition_cost: 334,
             alt_bn128_multiplication_cost: 11_550,
-            alt_bn128_pairing_one_pair_cost: 136_011,
+            alt_bn128_pairing_one_pair_cost_first: 36364,
+            alt_bn128_pairing_one_pair_cost_other: 12121,
         }
     }
 
