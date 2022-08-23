@@ -463,8 +463,8 @@ pub struct Task {
 }
 
 impl Task {
-    fn new_for_queue(v: usize) -> std::sync::Arc<Self> {
-        TaskInQueue::new(v)
+    fn new_for_queue(v: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
+        TaskInQueue::new(Task { tx, contention_count: 0, uncontended: Default::default() })
     }
 
     fn currently_contended(&self) -> bool {
