@@ -875,7 +875,10 @@ impl ScheduleStage {
         weighted_tx: (Weight, TaskInQueue),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
+        queue_clock: &mut usize,
     ) {
+        weighted_tx.1.observe_clock(queue_clock);
+        *queue_clock = queue_clock.checked_add(1);
         Self::push_to_runnable_queue(weighted_tx, runnable_queue, unique_key)
     }
 
@@ -891,6 +894,7 @@ impl ScheduleStage {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
         let mut contended_count = 0;
+        let mut queue_clock = 0;
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
 
         let (to_next_stage, maybe_jon_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
