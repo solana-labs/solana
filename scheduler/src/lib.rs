@@ -529,7 +529,7 @@ impl Task {
     }
 
     fn mark_as_uncontended(&self) {
-        assert!(self.currently_contended());
+        //assert!(self.currently_contended());
         self.uncontended.store(2, std::sync::atomic::Ordering::SeqCst)
     }
 
