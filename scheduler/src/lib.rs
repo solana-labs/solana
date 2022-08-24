@@ -872,7 +872,7 @@ impl ScheduleStage {
                     }
                 }
 
-                /*if !inserted {
+                if !inserted {
                     let contended_unique_weights = &page.contended_unique_weights;
                     contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
                         let mut found = true;
@@ -894,7 +894,7 @@ impl ScheduleStage {
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                         ()
                     });
-                }*/
+                }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
