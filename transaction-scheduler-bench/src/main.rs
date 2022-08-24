@@ -377,6 +377,7 @@ fn handle_transaction_batch(
             }
             found.then(|| solana_scheduler::TaskInQueue::clone(task))
         }).flatten().map(|task| {
+            task.trace_timestamps("in_exec(heaviest)");
             lock_attempt.heaviest_uncontended = Some(task);
             ()
         });
