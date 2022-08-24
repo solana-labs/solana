@@ -874,7 +874,7 @@ impl ScheduleStage {
 
                 if let Some(task) = l.heaviest_uncontended.take() {
                     //assert!(!task.already_finished());
-                    if task.currently_contended() {
+                    if task.currently_contended() || task.newly_queued() {
                         inserted = true;
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     }
