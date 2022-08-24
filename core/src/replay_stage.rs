@@ -910,7 +910,10 @@ impl ReplayStage {
                         let result = ledger_signal_receiver.recv_timeout(timer);
                         match result {
                             Err(RecvTimeoutError::Timeout) => (),
-                            Err(_) => break,
+                            Err(err) => {
+                                error!("exiting! ledger_signal_receiver error: {}", err);
+                                break;
+                            }
                             Ok(_) => trace!("blockstore signal"),
                         };
                     }
@@ -937,6 +940,10 @@ impl ReplayStage {
                         retransmit_not_propagated_time.as_us(),
                     );
                 }
+
+                // signal app exit in case we've broken the loop by means other
+                // than having observed an exit signal
+                exit.store(true, Ordering::Relaxed);
             })
             .unwrap();
 
