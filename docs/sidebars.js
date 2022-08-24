@@ -1,5 +1,5 @@
 module.exports = {
-  introdutionSidebar: [
+  introductionSidebar: [
     {
       type: "category",
       collapsed: false,
@@ -234,6 +234,7 @@ module.exports = {
         "cluster/fork-generation",
         "cluster/managing-forks",
         "cluster/turbine-block-propagation",
+        "cluster/commitments",
         "cluster/vote-signing",
         "cluster/stake-delegation-and-rewards",
       ],
