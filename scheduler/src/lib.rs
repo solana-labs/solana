@@ -426,6 +426,7 @@ pub struct Task {
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
     pub sequence_time: std::sync::atomic::AtomicUsize,
+    pub sequence_end_time: std::sync::atomic::AtomicUsize,
     pub queue_time: std::sync::atomic::AtomicUsize,
     pub queue_end_time: std::sync::atomic::AtomicUsize,
     pub execute_time: std::sync::atomic::AtomicUsize,
@@ -438,7 +439,7 @@ pub struct Task {
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
+        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
@@ -449,8 +450,9 @@ impl Task {
         self.sequence_time.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    pub fn record_queue_time(&self, clock: usize) {
-        self.queue_time.store(clock, std::sync::atomic::Ordering::SeqCst);
+    pub fn record_queue_time(&self, seq_clock, usize, queue_clock: usize) {
+        self.sequence_end_time.store(seq_clock, std::sync::atomic::Ordering::SeqCst);
+        self.queue_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn queue_time(&self) -> usize {
@@ -478,6 +480,7 @@ impl Task {
             contention_count: Default::default(),
             uncontended: Default::default(),
             sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
@@ -700,6 +703,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
+        sequence_clock: &usize,
         queue_clock: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
@@ -919,11 +923,12 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
+        sequence_time: &usize,
         queue_clock: &mut usize,
         execute_clock: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate, queue_clock)
+            Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate, sequence_time, queue_clock)
                 .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock));
         maybe_ee
     }
@@ -1053,7 +1058,7 @@ impl ScheduleStage {
 
                 let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
-                    Self::schedule_next_execution(runnable_queue, address_book, &mut contended_count, prefer_immediate, &mut queue_clock, &mut execute_clock);
+                    Self::schedule_next_execution(runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
 
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
