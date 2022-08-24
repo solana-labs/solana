@@ -1040,16 +1040,6 @@ impl ScheduleStage {
                         Multiplexed::FromPrevious(weighted_tx) => {
                             trace!("recv from previous");
 
-                            while from_exec.len() > 0 {
-                                let mut processed_execution_environment = from_exec.recv().unwrap();
-                                trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
-                                executing_queue_count -= 1;
-
-                                Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
-                                // async-ly propagate the result to rpc subsystems
-                                to_next_stage.send(processed_execution_environment).unwrap();
-                            }
-
                             Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut sequence_time);
 
                             while from.len() > 0 && from_exec.len() == 0 {
@@ -1064,6 +1054,17 @@ impl ScheduleStage {
                                     }
                                 }
                             }
+
+                            while from_exec.len() > 0 {
+                                let mut processed_execution_environment = from_exec.recv().unwrap();
+                                trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
+                                executing_queue_count -= 1;
+
+                                Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
+                                // async-ly propagate the result to rpc subsystems
+                                to_next_stage.send(processed_execution_environment).unwrap();
+                            }
+
                         }
                         Multiplexed::FromPreviousBatched(vvv) => {
                             unreachable!();
