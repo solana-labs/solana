@@ -63,7 +63,7 @@
 //! 
 //!     // Channel to receive unsubscribe channels (actually closures).
 //!     // These receive a pair of `(Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>), &'static str)`,
-//!     // where the first is a closure to call to unsubsribe, the second is the subscription name.
+//!     // where the first is a closure to call to unsubscribe, the second is the subscription name.
 //!     let (unsubscribe_sender, mut unsubscribe_receiver) = unbounded_channel::<(_, &'static str)>();
 //! 
 //!     // The `PubsubClient` must be `Arc`ed to share it across tasks.

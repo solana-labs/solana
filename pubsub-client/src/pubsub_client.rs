@@ -26,7 +26,7 @@
 //! [`PubsubClientSubscription::send_unsubscribe`], and
 //! [`PubsubClientSubscription::shutdown`], because its internal receivers block
 //! on events from the server, these subscriptions cannot actually be shutdown
-//! reliably. For a non-blocking, cancelable, API, use the asynchronous client
+//! reliably. For a non-blocking, cancelable API, use the asynchronous client
 //! in [`crate::nonblocking::pubsub_client`].
 //!
 //! By default the [`PubsubClient::block_subscribe`] and
