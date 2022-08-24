@@ -1,12 +1,6 @@
 use {
-    crate::transaction_priority_details::GetTransactionPriorityDetails,
     solana_measure::measure,
-    solana_sdk::{
-        clock::Slot,
-        pubkey::Pubkey,
-        saturating_add_assign,
-        transaction::{SanitizedTransaction, MAX_TX_ACCOUNT_LOCKS},
-    },
+    solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
     std::collections::HashMap,
 };
 
@@ -108,36 +102,29 @@ impl Default for PrioritizationFee {
 }
 
 impl PrioritizationFee {
-    /// Use `sanitized_tx` to update self for minimum transaction fee in the block and minimum fee for each writable account.
+    /// Update self for minimum transaction fee in the block and minimum fee for each writable account.
     pub fn update(
         &mut self,
-        sanitized_tx: &SanitizedTransaction,
+        transaction_fee: u64,
+        writable_accounts: &[Pubkey],
     ) -> Result<(), PrioritizationFeeError> {
         let (_, update_time) = measure!(
             {
-                let account_locks = sanitized_tx
-                    .get_account_locks(MAX_TX_ACCOUNT_LOCKS)
-                    .or(Err(PrioritizationFeeError::FailGetTransactionAccountLocks))?;
-
-                let priority_details = sanitized_tx
-                    .get_transaction_priority_details()
-                    .ok_or(PrioritizationFeeError::FailGetTransactionPriorityDetails)?;
-
-                if priority_details.priority < self.min_transaction_fee {
-                    self.min_transaction_fee = priority_details.priority;
+                if transaction_fee < self.min_transaction_fee {
+                    self.min_transaction_fee = transaction_fee;
                 }
-                for write_account in account_locks.writable {
+
+                for write_account in writable_accounts.iter() {
                     self.min_writable_account_fees
                         .entry(*write_account)
                         .and_modify(|write_lock_fee| {
-                            *write_lock_fee =
-                                std::cmp::min(*write_lock_fee, priority_details.priority)
+                            *write_lock_fee = std::cmp::min(*write_lock_fee, transaction_fee)
                         })
-                        .or_insert(priority_details.priority);
+                        .or_insert(transaction_fee);
                 }
 
                 self.metrics
-                    .accumulate_total_prioritization_fee(priority_details.priority);
+                    .accumulate_total_prioritization_fee(transaction_fee);
             },
             "update_time",
         );
@@ -211,29 +198,7 @@ impl PrioritizationFee {
 
 #[cfg(test)]
 mod tests {
-    use {
-        super::*,
-        solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, message::Message, pubkey::Pubkey,
-            system_instruction, transaction::Transaction,
-        },
-    };
-
-    fn build_sanitized_transaction_for_test(
-        compute_unit_price: u64,
-        signer_account: &Pubkey,
-        write_account: &Pubkey,
-    ) -> SanitizedTransaction {
-        let transaction = Transaction::new_unsigned(Message::new(
-            &[
-                system_instruction::transfer(signer_account, write_account, 1),
-                ComputeBudgetInstruction::set_compute_unit_price(compute_unit_price),
-            ],
-            Some(signer_account),
-        ));
-
-        SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap()
-    }
+    use {super::*, solana_sdk::pubkey::Pubkey};
 
     #[test]
     fn test_update_prioritization_fee() {
@@ -250,8 +215,9 @@ mod tests {
         // -----------------------------------------------------------------------
         // [5,   a, b             ]  -->  [5,     5,         5,         nil      ]
         {
-            let tx = build_sanitized_transaction_for_test(5, &write_account_a, &write_account_b);
-            assert!(prioritization_fee.update(&tx).is_ok());
+            assert!(prioritization_fee
+                .update(5, &[write_account_a, write_account_b])
+                .is_ok());
             assert_eq!(5, prioritization_fee.get_min_transaction_fee().unwrap());
             assert_eq!(
                 5,
@@ -275,8 +241,9 @@ mod tests {
         // -----------------------------------------------------------------------
         // [9,      b, c          ]  -->  [5,     5,         5,         9        ]
         {
-            let tx = build_sanitized_transaction_for_test(9, &write_account_b, &write_account_c);
-            assert!(prioritization_fee.update(&tx).is_ok());
+            assert!(prioritization_fee
+                .update(9, &[write_account_b, write_account_c])
+                .is_ok());
             assert_eq!(5, prioritization_fee.get_min_transaction_fee().unwrap());
             assert_eq!(
                 5,
@@ -303,8 +270,9 @@ mod tests {
         // -----------------------------------------------------------------------
         // [2,   a,    c          ]  -->  [2,     2,         5,         2        ]
         {
-            let tx = build_sanitized_transaction_for_test(2, &write_account_a, &write_account_c);
-            assert!(prioritization_fee.update(&tx).is_ok());
+            assert!(prioritization_fee
+                .update(2, &[write_account_a, write_account_c])
+                .is_ok());
             assert_eq!(2, prioritization_fee.get_min_transaction_fee().unwrap());
             assert_eq!(
                 2,

@@ -586,8 +586,6 @@ fn process_entries_with_callback(
                 }
             }
             EntryType::Transactions(transactions) => {
-                prioritization_fee_cache.update_transactions(bank.slot(), transactions.iter());
-
                 let starting_index = *starting_index;
                 let transaction_indexes = if randomize {
                     let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
@@ -612,6 +610,9 @@ fn process_entries_with_callback(
                             batch,
                             transaction_indexes,
                         });
+                        // entry is scheduled to be processed, transactions in it can be used to
+                        // update prioritization fee cache asynchronously.
+                        prioritization_fee_cache.update(bank.clone(), transactions.iter());
                         // done with this entry
                         break;
                     }

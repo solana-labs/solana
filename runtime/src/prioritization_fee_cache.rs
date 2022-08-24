@@ -1,5 +1,8 @@
 use {
-    crate::prioritization_fee::*,
+    crate::{
+        bank::Bank, prioritization_fee::*,
+        transaction_priority_details::GetTransactionPriorityDetails,
+    },
     crossbeam_channel::{unbounded, Receiver, Sender},
     log::*,
     lru::LruCache,
@@ -26,12 +29,6 @@ struct PrioritizationFeeCacheMetrics {
     // Count of transactions that successfully updated each slot's prioritization fee cache.
     successful_transaction_update_count: AtomicU64,
 
-    // Count of transactions that failed to get their priority details.
-    fail_get_transaction_priority_details_count: AtomicU64,
-
-    // Count of transactions that failed to get their account locks.
-    fail_get_transaction_account_locks_count: AtomicU64,
-
     // Accumulated time spent on tracking prioritization fee for each slot.
     total_update_elapsed_us: AtomicU64,
 
@@ -40,21 +37,17 @@ struct PrioritizationFeeCacheMetrics {
 
     // Accumulated time spent on acquiring each block entry's lock..
     total_entry_lock_elapsed_us: AtomicU64,
+
+    // Accumulated time spent on updating block priotization fees.
+    total_entry_update_elapsed_us: AtomicU64,
+
+    // Accumulated time spent on finalizing block priotization fees.
+    total_block_finalize_elapsed_us: AtomicU64,
 }
 
 impl PrioritizationFeeCacheMetrics {
     fn accumulate_successful_transaction_update_count(&self, val: u64) {
         self.successful_transaction_update_count
-            .fetch_add(val, Ordering::Relaxed);
-    }
-
-    fn accumulate_fail_get_transaction_priority_details_count(&self, val: u64) {
-        self.fail_get_transaction_priority_details_count
-            .fetch_add(val, Ordering::Relaxed);
-    }
-
-    fn accumulate_fail_get_transaction_account_locks_count(&self, val: u64) {
-        self.fail_get_transaction_account_locks_count
             .fetch_add(val, Ordering::Relaxed);
     }
 
@@ -73,6 +66,16 @@ impl PrioritizationFeeCacheMetrics {
             .fetch_add(val, Ordering::Relaxed);
     }
 
+    fn accumulate_total_entry_update_elapsed_us(&self, val: u64) {
+        self.total_entry_update_elapsed_us
+            .fetch_add(val, Ordering::Relaxed);
+    }
+
+    fn accumulate_total_block_finalize_elapsed_us(&self, val: u64) {
+        self.total_block_finalize_elapsed_us
+            .fetch_add(val, Ordering::Relaxed);
+    }
+
     fn report(&self, slot: Slot) {
         datapoint_info!(
             "block_prioritization_fee_counters",
@@ -80,18 +83,6 @@ impl PrioritizationFeeCacheMetrics {
             (
                 "successful_transaction_update_count",
                 self.successful_transaction_update_count
-                    .swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "fail_get_transaction_priority_details_count",
-                self.fail_get_transaction_priority_details_count
-                    .swap(0, Ordering::Relaxed) as i64,
-                i64
-            ),
-            (
-                "fail_get_transaction_account_locks_count",
-                self.fail_get_transaction_account_locks_count
                     .swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
@@ -110,14 +101,30 @@ impl PrioritizationFeeCacheMetrics {
                 self.total_entry_lock_elapsed_us.swap(0, Ordering::Relaxed) as i64,
                 i64
             ),
+            (
+                "total_entry_update_elapsed_us",
+                self.total_entry_update_elapsed_us
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
+            (
+                "total_block_finalize_elapsed_us",
+                self.total_block_finalize_elapsed_us
+                    .swap(0, Ordering::Relaxed) as i64,
+                i64
+            ),
         );
     }
 }
 
 enum FinalizingServiceUpdate {
+    TransactionUpdate {
+        slot: Slot,
+        transaction_fee: u64,
+        writable_accounts: Arc<Vec<Pubkey>>,
+    },
     BankFrozen {
         slot: Slot,
-        prioritization_fee: Arc<Mutex<PrioritizationFee>>,
     },
     Exit,
 }
@@ -126,7 +133,7 @@ enum FinalizingServiceUpdate {
 /// A separate internal thread `finalizing_thread` handles additional tasks when a bank is frozen,
 /// and collecting stats and reporting metrics.
 pub struct PrioritizationFeeCache {
-    cache: RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>,
+    cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
     // Asynchronously finalize prioritization fee when a bank is completed replay.
     finalizing_thread: Option<JoinHandle<()>>,
     sender: Sender<FinalizingServiceUpdate>,
@@ -154,19 +161,21 @@ impl PrioritizationFeeCache {
     pub fn new(capacity: u64) -> Self {
         let metrics = Arc::new(PrioritizationFeeCacheMetrics::default());
         let (sender, receiver) = unbounded();
+        let cache = Arc::new(RwLock::new(LruCache::new(capacity as usize)));
 
+        let cache_clone = cache.clone();
         let metrics_clone = metrics.clone();
         let finalizing_thread = Some(
             Builder::new()
                 .name("prioritization-fee-cache-finalizing-thread".to_string())
                 .spawn(move || {
-                    Self::finalizing_loop(receiver, metrics_clone);
+                    Self::finalizing_loop(cache_clone, receiver, metrics_clone);
                 })
                 .unwrap(),
         );
 
         PrioritizationFeeCache {
-            cache: RwLock::new(LruCache::new(capacity as usize)),
+            cache,
             finalizing_thread,
             sender,
             metrics,
@@ -174,8 +183,11 @@ impl PrioritizationFeeCache {
     }
 
     /// Get prioritization fee entry, create new entry if necessary
-    fn get_prioritization_fee(&self, slot: &Slot) -> Arc<Mutex<PrioritizationFee>> {
-        let mut cache = self.cache.write().unwrap();
+    fn get_prioritization_fee(
+        cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
+        slot: &Slot,
+    ) -> Arc<Mutex<PrioritizationFee>> {
+        let mut cache = cache.write().unwrap();
         match cache.get(slot) {
             Some(entry) => Arc::clone(entry),
             None => {
@@ -186,73 +198,60 @@ impl PrioritizationFeeCache {
         }
     }
 
-    /// Update block's minimum prioritization fee with `txs`,
-    /// Returns updated minimum prioritization fee for `slot`
-    pub fn update_transactions<'a>(
-        &self,
-        slot: Slot,
-        txs: impl Iterator<Item = &'a SanitizedTransaction>,
-    ) {
+    /// Update with a list of transactions' tx_priority_details and tx_account_locks; Only
+    /// transactions have both valid priority_detail and account_locks will be used to update
+    /// fee_cache asynchronously.
+    pub fn update<'a>(&self, bank: Arc<Bank>, txs: impl Iterator<Item = &'a SanitizedTransaction>) {
         let mut successful_transaction_update_count: u64 = 0;
-        let mut fail_get_transaction_priority_details_count: u64 = 0;
-        let mut fail_get_transaction_account_locks_count: u64 = 0;
-
-        let ((cache_lock_time, entry_lock_time), cache_update_time) = measure!(
+        let (_, send_updates_time) = measure!(
             {
-                let (block_prioritization_fee, cache_lock_time) =
-                    measure!(self.get_prioritization_fee(&slot), "cache_lock_time",);
+                for sanitized_transaction in txs {
+                    let priority_details = sanitized_transaction.get_transaction_priority_details();
+                    let account_locks = sanitized_transaction
+                        .get_account_locks(bank.get_transaction_account_lock_limit());
 
-                // Hold lock of slot's prioritization fee entry until all transactions are
-                // processed
-                let (mut block_prioritization_fee, entry_lock_time) =
-                    measure!(block_prioritization_fee.lock().unwrap(), "entry_lock_time",);
-
-                for sanitized_tx in txs {
-                    match block_prioritization_fee.update(sanitized_tx) {
-                        Err(PrioritizationFeeError::FailGetTransactionPriorityDetails) => {
-                            saturating_add_assign!(fail_get_transaction_priority_details_count, 1)
-                        }
-                        Err(PrioritizationFeeError::FailGetTransactionAccountLocks) => {
-                            saturating_add_assign!(fail_get_transaction_account_locks_count, 1)
-                        }
-                        _ => {
-                            saturating_add_assign!(successful_transaction_update_count, 1)
-                        }
+                    if priority_details.is_none() || account_locks.is_err() {
+                        continue;
                     }
-                }
 
-                (cache_lock_time, entry_lock_time)
+                    let writable_accounts = Arc::new(
+                        account_locks
+                            .unwrap()
+                            .writable
+                            .iter()
+                            .map(|key| **key)
+                            .collect::<Vec<_>>(),
+                    );
+
+                    self.sender
+                        .send(FinalizingServiceUpdate::TransactionUpdate {
+                            slot: bank.slot(),
+                            transaction_fee: priority_details.unwrap().priority,
+                            writable_accounts,
+                        })
+                        .unwrap_or_else(|err| {
+                            warn!(
+                                "prioritization fee cache transaction updates failed: {:?}",
+                                err
+                            );
+                        });
+                    saturating_add_assign!(successful_transaction_update_count, 1)
+                }
             },
-            "cache_update"
+            "send_updates",
         );
 
         self.metrics
+            .accumulate_total_update_elapsed_us(send_updates_time.as_us());
+        self.metrics
             .accumulate_successful_transaction_update_count(successful_transaction_update_count);
-        self.metrics
-            .accumulate_fail_get_transaction_priority_details_count(
-                fail_get_transaction_priority_details_count,
-            );
-        self.metrics
-            .accumulate_fail_get_transaction_account_locks_count(
-                fail_get_transaction_account_locks_count,
-            );
-        self.metrics
-            .accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
-        self.metrics
-            .accumulate_total_entry_lock_elapsed_us(entry_lock_time.as_us());
-        self.metrics
-            .accumulate_total_update_elapsed_us(cache_update_time.as_us());
     }
 
     /// Finalize prioritization fee when it's bank is completely replayed from blockstore,
     /// by pruning irrelevant accounts to save space, and marking its availability for queries.
     pub fn finalize_priority_fee(&self, slot: Slot) {
-        let prioritization_fee = self.get_prioritization_fee(&slot);
         self.sender
-            .send(FinalizingServiceUpdate::BankFrozen {
-                slot,
-                prioritization_fee,
-            })
+            .send(FinalizingServiceUpdate::BankFrozen { slot })
             .unwrap_or_else(|err| {
                 warn!(
                     "prioritization fee cache signalling bank frozen failed: {:?}",
@@ -261,24 +260,75 @@ impl PrioritizationFeeCache {
             });
     }
 
+    /// Internal function is invoked by worker thread to update slot's minimum prioritization fee,
+    /// Cache lock contends here.
+    fn update_transaction(
+        cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
+        slot: &Slot,
+        transaction_fee: u64,
+        writable_accounts: Arc<Vec<Pubkey>>,
+        metrics: Arc<PrioritizationFeeCacheMetrics>,
+    ) {
+        let (block_prioritization_fee, cache_lock_time) =
+            measure!(Self::get_prioritization_fee(cache, slot), "cache_lock_time");
+
+        let (mut block_prioritization_fee, entry_lock_time) =
+            measure!(block_prioritization_fee.lock().unwrap(), "entry_lock_time");
+
+        let (_, entry_update_time) = measure!(
+            block_prioritization_fee.update(transaction_fee, &writable_accounts),
+            "entry_update_time"
+        );
+        metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
+        metrics.accumulate_total_entry_lock_elapsed_us(entry_lock_time.as_us());
+        metrics.accumulate_total_entry_update_elapsed_us(entry_update_time.as_us());
+    }
+
+    fn finalize_slot(
+        cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
+        slot: &Slot,
+        metrics: Arc<PrioritizationFeeCacheMetrics>,
+    ) {
+        let (block_prioritization_fee, cache_lock_time) =
+            measure!(Self::get_prioritization_fee(cache, slot), "cache_lock_time");
+
+        let (mut block_prioritization_fee, entry_lock_time) =
+            measure!(block_prioritization_fee.lock().unwrap(), "entry_lock_time");
+
+        // prune cache by evicting write account entry from prioritization fee if its fee is less
+        // or equal to block's minimum transaction fee, because they are irrelevant in calculating
+        // block minimum fee.
+        let (_, slot_finalize_time) = measure!(
+            block_prioritization_fee.mark_block_completed(),
+            "slot_finalize_time"
+        );
+        block_prioritization_fee.report_metrics(*slot);
+        metrics.accumulate_total_cache_lock_elapsed_us(cache_lock_time.as_us());
+        metrics.accumulate_total_entry_lock_elapsed_us(entry_lock_time.as_us());
+        metrics.accumulate_total_block_finalize_elapsed_us(slot_finalize_time.as_us());
+    }
+
     fn finalizing_loop(
+        cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
         receiver: Receiver<FinalizingServiceUpdate>,
         metrics: Arc<PrioritizationFeeCacheMetrics>,
     ) {
         for update in receiver.iter() {
             match update {
-                FinalizingServiceUpdate::BankFrozen {
+                FinalizingServiceUpdate::TransactionUpdate {
                     slot,
-                    prioritization_fee,
-                } => {
-                    // prune cache by evicting write account entry from prioritization fee if its fee is less
-                    // or equal to block's minimum transaction fee, because they are irrelevant in calculating
-                    // block minimum fee.
-                    {
-                        let mut prioritization_fee = prioritization_fee.lock().unwrap();
-                        let _ = prioritization_fee.mark_block_completed();
-                        prioritization_fee.report_metrics(slot);
-                    }
+                    transaction_fee,
+                    writable_accounts,
+                } => Self::update_transaction(
+                    cache.clone(),
+                    &slot,
+                    transaction_fee,
+                    writable_accounts,
+                    metrics.clone(),
+                ),
+                FinalizingServiceUpdate::BankFrozen { slot } => {
+                    Self::finalize_slot(cache.clone(), &slot, metrics.clone());
+
                     metrics.report(slot);
                 }
                 FinalizingServiceUpdate::Exit => {
@@ -339,9 +389,17 @@ impl PrioritizationFeeCache {
 mod tests {
     use {
         super::*,
+        crate::{
+            bank::Bank,
+            bank_forks::BankForks,
+            genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
         solana_sdk::{
-            compute_budget::ComputeBudgetInstruction, message::Message, pubkey::Pubkey,
-            system_instruction, transaction::Transaction,
+            compute_budget::ComputeBudgetInstruction,
+            message::Message,
+            pubkey::Pubkey,
+            system_instruction,
+            transaction::{SanitizedTransaction, Transaction},
         },
     };
 
@@ -367,7 +425,10 @@ mod tests {
         slot: Slot,
     ) {
         prioritization_fee_cache.finalize_priority_fee(slot);
-        let fee = prioritization_fee_cache.get_prioritization_fee(&slot);
+        let fee = PrioritizationFeeCache::get_prioritization_fee(
+            prioritization_fee_cache.cache.clone(),
+            &slot,
+        );
 
         // wait till finalization is done
         while !fee.lock().unwrap().is_finalized() {
@@ -397,14 +458,18 @@ mod tests {
             build_sanitized_transaction_for_test(2, &write_account_a, &write_account_c),
         ];
 
-        let slot = 1;
+        let bank = Arc::new(Bank::default_for_tests());
+        let slot = bank.slot();
 
         let mut prioritization_fee_cache = PrioritizationFeeCache::default();
-        prioritization_fee_cache.update_transactions(slot, txs.iter());
+        prioritization_fee_cache.update(bank, txs.iter());
 
         // assert block minimum fee and account a, b, c fee accordingly
         {
-            let fee = prioritization_fee_cache.get_prioritization_fee(&slot);
+            let fee = PrioritizationFeeCache::get_prioritization_fee(
+                prioritization_fee_cache.cache.clone(),
+                &slot,
+            );
             let fee = fee.lock().unwrap();
             assert_eq!(2, fee.get_min_transaction_fee().unwrap());
             assert_eq!(2, fee.get_writable_account_fee(&write_account_a).unwrap());
@@ -419,7 +484,10 @@ mod tests {
         // assert after prune, account a and c should be removed from cache to save space
         {
             sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, slot);
-            let fee = prioritization_fee_cache.get_prioritization_fee(&slot);
+            let fee = PrioritizationFeeCache::get_prioritization_fee(
+                prioritization_fee_cache.cache.clone(),
+                &slot,
+            );
             let fee = fee.lock().unwrap();
             assert_eq!(2, fee.get_min_transaction_fee().unwrap());
             assert!(fee.get_writable_account_fee(&write_account_a).is_none());
@@ -432,20 +500,24 @@ mod tests {
     fn test_available_block_count() {
         let prioritization_fee_cache = PrioritizationFeeCache::default();
 
-        assert!(prioritization_fee_cache
-            .get_prioritization_fee(&1)
-            .lock()
-            .unwrap()
-            .mark_block_completed()
-            .is_ok());
-        assert!(prioritization_fee_cache
-            .get_prioritization_fee(&2)
-            .lock()
-            .unwrap()
-            .mark_block_completed()
-            .is_ok());
+        assert!(PrioritizationFeeCache::get_prioritization_fee(
+            prioritization_fee_cache.cache.clone(),
+            &1
+        )
+        .lock()
+        .unwrap()
+        .mark_block_completed()
+        .is_ok());
+        assert!(PrioritizationFeeCache::get_prioritization_fee(
+            prioritization_fee_cache.cache.clone(),
+            &2
+        )
+        .lock()
+        .unwrap()
+        .mark_block_completed()
+        .is_ok());
         // add slot 3 entry to cache, but not finalize it
-        prioritization_fee_cache.get_prioritization_fee(&3);
+        PrioritizationFeeCache::get_prioritization_fee(prioritization_fee_cache.cache.clone(), &3);
 
         // assert available block count should be 2 finalized blocks
         assert_eq!(2, prioritization_fee_cache.available_block_count());
@@ -464,6 +536,15 @@ mod tests {
         let write_account_b = Pubkey::new_unique();
         let write_account_c = Pubkey::new_unique();
 
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank0 = Bank::new_for_benches(&genesis_config);
+        let bank_forks = BankForks::new(bank0);
+        let bank = bank_forks.working_bank();
+        let collector = solana_sdk::pubkey::new_rand();
+        let bank1 = Arc::new(Bank::new_from_parent(&bank, &collector, 1));
+        let bank2 = Arc::new(Bank::new_from_parent(&bank, &collector, 2));
+        let bank3 = Arc::new(Bank::new_from_parent(&bank, &collector, 3));
+
         let mut prioritization_fee_cache = PrioritizationFeeCache::default();
 
         // Assert no minimum fee from empty cache
@@ -478,22 +559,24 @@ mod tests {
                 &write_account_a,
                 &write_account_b,
             )];
-            prioritization_fee_cache.update_transactions(1, txs.iter());
+            prioritization_fee_cache.update(bank1.clone(), txs.iter());
             assert_eq!(
                 5,
-                prioritization_fee_cache
-                    .get_prioritization_fee(&1)
-                    .lock()
-                    .unwrap()
-                    .get_min_transaction_fee()
-                    .unwrap()
+                PrioritizationFeeCache::get_prioritization_fee(
+                    prioritization_fee_cache.cache.clone(),
+                    &bank1.slot()
+                )
+                .lock()
+                .unwrap()
+                .get_min_transaction_fee()
+                .unwrap()
             );
             // before block is marked as completed
             assert!(prioritization_fee_cache
                 .get_prioritization_fees()
                 .is_empty());
             // after block is completed
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 1);
+            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, bank1.slot());
             assert_eq!(vec![5], prioritization_fee_cache.get_prioritization_fees());
         }
 
@@ -504,20 +587,22 @@ mod tests {
                 &write_account_b,
                 &write_account_c,
             )];
-            prioritization_fee_cache.update_transactions(2, txs.iter());
+            prioritization_fee_cache.update(bank2.clone(), txs.iter());
             assert_eq!(
                 9,
-                prioritization_fee_cache
-                    .get_prioritization_fee(&2)
-                    .lock()
-                    .unwrap()
-                    .get_min_transaction_fee()
-                    .unwrap()
+                PrioritizationFeeCache::get_prioritization_fee(
+                    prioritization_fee_cache.cache.clone(),
+                    &bank2.slot()
+                )
+                .lock()
+                .unwrap()
+                .get_min_transaction_fee()
+                .unwrap()
             );
             // before block is marked as completed
             assert_eq!(vec![5], prioritization_fee_cache.get_prioritization_fees());
             // after block is completed
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 2);
+            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, bank2.slot());
             assert_vec_eq(
                 &mut vec![5, 9],
                 &mut prioritization_fee_cache.get_prioritization_fees(),
@@ -531,15 +616,17 @@ mod tests {
                 &write_account_a,
                 &write_account_c,
             )];
-            prioritization_fee_cache.update_transactions(3, txs.iter());
+            prioritization_fee_cache.update(bank3.clone(), txs.iter());
             assert_eq!(
                 2,
-                prioritization_fee_cache
-                    .get_prioritization_fee(&3)
-                    .lock()
-                    .unwrap()
-                    .get_min_transaction_fee()
-                    .unwrap()
+                PrioritizationFeeCache::get_prioritization_fee(
+                    prioritization_fee_cache.cache.clone(),
+                    &bank3.slot()
+                )
+                .lock()
+                .unwrap()
+                .get_min_transaction_fee()
+                .unwrap()
             );
             // before block is marked as completed
             assert_vec_eq(
@@ -547,7 +634,7 @@ mod tests {
                 &mut prioritization_fee_cache.get_prioritization_fees(),
             );
             // after block is completed
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 3);
+            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, bank3.slot());
             assert_vec_eq(
                 &mut vec![5, 9, 2],
                 &mut prioritization_fee_cache.get_prioritization_fees(),
@@ -561,6 +648,14 @@ mod tests {
         let write_account_a = Pubkey::new_unique();
         let write_account_b = Pubkey::new_unique();
         let write_account_c = Pubkey::new_unique();
+        let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(10_000);
+        let bank0 = Bank::new_for_benches(&genesis_config);
+        let bank_forks = BankForks::new(bank0);
+        let bank = bank_forks.working_bank();
+        let collector = solana_sdk::pubkey::new_rand();
+        let bank1 = Arc::new(Bank::new_from_parent(&bank, &collector, 1));
+        let bank2 = Arc::new(Bank::new_from_parent(&bank, &collector, 2));
+        let bank3 = Arc::new(Bank::new_from_parent(&bank, &collector, 3));
 
         let mut prioritization_fee_cache = PrioritizationFeeCache::default();
 
@@ -585,7 +680,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            prioritization_fee_cache.update_transactions(1, txs.iter());
+            prioritization_fee_cache.update(bank1.clone(), txs.iter());
             // before block is marked as completed
             assert!(prioritization_fee_cache
                 .get_account_prioritization_fees(&write_account_a)
@@ -597,7 +692,7 @@ mod tests {
                 .get_account_prioritization_fees(&write_account_c)
                 .is_empty());
             // after block is completed
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 1);
+            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, bank1.slot());
             assert_eq!(
                 vec![5],
                 prioritization_fee_cache.get_account_prioritization_fees(&write_account_a)
@@ -621,7 +716,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            prioritization_fee_cache.update_transactions(2, txs.iter());
+            prioritization_fee_cache.update(bank2.clone(), txs.iter());
             // before block is marked as completed
             assert_eq!(
                 vec![5],
@@ -635,7 +730,7 @@ mod tests {
                 .get_account_prioritization_fees(&write_account_c)
                 .is_empty());
             // after block is completed
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 2);
+            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, bank2.slot());
             assert_eq!(
                 vec![5],
                 prioritization_fee_cache.get_account_prioritization_fees(&write_account_a)
@@ -660,7 +755,7 @@ mod tests {
                     &Pubkey::new_unique(),
                 ),
             ];
-            prioritization_fee_cache.update_transactions(3, txs.iter());
+            prioritization_fee_cache.update(bank3.clone(), txs.iter());
             // before block is marked as completed
             assert_eq!(
                 vec![5],
@@ -675,7 +770,7 @@ mod tests {
                 prioritization_fee_cache.get_account_prioritization_fees(&write_account_c)
             );
             // after block is completed
-            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, 3);
+            sync_finalize_priority_fee_for_test(&mut prioritization_fee_cache, bank3.slot());
             assert_vec_eq(
                 &mut vec![5, 2],
                 &mut prioritization_fee_cache.get_account_prioritization_fees(&write_account_a),
