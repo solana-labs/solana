@@ -179,24 +179,24 @@ impl Message {
     ///
     /// # Examples
     ///
-    /// This example uses the [`solana_address_lookup_table_program`], [`solana_client`], [`solana_sdk`], and [`anyhow`] crates.
+    /// This example uses the [`solana_address_lookup_table_program`], [`solana_rpc_client`], [`solana_sdk`], and [`anyhow`] crates.
     ///
     /// [`solana_address_lookup_table_program`]: https://docs.rs/solana-address-lookup-table-program
-    /// [`solana_client`]: https://docs.rs/solana-client
+    /// [`solana_rpc_client`]: https://docs.rs/solana-rpc-client
     /// [`solana_sdk`]: https://docs.rs/solana-sdk
     /// [`anyhow`]: https://docs.rs/anyhow
     ///
     /// ```
     /// # use solana_program::example_mocks::{
     /// #     solana_address_lookup_table_program,
-    /// #     solana_client,
+    /// #     solana_rpc_client,
     /// #     solana_sdk,
     /// # };
     /// # use std::borrow::Cow;
     /// # use solana_sdk::account::Account;
     /// use anyhow::Result;
     /// use solana_address_lookup_table_program::state::AddressLookupTable;
-    /// use solana_client::rpc_client::RpcClient;
+    /// use solana_rpc_client::rpc_client::RpcClient;
     /// use solana_sdk::{
     ///      address_lookup_table_account::AddressLookupTableAccount,
     ///      instruction::{AccountMeta, Instruction},
