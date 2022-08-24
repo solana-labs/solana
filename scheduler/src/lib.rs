@@ -693,6 +693,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
+        queue_clock: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
@@ -709,6 +710,10 @@ impl ScheduleStage {
         loop {
         if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, address_book) {
             trace!("pop loop iteration");
+            if from_runnable {
+                arc_next_task.record_queue_time(queue_clock);
+                *queue_clock = queue_clock.checked_add(1).unwrap();
+            }
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
             let unique_weight = next_task.unique_weight;
             let message_hash = next_task.tx.0.message_hash();
@@ -903,10 +908,11 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
+        queue_clock: &mut usize,
         execute_clock: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate)
+            Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate, queue_clock)
                 .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, execute_clock));
         maybe_ee
     }
@@ -936,6 +942,7 @@ impl ScheduleStage {
         let mut current_unique_key = u64::max_value();
         let mut contended_count = 0;
         let mut sequence_time = 0;
+        let mut queue_clock = 0;
         let mut execute_clock = 0;
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
 
@@ -1035,7 +1042,7 @@ impl ScheduleStage {
 
                 let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
-                    Self::schedule_next_execution(runnable_queue, address_book, &mut contended_count, prefer_immediate, &mut execute_clock);
+                    Self::schedule_next_execution(runnable_queue, address_book, &mut contended_count, prefer_immediate, &mut queue_clock, &mut execute_clock);
 
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
