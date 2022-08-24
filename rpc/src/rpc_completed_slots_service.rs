@@ -1,8 +1,8 @@
 use {
     crate::rpc_subscriptions::RpcSubscriptions,
     crossbeam_channel::RecvTimeoutError,
-    solana_client::rpc_response::SlotUpdate,
     solana_ledger::blockstore::CompletedSlotsReceiver,
+    solana_rpc_client_api::response::SlotUpdate,
     solana_sdk::timing::timestamp,
     std::{
         sync::{

@@ -23,20 +23,20 @@ use {
         },
         *,
     },
-    solana_client::{
-        client_error::ClientErrorKind,
-        pubsub_client::PubsubClient,
-        rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
-        rpc_config::{
+    solana_pubsub_client::pubsub_client::PubsubClient,
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
+    solana_rpc_client_api::{
+        client_error::ErrorKind as ClientErrorKind,
+        config::{
             RpcAccountInfoConfig, RpcBlockConfig, RpcGetVoteAccountsConfig,
             RpcLargestAccountsConfig, RpcLargestAccountsFilter, RpcProgramAccountsConfig,
             RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
         },
-        rpc_filter,
-        rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
-        rpc_response::SlotInfo,
+        filter::{Memcmp, RpcFilterType},
+        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+        response::SlotInfo,
     },
-    solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::from_account,
         account_utils::StateMut,
@@ -1770,12 +1770,9 @@ pub fn process_show_stakes(
         if vote_account_pubkeys.len() == 1 {
             program_accounts_config.filters = Some(vec![
                 // Filter by `StakeState::Stake(_, _)`
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp::new_base58_encoded(
-                    0,
-                    &[2, 0, 0, 0],
-                )),
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &[2, 0, 0, 0])),
                 // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp::new_base58_encoded(
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
                     124,
                     vote_account_pubkeys[0].as_ref(),
                 )),
@@ -1785,9 +1782,10 @@ pub fn process_show_stakes(
 
     if let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey {
         // withdrawer filter
-        let withdrawer_filter = rpc_filter::RpcFilterType::Memcmp(
-            rpc_filter::Memcmp::new_base58_encoded(44, withdraw_authority_pubkey.as_ref()),
-        );
+        let withdrawer_filter = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+            44,
+            withdraw_authority_pubkey.as_ref(),
+        ));
 
         let filters = program_accounts_config.filters.get_or_insert(vec![]);
         filters.push(withdrawer_filter);

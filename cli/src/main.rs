@@ -15,8 +15,8 @@ use {
         display::{println_name_value, println_name_value_or},
         OutputFormat,
     },
-    solana_client::rpc_config::RpcSendTransactionConfig,
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client_api::config::RpcSendTransactionConfig,
     std::{collections::HashMap, error, path::PathBuf, sync::Arc, time::Duration},
 };
 

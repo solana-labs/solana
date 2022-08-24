@@ -8,7 +8,6 @@ use {
     log::*,
     rand::distributions::{Distribution, Uniform},
     rayon::prelude::*,
-    solana_client::nonce_utils,
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
@@ -547,7 +546,7 @@ fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     let nonce_account = client
         .get_account(&nonce_account_pubkey)
         .unwrap_or_else(|error| panic!("{:?}", error));
-    let nonce_data = nonce_utils::data_from_account(&nonce_account)
+    let nonce_data = solana_rpc_client_nonce_utils::data_from_account(&nonce_account)
         .unwrap_or_else(|error| panic!("{:?}", error));
     nonce_data.blockhash()
 }

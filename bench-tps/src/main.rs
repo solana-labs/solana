@@ -10,19 +10,19 @@ use {
         keypairs::get_keypairs,
         send_batch::{generate_durable_nonce_accounts, generate_keypairs},
     },
-    solana_client::{
-        connection_cache::ConnectionCache,
-        rpc_client::RpcClient,
-        thin_client::ThinClient,
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     solana_genesis::Base64Account,
     solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor, pubkey::Pubkey,
         system_program,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_thin_client::thin_client::ThinClient,
+    solana_tpu_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     std::{
         collections::HashMap, fs::File, io::prelude::*, net::SocketAddr, path::Path, process::exit,
         sync::Arc,
