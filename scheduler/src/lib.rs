@@ -859,9 +859,9 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_result(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
+    fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook) {
         // do par()-ly?
-        trace!("commit: {}", ee.task.sequence_time());
+        trace!("commit: seq: {}", ee.task.sequence_time());
         Self::unlock_after_execution(address_book, &mut ee.lock_attempts);
         ee.task.mark_as_finished();
         // block-wide qos validation will be done here
@@ -944,7 +944,7 @@ impl ScheduleStage {
                                 trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                                 executing_queue_count -= 1;
 
-                                Self::commit_result(&mut processed_execution_environment, address_book);
+                                Self::commit_completed_execution(&mut processed_execution_environment, address_book);
                                 // async-ly propagate the result to rpc subsystems
                                 to_next_stage.send(processed_execution_environment).unwrap();
                             }
@@ -975,7 +975,7 @@ impl ScheduleStage {
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                         executing_queue_count -= 1;
 
-                        Self::commit_result(&mut processed_execution_environment, address_book);
+                        Self::commit_completed_execution(&mut processed_execution_environment, address_book);
                         // async-ly propagate the result to rpc subsystems
                         to_next_stage.send(processed_execution_environment).unwrap();
                         if false && from_exec.len() > 0 {
