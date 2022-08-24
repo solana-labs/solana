@@ -426,6 +426,7 @@ pub struct Task {
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
     pub sequence_time: std::sync::atomic::AtomicUsize,
+    pub queue_time: std::sync::atomic::AtomicUsize,
     pub execute_time: std::sync::atomic::AtomicUsize,
 }
 
@@ -436,7 +437,7 @@ pub struct Task {
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
+        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
@@ -446,6 +447,15 @@ impl Task {
     pub fn sequence_time(&self) -> usize {
         self.sequence_time.load(std::sync::atomic::Ordering::SeqCst)
     }
+
+    pub fn record_queue_time(&self, clock: usize) {
+        self.queue_time.store(clock, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn queue_time(&self) -> usize {
+        self.queue_time.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
 
     pub fn record_execute_time(&self, clock: usize) {
         self.execute_time.store(clock, std::sync::atomic::Ordering::SeqCst);
@@ -463,6 +473,7 @@ impl Task {
             contention_count: Default::default(),
             uncontended: Default::default(),
             sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
         }
     }
