@@ -363,7 +363,7 @@ fn handle_transaction_batch(
             assert_ne!(task_cursor.key(), &uq);
             let mut task = task_cursor.value();
             task.trace_timestamps("in_exec(initial list)");
-            while !task.currently_contended() {
+            while !(task.currently_contended() || task.newly_queued()) {
                 if let Some(new_cursor) = task_cursor.prev() {
                     assert!(new_cursor.key() < task_cursor.key());
                     assert_ne!(new_cursor.key(), &uq);

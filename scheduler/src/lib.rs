@@ -512,6 +512,10 @@ impl Task {
         }
     }
 
+    pub fn newly_queued(&self) -> bool {
+        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 0
+    }
+
     pub fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
