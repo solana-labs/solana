@@ -8,6 +8,7 @@ use {
     log::*,
     rand::distributions::{Distribution, Uniform},
     rayon::prelude::*,
+    solana_client::{nonce_utils, rpc_request::MAX_MULTIPLE_ACCOUNTS},
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
         account::Account,
@@ -544,10 +545,12 @@ fn get_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
     client: &Arc<T>,
     nonce_pubkeys: &[Pubkey],
 ) -> Vec<Option<Account>> {
+    // get_multiple_accounts supports maximum MAX_MULTIPLE_ACCOUNTS pubkeys in request
+    assert!(nonce_pubkeys.len() <= MAX_MULTIPLE_ACCOUNTS);
     loop {
-        match client.get_multiple_accounts(&nonce_pubkeys) {
-            Ok(nonce_account) => {
-                return nonce_account;
+        match client.get_multiple_accounts(nonce_pubkeys) {
+            Ok(nonce_accounts) => {
+                return nonce_accounts;
             }
             Err(err) => {
                 info!("Couldn't get durable nonce account: {:?}", err);
@@ -558,15 +561,12 @@ fn get_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
 }
 
 fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
-    client: Arc<T>,
+    client: &Arc<T>,
     nonce_pubkeys: &[Pubkey],
 ) -> Vec<Hash> {
     let num_accounts = nonce_pubkeys.len();
     let mut blockhashes = vec![Hash::default(); num_accounts];
-    let mut unprocessed = HashSet::with_capacity(num_accounts);
-    for i in 0..num_accounts {
-        unprocessed.insert(i);
-    }
+    let mut unprocessed = (0..num_accounts).collect::<HashSet<_>>();
 
     let mut request_pubkeys = Vec::<Pubkey>::with_capacity(num_accounts);
     let mut request_indexes = Vec::<usize>::with_capacity(num_accounts);
@@ -578,8 +578,11 @@ fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
         }
 
         let num_unprocessed_before = unprocessed.len();
-        info!("Request {} durable nonce accounts", num_unprocessed_before);
-        let accounts = get_nonce_accounts(&client, nonce_pubkeys);
+        let accounts: Vec<Option<Account>> = nonce_pubkeys
+            .chunks(MAX_MULTIPLE_ACCOUNTS)
+            .flat_map(|pubkeys| get_nonce_accounts(client, pubkeys))
+            .collect();
+
         for (account, index) in accounts.iter().zip(request_indexes.iter()) {
             if let Some(nonce_account) = account {
                 let nonce_data = nonce_utils::data_from_account(nonce_account).unwrap();
@@ -588,7 +591,7 @@ fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
             }
         }
         let num_unprocessed_after = unprocessed.len();
-        info!(
+        debug!(
             "Received {} durable nonce accounts",
             num_unprocessed_before - num_unprocessed_after
         );
@@ -613,8 +616,8 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
             .iter()
             .map(|keypair| keypair.pubkey())
             .collect();
-        let blockhashes = get_nonce_blockhashes(client, &pubkeys);
 
+        let blockhashes: Vec<Hash> = get_nonce_blockhashes(&client, &pubkeys);
         for i in 0..length {
             transactions.push((
                 system_transaction::nonced_transfer(
@@ -630,7 +633,7 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
         }
     } else {
         let pubkeys: Vec<Pubkey> = dest_nonce.iter().map(|keypair| keypair.pubkey()).collect();
-        let blockhashes = get_nonce_blockhashes(client, &pubkeys);
+        let blockhashes: Vec<Hash> = get_nonce_blockhashes(&client, &pubkeys);
 
         for i in 0..length {
             transactions.push((
