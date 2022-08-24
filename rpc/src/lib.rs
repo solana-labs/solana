@@ -4,6 +4,7 @@ pub mod max_slots;
 pub mod optimistically_confirmed_bank_tracker;
 pub mod parsed_token_accounts;
 pub mod rpc;
+mod rpc_cache;
 pub mod rpc_completed_slots_service;
 pub mod rpc_health;
 pub mod rpc_pubsub;

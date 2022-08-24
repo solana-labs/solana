@@ -4884,6 +4884,7 @@ dependencies = [
  "solana-logger 1.12.0",
  "solana-program-runtime",
  "solana-remote-wallet",
+ "solana-rpc-client",
  "solana-sdk 1.12.0",
  "solana-streamer",
  "solana-test-validator",
@@ -4942,58 +4943,15 @@ dependencies = [
 name = "solana-client"
 version = "1.12.0"
 dependencies = [
- "anyhow",
- "assert_matches",
- "async-mutex",
- "async-trait",
- "base64 0.13.0",
- "bincode",
- "bs58",
- "bytes",
- "clap 2.33.3",
- "crossbeam-channel",
- "enum_dispatch",
- "futures 0.3.23",
- "futures-util",
- "indexmap",
- "indicatif",
- "itertools",
- "jsonrpc-core",
- "jsonrpc-http-server",
- "lazy_static",
  "log",
- "quinn",
- "quinn-proto",
- "quinn-udp",
- "rand 0.7.3",
- "rand_chacha 0.2.2",
- "rayon",
- "reqwest",
- "rustls 0.20.6",
- "semver 1.0.13",
- "serde",
- "serde_derive",
- "serde_json",
- "solana-account-decoder",
- "solana-clap-utils",
- "solana-faucet",
- "solana-logger 1.12.0",
  "solana-measure",
- "solana-metrics",
- "solana-net-utils",
- "solana-perf",
+ "solana-pubsub-client",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-rpc-client-nonce-utils",
  "solana-sdk 1.12.0",
- "solana-streamer",
- "solana-transaction-status",
- "solana-version",
- "solana-vote-program",
- "spl-token-2022",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-tungstenite",
- "tungstenite",
- "url 2.2.2",
+ "solana-thin-client",
+ "solana-tpu-client",
 ]
 
 [[package]]
@@ -5912,6 +5870,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-pubsub-client"
+version = "1.12.0"
+dependencies = [
+ "crossbeam-channel",
+ "futures-util",
+ "log",
+ "reqwest",
+ "semver 1.0.13",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-rpc-client-api",
+ "solana-sdk 1.12.0",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "tungstenite",
+ "url 2.2.2",
+]
+
+[[package]]
 name = "solana-rayon-threadlimit"
 version = "1.12.0"
 dependencies = [
@@ -5990,6 +5971,72 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-util 0.6.9",
+]
+
+[[package]]
+name = "solana-rpc-client"
+version = "1.12.0"
+dependencies = [
+ "assert_matches",
+ "async-trait",
+ "base64 0.13.0",
+ "bincode",
+ "bs58",
+ "crossbeam-channel",
+ "futures 0.3.23",
+ "indicatif",
+ "jsonrpc-core",
+ "jsonrpc-http-server",
+ "log",
+ "reqwest",
+ "semver 1.0.13",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-rpc-client-api",
+ "solana-sdk 1.12.0",
+ "solana-transaction-status",
+ "solana-version",
+ "solana-vote-program",
+ "tokio",
+]
+
+[[package]]
+name = "solana-rpc-client-api"
+version = "1.12.0"
+dependencies = [
+ "base64 0.13.0",
+ "bs58",
+ "jsonrpc-core",
+ "reqwest",
+ "semver 1.0.13",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-sdk 1.12.0",
+ "solana-transaction-status",
+ "solana-version",
+ "spl-token-2022",
+ "thiserror",
+]
+
+[[package]]
+name = "solana-rpc-client-nonce-utils"
+version = "1.12.0"
+dependencies = [
+ "anyhow",
+ "clap 2.33.3",
+ "futures 0.3.23",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-clap-utils",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-sdk 1.12.0",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -6390,6 +6437,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-thin-client"
+version = "1.12.0"
+dependencies = [
+ "bincode",
+ "log",
+ "rayon",
+ "solana-logger 1.12.0",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-sdk 1.12.0",
+ "solana-tpu-client",
+]
+
+[[package]]
 name = "solana-tokens"
 version = "1.12.0"
 dependencies = [
@@ -6418,6 +6479,43 @@ dependencies = [
  "spl-token",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "solana-tpu-client"
+version = "1.12.0"
+dependencies = [
+ "async-mutex",
+ "async-trait",
+ "bincode",
+ "crossbeam-channel",
+ "enum_dispatch",
+ "futures 0.3.23",
+ "futures-util",
+ "indexmap",
+ "indicatif",
+ "itertools",
+ "lazy_static",
+ "log",
+ "quinn",
+ "quinn-proto",
+ "quinn-udp",
+ "rand 0.7.3",
+ "rand_chacha 0.2.2",
+ "rayon",
+ "rustls 0.20.6",
+ "solana-logger 1.12.0",
+ "solana-measure",
+ "solana-metrics",
+ "solana-net-utils",
+ "solana-perf",
+ "solana-pubsub-client",
+ "solana-rpc-client",
+ "solana-rpc-client-api",
+ "solana-sdk 1.12.0",
+ "solana-streamer",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
