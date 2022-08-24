@@ -856,7 +856,7 @@ impl ScheduleStage {
                 }
 
                 if !inserted {
-                    let contended_unique_weights = page.contended_unique_weights;
+                    let contended_unique_weights = &page.contended_unique_weights;
                     contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
                         let mut found = true;
                         //assert_ne!(task_cursor.key(), &task.uq);
