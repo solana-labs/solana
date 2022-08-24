@@ -854,7 +854,7 @@ impl ScheduleStage {
         unique_weight: UniqueWeight,
         task: TaskInQueue,
         lock_attempts: Vec<LockAttempt>,
-        execute_clock: &mut usize;
+        execute_clock: &mut usize,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
