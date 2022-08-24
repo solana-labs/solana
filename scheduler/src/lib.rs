@@ -485,8 +485,9 @@ impl Task {
         self.commit_time.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    pub fn trace_timestamps(&self) {
-        trace!("commit: seq: [{}sT..{}sT; {}sD], queue: [{}qT..{}qT; {}qD] exec: [{}eT..{}eT; {}eD]", 
+    pub fn trace_timestamps(&self, prefix: &str) {
+        trace!("{}: seq: [{}sT..{}sT; {}sD], queue: [{}qT..{}qT; {}qD] exec: [{}eT..{}eT; {}eD]", 
+               prefix,
               self.sequence_time(),
               self.sequence_end_time(),
               self.sequence_end_time() - self.sequence_time(),
@@ -951,7 +952,7 @@ impl ScheduleStage {
         // do par()-ly?
 
         ee.task.record_commit_time(*commit_time);
-        ee.task.trace_timestamps();
+        ee.task.trace_timestamps("commit");
         //*commit_time = commit_time.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking

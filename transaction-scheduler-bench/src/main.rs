@@ -354,6 +354,7 @@ fn handle_transaction_batch(
         .fetch_add(priority_collected, Ordering::Relaxed);
 
     let uq = transaction_batch.unique_weight;
+    transaction_batch.task.trace_timestamps();
     for mut lock_attempt in transaction_batch.lock_attempts.iter_mut() {
         let contended_unique_weights = lock_attempt.contended_unique_weights();
         contended_unique_weights.remove_task(&uq);
