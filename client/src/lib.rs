@@ -2,6 +2,8 @@
 
 pub mod transaction_executor;
 
+pub use solana_rpc_client::mock_sender_for_cli;
+
 pub mod blockhash_query {
     pub use solana_rpc_client_nonce_utils::blockhash_query::*;
 }
