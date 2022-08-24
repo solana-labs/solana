@@ -1477,7 +1477,6 @@ fn load_blockstore(
     // is processing the dropped banks from the `pruned_banks_receiver` channel.
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
-
     {
         let hard_forks: Vec<_> = bank_forks
             .read()
