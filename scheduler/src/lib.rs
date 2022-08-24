@@ -748,7 +748,11 @@ impl ScheduleStage {
         loop {
         if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, address_book) {
             trace!("pop loop iteration");
-            if from_runnable {
+            if from_runnable && arc_next_task.queue_time() != usize::max_value() {
+                continue;
+            }
+
+            if arc_next_task.queue_time() == usize::max_value() {
                 arc_next_task.record_queue_time(*sequence_clock, *queue_clock);
                 *queue_clock = queue_clock.checked_add(1).unwrap();
             }
@@ -876,6 +880,7 @@ impl ScheduleStage {
                     //assert!(!task.already_finished());
                     if task.currently_contended() || task.newly_queued() {
                         inserted = true;
+                        task.mark_as_contended();
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     }
                 }
