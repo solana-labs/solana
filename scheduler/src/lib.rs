@@ -430,10 +430,10 @@ pub struct Task {
     pub execute_time: std::sync::atomic::AtomicUsize,
 }
 
-// sequence_time
-// queue_time
-// execute_time
-// commit_time
+// sequence_time -> seq clock
+// queue_time -> queue clock
+// execute_time ---> exec clock
+// commit_time  -+
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
@@ -455,7 +455,6 @@ impl Task {
     pub fn queue_time(&self) -> usize {
         self.queue_time.load(std::sync::atomic::Ordering::SeqCst)
     }
-
 
     pub fn record_execute_time(&self, clock: usize) {
         self.execute_time.store(clock, std::sync::atomic::Ordering::SeqCst);
@@ -884,8 +883,11 @@ impl ScheduleStage {
     fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &usize) {
         // do par()-ly?
         info!("commit: seq: {}, exec: [{}..{}; {}]", ee.task.sequence_time(), ee.task.execute_time(), commit_time, commit_time - ee.task.execute_time());
+
+        // which order for data race free?: unlocking / marking
         Self::unlock_after_execution(address_book, &mut ee.lock_attempts);
         ee.task.mark_as_finished();
+
         // block-wide qos validation will be done here
         // if error risen..:
         //   don't commit the tx for banking and potentially finish scheduling at block max cu
