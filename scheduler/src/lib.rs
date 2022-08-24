@@ -486,7 +486,7 @@ impl Task {
     }
 
     pub fn queue_time_label(&self) -> &str {
-        format!("queue: [{}qT..{}qT; {}qD]", 
+        &format!("queue: [{}qT..{}qT; {}qD]", 
               self.queue_time(), self.queue_end_time(), self.queue_end_time() - self.queue_time(), 
               )
     }
