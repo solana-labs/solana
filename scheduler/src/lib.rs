@@ -430,6 +430,7 @@ pub struct Task {
     pub queue_time: std::sync::atomic::AtomicUsize,
     pub queue_end_time: std::sync::atomic::AtomicUsize,
     pub execute_time: std::sync::atomic::AtomicUsize,
+    pub commit_time: std::sync::atomic::AtomicUsize,
 }
 
 // sequence_time -> seq clock
