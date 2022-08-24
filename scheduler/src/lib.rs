@@ -722,7 +722,7 @@ impl ScheduleStage {
         if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, address_book) {
             trace!("pop loop iteration");
             if from_runnable {
-                arc_next_task.record_queue_time(*queue_clock);
+                arc_next_task.record_queue_time(*sequence_time, *queue_clock);
                 *queue_clock = queue_clock.checked_add(1).unwrap();
             }
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
