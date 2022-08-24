@@ -872,7 +872,7 @@ impl ScheduleStage {
                                 break;
                             }
                         }
-                        found.then(|| solana_scheduler::TaskInQueue::clone(task))
+                        found.then(|| TaskInQueue::clone(task))
                     }).flatten().map(|task| {
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                         ()
