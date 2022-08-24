@@ -91,7 +91,7 @@ pub struct ComputeBudget {
     /// Total cost will be alt_bn128_pairing_one_pair_cost_first
     /// + alt_bn128_pairing_one_pair_cost_other * (num_elems - 1)
     pub alt_bn128_pairing_one_pair_cost_first: u64,
-    pub alt_bn128_pairing_one_pair_cost_other: u64
+    pub alt_bn128_pairing_one_pair_cost_other: u64,
 }
 
 impl Default for ComputeBudget {

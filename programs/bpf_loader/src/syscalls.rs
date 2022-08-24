@@ -2559,8 +2559,12 @@ impl<'a, 'b> SyscallObject<BpfError> for SyscallAltBn128Pairing<'a, 'b> {
             .get_compute_budget()
             .alt_bn128_pairing_one_pair_cost_first
             .saturating_add(
-                invoke_context.get_compute_budget().alt_bn128_pairing_one_pair_cost_other.saturating_mul(ele_len.saturating_sub(1))
-            ).saturating_add(invoke_context.get_compute_budget().sha256_base_cost)
+                invoke_context
+                    .get_compute_budget()
+                    .alt_bn128_pairing_one_pair_cost_other
+                    .saturating_mul(ele_len.saturating_sub(1)),
+            )
+            .saturating_add(invoke_context.get_compute_budget().sha256_base_cost)
             .saturating_add(input_size)
             .saturating_add(ALT_BN128_PAIRING_OUTPUT_LEN as u64);
 
