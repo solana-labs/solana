@@ -752,6 +752,9 @@ impl ScheduleStage {
             if from_runnable && arc_next_task.queue_time() != usize::max_value() {
                 continue;
             }
+            if arc_next_task.already_finished() {
+                continue;
+            }
 
             if arc_next_task.queue_time() == usize::max_value() {
                 arc_next_task.record_queue_time(*sequence_clock, *queue_clock);
