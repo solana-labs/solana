@@ -739,7 +739,6 @@ impl ScheduleStage {
                     address_book,
                     &unique_weight,
                     &mut next_task.tx.1,
-                    provisional_count,
                 );
                 drop(next_task);
                 address_book.provisioning_trackers.insert(unique_weight, (ProvisioningTracker::new(provisional_count), arc_next_task));
@@ -770,7 +769,6 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut Vec<LockAttempt>,
-        provisional_count: usize,
     ) {
         for mut l in lock_attempts {
             match l.status {
