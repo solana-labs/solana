@@ -349,17 +349,19 @@ fn handle_transaction_batch(
         contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
             let mut found = true;
             assert_ne!(task_cursor.key(), &uq);
-            while !task_cursor.value().currently_contended() {
+            let mut value = task_cursor.value();
+            while !value.currently_contended() {
                 if let Some(new_cursor) = task_cursor.prev() {
                     assert!(new_cursor.key() < task_cursor.key());
                     assert_ne!(new_cursor.key(), &uq);
                     task_cursor = new_cursor;
+                    value = task_cursor.value();
                 } else {
                     found = false;
                     break;
                 }
             }
-            found.then(|| solana_scheduler::TaskInQueue::clone(task_cursor.value()))
+            found.then(|| solana_scheduler::TaskInQueue::clone(value))
         }).flatten().map(|task| {
             lock_attempt.heaviest_uncontended = Some(task);
             ()
