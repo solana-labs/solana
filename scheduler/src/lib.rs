@@ -869,31 +869,29 @@ impl ScheduleStage {
                     if task.currently_contended() {
                         inserted = true;
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
-                    }
-                }
-
-                if !inserted {
-                    let contended_unique_weights = &page.contended_unique_weights;
-                    contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
-                        let mut found = true;
-                        //assert_ne!(task_cursor.key(), &task.uq);
-                        let mut task = task_cursor.value();
-                        while !task.currently_contended() {
-                            if let Some(new_cursor) = task_cursor.prev() {
-                                assert!(new_cursor.key() < task_cursor.key());
-                                //assert_ne!(new_cursor.key(), &uq);
-                                task_cursor = new_cursor;
-                                task = task_cursor.value();
-                            } else {
-                                found = false;
-                                break;
+                    } else {
+                        let contended_unique_weights = &page.contended_unique_weights;
+                        contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
+                            let mut found = true;
+                            //assert_ne!(task_cursor.key(), &task.uq);
+                            let mut task = task_cursor.value();
+                            while !task.currently_contended() {
+                                if let Some(new_cursor) = task_cursor.prev() {
+                                    assert!(new_cursor.key() < task_cursor.key());
+                                    //assert_ne!(new_cursor.key(), &uq);
+                                    task_cursor = new_cursor;
+                                    task = task_cursor.value();
+                                } else {
+                                    found = false;
+                                    break;
+                                }
                             }
-                        }
-                        found.then(|| TaskInQueue::clone(task))
-                    }).flatten().map(|task| {
-                        address_book.uncontended_task_ids.insert(task.unique_weight, task);
-                        ()
-                    });
+                            found.then(|| TaskInQueue::clone(task))
+                        }).flatten().map(|task| {
+                            address_book.uncontended_task_ids.insert(task.unique_weight, task);
+                            ()
+                        });
+                    }
                 }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
