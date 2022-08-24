@@ -450,6 +450,10 @@ impl Task {
         self.sequence_time.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    pub fn sequence_end_time(&self) -> usize {
+        self.sequence_end_time.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     pub fn record_queue_time(&self, seq_clock: usize, queue_clock: usize) {
         self.sequence_end_time.store(seq_clock, std::sync::atomic::Ordering::SeqCst);
         self.queue_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
@@ -899,8 +903,10 @@ impl ScheduleStage {
     #[inline(never)]
     fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &usize) {
         // do par()-ly?
-        info!("commit: seq: {}, queue: [{}qt..{}qt; {}qd] exec: [{}et..{}et; {}ed]", 
+        info!("commit: seq: [{}st..{}.st; {}sd], queue: [{}qt..{}qt; {}qd] exec: [{}et..{}et; {}ed]", 
               ee.task.sequence_time(),
+              ee.task.sequence_end_time(),
+              ee.task.sequence_end_time() - ee.task.sequence_time(),
               ee.task.queue_time(), ee.task.queue_end_time(), ee.task.queue_end_time() - ee.task.queue_time(), 
               ee.task.execute_time(), commit_time, commit_time - ee.task.execute_time());
 
