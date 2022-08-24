@@ -996,7 +996,7 @@ impl ScheduleStage {
                         Multiplexed::FromPrevious(weighted_tx) => {
                             trace!("recv from previous");
 
-                            while false && from_exec.len() > 0 {
+                            while from_exec.len() > 0 {
                                 let mut processed_execution_environment = from_exec.recv().unwrap();
                                 trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                                 executing_queue_count -= 1;
@@ -1035,7 +1035,7 @@ impl ScheduleStage {
                         Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
                         // async-ly propagate the result to rpc subsystems
                         to_next_stage.send(processed_execution_environment).unwrap();
-                        if false && from_exec.len() > 0 {
+                        if from_exec.len() > 0 {
                             processed_execution_environment = from_exec.recv().unwrap();
                         } else {
                             break;
