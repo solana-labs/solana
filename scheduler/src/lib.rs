@@ -1001,7 +1001,7 @@ impl ScheduleStage {
                                 trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                                 executing_queue_count -= 1;
 
-                                Self::commit_completed_execution(&mut processed_execution_environment, address_book, &execute_clock);
+                                Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
                                 // async-ly propagate the result to rpc subsystems
                                 to_next_stage.send(processed_execution_environment).unwrap();
                             }
@@ -1032,7 +1032,7 @@ impl ScheduleStage {
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                         executing_queue_count -= 1;
 
-                        Self::commit_completed_execution(&mut processed_execution_environment, address_book, &execute_clock);
+                        Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
                         // async-ly propagate the result to rpc subsystems
                         to_next_stage.send(processed_execution_environment).unwrap();
                         if false && from_exec.len() > 0 {
