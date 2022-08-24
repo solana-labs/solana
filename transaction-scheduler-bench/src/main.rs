@@ -330,6 +330,7 @@ fn handle_transaction_batch(
         .fetch_add(num_transactions as usize, Ordering::Relaxed);
 
     if rand::thread_rng().gen_range(0..100) == 0 {
+        panic!();
         sleep(Duration::from_micros(
             num_transactions * execution_per_tx_us * 50,
         ));
