@@ -31,7 +31,7 @@
 //! This pattern is illustrated in the example below.
 //!
 //! By default the [`PubsubClient::block_subscribe`] and
-//! [`PubsubClient::vote_subscribe`] events are disabled. They can be enabled by
+//! [`PubsubClient::vote_subscribe`] events are disabled on RPC nodes. They can be enabled by
 //! passing `--rpc-pubsub-enable-block-subscription` and
 //! `--rpc-pubsub-enable-vote-subscription` to `solana-validator`. When these
 //! methods are disabled, the RPC server will return a "Method not found" error
