@@ -275,9 +275,9 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
 
     pub fn add_un_ref(&self, add: bool) {
         if add {
-            self.ref_count.fetch_add(1, Ordering::Release);
+            assert_ne!(0, self.ref_count.fetch_add(1, Ordering::Release));
         } else {
-            self.ref_count.fetch_sub(1, Ordering::Release);
+            assert_ne!(0, self.ref_count.fetch_sub(1, Ordering::Release));
         }
         self.set_dirty(true);
     }
