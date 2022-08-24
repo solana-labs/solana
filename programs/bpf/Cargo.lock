@@ -4151,6 +4151,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk 1.12.0",
  "solana-send-transaction-service",
+ "solana-tpu-client",
  "tarpc",
  "tokio",
  "tokio-serde",
@@ -5346,7 +5347,6 @@ dependencies = [
  "serde_json",
  "soketto",
  "solana-account-decoder",
- "solana-client",
  "solana-entry",
  "solana-faucet",
  "solana-gossip",
@@ -5356,12 +5356,14 @@ dependencies = [
  "solana-perf",
  "solana-poh",
  "solana-rayon-threadlimit",
+ "solana-rpc-client-api",
  "solana-runtime",
  "solana-sdk 1.12.0",
  "solana-send-transaction-service",
  "solana-stake-program",
  "solana-storage-bigtable",
  "solana-streamer",
+ "solana-tpu-client",
  "solana-transaction-status",
  "solana-version",
  "solana-vote-program",
@@ -5616,11 +5618,11 @@ version = "1.12.0"
 dependencies = [
  "crossbeam-channel",
  "log",
- "solana-client",
  "solana-measure",
  "solana-metrics",
  "solana-runtime",
  "solana-sdk 1.12.0",
+ "solana-tpu-client",
 ]
 
 [[package]]
