@@ -3021,10 +3021,7 @@ impl AccountsDb {
 
                 self.process_dead_slots(&dead_slots, purged_account_slots, purge_stats);
             } else {
-                // not sure why this fails yet with ancient append vecs
-                if !self.ancient_append_vecs {
-                    assert!(dead_slots.is_empty());
-                }
+                assert!(dead_slots.is_empty());
             }
         }
     }
@@ -7470,10 +7467,7 @@ impl AccountsDb {
                     .insert(account_info.offset());
             }
             if let Some(expected_slot) = expected_slot {
-                // not sure why this fails yet with ancient append vecs
-                if !self.ancient_append_vecs {
-                    assert_eq!(*slot, expected_slot);
-                }
+                assert_eq!(*slot, expected_slot);
             }
             if let Some(store) = self
                 .storage
