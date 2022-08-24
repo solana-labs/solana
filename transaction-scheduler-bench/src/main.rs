@@ -354,7 +354,7 @@ fn handle_transaction_batch(
         .fetch_add(priority_collected, Ordering::Relaxed);
 
     let uq = transaction_batch.unique_weight;
-    transaction_batch.task.trace_timestamps("in_exec(self)");
+    //transaction_batch.task.trace_timestamps("in_exec(self)");
     for mut lock_attempt in transaction_batch.lock_attempts.iter_mut() {
         let contended_unique_weights = lock_attempt.contended_unique_weights();
         contended_unique_weights.remove_task(&uq);
@@ -362,14 +362,14 @@ fn handle_transaction_batch(
             let mut found = true;
             assert_ne!(task_cursor.key(), &uq);
             let mut task = task_cursor.value();
-            task.trace_timestamps("in_exec(initial list)");
+            //task.trace_timestamps("in_exec(initial list)");
             while !task.currently_contended() {
                 if let Some(new_cursor) = task_cursor.prev() {
                     assert!(new_cursor.key() < task_cursor.key());
                     assert_ne!(new_cursor.key(), &uq);
                     task_cursor = new_cursor;
                     task = task_cursor.value();
-                    task.trace_timestamps("in_exec(subsequent list)");
+                    //task.trace_timestamps("in_exec(subsequent list)");
                 } else {
                     found = false;
                     break;
@@ -377,7 +377,7 @@ fn handle_transaction_batch(
             }
             found.then(|| solana_scheduler::TaskInQueue::clone(task))
         }).flatten().map(|task| {
-            task.trace_timestamps("in_exec(heaviest)");
+            //task.trace_timestamps("in_exec(heaviest)");
             lock_attempt.heaviest_uncontended = Some(task);
             ()
         });
