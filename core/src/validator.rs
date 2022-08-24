@@ -2076,7 +2076,12 @@ fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
         );
-        std::fs::remove_dir_all(&path).unwrap();
+        if let Err(e) = std::fs::remove_dir_all(&path) {
+            warn!(
+                "encountered error removing accounts path: {:?}: {}",
+                path.as_ref(), e
+            );
+        }
         return;
     }
 
