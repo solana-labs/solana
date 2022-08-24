@@ -345,7 +345,7 @@ fn handle_transaction_batch(
     let uq = transaction_batch.unique_weight;
     for mut lock_attempt in transaction_batch.lock_attempts.iter_mut() {
         let contended_unique_weights = lock_attempt.contended_unique_weights();
-        contended_unique_weights.remove_task_id(&uq);
+        contended_unique_weights.remove_task(&uq);
         contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
             let mut found = true;
             assert_ne!(task_cursor.key(), &uq);
