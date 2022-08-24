@@ -9,7 +9,9 @@ use {
     solana_program_runtime::invoke_context::{prepare_mock_invoke_context, InvokeContext},
     solana_rbpf::{
         assembler::assemble,
+        debugger,
         elf::Executable,
+        interpreter::Interpreter,
         static_analysis::Analysis,
         verifier::RequisiteVerifier,
         vm::{Config, DynamicAnalysis, VerifiedExecutable},
@@ -120,15 +122,16 @@ with input data, or BYTES is the number of 0-valued bytes to allocate for progra
             Arg::new("use")
                 .help(
                     "Method of execution to use, where 'cfg' generates Control Flow Graph \
-of the program, 'disassembler' dumps disassembled code of the program, 'interpreter' runs \
-the program in the virtual machine's interpreter, and 'jit' precompiles the program to \
-native machine code before execting it in the virtual machine.",
+of the program, 'debugger' yields execution to a remote debugger, 'disassembler' dumps \
+disassembled code of the program, 'interpreter' runs the program in the virtual \
+machine's interpreter, and 'jit' precompiles the program to native machine code before \
+executing it in the virtual machine.",
                 )
                 .short('u')
                 .long("use")
                 .takes_value(true)
                 .value_name("VALUE")
-                .possible_values(&["cfg", "disassembler", "interpreter", "jit"])
+                .possible_values(&["cfg", "debugger", "disassembler", "interpreter", "jit"])
                 .default_value("jit"),
         )
         .arg(
@@ -145,6 +148,14 @@ native machine code before execting it in the virtual machine.",
                 .help("Output trace to 'trace.out' file using tracing instrumentation")
                 .short('t')
                 .long("trace"),
+        )
+        .arg(
+            Arg::new("port")
+                .help("Port to use for the connection with a remote debugger")
+                .long("port")
+                .takes_value(true)
+                .value_name("PORT")
+                .default_value("9001"),
         )
         .arg(
             Arg::new("profile")
@@ -297,7 +308,11 @@ native machine code before execting it in the virtual machine.",
     )
     .unwrap();
     let start_time = Instant::now();
-    let result = if matches.value_of("use").unwrap() == "interpreter" {
+    let result = if matches.value_of("use").unwrap() == "debugger" {
+        let mut interpreter = Interpreter::new(&mut vm, &mut instruction_meter).unwrap();
+        let port = matches.value_of("port").unwrap().parse::<u16>().unwrap();
+        debugger::execute(&mut interpreter, port)
+    } else if matches.value_of("use").unwrap() == "interpreter" {
         vm.execute_program_interpreted(&mut instruction_meter)
     } else {
         vm.execute_program_jit(&mut instruction_meter)
