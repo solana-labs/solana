@@ -367,7 +367,7 @@ fn handle_transaction_batch(
             ()
         });
     }
-    error!("send from execute substage: {:?} seq: {}", uq, transaction_batch.task.sequence_time());
+    //error!("send from execute substage: {:?} seq: {}", uq, transaction_batch.task.sequence_time());
     completed_transaction_sender.0
         .send(transaction_batch)
         .unwrap();
