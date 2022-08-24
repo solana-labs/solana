@@ -360,7 +360,6 @@ fn handle_transaction_batch(
         contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
             let mut found = true;
             let mut removed = false;
-            assert_ne!(task_cursor.key(), &uq);
             let mut task = task_cursor.value();
             //task.trace_timestamps("in_exec(initial list)");
             while !task.currently_contended() {
