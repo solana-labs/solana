@@ -157,6 +157,7 @@ fn check_update_vote_state_slots_are_valid(
     vote_state: &VoteState,
     vote_state_update: &mut VoteStateUpdate,
     slot_hashes: &[(Slot, Hash)],
+    feature_set: Option<&FeatureSet>,
 ) -> Result<(), VoteError> {
     if vote_state_update.lockouts.is_empty() {
         return Err(VoteError::EmptySlots);
@@ -188,6 +189,10 @@ fn check_update_vote_state_slots_are_valid(
     }
 
     // Check if the proposed root is too old
+    let is_root_fix_enabled = feature_set
+        .map(|feature_set| feature_set.is_active(&feature_set::vote_state_update_root_fix::id()))
+        .unwrap_or(false);
+
     let original_proposed_root = vote_state_update.root;
     if let Some(new_proposed_root) = original_proposed_root {
         // If the new proposed root `R` is less than the earliest slot hash in the history
@@ -195,20 +200,22 @@ fn check_update_vote_state_slots_are_valid(
         // the root to the latest vote in the current vote that's less than R.
         if earliest_slot_hash_in_history > new_proposed_root {
             vote_state_update.root = vote_state.root_slot;
-            let mut prev_slot = Slot::MAX;
-            let current_root = vote_state_update.root;
-            for lockout in vote_state.votes.iter().rev() {
-                let is_slot_bigger_than_root = current_root
-                    .map(|current_root| lockout.slot > current_root)
-                    .unwrap_or(true);
-                // Ensure we're iterating from biggest to smallest vote in the
-                // current vote state
-                assert!(lockout.slot < prev_slot && is_slot_bigger_than_root);
-                if lockout.slot <= new_proposed_root {
-                    vote_state_update.root = Some(lockout.slot);
-                    break;
+            if is_root_fix_enabled {
+                let mut prev_slot = Slot::MAX;
+                let current_root = vote_state_update.root;
+                for lockout in vote_state.votes.iter().rev() {
+                    let is_slot_bigger_than_root = current_root
+                        .map(|current_root| lockout.slot > current_root)
+                        .unwrap_or(true);
+                    // Ensure we're iterating from biggest to smallest vote in the
+                    // current vote state
+                    assert!(lockout.slot < prev_slot && is_slot_bigger_than_root);
+                    if lockout.slot <= new_proposed_root {
+                        vote_state_update.root = Some(lockout.slot);
+                        break;
+                    }
+                    prev_slot = lockout.slot;
                 }
-                prev_slot = lockout.slot;
             }
         }
     }
@@ -268,22 +275,21 @@ fn check_update_vote_state_slots_are_valid(
                         vote_state_update_indexes_to_filter.push(vote_state_update_index);
                     }
                     if let Some(new_proposed_root) = root_to_check {
-                        // 1. Because `root_to_check.is_some()`, then we know that
-                        // we haven't checked the root yet in this loop, so
-                        // `proposed_vote_slot` == `new_proposed_root` == `vote_state_update.root`.
-                        assert_eq!(new_proposed_root, proposed_vote_slot);
-                        // 2. We know from the assert above that
-                        // `proposed_vote_slot < earliest_slot_hash_in_history`,
-                        // so from 1. we know that `new_proposed_root < earliest_slot_hash_in_history`.
-                        // Recall the only case where this can happen is if the
-                        // `original_proposed_root` was too old to be in SlotHashes.
-                        assert!(original_proposed_root.unwrap() < earliest_slot_hash_in_history);
-                        // 3. Because of 2, then the original proposed root `R` must have been
-                        // replaced by the latest vote in the existing vote state <= `R`
-                        assert!(new_proposed_root <= original_proposed_root.unwrap());
-                        // Thus we can conclude the new proposed root must be too old to be in
-                        // SlotHashes as well
-                        assert!(new_proposed_root < earliest_slot_hash_in_history);
+                        if is_root_fix_enabled {
+                            // 1. Because `root_to_check.is_some()`, then we know that
+                            // we haven't checked the root yet in this loop, so
+                            // `proposed_vote_slot` == `new_proposed_root` == `vote_state_update.root`.
+                            assert_eq!(new_proposed_root, proposed_vote_slot);
+                            // 2. We know from the assert earlier in the function that
+                            // `proposed_vote_slot < earliest_slot_hash_in_history`,
+                            // so from 1. we know that `new_proposed_root < earliest_slot_hash_in_history`.
+                            assert!(new_proposed_root < earliest_slot_hash_in_history);
+                        } else {
+                            // If the vote state update has a root < earliest_slot_hash_in_history
+                            // then we use the current root. The only case where this can happen
+                            // is if the current root itself is not in slot hashes.
+                            assert!(vote_state.root_slot.unwrap() < earliest_slot_hash_in_history);
+                        }
                         root_to_check = None;
                     } else {
                         vote_state_update_index += 1;
@@ -971,7 +977,12 @@ pub fn do_process_vote_state_update(
     mut vote_state_update: VoteStateUpdate,
     feature_set: Option<&FeatureSet>,
 ) -> Result<(), VoteError> {
-    check_update_vote_state_slots_are_valid(vote_state, &mut vote_state_update, slot_hashes)?;
+    check_update_vote_state_slots_are_valid(
+        vote_state,
+        &mut vote_state_update,
+        slot_hashes,
+        feature_set,
+    )?;
     process_new_vote_state(
         vote_state,
         vote_state_update.lockouts,
@@ -2186,7 +2197,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &empty_vote_state,
                 &mut vote_state_update,
-                &empty_slot_hashes
+                &empty_slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::EmptySlots),
         );
@@ -2197,7 +2209,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &empty_vote_state,
                 &mut vote_state_update,
-                &empty_slot_hashes
+                &empty_slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::SlotsMismatch),
         );
@@ -2216,7 +2229,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::VoteTooOld),
         );
@@ -2231,7 +2245,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled()),
             ),
             Err(VoteError::VoteTooOld),
         );
@@ -2282,8 +2297,13 @@ mod tests {
         let mut vote_state_update = VoteStateUpdate::from(vote_state_update_slots_and_lockouts);
         vote_state_update.hash = vote_state_update_hash;
         vote_state_update.root = Some(vote_state_update_root);
-        check_update_vote_state_slots_are_valid(&vote_state, &mut vote_state_update, &slot_hashes)
-            .unwrap();
+        check_update_vote_state_slots_are_valid(
+            &vote_state,
+            &mut vote_state_update,
+            &slot_hashes,
+            Some(&FeatureSet::all_enabled()),
+        )
+        .unwrap();
         assert_eq!(vote_state_update.root, expected_root);
 
         // The proposed root slot should become the biggest slot in the current vote state less than
@@ -2293,7 +2313,7 @@ mod tests {
             &slot_hashes,
             0,
             vote_state_update.clone(),
-            None,
+            Some(&FeatureSet::all_enabled()),
         )
         .is_ok());
         assert_eq!(vote_state.root_slot, expected_root);
@@ -2476,7 +2496,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::SlotsNotOrdered),
         );
@@ -2488,7 +2509,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled()),
             ),
             Err(VoteError::SlotsNotOrdered),
         );
@@ -2518,8 +2540,13 @@ mod tests {
             (vote_slot, 3),
         ]);
         vote_state_update.hash = vote_slot_hash;
-        check_update_vote_state_slots_are_valid(&vote_state, &mut vote_state_update, &slot_hashes)
-            .unwrap();
+        check_update_vote_state_slots_are_valid(
+            &vote_state,
+            &mut vote_state_update,
+            &slot_hashes,
+            Some(&FeatureSet::all_enabled()),
+        )
+        .unwrap();
 
         // Check the earlier slot was filtered out
         assert_eq!(
@@ -2544,7 +2571,7 @@ mod tests {
             &slot_hashes,
             0,
             vote_state_update,
-            None,
+            Some(&FeatureSet::all_enabled()),
         )
         .is_ok());
     }
@@ -2570,8 +2597,13 @@ mod tests {
         let mut vote_state_update =
             VoteStateUpdate::from(vec![(existing_older_than_history_slot, 3), (vote_slot, 2)]);
         vote_state_update.hash = vote_slot_hash;
-        check_update_vote_state_slots_are_valid(&vote_state, &mut vote_state_update, &slot_hashes)
-            .unwrap();
+        check_update_vote_state_slots_are_valid(
+            &vote_state,
+            &mut vote_state_update,
+            &slot_hashes,
+            Some(&FeatureSet::all_enabled()),
+        )
+        .unwrap();
         // Check the earlier slot was *NOT* filtered out
         assert_eq!(vote_state_update.lockouts.len(), 2);
         assert_eq!(
@@ -2596,7 +2628,7 @@ mod tests {
             &slot_hashes,
             0,
             vote_state_update,
-            None,
+            Some(&FeatureSet::all_enabled()),
         )
         .is_ok());
     }
@@ -2635,8 +2667,13 @@ mod tests {
             (vote_slot, 1),
         ]);
         vote_state_update.hash = vote_slot_hash;
-        check_update_vote_state_slots_are_valid(&vote_state, &mut vote_state_update, &slot_hashes)
-            .unwrap();
+        check_update_vote_state_slots_are_valid(
+            &vote_state,
+            &mut vote_state_update,
+            &slot_hashes,
+            Some(&FeatureSet::all_enabled()),
+        )
+        .unwrap();
         assert_eq!(vote_state_update.lockouts.len(), 3);
         assert_eq!(
             vote_state_update
@@ -2664,7 +2701,7 @@ mod tests {
             &slot_hashes,
             0,
             vote_state_update,
-            None,
+            Some(&FeatureSet::all_enabled()),
         )
         .is_ok());
     }
@@ -2696,7 +2733,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::SlotsMismatch),
         );
@@ -2715,7 +2753,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::SlotsMismatch),
         );
@@ -2749,7 +2788,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::RootOnDifferentFork),
         );
@@ -2773,7 +2813,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::SlotsMismatch),
         );
@@ -2798,8 +2839,13 @@ mod tests {
         let mut vote_state_update =
             VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (vote_slot, 1)]);
         vote_state_update.hash = vote_slot_hash;
-        check_update_vote_state_slots_are_valid(&vote_state, &mut vote_state_update, &slot_hashes)
-            .unwrap();
+        check_update_vote_state_slots_are_valid(
+            &vote_state,
+            &mut vote_state_update,
+            &slot_hashes,
+            Some(&FeatureSet::all_enabled()),
+        )
+        .unwrap();
 
         // Nothing in the update should have been filtered out
         assert_eq!(
@@ -2833,7 +2879,7 @@ mod tests {
             &slot_hashes,
             0,
             vote_state_update,
-            None,
+            Some(&FeatureSet::all_enabled()),
         )
         .is_ok());
     }
@@ -2856,8 +2902,13 @@ mod tests {
             .1;
         let mut vote_state_update = VoteStateUpdate::from(vec![(4, 2), (vote_slot, 1)]);
         vote_state_update.hash = vote_slot_hash;
-        check_update_vote_state_slots_are_valid(&vote_state, &mut vote_state_update, &slot_hashes)
-            .unwrap();
+        check_update_vote_state_slots_are_valid(
+            &vote_state,
+            &mut vote_state_update,
+            &slot_hashes,
+            Some(&FeatureSet::all_enabled()),
+        )
+        .unwrap();
 
         // Nothing in the update should have been filtered out
         assert_eq!(
@@ -2882,7 +2933,13 @@ mod tests {
         // should not have been popped off in the proposed state,
         // we should get a lockout conflict
         assert_eq!(
-            do_process_vote_state_update(&mut vote_state, &slot_hashes, 0, vote_state_update, None,),
+            do_process_vote_state_update(
+                &mut vote_state,
+                &slot_hashes,
+                0,
+                vote_state_update,
+                Some(&FeatureSet::all_enabled())
+            ),
             Err(VoteError::LockoutConflict)
         );
     }
@@ -2905,7 +2962,8 @@ mod tests {
             check_update_vote_state_slots_are_valid(
                 &vote_state,
                 &mut vote_state_update,
-                &slot_hashes
+                &slot_hashes,
+                Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::SlotHashMismatch),
         );

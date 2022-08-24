@@ -510,6 +510,10 @@ pub mod stop_sibling_instruction_search_at_parent {
     solana_sdk::declare_id!("EYVpEP7uzH1CoXzbD6PubGhYmnxRXPeq3PPsm1ba3gpo");
 }
 
+pub mod vote_state_update_root_fix {
+    solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -632,6 +636,7 @@ lazy_static! {
         (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
         (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
         (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
+        (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
