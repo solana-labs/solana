@@ -485,6 +485,12 @@ impl Task {
         self.commit_time.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    pub fn queue_time_label(&self) -> &str {
+        format!("queue: [{}qT..{}qT; {}qD]", 
+              self.queue_time(), self.queue_end_time(), self.queue_end_time() - self.queue_time(), 
+              )
+    }
+
     pub fn trace_timestamps(&self, prefix: &str) {
         trace!("{}: {:016x} seq: [{}sT..{}sT; {}sD], queue: [{}qT..{}qT; {}qD] exec: [{}eT..{}eT; {}eD]", 
               prefix,
