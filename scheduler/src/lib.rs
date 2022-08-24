@@ -714,8 +714,6 @@ impl ScheduleStage {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut a.1) };
 
-            *contended_count = contended_count.checked_sub(1).unwrap();
-            next_task.mark_as_uncontended();
             let lock_attempts = std::mem::take(&mut next_task.tx.1);
 
             return Some((a.0, a.1, lock_attempts));
@@ -780,6 +778,8 @@ impl ScheduleStage {
                     &unique_weight,
                     &mut next_task.tx.1,
                 );
+                *contended_count = contended_count.checked_sub(1).unwrap();
+                next_task.mark_as_uncontended();
                 drop(next_task);
                 address_book.provisioning_trackers.insert(unique_weight, (ProvisioningTracker::new(provisional_count), arc_next_task));
 
