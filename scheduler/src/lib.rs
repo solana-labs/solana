@@ -872,7 +872,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, current_exec_clock: &usize) {
         // do par()-ly?
-        info!("commit: seq: {}, exec: {}->{}", ee.task.sequence_time(), ee.task.execute_time(), current_exec_clock);
+        info!("commit: seq: {}, exec: [{}..{}; {}]", ee.task.sequence_time(), ee.task.execute_time(), current_exec_clock, current_exec_clock - ee.task.execute_time());
         Self::unlock_after_execution(address_book, &mut ee.lock_attempts);
         ee.task.mark_as_finished();
         // block-wide qos validation will be done here
