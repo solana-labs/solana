@@ -901,8 +901,10 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &usize) {
+    fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize) {
         // do par()-ly?
+        *commit_time = commit_time.checked_add(1).unwrap();
+
         info!("commit: seq: [{}st..{}.st; {}sd], queue: [{}qt..{}qt; {}qd] exec: [{}et..{}et; {}ed]", 
               ee.task.sequence_time(),
               ee.task.sequence_end_time(),
