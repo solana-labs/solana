@@ -891,7 +891,10 @@ impl ScheduleStage {
     #[inline(never)]
     fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &usize) {
         // do par()-ly?
-        info!("commit: seq: {}, exec: [{}..{}; {}]", ee.task.sequence_time(), ee.task.execute_time(), commit_time, commit_time - ee.task.execute_time());
+        info!("commit: seq: {}, queue: [{}..{}; {}] exec: [{}..{}; {}]", 
+              ee.task.sequence_time(),
+              ee.task.queue_time(), ee.task.queue_end_time(), ee.task.queue_end_time() - ee.task.queue_time(), 
+              ee.task.execute_time(), commit_time, commit_time - ee.task.execute_time());
 
         // which order for data race free?: unlocking / marking
         Self::unlock_after_execution(address_book, &mut ee.lock_attempts);
