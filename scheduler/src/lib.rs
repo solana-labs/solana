@@ -880,7 +880,6 @@ impl ScheduleStage {
                     //assert!(!task.already_finished());
                     if task.currently_contended() || task.newly_queued() {
                         inserted = true;
-                        task.mark_as_contended();
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     }
                 }
