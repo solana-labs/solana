@@ -335,22 +335,28 @@ fn output_slot(
                         */
                         let uq = ee.unique_weight;
                         for mut lock_attempt in ee.lock_attempts.iter_mut() {
-                            let page = lock_attempt.target.page_ref();
-                            page.contended_unique_weights.remove_task_id(&uq);
-                            if let Some(mut task_cursor) = page.contended_unique_weights.heaviest_task_cursor() {
+                            let contended_unique_weights = lock_attempt.contended_unique_weights();
+                            contended_unique_weights.remove_task(&uq);
+                            contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
                                 let mut found = true;
-                                while !task_cursor.value().currently_contended() {
+                                assert_ne!(task_cursor.key(), &uq);
+                                let mut task = task_cursor.value();
+                                while !task.currently_contended() {
                                     if let Some(new_cursor) = task_cursor.prev() {
+                                        assert!(new_cursor.key() < task_cursor.key());
+                                        assert_ne!(new_cursor.key(), &uq);
                                         task_cursor = new_cursor;
+                                        task = task_cursor.value();
                                     } else {
                                         found = false;
                                         break;
                                     }
                                 }
-                                if found {
-                                    lock_attempt.heaviest_uncontended = Some(solana_scheduler::TaskInQueue::clone(task_cursor.value()));
-                                }
-                            }
+                                found.then(|| solana_scheduler::TaskInQueue::clone(task))
+                            }).flatten().map(|task| {
+                                lock_attempt.heaviest_uncontended = Some(task);
+                                ()
+                            });
                         }
                         post_execute_env_sender.send(ee).unwrap();
                     }
