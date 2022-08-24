@@ -403,7 +403,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     ///
     /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
     /// continue until the `rows_limit` is reached or the end of the table, whichever comes first.
-    /// If `rows_limit` is zero, the listing will continue until the end of the table.
+    /// If `rows_limit` is zero, this method will return an empty array.
     pub async fn get_row_keys(
         &mut self,
         table_name: &str,
@@ -411,6 +411,9 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         end_at: Option<RowKey>,
         rows_limit: i64,
     ) -> Result<Vec<RowKey>> {
+        if rows_limit == 0 {
+            return Ok(vec![]);
+        }
         self.refresh_access_token().await;
         let response = self
             .client
@@ -465,7 +468,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
     ///
     /// If `end_at` is provided, the row key listing will end at the key. Otherwise it will
     /// continue until the `rows_limit` is reached or the end of the table, whichever comes first.
-    /// If `rows_limit` is zero, the listing will continue until the end of the table.
+    /// If `rows_limit` is zero, this method will return an empty array.
     pub async fn get_row_data(
         &mut self,
         table_name: &str,
@@ -473,8 +476,10 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
         end_at: Option<RowKey>,
         rows_limit: i64,
     ) -> Result<Vec<(RowKey, RowData)>> {
+        if rows_limit == 0 {
+            return Ok(vec![]);
+        }
         self.refresh_access_token().await;
-
         let response = self
             .client
             .read_rows(ReadRowsRequest {
@@ -515,7 +520,7 @@ impl<F: FnMut(Request<()>) -> InterceptedRequestResult> BigTable<F> {
             .read_rows(ReadRowsRequest {
                 table_name: format!("{}{}", self.table_prefix, table_name),
                 app_profile_id: self.app_profile_id.clone(),
-                rows_limit: 0, // return all keys
+                rows_limit: 0, // return all existing rows
                 rows: Some(RowSet {
                     row_keys: row_keys
                         .iter()
