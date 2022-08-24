@@ -430,20 +430,25 @@ pub struct Task {
     pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
-    pub queue_time: std::sync::atomic::AtomicUsize,
+    pub sequence_time: std::sync::atomic::AtomicUsize,
 }
+
+// sequence_time
+// queue_time
+// execute_time
+// terminate_time
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
+        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
     }
 
     pub fn observe_clock(&self, clock: usize) {
-        self.queue_time.store(clock, std::sync::atomic::Ordering::SeqCst);
+        self.sequence_time.store(clock, std::sync::atomic::Ordering::SeqCst);
     }
 
-    pub fn queue_time(&self) -> usize {
-        self.queue_time.load(std::sync::atomic::Ordering::SeqCst)
+    pub fn sequence_time(&self) -> usize {
+        self.sequence_time.load(std::sync::atomic::Ordering::SeqCst)
     }
 
 
@@ -453,7 +458,7 @@ impl Task {
             tx: Box::new((self.tx.0.clone(), self.tx.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>())),
             contention_count: Default::default(),
             uncontended: Default::default(),
-            queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
         }
     }
 
@@ -918,7 +923,7 @@ impl ScheduleStage {
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
                 while let mut a = ee_receiver.recv().unwrap() {
                     assert!(a.task.tx.1.is_empty());
-                    assert!(a.task.queue_time() != usize::max_value());
+                    assert!(a.task.sequence_time() != usize::max_value());
                     //let lock_attempts = std::mem::take(&mut a.lock_attempts);
                     //drop(lock_attempts);
                     //TaskInQueue::get_mut(&mut a.task).unwrap();
