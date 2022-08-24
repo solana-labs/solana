@@ -256,15 +256,45 @@ mod tests {
 
     #[test]
     fn test_is_writable() {
-        let mut message = check_test_loaded_message().0;
+        solana_logger::setup();
+        let create_message_with_keys = |keys: Vec<Pubkey>| {
+            LoadedMessage::new(
+                v0::Message {
+                    header: MessageHeader {
+                        num_required_signatures: 1,
+                        num_readonly_signed_accounts: 0,
+                        num_readonly_unsigned_accounts: 1,
+                    },
+                    account_keys: keys[..2].to_vec(),
+                    ..v0::Message::default()
+                },
+                LoadedAddresses {
+                    writable: keys[2..=2].to_vec(),
+                    readonly: keys[3..].to_vec(),
+                },
+            )
+        };
 
-        message.message.to_mut().account_keys[0] = sysvar::clock::id();
-        assert!(message.is_writable_index(0));
-        assert!(!message.is_writable(0));
+        let key0 = Pubkey::new_unique();
+        let key1 = Pubkey::new_unique();
+        let key2 = Pubkey::new_unique();
+        {
+            let message = create_message_with_keys(vec![sysvar::clock::id(), key0, key1, key2]);
+            assert!(message.is_writable_index(0));
+            assert!(!message.is_writable(0));
+        }
 
-        message.message.to_mut().account_keys[0] = system_program::id();
-        assert!(message.is_writable_index(0));
-        assert!(!message.is_writable(0));
+        {
+            let message = create_message_with_keys(vec![system_program::id(), key0, key1, key2]);
+            assert!(message.is_writable_index(0));
+            assert!(!message.is_writable(0));
+        }
+
+        {
+            let message = create_message_with_keys(vec![key0, key1, system_program::id(), key2]);
+            assert!(message.is_writable_index(2));
+            assert!(!message.is_writable(2));
+        }
     }
 
     #[test]
