@@ -439,7 +439,7 @@ pub struct Task {
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
+        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
@@ -476,6 +476,23 @@ impl Task {
         self.execute_time.load(std::sync::atomic::Ordering::SeqCst)
     }
 
+    pub fn record_commit_time(&self, execute_clock: usize) {
+        self.commit_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn commit_time(&self) -> usize {
+        self.commit_time.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub fn trace_timestamps(&self) {
+        trace!("commit: seq: [{}sT..{}sT; {}sD], queue: [{}qT..{}qT; {}qD] exec: [{}eT..{}eT; {}eD]", 
+              self.sequence_time(),
+              self.sequence_end_time(),
+              self.sequence_end_time() - self.sequence_time(),
+              self.queue_time(), self.queue_end_time(), self.queue_end_time() - self.queue_time(), 
+              self.execute_time(), self.commit_time(), self.commit_time() - self.execute_time());
+    }
+
 
     pub fn clone_for_test(&self) -> Self {
         Self {
@@ -488,6 +505,7 @@ impl Task {
             queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
         }
     }
 
@@ -931,12 +949,8 @@ impl ScheduleStage {
     fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize) {
         // do par()-ly?
 
-        trace!("commit: seq: [{}sT..{}sT; {}sD], queue: [{}qT..{}qT; {}qD] exec: [{}eT..{}eT; {}eD]", 
-              ee.task.sequence_time(),
-              ee.task.sequence_end_time(),
-              ee.task.sequence_end_time() - ee.task.sequence_time(),
-              ee.task.queue_time(), ee.task.queue_end_time(), ee.task.queue_end_time() - ee.task.queue_time(), 
-              ee.task.execute_time(), *commit_time, *commit_time - ee.task.execute_time());
+        ee.task.record_commit_time(commit_time);
+        ee.task.trace_timestamps();
         //*commit_time = commit_time.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
