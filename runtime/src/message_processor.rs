@@ -270,20 +270,21 @@ mod tests {
             AccountMeta::new_readonly(readonly_pubkey, false),
         ];
 
-        let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
-            1,
-            0,
-            2,
-            account_keys.clone(),
-            Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
-                    mock_system_program_id,
-                    &MockSystemInstruction::Correct,
-                    account_metas.clone(),
-                ),
-            ]),
-        )));
+        let message =
+            SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
+                1,
+                0,
+                2,
+                account_keys.clone(),
+                Hash::default(),
+                AccountKeys::new(&account_keys, None).compile_instructions(&[
+                    Instruction::new_with_bincode(
+                        mock_system_program_id,
+                        &MockSystemInstruction::Correct,
+                        account_metas.clone(),
+                    ),
+                ]),
+            )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -320,20 +321,21 @@ mod tests {
             0
         );
 
-        let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
-            1,
-            0,
-            2,
-            account_keys.clone(),
-            Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
-                    mock_system_program_id,
-                    &MockSystemInstruction::TransferLamports { lamports: 50 },
-                    account_metas.clone(),
-                ),
-            ]),
-        )));
+        let message =
+            SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
+                1,
+                0,
+                2,
+                account_keys.clone(),
+                Hash::default(),
+                AccountKeys::new(&account_keys, None).compile_instructions(&[
+                    Instruction::new_with_bincode(
+                        mock_system_program_id,
+                        &MockSystemInstruction::TransferLamports { lamports: 50 },
+                        account_metas.clone(),
+                    ),
+                ]),
+            )));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -359,20 +361,21 @@ mod tests {
             ))
         );
 
-        let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
-            1,
-            0,
-            2,
-            account_keys.clone(),
-            Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
-                    mock_system_program_id,
-                    &MockSystemInstruction::ChangeData { data: 50 },
-                    account_metas,
-                ),
-            ]),
-        )));
+        let message =
+            SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
+                1,
+                0,
+                2,
+                account_keys.clone(),
+                Hash::default(),
+                AccountKeys::new(&account_keys, None).compile_instructions(&[
+                    Instruction::new_with_bincode(
+                        mock_system_program_id,
+                        &MockSystemInstruction::ChangeData { data: 50 },
+                        account_metas,
+                    ),
+                ]),
+            )));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
