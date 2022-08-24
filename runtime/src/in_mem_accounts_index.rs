@@ -552,6 +552,16 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         reclaim: UpsertReclaim,
     ) {
         let mut slot_list = current.slot_list.write().unwrap();
+        let mut ignore_addref = false;
+        if current.ref_count() == 0 {
+            if slot_list.iter().any(|(_slot, info)| !info.is_cached()) {
+                panic!("found 0 ref count with uncached info: {slot_list:?}");
+            }
+            if !new_value.1.is_cached() {
+                ignore_addref = true;
+                current.add_un_ref_no_assert(true);
+            }
+        }
         let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
             &mut slot_list,
@@ -562,7 +572,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             reclaim,
         );
         if addref {
-            current.add_un_ref(true);
+            if !ignore_addref {
+                current.add_un_ref(true);
+            }
+        } else if ignore_addref {
+            panic!("unexpected");
         }
         current.set_dirty(true);
     }

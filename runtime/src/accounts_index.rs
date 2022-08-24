@@ -282,6 +282,15 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         self.set_dirty(true);
     }
 
+    pub fn add_un_ref_no_assert(&self, add: bool) {
+        if add {
+            self.ref_count.fetch_add(1, Ordering::Release);
+        } else {
+            self.ref_count.fetch_sub(1, Ordering::Release);
+        }
+        self.set_dirty(true);
+    }
+
     pub fn dirty(&self) -> bool {
         self.meta.dirty.load(Ordering::Acquire)
     }
