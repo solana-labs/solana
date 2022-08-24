@@ -12,13 +12,14 @@ use solana_rpc_client_api::deprecated_config::{
     RpcConfirmedBlockConfig, RpcConfirmedTransactionConfig,
     RpcGetConfirmedSignaturesForAddress2Config,
 };
+#[cfg(feature = "spinner")]
+use {crate::spinner, solana_sdk::clock::MAX_HASH_AGE_IN_SECONDS, std::cmp::min};
 use {
     crate::{
         http_sender::HttpSender,
         mock_sender::MockSender,
         rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClientConfig},
         rpc_sender::*,
-        spinner,
     },
     bincode::serialize,
     log::*,
@@ -38,7 +39,7 @@ use {
     },
     solana_sdk::{
         account::Account,
-        clock::{Epoch, Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT, MAX_HASH_AGE_IN_SECONDS},
+        clock::{Epoch, Slot, UnixTimestamp, DEFAULT_MS_PER_SLOT},
         commitment_config::{CommitmentConfig, CommitmentLevel},
         epoch_info::EpochInfo,
         epoch_schedule::EpochSchedule,
@@ -55,7 +56,6 @@ use {
     },
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
-        cmp::min,
         net::SocketAddr,
         str::FromStr,
         time::{Duration, Instant},
@@ -278,10 +278,10 @@ impl RpcClient {
     /// The URL is an HTTP URL, usually for port 8899, as in
     /// "http://localhost:8899".
     ///
-    /// The `confirm_transaction_initial_timeout` argument specifies, when
+    /// The `confirm_transaction_initial_timeout` argument specifies the amount of
+    /// time to allow for the server to initially process a transaction, when
     /// confirming a transaction via one of the `_with_spinner` methods, like
-    /// [`RpcClient::send_and_confirm_transaction_with_spinner`], the amount of
-    /// time to allow for the server to initially process a transaction. In
+    /// [`RpcClient::send_and_confirm_transaction_with_spinner`]. In
     /// other words, setting `confirm_transaction_initial_timeout` to > 0 allows
     /// `RpcClient` to wait for confirmation of a transaction that the server
     /// has not "seen" yet.
@@ -708,6 +708,7 @@ impl RpcClient {
         .into())
     }
 
+    #[cfg(feature = "spinner")]
     pub async fn send_and_confirm_transaction_with_spinner(
         &self,
         transaction: &Transaction,
@@ -719,6 +720,7 @@ impl RpcClient {
         .await
     }
 
+    #[cfg(feature = "spinner")]
     pub async fn send_and_confirm_transaction_with_spinner_and_commitment(
         &self,
         transaction: &Transaction,
@@ -735,6 +737,7 @@ impl RpcClient {
         .await
     }
 
+    #[cfg(feature = "spinner")]
     pub async fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
         transaction: &Transaction,
@@ -1124,6 +1127,7 @@ impl RpcClient {
         })
     }
 
+    #[cfg(feature = "spinner")]
     pub async fn confirm_transaction_with_spinner(
         &self,
         signature: &Signature,

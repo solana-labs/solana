@@ -1,3 +1,4 @@
+#![cfg(feature = "spinner")]
 //! Spinner creator
 
 use {

@@ -5,18 +5,16 @@ use {
         nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
     },
     solana_rpc_client::rpc_client::RpcClient,
-    solana_sdk::{
-        clock::Slot,
-        message::Message,
-        signers::Signers,
-        transaction::{Transaction, TransactionError},
-        transport::Result as TransportResult,
-    },
+    solana_sdk::{clock::Slot, transaction::Transaction, transport::Result as TransportResult},
     std::{
         collections::VecDeque,
         net::UdpSocket,
         sync::{Arc, RwLock},
     },
+};
+#[cfg(feature = "spinner")]
+use {
+    solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
     tokio::time::Duration,
 };
 
@@ -29,8 +27,10 @@ pub const DEFAULT_FANOUT_SLOTS: u64 = 12;
 pub const MAX_FANOUT_SLOTS: u64 = 100;
 
 /// Send at ~100 TPS
+#[cfg(feature = "spinner")]
 pub(crate) const SEND_TRANSACTION_INTERVAL: Duration = Duration::from_millis(10);
 /// Retry batch send after 4 seconds
+#[cfg(feature = "spinner")]
 pub(crate) const TRANSACTION_RESEND_INTERVAL: Duration = Duration::from_secs(4);
 
 /// Config params for `TpuClient`
@@ -124,6 +124,7 @@ impl TpuClient {
         })
     }
 
+    #[cfg(feature = "spinner")]
     pub fn send_and_confirm_messages_with_spinner<T: Signers>(
         &self,
         messages: &[Message],

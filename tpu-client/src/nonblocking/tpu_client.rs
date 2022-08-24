@@ -1,32 +1,33 @@
+#[cfg(feature = "spinner")]
+use {
+    crate::tpu_client::{SEND_TRANSACTION_INTERVAL, TRANSACTION_RESEND_INTERVAL},
+    indicatif::ProgressBar,
+    solana_rpc_client::spinner,
+    solana_rpc_client_api::request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
+};
 use {
     crate::{
         connection_cache::ConnectionCache,
         nonblocking::tpu_connection::TpuConnection,
-        tpu_client::{
-            RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS, SEND_TRANSACTION_INTERVAL,
-            TRANSACTION_RESEND_INTERVAL,
-        },
+        tpu_client::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
     },
     bincode::serialize,
     futures_util::{future::join_all, stream::StreamExt},
-    indicatif::ProgressBar,
     log::*,
     solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
-    solana_rpc_client::{nonblocking::rpc_client::RpcClient, spinner},
+    solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_rpc_client_api::{
         client_error::{Error as ClientError, Result as ClientResult},
-        request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         response::{RpcContactInfo, SlotUpdate},
     },
     solana_sdk::{
         clock::Slot,
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
-        message::Message,
         pubkey::Pubkey,
         signature::SignerError,
-        signers::Signers,
-        transaction::{Transaction, TransactionError},
+        transaction::Transaction,
         transport::{Result as TransportResult, TransportError},
     },
     std::{
@@ -326,6 +327,7 @@ impl TpuClient {
         })
     }
 
+    #[cfg(feature = "spinner")]
     pub async fn send_and_confirm_messages_with_spinner<T: Signers>(
         &self,
         messages: &[Message],
@@ -667,6 +669,7 @@ async fn maybe_fetch_cache_info(
     }
 }
 
+#[cfg(feature = "spinner")]
 fn set_message_for_confirmed_transactions(
     progress_bar: &ProgressBar,
     confirmed_transactions: u32,
