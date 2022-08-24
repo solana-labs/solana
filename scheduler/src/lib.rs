@@ -859,12 +859,12 @@ impl ScheduleStage {
                     let contended_unique_weights = l.contended_unique_weights();
                     contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
                         let mut found = true;
-                        assert_ne!(task_cursor.key(), &uq);
+                        assert_ne!(task_cursor.key(), &task.unique_weight);
                         let mut task = task_cursor.value();
                         while !task.currently_contended() {
                             if let Some(new_cursor) = task_cursor.prev() {
                                 assert!(new_cursor.key() < task_cursor.key());
-                                assert_ne!(new_cursor.key(), &uq);
+                                assert_ne!(new_cursor.key(), &task.unique_weight);
                                 task_cursor = new_cursor;
                                 task = task_cursor.value();
                             } else {
