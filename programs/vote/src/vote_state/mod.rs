@@ -198,12 +198,12 @@ fn check_update_vote_state_slots_are_valid(
             let mut prev_slot = Slot::MAX;
             let current_root = vote_state_update.root;
             for lockout in vote_state.votes.iter().rev() {
-                let is_bigger_than_root = current_root
+                let is_slot_bigger_than_root = current_root
                     .map(|current_root| lockout.slot > current_root)
                     .unwrap_or(true);
                 // Ensure we're iterating from biggest to smallest vote in the
                 // current vote state
-                assert!(lockout.slot < prev_slot && is_bigger_than_root);
+                assert!(lockout.slot < prev_slot && is_slot_bigger_than_root);
                 if lockout.slot <= new_proposed_root {
                     vote_state_update.root = Some(lockout.slot);
                     break;
@@ -214,7 +214,7 @@ fn check_update_vote_state_slots_are_valid(
     }
 
     // Index into the new proposed vote state's slots, starting with the root if it exists then
-    // we use this mutable root to fold checking the root slot into this the below loop
+    // we use this mutable root to fold checking the root slot into the below loop
     // for performance
     let mut root_to_check = vote_state_update.root;
     let mut vote_state_update_index = 0;
