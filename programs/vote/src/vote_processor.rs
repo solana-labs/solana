@@ -1,18 +1,12 @@
 //! Vote program processor
 
 use {
-<<<<<<< HEAD
     crate::{
         id,
         vote_instruction::VoteInstruction,
-        vote_state::{self, VoteAuthorize, VoteStateUpdate},
+        vote_state::{self, VoteAuthorize},
     },
     log::*,
-=======
-    crate::vote_state,
-    log::*,
-    solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
->>>>>>> efa6201ed (Check overflow on vote tx compaction boundary (#27185))
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
