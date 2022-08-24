@@ -214,7 +214,7 @@ JSON parsing for the following native and SPL programs:
 
 | Program | Account State | Instructions |
 | --- | --- | --- |
-| Address Lookup | v1.12.0 |   |
+| Address Lookup | v1.12.0 | v1.12.0 |
 | BPF Loader | n/a | stable |
 | BPF Upgradeable Loader | stable | stable |
 | Config | stable |   |
