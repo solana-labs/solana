@@ -909,7 +909,7 @@ impl ScheduleStage {
               ee.task.sequence_end_time(),
               ee.task.sequence_end_time() - ee.task.sequence_time(),
               ee.task.queue_time(), ee.task.queue_end_time(), ee.task.queue_end_time() - ee.task.queue_time(), 
-              ee.task.execute_time(), commit_time, commit_time - ee.task.execute_time());
+              ee.task.execute_time(), *commit_time, *commit_time - ee.task.execute_time());
         *commit_time = commit_time.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
