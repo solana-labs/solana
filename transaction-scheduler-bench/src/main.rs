@@ -370,7 +370,7 @@ fn handle_transaction_batch(
     completed_transaction_sender.0
         .send(transaction_batch)
         .unwrap();
-    trace!("send from execute: {:?}", uq);
+    error!("send from execute substage: {:?} seq: {}", uq, transaction_batch.sequence_time());
 }
 
 const NUM_SENDERS: usize = 2;
