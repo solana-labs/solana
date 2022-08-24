@@ -51,8 +51,8 @@
 
 #[cfg(test)]
 pub(crate) use shred_code::MAX_CODE_SHREDS_PER_SLOT;
-pub(crate) use shred_data::ShredData;
 pub use {
+    self::shred_data::ShredData,
     self::stats::{ProcessShredsStats, ShredFetchStats},
     crate::shredder::Shredder,
 };
@@ -80,7 +80,7 @@ mod common;
 mod legacy;
 mod merkle;
 mod shred_code;
-pub mod shred_data;
+mod shred_data;
 mod stats;
 mod traits;
 

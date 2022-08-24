@@ -3,7 +3,7 @@ use {
     bincode::serialized_size,
     crossbeam_channel::Receiver,
     solana_entry::entry::Entry,
-    solana_ledger::shred::shred_data::ShredData,
+    solana_ledger::shred::ShredData,
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::bank::Bank,
     solana_sdk::clock::Slot,
@@ -41,13 +41,35 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
 
     serialized_batch_byte_count += serialized_size(&entry)?;
     let mut entries = vec![entry];
-    let mut slot = bank.slot();
-    let mut max_tick_height = bank.max_tick_height();
 
-    assert!(last_tick_height <= max_tick_height);
+    assert!(last_tick_height <= bank.max_tick_height());
 
+    // Drain channel
+    while last_tick_height != bank.max_tick_height()
+        && serialized_batch_byte_count < target_serialized_batch_byte_count
+    {
+        let (try_bank, (entry, tick_height)) = match receiver.try_recv() {
+            Ok(working_bank_entry) => working_bank_entry,
+            Err(_) => break,
+        };
+        // If the bank changed, that implies the previous slot was interrupted and we do not have to
+        // broadcast its entries.
+        if try_bank.slot() != bank.slot() {
+            warn!("Broadcast for slot: {} interrupted", bank.slot());
+            entries.clear();
+            serialized_batch_byte_count = 8; // Vec len
+            bank = try_bank;
+        }
+        last_tick_height = tick_height;
+        let entry_bytes = serialized_size(&entry)?;
+        serialized_batch_byte_count += entry_bytes;
+        entries.push(entry);
+        assert!(last_tick_height <= bank.max_tick_height());
+    }
+
+    // Wait up to `ENTRY_COALESCE_DURATION` to try to coalesce entries into a 32 shred batch
     let coalesce_deadline = Instant::now() + ENTRY_COALESCE_DURATION;
-    while last_tick_height != max_tick_height
+    while last_tick_height != bank.max_tick_height()
         && serialized_batch_byte_count < target_serialized_batch_byte_count
     {
         let (try_bank, (entry, tick_height)) = match receiver.recv_deadline(coalesce_deadline) {
@@ -56,19 +78,17 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
         };
         // If the bank changed, that implies the previous slot was interrupted and we do not have to
         // broadcast its entries.
-        if try_bank.slot() != slot {
+        if try_bank.slot() != bank.slot() {
             warn!("Broadcast for slot: {} interrupted", bank.slot());
             entries.clear();
             serialized_batch_byte_count = 8; // Vec len
             bank = try_bank;
-            slot = bank.slot();
-            max_tick_height = bank.max_tick_height();
         }
         last_tick_height = tick_height;
         let entry_bytes = serialized_size(&entry)?;
         serialized_batch_byte_count += entry_bytes;
         entries.push(entry);
-        assert!(last_tick_height <= max_tick_height);
+        assert!(last_tick_height <= bank.max_tick_height());
     }
 
     let time_elapsed = recv_start.elapsed();
