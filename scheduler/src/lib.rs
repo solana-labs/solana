@@ -438,7 +438,7 @@ impl Task {
         TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
     }
 
-    pub fn observe_clock(&self, clock: usize) {
+    pub fn record_sequence_time(&self, clock: usize) {
         self.sequence_time.store(clock, std::sync::atomic::Ordering::SeqCst);
     }
 
@@ -890,10 +890,10 @@ impl ScheduleStage {
         weighted_tx: (Weight, TaskInQueue),
         runnable_queue: &mut TaskQueue,
         unique_key: &mut u64,
-        queue_clock: &mut usize,
+        sequence_time: &mut usize,
     ) {
-        weighted_tx.1.observe_clock(*queue_clock);
-        *queue_clock = queue_clock.checked_add(1).unwrap();
+        weighted_tx.1.record_sequence_time(*sequence_time);
+        *sequence_time = sequence_time.checked_add(1).unwrap();
         Self::push_to_runnable_queue(weighted_tx, runnable_queue, unique_key)
     }
 
@@ -909,7 +909,7 @@ impl ScheduleStage {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
         let mut contended_count = 0;
-        let mut queue_clock = 0;
+        let mut sequence_time = 0;
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
 
         let (to_next_stage, maybe_jon_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
@@ -948,14 +948,14 @@ impl ScheduleStage {
                                 to_next_stage.send(processed_execution_environment).unwrap();
                             }
 
-                            Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut queue_clock);
+                            Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut sequence_time);
 
                             while from.len() > 0 && from_exec.len() == 0 {
                                let i = from.recv().unwrap();
                                 match i {
                                     Multiplexed::FromPrevious(weighted_tx) => {
                                         trace!("recv from previous (after starvation)");
-                                        Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut queue_clock);
+                                        Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut sequence_time);
                                     }
                                     Multiplexed::FromPreviousBatched(vvv) => {
                                         unreachable!();
@@ -996,7 +996,7 @@ impl ScheduleStage {
                         match i {
                             Multiplexed::FromPrevious(weighted_tx) => {
                                 trace!("recv from previous (after starvation)");
-                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut queue_clock);
+                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut sequence_time);
                             }
                             Multiplexed::FromPreviousBatched(vvv) => {
                                 unreachable!();
@@ -1022,7 +1022,7 @@ impl ScheduleStage {
                         match i {
                             Multiplexed::FromPrevious(weighted_tx) => {
                                 trace!("recv from previous (after starvation)");
-                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut queue_clock);
+                                Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut sequence_time);
                             }
                             Multiplexed::FromPreviousBatched(vvv) => {
                                 unreachable!();
