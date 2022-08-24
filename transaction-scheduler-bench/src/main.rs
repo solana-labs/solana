@@ -354,7 +354,7 @@ fn handle_transaction_batch(
                 if let Some(new_cursor) = task_cursor.prev() {
                     assert!(new_cursor.key() < task_cursor.key());
                     assert_ne!(new_cursor.key(), &uq);
-                    (task_cursor, task) = (new_cursor, new_cursor.value());
+                    (task, task_cursor) = (new_cursor.value(), new_cursor);
                 } else {
                     found = false;
                     break;
