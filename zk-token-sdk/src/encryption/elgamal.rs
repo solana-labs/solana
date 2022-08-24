@@ -166,7 +166,7 @@ impl ElGamalKeypair {
 
         // Some `Signer` implementations return the default signature, which is not suitable for
         // use as key material
-        if signature == Signature::default() {
+        if bool::from(signature.as_ref().ct_eq(Signature::default().as_ref())) {
             return Err(SignerError::Custom("Rejecting default signature".into()));
         }
 
