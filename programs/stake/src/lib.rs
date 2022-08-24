@@ -24,11 +24,11 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
 /// rent exempt reserve _plus_ the minimum stake delegation.
 #[inline(always)]
 pub fn get_minimum_delegation(feature_set: &FeatureSet) -> u64 {
-    if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id() && !feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_100m_lamports::id()) {
+    if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()) && !feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_100m_lamports::id()) {
         const MINIMUM_DELEGATION_SOL: u64 = 1;
         MINIMUM_DELEGATION_SOL * LAMPORTS_PER_SOL
     }
-    else if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_100m_lamports::id() && !feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()) {
+    else if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_100m_lamports::id()) && !feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()) {
         const MINIMUM_DELEGATION_LAMPORTS: u64 = 100_000_000;
         MINIMUM_DELEGATION_LAMPORTS
     } else {
