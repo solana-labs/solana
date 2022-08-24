@@ -486,8 +486,9 @@ impl Task {
     }
 
     pub fn trace_timestamps(&self, prefix: &str) {
-        trace!("{}: seq: [{}sT..{}sT; {}sD], queue: [{}qT..{}qT; {}qD] exec: [{}eT..{}eT; {}eD]", 
-               prefix,
+        trace!("{}: {:016x} seq: [{}sT..{}sT; {}sD], queue: [{}qT..{}qT; {}qD] exec: [{}eT..{}eT; {}eD]", 
+              prefix,
+              self.unique_weight,
               self.sequence_time(),
               self.sequence_end_time(),
               self.sequence_end_time() - self.sequence_time(),
