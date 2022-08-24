@@ -444,7 +444,7 @@ fn output_slot(
 
                                 let t = solana_scheduler::Task::new_for_queue(weight, tx);
                                 for lock_attempt in t.tx.1.iter() {
-                                    lock_attempt.contended_unique_weights().insert_task_id(weight, solana_scheduler::TaskInQueue::clone(&t));
+                                    lock_attempt.contended_unique_weights().insert_task(weight, solana_scheduler::TaskInQueue::clone(&t));
                                 }
 
                                 muxed_sender
