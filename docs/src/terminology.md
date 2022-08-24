@@ -54,6 +54,10 @@ The Solana program that owns and loads [BPF](developing/on-chain-programs/overvi
 
 A computer program that accesses the Solana server network [cluster](#cluster).
 
+## commitment
+
+A measure of the network confirmation for the [block](#block).
+
 ## cluster
 
 A set of [validators](#validator) maintaining a single [ledger](#ledger).
@@ -72,7 +76,7 @@ The wallclock duration between a [leader](#leader) creating a [tick entry](#tick
 
 ## confirmed block
 
-A [block](#block) that has received a [supermajority](#supermajority) of [ledger votes](#ledger-vote).
+A [block](#block) that has received a [super majority](#supermajority) of [ledger votes](#ledger-vote).
 
 ## control plane
 
@@ -100,7 +104,7 @@ An off-chain service that acts as a custodian for a user's private key. It typic
 
 ## entry
 
-An entry on the [ledger](#ledger) either a [tick](#tick) or a [transactions entry](#transactions-entry).
+An entry on the [ledger](#ledger) either a [tick](#tick) or a [transaction's entry](#transactions-entry).
 
 ## entry id
 
