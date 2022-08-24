@@ -458,8 +458,7 @@ impl LedgerStorage {
     /// Fetch the next slots after the provided slot that contains a block
     ///
     /// start_slot: slot to start the search from (inclusive)
-    /// limit: stop after this many slots have been found; if limit==0, all records in the table
-    /// after start_slot will be read
+    /// limit: stop after this many slots have been found
     pub async fn get_confirmed_blocks(&self, start_slot: Slot, limit: usize) -> Result<Vec<Slot>> {
         debug!(
             "LedgerStorage::get_confirmed_blocks request received: {:?} {:?}",
