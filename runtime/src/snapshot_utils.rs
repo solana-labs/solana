@@ -1609,23 +1609,14 @@ fn rebuild_bank_from_snapshots(
         Ok(slot_deltas)
     })?;
 
-<<<<<<< HEAD
-    bank.src.append(&slot_deltas);
-=======
     verify_slot_deltas(slot_deltas.as_slice(), &bank)?;
 
-    bank.status_cache.write().unwrap().append(&slot_deltas);
-
-    bank.prepare_rewrites_for_hash();
->>>>>>> d2868f439 (Verify snapshot slot deltas (#26666))
+    bank.src.append(&slot_deltas);
 
     info!("Loaded bank for slot: {}", bank.slot());
     Ok(bank)
 }
 
-<<<<<<< HEAD
-fn get_snapshot_file_name(slot: Slot) -> String {
-=======
 /// Verify that the snapshot's slot deltas are not corrupt/invalid
 fn verify_slot_deltas(
     slot_deltas: &[BankSlotDelta],
@@ -1726,8 +1717,7 @@ fn verify_slot_deltas_with_history(
     Ok(())
 }
 
-pub(crate) fn get_snapshot_file_name(slot: Slot) -> String {
->>>>>>> d2868f439 (Verify snapshot slot deltas (#26666))
+fn get_snapshot_file_name(slot: Slot) -> String {
     slot.to_string()
 }
 
@@ -3466,154 +3456,6 @@ mod tests {
             "Ensure Account1 has not been brought back from the dead"
         );
     }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    fn test_bank_fields_from_snapshot() {
-        solana_logger::setup();
-        let collector = Pubkey::new_unique();
-        let key1 = Keypair::new();
-
-        let (genesis_config, mint_keypair) = create_genesis_config(sol_to_lamports(1_000_000.));
-        let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
-        while !bank0.is_complete() {
-            bank0.register_tick(&Hash::new_unique());
-        }
-
-        let slot = 1;
-        let bank1 = Arc::new(Bank::new_from_parent(&bank0, &collector, slot));
-        while !bank1.is_complete() {
-            bank1.register_tick(&Hash::new_unique());
-        }
-
-        let all_snapshots_dir = tempfile::TempDir::new().unwrap();
-        let snapshot_archive_format = ArchiveFormat::Tar;
-
-        let full_snapshot_slot = slot;
-        bank_to_full_snapshot_archive(
-            &all_snapshots_dir,
-            &bank1,
-            None,
-            &all_snapshots_dir,
-            &all_snapshots_dir,
-            snapshot_archive_format,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        )
-        .unwrap();
-
-        let slot = slot + 1;
-        let bank2 = Arc::new(Bank::new_from_parent(&bank1, &collector, slot));
-        bank2
-            .transfer(sol_to_lamports(1.), &mint_keypair, &key1.pubkey())
-            .unwrap();
-        while !bank2.is_complete() {
-            bank2.register_tick(&Hash::new_unique());
-        }
-
-        bank_to_incremental_snapshot_archive(
-            &all_snapshots_dir,
-            &bank2,
-            full_snapshot_slot,
-            None,
-            &all_snapshots_dir,
-            &all_snapshots_dir,
-            snapshot_archive_format,
-            DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        )
-        .unwrap();
-
-        let bank_fields = bank_fields_from_snapshot_archives(
-            &all_snapshots_dir,
-            &all_snapshots_dir,
-            &all_snapshots_dir,
-        )
-        .unwrap();
-        assert_eq!(bank_fields.slot, bank2.slot());
-        assert_eq!(bank_fields.parent_slot, bank2.parent_slot());
-    }
-
-    /// All the permutations of `snapshot_type` for the new-and-old accounts packages:
-    ///
-    ///  new      | old      |
-    ///  snapshot | snapshot |
-    ///  type     | type     | result
-    /// ----------+----------+--------
-    ///   FSS     |  FSS     |  true
-    ///   FSS     |  ISS     |  true
-    ///   FSS     |  None    |  true
-    ///   ISS     |  FSS     |  false
-    ///   ISS     |  ISS     |  true
-    ///   ISS     |  None    |  true
-    ///   None    |  FSS     |  false
-    ///   None    |  ISS     |  false
-    ///   None    |  None    |  true
-    #[test]
-    fn test_can_submit_accounts_package() {
-        /// helper function to create an AccountsPackage that's good enough for this test
-        fn new_accounts_package_with(snapshot_type: Option<SnapshotType>) -> AccountsPackage {
-            AccountsPackage {
-                slot: Slot::default(),
-                block_height: Slot::default(),
-                slot_deltas: Vec::default(),
-                snapshot_links: TempDir::new().unwrap(),
-                snapshot_storages: SnapshotStorages::default(),
-                archive_format: ArchiveFormat::Tar,
-                snapshot_version: SnapshotVersion::default(),
-                full_snapshot_archives_dir: PathBuf::default(),
-                incremental_snapshot_archives_dir: PathBuf::default(),
-                expected_capitalization: u64::default(),
-                accounts_hash_for_testing: None,
-                cluster_type: solana_sdk::genesis_config::ClusterType::Development,
-                snapshot_type,
-                accounts: Arc::new(crate::accounts::Accounts::default_for_tests()),
-                epoch_schedule: solana_sdk::epoch_schedule::EpochSchedule::default(),
-                rent_collector: crate::rent_collector::RentCollector::default(),
-            }
-        }
-
-        let pending_accounts_package = PendingAccountsPackage::default();
-        for (new_snapshot_type, old_snapshot_type, expected_result) in [
-            (
-                Some(SnapshotType::FullSnapshot),
-                Some(SnapshotType::FullSnapshot),
-                true,
-            ),
-            (
-                Some(SnapshotType::FullSnapshot),
-                Some(SnapshotType::IncrementalSnapshot(0)),
-                true,
-            ),
-            (Some(SnapshotType::FullSnapshot), None, true),
-            (
-                Some(SnapshotType::IncrementalSnapshot(0)),
-                Some(SnapshotType::FullSnapshot),
-                false,
-            ),
-            (
-                Some(SnapshotType::IncrementalSnapshot(0)),
-                Some(SnapshotType::IncrementalSnapshot(0)),
-                true,
-            ),
-            (Some(SnapshotType::IncrementalSnapshot(0)), None, true),
-            (None, Some(SnapshotType::FullSnapshot), false),
-            (None, Some(SnapshotType::IncrementalSnapshot(0)), false),
-            (None, None, true),
-        ] {
-            let new_accounts_package = new_accounts_package_with(new_snapshot_type);
-            let old_accounts_package = new_accounts_package_with(old_snapshot_type);
-            pending_accounts_package
-                .lock()
-                .unwrap()
-                .replace(old_accounts_package);
-
-            let actual_result =
-                can_submit_accounts_package(&new_accounts_package, &pending_accounts_package);
-            assert_eq!(expected_result, actual_result);
-        }
-    }
 
     #[test]
     fn test_verify_slot_deltas_structural_good() {
@@ -3765,5 +3607,4 @@ mod tests {
             Err(VerifySlotDeltasError::SlotNotFoundInDeltas(333)),
         );
     }
->>>>>>> d2868f439 (Verify snapshot slot deltas (#26666))
 }
