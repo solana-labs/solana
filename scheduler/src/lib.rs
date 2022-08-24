@@ -889,10 +889,11 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
+        execute_clock: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate)
-                .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll));
+                .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, execute_clock));
         maybe_ee
     }
 
@@ -921,6 +922,7 @@ impl ScheduleStage {
         let mut current_unique_key = u64::max_value();
         let mut contended_count = 0;
         let mut sequence_time = 0;
+        let mut execute_clock = 0;
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
 
         let (to_next_stage, maybe_jon_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
@@ -1019,7 +1021,7 @@ impl ScheduleStage {
 
                 let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
-                    Self::schedule_next_execution(runnable_queue, address_book, &mut contended_count, prefer_immediate);
+                    Self::schedule_next_execution(runnable_queue, address_book, &mut contended_count, prefer_immediate, &mut execute_clock);
 
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
