@@ -228,7 +228,7 @@ pub(crate) mod tests {
             clock::Slot,
             hash::Hash,
             instruction::CompiledInstruction,
-            message::{Message, MessageHeader, SanitizedMessage},
+            message::{LegacyMessage, Message, MessageHeader, SanitizedMessage},
             nonce::{self, state::DurableNonce},
             nonce_account,
             pubkey::Pubkey,
@@ -372,7 +372,7 @@ pub(crate) mod tests {
             durable_nonce_fee: Some(DurableNonceFee::from(
                 &NonceFull::from_partial(
                     rollback_partial,
-                    &SanitizedMessage::Legacy(message),
+                    &SanitizedMessage::Legacy(LegacyMessage::new(message)),
                     &[(pubkey, nonce_account)],
                     &rent_debits,
                 )
