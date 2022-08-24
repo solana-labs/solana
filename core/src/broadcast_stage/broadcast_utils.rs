@@ -45,9 +45,7 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
     assert!(last_tick_height <= bank.max_tick_height());
 
     // Drain channel
-    while last_tick_height != bank.max_tick_height()
-        && serialized_batch_byte_count < target_serialized_batch_byte_count
-    {
+    while last_tick_height != bank.max_tick_height() {
         let (try_bank, (entry, tick_height)) = match receiver.try_recv() {
             Ok(working_bank_entry) => working_bank_entry,
             Err(_) => break,
