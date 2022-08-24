@@ -843,7 +843,8 @@ impl ScheduleStage {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended = address_book.reset_lock(&mut l, true);
 
-            if newly_uncontended && l.target.page_ref().next_usage == Usage::Unused {
+            let page = l.target.page_mut();
+            if newly_uncontended && page.next_usage == Usage::Unused {
                 let mut inserted = false;
 
                 if let Some(task) = l.heaviest_uncontended.take() {
@@ -855,7 +856,7 @@ impl ScheduleStage {
                 }
 
                 if !inserted {
-                    let contended_unique_weights = l.contended_unique_weights();
+                    let contended_unique_weights = page.contended_unique_weights();
                     contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
                         let mut found = true;
                         //assert_ne!(task_cursor.key(), &task.uq);
@@ -878,7 +879,6 @@ impl ScheduleStage {
                     });
                 }
             }
-            let page = l.target.page_mut();
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
                 for task_id in std::mem::take(&mut page.provisional_task_ids).into_iter() {
