@@ -398,6 +398,11 @@ pub mod stake_raise_minimum_delegation_to_1_sol {
     solana_sdk::declare_id!("4xmyBuR2VCXzy9H6qYpH9ckfgnTuMDQFPFBfTs4eBCY1");
 }
 
+pub mod stake_raise_minimum_delegation_to_100m_lamports {
+    // This is a feature-proposal *feature id*.  The feature keypair address is `EVh5WdHoEvDfrW18CiH2emVYpxjMd2tMRnaT8yXC5oCu`.
+    solana_sdk::declare_id!("3Ynd8eXcJQVc79V75dH1Ut4JR5taoRG7j4oYJKQUpaGd");
+}
+
 pub mod add_set_compute_unit_price_ix {
     solana_sdk::declare_id!("98std1NSHqXi9WYvFShfVepRdCoq1qvsp8fsR2XZtG8g");
 }
@@ -603,6 +608,7 @@ lazy_static! {
         (stake_allow_zero_undelegated_amount::id(), "Allow zero-lamport undelegated amount for initialized stakes #24670"),
         (require_static_program_ids_in_transaction::id(), "require static program ids in versioned transactions"),
         (stake_raise_minimum_delegation_to_1_sol::id(), "Raise minimum stake delegation to 1.0 SOL #24357"),
+        (stake_raise_minimum_delegation_to_100m_lamports::id(), "Raise minimum stake delegation to 0.1 SOL #27366"),
         (add_set_compute_unit_price_ix::id(), "add compute budget ix for setting a compute unit price"),
         (disable_deploy_of_alloc_free_syscall::id(), "disable new deployments of deprecated sol_alloc_free_ syscall"),
         (include_account_index_in_rent_error::id(), "include account index in rent tx error #25190"),
