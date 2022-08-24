@@ -141,7 +141,7 @@ pub struct TaskIds {
 
 impl TaskIds {
     #[inline(never)]
-    pub fn insert_task_id(&self, u: TaskId, task: TaskInQueue) {
+    pub fn insert_task(&self, u: TaskId, task: TaskInQueue) {
         let mut is_inserted = false;
         self.task_ids.get_or_insert_with(u, || {
             is_inserted = true;
@@ -151,14 +151,9 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    pub fn remove_task_id(&self, u: &TaskId) {
+    pub fn remove_task(&self, u: &TaskId) {
         let removed_entry = self.task_ids.remove(u);
         assert!(removed_entry.is_some());
-    }
-
-    #[inline(never)]
-    fn heaviest_task_id(&self) -> Option<TaskId> {
-        self.task_ids.back().map(|e| *(e.key()))
     }
 
     #[inline(never)]
