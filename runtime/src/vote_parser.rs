@@ -7,7 +7,7 @@ use {
         signature::Signature,
         transaction::{SanitizedTransaction, Transaction},
     },
-    solana_vote_program::{vote_instruction::VoteInstruction, vote_state::VoteStateUpdate},
+    solana_vote_program::vote_instruction::VoteInstruction,
 };
 
 pub type ParsedVote = (Pubkey, VoteTransaction, Option<Hash>, Signature);
@@ -82,14 +82,18 @@ fn parse_vote_instruction_data(
         VoteInstruction::UpdateVoteStateSwitch(vote_state_update, hash) => {
             Some((VoteTransaction::from(vote_state_update), Some(hash)))
         }
-        VoteInstruction::CompactUpdateVoteState(compact_vote_state_update) => Some((
-            VoteTransaction::from(VoteStateUpdate::from(compact_vote_state_update)),
-            None,
-        )),
-        VoteInstruction::CompactUpdateVoteStateSwitch(compact_vote_state_update, hash) => Some((
-            VoteTransaction::from(VoteStateUpdate::from(compact_vote_state_update)),
-            Some(hash),
-        )),
+        VoteInstruction::CompactUpdateVoteState(compact_vote_state_update) => {
+            compact_vote_state_update
+                .uncompact()
+                .ok()
+                .map(|vote_state_update| (VoteTransaction::from(vote_state_update), None))
+        }
+        VoteInstruction::CompactUpdateVoteStateSwitch(compact_vote_state_update, hash) => {
+            compact_vote_state_update
+                .uncompact()
+                .ok()
+                .map(|vote_state_update| (VoteTransaction::from(vote_state_update), Some(hash)))
+        }
         VoteInstruction::Authorize(_, _)
         | VoteInstruction::AuthorizeChecked(_)
         | VoteInstruction::AuthorizeWithSeed(_)

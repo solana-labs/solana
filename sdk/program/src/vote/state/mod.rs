@@ -1,4 +1,3 @@
-#![allow(clippy::integer_arithmetic)]
 //! Vote state
 
 #[cfg(test)]
@@ -76,6 +75,7 @@ impl Lockout {
     // The last slot at which a vote is still locked out. Validators should not
     // vote on a slot in another fork which is less than or equal to this slot
     // to avoid having their stake slashed.
+    #[allow(clippy::integer_arithmetic)]
     pub fn last_locked_out_slot(&self) -> Slot {
         self.slot + self.lockout()
     }
@@ -151,6 +151,10 @@ impl VoteStateUpdate {
     pub fn slots(&self) -> Vec<Slot> {
         self.lockouts.iter().map(|lockout| lockout.slot).collect()
     }
+
+    pub fn compact(self) -> Option<CompactVoteStateUpdate> {
+        CompactVoteStateUpdate::new(self.lockouts, self.root, self.hash, self.timestamp)
+    }
 }
 
 /// Ignoring overhead, in a full `VoteStateUpdate` the lockouts take up
@@ -194,14 +198,19 @@ impl From<Vec<(Slot, u32)>> for CompactVoteStateUpdate {
                 confirmation_count,
             })
             .collect();
-        Self::new(lockouts, None, Hash::default())
+        Self::new(lockouts, None, Hash::default(), None).unwrap()
     }
 }
 
 impl CompactVoteStateUpdate {
-    pub fn new(mut lockouts: VecDeque<Lockout>, root: Option<Slot>, hash: Hash) -> Self {
+    pub fn new(
+        mut lockouts: VecDeque<Lockout>,
+        root: Option<Slot>,
+        hash: Hash,
+        timestamp: Option<UnixTimestamp>,
+    ) -> Option<Self> {
         if lockouts.is_empty() {
-            return Self::default();
+            return Some(Self::default());
         }
         let mut cur_slot = root.unwrap_or(0u64);
         let mut cur_confirmation_count = 0;
@@ -214,13 +223,14 @@ impl CompactVoteStateUpdate {
                  }| {
                     assert!(confirmation_count < 32);
 
-                    let offset = slot - cur_slot;
-                    cur_slot = slot;
-                    cur_confirmation_count = confirmation_count;
-                    offset
+                    slot.checked_sub(cur_slot).map(|offset| {
+                        cur_slot = slot;
+                        cur_confirmation_count = confirmation_count;
+                        offset
+                    })
                 },
             )
-            .expect("Tower should not be empty");
+            .expect("Tower should not be empty")?;
         let mut lockouts_32 = Vec::new();
         let mut lockouts_16 = Vec::new();
         let mut lockouts_8 = Vec::new();
@@ -231,7 +241,7 @@ impl CompactVoteStateUpdate {
         } in lockouts
         {
             assert!(confirmation_count < 32);
-            let offset = slot - cur_slot;
+            let offset = slot.checked_sub(cur_slot)?;
             if cur_confirmation_count > 15 {
                 lockouts_32.push(CompactLockout {
                     offset: offset.try_into().unwrap(),
@@ -254,15 +264,15 @@ impl CompactVoteStateUpdate {
         }
         // Last vote should be at the top of tower, so we don't have to explicitly store it
         assert!(cur_confirmation_count == 1);
-        Self {
+        Some(Self {
             root: root.unwrap_or(u64::MAX),
             root_to_first_vote_offset: offset,
             lockouts_32,
             lockouts_16,
             lockouts_8,
             hash,
-            timestamp: None,
-        }
+            timestamp,
+        })
     }
 
     pub fn root(&self) -> Option<Slot> {
@@ -279,29 +289,32 @@ impl CompactVoteStateUpdate {
             .chain(self.lockouts_16.iter().map(|lockout| lockout.offset.into()))
             .chain(self.lockouts_8.iter().map(|lockout| lockout.offset.into()))
             .scan(self.root().unwrap_or(0), |prev_slot, offset| {
-                let slot = *prev_slot + offset;
-                *prev_slot = slot;
-                Some(slot)
+                prev_slot.checked_add(offset).map(|slot| {
+                    *prev_slot = slot;
+                    slot
+                })
             })
             .collect()
     }
-}
 
-impl From<CompactVoteStateUpdate> for VoteStateUpdate {
-    fn from(vote_state_update: CompactVoteStateUpdate) -> Self {
-        let lockouts = vote_state_update
+    pub fn uncompact(self) -> Result<VoteStateUpdate, InstructionError> {
+        let first_slot = self
+            .root()
+            .unwrap_or(0)
+            .checked_add(self.root_to_first_vote_offset)
+            .ok_or(InstructionError::ArithmeticOverflow)?;
+        let mut arithmetic_overflow_occured = false;
+        let lockouts = self
             .lockouts_32
             .iter()
             .map(|lockout| (lockout.offset.into(), lockout.confirmation_count))
             .chain(
-                vote_state_update
-                    .lockouts_16
+                self.lockouts_16
                     .iter()
                     .map(|lockout| (lockout.offset.into(), lockout.confirmation_count)),
             )
             .chain(
-                vote_state_update
-                    .lockouts_8
+                self.lockouts_8
                     .iter()
                     .map(|lockout| (lockout.offset.into(), lockout.confirmation_count)),
             )
@@ -310,33 +323,32 @@ impl From<CompactVoteStateUpdate> for VoteStateUpdate {
                 std::iter::once((0, 1)),
             )
             .scan(
-                vote_state_update.root().unwrap_or(0) + vote_state_update.root_to_first_vote_offset,
+                first_slot,
                 |slot, (offset, confirmation_count): (u64, u8)| {
                     let cur_slot = *slot;
-                    *slot += offset;
-                    Some(Lockout {
-                        slot: cur_slot,
-                        confirmation_count: confirmation_count.into(),
-                    })
+                    if let Some(new_slot) = slot.checked_add(offset) {
+                        *slot = new_slot;
+                        Some(Lockout {
+                            slot: cur_slot,
+                            confirmation_count: confirmation_count.into(),
+                        })
+                    } else {
+                        arithmetic_overflow_occured = true;
+                        None
+                    }
                 },
             )
             .collect();
-        Self {
-            lockouts,
-            root: vote_state_update.root(),
-            hash: vote_state_update.hash,
-            timestamp: vote_state_update.timestamp,
+        if arithmetic_overflow_occured {
+            Err(InstructionError::ArithmeticOverflow)
+        } else {
+            Ok(VoteStateUpdate {
+                lockouts,
+                root: self.root(),
+                hash: self.hash,
+                timestamp: self.timestamp,
+            })
         }
-    }
-}
-
-impl From<VoteStateUpdate> for CompactVoteStateUpdate {
-    fn from(vote_state_update: VoteStateUpdate) -> Self {
-        CompactVoteStateUpdate::new(
-            vote_state_update.lockouts,
-            vote_state_update.root,
-            vote_state_update.hash,
-        )
     }
 }
 
@@ -387,6 +399,7 @@ pub struct CircBuf<I> {
 }
 
 impl<I: Default + Copy> Default for CircBuf<I> {
+    #[allow(clippy::integer_arithmetic)]
     fn default() -> Self {
         Self {
             buf: [I::default(); MAX_ITEMS],
@@ -397,6 +410,7 @@ impl<I: Default + Copy> Default for CircBuf<I> {
 }
 
 impl<I> CircBuf<I> {
+    #[allow(clippy::integer_arithmetic)]
     pub fn append(&mut self, item: I) {
         // remember prior delegate and when we switched, to support later slashing
         self.idx += 1;
@@ -506,6 +520,7 @@ impl VoteState {
     ///
     ///  if commission calculation is 100% one way or other,
     ///   indicate with false for was_split
+    #[allow(clippy::integer_arithmetic)]
     pub fn commission_split(&self, on: u64) -> (u64, u64, bool) {
         match self.commission.min(100) {
             0 => (0, on, false),
@@ -573,6 +588,7 @@ impl VoteState {
     }
 
     /// increment credits, record credits for last epoch if new epoch
+    #[allow(clippy::integer_arithmetic)]
     pub fn increment_credits(&mut self, epoch: Epoch, credits: u64) {
         // increment credits, record by epoch
 
@@ -600,6 +616,7 @@ impl VoteState {
         self.epoch_credits.last_mut().unwrap().1 += credits;
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn nth_recent_vote(&self, position: usize) -> Option<&Lockout> {
         if position < self.votes.len() {
             let pos = self.votes.len() - 1 - position;
@@ -735,6 +752,7 @@ impl VoteState {
         }
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn double_lockouts(&mut self) {
         let stack_depth = self.votes.len();
         for (i, v) in self.votes.iter_mut().enumerate() {
@@ -762,6 +780,7 @@ impl VoteState {
         Ok(())
     }
 
+    #[allow(clippy::integer_arithmetic)]
     pub fn is_correct_size_and_initialized(data: &[u8]) -> bool {
         const VERSION_OFFSET: usize = 4;
         data.len() == VoteState::size_of()
