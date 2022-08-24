@@ -697,11 +697,11 @@ impl ScheduleStage {
                 let weight_from_runnable = heaviest_runnable_entry.key();
                 let uw = weight_from_contended.key();
 
-                if false && weight_from_runnable > uw {
+                if weight_from_runnable > uw {
                     trace!("select: runnable > contended");
                     let t = heaviest_runnable_entry.remove();
                     return Some((true, t))
-                } else if true || uw > weight_from_runnable {
+                } else if uw > weight_from_runnable {
                     trace!("select: contended > runnnable");
                     let t = weight_from_contended.remove();
                     return Some(( false, t))
