@@ -28,7 +28,7 @@ maybeFullRpc="${19}"
 waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
-useQuic="${23}"
+disableQuic="${23}"
 
 set +x
 
@@ -286,8 +286,8 @@ EOF
     fi
 
 
-    if $useQuic; then
-      args+=(--tpu-use-quic)
+    if $disableQuic; then
+      args+=(--tpu-disable-quic)
     fi
 
     if [[ $airdropsEnabled = true ]]; then
@@ -418,8 +418,8 @@ EOF
       args+=(--enable-extended-tx-metadata-storage)
     fi
 
-    if $useQuic; then
-      args+=(--tpu-use-quic)
+    if $disableQuic; then
+      args+=(--tpu-disable-quic)
     fi
 
 cat >> ~/solana/on-reboot <<EOF

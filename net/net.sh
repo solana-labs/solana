@@ -108,8 +108,8 @@ Operate a configured testnet
    --full-rpc
                                       - Support full RPC services on all nodes
 
-   --tpu-use-quic
-                                      - Use quic for tpu packet forwarding
+   --tpu-disable-quic
+                                      - Disable quic for tpu packet forwarding
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -324,7 +324,7 @@ startBootstrapLeader() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
-         \"$useQuic\" \
+         \"$disableQuic\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -397,7 +397,7 @@ startNode() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
-         \"$useQuic\" \
+         \"$disableQuic\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -806,7 +806,7 @@ maybeWarpSlot=
 maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
-useQuic=false
+disableQuic=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -919,8 +919,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --full-rpc ]]; then
       maybeFullRpc=true
       shift 1
-    elif [[ $1 == --tpu-use-quic ]]; then
-      useQuic=true
+    elif [[ $1 == --tpu-disable-quic ]]; then
+      disableQuic=true
       shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
