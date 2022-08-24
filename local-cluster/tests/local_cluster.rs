@@ -6,13 +6,6 @@ use {
     gag::BufferRedirect,
     log::*,
     serial_test::serial,
-    solana_client::{
-        pubsub_client::PubsubClient,
-        rpc_client::RpcClient,
-        rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
-        rpc_response::RpcSignatureResult,
-        thin_client::ThinClient,
-    },
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
@@ -32,6 +25,12 @@ use {
         cluster_tests,
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
+    },
+    solana_pubsub_client::pubsub_client::PubsubClient,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
+        response::RpcSignatureResult,
     },
     solana_runtime::{
         hardened_unpack::open_genesis_config,
@@ -54,6 +53,7 @@ use {
         system_program, system_transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_thin_client::thin_client::ThinClient,
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         collections::{HashMap, HashSet},

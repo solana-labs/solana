@@ -1,5 +1,5 @@
 use {
-    solana_client::rpc_client::RpcClient,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         clock::{Epoch, DEFAULT_MS_PER_SLOT},
         commitment_config::CommitmentConfig,

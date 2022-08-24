@@ -77,7 +77,6 @@ pub struct AccountsDbFields<T>(
     /// slots that were roots within the last epoch for which we care about the hash value
     #[serde(deserialize_with = "default_on_eof")]
     Vec<(Slot, Hash)>,
-    // here?
 );
 
 /// Helper type to wrap BufReader streams when deserializing and reconstructing from either just a

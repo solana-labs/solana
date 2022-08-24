@@ -6,7 +6,6 @@ use log::*;
 use {
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_core::consensus::VOTE_THRESHOLD_DEPTH,
     solana_entry::entry::{Entry, EntrySlice},
     solana_gossip::{
@@ -32,6 +31,8 @@ use {
         transport::TransportError,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_thin_client::thin_client::ThinClient,
+    solana_tpu_client::connection_cache::ConnectionCache,
     solana_vote_program::vote_transaction,
     std::{
         collections::{HashMap, HashSet},

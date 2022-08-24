@@ -1,10 +1,10 @@
 use {
     crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
-    solana_client::tpu_client::TpuClient,
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
         message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
     },
+    solana_tpu_client::tpu_client::TpuClient,
 };
 
 impl BenchTpsClient for TpuClient {

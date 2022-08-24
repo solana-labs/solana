@@ -4,7 +4,6 @@ use {
     crate::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     crossbeam_channel::{unbounded, Sender},
     rand::{thread_rng, Rng},
-    solana_client::{connection_cache::ConnectionCache, thin_client::ThinClient},
     solana_perf::recycler::Recycler,
     solana_runtime::bank_forks::BankForks,
     solana_sdk::{
@@ -15,6 +14,8 @@ use {
         socket::SocketAddrSpace,
         streamer::{self, StreamerReceiveStats},
     },
+    solana_thin_client::thin_client::ThinClient,
+    solana_tpu_client::connection_cache::ConnectionCache,
     std::{
         collections::HashSet,
         net::{SocketAddr, TcpListener, UdpSocket},

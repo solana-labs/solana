@@ -7,12 +7,6 @@ use {
         cli::Config,
         send_batch::generate_durable_nonce_accounts,
     },
-    solana_client::{
-        connection_cache::ConnectionCache,
-        rpc_client::RpcClient,
-        thin_client::ThinClient,
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     solana_core::validator::ValidatorConfig,
     solana_faucet::faucet::run_local_faucet,
     solana_local_cluster::{
@@ -20,12 +14,18 @@ use {
         validator_configs::make_identical_validator_configs,
     },
     solana_rpc::rpc::JsonRpcConfig,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_thin_client::thin_client::ThinClient,
+    solana_tpu_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     std::{sync::Arc, time::Duration},
 };
 

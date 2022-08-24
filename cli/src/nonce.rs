@@ -20,8 +20,9 @@ use {
         nonce::*,
     },
     solana_cli_output::CliNonceAccount,
-    solana_client::{nonce_utils::*, rpc_client::RpcClient},
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_nonce_utils::*,
     solana_sdk::{
         account::Account,
         feature_set::merge_nonce_error_into_system_error,

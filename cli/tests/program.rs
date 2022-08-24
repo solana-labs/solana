@@ -7,8 +7,8 @@ use {
         program::{ProgramCliCommand, CLOSE_PROGRAM_WARNING},
     },
     solana_cli_output::OutputFormat,
-    solana_client::rpc_client::RpcClient,
     solana_faucet::faucet::run_local_faucet,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         account_utils::StateMut,
         bpf_loader,

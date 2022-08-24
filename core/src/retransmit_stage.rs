@@ -10,7 +10,6 @@ use {
     itertools::{izip, Itertools},
     lru::LruCache,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
-    solana_client::rpc_response::SlotUpdate,
     solana_gossip::{
         cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
         contact_info::ContactInfo,
@@ -22,6 +21,7 @@ use {
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
+    solana_rpc_client_api::response::SlotUpdate,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, pubkey::Pubkey, timing::timestamp},
     solana_streamer::{

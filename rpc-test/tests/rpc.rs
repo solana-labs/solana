@@ -6,15 +6,13 @@ use {
     reqwest::{self, header::CONTENT_TYPE},
     serde_json::{json, Value},
     solana_account_decoder::UiAccount,
-    solana_client::{
-        client_error::{ClientErrorKind, Result as ClientResult},
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
-        nonblocking::pubsub_client::PubsubClient,
-        rpc_client::RpcClient,
-        rpc_config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
-        rpc_request::RpcError,
-        rpc_response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
-        tpu_client::{TpuClient, TpuClientConfig},
+    solana_pubsub_client::nonblocking::pubsub_client::PubsubClient,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        client_error::{ErrorKind as ClientErrorKind, Result as ClientResult},
+        config::{RpcAccountInfoConfig, RpcSignatureSubscribeConfig},
+        request::RpcError,
+        response::{Response as RpcResponse, RpcSignatureResult, SlotUpdate},
     },
     solana_sdk::{
         commitment_config::CommitmentConfig,
@@ -27,6 +25,10 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     solana_transaction_status::TransactionStatus,
     std::{
         collections::HashSet,
@@ -116,7 +118,8 @@ fn test_rpc_send_tx() {
     assert!(confirmed_tx);
 
     use {
-        solana_account_decoder::UiAccountEncoding, solana_client::rpc_config::RpcAccountInfoConfig,
+        solana_account_decoder::UiAccountEncoding,
+        solana_rpc_client_api::config::RpcAccountInfoConfig,
     };
     let config = RpcAccountInfoConfig {
         encoding: Some(UiAccountEncoding::Base64),

@@ -22,7 +22,6 @@ use {
     histogram::Histogram,
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
-    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_entry::entry::hash_transactions,
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_ledger::{
@@ -61,6 +60,7 @@ use {
         transport::TransportError,
     },
     solana_streamer::sendmmsg::batch_send,
+    solana_tpu_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
         cmp,

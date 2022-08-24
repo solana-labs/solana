@@ -5,7 +5,7 @@
 use {
     crate::rpc_subscriptions::RpcSubscriptions,
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-    solana_client::rpc_response::{SlotTransactionStats, SlotUpdate},
+    solana_rpc_client_api::response::{SlotTransactionStats, SlotUpdate},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, timing::timestamp},
     std::{

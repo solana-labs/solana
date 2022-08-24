@@ -2,7 +2,6 @@ use {
     log::*,
     rand::{seq::SliceRandom, thread_rng, Rng},
     rayon::prelude::*,
-    solana_client::rpc_client::RpcClient,
     solana_core::validator::{ValidatorConfig, ValidatorStartProgress},
     solana_download_utils::{download_snapshot_archive, DownloadProgressRecord},
     solana_genesis_utils::download_then_check_genesis_hash,
@@ -12,6 +11,7 @@ use {
         crds_value,
         gossip_service::GossipService,
     },
+    solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_package::SnapshotType,

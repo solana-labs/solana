@@ -9,6 +9,7 @@ use {
             rpc_accounts::*, rpc_bank::*, rpc_deprecated_v1_7::*, rpc_deprecated_v1_9::*,
             rpc_full::*, rpc_minimal::*, rpc_obsolete_v1_7::*, *,
         },
+        rpc_cache::LargestAccountsCache,
         rpc_health::*,
     },
     crossbeam_channel::unbounded,
@@ -18,7 +19,6 @@ use {
         RequestMiddlewareAction, ServerBuilder,
     },
     regex::Regex,
-    solana_client::{connection_cache::ConnectionCache, rpc_cache::LargestAccountsCache},
     solana_gossip::cluster_info::ClusterInfo,
     solana_ledger::{
         bigtable_upload::ConfirmedBlockUploadConfig,
@@ -39,6 +39,7 @@ use {
     },
     solana_send_transaction_service::send_transaction_service::{self, SendTransactionService},
     solana_storage_bigtable::CredentialType,
+    solana_tpu_client::connection_cache::ConnectionCache,
     std::{
         collections::HashSet,
         net::SocketAddr,
@@ -569,7 +570,6 @@ mod tests {
     use {
         super::*,
         crate::rpc::create_validator_exit,
-        solana_client::rpc_config::RpcContextConfig,
         solana_gossip::{
             contact_info::ContactInfo,
             crds::GossipRoute,
@@ -579,6 +579,7 @@ mod tests {
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
             get_tmp_ledger_path,
         },
+        solana_rpc_client_api::config::RpcContextConfig,
         solana_runtime::bank::Bank,
         solana_sdk::{
             genesis_config::{ClusterType, DEFAULT_GENESIS_ARCHIVE},

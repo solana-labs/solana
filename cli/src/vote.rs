@@ -26,11 +26,10 @@ use {
         return_signers_with_config, CliEpochVotingHistory, CliLockout, CliVoteAccount,
         ReturnSignersConfig,
     },
-    solana_client::{
-        blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
-        rpc_config::RpcGetVoteAccountsConfig,
-    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::config::RpcGetVoteAccountsConfig,
+    solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, message::Message,
         native_token::lamports_to_sol, pubkey::Pubkey, system_instruction::SystemError,
@@ -873,7 +872,7 @@ pub fn process_create_vote_account(
         }
 
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1010,7 +1009,7 @@ pub fn process_vote_authorize(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1086,7 +1085,7 @@ pub fn process_vote_update_validator(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1155,7 +1154,7 @@ pub fn process_vote_update_commission(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1346,7 +1345,7 @@ pub fn process_withdraw_from_vote_account(
     } else {
         tx.try_sign(&config.signers, recent_blockhash)?;
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,
@@ -1428,7 +1427,7 @@ mod tests {
     use {
         super::*,
         crate::{clap_app::get_clap_app, cli::parse_command},
-        solana_client::blockhash_query,
+        solana_rpc_client_nonce_utils::blockhash_query,
         solana_sdk::{
             hash::Hash,
             signature::{read_keypair_file, write_keypair, Keypair, Signer},

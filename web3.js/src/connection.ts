@@ -43,7 +43,6 @@ import {
   TransactionExpiredTimeoutError,
 } from './transaction/expiry-custom-errors';
 import {makeWebsocketUrl} from './utils/makeWebsocketUrl';
-import {URL} from './utils/url-impl';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
@@ -304,6 +303,14 @@ export type BlockhashWithExpiryBlockHeight = Readonly<{
 export type BlockheightBasedTransactionConfirmationStrategy = {
   signature: TransactionSignature;
 } & BlockhashWithExpiryBlockHeight;
+
+/* @internal */
+function assertEndpointUrl(putativeUrl: string) {
+  if (/^https?:/.test(putativeUrl) === false) {
+    throw new TypeError('Endpoint URL must start with `http:` or `https:`.');
+  }
+  return putativeUrl;
+}
 
 /** @internal */
 function extractCommitmentFromConfig<TConfig>(
@@ -1117,7 +1124,6 @@ export type PerfSample = {
 
 function createRpcClient(
   url: string,
-  useHttps: boolean,
   httpHeaders?: HttpHeaders,
   customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
@@ -1126,7 +1132,7 @@ function createRpcClient(
   const fetch = customFetch ? customFetch : fetchImpl;
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
-    agentManager = new AgentManager(useHttps);
+    agentManager = new AgentManager(url.startsWith('https:') /* useHttps */);
   }
 
   let fetchWithMiddleware: FetchFn | undefined;
@@ -2493,9 +2499,6 @@ export class Connection {
     endpoint: string,
     commitmentOrConfig?: Commitment | ConnectionConfig,
   ) {
-    let url = new URL(endpoint);
-    const useHttps = url.protocol === 'https:';
-
     let wsEndpoint;
     let httpHeaders;
     let fetch;
@@ -2514,12 +2517,11 @@ export class Connection {
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
     }
 
-    this._rpcEndpoint = endpoint;
+    this._rpcEndpoint = assertEndpointUrl(endpoint);
     this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
 
     this._rpcClient = createRpcClient(
-      url.toString(),
-      useHttps,
+      endpoint,
       httpHeaders,
       fetch,
       fetchMiddleware,

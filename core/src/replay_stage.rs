@@ -31,7 +31,6 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
-    solana_client::rpc_response::SlotUpdate,
     solana_entry::entry::VerifyRecyclers,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
@@ -52,6 +51,7 @@ use {
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
         rpc_subscriptions::RpcSubscriptions,
     },
+    solana_rpc_client_api::response::SlotUpdate,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank::{Bank, NewBankOptions},
@@ -70,7 +70,7 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
-    solana_vote_program::vote_state::{CompactVoteStateUpdate, VoteTransaction},
+    solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::{HashMap, HashSet},
         result,
@@ -2012,7 +2012,13 @@ impl ReplayStage {
             .is_active(&feature_set::compact_vote_state_updates::id());
         let vote = match (should_compact, vote) {
             (true, VoteTransaction::VoteStateUpdate(vote_state_update)) => {
-                VoteTransaction::from(CompactVoteStateUpdate::from(vote_state_update))
+                if let Some(compact_vote_state_update) = vote_state_update.compact() {
+                    VoteTransaction::from(compact_vote_state_update)
+                } else {
+                    // Compaction failed
+                    warn!("Compaction failed when generating vote tx for vote account {}. Unable to vote", vote_account_pubkey);
+                    return None;
+                }
             }
             (_, vote) => vote,
         };

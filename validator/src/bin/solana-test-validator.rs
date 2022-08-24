@@ -9,13 +9,13 @@ use {
             normalize_to_url_if_moniker,
         },
     },
-    solana_client::rpc_client::RpcClient,
     solana_core::tower_storage::FileTowerStorage,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
     },
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,

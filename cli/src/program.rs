@@ -17,14 +17,6 @@ use {
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
         CliUpgradeableProgramClosed, CliUpgradeablePrograms,
     },
-    solana_client::{
-        client_error::ClientErrorKind,
-        connection_cache::ConnectionCache,
-        rpc_client::RpcClient,
-        rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
-        rpc_filter::{Memcmp, RpcFilterType},
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     solana_program_runtime::invoke_context::InvokeContext,
     solana_rbpf::{
         elf::Executable,
@@ -32,6 +24,12 @@ use {
         vm::{Config, VerifiedExecutable},
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        client_error::ErrorKind as ClientErrorKind,
+        config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
+        filter::{Memcmp, RpcFilterType},
+    },
     solana_sdk::{
         account::Account,
         account_utils::StateMut,
@@ -49,6 +47,10 @@ use {
         sysvar::rent::Rent,
         transaction::{Transaction, TransactionError},
         transaction_context::TransactionContext,
+    },
+    solana_tpu_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
     },
     std::{
         fs::File,

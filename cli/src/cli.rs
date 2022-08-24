@@ -12,16 +12,13 @@ use {
     solana_cli_output::{
         display::println_name_value, CliSignature, CliValidatorsSortOrder, OutputFormat,
     },
-    solana_client::{
-        blockhash_query::BlockhashQuery,
-        client_error::{ClientError, Result as ClientResult},
-        nonce_utils,
-        rpc_client::RpcClient,
-        rpc_config::{
-            RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter,
-        },
-    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        client_error::{Error as ClientError, Result as ClientResult},
+        config::{RpcLargestAccountsFilter, RpcSendTransactionConfig, RpcTransactionLogsFilter},
+    },
+    solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
         clock::{Epoch, Slot},
         commitment_config::CommitmentConfig,
@@ -465,7 +462,7 @@ pub enum CliError {
     #[error("Account {2} has insufficient funds for spend ({0} SOL) + fee ({1} SOL)")]
     InsufficientFundsForSpendAndFee(f64, f64, Pubkey),
     #[error(transparent)]
-    InvalidNonce(nonce_utils::Error),
+    InvalidNonce(solana_rpc_client_nonce_utils::Error),
     #[error("Dynamic program error: {0}")]
     DynamicProgramError(String),
     #[error("RPC request error: {0}")]
@@ -480,10 +477,12 @@ impl From<Box<dyn error::Error>> for CliError {
     }
 }
 
-impl From<nonce_utils::Error> for CliError {
-    fn from(error: nonce_utils::Error) -> Self {
+impl From<solana_rpc_client_nonce_utils::Error> for CliError {
+    fn from(error: solana_rpc_client_nonce_utils::Error) -> Self {
         match error {
-            nonce_utils::Error::Client(client_error) => Self::RpcRequestError(client_error),
+            solana_rpc_client_nonce_utils::Error::Client(client_error) => {
+                Self::RpcRequestError(client_error)
+            }
             _ => Self::InvalidNonce(error),
         }
     }
@@ -1711,12 +1710,12 @@ mod tests {
     use {
         super::*,
         serde_json::{json, Value},
-        solana_client::{
-            blockhash_query,
-            mock_sender_for_cli::SIGNATURE,
-            rpc_request::RpcRequest,
-            rpc_response::{Response, RpcResponseContext},
+        solana_rpc_client::mock_sender_for_cli::SIGNATURE,
+        solana_rpc_client_api::{
+            request::RpcRequest,
+            response::{Response, RpcResponseContext},
         },
+        solana_rpc_client_nonce_utils::blockhash_query,
         solana_sdk::{
             pubkey::Pubkey,
             signature::{
