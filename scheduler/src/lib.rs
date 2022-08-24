@@ -458,7 +458,7 @@ impl Task {
     }
 
     pub fn record_execute_time(&self, queue_clock: usize, execute_clock: usize) {
-        self.queue_end_time.load(queue_clock, std::sync::atomic::Ordering::SeqCst);
+        self.queue_end_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
         self.execute_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
     }
 
