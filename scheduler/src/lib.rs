@@ -427,6 +427,7 @@ pub struct Task {
     pub uncontended: std::sync::atomic::AtomicUsize,
     pub sequence_time: std::sync::atomic::AtomicUsize,
     pub queue_time: std::sync::atomic::AtomicUsize,
+    pub queue_end_time: std::sync::atomic::AtomicUsize,
     pub execute_time: std::sync::atomic::AtomicUsize,
 }
 
@@ -437,7 +438,7 @@ pub struct Task {
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
+        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
@@ -456,8 +457,9 @@ impl Task {
         self.queue_time.load(std::sync::atomic::Ordering::SeqCst)
     }
 
-    pub fn record_execute_time(&self, clock: usize) {
-        self.execute_time.store(clock, std::sync::atomic::Ordering::SeqCst);
+    pub fn record_execute_time(&self, queue_clock: usize, execute_clock: usize) {
+        self.queue_end_time.load(queue_clock, std::sync::atomic::Ordering::SeqCst)
+        self.execute_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn execute_time(&self) -> usize {
@@ -473,6 +475,7 @@ impl Task {
             uncontended: Default::default(),
             sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
         }
     }
@@ -869,11 +872,12 @@ impl ScheduleStage {
         unique_weight: UniqueWeight,
         task: TaskInQueue,
         lock_attempts: Vec<LockAttempt>,
+        queue_clock: &usize,
         execute_clock: &mut usize,
     ) -> Box<ExecutionEnvironment> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
-        task.record_execute_time(*execute_clock);
+        task.record_execute_time(queue_clock, *execute_clock);
         *execute_clock = execute_clock.checked_add(1).unwrap();
 
         Box::new(ExecutionEnvironment {
@@ -913,7 +917,7 @@ impl ScheduleStage {
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
             Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate, queue_clock)
-                .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, execute_clock));
+                .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock));
         maybe_ee
     }
 
