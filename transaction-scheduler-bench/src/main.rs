@@ -363,7 +363,7 @@ fn handle_transaction_batch(
         }).flatten().map(|task| {
             lock_attempt.heaviest_uncontended = Some(task);
             ()
-        });
+        })
     }
     completed_transaction_sender.0
         .send(transaction_batch)
