@@ -512,10 +512,6 @@ impl Task {
         }
     }
 
-    pub fn newly_queued(&self) -> bool {
-        self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 0
-    }
-
     pub fn currently_contended(&self) -> bool {
         self.uncontended.load(std::sync::atomic::Ordering::SeqCst) == 1
     }
@@ -529,13 +525,12 @@ impl Task {
     }
 
     fn mark_as_uncontended(&self) {
-        //assert!(self.currently_contended());
+        assert!(self.currently_contended());
         self.uncontended.store(2, std::sync::atomic::Ordering::SeqCst)
     }
 
     fn mark_as_finished(&self) {
-        assert!(!self.already_finished());
-        assert!(!self.currently_contended());
+        assert!(!self.already_finished() && !self.currently_contended());
         self.uncontended.store(3, std::sync::atomic::Ordering::SeqCst)
     }
 }
@@ -739,9 +734,6 @@ impl ScheduleStage {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut a.1) };
-            if next_task.already_finished() {
-                return None;
-            }
 
             let lock_attempts = std::mem::take(&mut next_task.tx.1);
 
@@ -752,14 +744,7 @@ impl ScheduleStage {
         loop {
         if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, address_book) {
             trace!("pop loop iteration");
-            if from_runnable && arc_next_task.queue_time() != usize::max_value() {
-                continue;
-            }
-            if arc_next_task.already_finished() {
-                continue;
-            }
-
-            if arc_next_task.queue_time() == usize::max_value() {
+            if from_runnable {
                 arc_next_task.record_queue_time(*sequence_clock, *queue_clock);
                 *queue_clock = queue_clock.checked_add(1).unwrap();
             }
@@ -825,7 +810,7 @@ impl ScheduleStage {
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
 
-            if next_task.currently_contended() {
+            if !from_runnable {
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
             }
@@ -885,7 +870,7 @@ impl ScheduleStage {
 
                 if let Some(task) = l.heaviest_uncontended.take() {
                     //assert!(!task.already_finished());
-                    if task.currently_contended() || task.newly_queued() {
+                    if task.currently_contended() {
                         inserted = true;
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     }
