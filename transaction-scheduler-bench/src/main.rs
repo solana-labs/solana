@@ -341,7 +341,7 @@ fn handle_transaction_batch(
     }
     */
     sleep(Duration::from_micros(
-        rand::thread_rng().gen_range(0..execution_per_tx_us)
+        rand::thread_rng().gen_range(0..=execution_per_tx_us)
     ));
 
     let priority_collected = transaction_batch.task.tx.0.get_transaction_priority_details().unwrap().priority;
