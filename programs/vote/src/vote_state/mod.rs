@@ -3805,13 +3805,13 @@ mod tests {
         vote_state_update.hash = Hash::new_unique();
         vote_state_update.root = Some(1);
 
-        let compact_vote_state_update = CompactVoteStateUpdate::from(vote_state_update.clone());
+        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
 
         assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
         assert_eq!(vote_state_update.hash, compact_vote_state_update.hash);
         assert_eq!(vote_state_update.root, compact_vote_state_update.root());
 
-        let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
+        let vote_state_update_new = compact_vote_state_update.uncompact().unwrap();
         assert_eq!(vote_state_update, vote_state_update_new);
     }
 
@@ -3825,11 +3825,11 @@ mod tests {
             (u64::pow(2, 28), 17),
             (u64::pow(2, 28) + u64::pow(2, 16), 1),
         ]);
-        let compact_vote_state_update = CompactVoteStateUpdate::from(vote_state_update.clone());
+        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
 
         assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
 
-        let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
+        let vote_state_update_new = compact_vote_state_update.uncompact().unwrap();
         assert_eq!(vote_state_update, vote_state_update_new);
     }
 
@@ -3845,11 +3845,11 @@ mod tests {
             (two_31 + two_15 + 1, 6),
             (two_31 + two_15 + 1 + 64, 1),
         ]);
-        let compact_vote_state_update = CompactVoteStateUpdate::from(vote_state_update.clone());
+        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
 
         assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
 
-        let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
+        let vote_state_update_new = compact_vote_state_update.uncompact().unwrap();
         assert_eq!(vote_state_update, vote_state_update_new);
     }
 
@@ -3859,11 +3859,42 @@ mod tests {
         let two_31 = u64::pow(2, 31);
         let mut vote_state_update = VoteStateUpdate::from(vec![(two_58, 31), (two_58 + two_31, 1)]);
         vote_state_update.root = Some(two_31);
-        let compact_vote_state_update = CompactVoteStateUpdate::from(vote_state_update.clone());
+        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
 
         assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
 
-        let vote_state_update_new = VoteStateUpdate::from(compact_vote_state_update);
+        let vote_state_update_new = compact_vote_state_update.uncompact().unwrap();
         assert_eq!(vote_state_update, vote_state_update_new);
+    }
+
+    #[test]
+    fn test_compact_vote_state_update_overflow() {
+        let compact_vote_state_update = CompactVoteStateUpdate {
+            root: u64::MAX - 1,
+            root_to_first_vote_offset: 10,
+            lockouts_32: vec![],
+            lockouts_16: vec![],
+            lockouts_8: vec![CompactLockout::new(10)],
+            hash: Hash::new_unique(),
+            timestamp: None,
+        };
+        assert_eq!(
+            Err(InstructionError::ArithmeticOverflow),
+            compact_vote_state_update.uncompact()
+        );
+
+        let compact_vote_state_update = CompactVoteStateUpdate {
+            root: u64::MAX - u32::MAX as u64,
+            root_to_first_vote_offset: 10,
+            lockouts_32: vec![CompactLockout::new(u32::MAX)],
+            lockouts_16: vec![],
+            lockouts_8: vec![CompactLockout::new(10)],
+            hash: Hash::new_unique(),
+            timestamp: None,
+        };
+        assert_eq!(
+            Err(InstructionError::ArithmeticOverflow),
+            compact_vote_state_update.uncompact()
+        );
     }
 }
