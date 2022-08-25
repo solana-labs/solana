@@ -153,7 +153,7 @@ impl TaskIds {
     #[inline(never)]
     pub fn remove_task(&self, u: &TaskId) {
         let removed_entry = self.task_ids.remove(u);
-        assert!(removed_entry.is_some());
+        //assert!(removed_entry.is_some());
     }
 
     #[inline(never)]
@@ -1034,9 +1034,11 @@ impl ScheduleStage {
         let (task_sender, task_receiver) = crossbeam_channel::unbounded::<TaskInQueue>();
         let h = std::thread::Builder::new().name("sol-indexer".to_string()).spawn(move || {
             while let task = task_receiver.recv().unwrap() {
-                let unique_weight = task.unique_weight;
-                for lock_attempt in task.tx.1.iter() {
-                    lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&task));
+                if task.currently_contended() {
+                    let unique_weight = task.unique_weight;
+                    for lock_attempt in task.tx.1.iter() {
+                        lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&task));
+                    }
                 }
             }
         }).unwrap();
