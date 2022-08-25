@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
-import { NFTOKEN_ADDRESS } from "../nftoken";
-import { Account } from "../../providers/accounts";
-import { NftokenTypes } from "../nftoken-types";
+import { NFTOKEN_ADDRESS } from "./nftoken";
+import { Account } from "../../../providers/accounts";
+import { NftokenTypes } from "./nftoken-types";
 
 export function isNFTokenAccount(account: Account): boolean {
   return Boolean(
@@ -9,6 +9,8 @@ export function isNFTokenAccount(account: Account): boolean {
       account.details.rawData
   );
 }
+
+const nftokenAccountDisc = "IbRbNewPP2E=";
 
 export const parseNFTokenNFTAccount = (
   account: Account
@@ -27,7 +29,8 @@ export const parseNFTokenNFTAccount = (
     }
 
     if (
-      Buffer.from(parsed!.discriminator).toString("base64") !== "IbRbNewPP2E="
+      Buffer.from(parsed!.discriminator).toString("base64") !==
+      nftokenAccountDisc
     ) {
       return null;
     }
@@ -49,6 +52,7 @@ export const parseNFTokenNFTAccount = (
   }
 };
 
+const collectionAccountDisc = "RQLwA3YS2fI=";
 export const parseNFTokenCollectionAccount = (
   account: Account
 ): NftokenTypes.CollectionAccount | null => {
@@ -65,7 +69,8 @@ export const parseNFTokenCollectionAccount = (
       return null;
     }
     if (
-      Buffer.from(parsed.discriminator).toString("base64") !== "RQLwA3YS2fI="
+      Buffer.from(parsed.discriminator).toString("base64") !==
+      collectionAccountDisc
     ) {
       return null;
     }

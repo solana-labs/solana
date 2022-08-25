@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { clusterPath } from "../../utils/url";
+import { clusterPath } from "../../../utils/url";
 import { useCollectionNfts } from "./nftoken-hooks";
 import { NftokenImage } from "./NFTokenAccountSection";
 

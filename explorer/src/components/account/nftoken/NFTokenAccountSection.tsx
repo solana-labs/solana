@@ -10,11 +10,11 @@ import { Suspense, useEffect, useState } from "react";
 import {
   parseNFTokenCollectionAccount,
   parseNFTokenNFTAccount,
-} from "../../utils/nftoken-parsers.ts/isNFTokenAccount";
-import { NftokenTypes } from "../../utils/nftoken-types";
-import { MAX_TIME_LOADING_IMAGE, useCachedImage } from "../common/NFTArt";
+} from "./isNFTokenAccount";
+import { NftokenTypes } from "./nftoken-types";
+import { MAX_TIME_LOADING_IMAGE, useCachedImage } from "../../common/NFTArt";
 import { useCollectionNfts, useNftokenMetadata } from "./nftoken-hooks";
-import { UnknownAccountCard } from "./UnknownAccountCard";
+import { UnknownAccountCard } from "../UnknownAccountCard";
 
 export function NFTokenAccountSection({ account }: { account: Account }) {
   const nft = parseNFTokenNFTAccount(account);
@@ -79,59 +79,13 @@ const NFTCard = ({ nft }: { nft: NftokenTypes.NftAccount }) => {
           <td>Collection</td>
           <td className="text-lg-end">
             {nft.collection ? (
-              <div>
-                <Address
-                  pubkey={new PublicKey(nft.collection)}
-                  alignRight
-                  link
-                />
-
-                <CollectionInfo collection={nft.collection} imageSize={24} />
-              </div>
+              <Address pubkey={new PublicKey(nft.collection)} alignRight link />
             ) : (
               "No Collection"
             )}
           </td>
         </tr>
       </TableCardBody>
-    </div>
-  );
-};
-
-const CollectionInfo = ({
-  collection,
-  imageSize,
-}: {
-  collection: string;
-  imageSize: number;
-}) => {
-  const collectionAccount = useAccountInfo(collection);
-  const fetchInfo = useFetchAccountInfo();
-
-  const collectionParsed = collectionAccount?.data
-    ? parseNFTokenCollectionAccount(collectionAccount.data)
-    : null;
-  const { data: metadata } = useNftokenMetadata(
-    collectionParsed?.metadata_url ?? null
-  );
-
-  useEffect(() => {
-    fetchInfo(new PublicKey(collection));
-  }, [collection, fetchInfo]);
-
-  return (
-    <div
-      className={"mt-2"}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "0.5rem",
-        justifyContent: "flex-end",
-      }}
-    >
-      <NftokenImage size={imageSize} url={metadata?.image} />
-
-      <div>{metadata?.name ?? "Loading..."}</div>
     </div>
   );
 };
@@ -249,9 +203,9 @@ const CollectionCard = ({
           </td>
         </tr>
         <tr>
-          <td>Number NFTs</td>
+          <td>Number of NFTs</td>
           <td className="text-lg-end">
-            <Suspense fallback={<div>Loading..</div>}>
+            <Suspense fallback={<div>Loading...</div>}>
               <NumNfts collection={collection.address} />
             </Suspense>
           </td>

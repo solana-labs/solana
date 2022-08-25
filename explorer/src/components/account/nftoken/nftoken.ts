@@ -6,6 +6,8 @@ import { NftokenTypes } from "./nftoken-types";
 
 export const NFTOKEN_ADDRESS = "nftokf9qcHSYkVSP3P2gUMmV6d4AwjMueXgUu43HyLL";
 
+const nftokenAccountDiscInHex = "21b45b35ec0f3f61";
+
 export namespace NftokenFetcher {
   export const getNftsInCollection = async ({
     collection,
@@ -22,7 +24,7 @@ export namespace NftokenFetcher {
           {
             memcmp: {
               offset: 0,
-              bytes: bs58.encode(Buffer.from("21b45b35ec0f3f61", "hex")),
+              bytes: bs58.encode(Buffer.from(nftokenAccountDiscInHex, "hex")),
             },
           },
           {

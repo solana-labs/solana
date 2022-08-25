@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import { expect } from "chai";
-import { NFTOKEN_ADDRESS } from "../utils/nftoken";
-import { parseNFTokenNFTAccount } from "../utils/nftoken-parsers.ts/isNFTokenAccount";
+import { NFTOKEN_ADDRESS } from "../components/account/nftoken/nftoken";
+import { parseNFTokenNFTAccount } from "../components/account/nftoken/isNFTokenAccount";
 
 describe("parseNFTokenAccounts", () => {
   it("parses an NFT", () => {

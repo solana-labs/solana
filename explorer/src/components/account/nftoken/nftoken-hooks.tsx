@@ -1,7 +1,7 @@
 import useSWR, { SWRResponse } from "swr";
-import { useCluster } from "../../providers/cluster";
-import { NftokenFetcher } from "../../utils/nftoken";
-import { NftokenTypes } from "../../utils/nftoken-types";
+import { useCluster } from "../../../providers/cluster";
+import { NftokenFetcher } from "./nftoken";
+import { NftokenTypes } from "./nftoken-types";
 
 const getCollectionNftsFetcher = async (
   _method: string,

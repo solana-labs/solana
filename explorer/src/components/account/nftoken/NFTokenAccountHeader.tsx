@@ -1,12 +1,12 @@
 import React, { Suspense } from "react";
-import { Account } from "../../providers/accounts";
+import { Account } from "../../../providers/accounts";
 import {
   parseNFTokenCollectionAccount,
   parseNFTokenNFTAccount,
-} from "../../utils/nftoken-parsers.ts/isNFTokenAccount";
-import { NftokenTypes } from "../../utils/nftoken-types";
-import { InfoTooltip } from "../common/InfoTooltip";
-import { CachedImageContent } from "../common/NFTArt";
+} from "./isNFTokenAccount";
+import { NftokenTypes } from "./nftoken-types";
+import { InfoTooltip } from "../../common/InfoTooltip";
+import { CachedImageContent } from "../../common/NFTArt";
 import { useNftokenMetadata } from "./nftoken-hooks";
 
 export function NFTokenAccountHeader({ account }: { account: Account }) {
