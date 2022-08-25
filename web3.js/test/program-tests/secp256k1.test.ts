@@ -1,7 +1,11 @@
 import {Buffer} from 'buffer';
 import {keccak_256} from 'js-sha3';
-import {privateKeyVerify, ecdsaSign, publicKeyCreate} from 'secp256k1';
 
+import {
+  ecdsaSign,
+  isValidPrivateKey,
+  publicKeyCreate,
+} from '../../src/utils/secp256k1';
 import {
   Connection,
   Keypair,
@@ -16,14 +20,17 @@ const randomPrivateKey = () => {
   let privateKey;
   do {
     privateKey = Keypair.generate().secretKey.slice(0, 32);
-  } while (!privateKeyVerify(privateKey));
+  } while (!isValidPrivateKey(privateKey));
   return privateKey;
 };
 
 if (process.env.TEST_LIVE) {
   describe('secp256k1', () => {
     const privateKey = randomPrivateKey();
-    const publicKey = publicKeyCreate(privateKey, false).slice(1);
+    const publicKey = publicKeyCreate(
+      privateKey,
+      false /* isCompressed */,
+    ).slice(1);
     const ethAddress = Secp256k1Program.publicKeyToEthAddress(publicKey);
     const from = Keypair.generate();
     const connection = new Connection(url, 'confirmed');
@@ -37,7 +44,7 @@ if (process.env.TEST_LIVE) {
     it('create secp256k1 instruction with string address', async () => {
       const message = Buffer.from('string address');
       const messageHash = Buffer.from(keccak_256.update(message).digest());
-      const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
+      const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
       const transaction = new Transaction().add(
         Secp256k1Program.createInstructionWithEthAddress({
           ethAddress: ethAddress.toString('hex'),
@@ -53,7 +60,7 @@ if (process.env.TEST_LIVE) {
     it('create secp256k1 instruction with 0x prefix string address', async () => {
       const message = Buffer.from('0x string address');
       const messageHash = Buffer.from(keccak_256.update(message).digest());
-      const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
+      const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
       const transaction = new Transaction().add(
         Secp256k1Program.createInstructionWithEthAddress({
           ethAddress: '0x' + ethAddress.toString('hex'),
@@ -69,7 +76,7 @@ if (process.env.TEST_LIVE) {
     it('create secp256k1 instruction with buffer address', async () => {
       const message = Buffer.from('buffer address');
       const messageHash = Buffer.from(keccak_256.update(message).digest());
-      const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
+      const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
       const transaction = new Transaction().add(
         Secp256k1Program.createInstructionWithEthAddress({
           ethAddress,
@@ -85,7 +92,7 @@ if (process.env.TEST_LIVE) {
     it('create secp256k1 instruction with public key', async () => {
       const message = Buffer.from('public key');
       const messageHash = Buffer.from(keccak_256.update(message).digest());
-      const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
+      const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
       const transaction = new Transaction().add(
         Secp256k1Program.createInstructionWithPublicKey({
           publicKey,

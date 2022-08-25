@@ -1,14 +1,12 @@
 import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
-import secp256k1 from 'secp256k1';
 import sha3 from 'js-sha3';
 
 import {PublicKey} from '../publickey';
 import {TransactionInstruction} from '../transaction';
 import assert from '../utils/assert';
+import {publicKeyCreate, ecdsaSign} from '../utils/secp256k1';
 import {toBuffer} from '../utils/to-buffer';
-
-const {publicKeyCreate, ecdsaSign} = secp256k1;
 
 const PRIVATE_KEY_BYTES = 32;
 const ETHEREUM_ADDRESS_BYTES = 20;
@@ -209,11 +207,14 @@ export class Secp256k1Program {
 
     try {
       const privateKey = toBuffer(pkey);
-      const publicKey = publicKeyCreate(privateKey, false).slice(1); // throw away leading byte
+      const publicKey = publicKeyCreate(
+        privateKey,
+        false /* isCompressed */,
+      ).slice(1); // throw away leading byte
       const messageHash = Buffer.from(
         sha3.keccak_256.update(toBuffer(message)).digest(),
       );
-      const {signature, recid: recoveryId} = ecdsaSign(messageHash, privateKey);
+      const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
 
       return this.createInstructionWithPublicKey({
         publicKey,
