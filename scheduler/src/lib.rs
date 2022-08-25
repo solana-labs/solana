@@ -1033,7 +1033,7 @@ impl ScheduleStage {
 
             (&ee_sender, Some(h))
         };
-        let (task_sender, task_receiver) = crossbeam_channel::unbounded::<TaskInQueue>();
+        let (task_sender, task_receiver) = crossbeam_channel::unbounded::<Vec<LockAttempt>>();
         let h = std::thread::Builder::new().name("sol-indexer".to_string()).spawn(move || {
             while let task = task_receiver.recv().unwrap() {
                 if task.currently_contended() {
