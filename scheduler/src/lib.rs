@@ -1033,7 +1033,7 @@ impl ScheduleStage {
 
             (&ee_sender, Some(h))
         };
-        let (task_sender, task_receiver) = crossbeam_channel::unbounded::<Vec<LockAttempt>>();
+        let (task_sender, task_receiver) = crossbeam_channel::unbounded::<(u64, TaskInQueue, Vec<LockAttempt>)>();
         let h = std::thread::Builder::new().name("sol-indexer".to_string()).spawn(move || {
             /*while let (uw, ll) = task_receiver.recv().unwrap() {
                     for lock_attempt in task.tx.1.iter() {
