@@ -419,6 +419,29 @@ pub mod check_ping_ancestor_requests {
     solana_sdk::declare_id!("AXLB87anNaUQtqBSsxkm4gvNzYY985aLtNtpJC94uWLJ");
 }
 
+<<<<<<< HEAD
+=======
+pub mod incremental_snapshot_only_incremental_hash_calculation {
+    solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
+}
+
+pub mod disable_cpi_setting_executable_and_rent_epoch {
+    solana_sdk::declare_id!("B9cdB55u4jQsDNsdTK525yE9dmSc5Ga7YBaBrDFvEhM9");
+}
+
+pub mod relax_authority_signer_check_for_lookup_table_creation {
+    solana_sdk::declare_id!("FKAcEvNgSY79RpqsPNUV5gDyumopH4cEHqUxyfm8b8Ap");
+}
+
+pub mod stop_sibling_instruction_search_at_parent {
+    solana_sdk::declare_id!("EYVpEP7uzH1CoXzbD6PubGhYmnxRXPeq3PPsm1ba3gpo");
+}
+
+pub mod vote_state_update_root_fix {
+    solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
+}
+
+>>>>>>> ad6c2d8c5 (Handle VoteStateUpdates for outdated roots bigger than slots in existing VoteState (#27323))
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -518,6 +541,14 @@ lazy_static! {
         (prevent_crediting_accounts_that_end_rent_paying::id(), "prevent crediting rent paying accounts #26606"),
         (sign_repair_requests::id(), "sign repair requests #26834"),
         (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
+<<<<<<< HEAD
+=======
+        (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
+        (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
+        (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
+        (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
+        (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
+>>>>>>> ad6c2d8c5 (Handle VoteStateUpdates for outdated roots bigger than slots in existing VoteState (#27323))
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
