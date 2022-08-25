@@ -14,6 +14,7 @@ use {
 };
 
 const TWO16: u64 = 65536; // 2^16
+const TWO17: u64 = 131072; // 2^17
 
 /// Type that captures a discrete log challenge.
 ///
@@ -31,6 +32,8 @@ pub struct DiscreteLog {
     range_bound: usize,
     /// Ristretto point representing each step of the discrete log search
     step_point: RistrettoPoint,
+    /// Ristretto point compression batch size
+    compression_batch_size: usize,
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -41,13 +44,11 @@ pub struct DecodePrecomputation(HashMap<[u8; 32], u16>);
 fn decode_u32_precomputation(generator: RistrettoPoint) -> DecodePrecomputation {
     let mut hashmap = HashMap::new();
 
-    // TODO: change to TWO17
-    // TODO: update comments
-    let two16_scalar = Scalar::from(TWO16 + TWO16);
+    let two17_scalar = Scalar::from(TWO17);
     let identity = RistrettoPoint::identity(); // 0 * G
-    let generator = two16_scalar * generator; // 2^16 * G
+    let generator = two17_scalar * generator; // 2^17 * G
 
-    // iterator for 2^12*0G , 2^12*1G, 2^12*2G, ...
+    // iterator for 2^17*0G , 2^17*1G, 2^17*2G, ...
     let ristretto_iter = RistrettoIterator::new((identity, 0), (generator, 1));
     for (point, x_hi) in ristretto_iter.take(TWO16 as usize) {
         let key = point.compress().to_bytes();
@@ -78,6 +79,7 @@ impl DiscreteLog {
             num_threads: 1,
             range_bound: TWO16 as usize,
             step_point: G,
+            compression_batch_size: 32,
         }
     }
 
@@ -95,6 +97,19 @@ impl DiscreteLog {
         Ok(())
     }
 
+    /// Adjusts inversion batch size in a discrete log instance.
+    pub fn set_compression_batch_size(
+        &mut self,
+        compression_batch_size: usize,
+    ) -> Result<(), ProofError> {
+        if compression_batch_size >= TWO16 as usize {
+            return Err(ProofError::DiscreteLogBatchSize);
+        }
+        self.compression_batch_size = compression_batch_size;
+
+        Ok(())
+    }
+
     /// Solves the discrete log problem under the assumption that the solution
     /// is a 32-bit number.
     pub fn decode_u32(self) -> Option<u64> {
@@ -108,7 +123,11 @@ impl DiscreteLog {
                 );
 
                 let handle = thread::spawn(move || {
-                    Self::decode_range(ristretto_iterator, self.range_bound)
+                    Self::decode_range(
+                        ristretto_iterator,
+                        self.range_bound,
+                        self.compression_batch_size,
+                    )
                     // Self::decode_range(ristretto_iterator, self.range_bound)
                 });
 
@@ -127,12 +146,18 @@ impl DiscreteLog {
         solution
     }
 
-    fn decode_range(ristretto_iterator: RistrettoIterator, range_bound: usize) -> Option<u64> {
+    fn decode_range(
+        ristretto_iterator: RistrettoIterator,
+        range_bound: usize,
+        compression_batch_size: usize,
+    ) -> Option<u64> {
         let hashmap = &DECODE_PRECOMPUTATION_FOR_G;
         let mut decoded = None;
 
-        let batch_size = 32;
-        for batch in &ristretto_iterator.take(range_bound).chunks(batch_size) {
+        for batch in &ristretto_iterator
+            .take(range_bound)
+            .chunks(compression_batch_size)
+        {
             let (batch_points, batch_indices): (Vec<_>, Vec<_>) = batch
                 .filter(|(point, index)| {
                     if point.is_identity() {
