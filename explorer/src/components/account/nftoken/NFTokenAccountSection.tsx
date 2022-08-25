@@ -3,7 +3,6 @@ import { Address } from "components/common/Address";
 import { TableCardBody } from "components/common/TableCardBody";
 import {
   Account,
-  useAccountInfo,
   useFetchAccountInfo,
 } from "providers/accounts";
 import { Suspense, useEffect, useState } from "react";
@@ -13,7 +12,7 @@ import {
 } from "./isNFTokenAccount";
 import { NftokenTypes } from "./nftoken-types";
 import { MAX_TIME_LOADING_IMAGE, useCachedImage } from "../../common/NFTArt";
-import { useCollectionNfts, useNftokenMetadata } from "./nftoken-hooks";
+import { useCollectionNfts } from "./nftoken-hooks";
 import { UnknownAccountCard } from "../UnknownAccountCard";
 
 export function NFTokenAccountSection({ account }: { account: Account }) {
