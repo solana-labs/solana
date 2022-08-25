@@ -6,7 +6,7 @@ use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        latest_unprocessed_votes::{self, LatestUnprocessedVotes, VoteSource},
+        latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
@@ -15,9 +15,7 @@ use {
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
         unprocessed_packet_batches::{self, *},
-        unprocessed_transaction_storage::{
-            InsertPacketBatchesSummary, ThreadType, UnprocessedTransactionStorage,
-        },
+        unprocessed_transaction_storage::{ThreadType, UnprocessedTransactionStorage},
     },
     core::iter::repeat,
     crossbeam_channel::{
@@ -385,9 +383,9 @@ pub enum ForwardOption {
 
 #[derive(Debug, Default)]
 pub struct FilterForwardingResults {
-    total_forwardable_packets: usize,
-    total_tracer_packets_in_buffer: usize,
-    total_forwardable_tracer_packets: usize,
+    pub(crate) total_forwardable_packets: usize,
+    pub(crate) total_tracer_packets_in_buffer: usize,
+    pub(crate) total_forwardable_tracer_packets: usize,
 }
 
 impl BankingStage {
@@ -447,9 +445,10 @@ impl BankingStage {
             TOTAL_BUFFERED_PACKETS / ((num_threads - NUM_VOTE_PROCESSING_THREADS) as usize);
         // Keeps track of extraneous vote transactions for the vote threads
         let latest_unprocessed_votes = Arc::new(LatestUnprocessedVotes::new());
-        let bank = poh_recorder.read().unwrap().bank();
-        let split_voting_threads = bank
-            .map(|bank| {
+        let should_split_voting_threads = bank_forks
+            .read()
+            .map(|bank_forks| {
+                let bank = bank_forks.root_bank();
                 bank.feature_set
                     .is_active(&allow_votes_to_directly_update_vote_state::id())
                     && bank.feature_set.is_active(&split_banking_threads::id())
@@ -465,7 +464,7 @@ impl BankingStage {
                         (
                             verified_vote_receiver.clone(),
                             (
-                                split_voting_threads,
+                                should_split_voting_threads,
                                 Some(latest_unprocessed_votes.clone()),
                                 ThreadType::Voting(VoteSource::Gossip),
                             ),
@@ -474,14 +473,14 @@ impl BankingStage {
                     1 => (
                         tpu_verified_vote_receiver.clone(),
                         (
-                            split_voting_threads,
+                            should_split_voting_threads,
                             Some(latest_unprocessed_votes.clone()),
                             ThreadType::Voting(VoteSource::Tpu),
                         ),
                     ),
                     _ => (
                         verified_receiver.clone(),
-                        (split_voting_threads, None, ThreadType::Transactions),
+                        (should_split_voting_threads, None, ThreadType::Transactions),
                     ),
                 };
 
@@ -681,7 +680,7 @@ impl BankingStage {
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         recorder: &TransactionRecorder,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         banking_stage_stats: &BankingStageStats,
         qos_service: &QosService,
@@ -689,7 +688,7 @@ impl BankingStage {
         consumed_buffered_packets_count: &mut usize,
         rebuffered_packet_count: &mut usize,
         reached_end_of_slot: &mut bool,
-        test_fn: Option<impl Fn()>,
+        test_fn: &Option<impl Fn()>,
         packets_to_process: &Vec<Rc<ImmutableDeserializedPacket>>,
     ) -> Option<Vec<usize>> {
         // TODO: Right now we iterate through buffer and try the highest weighted transaction once
@@ -714,7 +713,7 @@ impl BankingStage {
                     &bank_creation_time,
                     recorder,
                     packets_to_process.iter().map(|p| &**p),
-                    transaction_status_sender.clone(),
+                    transaction_status_sender,
                     gossip_vote_sender,
                     banking_stage_stats,
                     qos_service,
@@ -755,7 +754,7 @@ impl BankingStage {
             // Out of the buffered packets just retried, collect any still unprocessed
             // transactions in this batch for forwarding
             *rebuffered_packet_count += retryable_transaction_indexes.len();
-            if let Some(test_fn) = &test_fn {
+            if let Some(test_fn) = test_fn {
                 test_fn();
             }
 
@@ -763,7 +762,7 @@ impl BankingStage {
                 .increment_retryable_packets_count(retryable_transaction_indexes.len() as u64);
 
             Some(retryable_transaction_indexes)
-        } else if reached_end_of_slot {
+        } else if *reached_end_of_slot {
             None
         } else {
             // mark as end-of-slot to avoid aggressively lock poh for the remaining for
@@ -806,7 +805,7 @@ impl BankingStage {
                     poh_recorder,
                     slot_metrics_tracker,
                     recorder,
-                    transaction_status_sender,
+                    &transaction_status_sender,
                     gossip_vote_sender,
                     banking_stage_stats,
                     qos_service,
@@ -814,7 +813,7 @@ impl BankingStage {
                     &mut consumed_buffered_packets_count,
                     &mut rebuffered_packet_count,
                     &mut reached_end_of_slot,
-                    test_fn,
+                    &test_fn,
                     packets_to_process,
                 )
             },
@@ -1135,27 +1134,19 @@ impl BankingStage {
                     vote_source,
                 )
             }
-            (_, _, thread_type) => UnprocessedTransactionStorage::new_transaction_storage(
+            (_, hot_swap, thread_type) => UnprocessedTransactionStorage::new_transaction_storage(
                 UnprocessedPacketBatches::with_capacity(batch_limit),
                 thread_type,
+                hot_swap,
             ),
         };
 
         loop {
             // Hotswap
-            unprocessed_transaction_storage = match unprocessed_transaction_storage {
-                UnprocessedTransactionStorage::TransactionStorage(transaction_storage) => {
-                    if let ThreadType::Voting(vote_source) = transaction_storage.thread_type {
-                        UnprocessedTransactionStorage::new_vote_storage(
-                            latest_unprocessed_votes,
-                            vote_source,
-                        )
-                    } else {
-                        UnprocessedTransactionStorage::TransactionStorage(transaction_storage)
-                    }
-                }
-                _ => unprocessed_transaction_storage,
-            };
+            // TODO: figure out how often to check this as it grabs the read lock on bank forks
+            // when checking feature_set
+            unprocessed_transaction_storage =
+                unprocessed_transaction_storage.maybe_hot_swap(bank_forks);
 
             let my_pubkey = cluster_info.id();
             if !unprocessed_transaction_storage.is_empty()
@@ -1287,7 +1278,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         poh: &TransactionRecorder,
         batch: &TransactionBatch,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
     ) -> ExecuteAndCommitTransactionsOutput {
@@ -1529,7 +1520,7 @@ impl BankingStage {
         txs: &[SanitizedTransaction],
         poh: &TransactionRecorder,
         chunk_offset: usize,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
@@ -1722,7 +1713,7 @@ impl BankingStage {
         bank_creation_time: &Instant,
         transactions: &[SanitizedTransaction],
         poh: &TransactionRecorder,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
@@ -1754,7 +1745,7 @@ impl BankingStage {
                 &transactions[chunk_start..chunk_end],
                 poh,
                 chunk_start,
-                transaction_status_sender.clone(),
+                transaction_status_sender,
                 gossip_vote_sender,
                 qos_service,
                 log_messages_bytes_limit,
@@ -1919,7 +1910,7 @@ impl BankingStage {
         bank_creation_time: &Instant,
         poh: &'a TransactionRecorder,
         deserialized_packets: impl Iterator<Item = &'a ImmutableDeserializedPacket>,
-        transaction_status_sender: Option<TransactionStatusSender>,
+        transaction_status_sender: &Option<TransactionStatusSender>,
         gossip_vote_sender: &'a ReplayVoteSender,
         banking_stage_stats: &'a BankingStageStats,
         qos_service: &'a QosService,
@@ -2187,12 +2178,15 @@ impl BankingStage {
     }
 }
 
-pub(crate) fn weighted_random_order_by_stake(bank: &Arc<Bank>) -> impl Iterator<Item = Pubkey> {
+pub(crate) fn weighted_random_order_by_stake<'a>(
+    bank: &Arc<Bank>,
+    pubkeys: impl Iterator<Item = &'a Pubkey>,
+) -> impl Iterator<Item = Pubkey> {
     // Efraimidis and Spirakis algo for weighted random sample without replacement
-    let mut pubkey_with_weight: Vec<(f64, Pubkey)> = bank
-        .staked_nodes()
-        .iter()
-        .filter_map(|(&pubkey, &stake)| {
+    let staked_nodes = bank.staked_nodes();
+    let mut pubkey_with_weight: Vec<(f64, Pubkey)> = pubkeys
+        .filter_map(|&pubkey| {
+            let stake = staked_nodes.get(&pubkey).copied().unwrap_or(0);
             if stake == 0 {
                 None // Ignore votes from unstaked validators
             } else {
@@ -2270,7 +2264,6 @@ mod tests {
         solana_runtime::{bank_forks::BankForks, genesis_utils::activate_feature},
         solana_sdk::{
             account::AccountSharedData,
-            feature_set,
             hash::Hash,
             instruction::InstructionError,
             message::{
@@ -2931,7 +2924,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
-                None,
+                &None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 None,
@@ -2984,7 +2977,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
-                None,
+                &None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 None,
@@ -3068,7 +3061,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
-                None,
+                &None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 None,
@@ -3160,7 +3153,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
-                None,
+                &None,
                 &gossip_vote_sender,
                 &qos_service,
                 None,
@@ -3200,7 +3193,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
-                None,
+                &None,
                 &gossip_vote_sender,
                 &qos_service,
                 None,
@@ -3297,7 +3290,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
-                None,
+                &None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 None,
@@ -3463,7 +3456,7 @@ mod tests {
                 &Instant::now(),
                 &transactions,
                 &recorder,
-                None,
+                &None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
                 None,
@@ -3530,7 +3523,7 @@ mod tests {
             &Instant::now(),
             &transactions,
             &recorder,
-            None,
+            &None,
             &gossip_vote_sender,
             &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
             None,
@@ -3751,7 +3744,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
-                Some(TransactionStatusSender {
+                &Some(TransactionStatusSender {
                     sender: transaction_status_sender,
                 }),
                 &gossip_vote_sender,
@@ -3913,7 +3906,7 @@ mod tests {
                 &[sanitized_tx.clone()],
                 &recorder,
                 0,
-                Some(TransactionStatusSender {
+                &Some(TransactionStatusSender {
                     sender: transaction_status_sender,
                 }),
                 &gossip_vote_sender,
@@ -4025,6 +4018,7 @@ mod tests {
                         num_conflicting_transactions,
                     ),
                     ThreadType::Transactions,
+                    None,
                 );
 
             let (gossip_vote_sender, _gossip_vote_receiver) = unbounded();
@@ -4125,6 +4119,7 @@ mod tests {
                                 num_conflicting_transactions,
                             ),
                             ThreadType::Transactions,
+                            None,
                         );
                     let all_packet_message_hashes: HashSet<Hash> = buffered_packet_batches
                         .iter()
@@ -4244,6 +4239,7 @@ mod tests {
                     &mut UnprocessedTransactionStorage::new_transaction_storage(
                         unprocessed_packet_batches,
                         ThreadType::Transactions,
+                        None,
                     ),
                     &poh_recorder,
                     &socket,
@@ -4301,6 +4297,7 @@ mod tests {
                 2,
             ),
             ThreadType::Transactions,
+            None,
         );
 
         let genesis_config_info = create_slow_genesis_config(10_000);
@@ -4520,6 +4517,7 @@ mod tests {
             let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
                 UnprocessedPacketBatches::with_capacity(100),
                 thread_type,
+                None,
             );
             transaction_storage
                 .deserialize_and_insert_batch(&packet_batch, &(0..3_usize).collect_vec());

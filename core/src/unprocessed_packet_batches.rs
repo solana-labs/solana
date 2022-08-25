@@ -22,7 +22,7 @@ use {
 /// SanitizedTransaction
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeserializedPacket {
-    immutable_section: Rc<ImmutableDeserializedPacket>,
+    pub(crate) immutable_section: Rc<ImmutableDeserializedPacket>,
     pub forwarded: bool,
 }
 

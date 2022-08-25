@@ -41,7 +41,14 @@ impl DeserializedVotePacket {
             return Err(DeserializedPacketError::VoteTransactionError);
         }
 
-        let vote = ImmutableDeserializedPacket::new(packet, None)?;
+        let vote = Rc::new(ImmutableDeserializedPacket::new(packet, None)?);
+        Self::new_from_immutable(vote, vote_source)
+    }
+
+    pub fn new_from_immutable(
+        vote: Rc<ImmutableDeserializedPacket>,
+        vote_source: VoteSource,
+    ) -> Result<Self, DeserializedPacketError> {
         let message = vote.transaction().get_message();
         let (_, instruction) = message
             .program_instructions_iter()
@@ -59,7 +66,7 @@ impl DeserializedVotePacket {
                 let slot = vote_state_update.last_voted_slot().unwrap_or(0);
 
                 Ok(Self {
-                    vote: Some(Rc::new(vote)),
+                    vote: Some(vote),
                     slot,
                     pubkey,
                     vote_source,
@@ -223,6 +230,7 @@ impl LatestUnprocessedVotes {
         if let Ok(latest_votes_per_pubkey) = self.latest_votes_per_pubkey.read() {
             return weighted_random_order_by_stake(
                 &forward_packet_batches_by_accounts.current_bank,
+                latest_votes_per_pubkey.keys(),
             )
             .filter(|pubkey| {
                 if let Some(lock) = latest_votes_per_pubkey.get(pubkey) {

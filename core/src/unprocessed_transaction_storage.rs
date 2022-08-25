@@ -13,10 +13,11 @@ use {
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
     solana_perf::packet::PacketBatch,
-    solana_runtime::bank::Bank,
+    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_sdk::feature_set::{allow_votes_to_directly_update_vote_state, split_banking_threads},
     std::{
         rc::Rc,
-        sync::{atomic::Ordering, Arc},
+        sync::{atomic::Ordering, Arc, RwLock},
     },
 };
 
@@ -56,7 +57,7 @@ pub enum ThreadType {
 }
 
 #[derive(Debug)]
-struct VoteStorage {
+pub struct VoteStorage {
     latest_unprocessed_votes: Arc<LatestUnprocessedVotes>,
     vote_source: VoteSource,
 }
@@ -129,7 +130,10 @@ impl VoteStorage {
         // Based on the stake distribution present in the supplied bank, drain the unprocessed votes
         // from each validator using a weighted random ordering. Votes from validators with
         // 0 stake are ignored.
-        // TODO: Add proper error handling in case bank is missing?
+        if bank.is_none() {
+            // Nothing to process
+            return;
+        }
         let bank = bank.unwrap();
 
         let latest_votes_per_pubkey = self
@@ -138,7 +142,7 @@ impl VoteStorage {
             .read()
             .unwrap();
 
-        let retryable_votes = weighted_random_order_by_stake(&bank)
+        let retryable_votes = weighted_random_order_by_stake(&bank, latest_votes_per_pubkey.keys())
             .filter_map(|pubkey| {
                 if let Some(lock) = latest_votes_per_pubkey.get(&pubkey) {
                     if let Ok(latest_vote) = lock.write() {
@@ -181,14 +185,19 @@ impl VoteStorage {
 }
 
 #[derive(Debug)]
-struct TransactionStorage {
+pub struct TransactionStorage {
     unprocessed_packet_batches: UnprocessedPacketBatches,
     thread_type: ThreadType,
+    hot_swap: Option<Arc<LatestUnprocessedVotes>>,
 }
 
 impl TransactionStorage {
     fn is_empty(&self) -> bool {
         self.unprocessed_packet_batches.is_empty()
+    }
+
+    pub fn thread_type(&self) -> ThreadType {
+        self.thread_type
     }
 
     fn len(&self) -> usize {
@@ -197,6 +206,41 @@ impl TransactionStorage {
 
     fn capacity(&self) -> usize {
         self.unprocessed_packet_batches.capacity()
+    }
+
+    fn hotswap(mut self) -> VoteStorage {
+        if let ThreadType::Voting(vote_source) = self.thread_type {
+            if let Some(latest_unprocessed_votes) = self.hot_swap {
+                let vote_storage = VoteStorage {
+                    latest_unprocessed_votes,
+                    vote_source,
+                };
+                // Move everything over
+                let deserialized_vote_packets = self
+                    .unprocessed_packet_batches
+                    .message_hash_to_transaction
+                    .drain()
+                    .filter_map(
+                        |(
+                            _,
+                            DeserializedPacket {
+                                immutable_section, ..
+                            },
+                        )| {
+                            DeserializedVotePacket::new_from_immutable(
+                                immutable_section,
+                                vote_source,
+                            )
+                            .ok()
+                        },
+                    );
+                vote_storage
+                    .latest_unprocessed_votes
+                    .insert_batch(deserialized_vote_packets);
+                return vote_storage;
+            }
+        }
+        panic!("Hotswap failed, manual intervention required")
     }
 
     #[cfg(test)]
@@ -307,10 +351,12 @@ impl UnprocessedTransactionStorage {
     pub fn new_transaction_storage(
         unprocessed_packet_batches: UnprocessedPacketBatches,
         thread_type: ThreadType,
+        hot_swap: Option<Arc<LatestUnprocessedVotes>>,
     ) -> Self {
         Self::TransactionStorage(TransactionStorage {
             unprocessed_packet_batches,
             thread_type,
+            hot_swap,
         })
     }
 
@@ -424,7 +470,7 @@ impl UnprocessedTransactionStorage {
         &mut self,
         bank: Option<Arc<Bank>>,
         batch_size: usize,
-        mut processing_function: F,
+        processing_function: F,
     ) where
         F: FnMut(&Vec<Rc<ImmutableDeserializedPacket>>) -> Option<Vec<usize>>,
     {
@@ -437,9 +483,35 @@ impl UnprocessedTransactionStorage {
             }
         }
     }
+
+    pub fn maybe_hot_swap(self, bank_forks: &Arc<RwLock<BankForks>>) -> Self {
+        match self {
+            Self::TransactionStorage(transaction_storage) => {
+                if let ThreadType::Voting(_) = transaction_storage.thread_type() {
+                    // Check to see if flag was activated
+                    if let Ok(bank_forks) = bank_forks.read() {
+                        let bank = bank_forks.root_bank();
+                        if bank
+                            .feature_set
+                            .is_active(&allow_votes_to_directly_update_vote_state::id())
+                            && bank.feature_set.is_active(&split_banking_threads::id())
+                        {
+                            // Met all the conditions, time to hotswap
+                            return Self::VoteStorage(transaction_storage.hotswap());
+                        }
+                    }
+                }
+                Self::TransactionStorage(transaction_storage)
+            }
+            vote_storage => vote_storage,
+        }
+    }
 }
 
+#[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_filter_processed_packets() {
         let retryable_indexes = [0, 1, 2, 3];
