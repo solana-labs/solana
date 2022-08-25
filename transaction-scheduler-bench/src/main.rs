@@ -393,8 +393,6 @@ fn handle_transaction_batch(
         .unwrap();
 }
 
-const NUM_SENDERS: usize = 2;
-
 fn spawn_packet_senders(
     preloader: Arc<solana_scheduler::Preloader>,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
@@ -405,7 +403,11 @@ fn spawn_packet_senders(
     duration: Duration,
     exit: Arc<AtomicBool>,
 ) -> Vec<JoinHandle<()>> {
-    (0..NUM_SENDERS)
+    let producer_count = std::env::var("PRODUCER_COUNT")
+        .unwrap_or(format!("{}", 4))
+        .parse::<usize>()
+        .unwrap();
+    (0..producer_count)
         .map(|i| {
             let num_accounts = if i == 0 && high_conflict_sender > 0 {
                 high_conflict_sender
@@ -413,6 +415,7 @@ fn spawn_packet_senders(
                 accounts.len()
             };
             spawn_packet_sender(
+                producer_count,
                 Arc::clone(&preloader),
                 metrics.clone(),
                 num_accounts,
@@ -427,6 +430,7 @@ fn spawn_packet_senders(
 }
 
 fn spawn_packet_sender(
+    producer_count: usize,
     preloader: Arc<solana_scheduler::Preloader>,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
@@ -438,6 +442,7 @@ fn spawn_packet_sender(
 ) -> JoinHandle<()> {
     std::thread::Builder::new().name("sol-producer".to_string()).spawn(move || {
         send_packets(
+            producer_count,
             preloader,
             metrics,
             num_accounts,
@@ -451,6 +456,7 @@ fn spawn_packet_sender(
 }
 
 fn send_packets(
+    producer_count: usize,
     preloader: Arc<solana_scheduler::Preloader>,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     num_accounts: usize,
@@ -462,7 +468,7 @@ fn send_packets(
 ) {
     let packets_per_msg = config.packets_per_batch * config.batches_per_msg;
     let loop_frequency =
-        config.packet_send_rate as f64 * packets_per_msg as f64 / NUM_SENDERS as f64;
+        config.packet_send_rate as f64 * packets_per_msg as f64 / producer_count as f64;
     let loop_duration = Duration::from_secs_f64(1.0 / loop_frequency);
 
     info!("sending packets: packets_per_msg: {packets_per_msg} loop_frequency: {loop_frequency} loop_duration: {loop_duration:?}");
