@@ -529,21 +529,7 @@ mod tests {
         FeatureSet::all_enabled()
     }
 
-    /// The "old" behavior is before the stake minimum delegation was raised to either 0.1 or 1 SOL
-    fn feature_set_alternative_new_behavior() -> FeatureSet {
-        let mut feature_set = feature_set_new_behavior();
-        feature_set.deactivate(&feature_set::stake_raise_minimum_delegation_to_100m_lamports::id());
-        feature_set
-    }
-
-    /// The "old" behavior is before the stake minimum delegation was raised to either 0.1 or 1 SOL
-    fn feature_set_alternative_behavior() -> FeatureSet {
-        let mut feature_set = feature_set_new_behavior();
-        feature_set.deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
-        feature_set
-    }
-
-    /// The "old" behavior is before the stake minimum delegation was raised to either 0.1 or 1 SOL
+    /// The "old" behavior is before the stake minimum delegation was raised
     fn feature_set_old_behavior() -> FeatureSet {
         let mut feature_set = feature_set_new_behavior();
         feature_set.deactivate(&feature_set::stake_raise_minimum_delegation_to_1_sol::id());
@@ -687,8 +673,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_stake_process_instruction(feature_set: FeatureSet) {
         process_instruction_as_one_arg(
             &feature_set,
@@ -806,8 +790,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_spoofed_stake_accounts(feature_set: FeatureSet) {
         process_instruction_as_one_arg(
             &feature_set,
@@ -936,8 +918,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_stake_process_instruction_decode_bail(feature_set: FeatureSet) {
         // these will not call stake_state, have bogus contents
         let stake_address = Pubkey::new_unique();
@@ -1207,8 +1187,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_stake_checked_instructions(feature_set: FeatureSet) {
         let stake_address = Pubkey::new_unique();
         let staker = Pubkey::new_unique();
@@ -1571,8 +1549,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_stake_initialize(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -1681,8 +1657,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_authorize(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let authority_address_2 = solana_sdk::pubkey::new_rand();
@@ -1864,8 +1838,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_authorize_override(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let mallory_address = solana_sdk::pubkey::new_rand();
@@ -1985,8 +1957,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_authorize_with_seed(feature_set: FeatureSet) {
         let authority_base_address = solana_sdk::pubkey::new_rand();
         let authority_address = solana_sdk::pubkey::new_rand();
@@ -2104,8 +2074,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_authorize_delegated_stake(feature_set: FeatureSet) {
         let authority_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -2297,8 +2265,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_stake_delegate(feature_set: FeatureSet) {
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
@@ -2549,8 +2515,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_redelegate_consider_balance_changes(feature_set: FeatureSet) {
         let mut clock = Clock::default();
         let rent = Rent::default();
@@ -2769,8 +2733,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -2881,8 +2843,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_withdraw_stake(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let authority_address = solana_sdk::pubkey::new_rand();
@@ -3174,8 +3134,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_withdraw_stake_before_warmup(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -3309,8 +3267,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_withdraw_lockup(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
@@ -3437,8 +3393,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_withdraw_rent_exempt(feature_set: FeatureSet) {
         let recipient_address = solana_sdk::pubkey::new_rand();
         let custodian_address = solana_sdk::pubkey::new_rand();
@@ -3531,8 +3485,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_deactivate(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
@@ -3657,8 +3609,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_set_lockup(feature_set: FeatureSet) {
         let custodian_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -3945,8 +3895,6 @@ mod tests {
     /// - Assert 2: accounts with a balance less-than the rent exemption do not initialize
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_initialize_minimum_balance(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4005,8 +3953,6 @@ mod tests {
     /// more information.)
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_delegate_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -4102,8 +4048,6 @@ mod tests {
     ///  LT     | LT   | Err
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -4199,8 +4143,6 @@ mod tests {
     ///             delegation is not OK
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_full_amount_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -4274,8 +4216,6 @@ mod tests {
     /// the minimum split amount reduces accordingly.
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_initialized_split_destination_minimum_balance(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4374,8 +4314,6 @@ mod tests {
     /// Various tests to account for two pending proposals for raised min delegation
     #[test_case(feature_set_old_behavior(), &[Ok(()), Ok(())]; "old_behavior")]
     #[test_case(feature_set_new_behavior(), &[ Err(InstructionError::InsufficientFunds), Err(InstructionError::InsufficientFunds) ] ; "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(), &[ Err(InstructionError::InsufficientFunds), Err(InstructionError::InsufficientFunds) ] ; "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(), &[ Err(InstructionError::InsufficientFunds), Err(InstructionError::InsufficientFunds) ] ; "alternative_new_behavior")]
     fn test_staked_split_destination_minimum_balance(
         feature_set: FeatureSet,
         expected_results: &[Result<(), InstructionError>],
@@ -4529,8 +4467,6 @@ mod tests {
     /// - Assert 2: withdrawing so remaining stake is less-than the minimum is not OK
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_withdraw_minimum_stake_delegation(feature_set: FeatureSet) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
         let rent = Rent::default();
@@ -4641,8 +4577,6 @@ mod tests {
     // parameter can be removed and consolidated.
     #[test_case(feature_set_old_old_behavior(), Ok(()); "old_old_behavior")]
     #[test_case(feature_set_new_behavior(), Err(StakeError::InsufficientDelegation.into()); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(), Err(StakeError::InsufficientDelegation.into()); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(), Err(StakeError::InsufficientDelegation.into()); "alternative_new_behavior")]
     fn test_behavior_withdrawal_then_redelegate_with_less_than_minimum_stake_delegation(
         feature_set: FeatureSet,
         expected_result: Result<(), InstructionError>,
@@ -4825,8 +4759,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_source_uninitialized(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -4927,8 +4859,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_split_not_uninitialized(feature_set: FeatureSet) {
         let stake_lamports = 42;
         let stake_address = solana_sdk::pubkey::new_rand();
@@ -4980,8 +4910,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_more_than_staked(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5041,8 +4969,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_with_rent(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5153,8 +5079,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_to_account_with_rent_exempt_reserve(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5280,8 +5204,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_from_larger_sized_account(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_larger_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
@@ -5413,8 +5335,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_from_smaller_sized_account(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_smaller_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5494,8 +5414,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_100_percent_of_source(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5592,8 +5510,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_100_percent_of_source_to_account_with_lamports(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_exempt_reserve = rent.minimum_balance(StakeState::size_of());
@@ -5690,8 +5606,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_split_rent_exemptness(feature_set: FeatureSet) {
         let rent = Rent::default();
         let source_rent_exempt_reserve = rent.minimum_balance(StakeState::size_of() + 100);
@@ -5830,8 +5744,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_merge(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -5962,8 +5874,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_merge_self_fails(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let authorized_address = solana_sdk::pubkey::new_rand();
@@ -6041,8 +5951,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_merge_incorrect_authorized_staker(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -6137,8 +6045,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_merge_invalid_account_data(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -6220,8 +6126,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_merge_fake_stake_source(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -6293,8 +6197,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_merge_active_stake(feature_set: FeatureSet) {
         let stake_address = solana_sdk::pubkey::new_rand();
         let merge_from_address = solana_sdk::pubkey::new_rand();
@@ -6555,8 +6457,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_stake_get_minimum_delegation(feature_set: FeatureSet) {
         let stake_address = Pubkey::new_unique();
         let stake_account = create_default_stake_account();
@@ -6612,8 +6512,6 @@ mod tests {
     // disabled | bad         | none    || Err NotEnoughAccountKeys
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_stake_process_instruction_error_ordering(feature_set: FeatureSet) {
         let rent = Rent::default();
         let rent_address = sysvar::rent::id();
@@ -6720,8 +6618,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_deactivate_delinquent(feature_set: FeatureSet) {
         let feature_set = Arc::new(feature_set);
         let mut sysvar_cache_override = SysvarCache::default();
@@ -6992,8 +6888,6 @@ mod tests {
 
     #[test_case(feature_set_old_behavior(); "old_behavior")]
     #[test_case(feature_set_new_behavior(); "new_behavior")]
-    #[test_case(feature_set_alternative_behavior(); "alternative_behavior")]
-    #[test_case(feature_set_alternative_new_behavior(); "alternative_new_behavior")]
     fn test_redelegate(feature_set: FeatureSet) {
         let feature_set = Arc::new(feature_set);
 
