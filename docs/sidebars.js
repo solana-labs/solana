@@ -75,10 +75,10 @@ module.exports = {
       ],
     },
   ],
-  developingSidebar: [
+  developerSidebar: [
     {
-      type: "doc",
-      id: "developing/programming-model/overview",
+      type: "link",
+      href: "/developers",
       label: "Overview",
     },
     {
