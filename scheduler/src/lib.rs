@@ -744,7 +744,7 @@ impl ScheduleStage {
                 arc_next_task.record_queue_time(*sequence_clock, *queue_clock);
                 *queue_clock = queue_clock.checked_add(1).unwrap();
             }
-            let a2 = TaskInQueue::clone(arc_next_task);
+            let a2 = TaskInQueue::clone(&arc_next_task);
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
             let unique_weight = next_task.unique_weight;
             let message_hash = next_task.tx.0.message_hash();
