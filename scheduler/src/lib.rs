@@ -507,6 +507,7 @@ impl Task {
     pub fn clone_for_test(&self) -> Self {
         Self {
             unique_weight: self.unique_weight,
+            for_indexer: self.tx.1.iter().map(|a| a.clone_for_test()).collect(),
             tx: Box::new((self.tx.0.clone(), self.tx.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>())),
             contention_count: Default::default(),
             uncontended: Default::default(),
@@ -516,7 +517,6 @@ impl Task {
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
-            for_indexer: self.tx.1.iter().map(|a| a.clone_for_test()).collect(),
         }
     }
 
