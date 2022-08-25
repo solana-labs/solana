@@ -3,9 +3,12 @@
 use {
     crate::errors::ProofError,
     curve25519_dalek::{
-        constants::RISTRETTO_BASEPOINT_POINT as G, ristretto::RistrettoPoint, scalar::Scalar,
-        traits::Identity,
+        constants::RISTRETTO_BASEPOINT_POINT as G,
+        ristretto::RistrettoPoint,
+        scalar::Scalar,
+        traits::{Identity, IsIdentity},
     },
+    itertools::Itertools,
     serde::{Deserialize, Serialize},
     std::{collections::HashMap, thread},
 };
@@ -38,7 +41,9 @@ pub struct DecodePrecomputation(HashMap<[u8; 32], u16>);
 fn decode_u32_precomputation(generator: RistrettoPoint) -> DecodePrecomputation {
     let mut hashmap = HashMap::new();
 
-    let two16_scalar = Scalar::from(TWO16);
+    // TODO: change to TWO17
+    // TODO: update comments
+    let two16_scalar = Scalar::from(TWO16 + TWO16);
     let identity = RistrettoPoint::identity(); // 0 * G
     let generator = two16_scalar * generator; // 2^16 * G
 
@@ -102,8 +107,10 @@ impl DiscreteLog {
                     (-(&self.step_point), self.num_threads as u64),
                 );
 
-                let handle =
-                    thread::spawn(move || Self::decode_range(ristretto_iterator, self.range_bound));
+                let handle = thread::spawn(move || {
+                    Self::decode_range(ristretto_iterator, self.range_bound)
+                    // Self::decode_range(ristretto_iterator, self.range_bound)
+                });
 
                 starting_point -= G;
                 handle
@@ -123,13 +130,30 @@ impl DiscreteLog {
     fn decode_range(ristretto_iterator: RistrettoIterator, range_bound: usize) -> Option<u64> {
         let hashmap = &DECODE_PRECOMPUTATION_FOR_G;
         let mut decoded = None;
-        for (point, x_lo) in ristretto_iterator.take(range_bound) {
-            let key = point.compress().to_bytes();
-            if hashmap.0.contains_key(&key) {
-                let x_hi = hashmap.0[&key];
-                decoded = Some(x_lo + TWO16 * x_hi as u64);
+
+        let batch_size = 32;
+        for batch in &ristretto_iterator.take(range_bound).chunks(batch_size) {
+            let (batch_points, batch_indices): (Vec<_>, Vec<_>) = batch
+                .filter(|(point, index)| {
+                    if point.is_identity() {
+                        decoded = Some(*index);
+                        return false;
+                    }
+                    true
+                })
+                .unzip();
+
+            let batch_compressed = RistrettoPoint::double_and_compress_batch(&batch_points);
+
+            for (point, x_lo) in batch_compressed.iter().zip(batch_indices.iter()) {
+                let key = point.to_bytes();
+                if hashmap.0.contains_key(&key) {
+                    let x_hi = hashmap.0[&key];
+                    decoded = Some(x_lo + TWO16 * x_hi as u64);
+                }
             }
         }
+
         decoded
     }
 }
@@ -167,6 +191,7 @@ mod tests {
     #[allow(non_snake_case)]
     fn test_serialize_decode_u32_precomputation_for_G() {
         let decode_u32_precomputation_for_G = decode_u32_precomputation(G);
+        // let decode_u32_precomputation_for_G = decode_u32_precomputation(G);
 
         if decode_u32_precomputation_for_G.0 != DECODE_PRECOMPUTATION_FOR_G.0 {
             use std::{fs::File, io::Write, path::PathBuf};
@@ -183,7 +208,7 @@ mod tests {
     #[test]
     fn test_decode_correctness() {
         // general case
-        let amount: u64 = 55;
+        let amount: u64 = 4294967295;
 
         let instance = DiscreteLog::new(G, Scalar::from(amount) * G);
 
