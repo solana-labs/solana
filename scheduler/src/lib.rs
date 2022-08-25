@@ -1036,9 +1036,9 @@ impl ScheduleStage {
         let (task_sender, task_receiver) = crossbeam_channel::unbounded::<(u64, TaskInQueue, Vec<LockAttempt>)>();
         let h = std::thread::Builder::new().name("sol-indexer".to_string()).spawn(move || {
             while let (uw, task, ll) = task_receiver.recv().unwrap() {
-                    for lock_attempt in ll {
-                        lock_attempt.contended_unique_weights().insert_task(uw, TaskInQueue::clone(&task));
-                    }
+                for lock_attempt in ll {
+                    lock_attempt.contended_unique_weights().insert_task(uw, TaskInQueue::clone(&task));
+                }
             }
         }).unwrap();
 
