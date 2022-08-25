@@ -364,8 +364,8 @@ fn handle_transaction_batch(
             //task.trace_timestamps("in_exec(initial list)");
             while !task.currently_contended() {
                 if task_cursor.key() == &uq {
-                    assert!(task_cursor.remove());
-                    removed = true;
+                    removed = task_cursor.remove();
+                    assert!(removed);
                 }
                 if let Some(new_cursor) = task_cursor.prev() {
                     assert!(new_cursor.key() < task_cursor.key());
