@@ -780,7 +780,7 @@ impl ScheduleStage {
                     //for lock_attempt in next_task.tx.1.iter() {
                     //    lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&a2));
                     //}
-                    task_sender.send(next_task.tx.1.clone()).unwrap();
+                    task_sender.send(next_task.tx.1.clone_for_test()).unwrap();
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
