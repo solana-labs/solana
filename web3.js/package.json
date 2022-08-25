@@ -58,7 +58,7 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.12.5",
-    "@ethersproject/sha2": "^5.5.0",
+    "@noble/hashes": "^1.1.2",
     "@solana/buffer-layout": "^4.0.0",
     "bigint-buffer": "^1.1.5",
     "bn.js": "^5.0.0",
