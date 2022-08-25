@@ -1028,6 +1028,15 @@ impl ScheduleStage {
 
             (&ee_sender, Some(h))
         };
+        let (task_sender, task_receiver) = crossbeam_channel::unbounded::<TaskInQueue>();
+        let h = std::thread::Builder::new().name("sol-indexer".to_string()).spawn(move || {
+            while let task = task_receiver.recv().unwrap() {
+                let unique_weight = task.unique_weight;
+                for lock_attempt in task.tx.1.iter() {
+                    lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&task));
+                }
+            }
+        }).unwrap();
 
         loop {
             trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
