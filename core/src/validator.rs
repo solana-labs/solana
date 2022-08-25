@@ -2076,23 +2076,7 @@ fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
             "Path renaming failed: {}.  Falling back to rm_dir in sync mode",
             err.to_string()
         );
-        if let Ok(dir_entries) = std::fs::read_dir(&path) {
-            for dir_entry in dir_entries {
-                let sub_path = dir_entry.unwrap().path();
-                if let Err(err) = std::fs::remove_dir_all(&sub_path) {
-                    warn!(
-                        "Path removing failed on {}.  Error: {}",
-                        sub_path.display(),
-                        err.to_string()
-                    );
-                }
-            }
-        } else {
-            warn!(
-                "Failed to read the sub paths of {}",
-                path.as_ref().display()
-            );
-        }
+        delete_contents_of_path(path);
         return;
     }
 
@@ -2102,6 +2086,53 @@ fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
             std::fs::remove_dir_all(&path_delete).unwrap();
         })
         .unwrap();
+}
+
+/// Delete the files and subdirectories in a directory.
+/// This is useful if the process does not have permission
+/// to delete the top level directory it might be able to
+/// delete the contents of that directory.
+fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
+    if let Ok(dir_entries) = std::fs::read_dir(&path) {
+        for dir_entry in dir_entries {
+            if let Ok(entry) = dir_entry {
+                let sub_path = entry.path();
+                let metadata = match entry.metadata() {
+                    Ok(metadata) => metadata,
+                    Err(err) => {
+                        warn!(
+                            "Failed to get metadata for {}. Error: {}",
+                            sub_path.display(),
+                            err.to_string()
+                        );
+                        break;
+                    }
+                };
+                if metadata.is_dir() {
+                    if let Err(err) = std::fs::remove_dir_all(&sub_path) {
+                        warn!(
+                            "Failed to remove sub directory {}.  Error: {}",
+                            sub_path.display(),
+                            err.to_string()
+                        );
+                    }
+                } else {
+                    if let Err(err) = std::fs::remove_file(&sub_path) {
+                        warn!(
+                            "Failed to remove file {}.  Error: {}",
+                            sub_path.display(),
+                            err.to_string()
+                        );
+                    }
+                }
+            }
+        }
+    } else {
+        warn!(
+            "Failed to read the sub paths of {}",
+            path.as_ref().display()
+        );
+    }
 }
 
 fn cleanup_accounts_paths(config: &ValidatorConfig) {
