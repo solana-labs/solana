@@ -1993,6 +1993,11 @@ pub fn main() {
                     .long("skip-new-snapshot-check")
                     .help("Skip check for a new snapshot")
             )
+            .arg(
+                Arg::with_name("replay_slots_concurrently")
+                    .long("replay-slots-concurrently")
+                    .help("Allow concurrent replay of slots on different forks.")
+            )
             .after_help("Note: If this command exits with a non-zero status \
                          then this not a good time for a restart")
         )
@@ -2759,6 +2764,7 @@ pub fn main() {
             ..RuntimeConfig::default()
         },
         staked_nodes_overrides: staked_nodes_overrides.clone(),
+        replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
         ..ValidatorConfig::default()
     };
 
