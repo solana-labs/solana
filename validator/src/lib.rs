@@ -14,6 +14,7 @@ use {
         path::Path,
         process::exit,
         thread::JoinHandle,
+        time::Duration,
     },
 };
 
@@ -65,15 +66,20 @@ pub fn redirect_stderr_to_file(logfile: Option<String>) -> Option<JoinHandle<()>
 
                 solana_logger::setup_with_default(filter);
                 redirect_stderr(&logfile);
-                Some(std::thread::spawn(move || {
-                    for signal in signals.forever() {
-                        info!(
-                            "received SIGUSR1 ({}), reopening log file: {:?}",
-                            signal, logfile
-                        );
-                        redirect_stderr(&logfile);
-                    }
-                }))
+                Some(
+                    std::thread::Builder::new()
+                        .name("solSigUsr1".into())
+                        .spawn(move || {
+                            for signal in signals.forever() {
+                                info!(
+                                    "received SIGUSR1 ({}), reopening log file: {:?}",
+                                    signal, logfile
+                                );
+                                redirect_stderr(&logfile);
+                            }
+                        })
+                        .unwrap(),
+                )
             }
             #[cfg(not(unix))]
             {
@@ -121,9 +127,12 @@ pub fn println_name_value(name: &str, value: &str) {
 pub fn new_spinner_progress_bar() -> ProgressBar {
     let progress_bar = indicatif::ProgressBar::new(42);
     progress_bar.set_draw_target(ProgressDrawTarget::stdout());
-    progress_bar
-        .set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}"));
-    progress_bar.enable_steady_tick(100);
+    progress_bar.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {wide_msg}")
+            .expect("ProgresStyle::template direct input to be correct"),
+    );
+    progress_bar.enable_steady_tick(Duration::from_millis(100));
 
     ProgressBar {
         progress_bar,

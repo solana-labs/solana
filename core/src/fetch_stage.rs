@@ -208,7 +208,7 @@ impl FetchStage {
         let poh_recorder = poh_recorder.clone();
 
         let fwd_thread_hdl = Builder::new()
-            .name("solana-fetch-stage-fwd-rcvr".to_string())
+            .name("solFetchStgFwRx".to_string())
             .spawn(move || loop {
                 if let Err(e) =
                     Self::handle_forwarded_packets(&forward_receiver, &sender, &poh_recorder)
@@ -226,7 +226,7 @@ impl FetchStage {
 
         let exit = exit.clone();
         let metrics_thread_hdl = Builder::new()
-            .name("solana-fetch-stage-metrics".to_string())
+            .name("solFetchStgMetr".to_string())
             .spawn(move || loop {
                 sleep(Duration::from_secs(1));
 

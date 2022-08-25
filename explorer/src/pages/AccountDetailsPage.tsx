@@ -52,6 +52,9 @@ import {
   isNFTokenAccount,
   parseNFTokenCollectionAccount,
 } from "../utils/nftoken-parsers.ts/isNFTokenAccount";
+import { isAddressLookupTableAccount } from "components/account/address-lookup-table/types";
+import { AddressLookupTableAccountSection } from "components/account/address-lookup-table/AddressLookupTableAccountSection";
+import { LookupTableEntriesCard } from "components/account/address-lookup-table/LookupTableEntriesCard";
 
 const IDENTICON_WIDTH = 64;
 
@@ -137,6 +140,13 @@ const TABS_LOOKUP: { [id: string]: Tab[] } = {
       slug: "nftoken-collection-nfts",
       title: "NFTs",
       path: "/nfts",
+    },
+  ],
+  "address-lookup-table": [
+    {
+      slug: "entries",
+      title: "Table Entries",
+      path: "/entries",
     },
   ],
 };
@@ -329,7 +339,8 @@ function DetailsSections({
 }
 
 function InfoSection({ account }: { account: Account }) {
-  const data = account?.details?.data;
+  const details = account?.details;
+  const data = details?.data;
 
   if (data && data.program === "bpf-upgradeable-loader") {
     return (
@@ -364,6 +375,16 @@ function InfoSection({ account }: { account: Account }) {
     return (
       <ConfigAccountSection account={account} configAccount={data.parsed} />
     );
+  } else if (
+    details?.rawData &&
+    isAddressLookupTableAccount(details.owner, details.rawData)
+  ) {
+    return (
+      <AddressLookupTableAccountSection
+        account={account}
+        data={details.rawData}
+      />
+    );
   } else {
     return <UnknownAccountCard account={account} />;
   }
@@ -397,7 +418,8 @@ export type MoreTabs =
   | "domains"
   | "security"
   | "anchor-program"
-  | "anchor-account";
+  | "anchor-account"
+  | "entries";
 
 function MoreSection({
   account,
@@ -409,7 +431,8 @@ function MoreSection({
   tabs: (JSX.Element | null)[];
 }) {
   const pubkey = account.pubkey;
-  const data = account?.details?.data;
+  const details = account?.details;
+  const data = details?.data;
 
   return (
     <>
@@ -486,6 +509,11 @@ function MoreSection({
           <AnchorAccountCard account={account} />
         </React.Suspense>
       )}
+      {tab === "entries" &&
+        details?.rawData &&
+        isAddressLookupTableAccount(details.owner, details.rawData) && (
+          <LookupTableEntriesCard lookupTableAccountData={details?.rawData} />
+        )}
     </>
   );
 }
@@ -512,6 +540,14 @@ function getTabs(pubkey: PublicKey, account: Account): TabComponent[] {
 
   if (data && programTypeKey in TABS_LOOKUP) {
     tabs.push(...TABS_LOOKUP[programTypeKey]);
+  }
+
+  // Add the key for address lookup tables
+  if (
+    account.details?.rawData &&
+    isAddressLookupTableAccount(account.details.owner, account.details.rawData)
+  ) {
+    tabs.push(...TABS_LOOKUP["address-lookup-table"]);
   }
 
   // Add the key for Metaplex NFTs

@@ -2,12 +2,12 @@ use {
     clap::{crate_description, crate_name, App, Arg, ArgMatches},
     solana_clap_utils::input_validators::{is_url, is_url_or_moniker},
     solana_cli_config::{ConfigInput, CONFIG_FILE},
-    solana_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     solana_sdk::{
         fee_calculator::FeeRateGovernor,
         pubkey::Pubkey,
         signature::{read_keypair_file, Keypair},
     },
+    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{net::SocketAddr, process::exit, time::Duration},
 };
 
@@ -54,6 +54,8 @@ pub struct Config {
     pub external_client_type: ExternalClientType,
     pub use_quic: bool,
     pub tpu_connection_pool_size: usize,
+    pub use_randomized_compute_unit_price: bool,
+    pub use_durable_nonce: bool,
 }
 
 impl Default for Config {
@@ -81,6 +83,8 @@ impl Default for Config {
             external_client_type: ExternalClientType::default(),
             use_quic: DEFAULT_TPU_USE_QUIC,
             tpu_connection_pool_size: DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            use_randomized_compute_unit_price: false,
+            use_durable_nonce: false,
         }
     }
 }
@@ -290,10 +294,10 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .help("Submit transactions with a TpuClient")
         )
         .arg(
-            Arg::with_name("tpu_use_quic")
-                .long("tpu-use-quic")
+            Arg::with_name("tpu_disable_quic")
+                .long("tpu-disable-quic")
                 .takes_value(false)
-                .help("Submit transactions via QUIC; only affects ThinClient (default) \
+                .help("Do not submit transactions via QUIC; only affects ThinClient (default) \
                     or TpuClient sends"),
         )
         .arg(
@@ -302,6 +306,12 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .takes_value(true)
                 .help("Controls the connection pool size per remote address; only affects ThinClient (default) \
                     or TpuClient sends"),
+        )
+        .arg(
+            Arg::with_name("use_randomized_compute_unit_price")
+                .long("use-randomized-compute-unit-price")
+                .takes_value(false)
+                .help("Sets random compute-unit-price in range [0..100] to transfer transactions"),
         )
 }
 
@@ -348,8 +358,8 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
         args.external_client_type = ExternalClientType::RpcClient;
     }
 
-    if matches.is_present("tpu_use_quic") {
-        args.use_quic = true;
+    if matches.is_present("tpu_disable_quic") {
+        args.use_quic = false;
     }
 
     if let Some(v) = matches.value_of("tpu_connection_pool_size") {
@@ -431,6 +441,10 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
             .to_string()
             .parse()
             .expect("can't parse target slots per epoch");
+    }
+
+    if matches.is_present("use_randomized_compute_unit_price") {
+        args.use_randomized_compute_unit_price = true;
     }
 
     args

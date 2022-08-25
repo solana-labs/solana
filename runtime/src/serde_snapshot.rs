@@ -8,12 +8,13 @@ use {
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         append_vec::{AppendVec, StoredMetaWriteVersion},
-        bank::{Bank, BankFieldsToDeserialize, BankRc},
+        bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
         epoch_stakes::EpochStakes,
         hardened_unpack::UnpackedAppendVecMap,
         rent_collector::RentCollector,
+        runtime_config::RuntimeConfig,
         serde_snapshot::storage::SerializableAccountStorageEntry,
         snapshot_utils::{self, BANK_SNAPSHOT_PRE_FILENAME_EXTENSION},
         stakes::Stakes,
@@ -64,7 +65,7 @@ pub(crate) enum SerdeStyle {
 
 const MAX_STREAM_SIZE: u64 = 32 * 1024 * 1024 * 1024;
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, AbiExample, PartialEq, Eq)]
 pub struct AccountsDbFields<T>(
     HashMap<Slot, Vec<T>>,
     StoredMetaWriteVersion,
@@ -118,7 +119,7 @@ impl<T> SnapshotAccountsDbFields<T> {
                 // There must not be any overlap in the slots of storages between the full snapshot and the incremental snapshot
                 incremental_snapshot_storages
                     .iter()
-                    .all(|storage_entry| !full_snapshot_storages.contains_key(storage_entry.0)).then(|| ()).ok_or_else(|| {
+                    .all(|storage_entry| !full_snapshot_storages.contains_key(storage_entry.0)).then_some(()).ok_or_else(|| {
                         io::Error::new(io::ErrorKind::InvalidData, "Snapshots are incompatible: There are storages for the same slot in both the full snapshot and the incremental snapshot!")
                     })?;
 
@@ -192,6 +193,7 @@ trait TypeContext<'a>: PartialEq {
         stream_reader: &mut BufReader<R>,
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
+        incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,
@@ -285,6 +287,7 @@ pub(crate) fn bank_from_streams<R>(
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     genesis_config: &GenesisConfig,
+    runtime_config: &RuntimeConfig,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
     additional_builtins: Option<&Builtins>,
     account_secondary_indexes: AccountSecondaryIndexes,
@@ -303,6 +306,7 @@ where
         bank_fields,
         accounts_db_fields,
         genesis_config,
+        runtime_config,
         account_paths,
         unpacked_append_vec_map,
         debug_keys,
@@ -367,12 +371,18 @@ fn reserialize_bank_fields_with_new_hash<W, R>(
     stream_reader: &mut BufReader<R>,
     stream_writer: &mut BufWriter<W>,
     accounts_hash: &Hash,
+    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> Result<(), Error>
 where
     W: Write,
     R: Read,
 {
-    newer::Context::reserialize_bank_fields_with_hash(stream_reader, stream_writer, accounts_hash)
+    newer::Context::reserialize_bank_fields_with_hash(
+        stream_reader,
+        stream_writer,
+        accounts_hash,
+        incremental_snapshot_persistence,
+    )
 }
 
 /// effectively updates the accounts hash in the serialized bank file on disk
@@ -384,6 +394,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
     bank_snapshots_dir: impl AsRef<Path>,
     slot: Slot,
     accounts_hash: &Hash,
+    incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
     let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
@@ -401,6 +412,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
                 &mut BufReader::new(file),
                 &mut BufWriter::new(file_out),
                 accounts_hash,
+                incremental_snapshot_persistence,
             )
             .unwrap();
         }
@@ -483,6 +495,7 @@ fn reconstruct_bank_from_fields<E>(
     bank_fields: BankFieldsToDeserialize,
     snapshot_accounts_db_fields: SnapshotAccountsDbFields<E>,
     genesis_config: &GenesisConfig,
+    runtime_config: &RuntimeConfig,
     account_paths: &[PathBuf],
     unpacked_append_vec_map: UnpackedAppendVecMap,
     debug_keys: Option<Arc<HashSet<Pubkey>>>,
@@ -513,12 +526,14 @@ where
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
+    let runtime_config = Arc::new(runtime_config.clone());
 
     // if limit_load_slot_count_from_snapshot is set, then we need to side-step some correctness checks beneath this call
     let debug_do_not_add_builtins = limit_load_slot_count_from_snapshot.is_some();
     let bank = Bank::new_from_fields(
         bank_rc,
         genesis_config,
+        runtime_config,
         bank_fields,
         debug_keys,
         additional_builtins,
@@ -775,7 +790,7 @@ where
     let accounts_db = Arc::new(accounts_db);
     let accounts_db_clone = accounts_db.clone();
     let handle = Builder::new()
-        .name("notify_account_restore_from_snapshot".to_string())
+        .name("solNfyAccRestor".to_string())
         .spawn(move || {
             accounts_db_clone.notify_account_restore_from_snapshot();
         })

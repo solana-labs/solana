@@ -2,7 +2,6 @@ use {
     crate::tpu_info::TpuInfo,
     crossbeam_channel::{Receiver, RecvTimeoutError},
     log::*,
-    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_measure::measure::Measure,
     solana_metrics::datapoint_warn,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -10,6 +9,7 @@ use {
         hash::Hash, nonce_account, pubkey::Pubkey, saturating_add_assign, signature::Signature,
         timing::AtomicInterval, transport::TransportError,
     },
+    solana_tpu_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     std::{
         collections::{
             hash_map::{Entry, HashMap},
@@ -410,7 +410,7 @@ impl SendTransactionService {
             config
         );
         Builder::new()
-            .name("send-tx-receive".to_string())
+            .name("solStxReceive".to_string())
             .spawn(move || loop {
                 let recv_timeout_ms = config.batch_send_rate_ms;
                 let stats = &stats_report.stats;
@@ -510,7 +510,7 @@ impl SendTransactionService {
             config
         );
         Builder::new()
-            .name("send-tx-retry".to_string())
+            .name("solStxRetry".to_string())
             .spawn(move || loop {
                 let retry_interval_ms = config.retry_rate_ms;
                 let stats = &stats_report.stats;

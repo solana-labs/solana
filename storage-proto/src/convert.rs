@@ -25,6 +25,7 @@ use {
     },
 };
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 pub mod generated {
     include!(concat!(
         env!("OUT_DIR"),
@@ -32,6 +33,7 @@ pub mod generated {
     ));
 }
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 pub mod tx_by_addr {
     include!(concat!(
         env!("OUT_DIR"),
@@ -365,6 +367,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             rewards,
             loaded_addresses,
             return_data,
+            compute_units_consumed,
         } = value;
         let err = match status {
             Ok(()) => None,
@@ -424,6 +427,7 @@ impl From<TransactionStatusMeta> for generated::TransactionStatusMeta {
             loaded_readonly_addresses,
             return_data,
             return_data_none,
+            compute_units_consumed,
         }
     }
 }
@@ -455,6 +459,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             loaded_readonly_addresses,
             return_data,
             return_data_none,
+            compute_units_consumed,
         } = value;
         let status = match &err {
             None => Ok(()),
@@ -515,6 +520,7 @@ impl TryFrom<generated::TransactionStatusMeta> for TransactionStatusMeta {
             rewards,
             loaded_addresses,
             return_data,
+            compute_units_consumed,
         })
     }
 }

@@ -3,7 +3,8 @@
 use {
     lazy_static::lazy_static,
     solana_sdk::{
-        feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program, system_program,
+        ed25519_program, feature, incinerator, native_loader, pubkey::Pubkey, secp256k1_program,
+        system_program,
     },
     std::collections::HashMap,
 };
@@ -38,8 +39,8 @@ lazy_static! {
         (solana_sdk::stake::program::id(), COMPUTE_UNIT_TO_US_RATIO * 25),
         (solana_config_program::id(), COMPUTE_UNIT_TO_US_RATIO * 15),
         (solana_vote_program::id(), COMPUTE_UNIT_TO_US_RATIO * 70),
-        // secp256k1 is executed in banking stage, it should cost similar to sigverify
         (secp256k1_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
+        (ed25519_program::id(), COMPUTE_UNIT_TO_US_RATIO * 24),
         (system_program::id(), COMPUTE_UNIT_TO_US_RATIO * 5),
     ]
     .iter()
@@ -63,5 +64,6 @@ pub const MAX_WRITABLE_ACCOUNT_UNITS: u64 = MAX_BLOCK_REPLAY_TIME_US * COMPUTE_U
 /// sets at ~75% of MAX_BLOCK_UNITS to leave room for non-vote transactions
 pub const MAX_VOTE_UNITS: u64 = (MAX_BLOCK_UNITS as f64 * 0.75_f64) as u64;
 
-/// max length of account data in a block (bytes)
-pub const MAX_ACCOUNT_DATA_BLOCK_LEN: u64 = 100_000_000;
+/// The maximum allowed size, in bytes, that accounts data can grow, per block.
+/// This can also be thought of as the maximum size of new allocations per block.
+pub const MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA: u64 = 100_000_000;

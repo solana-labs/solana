@@ -9,13 +9,10 @@ use {
         test_utils::{check_ready, wait_for_next_epoch},
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
-    solana_client::{
-        blockhash_query::{self, BlockhashQuery},
-        nonce_utils,
-        rpc_client::RpcClient,
-        rpc_response::{RpcStakeActivation, StakeActivationState},
-    },
     solana_faucet::faucet::run_local_faucet,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::response::{RpcStakeActivation, StakeActivationState},
+    solana_rpc_client_nonce_utils::blockhash_query::{self, BlockhashQuery},
     solana_sdk::{
         account_utils::StateMut,
         commitment_config::CommitmentConfig,
@@ -93,6 +90,7 @@ fn test_stake_redelegation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -113,6 +111,7 @@ fn test_stake_redelegation() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -135,6 +134,7 @@ fn test_stake_redelegation() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -153,6 +153,7 @@ fn test_stake_redelegation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -216,6 +217,7 @@ fn test_stake_redelegation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: Some(stake2_keypair.pubkey()),
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -328,6 +330,7 @@ fn test_stake_delegation_force() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -350,6 +353,7 @@ fn test_stake_delegation_force() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -368,6 +372,7 @@ fn test_stake_delegation_force() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap_err();
 
@@ -385,6 +390,7 @@ fn test_stake_delegation_force() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 }
@@ -445,6 +451,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -462,6 +469,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -478,6 +486,7 @@ fn test_seed_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
 }
@@ -533,6 +542,7 @@ fn test_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -551,6 +561,7 @@ fn test_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -567,6 +578,7 @@ fn test_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
 }
@@ -646,6 +658,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config_validator).unwrap();
 
@@ -664,6 +677,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -686,6 +700,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -703,6 +718,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
@@ -723,6 +739,7 @@ fn test_offline_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
 }
@@ -776,6 +793,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -788,16 +806,17 @@ fn test_nonced_stake_delegation_and_deactivation() {
         nonce_authority: Some(config.signers[0].pubkey()),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -819,16 +838,17 @@ fn test_nonced_stake_delegation_and_deactivation() {
         memo: None,
         fee_payer: 0,
         redelegation_stake_account_pubkey: None,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -848,6 +868,7 @@ fn test_nonced_stake_delegation_and_deactivation() {
         memo: None,
         seed: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 }
@@ -915,6 +936,7 @@ fn test_stake_authorize() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -939,6 +961,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -980,6 +1003,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1011,6 +1035,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1042,6 +1067,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
@@ -1066,6 +1092,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1088,16 +1115,17 @@ fn test_stake_authorize() {
         nonce_authority: Some(offline_authority_pubkey),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -1122,6 +1150,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     let sign_reply = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sign_reply);
@@ -1150,6 +1179,7 @@ fn test_stake_authorize() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1160,12 +1190,12 @@ fn test_stake_authorize() {
     };
     assert_eq!(current_authority, online_authority_pubkey);
 
-    let new_nonce_hash = nonce_utils::get_account_with_commitment(
+    let new_nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
     assert_ne!(nonce_hash, new_nonce_hash);
@@ -1249,6 +1279,7 @@ fn test_stake_authorize_with_fee_payer() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     check_balance!(
@@ -1276,6 +1307,7 @@ fn test_stake_authorize_with_fee_payer() {
         fee_payer: 1,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     // `config` balance has not changed, despite submitting the TX
@@ -1307,6 +1339,7 @@ fn test_stake_authorize_with_fee_payer() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sign_reply = process_command(&config_offline).unwrap();
@@ -1331,6 +1364,7 @@ fn test_stake_authorize_with_fee_payer() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     // `config`'s balance again has not changed
@@ -1421,6 +1455,7 @@ fn test_stake_split() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
@@ -1437,17 +1472,18 @@ fn test_stake_split() {
         nonce_authority: Some(offline_pubkey),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     check_balance!(minimum_nonce_balance, &rpc_client, &nonce_account.pubkey());
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -1468,6 +1504,7 @@ fn test_stake_split() {
         seed: None,
         lamports: 2 * stake_balance,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -1491,6 +1528,7 @@ fn test_stake_split() {
         seed: None,
         lamports: 2 * stake_balance,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     check_balance!(8 * stake_balance, &rpc_client, &stake_account_pubkey,);
@@ -1577,6 +1615,7 @@ fn test_stake_set_lockup() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     check_balance!(10 * stake_balance, &rpc_client, &stake_account_pubkey,);
@@ -1601,6 +1640,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1637,6 +1677,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -1658,6 +1699,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1691,6 +1733,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -1707,17 +1750,18 @@ fn test_stake_set_lockup() {
         nonce_authority: Some(offline_pubkey),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     check_balance!(minimum_nonce_balance, &rpc_client, &nonce_account_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -1739,6 +1783,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -1761,6 +1806,7 @@ fn test_stake_set_lockup() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -1834,16 +1880,17 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         nonce_authority: Some(offline_pubkey),
         memo: None,
         amount: SpendAmount::Some(minimum_nonce_balance),
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -1867,6 +1914,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     config_offline.output_format = OutputFormat::JsonCompact;
     let sig_response = process_command(&config_offline).unwrap();
@@ -1894,17 +1942,18 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     check_balance!(50_000_000_000, &rpc_client, &stake_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -1926,6 +1975,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         seed: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
@@ -1948,17 +1998,18 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         seed: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     check_balance!(50_000_000_000, &rpc_client, &recipient_pubkey);
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_account.pubkey(),
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -1981,6 +2032,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     let sig_response = process_command(&config_offline).unwrap();
     let sign_only = parse_sign_only_reply_string(&sig_response);
@@ -2006,6 +2058,7 @@ fn test_offline_nonced_create_stake_account_and_withdraw() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let seed_address =
@@ -2061,6 +2114,7 @@ fn test_stake_checked_instructions() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap_err(); // unsigned authority should fail
 
@@ -2081,6 +2135,7 @@ fn test_stake_checked_instructions() {
         memo: None,
         fee_payer: 0,
         from: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
 
@@ -2105,6 +2160,7 @@ fn test_stake_checked_instructions() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap_err(); // unsigned authority should fail
 
@@ -2126,6 +2182,7 @@ fn test_stake_checked_instructions() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -2156,6 +2213,7 @@ fn test_stake_checked_instructions() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap_err(); // unsigned authority should fail
 
@@ -2181,6 +2239,7 @@ fn test_stake_checked_instructions() {
         fee_payer: 0,
         custodian: None,
         no_wait: false,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();
@@ -2212,6 +2271,7 @@ fn test_stake_checked_instructions() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap_err(); // unsigned new custodian should fail
 
@@ -2228,6 +2288,7 @@ fn test_stake_checked_instructions() {
         nonce_authority: 0,
         memo: None,
         fee_payer: 0,
+        compute_unit_price: None,
     };
     process_command(&config).unwrap();
     let stake_account = rpc_client.get_account(&stake_account_pubkey).unwrap();

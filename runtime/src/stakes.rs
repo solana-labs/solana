@@ -8,6 +8,7 @@ use {
     },
     dashmap::DashMap,
     im::HashMap as ImHashMap,
+    log::error,
     num_derive::ToPrimitive,
     num_traits::ToPrimitive,
     rayon::{prelude::*, ThreadPool},
@@ -19,7 +20,7 @@ use {
     },
     solana_vote_program::vote_state::VoteState,
     std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         ops::Add,
         sync::{Arc, RwLock, RwLockReadGuard},
     },
@@ -34,6 +35,12 @@ pub enum Error {
     InvalidStakeAccount(#[from] stake_account::Error),
     #[error("Stake account not found: {0}")]
     StakeAccountNotFound(Pubkey),
+    #[error("Vote account mismatch: {0}")]
+    VoteAccountMismatch(Pubkey),
+    #[error("Vote account not cached: {0}")]
+    VoteAccountNotCached(Pubkey),
+    #[error("Vote account not found: {0}")]
+    VoteAccountNotFound(Pubkey),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, ToPrimitive)]
@@ -222,6 +229,47 @@ impl Stakes<StakeAccount> {
                 Err(Error::InvalidDelegation(*pubkey))
             }
         });
+        // Assert that cached vote accounts are consistent with accounts-db.
+        for (pubkey, vote_account) in stakes.vote_accounts.iter() {
+            let account = match get_account(pubkey) {
+                None => return Err(Error::VoteAccountNotFound(*pubkey)),
+                Some(account) => account,
+            };
+            // Ignoring rent_epoch until the feature for
+            // preserve_rent_epoch_for_rent_exempt_accounts is activated.
+            let vote_account = vote_account.account();
+            if vote_account.lamports() != account.lamports()
+                || vote_account.owner() != account.owner()
+                || vote_account.executable() != account.executable()
+                || vote_account.data() != account.data()
+            {
+                error!(
+                    "vote account mismatch: {}, {:?}, {:?}",
+                    pubkey, vote_account, account
+                );
+                return Err(Error::VoteAccountMismatch(*pubkey));
+            }
+        }
+        // Assert that all valid vote-accounts referenced in
+        // stake delegations are already cached.
+        let voter_pubkeys: HashSet<Pubkey> = stakes
+            .stake_delegations
+            .values()
+            .map(|delegation| delegation.voter_pubkey)
+            .filter(|voter_pubkey| stakes.vote_accounts.get(voter_pubkey).is_none())
+            .collect();
+        for pubkey in voter_pubkeys {
+            let account = match get_account(&pubkey) {
+                None => continue,
+                Some(account) => account,
+            };
+            if VoteState::is_correct_size_and_initialized(account.data())
+                && VoteAccount::try_from(account.clone()).is_ok()
+            {
+                error!("vote account not cached: {}, {:?}", pubkey, account);
+                return Err(Error::VoteAccountNotCached(pubkey));
+            }
+        }
         Ok(Self {
             vote_accounts: stakes.vote_accounts.clone(),
             stake_delegations: stake_delegations.collect::<Result<_, _>>()?,
@@ -618,7 +666,7 @@ pub(crate) mod tests {
         stakes_cache.check_and_store(&vote11_pubkey, &vote11_account);
         stakes_cache.check_and_store(&stake11_pubkey, &stake11_account);
 
-        let vote11_node_pubkey = VoteState::from(&vote11_account).unwrap().node_pubkey;
+        let vote11_node_pubkey = vote_state::from(&vote11_account).unwrap().node_pubkey;
 
         let highest_staked_node = stakes_cache.stakes().highest_staked_node();
         assert_eq!(highest_staked_node, Some(vote11_node_pubkey));
@@ -681,7 +729,7 @@ pub(crate) mod tests {
         // Vote account uninitialized
         let default_vote_state = VoteState::default();
         let versioned = VoteStateVersions::new_current(default_vote_state);
-        VoteState::to(&versioned, &mut vote_account).unwrap();
+        vote_state::to(&versioned, &mut vote_account).unwrap();
         stakes_cache.check_and_store(&vote_pubkey, &vote_account);
 
         {

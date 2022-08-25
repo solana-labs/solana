@@ -42,7 +42,6 @@ use {
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
             cap_accounts_data_len, cap_bpf_program_instruction_accounts,
-            disable_bpf_deprecated_load_instructions, disable_bpf_unresolved_symbols_at_runtime,
             disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
             enable_bpf_loader_extend_program_data_ix,
             error_on_syscall_bpf_function_hash_collisions, reject_callx_r10,
@@ -167,17 +166,10 @@ pub fn create_executor(
         enable_instruction_meter: true,
         enable_instruction_tracing: log_enabled!(Trace),
         enable_symbol_and_section_labels: false,
-        disable_unresolved_symbols_at_runtime: invoke_context
-            .feature_set
-            .is_active(&disable_bpf_unresolved_symbols_at_runtime::id()),
         reject_broken_elfs: reject_deployment_of_broken_elfs,
         noop_instruction_rate: 256,
         sanitize_user_provided_values: true,
         encrypt_environment_registers: true,
-        disable_deprecated_load_instructions: reject_deployment_of_broken_elfs
-            && invoke_context
-                .feature_set
-                .is_active(&disable_bpf_deprecated_load_instructions::id()),
         syscall_bpf_function_hash_collision: invoke_context
             .feature_set
             .is_active(&error_on_syscall_bpf_function_hash_collisions::id()),
@@ -189,6 +181,8 @@ pub fn create_executor(
         optimize_rodata: false,
         static_syscalls: false,
         enable_elf_vaddr: false,
+        reject_rodata_stack_overlap: false,
+        new_elf_parser: false,
         // Warning, do not use `Config::default()` so that configuration here is explicit.
     };
     let mut create_executor_metrics = executor_metrics::CreateMetrics::default();
@@ -303,7 +297,7 @@ pub fn create_vm<'a, 'b>(
             .saturating_mul(compute_budget.heap_cost),
     );
     let mut heap =
-        AlignedMemory::new_with_size(compute_budget.heap_size.unwrap_or(HEAP_LENGTH), HOST_ALIGN);
+        AlignedMemory::<HOST_ALIGN>::zero_filled(compute_budget.heap_size.unwrap_or(HEAP_LENGTH));
     let parameter_region = MemoryRegion::new_writable(parameter_bytes, MM_INPUT_START);
     let mut vm = EbpfVm::new(program, heap.as_slice_mut(), vec![parameter_region])?;
     syscalls::bind_syscall_context_objects(&mut vm, invoke_context, heap, orig_account_lengths)?;

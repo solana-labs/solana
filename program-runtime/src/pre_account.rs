@@ -120,7 +120,6 @@ impl PreAccount {
 
         if outermost_call {
             timings.total_account_count = timings.total_account_count.saturating_add(1);
-            timings.total_data_size = timings.total_data_size.saturating_add(post.data().len());
             if owner_changed
                 || lamports_changed
                 || data_len_changed
@@ -129,8 +128,6 @@ impl PreAccount {
                 || self.changed
             {
                 timings.changed_account_count = timings.changed_account_count.saturating_add(1);
-                timings.data_size_changed =
-                    timings.data_size_changed.saturating_add(post.data().len());
             }
         }
 

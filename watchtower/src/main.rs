@@ -9,9 +9,10 @@ use {
         input_validators::{is_parsable, is_pubkey_or_keypair, is_url},
     },
     solana_cli_output::display::format_labeled_address,
-    solana_client::{client_error, rpc_client::RpcClient, rpc_response::RpcVoteAccountStatus},
     solana_metrics::{datapoint_error, datapoint_info},
     solana_notifier::Notifier,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{client_error, response::RpcVoteAccountStatus},
     solana_sdk::{
         hash::Hash,
         native_token::{sol_to_lamports, Sol},
@@ -321,7 +322,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Err(err) => {
                 let mut failure = Some(("rpc-error", err.to_string()));
 
-                if let client_error::ClientErrorKind::Reqwest(reqwest_err) = err.kind() {
+                if let client_error::ErrorKind::Reqwest(reqwest_err) = err.kind() {
                     if let Some(client_error::reqwest::StatusCode::BAD_GATEWAY) =
                         reqwest_err.status()
                     {

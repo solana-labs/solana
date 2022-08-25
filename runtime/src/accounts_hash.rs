@@ -18,7 +18,6 @@ use {
         },
     },
 };
-pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
 
 #[derive(Default, Debug)]
@@ -94,6 +93,7 @@ pub struct HashStats {
     pub rehash_required: AtomicUsize,
     /// # rehashes that took place and were UNnecessary
     pub rehash_unnecessary: AtomicUsize,
+    pub oldest_root: Slot,
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
     pub append_vec_sizes_older_than_epoch: AtomicUsize,
@@ -218,6 +218,7 @@ impl HashStats {
                 self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
                 i64
             ),
+            ("oldest_root", self.oldest_root as i64, i64),
             (
                 "ancient_append_vecs",
                 self.ancient_append_vecs.load(Ordering::Relaxed) as i64,
@@ -842,7 +843,7 @@ impl AccountsHash {
             );
 
             // add lamports, get hash as long as the lamports are > 0
-            if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL
+            if item.lamports != 0
                 && (!filler_accounts_enabled || !self.is_filler_account(&item.pubkey))
             {
                 overall_sum = Self::checked_cast_for_capitalization(
@@ -1040,7 +1041,7 @@ pub mod tests {
         // 2nd key - zero lamports, so will be removed
         let key = Pubkey::new(&[12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
-        let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
+        let val = CalculateHashIntermediate::new(hash, 0, key);
         account_maps.push(val);
 
         let accounts_hash = AccountsHash::default();
@@ -1114,7 +1115,7 @@ pub mod tests {
             // 2nd key - zero lamports, so will be removed
             let key = Pubkey::new(&[12u8; 32]);
             let hash = Hash::new(&[2u8; 32]);
-            let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
+            let val = CalculateHashIntermediate::new(hash, 0, key);
             account_maps.push(val);
 
             let mut previous_pass = PreviousPass::default();
@@ -1393,10 +1394,13 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_de_dup_accounts_zero_chunks() {
-        let vec = [vec![vec![CalculateHashIntermediate::default()]]];
+        let vec = [vec![vec![CalculateHashIntermediate {
+            lamports: 1,
+            ..CalculateHashIntermediate::default()
+        }]]];
         let (hashes, lamports, _) = AccountsHash::default().de_dup_accounts_in_parallel(&vec, 0);
         assert_eq!(vec![&Hash::default()], hashes);
-        assert_eq!(lamports, 0);
+        assert_eq!(lamports, 1);
     }
 
     #[test]
@@ -1651,7 +1655,7 @@ pub mod tests {
         assert_eq!(result, (vec![&val.hash], val.lamports as u64, 1));
 
         // zero original lamports, higher version
-        let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
+        let val = CalculateHashIntermediate::new(hash, 0, key);
         account_maps.push(val); // has to be after previous entry since account_maps are in slot order
 
         let vecs = vec![vec![account_maps.to_vec()]];

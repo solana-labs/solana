@@ -7,7 +7,7 @@ use {
     curve25519_dalek::{
         ristretto::{CompressedRistretto, RistrettoPoint},
         scalar::Scalar,
-        traits::VartimeMultiscalarMul,
+        traits::{MultiscalarMul, VartimeMultiscalarMul},
     },
     merlin::Transcript,
     std::borrow::Borrow,
@@ -85,7 +85,7 @@ impl InnerProductProof {
             let c_L = util::inner_product(a_L, b_R);
             let c_R = util::inner_product(a_R, b_L);
 
-            let L = RistrettoPoint::vartime_multiscalar_mul(
+            let L = RistrettoPoint::multiscalar_mul(
                 a_L.iter()
                     .zip(G_factors[n..2 * n].iter())
                     .map(|(a_L_i, g)| a_L_i * g)
@@ -99,7 +99,7 @@ impl InnerProductProof {
             )
             .compress();
 
-            let R = RistrettoPoint::vartime_multiscalar_mul(
+            let R = RistrettoPoint::multiscalar_mul(
                 a_R.iter()
                     .zip(G_factors[0..n].iter())
                     .map(|(a_R_i, g)| a_R_i * g)
@@ -125,11 +125,11 @@ impl InnerProductProof {
             for i in 0..n {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                G_L[i] = RistrettoPoint::vartime_multiscalar_mul(
+                G_L[i] = RistrettoPoint::multiscalar_mul(
                     &[u_inv * G_factors[i], u * G_factors[n + i]],
                     &[G_L[i], G_R[i]],
                 );
-                H_L[i] = RistrettoPoint::vartime_multiscalar_mul(
+                H_L[i] = RistrettoPoint::multiscalar_mul(
                     &[u * H_factors[i], u_inv * H_factors[n + i]],
                     &[H_L[i], H_R[i]],
                 )
@@ -151,13 +151,13 @@ impl InnerProductProof {
             let c_L = util::inner_product(a_L, b_R);
             let c_R = util::inner_product(a_R, b_L);
 
-            let L = RistrettoPoint::vartime_multiscalar_mul(
+            let L = RistrettoPoint::multiscalar_mul(
                 a_L.iter().chain(b_R.iter()).chain(iter::once(&c_L)),
                 G_R.iter().chain(H_L.iter()).chain(iter::once(Q)),
             )
             .compress();
 
-            let R = RistrettoPoint::vartime_multiscalar_mul(
+            let R = RistrettoPoint::multiscalar_mul(
                 a_R.iter().chain(b_L.iter()).chain(iter::once(&c_R)),
                 G_L.iter().chain(H_R.iter()).chain(iter::once(Q)),
             )
@@ -175,8 +175,8 @@ impl InnerProductProof {
             for i in 0..n {
                 a_L[i] = a_L[i] * u + u_inv * a_R[i];
                 b_L[i] = b_L[i] * u_inv + u * b_R[i];
-                G_L[i] = RistrettoPoint::vartime_multiscalar_mul(&[u_inv, u], &[G_L[i], G_R[i]]);
-                H_L[i] = RistrettoPoint::vartime_multiscalar_mul(&[u, u_inv], &[H_L[i], H_R[i]]);
+                G_L[i] = RistrettoPoint::multiscalar_mul(&[u_inv, u], &[G_L[i], G_R[i]]);
+                H_L[i] = RistrettoPoint::multiscalar_mul(&[u, u_inv], &[H_L[i], H_R[i]]);
             }
 
             a = a_L;

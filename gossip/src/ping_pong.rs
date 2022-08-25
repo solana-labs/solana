@@ -16,6 +16,8 @@ use {
     },
 };
 
+const PING_PONG_HASH_PREFIX: &[u8] = "SOLANA_PING_PONG".as_bytes();
+
 #[derive(AbiExample, Debug, Deserialize, Serialize)]
 pub struct Ping<T> {
     from: Pubkey,
@@ -100,14 +102,27 @@ impl<T: Serialize> Signable for Ping<T> {
 }
 
 impl Pong {
-    pub fn new<T: Serialize>(ping: &Ping<T>, keypair: &Keypair) -> Result<Self, Error> {
-        let hash = hash::hash(&serialize(&ping.token)?);
+    pub fn new<T: Serialize>(
+        domain: bool,
+        ping: &Ping<T>,
+        keypair: &Keypair,
+    ) -> Result<Self, Error> {
+        let token = serialize(&ping.token)?;
+        let hash = if domain {
+            hash::hashv(&[PING_PONG_HASH_PREFIX, &token])
+        } else {
+            hash::hash(&token)
+        };
         let pong = Pong {
             from: keypair.pubkey(),
             hash,
             signature: keypair.sign_message(hash.as_ref()),
         };
         Ok(pong)
+    }
+
+    pub fn from(&self) -> &Pubkey {
+        &self.from
     }
 }
 
@@ -183,9 +198,15 @@ impl PingCache {
             Some(t) if now.saturating_duration_since(*t) < delay => None,
             _ => {
                 let ping = pingf()?;
-                let hash = hash::hash(&serialize(&ping.token).ok()?);
-                self.pings.put(node, now);
+                let token = serialize(&ping.token).ok()?;
+                // For backward compatibility, for now responses both with and
+                // without domain are accepted.
+                // TODO: remove no domain case once cluster is upgraded.
+                let hash = hash::hash(&token);
                 self.pending_cache.put(hash, node);
+                let hash = hash::hashv(&[PING_PONG_HASH_PREFIX, &token]);
+                self.pending_cache.put(hash, node);
+                self.pings.put(node, now);
                 Some(ping)
             }
         }
@@ -277,10 +298,18 @@ mod tests {
         assert!(ping.verify());
         assert!(ping.sanitize().is_ok());
 
-        let pong = Pong::new(&ping, &keypair).unwrap();
+        let pong = Pong::new(/*domain:*/ false, &ping, &keypair).unwrap();
         assert!(pong.verify());
         assert!(pong.sanitize().is_ok());
         assert_eq!(hash::hash(&ping.token), pong.hash);
+
+        let pong = Pong::new(/*domian:*/ true, &ping, &keypair).unwrap();
+        assert!(pong.verify());
+        assert!(pong.sanitize().is_ok());
+        assert_eq!(
+            hash::hashv(&[PING_PONG_HASH_PREFIX, &ping.token]),
+            pong.hash
+        );
     }
 
     #[test]
@@ -335,7 +364,10 @@ mod tests {
                     assert!(ping.is_none());
                 }
                 Some(ping) => {
-                    let pong = Pong::new(ping, keypair).unwrap();
+                    let domain = rng.gen_ratio(1, 2);
+                    let pong = Pong::new(domain, ping, keypair).unwrap();
+                    assert!(cache.add(&pong, *socket, now));
+                    let pong = Pong::new(!domain, ping, keypair).unwrap();
                     assert!(cache.add(&pong, *socket, now));
                 }
             }

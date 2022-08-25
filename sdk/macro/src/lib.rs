@@ -44,15 +44,15 @@ fn id_to_tokens(
     tokens: &mut proc_macro2::TokenStream,
 ) {
     tokens.extend(quote! {
-        /// The static program ID
+        /// The static program ID.
         pub static ID: #pubkey_type = #id;
 
-        /// Confirms that a given pubkey is equivalent to the program ID
+        /// Returns `true` if given pubkey is the program ID.
         pub fn check_id(id: &#pubkey_type) -> bool {
             id == &ID
         }
 
-        /// Returns the program ID
+        /// Returns the program ID.
         pub fn id() -> #pubkey_type {
             ID
         }
@@ -71,16 +71,16 @@ fn deprecated_id_to_tokens(
     tokens: &mut proc_macro2::TokenStream,
 ) {
     tokens.extend(quote! {
-        /// The static program ID
+        /// The static program ID.
         pub static ID: #pubkey_type = #id;
 
-        /// Confirms that a given pubkey is equivalent to the program ID
+        /// Returns `true` if given pubkey is the program ID.
         #[deprecated()]
         pub fn check_id(id: &#pubkey_type) -> bool {
             id == &ID
         }
 
-        /// Returns the program ID
+        /// Returns the program ID.
         #[deprecated()]
         pub fn id() -> #pubkey_type {
             ID

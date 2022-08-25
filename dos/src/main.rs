@@ -40,21 +40,19 @@
 //!
 #![allow(clippy::integer_arithmetic)]
 use {
+    crossbeam_channel::{select, tick, unbounded, Receiver, Sender},
     itertools::Itertools,
     log::*,
     rand::{thread_rng, Rng},
     solana_bench_tps::{bench::generate_and_fund_keypairs, bench_tps_client::BenchTpsClient},
-    solana_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
-        rpc_client::RpcClient,
-        tpu_connection::TpuConnection,
-    },
-    solana_core::serve_repair::RepairProtocol,
+    solana_core::serve_repair::{RepairProtocol, RepairRequestHeader, ServeRepair},
     solana_dos::cli::*,
     solana_gossip::{
         contact_info::ContactInfo,
         gossip_service::{discover, get_multi_client},
     },
+    solana_measure::measure::Measure,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         hash::Hash,
         instruction::CompiledInstruction,
@@ -64,28 +62,27 @@ use {
         stake,
         system_instruction::{self, SystemInstruction},
         system_program,
+        timing::timestamp,
         transaction::Transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_tpu_client::{
+        connection_cache::{ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE},
+        tpu_connection::TpuConnection,
+    },
     std::{
-        cmp::min,
         net::{SocketAddr, UdpSocket},
         process::exit,
         sync::Arc,
+        thread,
         time::{Duration, Instant},
     },
 };
 
-const SAMPLE_PERIOD_MS: usize = 10_000;
+const PROGRESS_TIMEOUT_S: u64 = 120;
+const SAMPLE_PERIOD_MS: u64 = 10_000;
 fn compute_rate_per_second(count: usize) -> usize {
-    (count * 1000) / SAMPLE_PERIOD_MS
-}
-
-fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
-    let source = thread_rng().gen_range(0, nodes.len());
-    let mut contact = nodes[source].clone();
-    contact.id = solana_sdk::pubkey::new_rand();
-    contact
+    (count * 1000) / (SAMPLE_PERIOD_MS as usize)
 }
 
 /// Provide functionality to generate several types of transactions:
@@ -98,6 +95,7 @@ fn get_repair_contact(nodes: &[ContactInfo]) -> ContactInfo {
 /// 2.1 Transfer from 1 payer to multiple destinations (many instructions per transaction)
 /// 2.2 Create an account
 ///
+#[derive(Clone)]
 struct TransactionGenerator {
     blockhash: Hash,
     last_generated: Instant,
@@ -235,17 +233,192 @@ impl TransactionGenerator {
     }
 }
 
-const SEND_BATCH_MAX_SIZE: usize = 1 << 10;
+// Multithreading-related functions
+//
+// The most computationally expensive work is signing new transactions.
+// Here we generate them in `num_gen_threads` threads.
+//
+struct TransactionBatchMsg {
+    batch: Vec<Vec<u8>>,
+    gen_time: u64,
+}
+
+/// Creates thread which receives batches of transactions from tx_receiver
+/// and sends them to the target.
+/// If `iterations` is 0, it works indefenetely.
+/// Otherwise, it sends at least `iterations` number of transactions
+fn create_sender_thread(
+    tx_receiver: Receiver<TransactionBatchMsg>,
+    iterations: usize,
+    target: &SocketAddr,
+    tpu_use_quic: bool,
+) -> thread::JoinHandle<()> {
+    // ConnectionCache is used instead of client because it gives ~6% higher pps
+    let connection_cache = match tpu_use_quic {
+        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
+    };
+    let connection = connection_cache.get_connection(target);
+
+    let stats_timer_receiver = tick(Duration::from_millis(SAMPLE_PERIOD_MS));
+    let progress_timer_receiver = tick(Duration::from_secs(PROGRESS_TIMEOUT_S));
+
+    let mut time_send_ns = 0;
+    let mut time_generate_ns = 0;
+
+    // Sender signals to stop Generators by dropping receiver.
+    // It happens in 2 cases:
+    // * Sender has sent at least `iterations` number of transactions
+    // * Sender observes that there is no progress. Since there is no way to use recv_timeout with select,
+    // a timer is used.
+    thread::Builder::new().name("Sender".to_string()).spawn(move || {
+        let mut total_count: usize = 0;
+        let mut prev_total_count = 0; // to track progress
+
+        let mut stats_count: usize = 0;
+        let mut stats_error_count: usize = 0;
+
+        loop {
+            select! {
+                recv(tx_receiver) -> msg => {
+                    match msg {
+                        Ok(tx_batch) => {
+                            let len = tx_batch.batch.len();
+                            let mut measure_send_txs = Measure::start("measure_send_txs");
+                            let res = connection.send_wire_transaction_batch_async(tx_batch.batch);
+
+                            measure_send_txs.stop();
+                            time_send_ns += measure_send_txs.as_ns();
+                            time_generate_ns += tx_batch.gen_time;
+
+                            if res.is_err() {
+                                stats_error_count += len;
+                            }
+                            stats_count += len;
+                            total_count += len;
+                            if iterations != 0 && total_count >= iterations {
+                                info!("All transactions has been sent");
+                                // dropping receiver to signal generator threads to stop
+                                drop(tx_receiver);
+                                break;
+                            }
+                        }
+                        _ => panic!("Sender panics"),
+                    }
+                },
+                recv(stats_timer_receiver) -> _ => {
+                    info!("tx_receiver queue len: {}", tx_receiver.len());
+                    info!("Count: {}, error count: {}, send mean time: {}, generate mean time: {}, rps: {}",
+                        stats_count,
+                        stats_error_count,
+                        time_send_ns.checked_div(stats_count as u64).unwrap_or(0),
+                        time_generate_ns.checked_div(stats_count as u64).unwrap_or(0),
+                        compute_rate_per_second(stats_count),
+                    );
+                    stats_count = 0;
+                    stats_error_count = 0;
+                    time_send_ns = 0;
+                    time_generate_ns = 0;
+                },
+                recv(progress_timer_receiver) -> _ => {
+                    if prev_total_count - total_count == 0 {
+                        info!("No progress, stop execution");
+                        // dropping receiver to signal generator threads to stop
+                        drop(tx_receiver);
+                        break;
+                    }
+                    prev_total_count = total_count;
+                }
+            }
+        }
+    }).unwrap()
+}
+
+fn create_generator_thread<T: 'static + BenchTpsClient + Send + Sync>(
+    tx_sender: &Sender<TransactionBatchMsg>,
+    send_batch_size: usize,
+    transaction_generator: &mut TransactionGenerator,
+    client: Option<Arc<T>>,
+    payer: Option<Keypair>,
+) -> thread::JoinHandle<()> {
+    let tx_sender = tx_sender.clone();
+
+    let mut transaction_generator = transaction_generator.clone();
+    let transaction_params: &TransactionParams = &transaction_generator.transaction_params;
+
+    // Generate n=1000 unique keypairs
+    // The number of chunks is described by binomial coefficient
+    // and hence this choice of n provides large enough number of permutations
+    let mut keypairs_flat: Vec<Keypair> = Vec::new();
+    // 1000 is arbitrary number. In case of permutation_size > 1,
+    // this guaranties large enough set of unique permutations
+    let permutation_size = get_permutation_size(
+        transaction_params.num_signatures.as_ref(),
+        transaction_params.num_instructions.as_ref(),
+    );
+    let num_keypairs = 1000 * permutation_size;
+
+    let generate_keypairs =
+        transaction_params.valid_signatures || transaction_params.valid_blockhash;
+    if generate_keypairs {
+        keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
+    }
+
+    thread::Builder::new()
+        .name("Generator".to_string())
+        .spawn(move || {
+            let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
+            let mut it = indexes.iter().permutations(permutation_size);
+
+            loop {
+                let mut data = Vec::<Vec<u8>>::with_capacity(send_batch_size);
+                let mut measure_generate_txs = Measure::start("measure_generate_txs");
+                for _ in 0..send_batch_size {
+                    let chunk_keypairs = if generate_keypairs {
+                        let mut permutation = it.next();
+                        if permutation.is_none() {
+                            // if ran out of permutations, regenerate keys
+                            keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
+                            info!("Regenerate keypairs");
+                            permutation = it.next();
+                        }
+                        let permutation = permutation.unwrap();
+                        Some(apply_permutation(permutation, &keypairs_flat))
+                    } else {
+                        None
+                    };
+                    let tx = transaction_generator.generate(
+                        payer.as_ref(),
+                        chunk_keypairs,
+                        client.as_ref(),
+                    );
+                    data.push(bincode::serialize(&tx).unwrap());
+                }
+                measure_generate_txs.stop();
+
+                let result = tx_sender.send(TransactionBatchMsg {
+                    batch: data,
+                    gen_time: measure_generate_txs.as_ns(),
+                });
+                if result.is_err() {
+                    // means that receiver has been dropped by sender thread
+                    info!("Exit generator thread");
+                    break;
+                }
+            }
+        })
+        .unwrap()
+}
 
 fn get_target(
     nodes: &[ContactInfo],
     mode: Mode,
     entrypoint_addr: SocketAddr,
-) -> Option<SocketAddr> {
+) -> Option<(Pubkey, SocketAddr)> {
     let mut target = None;
     if nodes.is_empty() {
         // skip-gossip case
-        target = Some(entrypoint_addr);
+        target = Some((solana_sdk::pubkey::new_rand(), entrypoint_addr));
     } else {
         info!("************ NODE ***********");
         for node in nodes {
@@ -257,13 +430,13 @@ fn get_target(
             if node.gossip == entrypoint_addr {
                 info!("{}", node.gossip);
                 target = match mode {
-                    Mode::Gossip => Some(node.gossip),
-                    Mode::Tvu => Some(node.tvu),
-                    Mode::TvuForwards => Some(node.tvu_forwards),
-                    Mode::Tpu => Some(node.tpu),
-                    Mode::TpuForwards => Some(node.tpu_forwards),
-                    Mode::Repair => Some(node.repair),
-                    Mode::ServeRepair => Some(node.serve_repair),
+                    Mode::Gossip => Some((node.id, node.gossip)),
+                    Mode::Tvu => Some((node.id, node.tvu)),
+                    Mode::TvuForwards => Some((node.id, node.tvu_forwards)),
+                    Mode::Tpu => Some((node.id, node.tpu)),
+                    Mode::TpuForwards => Some((node.id, node.tpu_forwards)),
+                    Mode::Repair => Some((node.id, node.repair)),
+                    Mode::ServeRepair => Some((node.id, node.serve_repair)),
                     Mode::Rpc => None,
                 };
                 break;
@@ -390,90 +563,39 @@ fn run_dos_transactions<T: 'static + BenchTpsClient + Send + Sync>(
     client: Option<Arc<T>>,
     transaction_params: TransactionParams,
     tpu_use_quic: bool,
+    num_gen_threads: usize,
+    send_batch_size: usize,
 ) {
-    // Number of payers is the number of generating threads, for now it is 1
+    // Number of payers is the number of generating threads
     // Later, we will create a new payer for each thread since Keypair is not clonable
-    let payers: Vec<Option<Keypair>> =
-        create_payers(transaction_params.valid_blockhash, 1, client.as_ref());
-    let payer = payers[0].as_ref();
-
-    // Generate n=1000 unique keypairs
-    // The number of chunks is described by binomial coefficient
-    // and hence this choice of n provides large enough number of permutations
-    let mut keypairs_flat: Vec<Keypair> = Vec::new();
-    // 1000 is arbitrary number. In case of permutation_size > 1,
-    // this guaranties large enough set of unique permutations
-    let permutation_size = get_permutation_size(
-        transaction_params.num_signatures.as_ref(),
-        transaction_params.num_instructions.as_ref(),
+    let payers: Vec<Option<Keypair>> = create_payers(
+        transaction_params.valid_blockhash,
+        num_gen_threads,
+        client.as_ref(),
     );
-    let num_keypairs = 1000 * permutation_size;
-
-    let generate_keypairs =
-        transaction_params.valid_signatures || transaction_params.valid_blockhash;
-    if generate_keypairs {
-        keypairs_flat = (0..num_keypairs).map(|_| Keypair::new()).collect();
-    }
-
-    let indexes: Vec<usize> = (0..keypairs_flat.len()).collect();
-    let mut it = indexes.iter().permutations(permutation_size);
 
     let mut transaction_generator = TransactionGenerator::new(transaction_params);
+    let (tx_sender, tx_receiver) = unbounded();
 
-    //let connection_cache_stats = Arc::new(ConnectionCacheStats::default());
-    //let udp_client = UdpTpuConnection::new(target, connection_cache_stats);
-
-    let connection_cache = match tpu_use_quic {
-        true => ConnectionCache::new(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-        false => ConnectionCache::with_udp(DEFAULT_TPU_CONNECTION_POOL_SIZE),
-    };
-    let connection = connection_cache.get_connection(&target);
-
-    let mut count = 0;
-    let mut total_count = 0;
-    let mut error_count = 0;
-    let mut last_log = Instant::now();
-
-    loop {
-        let send_batch_size = min(iterations - total_count, SEND_BATCH_MAX_SIZE);
-        let mut data = Vec::<Vec<u8>>::with_capacity(SEND_BATCH_MAX_SIZE);
-        for _ in 0..send_batch_size {
-            let chunk_keypairs = if generate_keypairs {
-                let mut permutation = it.next();
-                if permutation.is_none() {
-                    // if ran out of permutations, regenerate keys
-                    keypairs_flat.iter_mut().for_each(|v| *v = Keypair::new());
-                    info!("Regenerate keypairs");
-                    permutation = it.next();
-                }
-                let permutation = permutation.unwrap();
-                Some(apply_permutation(permutation, &keypairs_flat))
-            } else {
-                None
-            };
-            let tx = transaction_generator.generate(payer, chunk_keypairs, client.as_ref());
-            data.push(bincode::serialize(&tx).unwrap());
-        }
-
-        let res = connection.send_wire_transaction_batch_async(data);
-
-        if res.is_err() {
-            error_count += send_batch_size;
-        }
-        count += send_batch_size;
-        total_count += send_batch_size;
-        if last_log.elapsed().as_millis() > SAMPLE_PERIOD_MS as u128 {
-            info!(
-                "count: {}, errors: {}, rps: {}",
-                count,
-                error_count,
-                compute_rate_per_second(count)
-            );
-            last_log = Instant::now();
-            count = 0;
-        }
-        if iterations != 0 && total_count >= iterations {
-            break;
+    let sender_thread = create_sender_thread(tx_receiver, iterations, &target, tpu_use_quic);
+    let tx_generator_threads: Vec<_> = payers
+        .into_iter()
+        .map(|payer| {
+            create_generator_thread(
+                &tx_sender,
+                send_batch_size,
+                &mut transaction_generator,
+                client.clone(),
+                payer,
+            )
+        })
+        .collect();
+    if let Err(err) = sender_thread.join() {
+        println!("join() failed with: {:?}", err);
+    }
+    for t_generator in tx_generator_threads {
+        if let Err(err) = t_generator.join() {
+            println!("join() failed with: {:?}", err);
         }
     }
 }
@@ -500,39 +622,49 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
     } else if params.data_type == DataType::Transaction
         && params.transaction_params.unique_transactions
     {
-        let target = target.expect("should have target");
-        info!("Targeting {}", target);
+        let (_, target_addr) = target.expect("should have target");
+        info!("Targeting {}", target_addr);
         run_dos_transactions(
-            target,
+            target_addr,
             iterations,
             client,
             params.transaction_params,
             params.tpu_use_quic,
+            params.num_gen_threads,
+            params.send_batch_size,
         );
     } else {
-        let target = target.expect("should have target");
-        info!("Targeting {}", target);
+        let (target_id, target_addr) = target.expect("should have target");
+        info!("Targeting {}", target_addr);
         let mut data = match params.data_type {
             DataType::RepairHighest => {
                 let slot = 100;
-                let req =
-                    RepairProtocol::WindowIndexWithNonce(get_repair_contact(nodes), slot, 0, 0);
-                bincode::serialize(&req).unwrap()
+                let keypair = Keypair::new();
+                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+                let req = RepairProtocol::WindowIndex {
+                    header,
+                    slot,
+                    shred_index: 0,
+                };
+                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
             }
             DataType::RepairShred => {
                 let slot = 100;
-                let req = RepairProtocol::HighestWindowIndexWithNonce(
-                    get_repair_contact(nodes),
+                let keypair = Keypair::new();
+                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+                let req = RepairProtocol::HighestWindowIndex {
+                    header,
                     slot,
-                    0,
-                    0,
-                );
-                bincode::serialize(&req).unwrap()
+                    shred_index: 0,
+                };
+                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
             }
             DataType::RepairOrphan => {
                 let slot = 100;
-                let req = RepairProtocol::OrphanWithNonce(get_repair_contact(nodes), slot, 0);
-                bincode::serialize(&req).unwrap()
+                let keypair = Keypair::new();
+                let header = RepairRequestHeader::new(keypair.pubkey(), target_id, timestamp(), 0);
+                let req = RepairProtocol::Orphan { header, slot };
+                ServeRepair::repair_proto_to_bytes(&req, Some(&keypair)).unwrap()
             }
             DataType::Random => {
                 vec![0; params.data_size]
@@ -574,7 +706,7 @@ fn run_dos<T: 'static + BenchTpsClient + Send + Sync>(
             if params.data_type == DataType::Random {
                 thread_rng().fill(&mut data[..]);
             }
-            let res = socket.send_to(&data, target);
+            let res = socket.send_to(&data, target_addr);
             if res.is_err() {
                 error_count += 1;
             }
@@ -654,7 +786,6 @@ fn main() {
 pub mod test {
     use {
         super::*,
-        solana_client::thin_client::ThinClient,
         solana_core::validator::ValidatorConfig,
         solana_faucet::faucet::run_local_faucet,
         solana_local_cluster::{
@@ -664,7 +795,10 @@ pub mod test {
         },
         solana_rpc::rpc::JsonRpcConfig,
         solana_sdk::timing::timestamp,
+        solana_thin_client::thin_client::ThinClient,
     };
+
+    const TEST_SEND_BATCH_SIZE: usize = 1;
 
     // thin wrapper for the run_dos function
     // to avoid specifying everywhere generic parameters
@@ -691,8 +825,10 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -707,8 +843,10 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -723,8 +861,10 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -739,8 +879,10 @@ pub mod test {
                 data_input: Some(Pubkey::default()),
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
@@ -770,8 +912,10 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams::default(),
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
@@ -807,6 +951,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: Some(8),
                     valid_blockhash: false,
@@ -816,6 +961,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -832,6 +978,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: Some(8),
                     valid_blockhash: false,
@@ -841,6 +988,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -857,6 +1005,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: Some(8),
                     valid_blockhash: false,
@@ -866,6 +1015,7 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic: false,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
@@ -934,6 +1084,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -943,6 +1094,7 @@ pub mod test {
                     num_instructions: Some(1),
                 },
                 tpu_use_quic,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
 
@@ -961,6 +1113,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -970,6 +1123,7 @@ pub mod test {
                     num_instructions: Some(1),
                 },
                 tpu_use_quic,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
         // creates and sends unique transactions of type Transfer
@@ -987,6 +1141,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -996,6 +1151,7 @@ pub mod test {
                     num_instructions: Some(8),
                 },
                 tpu_use_quic,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
         // creates and sends unique transactions of type CreateAccount
@@ -1013,6 +1169,7 @@ pub mod test {
                 data_input: None,
                 skip_gossip: false,
                 allow_private_addr: false,
+                num_gen_threads: 1,
                 transaction_params: TransactionParams {
                     num_signatures: None,
                     valid_blockhash: true,
@@ -1022,16 +1179,19 @@ pub mod test {
                     num_instructions: None,
                 },
                 tpu_use_quic,
+                send_batch_size: TEST_SEND_BATCH_SIZE,
             },
         );
     }
 
     #[test]
+    #[ignore]
     fn test_dos_with_blockhash_and_payer() {
         run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ false)
     }
 
     #[test]
+    #[ignore]
     fn test_dos_with_blockhash_and_payer_and_quic() {
         run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ true)
     }

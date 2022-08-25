@@ -48,16 +48,7 @@ fn deposit_many(bank: &Bank, pubkeys: &mut Vec<Pubkey>, num: usize) -> Result<()
 #[bench]
 fn test_accounts_create(bencher: &mut Bencher) {
     let (genesis_config, _) = create_genesis_config(10_000);
-    let bank0 = Bank::new_with_paths_for_benches(
-        &genesis_config,
-        vec![PathBuf::from("bench_a0")],
-        None,
-        None,
-        AccountSecondaryIndexes::default(),
-        false,
-        AccountShrinkThreshold::default(),
-        false,
-    );
+    let bank0 = Bank::new_with_paths_for_benches(&genesis_config, vec![PathBuf::from("bench_a0")]);
     bencher.iter(|| {
         let mut pubkeys: Vec<Pubkey> = vec![];
         deposit_many(&bank0, &mut pubkeys, 1000).unwrap();
@@ -71,12 +62,6 @@ fn test_accounts_squash(bencher: &mut Bencher) {
     let mut prev_bank = Arc::new(Bank::new_with_paths_for_benches(
         &genesis_config,
         vec![PathBuf::from("bench_a1")],
-        None,
-        None,
-        AccountSecondaryIndexes::default(),
-        false,
-        AccountShrinkThreshold::default(),
-        false,
     ));
     let mut pubkeys: Vec<Pubkey> = vec![];
     deposit_many(&prev_bank, &mut pubkeys, 250_000).unwrap();
@@ -124,6 +109,7 @@ fn test_accounts_hash_bank_hash(bencher: &mut Bencher) {
             test_hash_calculation,
             &EpochSchedule::default(),
             &RentCollector::default(),
+            false,
             false,
             false,
         ))
@@ -192,7 +178,7 @@ fn bench_delete_dependencies(bencher: &mut Bencher) {
         accounts.add_root(i);
     }
     bencher.iter(|| {
-        accounts.accounts_db.clean_accounts(None, false, None);
+        accounts.accounts_db.clean_accounts_for_tests();
     });
 }
 

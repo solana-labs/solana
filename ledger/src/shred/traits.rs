@@ -7,6 +7,8 @@ pub(super) trait Shred: Sized {
     // Total size of payload including headers, merkle
     // branches (if any), zero paddings, etc.
     const SIZE_OF_PAYLOAD: usize;
+    // Size of common and code/data headers.
+    const SIZE_OF_HEADERS: usize;
 
     fn from_payload(shred: Vec<u8>) -> Result<Self, Error>;
     fn common_header(&self) -> &ShredCommonHeader;

@@ -1,6 +1,6 @@
 [package]
 name = "solana-ed25519-program-tests"
-version = "1.11.5"
+version = "1.12.0"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
@@ -12,8 +12,8 @@ publish = false
 assert_matches = "1.5.0"
 ed25519-dalek = "=1.0.1"
 rand = "0.7.0"
-solana-program-test = { path = "../../program-test", version = "=1.11.5" }
-solana-sdk = { path = "../../sdk", version = "=1.11.5" }
+solana-program-test = { path = "../../program-test", version = "=1.12.0" }
+solana-sdk = { path = "../../sdk", version = "=1.12.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

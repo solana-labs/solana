@@ -25,13 +25,12 @@ static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_SIGNER = 12;
 static const uint8_t TEST_PRIVILEGE_DEESCALATION_ESCALATION_WRITABLE = 13;
 static const uint8_t TEST_WRITABLE_DEESCALATION_WRITABLE = 14;
 static const uint8_t TEST_NESTED_INVOKE_TOO_DEEP = 15;
-static const uint8_t TEST_EXECUTABLE_LAMPORTS = 16;
-static const uint8_t TEST_CALL_PRECOMPILE = 17;
-static const uint8_t ADD_LAMPORTS = 18;
-static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 19;
-static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER = 20;
-static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE = 21;
-static const uint8_t TEST_MAX_ACCOUNT_INFOS_EXCEEDED = 22;
+static const uint8_t TEST_CALL_PRECOMPILE = 16;
+static const uint8_t ADD_LAMPORTS = 17;
+static const uint8_t TEST_RETURN_DATA_TOO_LARGE = 18;
+static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_SIGNER = 19;
+static const uint8_t TEST_DUPLICATE_PRIVILEGE_ESCALATION_WRITABLE = 20;
+static const uint8_t TEST_MAX_ACCOUNT_INFOS_EXCEEDED = 21;
 
 static const int MINT_INDEX = 0;
 static const int ARGUMENT_INDEX = 1;
@@ -320,6 +319,21 @@ extern uint64_t entrypoint(const uint8_t *input) {
         sol_assert(accounts[ARGUMENT_INDEX].data[i] == 0);
       }
     }
+
+    sol_log("Test that is_executable and rent_epoch are ignored");
+    {
+      accounts[INVOKED_ARGUMENT_INDEX].executable = true;
+      accounts[INVOKED_ARGUMENT_INDEX].rent_epoch += 1;
+      SolAccountMeta arguments[] = {
+          {accounts[INVOKED_ARGUMENT_INDEX].key, true, false}};
+      uint8_t data[] = {RETURN_OK};
+      const SolInstruction instruction = {accounts[INVOKED_PROGRAM_INDEX].key,
+                                          arguments, SOL_ARRAY_SIZE(arguments),
+                                          data, SOL_ARRAY_SIZE(data)};
+
+      sol_assert(SUCCESS ==
+                 sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts)));
+    }
     break;
   }
   case TEST_PRIVILEGE_ESCALATION_SIGNER: {
@@ -591,25 +605,6 @@ extern uint64_t entrypoint(const uint8_t *input) {
   }
   case TEST_NESTED_INVOKE_TOO_DEEP: {
     do_nested_invokes(5, accounts, params.ka_num);
-    break;
-  }
-  case TEST_EXECUTABLE_LAMPORTS: {
-    sol_log("Test executable lamports");
-    accounts[ARGUMENT_INDEX].executable = true;
-    *accounts[ARGUMENT_INDEX].lamports -= 1;
-    *accounts[DERIVED_KEY1_INDEX].lamports +=1;
-    SolAccountMeta arguments[] = {
-      {accounts[ARGUMENT_INDEX].key, true, false},
-      {accounts[DERIVED_KEY1_INDEX].key, true, false},
-    };
-    uint8_t data[] = {ADD_LAMPORTS, 0, 0, 0};
-    SolPubkey program_id;
-    sol_memcpy(&program_id, params.program_id, sizeof(SolPubkey));
-    const SolInstruction instruction = {&program_id,
-					arguments, SOL_ARRAY_SIZE(arguments),
-					data, SOL_ARRAY_SIZE(data)};
-    sol_invoke(&instruction, accounts, SOL_ARRAY_SIZE(accounts));
-    *accounts[ARGUMENT_INDEX].lamports += 1;
     break;
   }
   case TEST_CALL_PRECOMPILE: {

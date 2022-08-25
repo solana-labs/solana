@@ -18,8 +18,10 @@ import {
   sendAndConfirmTransaction,
   Keypair,
   Message,
+  AddressLookupTableProgram,
+  SYSTEM_INSTRUCTION_LAYOUTS,
 } from '../src';
-import invariant from '../src/util/assert';
+import invariant from '../src/utils/assert';
 import {MOCK_PORT, url} from './url';
 import {
   AccountInfo,
@@ -35,7 +37,7 @@ import {
   SignatureResult,
   SlotInfo,
 } from '../src/connection';
-import {sleep} from '../src/util/sleep';
+import {sleep} from '../src/utils/sleep';
 import {
   helpers,
   mockErrorMessage,
@@ -49,16 +51,20 @@ import {
   restoreRpcWebSocket,
   mockRpcMessage,
 } from './mocks/rpc-websockets';
-import {TransactionInstruction, TransactionSignature} from '../src/transaction';
+import {
+  TransactionInstruction,
+  TransactionSignature,
+  TransactionExpiredBlockheightExceededError,
+  TransactionExpiredTimeoutError,
+} from '../src/transaction';
 import type {
   SignatureStatus,
   TransactionError,
   KeyedAccountInfo,
 } from '../src/connection';
-import {
-  TransactionExpiredBlockheightExceededError,
-  TransactionExpiredTimeoutError,
-} from '../src/util/tx-expiry-custom-errors';
+import {VersionedTransaction} from '../src/transaction/versioned';
+import {MessageV0} from '../src/message/v0';
+import {encodeData} from '../src/instruction';
 
 use(chaiAsPromised);
 
@@ -4242,5 +4248,206 @@ describe('Connection', function () {
       const version = await connection.getVersion();
       expect(version['solana-core']).to.be.ok;
     }).timeout(20 * 1000);
+
+    it('getAddressLookupTable', async () => {
+      const payer = Keypair.generate();
+
+      await helpers.airdrop({
+        connection,
+        address: payer.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+
+      const lookupTableAddresses = new Array(10)
+        .fill(0)
+        .map(() => Keypair.generate().publicKey);
+
+      const recentSlot = await connection.getSlot('finalized');
+      const [createIx, lookupTableKey] =
+        AddressLookupTableProgram.createLookupTable({
+          recentSlot,
+          payer: payer.publicKey,
+          authority: payer.publicKey,
+        });
+
+      // create, extend, and fetch
+      {
+        const transaction = new Transaction().add(createIx).add(
+          AddressLookupTableProgram.extendLookupTable({
+            lookupTable: lookupTableKey,
+            addresses: lookupTableAddresses,
+            authority: payer.publicKey,
+            payer: payer.publicKey,
+          }),
+        );
+        await helpers.processTransaction({
+          connection,
+          transaction,
+          signers: [payer],
+          commitment: 'processed',
+        });
+
+        const lookupTableResponse = await connection.getAddressLookupTable(
+          lookupTableKey,
+          {
+            commitment: 'processed',
+          },
+        );
+        const lookupTableAccount = lookupTableResponse.value;
+        if (!lookupTableAccount) {
+          expect(lookupTableAccount).to.be.ok;
+          return;
+        }
+        expect(lookupTableAccount.isActive()).to.be.true;
+        expect(lookupTableAccount.state.authority).to.eql(payer.publicKey);
+        expect(lookupTableAccount.state.addresses).to.eql(lookupTableAddresses);
+      }
+
+      // freeze and fetch
+      {
+        const transaction = new Transaction().add(
+          AddressLookupTableProgram.freezeLookupTable({
+            lookupTable: lookupTableKey,
+            authority: payer.publicKey,
+          }),
+        );
+        await helpers.processTransaction({
+          connection,
+          transaction,
+          signers: [payer],
+          commitment: 'processed',
+        });
+
+        const lookupTableResponse = await connection.getAddressLookupTable(
+          lookupTableKey,
+          {
+            commitment: 'processed',
+          },
+        );
+        const lookupTableAccount = lookupTableResponse.value;
+        if (!lookupTableAccount) {
+          expect(lookupTableAccount).to.be.ok;
+          return;
+        }
+        expect(lookupTableAccount.isActive()).to.be.true;
+        expect(lookupTableAccount.state.authority).to.be.undefined;
+      }
+    });
+
+    it('sendRawTransaction with v0 transaction', async () => {
+      const payer = Keypair.generate();
+
+      await helpers.airdrop({
+        connection,
+        address: payer.publicKey,
+        amount: 10 * LAMPORTS_PER_SOL,
+      });
+
+      const lookupTableAddresses = [Keypair.generate().publicKey];
+      const recentSlot = await connection.getSlot('finalized');
+      const [createIx, lookupTableKey] =
+        AddressLookupTableProgram.createLookupTable({
+          recentSlot,
+          payer: payer.publicKey,
+          authority: payer.publicKey,
+        });
+
+      // create, extend, and fetch lookup table
+      {
+        const transaction = new Transaction().add(createIx).add(
+          AddressLookupTableProgram.extendLookupTable({
+            lookupTable: lookupTableKey,
+            addresses: lookupTableAddresses,
+            authority: payer.publicKey,
+            payer: payer.publicKey,
+          }),
+        );
+        await helpers.processTransaction({
+          connection,
+          transaction,
+          signers: [payer],
+          commitment: 'processed',
+        });
+
+        const lookupTableResponse = await connection.getAddressLookupTable(
+          lookupTableKey,
+          {
+            commitment: 'processed',
+          },
+        );
+        const lookupTableAccount = lookupTableResponse.value;
+        if (!lookupTableAccount) {
+          expect(lookupTableAccount).to.be.ok;
+          return;
+        }
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const latestSlot = await connection.getSlot('processed');
+          if (latestSlot > lookupTableAccount.state.lastExtendedSlot) {
+            break;
+          } else {
+            console.log('Waiting for next slot...');
+            await sleep(500);
+          }
+        }
+      }
+
+      // create, serialize, send and confirm versioned transaction
+      {
+        const {blockhash, lastValidBlockHeight} =
+          await connection.getLatestBlockhash();
+        const transferIxData = encodeData(SYSTEM_INSTRUCTION_LAYOUTS.Transfer, {
+          lamports: BigInt(LAMPORTS_PER_SOL),
+        });
+        const transaction = new VersionedTransaction(
+          new MessageV0({
+            header: {
+              numRequiredSignatures: 1,
+              numReadonlySignedAccounts: 0,
+              numReadonlyUnsignedAccounts: 1,
+            },
+            staticAccountKeys: [payer.publicKey, SystemProgram.programId],
+            recentBlockhash: blockhash,
+            compiledInstructions: [
+              {
+                programIdIndex: 1,
+                accountKeyIndexes: [0, 2],
+                data: transferIxData,
+              },
+            ],
+            addressTableLookups: [
+              {
+                accountKey: lookupTableKey,
+                writableIndexes: [0],
+                readonlyIndexes: [],
+              },
+            ],
+          }),
+        );
+        transaction.sign([payer]);
+        const signature = bs58.encode(transaction.signatures[0]);
+        const serializedTransaction = transaction.serialize();
+        await connection.sendRawTransaction(serializedTransaction, {
+          preflightCommitment: 'processed',
+        });
+
+        await connection.confirmTransaction(
+          {
+            signature,
+            blockhash,
+            lastValidBlockHeight,
+          },
+          'processed',
+        );
+
+        const transferToKey = lookupTableAddresses[0];
+        const transferToAccount = await connection.getAccountInfo(
+          transferToKey,
+          'processed',
+        );
+        expect(transferToAccount?.lamports).to.be.eq(LAMPORTS_PER_SOL);
+      }
+    });
   }
 });

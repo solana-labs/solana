@@ -31,6 +31,7 @@ pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<(Slot, T)>>,
 
     pub count_buckets_flushed: AtomicUsize,
+    /// rolling 'current' age
     pub age: AtomicU8,
     pub stats: BucketMapHolderStats,
 
@@ -46,7 +47,9 @@ pub struct BucketMapHolder<T: IndexValue> {
     // how much mb are we allowed to keep in the in-mem index?
     // Rest goes to disk.
     pub mem_budget_mb: Option<usize>,
-    ages_to_stay_in_cache: Age,
+
+    /// how many ages should elapse from the last time an item is used where the item will remain in the cache
+    pub ages_to_stay_in_cache: Age,
 
     /// startup is a special time for flush to focus on moving everything to disk as fast and efficiently as possible
     /// with less thread count limitations. LRU and access patterns are not important. Freeing memory

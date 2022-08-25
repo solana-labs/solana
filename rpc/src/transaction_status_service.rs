@@ -37,7 +37,7 @@ impl TransactionStatusService {
     ) -> Self {
         let exit = exit.clone();
         let thread_hdl = Builder::new()
-            .name("solana-transaction-status-writer".to_string())
+            .name("solTxStatusWrtr".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
@@ -103,6 +103,7 @@ impl TransactionStatusService {
                             inner_instructions,
                             durable_nonce_fee,
                             return_data,
+                            executed_units,
                             ..
                         } = details;
                         let lamports_per_signature = match durable_nonce_fee {
@@ -160,6 +161,7 @@ impl TransactionStatusService {
                             rewards,
                             loaded_addresses,
                             return_data,
+                            compute_units_consumed: Some(executed_units),
                         };
 
                         if let Some(transaction_notifier) = transaction_notifier.as_ref() {

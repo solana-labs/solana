@@ -581,8 +581,8 @@ pub fn create_nonce_account_with_seed(
 ///
 /// ```
 /// # use solana_program::example_mocks::solana_sdk;
-/// # use solana_program::example_mocks::solana_client;
-/// use solana_client::rpc_client::RpcClient;
+/// # use solana_program::example_mocks::solana_rpc_client;
+/// use solana_rpc_client::rpc_client::RpcClient;
 /// use solana_sdk::{
 /// #   pubkey::Pubkey,
 ///     signature::{Keypair, Signer},
@@ -671,7 +671,7 @@ pub fn create_nonce_account(
 /// setting it to a recent blockhash, the value of the nonce must be retreived
 /// and deserialized from the nonce account, and that value specified as the
 /// "recent blockhash". A nonce account can be deserialized with the
-/// [`solana_client::nonce_utils::data_from_account`][dfa] function.
+/// [`solana_rpc_client_nonce_utils::data_from_account`][dfa] function.
 ///
 /// For further description of durable transaction nonces see
 /// [`create_nonce_account`].
@@ -679,7 +679,7 @@ pub fn create_nonce_account(
 /// [`Message`]: crate::message::Message
 /// [`Message::new_with_nonce`]: crate::message::Message::new_with_nonce
 /// [`recent_blockhash`]: crate::message::Message::recent_blockhash
-/// [dfa]: https://docs.rs/solana-client/latest/solana_client/nonce_utils/fn.data_from_account.html
+/// [dfa]: https://docs.rs/solana-rpc-client-nonce-utils/latest/solana_rpc_client_nonce_utils/fn.data_from_account.html
 ///
 /// # Required signers
 ///
@@ -691,11 +691,9 @@ pub fn create_nonce_account(
 ///
 /// ```
 /// # use solana_program::example_mocks::solana_sdk;
-/// # use solana_program::example_mocks::solana_client;
-/// use solana_client::{
-///     rpc_client::RpcClient,
-///     nonce_utils,
-/// };
+/// # use solana_program::example_mocks::solana_rpc_client;
+/// # use solana_program::example_mocks::solana_rpc_client_nonce_utils;
+/// use solana_rpc_client::rpc_client::RpcClient;
 /// use solana_sdk::{
 ///     message::Message,
 ///     pubkey::Pubkey,
@@ -751,7 +749,7 @@ pub fn create_nonce_account(
 ///     #   rent_epoch: 1,
 ///     # });
 ///     let nonce_account = client.get_account(nonce_account_pubkey)?;
-///     let nonce_data = nonce_utils::data_from_account(&nonce_account)?;
+///     let nonce_data = solana_rpc_client_nonce_utils::data_from_account(&nonce_account)?;
 ///     let blockhash = nonce_data.blockhash();
 ///
 ///     tx.try_sign(&[payer], blockhash)?;
@@ -817,8 +815,8 @@ pub fn advance_nonce_account(nonce_pubkey: &Pubkey, authorized_pubkey: &Pubkey) 
 ///
 /// ```
 /// # use solana_program::example_mocks::solana_sdk;
-/// # use solana_program::example_mocks::solana_client;
-/// use solana_client::rpc_client::RpcClient;
+/// # use solana_program::example_mocks::solana_rpc_client;
+/// use solana_rpc_client::rpc_client::RpcClient;
 /// use solana_sdk::{
 ///     pubkey::Pubkey,
 ///     signature::{Keypair, Signer},
@@ -899,8 +897,8 @@ pub fn withdraw_nonce_account(
 ///
 /// ```
 /// # use solana_program::example_mocks::solana_sdk;
-/// # use solana_program::example_mocks::solana_client;
-/// use solana_client::rpc_client::RpcClient;
+/// # use solana_program::example_mocks::solana_rpc_client;
+/// use solana_rpc_client::rpc_client::RpcClient;
 /// use solana_sdk::{
 ///     pubkey::Pubkey,
 ///     signature::{Keypair, Signer},
