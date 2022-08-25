@@ -428,13 +428,13 @@ impl InstructionContext {
     #[cfg(not(target_os = "solana"))]
     pub fn configure(
         &mut self,
-        program_accounts: Vec<usize>,
-        instruction_accounts: Vec<InstructionAccount>,
-        instruction_data: Vec<u8>,
+        program_accounts: &[usize],
+        instruction_accounts: &[InstructionAccount],
+        instruction_data: &[u8],
     ) {
-        self.program_accounts = program_accounts;
-        self.instruction_accounts = instruction_accounts;
-        self.instruction_data = instruction_data;
+        self.program_accounts = program_accounts.to_vec();
+        self.instruction_accounts = instruction_accounts.to_vec();
+        self.instruction_data = instruction_data.to_vec();
     }
 
     /// How many Instructions were on the stack after this one was pushed
