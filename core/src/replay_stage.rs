@@ -533,7 +533,7 @@ impl ReplayStage {
                         block_metadata_notifier.clone(),
                         &mut replay_timing,
                         log_messages_bytes_limit,
-                        replay_slots_concurrently
+                        replay_slots_concurrently,
                         &prioritization_fee_cache,
                     );
                     replay_active_banks_time.stop();

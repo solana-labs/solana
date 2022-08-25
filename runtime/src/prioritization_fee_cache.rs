@@ -38,10 +38,10 @@ struct PrioritizationFeeCacheMetrics {
     // Accumulated time spent on acquiring each block entry's lock..
     total_entry_lock_elapsed_us: AtomicU64,
 
-    // Accumulated time spent on updating block priotization fees.
+    // Accumulated time spent on updating block prioritization fees.
     total_entry_update_elapsed_us: AtomicU64,
 
-    // Accumulated time spent on finalizing block priotization fees.
+    // Accumulated time spent on finalizing block prioritization fees.
     total_block_finalize_elapsed_us: AtomicU64,
 }
 
@@ -117,7 +117,7 @@ impl PrioritizationFeeCacheMetrics {
     }
 }
 
-enum FinalizingServiceUpdate {
+enum CacheServiceUpdate {
     TransactionUpdate {
         slot: Slot,
         transaction_fee: u64,
@@ -130,13 +130,12 @@ enum FinalizingServiceUpdate {
 }
 
 /// Stores up to MAX_NUM_RECENT_BLOCKS recent block's prioritization fee,
-/// A separate internal thread `finalizing_thread` handles additional tasks when a bank is frozen,
+/// A separate internal thread `service_thread` handles additional tasks when a bank is frozen,
 /// and collecting stats and reporting metrics.
 pub struct PrioritizationFeeCache {
     cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
-    // Asynchronously finalize prioritization fee when a bank is completed replay.
-    finalizing_thread: Option<JoinHandle<()>>,
-    sender: Sender<FinalizingServiceUpdate>,
+    service_thread: Option<JoinHandle<()>>,
+    sender: Sender<CacheServiceUpdate>,
     metrics: Arc<PrioritizationFeeCacheMetrics>,
 }
 
@@ -148,12 +147,12 @@ impl Default for PrioritizationFeeCache {
 
 impl Drop for PrioritizationFeeCache {
     fn drop(&mut self) {
-        let _ = self.sender.send(FinalizingServiceUpdate::Exit);
-        self.finalizing_thread
+        let _ = self.sender.send(CacheServiceUpdate::Exit);
+        self.service_thread
             .take()
             .unwrap()
             .join()
-            .expect("Prioritization fee cache finalizing thread failed to join");
+            .expect("Prioritization fee cache servicing thread failed to join");
     }
 }
 
@@ -165,18 +164,18 @@ impl PrioritizationFeeCache {
 
         let cache_clone = cache.clone();
         let metrics_clone = metrics.clone();
-        let finalizing_thread = Some(
+        let service_thread = Some(
             Builder::new()
-                .name("prioritization-fee-cache-finalizing-thread".to_string())
+                .name("prioritization-fee-cache-servicing-thread".to_string())
                 .spawn(move || {
-                    Self::finalizing_loop(cache_clone, receiver, metrics_clone);
+                    Self::service_loop(cache_clone, receiver, metrics_clone);
                 })
                 .unwrap(),
         );
 
         PrioritizationFeeCache {
             cache,
-            finalizing_thread,
+            service_thread,
             sender,
             metrics,
         }
@@ -224,7 +223,7 @@ impl PrioritizationFeeCache {
                     );
 
                     self.sender
-                        .send(FinalizingServiceUpdate::TransactionUpdate {
+                        .send(CacheServiceUpdate::TransactionUpdate {
                             slot: bank.slot(),
                             transaction_fee: priority_details.unwrap().priority,
                             writable_accounts,
@@ -251,7 +250,7 @@ impl PrioritizationFeeCache {
     /// by pruning irrelevant accounts to save space, and marking its availability for queries.
     pub fn finalize_priority_fee(&self, slot: Slot) {
         self.sender
-            .send(FinalizingServiceUpdate::BankFrozen { slot })
+            .send(CacheServiceUpdate::BankFrozen { slot })
             .unwrap_or_else(|err| {
                 warn!(
                     "prioritization fee cache signalling bank frozen failed: {:?}",
@@ -262,7 +261,7 @@ impl PrioritizationFeeCache {
 
     /// Internal function is invoked by worker thread to update slot's minimum prioritization fee,
     /// Cache lock contends here.
-    fn update_transaction(
+    fn update_cache(
         cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
         slot: &Slot,
         transaction_fee: u64,
@@ -308,30 +307,30 @@ impl PrioritizationFeeCache {
         metrics.accumulate_total_block_finalize_elapsed_us(slot_finalize_time.as_us());
     }
 
-    fn finalizing_loop(
+    fn service_loop(
         cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
-        receiver: Receiver<FinalizingServiceUpdate>,
+        receiver: Receiver<CacheServiceUpdate>,
         metrics: Arc<PrioritizationFeeCacheMetrics>,
     ) {
         for update in receiver.iter() {
             match update {
-                FinalizingServiceUpdate::TransactionUpdate {
+                CacheServiceUpdate::TransactionUpdate {
                     slot,
                     transaction_fee,
                     writable_accounts,
-                } => Self::update_transaction(
+                } => Self::update_cache(
                     cache.clone(),
                     &slot,
                     transaction_fee,
                     writable_accounts,
                     metrics.clone(),
                 ),
-                FinalizingServiceUpdate::BankFrozen { slot } => {
+                CacheServiceUpdate::BankFrozen { slot } => {
                     Self::finalize_slot(cache.clone(), &slot, metrics.clone());
 
                     metrics.report(slot);
                 }
-                FinalizingServiceUpdate::Exit => {
+                CacheServiceUpdate::Exit => {
                     break;
                 }
             }
@@ -419,7 +418,31 @@ mod tests {
         SanitizedTransaction::try_from_legacy_transaction(transaction).unwrap()
     }
 
-    // finalization is asynchronous, this test helper will block until finalization is completed.
+    // update fee cache is asynchronous, this test helper blocks until update is completed.
+    fn sync_update<'a>(
+        prioritization_fee_cache: &mut PrioritizationFeeCache,
+        bank: Arc<Bank>,
+        txs: impl Iterator<Item = &'a SanitizedTransaction>,
+    ) {
+        prioritization_fee_cache.update(bank.clone(), txs);
+
+        let block_fee = PrioritizationFeeCache::get_prioritization_fee(
+            prioritization_fee_cache.cache.clone(),
+            &bank.slot(),
+        );
+
+        // wait till update is done
+        while block_fee
+            .lock()
+            .unwrap()
+            .get_min_transaction_fee()
+            .is_none()
+        {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
+    // finalization is asynchronous, this test helper blocks until finalization is completed.
     fn sync_finalize_priority_fee_for_test(
         prioritization_fee_cache: &mut PrioritizationFeeCache,
         slot: Slot,
@@ -559,7 +582,7 @@ mod tests {
                 &write_account_a,
                 &write_account_b,
             )];
-            prioritization_fee_cache.update(bank1.clone(), txs.iter());
+            sync_update(&mut prioritization_fee_cache, bank1.clone(), txs.iter());
             assert_eq!(
                 5,
                 PrioritizationFeeCache::get_prioritization_fee(
@@ -587,7 +610,7 @@ mod tests {
                 &write_account_b,
                 &write_account_c,
             )];
-            prioritization_fee_cache.update(bank2.clone(), txs.iter());
+            sync_update(&mut prioritization_fee_cache, bank2.clone(), txs.iter());
             assert_eq!(
                 9,
                 PrioritizationFeeCache::get_prioritization_fee(
@@ -616,7 +639,7 @@ mod tests {
                 &write_account_a,
                 &write_account_c,
             )];
-            prioritization_fee_cache.update(bank3.clone(), txs.iter());
+            sync_update(&mut prioritization_fee_cache, bank3.clone(), txs.iter());
             assert_eq!(
                 2,
                 PrioritizationFeeCache::get_prioritization_fee(
