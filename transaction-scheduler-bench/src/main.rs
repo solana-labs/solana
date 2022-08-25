@@ -415,6 +415,7 @@ fn spawn_packet_senders(
                 accounts.len()
             };
             spawn_packet_sender(
+                i,
                 producer_count,
                 Arc::clone(&preloader),
                 metrics.clone(),
@@ -430,6 +431,7 @@ fn spawn_packet_senders(
 }
 
 fn spawn_packet_sender(
+    i: usize,
     producer_count: usize,
     preloader: Arc<solana_scheduler::Preloader>,
     metrics: Arc<TransactionSchedulerBenchMetrics>,
@@ -440,7 +442,7 @@ fn spawn_packet_sender(
     duration: Duration,
     exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
-    std::thread::Builder::new().name("sol-producer".to_string()).spawn(move || {
+    std::thread::Builder::new().name(format!("sol-producer{:02}", i)).spawn(move || {
         send_packets(
             producer_count,
             preloader,
