@@ -4,7 +4,7 @@ description: "A Solana Program, aka smart contract, is the executable code that 
 keywords: ""
 ---
 
-Solana Programs, often referred to as "_smart contracts_" on other blockchains, are the executable code that interprets the instructions sent inside of each transaction on the blockchain. They can be deployed directly into the core of the network as [Native Programs](#native-programs), or published by anyone as [On Chain Programs](#on chain-programs). Programs are the core building blocks of the network and handle everything from sending tokens between wallets, to accepting votes of a DAOs, to tracking ownership of NFTs.
+Solana Programs, often referred to as "_smart contracts_" on other blockchains, are the executable code that interprets the instructions sent inside of each transaction on the blockchain. They can be deployed directly into the core of the network as [Native Programs](#native-programs), or published by anyone as [On Chain Programs](#on-chain-programs). Programs are the core building blocks of the network and handle everything from sending tokens between wallets, to accepting votes of a DAOs, to tracking ownership of NFTs.
 
 Both types of programs run on top of the [Sealevel runtime](https://medium.com/solana-labs/sealevel-parallel-processing-thousands-of-smart-contracts-d814b378192), which is Solana's _parallel processing_ model that helps to enable the high transactions speeds of the blockchain.
 
