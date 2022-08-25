@@ -4,7 +4,7 @@ use {
     crate::{
         id,
         vote_instruction::VoteInstruction,
-        vote_state::{self, VoteAuthorize, VoteStateUpdate},
+        vote_state::{self, VoteAuthorize},
     },
     log::*,
     solana_program_runtime::{
@@ -185,11 +185,12 @@ pub fn process_instruction(
                 let sysvar_cache = invoke_context.get_sysvar_cache();
                 let slot_hashes = sysvar_cache.get_slot_hashes()?;
                 let clock = sysvar_cache.get_clock()?;
+                let vote_state_update = compact_vote_state_update.uncompact()?;
                 vote_state::process_vote_state_update(
                     &mut me,
                     slot_hashes.slot_hashes(),
                     &clock,
-                    VoteStateUpdate::from(compact_vote_state_update),
+                    vote_state_update,
                     &signers,
                     &invoke_context.feature_set,
                 )
