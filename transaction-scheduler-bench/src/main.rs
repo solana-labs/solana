@@ -491,20 +491,22 @@ fn send_packets(
         );
         let mut rng = rand::thread_rng();
 
-        for vv in packet_batches {
-            for v in vv {
-                let p = solana_scheduler::get_transaction_priority_details(&v.0);
-                let p = (p << 32) | (rng.gen::<u64>() & 0x0000_0000_ffff_ffff);
-                let t = solana_scheduler::Task::new_for_queue(p, v);
-                for lock_attempt in t.tx.1.iter() {
-                    lock_attempt.contended_unique_weights().insert_task(p, solana_scheduler::TaskInQueue::clone(&t));
+        loop {
+            for vv in packet_batches {
+                for v in vv {
+                    let p = solana_scheduler::get_transaction_priority_details(&v.0);
+                    let p = (p << 32) | (rng.gen::<u64>() & 0x0000_0000_ffff_ffff);
+                    let t = solana_scheduler::Task::new_for_queue(p, v);
+                    for lock_attempt in t.tx.1.iter() {
+                        lock_attempt.contended_unique_weights().insert_task(p, solana_scheduler::TaskInQueue::clone(&t));
+                    }
+                    packet_batch_sender.send(solana_scheduler::Multiplexed::FromPrevious((p, t))).unwrap();
                 }
-                packet_batch_sender.send(solana_scheduler::Multiplexed::FromPrevious((p, t))).unwrap();
             }
-        }
-        
+            
 
-        std::thread::sleep(loop_duration.saturating_sub(packet_build_time.as_duration()));
+            std::thread::sleep(loop_duration.saturating_sub(packet_build_time.as_duration()));
+        }
     }
 }
 
