@@ -722,7 +722,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn pop_from_queue_then_lock(
-        task_sender: &crossbeam_channel::Sender<TaskInQueue>,
+        task_sender: &crossbeam_channel::Sender<Vec<LockAttempt>>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
