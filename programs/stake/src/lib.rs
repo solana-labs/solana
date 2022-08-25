@@ -25,8 +25,7 @@ pub fn add_genesis_accounts(genesis_config: &mut GenesisConfig) -> u64 {
 /// Multiple proposals to raise the delegation exist, enforce the feature with the highest minimum
 #[inline(always)]
 pub fn get_minimum_delegation(feature_set: &FeatureSet) -> u64 {
-    if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id())
-    {
+    if feature_set.is_active(&feature_set::stake_raise_minimum_delegation_to_1_sol::id()) {
         const MINIMUM_DELEGATION_SOL: u64 = 1;
         MINIMUM_DELEGATION_SOL * LAMPORTS_PER_SOL
     } else if feature_set
