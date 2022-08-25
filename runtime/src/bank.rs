@@ -19501,7 +19501,6 @@ pub(crate) mod tests {
     /// 2. The bank's accounts_data_size is unmodified
     #[test]
     fn test_cap_accounts_data_allocations_per_transaction() {
-        use solana_sdk::signature::KeypairInsecureClone;
         const NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION: usize =
             MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION as usize
                 / MAX_PERMITTED_DATA_LENGTH as usize;
@@ -19514,7 +19513,7 @@ pub(crate) mod tests {
         bank.activate_feature(&feature_set::cap_accounts_data_allocations_per_transaction::id());
 
         let mut instructions = Vec::new();
-        let mut keypairs = vec![mint_keypair.clone()];
+        let mut keypairs = vec![mint_keypair.insecure_clone()];
         for _ in 0..=NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION {
             let keypair = Keypair::new();
             let instruction = system_instruction::create_account(
