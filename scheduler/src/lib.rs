@@ -744,6 +744,7 @@ impl ScheduleStage {
                 arc_next_task.record_queue_time(*sequence_clock, *queue_clock);
                 *queue_clock = queue_clock.checked_add(1).unwrap();
             }
+            let a2 = TaskInQueue::clone(arc_next_task);
             let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
             let unique_weight = next_task.unique_weight;
             let message_hash = next_task.tx.0.message_hash();
@@ -776,7 +777,7 @@ impl ScheduleStage {
                     next_task.mark_as_contended();
                     *contended_count = contended_count.checked_add(1).unwrap();
                     for lock_attempt in next_task.tx.1.iter() {
-                        lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&arc_next_task));
+                        lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&a2));
                     }
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
