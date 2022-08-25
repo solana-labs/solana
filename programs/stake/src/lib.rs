@@ -81,7 +81,7 @@ mod tests {
 
     #[allow(deprecated)]
     #[test_case(feature_set_old_behavior(), solana_sdk::stake::MINIMUM_STAKE_DELEGATION; "old_behavior")]
-    #[test_case(feature_set_only_1_sol_minimum(), 1 * LAMPORTS_PER_SOL; "new_behavior_1_sol")]
+    #[test_case(feature_set_only_1_sol_minimum(), LAMPORTS_PER_SOL; "new_behavior_1_sol")]
     #[test_case(feature_set_only_100m_lamports_minimum(), 100_000_000; "new_behavior_100m_lamports")]
     fn test_minimum_delegation(feature_set: FeatureSet, expected_result: u64) {
         let minimum_delegation = crate::get_minimum_delegation(&feature_set);
