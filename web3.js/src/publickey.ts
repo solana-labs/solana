@@ -2,7 +2,7 @@ import BN from 'bn.js';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
-import {sha256} from '@ethersproject/sha2';
+import {sha256} from '@noble/hashes/sha256';
 
 import {Struct, SOLANA_SCHEMA} from './utils/borsh-schema';
 import {toBuffer} from './utils/to-buffer';
@@ -140,8 +140,8 @@ export class PublicKey extends Struct {
       Buffer.from(seed),
       programId.toBuffer(),
     ]);
-    const hash = sha256(new Uint8Array(buffer)).slice(2);
-    return new PublicKey(Buffer.from(hash, 'hex'));
+    const publicKeyBytes = sha256(buffer);
+    return new PublicKey(publicKeyBytes);
   }
 
   /**
@@ -164,8 +164,7 @@ export class PublicKey extends Struct {
       programId.toBuffer(),
       Buffer.from('ProgramDerivedAddress'),
     ]);
-    let hash = sha256(new Uint8Array(buffer)).slice(2);
-    let publicKeyBytes = new BN(hash, 16).toArray(undefined, 32);
+    const publicKeyBytes = sha256(buffer);
     if (is_on_curve(publicKeyBytes)) {
       throw new Error(`Invalid seeds, address must fall off the curve`);
     }
