@@ -352,6 +352,10 @@ impl FeeSigmaProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, FeeSigmaProofError> {
+        if bytes.len() != 256 {
+            return Err(FeeSigmaProofError::Format);
+        }
+
         let bytes = array_ref![bytes, 0, 256];
         let (Y_max_proof, z_max_proof, c_max_proof, Y_delta, Y_claimed, z_x, z_delta, z_claimed) =
             array_refs![bytes, 32, 32, 32, 32, 32, 32, 32, 32];
