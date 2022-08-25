@@ -1034,7 +1034,11 @@ impl ScheduleStage {
             (&ee_sender, Some(h))
         };
         let (task_sender, task_receiver) = crossbeam_channel::unbounded::<(u64, TaskInQueue, Vec<LockAttempt>)>();
-        for thx in 0..4 {
+        let indexer_count = std::env::var("INDEXER_COUNT")
+            .unwrap_or(format!("{}", 4))
+            .parse::<usize>()
+            .unwrap();
+        for thx in 0..indexer_count {
             let task_receiver = task_receiver.clone();
             let h = std::thread::Builder::new().name(format!("sol-indexer{:02}", thx)).spawn(move || {
                 while let (uw, task, ll) = task_receiver.recv().unwrap() {
