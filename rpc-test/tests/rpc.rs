@@ -346,10 +346,32 @@ fn test_rpc_subscriptions() {
         }
     });
 
-    while signature_subscription_ready.load(Ordering::SeqCst) != transactions.len()
-        || account_subscription_ready.load(Ordering::SeqCst) != transactions.len()
+    let now = Instant::now();
+    while (signature_subscription_ready.load(Ordering::SeqCst) != transactions.len()
+        || account_subscription_ready.load(Ordering::SeqCst) != transactions.len())
+        && now.elapsed() < Duration::from_secs(15)
     {
         sleep(Duration::from_millis(100))
+    }
+
+    // check signature subscription
+    let num = signature_subscription_ready.load(Ordering::SeqCst);
+    if num != transactions.len() {
+        error!(
+            "signature subscription didn't setup properly, want: {}, got: {}",
+            transactions.len(),
+            num
+        );
+    }
+
+    // check account subscription
+    let num = account_subscription_ready.load(Ordering::SeqCst);
+    if num != transactions.len() {
+        error!(
+            "account subscriptions didn't setup properly, want: {}, got: {}",
+            transactions.len(),
+            num
+        );
     }
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
