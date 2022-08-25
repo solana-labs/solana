@@ -361,7 +361,7 @@ fn handle_transaction_batch(
             let mut found = true;
             let mut removed = false;
             let mut task = task_cursor.value();
-            //task.trace_timestamps("in_exec(initial list)");
+            task.trace_timestamps("in_exec(initial list)");
             while !task.currently_contended() {
                 if task_cursor.key() == &uq {
                     removed = task_cursor.remove();
@@ -371,7 +371,7 @@ fn handle_transaction_batch(
                     assert!(new_cursor.key() < task_cursor.key());
                     task_cursor = new_cursor;
                     task = task_cursor.value();
-                    //task.trace_timestamps("in_exec(subsequent list)");
+                    task.trace_timestamps("in_exec(subsequent list)");
                 } else {
                     found = false;
                     break;
