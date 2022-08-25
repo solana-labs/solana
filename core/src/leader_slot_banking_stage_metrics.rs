@@ -1,5 +1,8 @@
 use {
-    crate::leader_slot_banking_stage_timing_metrics::*,
+    crate::{
+        leader_slot_banking_stage_timing_metrics::*,
+        unprocessed_transaction_storage::InsertPacketBatchesSummary,
+    },
     solana_poh::poh_recorder::BankStart,
     solana_runtime::transaction_error_metrics::*,
     solana_sdk::{clock::Slot, saturating_add_assign},
@@ -496,6 +499,21 @@ impl LeaderSlotMetricsTracker {
                 .execute_and_commit_timings
                 .accumulate(execute_and_commit_timings);
         }
+    }
+
+    pub(crate) fn accumulate_insert_packet_batches_summary(
+        &mut self,
+        insert_packet_batches_summary: &InsertPacketBatchesSummary,
+    ) {
+        self.increment_exceeded_buffer_limit_dropped_packets_count(
+            insert_packet_batches_summary.num_dropped_packets as u64,
+        );
+        self.increment_dropped_gossip_vote_count(
+            insert_packet_batches_summary.num_dropped_gossip_vote_packets as u64,
+        );
+        self.increment_dropped_tpu_vote_count(
+            insert_packet_batches_summary.num_dropped_tpu_vote_packets as u64,
+        );
     }
 
     pub(crate) fn accumulate_transaction_errors(

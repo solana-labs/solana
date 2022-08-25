@@ -5,24 +5,29 @@ use {
         },
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        latest_unprocessed_votes::{self, LatestUnprocessedVotes, VoteSource},
-        unprocessed_packet_batches::{self, UnprocessedPacketBatches},
+        latest_unprocessed_votes::{
+            self, DeserializedVotePacket, LatestUnprocessedVotes, VoteSource,
+        },
+        unprocessed_packet_batches::{self, DeserializedPacket, UnprocessedPacketBatches},
     },
     itertools::Itertools,
     min_max_heap::MinMaxHeap,
     solana_perf::packet::PacketBatch,
     solana_runtime::bank::Bank,
-    std::{rc::Rc, sync::Arc, sync::atomic::Ordering},
+    std::{
+        rc::Rc,
+        sync::{atomic::Ordering, Arc},
+    },
 };
 
 const MAX_STAKED_VALIDATORS: usize = 10_000;
 
 #[derive(Debug, Default)]
 pub struct InsertPacketBatchesSummary {
-    num_dropped_packets: usize,
-    num_dropped_gossip_vote_packets: usize,
-    num_dropped_tpu_vote_packets: usize,
-    num_dropped_tracer_packets: usize,
+    pub(crate) num_dropped_packets: usize,
+    pub(crate) num_dropped_gossip_vote_packets: usize,
+    pub(crate) num_dropped_tpu_vote_packets: usize,
+    pub(crate) num_dropped_tracer_packets: usize,
 }
 
 fn filter_processed_packets<'a, F>(
@@ -199,6 +204,10 @@ impl TransactionStorage {
         self.unprocessed_packet_batches.iter()
     }
 
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut DeserializedPacket> {
+        self.unprocessed_packet_batches.iter_mut()
+    }
+
     fn forward_option(&self) -> ForwardOption {
         match self.thread_type {
             ThreadType::Transactions => ForwardOption::ForwardTransaction,
@@ -295,14 +304,20 @@ pub enum UnprocessedTransactionStorage {
 }
 
 impl UnprocessedTransactionStorage {
-    pub fn new_transaction_storage(unprocessed_packet_batches : UnprocessedPacketBatches, thread_type : ThreadType) -> Self {
+    pub fn new_transaction_storage(
+        unprocessed_packet_batches: UnprocessedPacketBatches,
+        thread_type: ThreadType,
+    ) -> Self {
         Self::TransactionStorage(TransactionStorage {
             unprocessed_packet_batches,
-            thread_type
+            thread_type,
         })
     }
 
-    pub fn new_vote_storage(latest_unprocessed_votes : Arc<LatestUnprocessedVotes>, vote_source : VoteSource) -> Self {
+    pub fn new_vote_storage(
+        latest_unprocessed_votes: Arc<LatestUnprocessedVotes>,
+        vote_source: VoteSource,
+    ) -> Self {
         Self::VoteStorage(VoteStorage {
             latest_unprocessed_votes,
             vote_source,
@@ -421,5 +436,58 @@ impl UnprocessedTransactionStorage {
                 vote_storage.process_packets(bank, batch_size, processing_function)
             }
         }
+    }
+}
+
+mod tests {
+    #[test]
+    fn test_filter_processed_packets() {
+        let retryable_indexes = [0, 1, 2, 3];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        filter_processed_packets(retryable_indexes.iter(), f);
+        assert!(non_retryable_indexes.is_empty());
+
+        let retryable_indexes = [0, 1, 2, 3, 5];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(4, 5)]);
+
+        let retryable_indexes = [1, 2, 3];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(0, 1)]);
+
+        let retryable_indexes = [1, 2, 3, 5];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5)]);
+
+        let retryable_indexes = [1, 2, 3, 5, 8];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5), (6, 8)]);
+
+        let retryable_indexes = [1, 2, 3, 5, 8, 8];
+        let mut non_retryable_indexes = vec![];
+        let f = |start, end| {
+            non_retryable_indexes.push((start, end));
+        };
+        filter_processed_packets(retryable_indexes.iter(), f);
+        assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5), (6, 8)]);
     }
 }
