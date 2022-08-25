@@ -264,7 +264,7 @@ fn test_rpc_subscriptions() {
         .collect();
     let mut signature_set: HashSet<Signature> =
         transactions.iter().map(|tx| tx.signatures[0]).collect();
-    let account_set: HashSet<Pubkey> = transactions
+    let mut account_set: HashSet<Pubkey> = transactions
         .iter()
         .map(|tx| tx.message.account_keys[1])
         .collect();
@@ -272,7 +272,7 @@ fn test_rpc_subscriptions() {
     // Track when subscriptions are ready
     let (ready_sender, ready_receiver) = unbounded::<()>();
     // Track account notifications are received
-    let (account_sender, account_receiver) = unbounded::<RpcResponse<UiAccount>>();
+    let (account_sender, account_receiver) = unbounded::<(Pubkey, RpcResponse<UiAccount>)>();
     // Track when status notifications are received
     let (status_sender, status_receiver) =
         unbounded::<(Signature, RpcResponse<RpcSignatureResult>)>();
@@ -281,6 +281,8 @@ fn test_rpc_subscriptions() {
     let rt = Runtime::new().unwrap();
     let rpc_pubsub_url = test_validator.rpc_pubsub_url();
     let signature_set_clone = signature_set.clone();
+    let account_set_clone = account_set.clone();
+
     rt.spawn(async move {
         let pubsub_client = Arc::new(PubsubClient::new(&rpc_pubsub_url).await.unwrap());
 
@@ -309,7 +311,7 @@ fn test_rpc_subscriptions() {
         }
 
         // Subscribe to account notifications
-        for pubkey in account_set {
+        for pubkey in account_set_clone {
             let account_sender = account_sender.clone();
             tokio::spawn({
                 let _pubsub_client = Arc::clone(&pubsub_client);
@@ -326,7 +328,7 @@ fn test_rpc_subscriptions() {
                         .unwrap();
 
                     let response = account_notifications.next().await.unwrap();
-                    account_sender.send(response).unwrap();
+                    account_sender.send((pubkey, response)).unwrap();
                     account_unsubscribe().await;
                 }
             });
@@ -406,18 +408,17 @@ fn test_rpc_subscriptions() {
     }
 
     let deadline = Instant::now() + Duration::from_secs(60);
-    let mut account_notifications = transactions.len();
-    while account_notifications > 0 {
+    while !account_set.is_empty() {
         let timeout = deadline.saturating_duration_since(Instant::now());
         match account_receiver.recv_timeout(timeout) {
-            Ok(result) => {
+            Ok((pubkey, result)) => {
                 assert_eq!(result.value.lamports, Rent::default().minimum_balance(0));
-                account_notifications -= 1;
+                assert!(account_set.remove(&pubkey));
             }
             Err(_err) => {
                 panic!(
                     "recv_timeout, {}/{} accounts remaining",
-                    account_notifications,
+                    account_set.len(),
                     transactions.len()
                 );
             }
