@@ -516,6 +516,7 @@ impl Task {
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            for_indexer: tx.1.iter().map(|a| a.clone_for_test()).collect(),
         }
     }
 
