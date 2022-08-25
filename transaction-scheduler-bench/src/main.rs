@@ -355,37 +355,39 @@ fn handle_transaction_batch(
 
     let uq = transaction_batch.unique_weight;
     //transaction_batch.task.trace_timestamps("in_exec(self)");
-    for mut lock_attempt in transaction_batch.lock_attempts.iter_mut() {
-        let contended_unique_weights = lock_attempt.contended_unique_weights();
-        contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
-            let mut found = true;
-            let mut removed = false;
-            let mut task = task_cursor.value();
-            task.trace_timestamps("in_exec(initial list)");
-            while !task.currently_contended() {
-                if task_cursor.key() == &uq {
-                    removed = task_cursor.remove();
-                    assert!(removed);
+    if transaction_batch.contention_count > 0 {
+        for mut lock_attempt in transaction_batch.lock_attempts.iter_mut() {
+            let contended_unique_weights = lock_attempt.contended_unique_weights();
+            contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
+                let mut found = true;
+                let mut removed = false;
+                let mut task = task_cursor.value();
+                task.trace_timestamps("in_exec(initial list)");
+                while !task.currently_contended() {
+                    if task_cursor.key() == &uq {
+                        removed = task_cursor.remove();
+                        assert!(removed);
+                    }
+                    if let Some(new_cursor) = task_cursor.prev() {
+                        assert!(new_cursor.key() < task_cursor.key());
+                        task_cursor = new_cursor;
+                        task = task_cursor.value();
+                        task.trace_timestamps("in_exec(subsequent list)");
+                    } else {
+                        found = false;
+                        break;
+                    }
                 }
-                if let Some(new_cursor) = task_cursor.prev() {
-                    assert!(new_cursor.key() < task_cursor.key());
-                    task_cursor = new_cursor;
-                    task = task_cursor.value();
-                    task.trace_timestamps("in_exec(subsequent list)");
-                } else {
-                    found = false;
-                    break;
+                if !removed {
+                    contended_unique_weights.remove_task(&uq);
                 }
-            }
-            if !removed {
-                contended_unique_weights.remove_task(&uq);
-            }
-            found.then(|| solana_scheduler::TaskInQueue::clone(task))
-        }).flatten().map(|task| {
-            task.trace_timestamps(&format!("in_exec(heaviest:{})", transaction_batch.task.queue_time_label()));
-            lock_attempt.heaviest_uncontended = Some(task);
-            ()
-        });
+                found.then(|| solana_scheduler::TaskInQueue::clone(task))
+            }).flatten().map(|task| {
+                task.trace_timestamps(&format!("in_exec(heaviest:{})", transaction_batch.task.queue_time_label()));
+                lock_attempt.heaviest_uncontended = Some(task);
+                ()
+            });
+        }
     }
     //error!("send from execute substage: {:?} seq: {}", uq, transaction_batch.task.sequence_time());
     completed_transaction_sender.0
