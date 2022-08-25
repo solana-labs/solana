@@ -13,45 +13,15 @@
 #![doc(hidden)]
 #![allow(clippy::new_without_default)]
 
-pub mod solana_client {
-    pub mod client_error {
-        #[derive(thiserror::Error, Debug)]
-        #[error("mock-error")]
-        pub struct ClientError;
-        pub type Result<T> = std::result::Result<T, ClientError>;
-    }
-
-    pub mod nonce_utils {
-        use {
-            super::super::solana_sdk::{
-                account::ReadableAccount, account_utils::StateMut, pubkey::Pubkey,
-            },
-            crate::nonce::state::{Data, DurableNonce, Versions},
-        };
-
-        #[derive(thiserror::Error, Debug)]
-        #[error("mock-error")]
-        pub struct Error;
-
-        pub fn data_from_account<T: ReadableAccount + StateMut<Versions>>(
-            _account: &T,
-        ) -> Result<Data, Error> {
-            Ok(Data::new(
-                Pubkey::new_unique(),
-                DurableNonce::default(),
-                5000,
-            ))
-        }
-    }
-
+pub mod solana_rpc_client {
     pub mod rpc_client {
         use {
-            super::{
-                super::solana_sdk::{
+            super::super::{
+                solana_rpc_client_api::client_error::Result as ClientResult,
+                solana_sdk::{
                     account::Account, hash::Hash, pubkey::Pubkey, signature::Signature,
                     transaction::Transaction,
                 },
-                client_error::Result as ClientResult,
             },
             std::{cell::RefCell, collections::HashMap, rc::Rc},
         };
@@ -103,6 +73,36 @@ pub mod solana_client {
                 Ok(0)
             }
         }
+    }
+}
+
+pub mod solana_rpc_client_api {
+    pub mod client_error {
+        #[derive(thiserror::Error, Debug)]
+        #[error("mock-error")]
+        pub struct ClientError;
+        pub type Result<T> = std::result::Result<T, ClientError>;
+    }
+}
+
+pub mod solana_rpc_client_nonce_utils {
+    use {
+        super::solana_sdk::{account::ReadableAccount, account_utils::StateMut, pubkey::Pubkey},
+        crate::nonce::state::{Data, DurableNonce, Versions},
+    };
+
+    #[derive(thiserror::Error, Debug)]
+    #[error("mock-error")]
+    pub struct Error;
+
+    pub fn data_from_account<T: ReadableAccount + StateMut<Versions>>(
+        _account: &T,
+    ) -> Result<Data, Error> {
+        Ok(Data::new(
+            Pubkey::new_unique(),
+            DurableNonce::default(),
+            5000,
+        ))
     }
 }
 

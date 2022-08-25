@@ -1,4 +1,8 @@
+import {PublicKey} from '../publickey';
+
 export * from './legacy';
+export * from './versioned';
+export * from './v0';
 
 /**
  * The message header, identifying signed and read-only account
@@ -16,17 +20,26 @@ export type MessageHeader = {
 };
 
 /**
+ * An address table lookup used to load additional accounts
+ */
+export type MessageAddressTableLookup = {
+  accountKey: PublicKey;
+  writableIndexes: Array<number>;
+  readonlyIndexes: Array<number>;
+};
+
+/**
  * An instruction to execute by a program
  *
  * @property {number} programIdIndex
- * @property {number[]} accounts
- * @property {string} data
+ * @property {number[]} accountKeyIndexes
+ * @property {Uint8Array} data
  */
-export type CompiledInstruction = {
+export type MessageCompiledInstruction = {
   /** Index into the transaction keys array indicating the program account that executes this instruction */
   programIdIndex: number;
   /** Ordered indices into the transaction keys array indicating which accounts to pass to the program */
-  accounts: number[];
-  /** The program input data encoded as base 58 */
-  data: string;
+  accountKeyIndexes: number[];
+  /** The program input data */
+  data: Uint8Array;
 };

@@ -205,6 +205,10 @@ impl CtxtCommEqualityProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
+        if bytes.len() != 192 {
+            return Err(EqualityProofError::Format);
+        }
+
         let bytes = array_ref![bytes, 0, 192];
         let (Y_0, Y_1, Y_2, z_s, z_x, z_r) = array_refs![bytes, 32, 32, 32, 32, 32, 32];
 
@@ -424,6 +428,10 @@ impl CtxtCtxtEqualityProof {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, EqualityProofError> {
+        if bytes.len() != 224 {
+            return Err(EqualityProofError::Format);
+        }
+
         let bytes = array_ref![bytes, 0, 224];
         let (Y_0, Y_1, Y_2, Y_3, z_s, z_x, z_r) = array_refs![bytes, 32, 32, 32, 32, 32, 32, 32];
 

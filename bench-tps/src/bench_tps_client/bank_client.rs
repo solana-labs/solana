@@ -107,4 +107,8 @@ impl BenchTpsClient for BankClient {
                 })
             })
     }
+
+    fn get_multiple_accounts(&self, _pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
+        unimplemented!("BankClient doesn't support get_multiple_accounts");
+    }
 }

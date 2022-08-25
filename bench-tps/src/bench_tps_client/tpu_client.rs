@@ -118,4 +118,10 @@ impl BenchTpsClient for TpuClient {
                 })
             })
     }
+
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
+        self.rpc_client()
+            .get_multiple_accounts(pubkeys)
+            .map_err(|err| err.into())
+    }
 }
