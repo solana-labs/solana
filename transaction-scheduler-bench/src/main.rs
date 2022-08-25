@@ -369,6 +369,9 @@ fn handle_transaction_batch(
                     removed = task_cursor.remove();
                     assert!(removed);
                 }
+                if task.already_finished() {
+                    panic!()
+                }
                 if let Some(new_cursor) = task_cursor.prev() {
                     assert!(new_cursor.key() < task_cursor.key());
                     task_cursor = new_cursor;
