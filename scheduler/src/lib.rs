@@ -1039,7 +1039,6 @@ impl ScheduleStage {
                     for lock_attempt in task.tx.1.iter() {
                         lock_attempt.contended_unique_weights().insert_task(uw, TaskInQueue::clone(&task));
                     }
-                }
             }
         }).unwrap();
 
