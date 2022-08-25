@@ -788,6 +788,7 @@ impl ScheduleStage {
                 }
             } else if provisional_count > 0 {
                 assert!(!from_runnable);
+                assert_eq!(unlockable_count, 0);
                 let lock_count = next_task.tx.1.len();
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 Self::finalize_lock_for_provisional_execution(
