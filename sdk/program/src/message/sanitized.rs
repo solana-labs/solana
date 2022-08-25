@@ -464,7 +464,7 @@ mod tests {
                     message.is_writable_account_cache.len(),
                     message.account_keys().len()
                 );
-                assert!(message.is_writable_account_cache.get(0).unwrap());
+                assert!(message.is_writable_account_cache.first().unwrap());
                 assert!(!message.is_writable_account_cache.get(1).unwrap());
                 assert!(message.is_writable_account_cache.get(2).unwrap());
                 assert!(!message.is_writable_account_cache.get(3).unwrap());
@@ -495,7 +495,7 @@ mod tests {
                     message.is_writable_account_cache.len(),
                     message.account_keys().len()
                 );
-                assert!(message.is_writable_account_cache.get(0).unwrap());
+                assert!(message.is_writable_account_cache.first().unwrap());
                 assert!(!message.is_writable_account_cache.get(1).unwrap());
                 assert!(message.is_writable_account_cache.get(2).unwrap());
                 assert!(!message.is_writable_account_cache.get(3).unwrap());

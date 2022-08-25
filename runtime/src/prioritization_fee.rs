@@ -76,9 +76,9 @@ pub enum PrioritizationFeeError {
     BlockIsAlreadyFinalized,
 }
 
-/// Block minimum prioritization fee stats, includes the minimum prioritization fee of transactions in a
-/// block; and minimum fee for each writable accounts of all transactions in block. The only relevant
-/// write account minimum fees are those greater than block minimum fee, because the minimum fee needed to land
+/// Block minimum prioritization fee stats, includes the minimum prioritization fee for a transaction in this
+/// block; and the minimum fee for each writable account in all transactions in this block. The only relevant
+/// write account minimum fees are those greater than the block minimum transaction fee, because the minimum fee needed to land
 /// a transaction is determined by Max( min_transaction_fee, min_writable_account_fees(key), ...)
 #[derive(Debug)]
 pub struct PrioritizationFee {
@@ -166,7 +166,7 @@ impl PrioritizationFee {
     }
 
     pub fn get_min_transaction_fee(&self) -> Option<u64> {
-        (self.min_transaction_fee != u64::MAX).then(|| self.min_transaction_fee)
+        (self.min_transaction_fee != u64::MAX).then_some(self.min_transaction_fee)
     }
 
     pub fn get_writable_account_fee(&self, key: &Pubkey) -> Option<u64> {
