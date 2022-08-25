@@ -776,7 +776,7 @@ impl ScheduleStage {
                     next_task.mark_as_contended();
                     *contended_count = contended_count.checked_add(1).unwrap();
                     for lock_attempt in next_task.tx.1.iter() {
-                        lock_attempt.contended_unique_weights().insert_task(p, TaskInQueue::clone(&t));
+                        lock_attempt.contended_unique_weights().insert_task(p, TaskInQueue::clone(&next_task_arc));
                     }
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
