@@ -720,6 +720,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn pop_from_queue_then_lock(
+        task_sender: &crossbeam_channel::Sender<TaskInQueue>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
@@ -776,9 +777,10 @@ impl ScheduleStage {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
                     next_task.mark_as_contended();
                     *contended_count = contended_count.checked_add(1).unwrap();
-                    for lock_attempt in next_task.tx.1.iter() {
-                        lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&a2));
-                    }
+                    //for lock_attempt in next_task.tx.1.iter() {
+                    //    lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&a2));
+                    //}
+                    task_sender.send(TaskInQueue::clone(&a2)).unwrap();
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
@@ -980,7 +982,7 @@ impl ScheduleStage {
         execute_clock: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(runnable_queue, address_book, contended_count, prefer_immediate, sequence_time, queue_clock)
+            Self::pop_from_queue_then_lock(task_sender, runnable_queue, address_book, contended_count, prefer_immediate, sequence_time, queue_clock)
                 .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock));
         maybe_ee
     }
