@@ -6,8 +6,14 @@ use {
     crate::{
         hash::Hash,
         message::{
+<<<<<<< HEAD
             v0::{self, LoadedAddresses},
             SanitizedMessage, VersionedMessage,
+=======
+            legacy,
+            v0::{self, LoadedAddresses, MessageAddressTableLookup},
+            LegacyMessage, SanitizedMessage, VersionedMessage,
+>>>>>>> 5e71f339c (Add a SanitizedMessage type that caches writable accounts indexes (#27317))
         },
         precompiles::verify_if_precompile,
         pubkey::Pubkey,
@@ -69,7 +75,9 @@ impl SanitizedTransaction {
         let signatures = tx.signatures;
         let SanitizedVersionedMessage { message } = tx.message;
         let message = match message {
-            VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
+            VersionedMessage::Legacy(message) => {
+                SanitizedMessage::Legacy(LegacyMessage::new(message))
+            }
             VersionedMessage::V0(message) => {
                 let loaded_addresses =
                     address_loader.load_addresses(&message.address_table_lookups)?;
@@ -104,7 +112,9 @@ impl SanitizedTransaction {
 
         let signatures = tx.signatures;
         let message = match tx.message {
-            VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
+            VersionedMessage::Legacy(message) => {
+                SanitizedMessage::Legacy(LegacyMessage::new(message))
+            }
             VersionedMessage::V0(message) => {
                 let loaded_addresses =
                     address_loader.load_addresses(&message.address_table_lookups)?;
@@ -131,7 +141,7 @@ impl SanitizedTransaction {
 
         Ok(Self {
             message_hash: tx.message.hash(),
-            message: SanitizedMessage::Legacy(tx.message),
+            message: SanitizedMessage::Legacy(LegacyMessage::new(tx.message)),
             is_simple_vote_tx: false,
             signatures: tx.signatures,
         })
@@ -182,9 +192,9 @@ impl SanitizedTransaction {
                 signatures,
                 message: VersionedMessage::V0(v0::Message::clone(&sanitized_msg.message)),
             },
-            SanitizedMessage::Legacy(message) => VersionedTransaction {
+            SanitizedMessage::Legacy(legacy_message) => VersionedTransaction {
                 signatures,
-                message: VersionedMessage::Legacy(message.clone()),
+                message: VersionedMessage::Legacy(legacy::Message::clone(&legacy_message.message)),
             },
         }
     }
@@ -242,7 +252,7 @@ impl SanitizedTransaction {
     /// Return the serialized message data to sign.
     fn message_data(&self) -> Vec<u8> {
         match &self.message {
-            SanitizedMessage::Legacy(message) => message.serialize(),
+            SanitizedMessage::Legacy(legacy_message) => legacy_message.message.serialize(),
             SanitizedMessage::V0(loaded_msg) => loaded_msg.message.serialize(),
         }
     }

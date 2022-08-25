@@ -182,7 +182,7 @@ mod tests {
         solana_sdk::{
             account::{AccountSharedData, ReadableAccount},
             instruction::{AccountMeta, Instruction, InstructionError},
-            message::{AccountKeys, Message},
+            message::{AccountKeys, LegacyMessage, Message},
             native_loader::{self, create_loadable_account_for_test},
             pubkey::Pubkey,
             secp256k1_instruction::new_secp256k1_instruction,
@@ -273,20 +273,21 @@ mod tests {
             AccountMeta::new_readonly(readonly_pubkey, false),
         ];
 
-        let message = SanitizedMessage::Legacy(Message::new_with_compiled_instructions(
-            1,
-            0,
-            2,
-            account_keys.clone(),
-            Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
-                    mock_system_program_id,
-                    &MockSystemInstruction::Correct,
-                    account_metas.clone(),
-                ),
-            ]),
-        ));
+        let message =
+            SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
+                1,
+                0,
+                2,
+                account_keys.clone(),
+                Hash::default(),
+                AccountKeys::new(&account_keys, None).compile_instructions(&[
+                    Instruction::new_with_bincode(
+                        mock_system_program_id,
+                        &MockSystemInstruction::Correct,
+                        account_metas.clone(),
+                    ),
+                ]),
+            )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -323,20 +324,21 @@ mod tests {
             0
         );
 
-        let message = SanitizedMessage::Legacy(Message::new_with_compiled_instructions(
-            1,
-            0,
-            2,
-            account_keys.clone(),
-            Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
-                    mock_system_program_id,
-                    &MockSystemInstruction::TransferLamports { lamports: 50 },
-                    account_metas.clone(),
-                ),
-            ]),
-        ));
+        let message =
+            SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
+                1,
+                0,
+                2,
+                account_keys.clone(),
+                Hash::default(),
+                AccountKeys::new(&account_keys, None).compile_instructions(&[
+                    Instruction::new_with_bincode(
+                        mock_system_program_id,
+                        &MockSystemInstruction::TransferLamports { lamports: 50 },
+                        account_metas.clone(),
+                    ),
+                ]),
+            )));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -362,20 +364,21 @@ mod tests {
             ))
         );
 
-        let message = SanitizedMessage::Legacy(Message::new_with_compiled_instructions(
-            1,
-            0,
-            2,
-            account_keys.clone(),
-            Hash::default(),
-            AccountKeys::new(&account_keys, None).compile_instructions(&[
-                Instruction::new_with_bincode(
-                    mock_system_program_id,
-                    &MockSystemInstruction::ChangeData { data: 50 },
-                    account_metas,
-                ),
-            ]),
-        ));
+        let message =
+            SanitizedMessage::Legacy(LegacyMessage::new(Message::new_with_compiled_instructions(
+                1,
+                0,
+                2,
+                account_keys.clone(),
+                Hash::default(),
+                AccountKeys::new(&account_keys, None).compile_instructions(&[
+                    Instruction::new_with_bincode(
+                        mock_system_program_id,
+                        &MockSystemInstruction::ChangeData { data: 50 },
+                        account_metas,
+                    ),
+                ]),
+            )));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -504,14 +507,14 @@ mod tests {
         ];
 
         // Try to borrow mut the same account
-        let message = SanitizedMessage::Legacy(Message::new(
+        let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::BorrowFail,
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
-        ));
+        )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
@@ -539,14 +542,14 @@ mod tests {
         );
 
         // Try to borrow mut the same account in a safe way
-        let message = SanitizedMessage::Legacy(Message::new(
+        let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::MultiBorrowMut,
                 account_metas.clone(),
             )],
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
-        ));
+        )));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -567,7 +570,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Do work on the same transaction account but at different instruction accounts
-        let message = SanitizedMessage::Legacy(Message::new(
+        let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new(
             &[Instruction::new_with_bincode(
                 mock_program_id,
                 &MockSystemInstruction::DoWork {
@@ -577,7 +580,7 @@ mod tests {
                 account_metas,
             )],
             Some(transaction_context.get_key_of_account_at_index(0).unwrap()),
-        ));
+        )));
         let result = MessageProcessor::process_message(
             builtin_programs,
             &message,
@@ -647,7 +650,7 @@ mod tests {
         let mut transaction_context =
             TransactionContext::new(accounts, Some(Rent::default()), 1, 2);
 
-        let message = SanitizedMessage::Legacy(Message::new(
+        let message = SanitizedMessage::Legacy(LegacyMessage::new(Message::new(
             &[
                 new_secp256k1_instruction(
                     &libsecp256k1::SecretKey::random(&mut rand::thread_rng()),
@@ -656,7 +659,7 @@ mod tests {
                 Instruction::new_with_bytes(mock_program_id, &[], vec![]),
             ],
             None,
-        ));
+        )));
         let sysvar_cache = SysvarCache::default();
         let result = MessageProcessor::process_message(
             builtin_programs,
