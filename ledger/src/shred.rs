@@ -51,11 +51,6 @@
 
 #[cfg(test)]
 pub(crate) use shred_code::MAX_CODE_SHREDS_PER_SLOT;
-pub(crate) use shred_data::ShredData;
-pub use {
-    self::stats::{ProcessShredsStats, ShredFetchStats},
-    crate::shredder::Shredder,
-};
 use {
     self::{shred_code::ShredCode, traits::Shred as _},
     crate::blockstore::{self, MAX_DATA_SHREDS_PER_SLOT},
@@ -74,6 +69,13 @@ use {
     static_assertions::const_assert_eq,
     std::fmt::Debug,
     thiserror::Error,
+};
+pub use {
+    self::{
+        shred_data::ShredData,
+        stats::{ProcessShredsStats, ShredFetchStats},
+    },
+    crate::shredder::Shredder,
 };
 
 mod common;
