@@ -1,10 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 import { Address } from "components/common/Address";
 import { TableCardBody } from "components/common/TableCardBody";
-import {
-  Account,
-  useFetchAccountInfo,
-} from "providers/accounts";
+import { Account, useFetchAccountInfo } from "providers/accounts";
 import { Suspense, useEffect, useState } from "react";
 import {
   parseNFTokenCollectionAccount,
