@@ -441,7 +441,7 @@ pub struct Task {
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()) })
+        TaskInQueue::new(Self { unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), for_indexer: tx.1.iter().map(|a| a.clone_for_test()).collect() })
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
