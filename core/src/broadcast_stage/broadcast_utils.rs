@@ -33,13 +33,11 @@ pub struct UnfinishedSlotInfo {
 pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result<ReceiveResults> {
     let target_serialized_batch_byte_count: u64 =
         32 * ShredData::capacity(/*merkle_proof_size*/ None).unwrap() as u64;
-    let mut serialized_batch_byte_count: u64 = 8; // Vec len
     let timer = Duration::new(1, 0);
     let recv_start = Instant::now();
 
     let (mut bank, (entry, mut last_tick_height)) = receiver.recv_timeout(timer)?;
 
-    serialized_batch_byte_count += serialized_size(&entry)?;
     let mut entries = vec![entry];
 
     assert!(last_tick_height <= bank.max_tick_height());
@@ -55,18 +53,17 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
         if try_bank.slot() != bank.slot() {
             warn!("Broadcast for slot: {} interrupted", bank.slot());
             entries.clear();
-            serialized_batch_byte_count = 8; // Vec len
             bank = try_bank;
         }
         last_tick_height = tick_height;
-        let entry_bytes = serialized_size(&entry)?;
-        serialized_batch_byte_count += entry_bytes;
         entries.push(entry);
         assert!(last_tick_height <= bank.max_tick_height());
     }
 
+    let mut serialized_batch_byte_count = serialized_size(&entries)?;
+
     // Wait up to `ENTRY_COALESCE_DURATION` to try to coalesce entries into a 32 shred batch
-    let coalesce_deadline = Instant::now() + ENTRY_COALESCE_DURATION;
+    let mut coalesce_deadline = Instant::now() + ENTRY_COALESCE_DURATION;
     while last_tick_height != bank.max_tick_height()
         && serialized_batch_byte_count < target_serialized_batch_byte_count
     {
@@ -81,6 +78,7 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
             entries.clear();
             serialized_batch_byte_count = 8; // Vec len
             bank = try_bank;
+            coalesce_deadline = Instant::now() + ENTRY_COALESCE_DURATION;
         }
         last_tick_height = tick_height;
         let entry_bytes = serialized_size(&entry)?;
