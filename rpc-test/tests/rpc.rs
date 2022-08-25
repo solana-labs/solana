@@ -294,8 +294,7 @@ fn test_rpc_subscriptions() {
         // Subscribe to signature notifications
         for signature in signature_set_clone {
             let status_sender = status_sender.clone();
-            let signature_subscription_ready_clone_clone =
-                signature_subscription_ready_clone.clone();
+            let signature_subscription_ready_clone = signature_subscription_ready_clone.clone();
             tokio::spawn({
                 let _pubsub_client = Arc::clone(&pubsub_client);
                 async move {
@@ -310,7 +309,7 @@ fn test_rpc_subscriptions() {
                         .await
                         .unwrap();
 
-                    signature_subscription_ready_clone_clone.fetch_add(1, Ordering::SeqCst);
+                    signature_subscription_ready_clone.fetch_add(1, Ordering::SeqCst);
 
                     let response = sig_notifications.next().await.unwrap();
                     status_sender.send((signature, response)).unwrap();
@@ -322,7 +321,7 @@ fn test_rpc_subscriptions() {
         // Subscribe to account notifications
         for pubkey in account_set_clone {
             let account_sender = account_sender.clone();
-            let account_subscription_ready_clone_clone = account_subscription_ready_clone.clone();
+            let account_subscription_ready_clone = account_subscription_ready_clone.clone();
             tokio::spawn({
                 let _pubsub_client = Arc::clone(&pubsub_client);
                 async move {
@@ -337,7 +336,7 @@ fn test_rpc_subscriptions() {
                         .await
                         .unwrap();
 
-                    account_subscription_ready_clone_clone.fetch_add(1, Ordering::SeqCst);
+                    account_subscription_ready_clone.fetch_add(1, Ordering::SeqCst);
 
                     let response = account_notifications.next().await.unwrap();
                     account_sender.send((pubkey, response)).unwrap();
