@@ -1113,6 +1113,7 @@ impl ScheduleStage {
                     executing_queue_count += 1;
 
                     to_execute_substage.send(ee).unwrap();
+                    break;
                 } else {
                     trace!("incoming queue starved");
                     while from.len() > 0 {
