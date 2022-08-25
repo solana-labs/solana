@@ -2094,36 +2094,34 @@ fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
 /// delete the contents of that directory.
 fn delete_contents_of_path(path: impl AsRef<Path> + Copy) {
     if let Ok(dir_entries) = std::fs::read_dir(&path) {
-        for dir_entry in dir_entries {
-            if let Ok(entry) = dir_entry {
-                let sub_path = entry.path();
-                let metadata = match entry.metadata() {
-                    Ok(metadata) => metadata,
-                    Err(err) => {
-                        warn!(
-                            "Failed to get metadata for {}. Error: {}",
-                            sub_path.display(),
-                            err.to_string()
-                        );
-                        break;
-                    }
-                };
-                if metadata.is_dir() {
-                    if let Err(err) = std::fs::remove_dir_all(&sub_path) {
-                        warn!(
-                            "Failed to remove sub directory {}.  Error: {}",
-                            sub_path.display(),
-                            err.to_string()
-                        );
-                    }
-                } else {
-                    if let Err(err) = std::fs::remove_file(&sub_path) {
-                        warn!(
-                            "Failed to remove file {}.  Error: {}",
-                            sub_path.display(),
-                            err.to_string()
-                        );
-                    }
+        for entry in dir_entries.flatten() {
+            let sub_path = entry.path();
+            let metadata = match entry.metadata() {
+                Ok(metadata) => metadata,
+                Err(err) => {
+                    warn!(
+                        "Failed to get metadata for {}. Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                    break;
+                }
+            };
+            if metadata.is_dir() {
+                if let Err(err) = std::fs::remove_dir_all(&sub_path) {
+                    warn!(
+                        "Failed to remove sub directory {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
+                }
+            } else if metadata.is_file() {
+                if let Err(err) = std::fs::remove_file(&sub_path) {
+                    warn!(
+                        "Failed to remove file {}.  Error: {}",
+                        sub_path.display(),
+                        err.to_string()
+                    );
                 }
             }
         }
