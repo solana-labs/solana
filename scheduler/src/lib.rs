@@ -1095,7 +1095,7 @@ impl ScheduleStage {
 
                 let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
-                    Self::schedule_next_execution(task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
+                    Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
 
                 if let Some(ee) = maybe_ee {
                     trace!("send to execute");
