@@ -970,7 +970,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn schedule_next_execution(
-        task_sender: usize,
+        task_sender: crossbeam_channel::Sender<TaskInQueue>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
