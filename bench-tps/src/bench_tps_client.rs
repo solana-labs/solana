@@ -91,6 +91,8 @@ pub trait BenchTpsClient {
         pubkey: &Pubkey,
         commitment_config: CommitmentConfig,
     ) -> Result<Account>;
+
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>>;
 }
 
 mod bank_client;
