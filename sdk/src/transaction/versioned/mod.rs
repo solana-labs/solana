@@ -82,20 +82,24 @@ impl VersionedTransaction {
         }?;
 
         let message_data = message.serialize();
-        let unordered_signatures = keypairs.try_sign_message(&message_data)?;
-        let signatures: Vec<Signature> = expected_signer_keys
+        let signature_indexes: Vec<usize> = expected_signer_keys
             .iter()
             .map(|signer_key| {
-                let index = signer_keys
+                signer_keys
                     .iter()
                     .position(|key| key == signer_key)
-                    .ok_or(SignerError::KeypairPubkeyMismatch)?;
+                    .ok_or(SignerError::KeypairPubkeyMismatch)
+            })
+            .collect::<std::result::Result<_, SignerError>>()?;
 
-                let signature = unordered_signatures
+        let unordered_signatures = keypairs.try_sign_message(&message_data)?;
+        let signatures: Vec<Signature> = signature_indexes
+            .into_iter()
+            .map(|index| {
+                unordered_signatures
                     .get(index)
-                    .ok_or_else(|| SignerError::InvalidInput("invalid keypairs".to_string()))?;
-
-                Ok(*signature)
+                    .copied()
+                    .ok_or_else(|| SignerError::InvalidInput("invalid keypairs".to_string()))
             })
             .collect::<std::result::Result<_, SignerError>>()?;
 
