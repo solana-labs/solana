@@ -431,6 +431,7 @@ pub struct Task {
     pub queue_end_time: std::sync::atomic::AtomicUsize,
     pub execute_time: std::sync::atomic::AtomicUsize,
     pub commit_time: std::sync::atomic::AtomicUsize,
+    pub for_indexer: Vec<LockAttempt>,
 }
 
 // sequence_time -> seq clock
@@ -780,7 +781,7 @@ impl ScheduleStage {
                     //for lock_attempt in next_task.tx.1.iter() {
                     //    lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&a2));
                     //}
-                    task_sender.send(next_task.tx.1.clone_for_test()).unwrap();
+                    task_sender.send(TaskInQueue::clone(&a2)).unwrap();
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
                     trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
@@ -1034,12 +1035,12 @@ impl ScheduleStage {
         let (task_sender, task_receiver) = crossbeam_channel::unbounded::<TaskInQueue>();
         let h = std::thread::Builder::new().name("sol-indexer".to_string()).spawn(move || {
             while let task = task_receiver.recv().unwrap() {
-                //if task.currently_contended() {
+                if task.currently_contended() {
                     let unique_weight = task.unique_weight;
                     for lock_attempt in task.tx.1.iter() {
                         lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&task));
                     }
-                //}
+                }
             }
         }).unwrap();
 
