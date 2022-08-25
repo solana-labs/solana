@@ -33,7 +33,10 @@ use {
     std::{
         collections::HashSet,
         net::UdpSocket,
-        sync::Arc,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
         thread::sleep,
         time::{Duration, Instant},
     },
@@ -269,8 +272,6 @@ fn test_rpc_subscriptions() {
         .map(|tx| tx.message.account_keys[1])
         .collect();
 
-    // Track when subscriptions are ready
-    let (ready_sender, ready_receiver) = unbounded::<()>();
     // Track account notifications are received
     let (account_sender, account_receiver) = unbounded::<(Pubkey, RpcResponse<UiAccount>)>();
     // Track when status notifications are received
@@ -282,6 +283,10 @@ fn test_rpc_subscriptions() {
     let rpc_pubsub_url = test_validator.rpc_pubsub_url();
     let signature_set_clone = signature_set.clone();
     let account_set_clone = account_set.clone();
+    let signature_subscription_ready = Arc::new(AtomicUsize::new(0));
+    let account_subscription_ready = Arc::new(AtomicUsize::new(0));
+    let signature_subscription_ready_clone = signature_subscription_ready.clone();
+    let account_subscription_ready_clone = account_subscription_ready.clone();
 
     rt.spawn(async move {
         let pubsub_client = Arc::new(PubsubClient::new(&rpc_pubsub_url).await.unwrap());
@@ -289,6 +294,8 @@ fn test_rpc_subscriptions() {
         // Subscribe to signature notifications
         for signature in signature_set_clone {
             let status_sender = status_sender.clone();
+            let signature_subscription_ready_clone_clone =
+                signature_subscription_ready_clone.clone();
             tokio::spawn({
                 let _pubsub_client = Arc::clone(&pubsub_client);
                 async move {
@@ -303,6 +310,8 @@ fn test_rpc_subscriptions() {
                         .await
                         .unwrap();
 
+                    signature_subscription_ready_clone_clone.fetch_add(1, Ordering::SeqCst);
+
                     let response = sig_notifications.next().await.unwrap();
                     status_sender.send((signature, response)).unwrap();
                     sig_unsubscribe().await;
@@ -313,6 +322,7 @@ fn test_rpc_subscriptions() {
         // Subscribe to account notifications
         for pubkey in account_set_clone {
             let account_sender = account_sender.clone();
+            let account_subscription_ready_clone_clone = account_subscription_ready_clone.clone();
             tokio::spawn({
                 let _pubsub_client = Arc::clone(&pubsub_client);
                 async move {
@@ -327,28 +337,21 @@ fn test_rpc_subscriptions() {
                         .await
                         .unwrap();
 
+                    account_subscription_ready_clone_clone.fetch_add(1, Ordering::SeqCst);
+
                     let response = account_notifications.next().await.unwrap();
                     account_sender.send((pubkey, response)).unwrap();
                     account_unsubscribe().await;
                 }
             });
         }
-
-        // Signal ready after the next slot notification
-        tokio::spawn({
-            let _pubsub_client = Arc::clone(&pubsub_client);
-            async move {
-                let (mut slot_notifications, slot_unsubscribe) =
-                    _pubsub_client.slot_subscribe().await.unwrap();
-                let _response = slot_notifications.next().await.unwrap();
-                ready_sender.send(()).unwrap();
-                slot_unsubscribe().await;
-            }
-        });
     });
 
-    // Wait for signature subscriptions
-    ready_receiver.recv_timeout(Duration::from_secs(2)).unwrap();
+    while signature_subscription_ready.load(Ordering::SeqCst) != transactions.len()
+        || account_subscription_ready.load(Ordering::SeqCst) != transactions.len()
+    {
+        sleep(Duration::from_millis(100))
+    }
 
     let rpc_client = RpcClient::new(test_validator.rpc_url());
     let mut mint_balance = rpc_client
