@@ -355,7 +355,7 @@ fn handle_transaction_batch(
 
     let uq = transaction_batch.unique_weight;
     //transaction_batch.task.trace_timestamps("in_exec(self)");
-    if transaction_batch.contention_count > 0 {
+    if transaction_batch.task.contention_count > 0 {
         for mut lock_attempt in transaction_batch.lock_attempts.iter_mut() {
             let contended_unique_weights = lock_attempt.contended_unique_weights();
             contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
