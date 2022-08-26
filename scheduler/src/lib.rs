@@ -1101,6 +1101,7 @@ impl ScheduleStage {
                        from_len -= 1;
                        if from_len == 0 {
                            from_len = from.len();
+                           trace!("select3: refill {} {}", from_len, from_exec_len);
                        }
                     }
                     if from_exec_len > 0 {
@@ -1115,6 +1116,7 @@ impl ScheduleStage {
                        from_exec_len -= 1;
                        if from_exec_len == 0 {
                            from_exec_len = from_exec.len();
+                           trace!("select4: refill {} {}", from_len, from_exec_len);
                        }
                     }
                 }
