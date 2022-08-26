@@ -258,7 +258,7 @@ fn main() {
 fn start_execution_threads(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     transaction_batch_receivers: Vec<Receiver<TransactionBatchMessage>>,
-    completed_transaction_sender: (Sender<CompletedTransactionMessage>, Sender<solana_scheduler::Multiplexed>),
+    completed_transaction_sender: Sender<CompletedTransactionMessage>
     execution_per_tx_us: u64,
     exit: Arc<AtomicBool>,
 ) -> Vec<JoinHandle<()>> {
@@ -282,7 +282,7 @@ fn start_execution_thread(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     thread_index: usize,
     transaction_batch_receiver: Receiver<TransactionBatchMessage>,
-    completed_transaction_sender: (Sender<CompletedTransactionMessage>, Sender<solana_scheduler::Multiplexed>),
+    completed_transaction_sender: Sender<CompletedTransactionMessage>,
     execution_per_tx_us: u64,
     exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
@@ -302,7 +302,7 @@ fn execution_worker(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     thread_index: usize,
     transaction_batch_receiver: Receiver<TransactionBatchMessage>,
-    completed_transaction_sender: (Sender<CompletedTransactionMessage>, Sender<solana_scheduler::Multiplexed>),
+    completed_transaction_sender: Sender<CompletedTransactionMessage>,
     execution_per_tx_us: u64,
     exit: Arc<AtomicBool>,
 ) {
