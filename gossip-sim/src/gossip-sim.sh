@@ -80,7 +80,7 @@ echo "args to run: ${args[@]}"
 if [[ $writeKeys == "true" ]]; then
   echo "writeKeys true"
   gossip-sim "${args[@]}"
-else 
+else
   echo "writeKeys false"
   gossip-sim "${args[@]}" &
   pid=$!

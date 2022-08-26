@@ -108,10 +108,10 @@ Operate a configured testnet
                                       - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
    --full-rpc
                                       - Support full RPC services on all nodes
-   --gossip-instances                 - Number of gossip instances to deploy across GCE instances. 
+   --gossip-instances                 - Number of gossip instances to deploy across GCE instances.
                                         Does a round robin deployment. Used with `gossip-sim` command
                                         Cannot be used with --gossip-instances-per-node
-   --gossip-instances-per-node        - Number of gossip instances to deploy on each GCE instance. 
+   --gossip-instances-per-node        - Number of gossip instances to deploy on each GCE instance.
                                         Used with `gossip-sim` command
                                         Cannot be used with --gossip-instances
    --tpu-disable-quic
@@ -249,7 +249,7 @@ startCommon() {
       mkdir -p $SOLANA_HOME $CARGO_BIN;
       mv ~/config $SOLANA_HOME/
     "
-  elif [[ $instanceIndex -le 0 ]]; then 
+  elif [[ $instanceIndex -le 0 ]]; then
     # shellcheck disable=SC2029
     ssh "${sshOptions[@]}" "$ipAddress" "
       set -x;
@@ -359,7 +359,7 @@ startNode() {
   echo "startNode instanceIndex: $instanceIndex"
 
   initLogDir
-  if [[ $instanceIndex == -1 ]]; then 
+  if [[ $instanceIndex == -1 ]]; then
     declare logFile="$netLogDir/validator-$ipAddress.log"
   else
     declare logFile="$netLogDir/validator-$ipAddress-$instanceIndex.log"
@@ -426,9 +426,9 @@ startNode() {
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  if [[ $instanceIndex == -1 ]]; then 
+  if [[ $instanceIndex == -1 ]]; then
     ln -sf "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
-  else 
+  else
     ln -sf "validator-$ipAddress-$instanceIndex.log" "$netLogDir/validator-$pid.log"
   fi
 
@@ -622,7 +622,7 @@ threadGossipDeploy() {
   declare ipAddress="$2"
   declare nodeType=$3
   declare nodeIndex=$4
-  
+
   for (( i=0; i<$instancesPerNode; i++ ))
   do
     echo "startGossipNode: instanceIndex: $i"
@@ -635,9 +635,9 @@ threadGossipDeploy() {
 calculateInstancesPerNode() {
   perNode=$(( $gossipInstances / $(( ${#validatorIpList[@]} - 1)) ))
   echo "perNode: $perNode"
-  if [[ $perNode -ge 1 ]]; then 
+  if [[ $perNode -ge 1 ]]; then
     instancesPerNode=$perNode
-  else 
+  else
     instancesPerNode=0
   fi
 }
@@ -649,13 +649,13 @@ deploy() {
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
   leftover=0
-  if [[ $gossipInstances != 0 ]]; then 
+  if [[ $gossipInstances != 0 ]]; then
     calculateInstancesPerNode
     leftover=$(( $gossipInstances % $(( ${#validatorIpList[@]} - 1 )) ))
   else
     gossipInstances=$(($instancesPerNode * $((${#validatorIpList[@]} - 1))))
   fi
-  
+
   gossipDeployLoopCount=0
   declare bootstrapLeader=true
   for nodeAddress in "${validatorIpList[@]}" "${blockstreamerIpList[@]}"; do
@@ -673,14 +673,14 @@ deploy() {
       SECONDS=0
       pids=()
     else
-      if [[ $isGossip == 1 ]]; then 
+      if [[ $isGossip == 1 ]]; then
         instancesAndLeftoverPerNode=$instancesPerNode
-        if [[ $gossipDeployLoopCount -lt $leftover ]]; then 
+        if [[ $gossipDeployLoopCount -lt $leftover ]]; then
           instancesAndLeftoverPerNode=$(($instancesPerNode  + 1))
-        fi 
+        fi
         threadGossipDeploy $instancesAndLeftoverPerNode $ipAddress $nodeType $nodeIndex &
         gossipDeployLoopCount=$(($gossipDeployLoopCount + 1))
-      else 
+      else
         startNode "$ipAddress" $nodeType $nodeIndex
         # Stagger additional node start time. If too many nodes start simultaneously
         # the bootstrap node gets more rsync requests from the additional nodes than
@@ -690,9 +690,9 @@ deploy() {
     fi
   done
 
-  if [[ $isGossip == 1 ]]; then 
-    wait 
-  fi 
+  if [[ $isGossip == 1 ]]; then
+    wait
+  fi
 
   for pid in "${pids[@]}"; do
     declare ok=true
@@ -708,7 +708,7 @@ deploy() {
     fi
   done
 
-  if [[ $isGossip != 1 ]]; then 
+  if [[ $isGossip != 1 ]]; then
     if ! $waitForNodeInit; then
       # Handle async init
       declare startTime=$SECONDS
@@ -738,7 +738,7 @@ deploy() {
     clientDeployTime=$SECONDS
 
     $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
-  fi 
+  fi
 
   declare networkVersion=unknown
   case $deployMethod in
@@ -764,7 +764,7 @@ deploy() {
   echo
   echo "--- Deployment Successful"
   echo "Bootstrap validator deployment took $bootstrapNodeDeployTime seconds"
-  if [[ $isGossip == 1 ]]; then 
+  if [[ $isGossip == 1 ]]; then
     echo "Deployed $gossipInstances gossip instances across $((${#validatorIpList[@]} - 1)) GCE nodes"
     echo "      --- $instancesPerNode gossip instances per node + $leftover additional gossip instances"
   fi
@@ -889,7 +889,7 @@ waitForNodeInit=true
 extraPrimordialStakes=0
 disableQuic=false
 # need to set either instancesPerNode or gossipInstances
-instancesPerNode=0 # default. 
+instancesPerNode=0 # default.
 gossipInstances=0 # default number of gossip instances
 isGossip=0
 
@@ -1042,8 +1042,8 @@ while [[ -n $1 ]]; do
   fi
 done
 
-if [[ $isGossip == 1 ]]; then 
-  if [[ ($instancesPerNode == 0 && $gossipInstances == 0) || ($instancesPerNode != 0 && $gossipInstances != 0) ]]; then 
+if [[ $isGossip == 1 ]]; then
+  if [[ ($instancesPerNode == 0 && $gossipInstances == 0) || ($instancesPerNode != 0 && $gossipInstances != 0) ]]; then
     usage "need to set either --gossip-instances-per-node OR --gossip-instances (not both)"
   fi
 fi
