@@ -30,7 +30,8 @@ cat > "$CONFIG_FILE" <<EOF
   "name": "$PROJECT_NAME",
   "scope": "solana-labs",
   "redirects": [
-    { "source": "/apps", "destination": "/developing/programming-model/overview" },
+    { "source": "/apps", "destination": "/developers" },
+    { "source": "/developing/programming-model/overview", "destination": "/developers" },
     { "source": "/apps/backwards-compatibility", "destination": "/developing/backwards-compatibility" },
     { "source": "/apps/break", "destination": "/developing/on-chain-programs/examples" },
     { "source": "/apps/builtins", "destination": "/developing/runtime-facilities/programs" },

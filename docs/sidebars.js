@@ -48,9 +48,9 @@ module.exports = {
       items: [
         "terminology",
         {
-          type: "ref",
+          type: "link",
+          href: "/developers",
           label: "Developers",
-          id: "developing/programming-model/overview",
         },
         {
           type: "ref",
