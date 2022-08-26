@@ -830,7 +830,7 @@ impl ScheduleStage {
         provisional_count: usize,
     ) {
         let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(task)));
-        for mut l in task.tx.1.lock_attempts {
+        for mut l in task.tx.1 {
             match l.status {
                 LockStatus::Provisional => {
                     l.target.page_mut().provisional_task_ids.insert(Arc::clone(tracker));
