@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-invoke"
-version = "1.11.9"
+version = "1.11.10"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -15,7 +15,7 @@ program = []
 
 [dependencies]
 solana-bpf-rust-invoked = { path = "../invoked", default-features = false }
-solana-program = { path = "../../../../sdk/program", version = "=1.11.9" }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.10" }
 
 [lib]
 crate-type = ["lib", "cdylib"]

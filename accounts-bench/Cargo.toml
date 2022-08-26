@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-accounts-bench"
-version = "1.11.9"
+version = "1.11.10"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -12,11 +12,11 @@ publish = false
 clap = "2.33.1"
 log = "0.4.17"
 rayon = "1.5.3"
-solana-logger = { path = "../logger", version = "=1.11.9" }
-solana-measure = { path = "../measure", version = "=1.11.9" }
-solana-runtime = { path = "../runtime", version = "=1.11.9" }
-solana-sdk = { path = "../sdk", version = "=1.11.9" }
-solana-version = { path = "../version", version = "=1.11.9" }
+solana-logger = { path = "../logger", version = "=1.11.10" }
+solana-measure = { path = "../measure", version = "=1.11.10" }
+solana-runtime = { path = "../runtime", version = "=1.11.10" }
+solana-sdk = { path = "../sdk", version = "=1.11.10" }
+solana-version = { path = "../version", version = "=1.11.10" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
