@@ -325,7 +325,7 @@ fn execution_worker(
 fn handle_transaction_batch(
     metrics: &TransactionSchedulerBenchMetrics,
     thread_index: usize,
-    completed_transaction_sender: &(Sender<CompletedTransactionMessage>),
+    completed_transaction_sender: &Sender<CompletedTransactionMessage>,
     mut transaction_batch: TransactionBatchMessage,
     execution_per_tx_us: u64,
 ) {
@@ -398,7 +398,7 @@ fn handle_transaction_batch(
         });
     }
     //error!("send from execute substage: {:?} seq: {}", uq, transaction_batch.task.sequence_time());
-    completed_transaction_sender.0
+    completed_transaction_sender
         .send(transaction_batch)
         .unwrap();
 }
