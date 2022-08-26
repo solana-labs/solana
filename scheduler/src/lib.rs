@@ -422,7 +422,7 @@ struct Bundle {
 #[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
-    pub tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>, // actually should be Bundle
+    pub tx: (SanitizedTransaction, Vec<LockAttempt>), // actually should be Bundle
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
     pub sequence_time: std::sync::atomic::AtomicUsize,
@@ -440,7 +440,7 @@ pub struct Task {
 // commit_time  -+
 
 impl Task {
-    pub fn new_for_queue(unique_weight: UniqueWeight, tx: Box<(SanitizedTransaction, Vec<LockAttempt>)>) -> std::sync::Arc<Self> {
+    pub fn new_for_queue(unique_weight: UniqueWeight, tx: (SanitizedTransaction, Vec<LockAttempt>)) -> std::sync::Arc<Self> {
         TaskInQueue::new(Self { for_indexer: tx.1.iter().map(|a| a.clone_for_test()).collect(), unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),  })
     }
 
