@@ -1130,6 +1130,8 @@ impl ScheduleStage {
                        Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                     }
                 }
+                } else {
+                    break
                 }
             }
         }
