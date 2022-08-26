@@ -1106,6 +1106,7 @@ impl ScheduleStage {
                         break;
                     }
                 }
+                if false {
                 from_len = from.len();
                 from_exec_len = from_exec.len();
 
@@ -1128,6 +1129,7 @@ impl ScheduleStage {
                        let task = from.recv().unwrap();
                        Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                     }
+                }
                 }
             }
         }
