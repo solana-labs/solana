@@ -428,14 +428,8 @@ fn test_rpc_subscriptions() {
         }
     }
 
-<<<<<<< HEAD
     let deadline = Instant::now() + Duration::from_secs(10);
-    let mut account_notifications = transactions.len();
-    while account_notifications > 0 {
-=======
-    let deadline = Instant::now() + Duration::from_secs(60);
     while !account_set.is_empty() {
->>>>>>> c3c169973 (fix test_rpc_subscriptions (#27394))
         let timeout = deadline.saturating_duration_since(Instant::now());
         match account_receiver.recv_timeout(timeout) {
             Ok((pubkey, result)) => {
