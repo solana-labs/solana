@@ -487,7 +487,7 @@ fn send_packets(
 
     let blockhash = Hash::default();
     let start = Instant::now();
-    let unique_weight = usize::max_value();
+    let unique_weight = u64::max_value();
 
     loop {
         if exit.load(Ordering::Relaxed) {
