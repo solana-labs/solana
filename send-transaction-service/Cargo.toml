@@ -1,6 +1,6 @@
 [package]
 name = "solana-send-transaction-service"
-version = "1.10.38"
+version = "1.10.39"
 description = "Solana send transaction service"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,15 +12,15 @@ edition = "2021"
 [dependencies]
 crossbeam-channel = "0.5"
 log = "0.4.14"
-solana-client = { path = "../client", version = "=1.10.38" }
-solana-measure = { path = "../measure", version = "=1.10.38" }
-solana-metrics = { path = "../metrics", version = "=1.10.38" }
-solana-runtime = { path = "../runtime", version = "=1.10.38" }
-solana-sdk = { path = "../sdk", version = "=1.10.38" }
+solana-client = { path = "../client", version = "=1.10.39" }
+solana-measure = { path = "../measure", version = "=1.10.39" }
+solana-metrics = { path = "../metrics", version = "=1.10.39" }
+solana-runtime = { path = "../runtime", version = "=1.10.39" }
+solana-sdk = { path = "../sdk", version = "=1.10.39" }
 
 
 [dev-dependencies]
-solana-logger = { path = "../logger", version = "=1.10.38" }
+solana-logger = { path = "../logger", version = "=1.10.39" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

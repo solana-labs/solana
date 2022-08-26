@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-transaction-dos"
-version = "1.10.38"
+version = "1.10.39"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,23 +14,23 @@ clap = "2.33.1"
 log = "0.4.14"
 rand = "0.7.0"
 rayon = "1.5.1"
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.38" }
-solana-cli = { path = "../cli", version = "=1.10.38" }
-solana-client = { path = "../client", version = "=1.10.38" }
-solana-core = { path = "../core", version = "=1.10.38" }
-solana-faucet = { path = "../faucet", version = "=1.10.38" }
-solana-gossip = { path = "../gossip", version = "=1.10.38" }
-solana-logger = { path = "../logger", version = "=1.10.38" }
-solana-measure = { path = "../measure", version = "=1.10.38" }
-solana-net-utils = { path = "../net-utils", version = "=1.10.38" }
-solana-runtime = { path = "../runtime", version = "=1.10.38" }
-solana-sdk = { path = "../sdk", version = "=1.10.38" }
-solana-streamer = { path = "../streamer", version = "=1.10.38" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.10.38" }
-solana-version = { path = "../version", version = "=1.10.38" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.10.39" }
+solana-cli = { path = "../cli", version = "=1.10.39" }
+solana-client = { path = "../client", version = "=1.10.39" }
+solana-core = { path = "../core", version = "=1.10.39" }
+solana-faucet = { path = "../faucet", version = "=1.10.39" }
+solana-gossip = { path = "../gossip", version = "=1.10.39" }
+solana-logger = { path = "../logger", version = "=1.10.39" }
+solana-measure = { path = "../measure", version = "=1.10.39" }
+solana-net-utils = { path = "../net-utils", version = "=1.10.39" }
+solana-runtime = { path = "../runtime", version = "=1.10.39" }
+solana-sdk = { path = "../sdk", version = "=1.10.39" }
+solana-streamer = { path = "../streamer", version = "=1.10.39" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.10.39" }
+solana-version = { path = "../version", version = "=1.10.39" }
 
 [dev-dependencies]
-solana-local-cluster = { path = "../local-cluster", version = "=1.10.38" }
+solana-local-cluster = { path = "../local-cluster", version = "=1.10.39" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

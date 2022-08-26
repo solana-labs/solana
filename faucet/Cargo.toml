@@ -1,6 +1,6 @@
 [package]
 name = "solana-faucet"
-version = "1.10.38"
+version = "1.10.39"
 description = "Solana Faucet"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -17,12 +17,12 @@ crossbeam-channel = "0.5"
 log = "0.4.14"
 serde = "1.0.136"
 serde_derive = "1.0.103"
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.38" }
-solana-cli-config = { path = "../cli-config", version = "=1.10.38" }
-solana-logger = { path = "../logger", version = "=1.10.38" }
-solana-metrics = { path = "../metrics", version = "=1.10.38" }
-solana-sdk = { path = "../sdk", version = "=1.10.38" }
-solana-version = { path = "../version", version = "=1.10.38" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.10.39" }
+solana-cli-config = { path = "../cli-config", version = "=1.10.39" }
+solana-logger = { path = "../logger", version = "=1.10.39" }
+solana-metrics = { path = "../metrics", version = "=1.10.39" }
+solana-sdk = { path = "../sdk", version = "=1.10.39" }
+solana-version = { path = "../version", version = "=1.10.39" }
 spl-memo = { version = "=3.0.1", features = ["no-entrypoint"] }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }

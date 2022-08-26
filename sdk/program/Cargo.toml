@@ -1,6 +1,6 @@
 [package]
 name = "solana-program"
-version = "1.10.38"
+version = "1.10.39"
 description = "Solana Program"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -29,9 +29,9 @@ serde_bytes = "0.11"
 serde_derive = "1.0.103"
 sha2 = "0.10.0"
 sha3 = "0.10.0"
-solana-frozen-abi = { path = "../../frozen-abi", version = "=1.10.38" }
-solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.10.38" }
-solana-sdk-macro = { path = "../macro", version = "=1.10.38" }
+solana-frozen-abi = { path = "../../frozen-abi", version = "=1.10.39" }
+solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.10.39" }
+solana-sdk-macro = { path = "../macro", version = "=1.10.39" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
@@ -44,7 +44,7 @@ itertools = "0.10.1"
 wasm-bindgen = "0.2"
 
 [target.'cfg(not(target_arch = "bpf"))'.dev-dependencies]
-solana-logger = { path = "../../logger", version = "=1.10.38" }
+solana-logger = { path = "../../logger", version = "=1.10.39" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"

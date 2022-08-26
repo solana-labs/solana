@@ -1,6 +1,6 @@
 [package]
 name = "solana-streamer"
-version = "1.10.38"
+version = "1.10.39"
 description = "Solana Streamer"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -25,15 +25,15 @@ quinn = "0.8.3"
 rand = "0.7.0"
 rcgen = "0.9.2"
 rustls = { version = "0.20.4", features = ["dangerous_configuration"] }
-solana-metrics = { path = "../metrics", version = "=1.10.38" }
-solana-perf = { path = "../perf", version = "=1.10.38" }
-solana-sdk = { path = "../sdk", version = "=1.10.38" }
+solana-metrics = { path = "../metrics", version = "=1.10.39" }
+solana-perf = { path = "../perf", version = "=1.10.39" }
+solana-sdk = { path = "../sdk", version = "=1.10.39" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }
 x509-parser = "0.14.0"
 
 [dev-dependencies]
-solana-logger = { path = "../logger", version = "=1.10.38" }
+solana-logger = { path = "../logger", version = "=1.10.39" }
 
 [lib]
 crate-type = ["lib"]

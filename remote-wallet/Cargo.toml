@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-remote-wallet"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.10.38"
+version = "1.10.39"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -19,7 +19,7 @@ num-traits = { version = "0.2" }
 parking_lot = "0.12"
 qstring = "0.7.2"
 semver = "1.0"
-solana-sdk = { path = "../sdk", version = "=1.10.38" }
+solana-sdk = { path = "../sdk", version = "=1.10.39" }
 thiserror = "1.0"
 uriparse = "0.6.3"
 
