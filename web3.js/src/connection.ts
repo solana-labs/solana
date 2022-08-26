@@ -24,7 +24,6 @@ import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
 
-import {URL} from './util/url-impl';
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
@@ -35,14 +34,15 @@ import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
 import {Transaction, TransactionStatus} from './transaction';
 import {Message} from './message';
-import assert from './util/assert';
-import {sleep} from './util/sleep';
-import {toBuffer} from './util/to-buffer';
+import {AddressLookupTableAccount} from './programs/address-lookup-table/state';
+import assert from './utils/assert';
+import {sleep} from './utils/sleep';
+import {toBuffer} from './utils/to-buffer';
 import {
   TransactionExpiredBlockheightExceededError,
   TransactionExpiredTimeoutError,
-} from './util/tx-expiry-custom-errors';
-import {makeWebsocketUrl} from './util/makeWebsocketUrl';
+} from './transaction/expiry-custom-errors';
+import {makeWebsocketUrl} from './utils/makeWebsocketUrl';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
@@ -303,6 +303,14 @@ export type BlockhashWithExpiryBlockHeight = Readonly<{
 export type BlockheightBasedTransactionConfirmationStrategy = {
   signature: TransactionSignature;
 } & BlockhashWithExpiryBlockHeight;
+
+/* @internal */
+function assertEndpointUrl(putativeUrl: string) {
+  if (/^https?:/.test(putativeUrl) === false) {
+    throw new TypeError('Endpoint URL must start with `http:` or `https:`.');
+  }
+  return putativeUrl;
+}
 
 /** @internal */
 function extractCommitmentFromConfig<TConfig>(
@@ -1116,7 +1124,6 @@ export type PerfSample = {
 
 function createRpcClient(
   url: string,
-  useHttps: boolean,
   httpHeaders?: HttpHeaders,
   customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
@@ -1125,7 +1132,7 @@ function createRpcClient(
   const fetch = customFetch ? customFetch : fetchImpl;
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
-    agentManager = new AgentManager(useHttps);
+    agentManager = new AgentManager(url.startsWith('https:') /* useHttps */);
   }
 
   let fetchWithMiddleware: FetchFn | undefined;
@@ -2492,9 +2499,6 @@ export class Connection {
     endpoint: string,
     commitmentOrConfig?: Commitment | ConnectionConfig,
   ) {
-    let url = new URL(endpoint);
-    const useHttps = url.protocol === 'https:';
-
     let wsEndpoint;
     let httpHeaders;
     let fetch;
@@ -2513,12 +2517,11 @@ export class Connection {
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
     }
 
-    this._rpcEndpoint = endpoint;
+    this._rpcEndpoint = assertEndpointUrl(endpoint);
     this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
 
     this._rpcClient = createRpcClient(
-      url.toString(),
-      useHttps,
+      endpoint,
       httpHeaders,
       fetch,
       fetchMiddleware,
@@ -4216,6 +4219,29 @@ export class Connection {
       );
     }
     return res.result;
+  }
+
+  async getAddressLookupTable(
+    accountKey: PublicKey,
+    config?: GetAccountInfoConfig,
+  ): Promise<RpcResponseAndContext<AddressLookupTableAccount | null>> {
+    const {context, value: accountInfo} = await this.getAccountInfoAndContext(
+      accountKey,
+      config,
+    );
+
+    let value = null;
+    if (accountInfo !== null) {
+      value = new AddressLookupTableAccount({
+        key: accountKey,
+        state: AddressLookupTableAccount.deserialize(accountInfo.data),
+      });
+    }
+
+    return {
+      context,
+      value,
+    };
   }
 
   /**

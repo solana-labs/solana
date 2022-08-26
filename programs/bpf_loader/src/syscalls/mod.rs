@@ -20,7 +20,7 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf,
+        ebpf::{self, HOST_ALIGN},
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
         question_mark,
@@ -37,7 +37,7 @@ use {
             curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
             disable_fees_sysvar, enable_early_verification_of_account_modifications,
             libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
-            prevent_calling_precompiles_as_programs, syscall_saturated_math,
+            stop_sibling_instruction_search_at_parent, syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
@@ -362,7 +362,7 @@ pub fn register_syscalls(
 pub fn bind_syscall_context_objects<'a, 'b>(
     vm: &mut EbpfVm<'a, RequisiteVerifier, BpfError, crate::ThisInstructionMeter>,
     invoke_context: &'a mut InvokeContext<'b>,
-    heap: AlignedMemory,
+    heap: AlignedMemory<HOST_ALIGN>,
     orig_account_lengths: Vec<usize>,
 ) -> Result<(), EbpfError<BpfError>> {
     let check_aligned = bpf_loader_deprecated::id()
@@ -1709,35 +1709,42 @@ declare_syscall!(
                 .consume(budget.syscall_base_cost),
             result
         );
+        let stop_sibling_instruction_search_at_parent = invoke_context
+            .feature_set
+            .is_active(&stop_sibling_instruction_search_at_parent::id());
 
+        // Reverse iterate through the instruction trace,
+        // ignoring anything except instructions on the same level
         let stack_height = invoke_context.get_stack_height();
-        let instruction_trace = invoke_context.transaction_context.get_instruction_trace();
-        let instruction_context = if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
-            // pick one of the top-level instructions
-            instruction_trace
-                .len()
-                .checked_sub(2)
-                .and_then(|result| result.checked_sub(index as usize))
-                .and_then(|index| instruction_trace.get(index))
-                .and_then(|instruction_list| instruction_list.first())
-        } else {
-            // Walk the last list of inner instructions
-            instruction_trace.last().and_then(|inners| {
-                let mut current_index = 0;
-                inners.iter().rev().skip(1).find(|instruction_context| {
-                    if stack_height == instruction_context.get_stack_height() {
-                        if index == current_index {
-                            return true;
-                        } else {
-                            current_index = current_index.saturating_add(1);
-                        }
-                    }
-                    false
-                })
-            })
-        };
+        let instruction_trace_length = invoke_context
+            .transaction_context
+            .get_instruction_trace_length();
+        let mut reverse_index_at_stack_height = 0;
+        let mut found_instruction_context = None;
+        for index_in_trace in (0..instruction_trace_length).rev() {
+            let instruction_context = question_mark!(
+                invoke_context
+                    .transaction_context
+                    .get_instruction_context_at_index_in_trace(index_in_trace)
+                    .map_err(SyscallError::InstructionError),
+                result
+            );
+            if (stop_sibling_instruction_search_at_parent
+                || instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT)
+                && instruction_context.get_stack_height() < stack_height
+            {
+                break;
+            }
+            if instruction_context.get_stack_height() == stack_height {
+                if index.saturating_add(1) == reverse_index_at_stack_height {
+                    found_instruction_context = Some(instruction_context);
+                    break;
+                }
+                reverse_index_at_stack_height = reverse_index_at_stack_height.saturating_add(1);
+            }
+        }
 
-        if let Some(instruction_context) = instruction_context {
+        if let Some(instruction_context) = found_instruction_context {
             let ProcessedSiblingInstruction {
                 data_len,
                 accounts_len,
@@ -2488,7 +2495,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
@@ -2530,7 +2537,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
@@ -2571,7 +2578,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
@@ -2613,7 +2620,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let config = Config::default();
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
@@ -3104,6 +3111,151 @@ mod tests {
             invoke_context: Rc::new(RefCell::new(invoke_context)),
         };
         call_program_address_common(seeds, address, &mut syscall)
+    }
+
+    #[test]
+    fn test_syscall_sol_get_processed_sibling_instruction() {
+        let transaction_accounts = (0..9)
+            .map(|_| {
+                (
+                    Pubkey::new_unique(),
+                    AccountSharedData::new(0, 0, &bpf_loader::id()),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut transaction_context = TransactionContext::new(transaction_accounts, None, 4, 1);
+        for (index_in_trace, stack_height) in [1, 2, 3, 2, 2, 3, 4, 3].into_iter().enumerate() {
+            while stack_height <= transaction_context.get_instruction_context_stack_height() {
+                transaction_context.pop().unwrap();
+            }
+            if stack_height > transaction_context.get_instruction_context_stack_height() {
+                let instruction_accounts = [InstructionAccount {
+                    index_in_transaction: index_in_trace.saturating_add(1),
+                    index_in_caller: 0, // This is incorrect / inconsistent but not required
+                    index_in_callee: 0,
+                    is_signer: false,
+                    is_writable: false,
+                }];
+                transaction_context
+                    .push(&[0], &instruction_accounts, &[index_in_trace as u8])
+                    .unwrap();
+            }
+        }
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+
+        let syscall_base_cost = invoke_context.get_compute_budget().syscall_base_cost;
+        let mut syscall_get_processed_sibling_instruction = SyscallGetProcessedSiblingInstruction {
+            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+        };
+        const VM_BASE_ADDRESS: u64 = 0x100000000;
+        const META_OFFSET: usize = 0;
+        const PROGRAM_ID_OFFSET: usize =
+            META_OFFSET + std::mem::size_of::<ProcessedSiblingInstruction>();
+        const DATA_OFFSET: usize = PROGRAM_ID_OFFSET + std::mem::size_of::<Pubkey>();
+        const ACCOUNTS_OFFSET: usize = DATA_OFFSET + 0x100;
+        const END_OFFSET: usize = ACCOUNTS_OFFSET + std::mem::size_of::<AccountInfo>() * 4;
+        let mut memory = [0u8; END_OFFSET];
+        let config = Config::default();
+        let mut memory_mapping = MemoryMapping::new::<UserError>(
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: memory.as_mut_ptr() as u64,
+                    vm_addr: VM_BASE_ADDRESS,
+                    len: END_OFFSET as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+            ],
+            &config,
+        )
+        .unwrap();
+        let processed_sibling_instruction = translate_type_mut::<ProcessedSiblingInstruction>(
+            &memory_mapping,
+            VM_BASE_ADDRESS,
+            true,
+        )
+        .unwrap();
+        processed_sibling_instruction.data_len = 1;
+        processed_sibling_instruction.accounts_len = 1;
+        let program_id = translate_type_mut::<Pubkey>(
+            &memory_mapping,
+            VM_BASE_ADDRESS.saturating_add(PROGRAM_ID_OFFSET as u64),
+            true,
+        )
+        .unwrap();
+        let data = translate_slice_mut::<u8>(
+            &memory_mapping,
+            VM_BASE_ADDRESS.saturating_add(DATA_OFFSET as u64),
+            processed_sibling_instruction.data_len as u64,
+            true,
+            true,
+        )
+        .unwrap();
+        let accounts = translate_slice_mut::<AccountMeta>(
+            &memory_mapping,
+            VM_BASE_ADDRESS.saturating_add(ACCOUNTS_OFFSET as u64),
+            processed_sibling_instruction.accounts_len as u64,
+            true,
+            true,
+        )
+        .unwrap();
+
+        syscall_get_processed_sibling_instruction
+            .invoke_context
+            .borrow_mut()
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(syscall_base_cost);
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall_get_processed_sibling_instruction.call(
+            0,
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(PROGRAM_ID_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(DATA_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(ACCOUNTS_OFFSET as u64),
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result, Ok(1));
+        {
+            let transaction_context = &syscall_get_processed_sibling_instruction
+                .invoke_context
+                .borrow()
+                .transaction_context;
+            assert_eq!(processed_sibling_instruction.data_len, 1);
+            assert_eq!(processed_sibling_instruction.accounts_len, 1);
+            assert_eq!(
+                program_id,
+                transaction_context.get_key_of_account_at_index(0).unwrap(),
+            );
+            assert_eq!(data, &[5]);
+            assert_eq!(
+                accounts,
+                &[AccountMeta {
+                    pubkey: *transaction_context.get_key_of_account_at_index(6).unwrap(),
+                    is_signer: false,
+                    is_writable: false
+                }]
+            );
+        }
+
+        syscall_get_processed_sibling_instruction
+            .invoke_context
+            .borrow_mut()
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(syscall_base_cost);
+        syscall_get_processed_sibling_instruction.call(
+            1,
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(PROGRAM_ID_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(DATA_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(ACCOUNTS_OFFSET as u64),
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result, Ok(0));
     }
 
     #[test]

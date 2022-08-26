@@ -201,8 +201,6 @@ pub mod do_support_realloc {
     solana_sdk::declare_id!("75m6ysz33AfLA5DDEzWM1obBrnPQRSsdVQ2nRmc8Vuu1");
 }
 
-// Note: when this feature is cleaned up, also remove the secp256k1 program from
-// the list of builtins and remove its files from /programs
 pub mod prevent_calling_precompiles_as_programs {
     solana_sdk::declare_id!("4ApgRX3ud6p7LNMJmsuaAcZY5HWctGPr5obAsjB3A54d");
 }
@@ -504,6 +502,18 @@ pub mod disable_cpi_setting_executable_and_rent_epoch {
     solana_sdk::declare_id!("B9cdB55u4jQsDNsdTK525yE9dmSc5Ga7YBaBrDFvEhM9");
 }
 
+pub mod relax_authority_signer_check_for_lookup_table_creation {
+    solana_sdk::declare_id!("FKAcEvNgSY79RpqsPNUV5gDyumopH4cEHqUxyfm8b8Ap");
+}
+
+pub mod stop_sibling_instruction_search_at_parent {
+    solana_sdk::declare_id!("EYVpEP7uzH1CoXzbD6PubGhYmnxRXPeq3PPsm1ba3gpo");
+}
+
+pub mod vote_state_update_root_fix {
+    solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -624,6 +634,9 @@ lazy_static! {
         (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
         (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
         (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
+        (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
+        (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
+        (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

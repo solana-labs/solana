@@ -16,23 +16,27 @@ itertools = "0.10.3"
 log = "0.4.17"
 rand = "0.7.0"
 rayon = "1.5.3"
-solana-client = { path = "../client", version = "=1.12.0" }
 solana-config-program = { path = "../programs/config", version = "=1.12.0" }
 solana-core = { path = "../core", version = "=1.12.0" }
 solana-entry = { path = "../entry", version = "=1.12.0" }
 solana-gossip = { path = "../gossip", version = "=1.12.0" }
 solana-ledger = { path = "../ledger", version = "=1.12.0" }
+solana-pubsub-client = { path = "../pubsub-client", version = "=1.12.0" }
+solana-rpc-client = { path = "../rpc-client", version = "=1.12.0" }
+solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.12.0" }
 solana-runtime = { path = "../runtime", version = "=1.12.0" }
 solana-sdk = { path = "../sdk", version = "=1.12.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.12.0" }
 solana-streamer = { path = "../streamer", version = "=1.12.0" }
+solana-thin-client = { path = "../thin-client", version = "=1.12.0" }
+solana-tpu-client = { path = "../tpu-client", version = "=1.12.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.12.0" }
 tempfile = "3.3.0"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 gag = "1.0.0"
-serial_test = "0.8.0"
+serial_test = "0.9.0"
 solana-download-utils = { path = "../download-utils", version = "=1.12.0" }
 solana-logger = { path = "../logger", version = "=1.12.0" }
 

@@ -17,11 +17,11 @@ use {
     solana_account_decoder::parse_token::{
         pubkey_from_spl_token, real_number_string, spl_token_pubkey,
     },
-    solana_client::{
-        client_error::{ClientError, Result as ClientResult},
-        rpc_client::RpcClient,
-        rpc_config::RpcSendTransactionConfig,
-        rpc_request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        client_error::{Error as ClientError, Result as ClientResult},
+        config::RpcSendTransactionConfig,
+        request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
     },
     solana_sdk::{
         clock::{Slot, DEFAULT_MS_PER_SLOT},
@@ -833,7 +833,11 @@ fn check_payer_balances(
     Ok(())
 }
 
-pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), Error> {
+pub fn process_balances(
+    client: &RpcClient,
+    args: &BalancesArgs,
+    exit: Arc<AtomicBool>,
+) -> Result<(), Error> {
     let allocations: Vec<Allocation> =
         read_allocations(&args.input_csv, None, false, args.spl_token_args.is_some())?;
     let allocations = merge_allocations(&allocations);
@@ -855,6 +859,10 @@ pub fn process_balances(client: &RpcClient, args: &BalancesArgs) -> Result<(), E
     );
 
     for allocation in &allocations {
+        if exit.load(Ordering::SeqCst) {
+            return Err(Error::ExitSignal);
+        }
+
         if let Some(spl_token_args) = &args.spl_token_args {
             print_token_balances(client, allocation, spl_token_args)?;
         } else {

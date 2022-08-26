@@ -6,11 +6,9 @@ use {
         spend_utils::SpendAmount,
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
-    solana_client::{
-        blockhash_query::{self, BlockhashQuery},
-        rpc_client::RpcClient,
-    },
     solana_faucet::faucet::run_local_faucet,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_nonce_utils::blockhash_query::{self, BlockhashQuery},
     solana_sdk::{
         account_utils::StateMut,
         commitment_config::CommitmentConfig,

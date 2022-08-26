@@ -19,7 +19,7 @@ use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("shredder_{}", ix))
+        .thread_name(|ix| format!("solShredder{:02}", ix))
         .build()
         .unwrap();
 }
@@ -33,7 +33,7 @@ const ERASURE_BATCH_SIZE: [usize; 33] = [
     55, 56, 58, 59, 60, 62, 63, 64, // 32
 ];
 
-type ReedSolomon = reed_solomon_erasure::ReedSolomon<Field>;
+pub(crate) type ReedSolomon = reed_solomon_erasure::ReedSolomon<Field>;
 
 #[derive(Debug)]
 pub struct Shredder {
@@ -378,9 +378,12 @@ fn get_fec_set_offsets(
 mod tests {
     use {
         super::*,
-        crate::shred::{
-            self, max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred,
-            ShredType,
+        crate::{
+            blockstore::MAX_DATA_SHREDS_PER_SLOT,
+            shred::{
+                self, max_entries_per_n_shred, max_ticks_per_n_shreds, verify_test_data_shred,
+                ShredType, MAX_CODE_SHREDS_PER_SLOT,
+            },
         },
         bincode::serialized_size,
         matches::assert_matches,
@@ -1103,6 +1106,19 @@ mod tests {
                 |((offset, chunk_size), (next_offset, _chunk_size))| offset + chunk_size
                     == *next_offset
             ));
+        }
+    }
+
+    #[test]
+    fn test_max_shreds_per_slot() {
+        for num_data_shreds in 0..128 {
+            let num_coding_shreds = get_erasure_batch_size(num_data_shreds)
+                .checked_sub(num_data_shreds)
+                .unwrap();
+            assert!(
+                MAX_DATA_SHREDS_PER_SLOT * num_coding_shreds
+                    <= MAX_CODE_SHREDS_PER_SLOT * num_data_shreds
+            );
         }
     }
 }

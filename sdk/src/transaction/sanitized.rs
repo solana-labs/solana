@@ -5,8 +5,9 @@ use {
     crate::{
         hash::Hash,
         message::{
+            legacy,
             v0::{self, LoadedAddresses, MessageAddressTableLookup},
-            SanitizedMessage, VersionedMessage,
+            LegacyMessage, SanitizedMessage, VersionedMessage,
         },
         precompiles::verify_if_precompile,
         pubkey::Pubkey,
@@ -87,7 +88,9 @@ impl SanitizedTransaction {
         let signatures = tx.signatures;
         let SanitizedVersionedMessage { message } = tx.message;
         let message = match message {
-            VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
+            VersionedMessage::Legacy(message) => {
+                SanitizedMessage::Legacy(LegacyMessage::new(message))
+            }
             VersionedMessage::V0(message) => {
                 let loaded_addresses =
                     address_loader.load_addresses(&message.address_table_lookups)?;
@@ -122,7 +125,9 @@ impl SanitizedTransaction {
 
         let signatures = tx.signatures;
         let message = match tx.message {
-            VersionedMessage::Legacy(message) => SanitizedMessage::Legacy(message),
+            VersionedMessage::Legacy(message) => {
+                SanitizedMessage::Legacy(LegacyMessage::new(message))
+            }
             VersionedMessage::V0(message) => {
                 let loaded_addresses =
                     address_loader.load_addresses(&message.address_table_lookups)?;
@@ -149,7 +154,7 @@ impl SanitizedTransaction {
 
         Ok(Self {
             message_hash: tx.message.hash(),
-            message: SanitizedMessage::Legacy(tx.message),
+            message: SanitizedMessage::Legacy(LegacyMessage::new(tx.message)),
             is_simple_vote_tx: false,
             signatures: tx.signatures,
         })
@@ -200,18 +205,21 @@ impl SanitizedTransaction {
                 signatures,
                 message: VersionedMessage::V0(v0::Message::clone(&sanitized_msg.message)),
             },
-            SanitizedMessage::Legacy(message) => VersionedTransaction {
+            SanitizedMessage::Legacy(legacy_message) => VersionedTransaction {
                 signatures,
-                message: VersionedMessage::Legacy(message.clone()),
+                message: VersionedMessage::Legacy(legacy::Message::clone(&legacy_message.message)),
             },
         }
     }
 
     /// Validate and return the account keys locked by this transaction
-    pub fn get_account_locks(&self) -> Result<TransactionAccountLocks> {
+    pub fn get_account_locks(
+        &self,
+        tx_account_lock_limit: usize,
+    ) -> Result<TransactionAccountLocks> {
         if self.message.has_duplicates() {
             Err(TransactionError::AccountLoadedTwice)
-        } else if self.message.account_keys().len() > MAX_TX_ACCOUNT_LOCKS {
+        } else if self.message.account_keys().len() > tx_account_lock_limit {
             Err(TransactionError::TooManyAccountLocks)
         } else {
             Ok(self.get_account_locks_unchecked())
@@ -257,7 +265,7 @@ impl SanitizedTransaction {
     /// Return the serialized message data to sign.
     fn message_data(&self) -> Vec<u8> {
         match &self.message {
-            SanitizedMessage::Legacy(message) => message.serialize(),
+            SanitizedMessage::Legacy(legacy_message) => legacy_message.message.serialize(),
             SanitizedMessage::V0(loaded_msg) => loaded_msg.message.serialize(),
         }
     }

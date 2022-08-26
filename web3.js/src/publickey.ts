@@ -2,15 +2,20 @@ import BN from 'bn.js';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import nacl from 'tweetnacl';
-import {sha256} from '@ethersproject/sha2';
+import {sha256} from '@noble/hashes/sha256';
 
-import {Struct, SOLANA_SCHEMA} from './util/borsh-schema';
-import {toBuffer} from './util/to-buffer';
+import {Struct, SOLANA_SCHEMA} from './utils/borsh-schema';
+import {toBuffer} from './utils/to-buffer';
 
 /**
  * Maximum length of derived pubkey seed
  */
 export const MAX_SEED_LENGTH = 32;
+
+/**
+ * Size of public key in bytes
+ */
+export const PUBLIC_KEY_LENGTH = 32;
 
 /**
  * Value to be converted into public key
@@ -54,7 +59,7 @@ export class PublicKey extends Struct {
       if (typeof value === 'string') {
         // assume base 58 encoding by default
         const decoded = bs58.decode(value);
-        if (decoded.length != 32) {
+        if (decoded.length != PUBLIC_KEY_LENGTH) {
           throw new Error(`Invalid public key input`);
         }
         this._bn = new BN(decoded);
@@ -103,7 +108,7 @@ export class PublicKey extends Struct {
    */
   toBuffer(): Buffer {
     const b = this._bn.toArrayLike(Buffer);
-    if (b.length === 32) {
+    if (b.length === PUBLIC_KEY_LENGTH) {
       return b;
     }
 
@@ -135,8 +140,8 @@ export class PublicKey extends Struct {
       Buffer.from(seed),
       programId.toBuffer(),
     ]);
-    const hash = sha256(new Uint8Array(buffer)).slice(2);
-    return new PublicKey(Buffer.from(hash, 'hex'));
+    const publicKeyBytes = sha256(buffer);
+    return new PublicKey(publicKeyBytes);
   }
 
   /**
@@ -159,8 +164,7 @@ export class PublicKey extends Struct {
       programId.toBuffer(),
       Buffer.from('ProgramDerivedAddress'),
     ]);
-    let hash = sha256(new Uint8Array(buffer)).slice(2);
-    let publicKeyBytes = new BN(hash, 16).toArray(undefined, 32);
+    const publicKeyBytes = sha256(buffer);
     if (is_on_curve(publicKeyBytes)) {
       throw new Error(`Invalid seeds, address must fall off the curve`);
     }

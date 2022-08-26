@@ -4,25 +4,25 @@ use {
     clap::value_t,
     log::*,
     solana_bench_tps::{
-        bench::do_bench_tps,
+        bench::{do_bench_tps, max_lamporots_for_prioritization},
         bench_tps_client::BenchTpsClient,
         cli::{self, ExternalClientType},
         keypairs::get_keypairs,
-        send_batch::generate_keypairs,
-    },
-    solana_client::{
-        connection_cache::ConnectionCache,
-        rpc_client::RpcClient,
-        thin_client::ThinClient,
-        tpu_client::{TpuClient, TpuClientConfig},
+        send_batch::{generate_durable_nonce_accounts, generate_keypairs},
     },
     solana_genesis::Base64Account,
     solana_gossip::gossip_service::{discover_cluster, get_client, get_multi_client},
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig, fee_calculator::FeeRateGovernor, pubkey::Pubkey,
         system_program,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_thin_client::thin_client::ThinClient,
+    solana_tpu_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     std::{
         collections::HashMap, fs::File, io::prelude::*, net::SocketAddr, path::Path, process::exit,
         sync::Arc,
@@ -153,6 +153,8 @@ fn main() {
         external_client_type,
         use_quic,
         tpu_connection_pool_size,
+        use_randomized_compute_unit_price,
+        use_durable_nonce,
         ..
     } = &cli_config;
 
@@ -161,8 +163,11 @@ fn main() {
         info!("Generating {} keypairs", keypair_count);
         let (keypairs, _) = generate_keypairs(id, keypair_count as u64);
         let num_accounts = keypairs.len() as u64;
-        let max_fee =
-            FeeRateGovernor::new(*target_lamports_per_signature, 0).max_lamports_per_signature;
+        let max_fee = FeeRateGovernor::new(*target_lamports_per_signature, 0)
+            .max_lamports_per_signature
+            .saturating_add(max_lamporots_for_prioritization(
+                *use_randomized_compute_unit_price,
+            ));
         let num_lamports_per_account = (num_accounts - 1 + NUM_SIGNATURES_FOR_TXS * max_fee)
             / num_accounts
             + num_lamports_per_account;
@@ -226,5 +231,11 @@ fn main() {
         client_ids_and_stake_file,
         *read_from_client_file,
     );
-    do_bench_tps(client, cli_config, keypairs);
+
+    let nonce_keypairs = if *use_durable_nonce {
+        Some(generate_durable_nonce_accounts(client.clone(), &keypairs))
+    } else {
+        None
+    };
+    do_bench_tps(client, cli_config, keypairs, nonce_keypairs);
 }

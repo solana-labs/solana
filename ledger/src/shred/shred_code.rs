@@ -10,7 +10,9 @@ use {
     static_assertions::const_assert_eq,
 };
 
-pub(super) const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT;
+// See ERASURE_BATCH_SIZE.
+const_assert_eq!(MAX_CODE_SHREDS_PER_SLOT, 32_768 * 17);
+pub(crate) const MAX_CODE_SHREDS_PER_SLOT: usize = MAX_DATA_SHREDS_PER_SLOT * 17;
 
 const_assert_eq!(ShredCode::SIZE_OF_PAYLOAD, 1228);
 
@@ -117,7 +119,7 @@ pub(super) fn erasure_shard_index<T: ShredCodeTrait>(shred: &T) -> Option<usize>
     let position = usize::from(coding_header.position);
     let fec_set_size = num_data_shreds.checked_add(num_coding_shreds)?;
     let index = position.checked_add(num_data_shreds)?;
-    (index < fec_set_size).then(|| index)
+    (index < fec_set_size).then_some(index)
 }
 
 pub(super) fn sanitize<T: ShredCodeTrait>(shred: &T) -> Result<(), Error> {

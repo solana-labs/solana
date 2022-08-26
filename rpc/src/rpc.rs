@@ -3,7 +3,7 @@
 use {
     crate::{
         max_slots::MaxSlots, optimistically_confirmed_bank_tracker::OptimisticallyConfirmedBank,
-        parsed_token_accounts::*, rpc_health::*,
+        parsed_token_accounts::*, rpc_cache::LargestAccountsCache, rpc_health::*,
     },
     bincode::{config::Options, serialize},
     crossbeam_channel::{unbounded, Receiver, Sender},
@@ -13,22 +13,6 @@ use {
     solana_account_decoder::{
         parse_token::{is_known_spl_token_id, token_amount_to_ui_amount, UiTokenAmount},
         UiAccount, UiAccountEncoding, UiDataSliceConfig, MAX_BASE58_BYTES,
-    },
-    solana_client::{
-        connection_cache::ConnectionCache,
-        rpc_cache::LargestAccountsCache,
-        rpc_config::*,
-        rpc_custom_error::RpcCustomError,
-        rpc_deprecated_config::*,
-        rpc_filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
-        rpc_request::{
-            TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE,
-            MAX_GET_CONFIRMED_BLOCKS_RANGE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
-            MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_PROGRAM_ACCOUNT_FILTERS,
-            MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
-            NUM_LARGEST_ACCOUNTS,
-        },
-        rpc_response::{Response as RpcResponse, *},
     },
     solana_entry::entry::Entry,
     solana_faucet::faucet::request_airdrop_transaction,
@@ -41,6 +25,20 @@ use {
     },
     solana_metrics::inc_new_counter_info,
     solana_perf::packet::PACKET_DATA_SIZE,
+    solana_rpc_client_api::{
+        config::*,
+        custom_error::RpcCustomError,
+        deprecated_config::*,
+        filter::{Memcmp, MemcmpEncodedBytes, RpcFilterType},
+        request::{
+            TokenAccountsFilter, DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+            MAX_GET_CONFIRMED_BLOCKS_RANGE, MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS2_LIMIT,
+            MAX_GET_CONFIRMED_SIGNATURES_FOR_ADDRESS_SLOT_RANGE, MAX_GET_PROGRAM_ACCOUNT_FILTERS,
+            MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS, MAX_GET_SLOT_LEADERS, MAX_MULTIPLE_ACCOUNTS,
+            NUM_LARGEST_ACCOUNTS,
+        },
+        response::{Response as RpcResponse, *},
+    },
     solana_runtime::{
         accounts::AccountAddressFilter,
         accounts_index::{AccountIndex, AccountSecondaryIndexes, IndexKey, ScanConfig},
@@ -83,6 +81,7 @@ use {
     solana_stake_program,
     solana_storage_bigtable::Error as StorageError,
     solana_streamer::socket::SocketAddrSpace,
+    solana_tpu_client::connection_cache::ConnectionCache,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, ConfirmedTransactionStatusWithSignature,
         ConfirmedTransactionWithStatusMeta, EncodedConfirmedTransactionWithStatusMeta, Reward,
@@ -129,7 +128,7 @@ fn new_response<T>(bank: &Bank, value: T) -> RpcResponse<T> {
 /// Wrapper for rpc return types of methods that provide responses both with and without context.
 /// Main purpose of this is to fix methods that lack context information in their return type,
 /// without breaking backwards compatibility.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum OptionalContext<T> {
     Context(RpcResponse<T>),
@@ -3646,9 +3645,7 @@ pub mod rpc_full {
             }
 
             if !skip_preflight {
-                if let Err(e) = verify_transaction(&transaction, &preflight_bank.feature_set) {
-                    return Err(e);
-                }
+                verify_transaction(&transaction, &preflight_bank.feature_set)?;
 
                 match meta.health.check() {
                     RpcHealthStatus::Ok => (),
@@ -4575,20 +4572,20 @@ pub mod tests {
         jsonrpc_core_client::transports::local,
         serde::de::DeserializeOwned,
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
-        solana_client::{
-            rpc_custom_error::{
-                JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE,
-                JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE,
-                JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION,
-            },
-            rpc_filter::{Memcmp, MemcmpEncodedBytes},
-        },
         solana_entry::entry::next_versioned_entry,
         solana_gossip::{contact_info::ContactInfo, socketaddr},
         solana_ledger::{
             blockstore_meta::PerfSample,
             blockstore_processor::fill_blockstore_slot_with_ticks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        },
+        solana_rpc_client_api::{
+            custom_error::{
+                JSON_RPC_SERVER_ERROR_BLOCK_NOT_AVAILABLE,
+                JSON_RPC_SERVER_ERROR_TRANSACTION_HISTORY_NOT_AVAILABLE,
+                JSON_RPC_SERVER_ERROR_UNSUPPORTED_TRANSACTION_VERSION,
+            },
+            filter::{Memcmp, MemcmpEncodedBytes},
         },
         solana_runtime::{
             accounts_background_service::AbsRequestSender, commitment::BlockCommitment,

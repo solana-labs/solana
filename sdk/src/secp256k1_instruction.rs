@@ -417,9 +417,9 @@
 //! The client program:
 //!
 //! ```no_run
-//! # use solana_sdk::example_mocks::solana_client;
+//! # use solana_sdk::example_mocks::solana_rpc_client;
 //! use anyhow::Result;
-//! use solana_client::rpc_client::RpcClient;
+//! use solana_rpc_client::rpc_client::RpcClient;
 //! use solana_sdk::{
 //!     instruction::{AccountMeta, Instruction},
 //!     secp256k1_instruction,
@@ -633,9 +633,9 @@
 //! The client program:
 //!
 //! ```no_run
-//! # use solana_sdk::example_mocks::solana_client;
+//! # use solana_sdk::example_mocks::solana_rpc_client;
 //! use anyhow::Result;
-//! use solana_client::rpc_client::RpcClient;
+//! use solana_rpc_client::rpc_client::RpcClient;
 //! use solana_sdk::{
 //!     instruction::{AccountMeta, Instruction},
 //!     keccak,

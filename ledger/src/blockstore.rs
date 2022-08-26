@@ -90,12 +90,12 @@ pub use {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("blockstore_{}", ix))
+        .thread_name(|ix| format!("solBstore{:02}", ix))
         .build()
         .unwrap();
     static ref PAR_THREAD_POOL_ALL_CPUS: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(num_cpus::get())
-        .thread_name(|ix| format!("blockstore_{}", ix))
+        .thread_name(|ix| format!("solBstoreAll{:02}", ix))
         .build()
         .unwrap();
 }
@@ -546,9 +546,9 @@ impl Blockstore {
         self.prepare_rooted_slot_iterator(slot, IteratorDirection::Reverse)
     }
 
-    /// Determines if `starting_slot` and `ending_slot` are connected by full slots
+    /// Determines if we can iterate from `starting_slot` to >= `ending_slot` by full slots
     /// `starting_slot` is excluded from the `is_full()` check
-    pub fn slots_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
+    pub fn slot_range_connected(&self, starting_slot: Slot, ending_slot: Slot) -> bool {
         if starting_slot == ending_slot {
             return true;
         }
@@ -562,8 +562,7 @@ impl Blockstore {
                 if slot_meta.is_full() {
                     match slot.cmp(&ending_slot) {
                         cmp::Ordering::Less => next_slots.extend(slot_meta.next_slots),
-                        cmp::Ordering::Equal => return true,
-                        cmp::Ordering::Greater => {} // slot is greater than the ending slot, so all its children would be as well
+                        _ => return true,
                     }
                 }
             }
@@ -626,7 +625,7 @@ impl Blockstore {
         index: &mut Index,
         erasure_meta: &ErasureMeta,
         prev_inserted_shreds: &HashMap<ShredId, Shred>,
-        recovered_data_shreds: &mut Vec<Shred>,
+        recovered_shreds: &mut Vec<Shred>,
         data_cf: &LedgerColumn<cf::ShredData>,
         code_cf: &LedgerColumn<cf::ShredCode>,
     ) {
@@ -647,9 +646,9 @@ impl Blockstore {
             code_cf,
         ))
         .collect();
-        if let Ok(mut result) = Shredder::try_recovery(available_shreds) {
+        if let Ok(mut result) = shred::recover(available_shreds) {
             Self::submit_metrics(slot, erasure_meta, true, "complete".into(), result.len());
-            recovered_data_shreds.append(&mut result);
+            recovered_shreds.append(&mut result);
         } else {
             Self::submit_metrics(slot, erasure_meta, true, "incomplete".into(), 0);
         }
@@ -710,7 +709,7 @@ impl Blockstore {
     ) -> Vec<Shred> {
         let data_cf = db.column::<cf::ShredData>();
         let code_cf = db.column::<cf::ShredCode>();
-        let mut recovered_data_shreds = vec![];
+        let mut recovered_shreds = vec![];
         // Recovery rules:
         // 1. Only try recovery around indexes for which new data or coding shreds are received
         // 2. For new data shreds, check if an erasure set exists. If not, don't try recovery
@@ -726,7 +725,7 @@ impl Blockstore {
                         index,
                         erasure_meta,
                         prev_inserted_shreds,
-                        &mut recovered_data_shreds,
+                        &mut recovered_shreds,
                         &data_cf,
                         &code_cf,
                     );
@@ -745,7 +744,7 @@ impl Blockstore {
                 }
             };
         }
-        recovered_data_shreds
+        recovered_shreds
     }
 
     /// The main helper function that performs the shred insertion logic
@@ -889,15 +888,18 @@ impl Blockstore {
         metrics.insert_shreds_elapsed_us += start.as_us();
         let mut start = Measure::start("Shred recovery");
         if let Some(leader_schedule_cache) = leader_schedule {
-            let recovered_data_shreds = Self::try_shred_recovery(
+            let recovered_shreds = Self::try_shred_recovery(
                 db,
                 &erasure_metas,
                 &mut index_working_set,
                 &just_inserted_shreds,
             );
 
-            metrics.num_recovered += recovered_data_shreds.len();
-            let recovered_data_shreds: Vec<_> = recovered_data_shreds
+            metrics.num_recovered += recovered_shreds
+                .iter()
+                .filter(|shred| shred.is_data())
+                .count();
+            let recovered_shreds: Vec<_> = recovered_shreds
                 .into_iter()
                 .filter_map(|shred| {
                     let leader =
@@ -905,6 +907,12 @@ impl Blockstore {
                     if !shred.verify(&leader) {
                         metrics.num_recovered_failed_sig += 1;
                         return None;
+                    }
+                    // Since the data shreds are fully recovered from the
+                    // erasure batch, no need to store coding shreds in
+                    // blockstore.
+                    if shred.is_code() {
+                        return Some(shred);
                     }
                     match self.check_insert_data_shred(
                         shred.clone(),
@@ -942,10 +950,10 @@ impl Blockstore {
                 // Always collect recovered-shreds so that above insert code is
                 // executed even if retransmit-sender is None.
                 .collect();
-            if !recovered_data_shreds.is_empty() {
+            if !recovered_shreds.is_empty() {
                 if let Some(retransmit_sender) = retransmit_sender {
                     let _ = retransmit_sender.send(
-                        recovered_data_shreds
+                        recovered_shreds
                             .into_iter()
                             .map(Shred::into_payload)
                             .collect(),
@@ -2872,28 +2880,29 @@ impl Blockstore {
                     .and_then(|serialized_shred| {
                         if serialized_shred.is_none() {
                             if let Some(slot_meta) = slot_meta {
-                                panic!(
-                                    "Shred with
-                                    slot: {},
-                                    index: {},
-                                    consumed: {},
-                                    completed_indexes: {:?}
-                                    must exist if shred index was included in a range: {} {}",
-                                    slot,
-                                    i,
-                                    slot_meta.consumed,
-                                    slot_meta.completed_data_indexes,
-                                    start_index,
-                                    end_index
-                                );
-                            } else {
-                                return Err(BlockstoreError::InvalidShredData(Box::new(
-                                    bincode::ErrorKind::Custom(format!(
-                                        "Missing shred for slot {}, index {}",
-                                        slot, i
-                                    )),
-                                )));
+                                if slot > self.lowest_cleanup_slot() {
+                                    panic!(
+                                        "Shred with
+                                        slot: {},
+                                        index: {},
+                                        consumed: {},
+                                        completed_indexes: {:?}
+                                        must exist if shred index was included in a range: {} {}",
+                                        slot,
+                                        i,
+                                        slot_meta.consumed,
+                                        slot_meta.completed_data_indexes,
+                                        start_index,
+                                        end_index
+                                    );
+                                }
                             }
+                            return Err(BlockstoreError::InvalidShredData(Box::new(
+                                bincode::ErrorKind::Custom(format!(
+                                    "Missing shred for slot {}, index {}",
+                                    slot, i
+                                )),
+                            )));
                         }
 
                         Shred::new_from_serialized_shred(serialized_shred.unwrap()).map_err(|err| {
@@ -3145,7 +3154,7 @@ impl Blockstore {
         }
         .expect("fetch from DuplicateSlots column family failed")?;
         let new_shred = Shred::new_from_serialized_shred(payload).unwrap();
-        (existing_shred != *new_shred.payload()).then(|| existing_shred)
+        (existing_shred != *new_shred.payload()).then_some(existing_shred)
     }
 
     pub fn has_duplicate_shreds_in_slot(&self, slot: Slot) -> bool {
@@ -5004,7 +5013,7 @@ pub mod tests {
         blockstore
             .insert_shreds(vec![shreds.remove(1)], None, false)
             .unwrap();
-        let timer = Duration::new(1, 0);
+        let timer = Duration::from_secs(1);
         assert!(recvr.recv_timeout(timer).is_err());
         // Insert first shred, now we've made a consecutive block
         blockstore
@@ -5501,7 +5510,7 @@ pub mod tests {
         }
     */
     #[test]
-    fn test_slots_connected_chain() {
+    fn test_slot_range_connected_chain() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5510,12 +5519,12 @@ pub mod tests {
             make_and_insert_slot(&blockstore, slot, slot.saturating_sub(1));
         }
 
-        assert!(blockstore.slots_connected(1, 3));
-        assert!(!blockstore.slots_connected(1, 4)); // slot 4 does not exist
+        assert!(blockstore.slot_range_connected(1, 3));
+        assert!(!blockstore.slot_range_connected(1, 4)); // slot 4 does not exist
     }
 
     #[test]
-    fn test_slots_connected_disconnected() {
+    fn test_slot_range_connected_disconnected() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5523,20 +5532,20 @@ pub mod tests {
         make_and_insert_slot(&blockstore, 2, 1);
         make_and_insert_slot(&blockstore, 4, 2);
 
-        assert!(!blockstore.slots_connected(1, 3)); // Slot 3 does not exit
-        assert!(blockstore.slots_connected(1, 4));
+        assert!(blockstore.slot_range_connected(1, 3)); // Slot 3 does not exist, but we can still replay this range to slot 4
+        assert!(blockstore.slot_range_connected(1, 4));
     }
 
     #[test]
-    fn test_slots_connected_same_slot() {
+    fn test_slot_range_connected_same_slot() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
-        assert!(blockstore.slots_connected(54, 54));
+        assert!(blockstore.slot_range_connected(54, 54));
     }
 
     #[test]
-    fn test_slots_connected_starting_slot_not_full() {
+    fn test_slot_range_connected_starting_slot_not_full() {
         let ledger_path = get_tmp_ledger_path_auto_delete!();
         let blockstore = Blockstore::open(ledger_path.path()).unwrap();
 
@@ -5544,7 +5553,7 @@ pub mod tests {
         make_and_insert_slot(&blockstore, 6, 5);
 
         assert!(!blockstore.meta(4).unwrap().unwrap().is_full());
-        assert!(blockstore.slots_connected(4, 6));
+        assert!(blockstore.slot_range_connected(4, 6));
     }
 
     #[test]

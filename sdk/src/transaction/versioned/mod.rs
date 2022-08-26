@@ -71,7 +71,7 @@ impl VersionedTransaction {
             return Err(SignerError::InvalidInput("invalid message".to_string()));
         }
 
-        let signer_keys = keypairs.pubkeys();
+        let signer_keys = keypairs.try_pubkeys()?;
         let expected_signer_keys =
             &static_account_keys[0..message.header().num_required_signatures as usize];
 
@@ -81,12 +81,27 @@ impl VersionedTransaction {
             Ordering::Equal => Ok(()),
         }?;
 
-        if signer_keys != expected_signer_keys {
-            return Err(SignerError::KeypairPubkeyMismatch);
-        }
-
         let message_data = message.serialize();
-        let signatures = keypairs.try_sign_message(&message_data)?;
+        let signature_indexes: Vec<usize> = expected_signer_keys
+            .iter()
+            .map(|signer_key| {
+                signer_keys
+                    .iter()
+                    .position(|key| key == signer_key)
+                    .ok_or(SignerError::KeypairPubkeyMismatch)
+            })
+            .collect::<std::result::Result<_, SignerError>>()?;
+
+        let unordered_signatures = keypairs.try_sign_message(&message_data)?;
+        let signatures: Vec<Signature> = signature_indexes
+            .into_iter()
+            .map(|index| {
+                unordered_signatures
+                    .get(index)
+                    .copied()
+                    .ok_or_else(|| SignerError::InvalidInput("invalid keypairs".to_string()))
+            })
+            .collect::<std::result::Result<_, SignerError>>()?;
 
         Ok(Self {
             signatures,
@@ -165,5 +180,64 @@ impl VersionedTransaction {
             .zip(self.message.static_account_keys().iter())
             .map(|(signature, pubkey)| signature.verify(pubkey.as_ref(), message_bytes))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        crate::{
+            message::Message as LegacyMessage,
+            signer::{keypair::Keypair, Signer},
+        },
+        solana_program::{
+            instruction::{AccountMeta, Instruction},
+            pubkey::Pubkey,
+        },
+    };
+
+    #[test]
+    fn test_try_new() {
+        let keypair0 = Keypair::new();
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+
+        let message = VersionedMessage::Legacy(LegacyMessage::new(
+            &[Instruction::new_with_bytes(
+                Pubkey::new_unique(),
+                &[],
+                vec![
+                    AccountMeta::new_readonly(keypair1.pubkey(), true),
+                    AccountMeta::new_readonly(keypair2.pubkey(), false),
+                ],
+            )],
+            Some(&keypair0.pubkey()),
+        ));
+
+        assert_eq!(
+            VersionedTransaction::try_new(message.clone(), &[&keypair0]),
+            Err(SignerError::NotEnoughSigners)
+        );
+
+        assert_eq!(
+            VersionedTransaction::try_new(message.clone(), &[&keypair0, &keypair0]),
+            Err(SignerError::KeypairPubkeyMismatch)
+        );
+
+        assert_eq!(
+            VersionedTransaction::try_new(message.clone(), &[&keypair1, &keypair2]),
+            Err(SignerError::KeypairPubkeyMismatch)
+        );
+
+        match VersionedTransaction::try_new(message.clone(), &[&keypair0, &keypair1]) {
+            Ok(tx) => assert_eq!(tx.verify_with_results(), vec![true; 2]),
+            Err(err) => assert_eq!(Some(err), None),
+        }
+
+        match VersionedTransaction::try_new(message, &[&keypair1, &keypair0]) {
+            Ok(tx) => assert_eq!(tx.verify_with_results(), vec![true; 2]),
+            Err(err) => assert_eq!(Some(err), None),
+        }
     }
 }

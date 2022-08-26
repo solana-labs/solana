@@ -25,6 +25,7 @@ use {
     },
 };
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 pub mod generated {
     include!(concat!(
         env!("OUT_DIR"),
@@ -32,6 +33,7 @@ pub mod generated {
     ));
 }
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 pub mod tx_by_addr {
     include!(concat!(
         env!("OUT_DIR"),

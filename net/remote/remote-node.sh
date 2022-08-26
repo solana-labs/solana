@@ -28,12 +28,14 @@ maybeFullRpc="${19}"
 waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
-instanceIndex="${23:--1}"
+disableQuic="${23}"
+instanceIndex="${24:--1}"
 
 if [[ $instanceIndex != -1 ]]; then 
   gossipRunScript="gossip-run-$instanceIndex"
   gossipRunKeyScript="gossip-run-key-$instanceIndex"
 fi
+
 
 set +x
 
@@ -332,16 +334,12 @@ EOF
         --init-complete-file "$initCompleteFile"
       )
 
-      if [[ "$tmpfsAccounts" = "true" ]]; then
-        args+=(--accounts /mnt/solana-accounts)
-      fi
 
-      if $maybeFullRpc; then
-        args+=(--enable-rpc-transaction-history)
-        args+=(--enable-extended-tx-metadata-storage)
-      fi
+    if $disableQuic; then
+      args+=(--tpu-disable-quic)
+    fi
 
-      if [[ $airdropsEnabled = true ]]; then
+    if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
         ./multinode-demo/faucet.sh > faucet.log 2>&1 &
 EOF
@@ -501,6 +499,10 @@ EOF
         args+=(--enable-rpc-transaction-history)
         args+=(--enable-extended-tx-metadata-storage)
       fi
+
+    if $disableQuic; then
+      args+=(--tpu-disable-quic)
+    fi
 
 cat >> ~/solana/on-reboot <<EOF
       $maybeSkipAccountsCreation

@@ -37,7 +37,6 @@ serde = "1.0.143"
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.12.0" }
 solana-bloom = { path = "../bloom", version = "=1.12.0" }
-solana-client = { path = "../client", version = "=1.12.0" }
 solana-entry = { path = "../entry", version = "=1.12.0" }
 solana-frozen-abi = { path = "../frozen-abi", version = "=1.12.0" }
 solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.12.0" }
@@ -52,10 +51,12 @@ solana-poh = { path = "../poh", version = "=1.12.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.12.0" }
 solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.12.0" }
 solana-rpc = { path = "../rpc", version = "=1.12.0" }
+solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.12.0" }
 solana-runtime = { path = "../runtime", version = "=1.12.0" }
 solana-sdk = { path = "../sdk", version = "=1.12.0" }
 solana-send-transaction-service = { path = "../send-transaction-service", version = "=1.12.0" }
 solana-streamer = { path = "../streamer", version = "=1.12.0" }
+solana-tpu-client = { path = "../tpu-client", version = "=1.12.0" }
 solana-transaction-status = { path = "../transaction-status", version = "=1.12.0" }
 solana-version = { path = "../version", version = "=1.12.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.12.0" }
@@ -69,7 +70,7 @@ trees = "0.4.2"
 matches = "0.1.9"
 raptorq = "1.7.0"
 serde_json = "1.0.83"
-serial_test = "0.8.0"
+serial_test = "0.9.0"
 solana-logger = { path = "../logger", version = "=1.12.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.12.0" }
 solana-stake-program = { path = "../programs/stake", version = "=1.12.0" }

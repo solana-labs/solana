@@ -60,7 +60,7 @@ pub async fn upload_confirmed_blocks(
                 starting_slot, err
             )
         })?
-        .map_while(|slot| (slot <= ending_slot).then(|| slot))
+        .map_while(|slot| (slot <= ending_slot).then_some(slot))
         .collect();
 
     if blockstore_slots.is_empty() {
@@ -164,35 +164,37 @@ pub async fn upload_confirmed_blocks(
                     let sender = sender.clone();
                     let slot_receiver = slot_receiver.clone();
                     let exit = exit.clone();
+                    std::thread::Builder::new()
+                        .name("solBigTGetBlk".into())
+                        .spawn(move || {
+                            let start = Instant::now();
+                            let mut num_blocks_read = 0;
 
-                    std::thread::spawn(move || {
-                        let start = Instant::now();
-                        let mut num_blocks_read = 0;
+                            while let Ok(slot) = slot_receiver.recv() {
+                                if exit.load(Ordering::Relaxed) {
+                                    break;
+                                }
 
-                        while let Ok(slot) = slot_receiver.recv() {
-                            if exit.load(Ordering::Relaxed) {
-                                break;
+                                let _ = match blockstore.get_rooted_block(slot, true) {
+                                    Ok(confirmed_block) => {
+                                        num_blocks_read += 1;
+                                        sender.send((slot, Some(confirmed_block)))
+                                    }
+                                    Err(err) => {
+                                        warn!(
+                                            "Failed to get load confirmed block from slot {}: {:?}",
+                                            slot, err
+                                        );
+                                        sender.send((slot, None))
+                                    }
+                                };
                             }
-
-                            let _ = match blockstore.get_rooted_block(slot, true) {
-                                Ok(confirmed_block) => {
-                                    num_blocks_read += 1;
-                                    sender.send((slot, Some(confirmed_block)))
-                                }
-                                Err(err) => {
-                                    warn!(
-                                        "Failed to get load confirmed block from slot {}: {:?}",
-                                        slot, err
-                                    );
-                                    sender.send((slot, None))
-                                }
-                            };
-                        }
-                        BlockstoreLoadStats {
-                            num_blocks_read,
-                            elapsed: start.elapsed(),
-                        }
-                    })
+                            BlockstoreLoadStats {
+                                num_blocks_read,
+                                elapsed: start.elapsed(),
+                            }
+                        })
+                        .unwrap()
                 })
                 .collect(),
             receiver,

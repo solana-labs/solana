@@ -1,7 +1,7 @@
 use {
     crate::{
-        cli::*, cluster_query::*, feature::*, inflation::*, nonce::*, program::*, stake::*,
-        validator_info::*, vote::*, wallet::*,
+        address_lookup_table::AddressLookupTableSubCommands, cli::*, cluster_query::*, feature::*,
+        inflation::*, nonce::*, program::*, stake::*, validator_info::*, vote::*, wallet::*,
     },
     clap::{App, AppSettings, Arg, ArgGroup, SubCommand},
     solana_clap_utils::{self, input_validators::*, keypair::*},
@@ -85,6 +85,12 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
                 .help("Show additional information"),
         )
         .arg(
+            Arg::with_name("use_quic")
+                .long("use-quic")
+                .global(true)
+                .help("Use QUIC when sending transactions."),
+        )
+        .arg(
             Arg::with_name("no_address_labels")
                 .long("no-address-labels")
                 .global(true)
@@ -130,6 +136,7 @@ pub fn get_clap_app<'ab, 'v>(name: &str, about: &'ab str, version: &'v str) -> A
         .inflation_subcommands()
         .nonce_subcommands()
         .program_subcommands()
+        .address_lookup_table_subcommands()
         .stake_subcommands()
         .validator_info_subcommands()
         .vote_subcommands()

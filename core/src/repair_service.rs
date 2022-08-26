@@ -212,7 +212,7 @@ impl RepairService {
             let exit = exit.clone();
             let repair_info = repair_info.clone();
             Builder::new()
-                .name("solana-repair-service".to_string())
+                .name("solRepairSvc".to_string())
                 .spawn(move || {
                     Self::run(
                         &blockstore,

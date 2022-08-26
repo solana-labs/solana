@@ -31,7 +31,6 @@ use {
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
     lazy_static::lazy_static,
     rayon::{prelude::*, ThreadPool},
-    solana_client::rpc_response::SlotUpdate,
     solana_entry::entry::VerifyRecyclers,
     solana_geyser_plugin_manager::block_metadata_notifier_interface::BlockMetadataNotifierLock,
     solana_gossip::cluster_info::ClusterInfo,
@@ -52,6 +51,7 @@ use {
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
         rpc_subscriptions::RpcSubscriptions,
     },
+    solana_rpc_client_api::response::SlotUpdate,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         bank::{Bank, NewBankOptions},
@@ -70,7 +70,7 @@ use {
         timing::timestamp,
         transaction::Transaction,
     },
-    solana_vote_program::vote_state::{CompactVoteStateUpdate, VoteTransaction},
+    solana_vote_program::vote_state::VoteTransaction,
     std::{
         collections::{HashMap, HashSet},
         result,
@@ -97,7 +97,7 @@ const MAX_CONCURRENT_FORKS_TO_REPLAY: usize = 4;
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(MAX_CONCURRENT_FORKS_TO_REPLAY)
-        .thread_name(|ix| format!("replay_{}", ix))
+        .thread_name(|ix| format!("solReplay{:02}", ix))
         .build()
         .unwrap();
 }
@@ -397,9 +397,9 @@ impl ReplayStage {
         drop_bank_sender: Sender<Vec<Arc<Bank>>>,
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         log_messages_bytes_limit: Option<usize>,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let mut tower = if let Some(process_blockstore) = maybe_process_blockstore {
-            let tower = process_blockstore.process_to_create_tower();
+            let tower = process_blockstore.process_to_create_tower()?;
             info!("Tower state: {:?}", tower);
             tower
         } else {
@@ -436,7 +436,7 @@ impl ReplayStage {
 
         #[allow(clippy::cognitive_complexity)]
         let t_replay = Builder::new()
-            .name("solana-replay-stage".to_string())
+            .name("solReplayStage".to_string())
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
                 let _exit = Finalizer::new(exit.clone());
@@ -940,10 +940,10 @@ impl ReplayStage {
             })
             .unwrap();
 
-        Self {
+        Ok(Self {
             t_replay,
             commitment_service,
-        }
+        })
     }
 
     fn check_for_vote_only_mode(
@@ -2012,7 +2012,13 @@ impl ReplayStage {
             .is_active(&feature_set::compact_vote_state_updates::id());
         let vote = match (should_compact, vote) {
             (true, VoteTransaction::VoteStateUpdate(vote_state_update)) => {
-                VoteTransaction::from(CompactVoteStateUpdate::from(vote_state_update))
+                if let Some(compact_vote_state_update) = vote_state_update.compact() {
+                    VoteTransaction::from(compact_vote_state_update)
+                } else {
+                    // Compaction failed
+                    warn!("Compaction failed when generating vote tx for vote account {}. Unable to vote", vote_account_pubkey);
+                    return None;
+                }
             }
             (_, vote) => vote,
         };

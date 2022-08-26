@@ -34,6 +34,7 @@ extern crate serde_derive;
 
 pub mod extract_memos;
 pub mod parse_accounts;
+pub mod parse_address_lookup_table;
 pub mod parse_associated_token;
 pub mod parse_bpf_loader;
 pub mod parse_instruction;
@@ -599,7 +600,7 @@ impl From<UiConfirmedBlock> for EncodedConfirmedBlock {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfirmedBlock {
     pub previous_blockhash: String,

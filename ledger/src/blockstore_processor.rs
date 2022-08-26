@@ -105,7 +105,7 @@ struct ReplayEntry {
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("blockstore_processor_{}", ix))
+        .thread_name(|ix| format!("solBstoreProc{:02}", ix))
         .build()
         .unwrap();
 }
@@ -853,12 +853,8 @@ pub fn process_blockstore_from_root(
     // We might be promptly restarted after bad capitalization was detected while creating newer snapshot.
     // In that case, we're most likely restored from the last good snapshot and replayed up to this root.
     // So again check here for the bad capitalization to avoid to continue until the next snapshot creation.
-    if !bank_forks
-        .read()
-        .unwrap()
-        .root_bank()
-        .calculate_and_verify_capitalization(debug_verify)
-    {
+    let bank = bank_forks.read().unwrap().root_bank();
+    if start_slot != bank.slot() && !bank.calculate_and_verify_capitalization(debug_verify) {
         return Err(
             BlockstoreProcessorError::RootBankWithMismatchedCapitalization(
                 bank_forks.read().unwrap().root(),

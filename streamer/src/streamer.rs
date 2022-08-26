@@ -168,7 +168,7 @@ pub fn receiver(
     let res = socket.set_read_timeout(Some(Duration::new(1, 0)));
     assert!(res.is_ok(), "streamer::receiver set_read_timeout error");
     Builder::new()
-        .name("solana-receiver".to_string())
+        .name("solReceiver".to_string())
         .spawn(move || {
             let _ = recv_loop(
                 &socket,
@@ -307,7 +307,7 @@ fn recv_send(
     let packets = packet_batch.iter().filter_map(|pkt| {
         let addr = pkt.meta.socket_addr();
         let data = pkt.data(..)?;
-        socket_addr_space.check(&addr).then(|| (data, addr))
+        socket_addr_space.check(&addr).then_some((data, addr))
     });
     batch_send(sock, &packets.collect::<Vec<_>>())?;
     Ok(())
@@ -372,7 +372,7 @@ pub fn responder(
     stats_reporter_sender: Option<Sender<Box<dyn FnOnce() + Send>>>,
 ) -> JoinHandle<()> {
     Builder::new()
-        .name(format!("solana-responder-{}", name))
+        .name(format!("solRspndr{}", name))
         .spawn(move || {
             let mut errors = 0;
             let mut last_error = None;
@@ -477,7 +477,7 @@ mod test {
         let t_responder = {
             let (s_responder, r_responder) = unbounded();
             let t_responder = responder(
-                "streamer_send_test",
+                "SendTest",
                 Arc::new(send),
                 r_responder,
                 SocketAddrSpace::Unspecified,

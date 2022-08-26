@@ -108,14 +108,15 @@ Operate a configured testnet
                                       - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
    --full-rpc
                                       - Support full RPC services on all nodes
-
    --gossip-instances                 - Number of gossip instances to deploy across GCE instances. 
                                         Does a round robin deployment. Used with `gossip-only` command
                                         Cannot be used with --gossip-instances-per-node
-
    --gossip-instances-per-node        - Number of gossip instances to deploy on each GCE instance. 
                                         Used with `gossip-only` command
                                         Cannot be used with --gossip-instances
+   --tpu-disable-quic
+                                      - Disable quic for tpu packet forwarding
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -338,6 +339,7 @@ startBootstrapLeader() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$disableQuic\" \
          \"$isGossip\" \
       "
 
@@ -418,7 +420,9 @@ startNode() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$disableQuic\" \
          \"$instanceIndex\" \
+
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -883,10 +887,12 @@ maybeWarpSlot=
 maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
+disableQuic=false
 # need to set either instancesPerNode or gossipInstances
 instancesPerNode=0 # default. 
 gossipInstances=0 # default number of gossip instances
 isGossip=0
+
 
 command=$1
 [[ -n $command ]] || usage
@@ -998,6 +1004,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 == --full-rpc ]]; then
       maybeFullRpc=true
+      shift 1
+    elif [[ $1 == --tpu-disable-quic ]]; then
+      disableQuic=true
       shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false

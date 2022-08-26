@@ -1,12 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     log::*,
     solana_cli_output::CliAccount,
-    solana_client::{
-        connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
-        nonblocking,
-        rpc_client::RpcClient,
-    },
     solana_core::{
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -23,6 +19,7 @@ use {
     solana_net_utils::PortRange,
     solana_program_runtime::compute_budget::ComputeBudget,
     solana_rpc::{rpc::JsonRpcConfig, rpc_pubsub_service::PubSubConfig},
+    solana_rpc_client::{nonblocking, rpc_client::RpcClient},
     solana_runtime::{
         accounts_db::AccountsDbConfig, accounts_index::AccountsIndexConfig, bank_forks::BankForks,
         genesis_utils::create_genesis_config_with_leader_ex,
@@ -46,6 +43,7 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
     std::{
         collections::{HashMap, HashSet},
         ffi::OsStr,
@@ -115,6 +113,7 @@ pub struct TestValidatorGenesis {
     pub validator_exit: Arc<RwLock<Exit>>,
     pub start_progress: Arc<RwLock<ValidatorStartProgress>>,
     pub authorized_voter_keypairs: Arc<RwLock<Vec<Arc<Keypair>>>>,
+    pub staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
     pub max_ledger_shreds: Option<u64>,
     pub max_genesis_archive_unpacked_size: Option<u64>,
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
@@ -122,6 +121,7 @@ pub struct TestValidatorGenesis {
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
+    pub transaction_account_lock_limit: Option<usize>,
 }
 
 impl Default for TestValidatorGenesis {
@@ -144,6 +144,7 @@ impl Default for TestValidatorGenesis {
             validator_exit: Arc::<RwLock<Exit>>::default(),
             start_progress: Arc::<RwLock<ValidatorStartProgress>>::default(),
             authorized_voter_keypairs: Arc::<RwLock<Vec<Arc<Keypair>>>>::default(),
+            staked_nodes_overrides: Arc::new(RwLock::new(HashMap::new())),
             max_ledger_shreds: Option::<u64>::default(),
             max_genesis_archive_unpacked_size: Option::<u64>::default(),
             geyser_plugin_config_files: Option::<Vec<PathBuf>>::default(),
@@ -151,6 +152,7 @@ impl Default for TestValidatorGenesis {
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
+            transaction_account_lock_limit: Option::<usize>::default(),
         }
     }
 }
@@ -279,7 +281,7 @@ impl TestValidatorGenesis {
         addresses: T,
         rpc_client: &RpcClient,
         skip_missing: bool,
-    ) -> &mut Self
+    ) -> Result<&mut Self, String>
     where
         T: IntoIterator<Item = Pubkey>,
     {
@@ -291,20 +293,21 @@ impl TestValidatorGenesis {
             } else if skip_missing {
                 warn!("Could not find {}, skipping.", address);
             } else {
-                error!("Failed to fetch {}: {}", address, res.unwrap_err());
-                solana_core::validator::abort();
+                return Err(format!("Failed to fetch {}: {}", address, res.unwrap_err()));
             }
         }
-        self
+        Ok(self)
     }
 
-    pub fn add_accounts_from_json_files(&mut self, accounts: &[AccountInfo]) -> &mut Self {
+    pub fn add_accounts_from_json_files(
+        &mut self,
+        accounts: &[AccountInfo],
+    ) -> Result<&mut Self, String> {
         for account in accounts {
-            let account_path =
-                solana_program_test::find_file(account.filename).unwrap_or_else(|| {
-                    error!("Unable to locate {}", account.filename);
-                    solana_core::validator::abort();
-                });
+            let account_path = match solana_program_test::find_file(account.filename) {
+                Some(path) => path,
+                None => return Err(format!("Unable to locate {}", account.filename)),
+            };
             let mut file = File::open(&account_path).unwrap();
             let mut account_info_raw = String::new();
             file.read_to_string(&mut account_info_raw).unwrap();
@@ -312,12 +315,11 @@ impl TestValidatorGenesis {
             let result: serde_json::Result<CliAccount> = serde_json::from_str(&account_info_raw);
             let account_info = match result {
                 Err(err) => {
-                    error!(
+                    return Err(format!(
                         "Unable to deserialize {}: {}",
                         account_path.to_str().unwrap(),
                         err
-                    );
-                    solana_core::validator::abort();
+                    ));
                 }
                 Ok(deserialized) => deserialized,
             };
@@ -333,25 +335,24 @@ impl TestValidatorGenesis {
 
             self.add_account(address, account);
         }
-        self
+        Ok(self)
     }
 
-    pub fn add_accounts_from_directories<T, P>(&mut self, dirs: T) -> &mut Self
+    pub fn add_accounts_from_directories<T, P>(&mut self, dirs: T) -> Result<&mut Self, String>
     where
         T: IntoIterator<Item = P>,
         P: AsRef<Path> + Display,
     {
         let mut json_files: HashSet<String> = HashSet::new();
         for dir in dirs {
-            let matched_files = fs::read_dir(&dir)
-                .unwrap_or_else(|err| {
-                    error!("Cannot read directory {}: {}", dir, err);
-                    solana_core::validator::abort();
-                })
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|path| path.is_file() && path.extension() == Some(OsStr::new("json")))
-                .map(|path| String::from(path.to_string_lossy()));
+            let matched_files = match fs::read_dir(&dir) {
+                Ok(dir) => dir,
+                Err(e) => return Err(format!("Cannot read directory {}: {}", &dir, e)),
+            }
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file() && path.extension() == Some(OsStr::new("json")))
+            .map(|path| String::from(path.to_string_lossy()));
 
             json_files.extend(matched_files);
         }
@@ -366,9 +367,9 @@ impl TestValidatorGenesis {
             })
             .collect();
 
-        self.add_accounts_from_json_files(&accounts);
+        self.add_accounts_from_json_files(&accounts)?;
 
-        self
+        Ok(self)
     }
 
     /// Add an account to the test environment with the account data in the provided `filename`
@@ -754,6 +755,7 @@ impl TestValidator {
                     ..ComputeBudget::default()
                 }),
             log_messages_bytes_limit: config.log_messages_bytes_limit,
+            transaction_account_lock_limit: config.transaction_account_lock_limit,
         };
 
         let mut validator_config = ValidatorConfig {
@@ -785,6 +787,7 @@ impl TestValidator {
             rocksdb_compaction_interval: Some(100), // Compact every 100 slots
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
+            staked_nodes_overrides: config.staked_nodes_overrides.clone(),
             accounts_db_config,
             runtime_config,
             ..ValidatorConfig::default_for_test()
@@ -806,7 +809,7 @@ impl TestValidator {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-        ));
+        )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...

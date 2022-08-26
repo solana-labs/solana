@@ -22,7 +22,7 @@ tar = "0.4.38"
 
 [dev-dependencies]
 assert_cmd = "*"
-predicates = "2.0"
+predicates = "2.1"
 serial_test = "*"
 
 [features]

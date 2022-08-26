@@ -25,9 +25,11 @@ solana-net-utils = { path = "../net-utils", version = "=1.12.0" }
 solana-program-runtime = { path = "../program-runtime", version = "=1.12.0" }
 solana-program-test = { path = "../program-test", version = "=1.12.0" }
 solana-rpc = { path = "../rpc", version = "=1.12.0" }
+solana-rpc-client = { path = "../rpc-client", version = "=1.12.0" }
 solana-runtime = { path = "../runtime", version = "=1.12.0" }
 solana-sdk = { path = "../sdk", version = "=1.12.0" }
 solana-streamer = { path = "../streamer", version = "=1.12.0" }
+solana-tpu-client = { path = "../tpu-client", version = "=1.12.0" }
 tokio = { version = "1", features = ["full"] }
 
 [package.metadata.docs.rs]

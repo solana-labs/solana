@@ -567,7 +567,7 @@ impl ServeRepair {
 
         let recycler = PacketBatchRecycler::default();
         Builder::new()
-            .name("solana-repair-listen".to_string())
+            .name("solRepairListen".to_string())
             .spawn(move || {
                 let mut last_print = Instant::now();
                 let mut stats = ServeRepairStats::default();
@@ -1044,11 +1044,16 @@ impl ServeRepair {
                 }
                 packet.meta.set_discard(true);
                 stats.ping_count += 1;
-                if let Ok(pong) = Pong::new(&ping, keypair) {
-                    let pong = RepairProtocol::Pong(pong);
-                    if let Ok(pong_bytes) = serialize(&pong) {
-                        let from_addr = packet.meta.socket_addr();
-                        pending_pongs.push((pong_bytes, from_addr));
+                // Respond both with and without domain so that the other node
+                // will accept the response regardless of its upgrade status.
+                // TODO: remove domain = false once cluster is upgraded.
+                for domain in [false, true] {
+                    if let Ok(pong) = Pong::new(domain, &ping, keypair) {
+                        let pong = RepairProtocol::Pong(pong);
+                        if let Ok(pong_bytes) = serialize(&pong) {
+                            let from_addr = packet.meta.socket_addr();
+                            pending_pongs.push((pong_bytes, from_addr));
+                        }
                     }
                 }
             }

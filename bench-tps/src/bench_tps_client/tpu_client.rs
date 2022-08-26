@@ -1,10 +1,10 @@
 use {
-    crate::bench_tps_client::{BenchTpsClient, Result},
-    solana_client::tpu_client::TpuClient,
+    crate::bench_tps_client::{BenchTpsClient, BenchTpsError, Result},
     solana_sdk::{
         account::Account, commitment_config::CommitmentConfig, epoch_info::EpochInfo, hash::Hash,
         message::Message, pubkey::Pubkey, signature::Signature, transaction::Transaction,
     },
+    solana_tpu_client::tpu_client::TpuClient,
 };
 
 impl BenchTpsClient for TpuClient {
@@ -100,6 +100,28 @@ impl BenchTpsClient for TpuClient {
     fn get_account(&self, pubkey: &Pubkey) -> Result<Account> {
         self.rpc_client()
             .get_account(pubkey)
+            .map_err(|err| err.into())
+    }
+
+    fn get_account_with_commitment(
+        &self,
+        pubkey: &Pubkey,
+        commitment_config: CommitmentConfig,
+    ) -> Result<Account> {
+        self.rpc_client()
+            .get_account_with_commitment(pubkey, commitment_config)
+            .map(|res| res.value)
+            .map_err(|err| err.into())
+            .and_then(|account| {
+                account.ok_or_else(|| {
+                    BenchTpsError::Custom(format!("AccountNotFound: pubkey={}", pubkey))
+                })
+            })
+    }
+
+    fn get_multiple_accounts(&self, pubkeys: &[Pubkey]) -> Result<Vec<Option<Account>>> {
+        self.rpc_client()
+            .get_multiple_accounts(pubkeys)
             .map_err(|err| err.into())
     }
 }

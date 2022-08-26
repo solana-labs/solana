@@ -3,9 +3,9 @@
 
 use {
     rand::{thread_rng, Rng},
-    solana_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     solana_gossip::cluster_info::ClusterInfo,
     solana_poh::poh_recorder::PohRecorder,
+    solana_tpu_client::{connection_cache::ConnectionCache, tpu_connection::TpuConnection},
     std::{
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -32,7 +32,7 @@ impl WarmQuicCacheService {
         exit: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
-            .name("sol-warm-quic-service".to_string())
+            .name("solWarmQuicSvc".to_string())
             .spawn(move || {
                 let slot_jitter = thread_rng().gen_range(-CACHE_JITTER_SLOT, CACHE_JITTER_SLOT);
                 let mut maybe_last_leader = None;

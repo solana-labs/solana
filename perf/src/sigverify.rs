@@ -45,7 +45,7 @@ pub const VERIFY_MIN_PACKETS_PER_THREAD: usize = 128;
 lazy_static! {
     static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
         .num_threads(get_thread_count())
-        .thread_name(|ix| format!("sigverify_{}", ix))
+        .thread_name(|ix| format!("solSigVerify{:02}", ix))
         .build()
         .unwrap();
 }
@@ -830,12 +830,7 @@ mod tests {
     pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
         assert!(a.len() >= b.len());
         let end = a.len() - b.len() + 1;
-        for i in 0..end {
-            if a[i..i + b.len()] == b[..] {
-                return Some(i);
-            }
-        }
-        None
+        (0..end).find(|&i| a[i..i + b.len()] == b[..])
     }
 
     #[test]

@@ -279,7 +279,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             m.stop();
 
             callback(if let Some(entry) = result {
-                entry.set_age(self.storage.future_age_to_flush());
+                self.set_age_to_future(entry);
                 Some(entry)
             } else {
                 drop(map);
@@ -305,6 +305,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.get_internal(pubkey, |entry| (true, entry.map(Arc::clone)))
     }
 
+    fn set_age_to_future(&self, entry: &AccountMapEntry<T>) {
+        entry.set_age(self.storage.future_age_to_flush());
+    }
+
     /// lookup 'pubkey' in index (in_mem or disk).
     /// call 'callback' whether found or not
     pub(crate) fn get_internal<RT>(
@@ -315,11 +319,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) -> RT {
         self.get_only_in_mem(pubkey, |entry| {
             if let Some(entry) = entry {
-                entry.set_age(self.storage.future_age_to_flush());
                 callback(Some(entry)).1
             } else {
                 // not in cache, look on disk
-                let stats = &self.stats();
+                let stats = self.stats();
                 let disk_entry = self.load_account_entry_from_disk(pubkey);
                 if disk_entry.is_none() {
                     return callback(None).1;
@@ -474,7 +477,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             reclaims,
                             reclaim,
                         );
-                        current.set_age(self.storage.future_age_to_flush());
+                        self.set_age_to_future(current);
                     }
                     Entry::Vacant(vacant) => {
                         // not in cache, look on disk
@@ -527,7 +530,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     fn update_entry_stats(&self, stopped_measure: Measure, found: bool) {
-        let stats = &self.stats();
+        let stats = self.stats();
         let (count, time) = if found {
             (&stats.entries_from_mem, &stats.entry_mem_us)
         } else {
@@ -1418,6 +1421,8 @@ impl<'a> FlushGuard<'a> {
     #[must_use = "if unused, the `flushing` flag will immediately clear"]
     fn lock(flushing: &'a AtomicBool) -> Option<Self> {
         let already_flushing = flushing.swap(true, Ordering::AcqRel);
+        // Eager evaluation here would result in dropping Self and clearing flushing flag
+        #[allow(clippy::unnecessary_lazy_evaluations)]
         (!already_flushing).then(|| Self { flushing })
     }
 }

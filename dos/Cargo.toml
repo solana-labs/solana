@@ -18,7 +18,6 @@ log = "0.4.17"
 rand = "0.7.0"
 serde = "1.0.143"
 solana-bench-tps = { path = "../bench-tps", version = "=1.12.0" }
-solana-client = { path = "../client", version = "=1.12.0" }
 solana-core = { path = "../core", version = "=1.12.0" }
 solana-faucet = { path = "../faucet", version = "=1.12.0" }
 solana-gossip = { path = "../gossip", version = "=1.12.0" }
@@ -27,13 +26,16 @@ solana-measure = { path = "../measure", version = "=1.12.0" }
 solana-net-utils = { path = "../net-utils", version = "=1.12.0" }
 solana-perf = { path = "../perf", version = "=1.12.0" }
 solana-rpc = { path = "../rpc", version = "=1.12.0" }
+solana-rpc-client = { path = "../rpc-client", version = "=1.12.0" }
 solana-sdk = { path = "../sdk", version = "=1.12.0" }
 solana-streamer = { path = "../streamer", version = "=1.12.0" }
+solana-tpu-client = { path = "../tpu-client", version = "=1.12.0" }
 solana-version = { path = "../version", version = "=1.12.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
-serial_test = "0.8.0"
+serial_test = "0.9.0"
 solana-local-cluster = { path = "../local-cluster", version = "=1.12.0" }
+solana-thin-client = { path = "../thin-client", version = "=1.12.0" }

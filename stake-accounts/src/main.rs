@@ -11,7 +11,8 @@ use {
         },
     },
     solana_cli_config::Config,
-    solana_client::{client_error::ClientError, rpc_client::RpcClient},
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::client_error::Error as ClientError,
     solana_sdk::{
         message::Message,
         native_token::lamports_to_sol,

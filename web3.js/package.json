@@ -58,7 +58,8 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.12.5",
-    "@ethersproject/sha2": "^5.5.0",
+    "@noble/hashes": "^1.1.2",
+    "@noble/secp256k1": "^1.6.3",
     "@solana/buffer-layout": "^4.0.0",
     "bigint-buffer": "^1.1.5",
     "bn.js": "^5.0.0",
@@ -69,9 +70,7 @@
     "jayson": "^3.4.4",
     "js-sha3": "^0.8.0",
     "node-fetch": "2",
-    "react-native-url-polyfill": "^1.3.0",
     "rpc-websockets": "^7.5.0",
-    "secp256k1": "^4.0.2",
     "superstruct": "^0.14.2",
     "tweetnacl": "^1.0.3"
   },

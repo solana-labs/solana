@@ -135,7 +135,7 @@ impl ShredFetchStage {
             })
             .collect();
         let modifier_hdl = Builder::new()
-            .name("solana-tvu-fetch-stage-packet-modifier".to_string())
+            .name("solTvuFetchPMod".to_string())
             .spawn(move || {
                 let repair_context = repair_context
                     .as_ref()
