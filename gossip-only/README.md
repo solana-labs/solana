@@ -95,7 +95,7 @@ let _ = self.run_gossip(
 ```
 Same issue as above, I wanted to set this as a flag but I never got to it.
 
-## Running Gossip-Only Locally
+## Running gossip-sim Locally
 ```
 cd solana
 ```
