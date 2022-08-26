@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-rand"
-version = "1.11.9"
+version = "1.11.10"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,7 +12,7 @@ edition = "2021"
 [dependencies]
 getrandom = { version = "0.1.14", features = ["dummy"] }
 rand = "0.7"
-solana-program = { path = "../../../../sdk/program", version = "=1.11.9" }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.10" }
 
 [lib]
 crate-type = ["cdylib"]

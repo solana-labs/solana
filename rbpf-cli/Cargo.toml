@@ -1,6 +1,6 @@
 [package]
 name = "rbpf-cli"
-version = "1.11.9"
+version = "1.11.10"
 description = "CLI to test and analyze eBPF programs"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/rbpf"
@@ -13,8 +13,8 @@ publish = false
 clap = { version = "3.1.5", features = ["cargo"] }
 serde = "1.0.138"
 serde_json = "1.0.81"
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.9" }
-solana-logger = { path = "../logger", version = "=1.11.9" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.11.9" }
-solana-sdk = { path = "../sdk", version = "=1.11.9" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.10" }
+solana-logger = { path = "../logger", version = "=1.11.10" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.11.10" }
+solana-sdk = { path = "../sdk", version = "=1.11.10" }
 solana_rbpf = "=0.2.31"

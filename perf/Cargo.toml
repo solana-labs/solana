@@ -1,6 +1,6 @@
 [package]
 name = "solana-perf"
-version = "1.11.9"
+version = "1.11.10"
 description = "Solana Performance APIs"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -22,10 +22,10 @@ log = "0.4.17"
 rand = "0.7.0"
 rayon = "1.5.3"
 serde = "1.0.138"
-solana-metrics = { path = "../metrics", version = "=1.11.9" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.9" }
-solana-sdk = { path = "../sdk", version = "=1.11.9" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.9" }
+solana-metrics = { path = "../metrics", version = "=1.11.10" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.10" }
+solana-sdk = { path = "../sdk", version = "=1.11.10" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.10" }
 
 [target."cfg(target_os = \"linux\")".dependencies]
 caps = "0.5.3"
@@ -37,7 +37,7 @@ name = "solana_perf"
 
 [dev-dependencies]
 matches = "0.1.9"
-solana-logger = { path = "../logger", version = "=1.11.9" }
+solana-logger = { path = "../logger", version = "=1.11.10" }
 
 [[bench]]
 name = "sigverify"

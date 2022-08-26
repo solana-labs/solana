@@ -5,7 +5,7 @@ edition = "2021"
 license = "Apache-2.0"
 name = "solana-program-test"
 repository = "https://github.com/solana-labs/solana"
-version = "1.11.9"
+version = "1.11.10"
 
 [dependencies]
 assert_matches = "1.5.0"
@@ -15,13 +15,13 @@ bincode = "1.3.3"
 chrono-humanize = "0.2.1"
 log = "0.4.17"
 serde = "1.0.138"
-solana-banks-client = { path = "../banks-client", version = "=1.11.9" }
-solana-banks-server = { path = "../banks-server", version = "=1.11.9" }
-solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.9" }
-solana-logger = { path = "../logger", version = "=1.11.9" }
-solana-program-runtime = { path = "../program-runtime", version = "=1.11.9" }
-solana-runtime = { path = "../runtime", version = "=1.11.9" }
-solana-sdk = { path = "../sdk", version = "=1.11.9" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.9" }
+solana-banks-client = { path = "../banks-client", version = "=1.11.10" }
+solana-banks-server = { path = "../banks-server", version = "=1.11.10" }
+solana-bpf-loader-program = { path = "../programs/bpf_loader", version = "=1.11.10" }
+solana-logger = { path = "../logger", version = "=1.11.10" }
+solana-program-runtime = { path = "../program-runtime", version = "=1.11.10" }
+solana-runtime = { path = "../runtime", version = "=1.11.10" }
+solana-sdk = { path = "../sdk", version = "=1.11.10" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.10" }
 thiserror = "1.0"
 tokio = { version = "1", features = ["full"] }

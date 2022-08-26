@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-dos"
-version = "1.11.9"
+version = "1.11.10"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -17,23 +17,23 @@ itertools = "0.10.3"
 log = "0.4.17"
 rand = "0.7.0"
 serde = "1.0.138"
-solana-bench-tps = { path = "../bench-tps", version = "=1.11.9" }
-solana-client = { path = "../client", version = "=1.11.9" }
-solana-core = { path = "../core", version = "=1.11.9" }
-solana-faucet = { path = "../faucet", version = "=1.11.9" }
-solana-gossip = { path = "../gossip", version = "=1.11.9" }
-solana-logger = { path = "../logger", version = "=1.11.9" }
-solana-measure = { path = "../measure", version = "=1.11.9" }
-solana-net-utils = { path = "../net-utils", version = "=1.11.9" }
-solana-perf = { path = "../perf", version = "=1.11.9" }
-solana-rpc = { path = "../rpc", version = "=1.11.9" }
-solana-sdk = { path = "../sdk", version = "=1.11.9" }
-solana-streamer = { path = "../streamer", version = "=1.11.9" }
-solana-version = { path = "../version", version = "=1.11.9" }
+solana-bench-tps = { path = "../bench-tps", version = "=1.11.10" }
+solana-client = { path = "../client", version = "=1.11.10" }
+solana-core = { path = "../core", version = "=1.11.10" }
+solana-faucet = { path = "../faucet", version = "=1.11.10" }
+solana-gossip = { path = "../gossip", version = "=1.11.10" }
+solana-logger = { path = "../logger", version = "=1.11.10" }
+solana-measure = { path = "../measure", version = "=1.11.10" }
+solana-net-utils = { path = "../net-utils", version = "=1.11.10" }
+solana-perf = { path = "../perf", version = "=1.11.10" }
+solana-rpc = { path = "../rpc", version = "=1.11.10" }
+solana-sdk = { path = "../sdk", version = "=1.11.10" }
+solana-streamer = { path = "../streamer", version = "=1.11.10" }
+solana-version = { path = "../version", version = "=1.11.10" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dev-dependencies]
 serial_test = "0.8.0"
-solana-local-cluster = { path = "../local-cluster", version = "=1.11.9" }
+solana-local-cluster = { path = "../local-cluster", version = "=1.11.10" }

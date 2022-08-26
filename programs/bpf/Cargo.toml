@@ -1,7 +1,7 @@
 [package]
 name = "solana-bpf-programs"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.11.9"
+version = "1.11.10"
 documentation = "https://docs.rs/solana"
 homepage = "https://solana.com/"
 readme = "README.md"
@@ -26,22 +26,22 @@ itertools = "0.10.1"
 log = "0.4.11"
 miow = "0.3.6"
 net2 = "0.2.37"
-solana-account-decoder = { path = "../../account-decoder", version = "=1.11.9" }
-solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.11.9" }
-solana-bpf-rust-invoke = { path = "rust/invoke", version = "=1.11.9" }
-solana-bpf-rust-realloc = { path = "rust/realloc", version = "=1.11.9" }
-solana-bpf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.11.9" }
-solana-cli-output = { path = "../../cli-output", version = "=1.11.9" }
-solana-logger = { path = "../../logger", version = "=1.11.9" }
-solana-measure = { path = "../../measure", version = "=1.11.9" }
-solana-program-runtime = { path = "../../program-runtime", version = "=1.11.9" }
-solana-runtime = { path = "../../runtime", version = "=1.11.9" }
-solana-sdk = { path = "../../sdk", version = "=1.11.9" }
-solana-transaction-status = { path = "../../transaction-status", version = "=1.11.9" }
+solana-account-decoder = { path = "../../account-decoder", version = "=1.11.10" }
+solana-bpf-loader-program = { path = "../bpf_loader", version = "=1.11.10" }
+solana-bpf-rust-invoke = { path = "rust/invoke", version = "=1.11.10" }
+solana-bpf-rust-realloc = { path = "rust/realloc", version = "=1.11.10" }
+solana-bpf-rust-realloc-invoke = { path = "rust/realloc_invoke", version = "=1.11.10" }
+solana-cli-output = { path = "../../cli-output", version = "=1.11.10" }
+solana-logger = { path = "../../logger", version = "=1.11.10" }
+solana-measure = { path = "../../measure", version = "=1.11.10" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.11.10" }
+solana-runtime = { path = "../../runtime", version = "=1.11.10" }
+solana-sdk = { path = "../../sdk", version = "=1.11.10" }
+solana-transaction-status = { path = "../../transaction-status", version = "=1.11.10" }
 solana_rbpf = "=0.2.31"
 
 [dev-dependencies]
-solana-ledger = { path = "../../ledger", version = "=1.11.9" }
+solana-ledger = { path = "../../ledger", version = "=1.11.10" }
 
 [[bench]]
 name = "bpf_loader"
