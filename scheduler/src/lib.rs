@@ -1094,18 +1094,6 @@ impl ScheduleStage {
                    trace!("select: back to");
                    break;
                 } else {
-                    if from_len > 0 {
-                       trace!("select3: {} {}", from_len, from_exec_len);
-                       let task = from.recv().unwrap();
-                       Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
-                       from_len -= 1;
-                       if from_len == 0 {
-                           from_len = from.len();
-                           if from_len > 0 {
-                               trace!("select3: refill {} {}", from_len, from_exec_len);
-                           }
-                       }
-                    }
                     if from_exec_len > 0 {
                        trace!("select4: {} {}", from_len, from_exec_len);
                         let mut processed_execution_environment = from_exec.recv().unwrap();
@@ -1119,6 +1107,18 @@ impl ScheduleStage {
                        if from_exec_len == 0 {
                            from_exec_len = from_exec.len();
                            if from_exec_len > 0 {
+                               trace!("select3: refill {} {}", from_len, from_exec_len);
+                           }
+                       }
+                    }
+                    if from_len > 0 {
+                       trace!("select3: {} {}", from_len, from_exec_len);
+                       let task = from.recv().unwrap();
+                       Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
+                       from_len -= 1;
+                       if from_len == 0 {
+                           from_len = from.len();
+                           if from_len > 0 {
                                trace!("select3: refill {} {}", from_len, from_exec_len);
                            }
                        }
