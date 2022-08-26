@@ -277,6 +277,7 @@ impl SnapshotRequestHandler {
             SnapshotError::MismatchedBaseSlot(..) => true,
             SnapshotError::NoSnapshotArchives => true,
             SnapshotError::MismatchedSlotHash(..) => true,
+            SnapshotError::VerifySlotDeltas(..) => true,
         }
     }
 }
