@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-store-tool"
 description = "Tool to inspect append vecs"
-version = "1.10.37"
+version = "1.10.38"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -12,9 +12,9 @@ publish = false
 [dependencies]
 clap = "2.33.1"
 log = { version = "0.4.14" }
-solana-logger = { path = "../../logger", version = "=1.10.37" }
-solana-runtime = { path = "..", version = "=1.10.37" }
-solana-version = { path = "../../version", version = "=1.10.37" }
+solana-logger = { path = "../../logger", version = "=1.10.38" }
+solana-runtime = { path = "..", version = "=1.10.38" }
+solana-version = { path = "../../version", version = "=1.10.38" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

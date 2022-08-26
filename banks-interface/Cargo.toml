@@ -1,6 +1,6 @@
 [package]
 name = "solana-banks-interface"
-version = "1.10.37"
+version = "1.10.38"
 description = "Solana banks RPC interface"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 serde = { version = "1.0.136", features = ["derive"] }
-solana-sdk = { path = "../sdk", version = "=1.10.37" }
+solana-sdk = { path = "../sdk", version = "=1.10.38" }
 tarpc = { version = "0.27.2", features = ["full"] }
 
 [lib]

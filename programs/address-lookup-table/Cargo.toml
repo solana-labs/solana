@@ -1,6 +1,6 @@
 [package]
 name = "solana-address-lookup-table-program"
-version = "1.10.37"
+version = "1.10.38"
 description = "Solana address lookup table program"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -16,14 +16,14 @@ log = "0.4.14"
 num-derive = "0.3"
 num-traits = "0.2"
 serde = { version = "1.0.136", features = ["derive"] }
-solana-frozen-abi = { path = "../../frozen-abi", version = "=1.10.37" }
-solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.10.37" }
-solana-program = { path = "../../sdk/program", version = "=1.10.37" }
+solana-frozen-abi = { path = "../../frozen-abi", version = "=1.10.38" }
+solana-frozen-abi-macro = { path = "../../frozen-abi/macro", version = "=1.10.38" }
+solana-program = { path = "../../sdk/program", version = "=1.10.38" }
 thiserror = "1.0"
 
 [target.'cfg(not(target_arch = "bpf"))'.dependencies]
-solana-program-runtime = { path = "../../program-runtime", version = "=1.10.37" }
-solana-sdk = { path = "../../sdk", version = "=1.10.37" }
+solana-program-runtime = { path = "../../program-runtime", version = "=1.10.38" }
+solana-sdk = { path = "../../sdk", version = "=1.10.38" }
 
 [build-dependencies]
 rustc_version = "0.4"
