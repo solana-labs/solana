@@ -1029,10 +1029,10 @@ impl ScheduleStage {
             let task_receiver = task_receiver.clone();
             let h = std::thread::Builder::new().name(format!("sol-indexer{:02}", thx)).spawn(move || {
                 while let (uw, task, ll) = task_receiver.recv().unwrap() {
-                    if task.already_finished() {
-                        break;
-                    }
                     for lock_attempt in ll {
+                        if task.already_finished() {
+                            break;
+                        }
                         lock_attempt.contended_unique_weights().insert_task(uw, TaskInQueue::clone(&task));
                     }
                 }
