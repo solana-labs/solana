@@ -544,15 +544,12 @@ impl InstructionContext {
         &'a self,
         transaction_context: &'b TransactionContext,
     ) -> Result<&'b Pubkey, InstructionError> {
-        let result = self
-            .get_index_of_program_account_in_transaction(
-                self.program_accounts.len().saturating_sub(1),
-            )
-            .and_then(|index_in_transaction| {
-                transaction_context.get_key_of_account_at_index(index_in_transaction)
-            });
-        debug_assert!(result.is_ok());
-        result
+        self.get_index_of_program_account_in_transaction(
+            self.program_accounts.len().saturating_sub(1),
+        )
+        .and_then(|index_in_transaction| {
+            transaction_context.get_key_of_account_at_index(index_in_transaction)
+        })
     }
 
     fn try_borrow_account<'a, 'b: 'a>(

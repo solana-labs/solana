@@ -278,11 +278,18 @@ impl<'a> InvokeContext<'a> {
         program_indices: &[usize],
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
-        let program_id = self.transaction_context.get_key_of_account_at_index(
-            *program_indices
-                .last()
-                .ok_or(InstructionError::UnsupportedProgramId)?,
-        )?;
+        self.transaction_context
+            .get_next_instruction_context()?
+            .configure(program_indices, instruction_accounts, instruction_data);
+
+        let instruction_context = self
+            .transaction_context
+            .get_instruction_context_at_index_in_trace(
+                self.transaction_context.get_instruction_trace_length(),
+            )?;
+        let program_id = instruction_context
+            .get_last_program_key(self.transaction_context)
+            .map_err(|_| InstructionError::UnsupportedProgramId)?;
         if self
             .transaction_context
             .get_instruction_context_stack_height()
@@ -294,27 +301,32 @@ impl<'a> InvokeContext<'a> {
                 .feature_set
                 .is_active(&enable_early_verification_of_account_modifications::id())
             {
-                self.pre_accounts = Vec::with_capacity(instruction_accounts.len());
-                for (instruction_account_index, instruction_account) in
-                    instruction_accounts.iter().enumerate()
+                self.pre_accounts =
+                    Vec::with_capacity(instruction_context.get_number_of_instruction_accounts());
+                for instruction_account_index in
+                    0..instruction_context.get_number_of_instruction_accounts()
                 {
-                    if instruction_account_index != instruction_account.index_in_callee {
+                    if instruction_context
+                        .is_instruction_account_duplicate(instruction_account_index)?
+                        .is_some()
+                    {
                         continue; // Skip duplicate account
                     }
-                    if instruction_account.index_in_transaction
-                        >= self.transaction_context.get_number_of_accounts()
-                    {
+                    let index_in_transaction = instruction_context
+                        .get_index_of_instruction_account_in_transaction(
+                            instruction_account_index,
+                        )?;
+                    if index_in_transaction >= self.transaction_context.get_number_of_accounts() {
                         return Err(InstructionError::MissingAccount);
                     }
                     let account = self
                         .transaction_context
-                        .get_account_at_index(instruction_account.index_in_transaction)?
+                        .get_account_at_index(index_in_transaction)?
                         .borrow()
                         .clone();
                     self.pre_accounts.push(PreAccount::new(
-                        self.transaction_context.get_key_of_account_at_index(
-                            instruction_account.index_in_transaction,
-                        )?,
+                        self.transaction_context
+                            .get_key_of_account_at_index(index_in_transaction)?,
                         account,
                     ));
                 }
@@ -348,9 +360,6 @@ impl<'a> InvokeContext<'a> {
         }
 
         self.syscall_context.push(None);
-        self.transaction_context
-            .get_next_instruction_context()?
-            .configure(program_indices, instruction_accounts, instruction_data);
         self.transaction_context.push()
     }
 
