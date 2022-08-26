@@ -1066,7 +1066,7 @@ impl ScheduleStage {
                     break;
                 }
 
-                let prefer_immediate = true; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
+                let prefer_immediate = false; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
                     Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
 
@@ -1087,7 +1087,7 @@ impl ScheduleStage {
                         break;
                     }
 
-                    let prefer_immediate = true; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
+                    let prefer_immediate = false; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
                     let maybe_ee =
                         Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
 
