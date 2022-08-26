@@ -426,7 +426,7 @@ fn spawn_packet_senders(
                 accounts.len()
             };
             spawn_packet_sender(
-                unique_weight
+                unique_weight.clone(),
                 i,
                 producer_count,
                 Arc::clone(&preloader),
@@ -443,6 +443,7 @@ fn spawn_packet_senders(
 }
 
 fn spawn_packet_sender(
+    unique_weight: std::sync::Arc<std::sync::atomic::AtomicU64>,
     i: usize,
     producer_count: usize,
     preloader: Arc<solana_scheduler::Preloader>,
