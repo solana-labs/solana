@@ -899,11 +899,11 @@ impl ScheduleStage {
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for tracker in std::mem::take(&mut page.provisional_task_ids).into_iter() {
+                for (unique_weight, tracker) in std::mem::take(&mut page.provisional_task_ids).into_iter() {
                             tracker.progress();
                             if tracker.is_fulfilled() {
                                 trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
-                                address_book.fulfilled_provisional_task_ids.insert(task.unique_weight, task);
+                                address_book.fulfilled_provisional_task_ids.insert(unique_weight, task);
                             } else {
                                 trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
                             }
