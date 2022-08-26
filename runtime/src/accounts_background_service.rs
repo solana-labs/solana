@@ -25,7 +25,7 @@ use {
         boxed::Box,
         fmt::{Debug, Formatter},
         sync::{
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
@@ -51,6 +51,34 @@ pub type SnapshotRequestReceiver = Receiver<SnapshotRequest>;
 pub type DroppedSlotsSender = Sender<(Slot, BankId)>;
 pub type DroppedSlotsReceiver = Receiver<(Slot, BankId)>;
 
+/// interval to report bank_drop queue events: 60s
+const BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL: u64 = 60_000;
+/// maximum drop bank signal queue length
+const MAX_DROP_BANK_SIGNAL_QUEUE_SIZE: usize = 10_000;
+
+#[derive(Debug, Default)]
+struct PrunedBankQueueLenReporter {
+    last_report_time: AtomicU64,
+}
+
+impl PrunedBankQueueLenReporter {
+    fn report(&self, q_len: usize) {
+        let now = solana_sdk::timing::timestamp();
+        let last_report_time = self.last_report_time.load(Ordering::Acquire);
+        if q_len > MAX_DROP_BANK_SIGNAL_QUEUE_SIZE
+            && now.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL
+        {
+            warn!("Excessive pruned_bank_channel_len: {}", q_len);
+            self.last_report_time.store(now, Ordering::Release);
+        }
+    }
+}
+
+lazy_static! {
+    static ref BANK_DROP_QUEUE_REPORTER: PrunedBankQueueLenReporter =
+        PrunedBankQueueLenReporter::default();
+}
+
 #[derive(Clone)]
 pub struct SendDroppedBankCallback {
     sender: DroppedSlotsSender,
@@ -58,11 +86,7 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
-        let l = self.sender.len();
-        if l > 10_000 {
-            warn!("Excessive pruned_bank_channel_len: {}", l);
-        }
-
+        BANK_DROP_QUEUE_REPORTER.report(self.sender.len());
         match self.sender.send((bank.slot(), bank.bank_id())) {
             Err(SendError(_)) => {
                 info!("bank DropCallback signal queue disconnected.");
@@ -85,7 +109,7 @@ impl Debug for SendDroppedBankCallback {
 
 impl SendDroppedBankCallback {
     pub fn new(sender: DroppedSlotsSender) -> Self {
-        Self { sender }
+        Self { sender: sender }
     }
 }
 
