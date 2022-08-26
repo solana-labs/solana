@@ -828,7 +828,7 @@ impl ScheduleStage {
         task: &TaskInQueue,
         provisional_count: usize,
     ) {
-        let tracker = Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(task)));
+        let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(task)));
         for mut l in task.tx.1.lock_attempts {
             match l.status {
                 LockStatus::Provisional => {
