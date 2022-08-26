@@ -2186,14 +2186,16 @@ impl JsonRpcRequestProcessor {
     fn get_recent_prioritization_fees(
         &self,
         pubkeys: Vec<Pubkey>,
-        config: RpcContextConfig,
-    ) -> Result<RpcResponse<Vec<u64>>> {
-        let bank = self.get_bank_with_config(config)?;
-        Ok(new_response(
-            &bank,
-            self.prioritization_fee_cache
-                .get_prioritization_fees(&pubkeys),
-        ))
+    ) -> Result<Vec<RpcPrioritizationFee>> {
+        Ok(self
+            .prioritization_fee_cache
+            .get_prioritization_fees(&pubkeys)
+            .into_iter()
+            .map(|(slot, prioritization_fee)| RpcPrioritizationFee {
+                slot,
+                prioritization_fee,
+            })
+            .collect())
     }
 }
 
@@ -3439,9 +3441,8 @@ pub mod rpc_full {
         fn get_recent_prioritization_fees(
             &self,
             meta: Self::Metadata,
-            pubkey_strs: Vec<String>,
-            config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<Vec<u64>>>;
+            pubkey_strs: Option<Vec<String>>,
+        ) -> Result<Vec<RpcPrioritizationFee>>;
     }
 
     pub struct FullImpl;
@@ -4022,9 +4023,9 @@ pub mod rpc_full {
         fn get_recent_prioritization_fees(
             &self,
             meta: Self::Metadata,
-            pubkey_strs: Vec<String>,
-            config: Option<RpcContextConfig>,
-        ) -> Result<RpcResponse<Vec<u64>>> {
+            pubkey_strs: Option<Vec<String>>,
+        ) -> Result<Vec<RpcPrioritizationFee>> {
+            let pubkey_strs = pubkey_strs.unwrap_or_default();
             debug!(
                 "get_recent_prioritization_fees rpc request received: {:?} pubkeys",
                 pubkey_strs.len()
@@ -4039,7 +4040,7 @@ pub mod rpc_full {
                 .into_iter()
                 .map(|pubkey_str| verify_pubkey(&pubkey_str))
                 .collect::<Result<Vec<_>>>()?;
-            meta.get_recent_prioritization_fees(pubkeys, config.unwrap_or_default())
+            meta.get_recent_prioritization_fees(pubkeys)
         }
     }
 }
