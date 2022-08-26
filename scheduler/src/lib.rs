@@ -1046,7 +1046,7 @@ impl ScheduleStage {
         let mut from_exec_len = from_exec.len();
 
         loop {
-            //trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from_len, to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
+            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from_len, to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
 
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
