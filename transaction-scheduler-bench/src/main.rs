@@ -128,7 +128,7 @@ fn spawn_unified_scheduler(
         exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     let lane_channel_factor = std::env::var("LANE_CHANNEL_FACTOR")
-        .unwrap_or(format!("{}", 10)
+        .unwrap_or(format!("{}", 10)))
         .parse::<usize>()
         .unwrap();
 
