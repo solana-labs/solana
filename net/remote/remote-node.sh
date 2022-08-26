@@ -31,7 +31,7 @@ tmpfsAccounts="${22:false}"
 disableQuic="${23}"
 instanceIndex="${24:--1}"
 
-if [[ $instanceIndex != -1 ]]; then 
+if [[ $instanceIndex != -1 ]]; then
   gossipRunScript="gossip-run-$instanceIndex"
   gossipRunKeyScript="gossip-run-key-$instanceIndex"
 fi
@@ -111,7 +111,7 @@ cat > ~/solana/$gossipRunKeyScript <<EOF
 EOF
   chmod +x ~/solana/$gossipRunKeyScript
 
-fi 
+fi
 
 GPU_CUDA_OK=false
 GPU_FAIL_IF_NONE=false
@@ -327,7 +327,7 @@ cat >> ~/solana/$gossipRunScript <<EOF
       disown
 EOF
       ~/solana/$gossipRunScript
-    else 
+    else
       args=(
         --gossip-host "$entrypointIp"
         --gossip-port 8001
@@ -395,7 +395,7 @@ EOF
 
       args=(
         --account-file gossip-sim/src/accounts.yaml
-        --write-keys 
+        --write-keys
         --num-keys 1
       )
 
@@ -421,7 +421,7 @@ EOF
       rm ~/solana/$gossipRunScript
       rm ~/solana/$gossipRunKeyScript
 
-    else 
+    else
       args=(
         --entrypoint "$entrypointIp:8001"
         --gossip-port 8001
