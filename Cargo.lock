@@ -5205,9 +5205,13 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.15.0"
 dependencies = [
+ "ahash",
+ "blake3",
  "block-buffer 0.9.0",
  "bs58",
  "bv",
+ "byteorder",
+ "cc",
  "either",
  "generic-array 0.14.6",
  "getrandom 0.1.16",
@@ -5222,6 +5226,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
+ "serde_json",
  "sha2 0.10.2",
  "solana-frozen-abi-macro 1.12.0",
  "solana-logger 1.12.0",
