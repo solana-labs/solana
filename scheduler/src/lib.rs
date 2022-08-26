@@ -795,9 +795,9 @@ impl ScheduleStage {
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
-                drop(next_task);
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
+                    next_task,
                     &arc_next_task,
                     provisional_count,
                 );
