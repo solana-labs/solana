@@ -500,6 +500,10 @@ pub mod incremental_snapshot_only_incremental_hash_calculation {
     solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
 }
 
+pub mod vote_state_update_root_fix {
+    solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -619,6 +623,7 @@ lazy_static! {
         (concurrent_replay_of_forks::id(), "Allow slots from different forks to be replayed concurrently #26465"),
         (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
         (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
+        (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
