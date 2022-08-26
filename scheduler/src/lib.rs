@@ -617,7 +617,6 @@ type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
 // switched from crossbeam_channel::select! due to observed poor performance
 pub enum Multiplexed {
     FromPrevious((Weight, TaskInQueue)),
-    FromPreviousBatched(Vec<Vec<Box<PreprocessedTransaction>>>),
 }
 
 pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
@@ -1059,9 +1058,6 @@ impl ScheduleStage {
                         Multiplexed::FromPrevious(weighted_tx) => {
                             trace!("recv from previous");
                             Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut sequence_time);
-                        }
-                        Multiplexed::FromPreviousBatched(vvv) => {
-                            unreachable!();
                         }
                     }
                }
