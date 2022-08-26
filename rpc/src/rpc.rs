@@ -2192,7 +2192,7 @@ impl JsonRpcRequestProcessor {
         Ok(new_response(
             &bank,
             self.prioritization_fee_cache
-                .get_prioritization_fees_with_accounts(&pubkeys),
+                .get_prioritization_fees(&pubkeys),
         ))
     }
 }
