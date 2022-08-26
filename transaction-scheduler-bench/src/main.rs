@@ -193,7 +193,7 @@ fn main() {
     let execution_handles = start_execution_threads(
         metrics.clone(),
         transaction_batch_receivers,
-        (completed_transaction_sender, packet_batch_sender.clone()),
+        completed_transaction_sender,
         execution_per_tx_us,
         exit.clone(),
     );
