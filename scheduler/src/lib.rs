@@ -1042,17 +1042,20 @@ impl ScheduleStage {
             }).unwrap();
         }
 
+        let mut from_len = from.len();
+        let mut from_exec_len = from_exec.len();
+
         loop {
-            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
+            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from_len, to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, address_book.provisioning_trackers.len(), max_executing_queue_count, address_book.uncontended_task_ids.len());
 
             crossbeam_channel::select! {
                recv(from) -> maybe_from => {
-                   trace!("select1: {} {}", from.len(), from_exec.len());
+                   trace!("select1: {} {}", from_len, from_exec_len);
                    let task = maybe_from.unwrap();
                    Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                }
                recv(from_exec) -> maybe_from_exec => {
-                   trace!("select2: {} {}", from.len(), from_exec.len());
+                   trace!("select2: {} {}", from_len, from_exec_len);
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
                     trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                     executing_queue_count -= 1;
@@ -1084,18 +1087,28 @@ impl ScheduleStage {
                     }
                 }
 
-                let from_len = from.len();
-                let from_exec_len = from_exec.len();
+                from_len = from.len();
+                from_exec_len = from_exec.len();
 
                 if from_len == 0 && from_exec_len == 0 {
                    trace!("select: back to");
-                    break;
+                   break;
                 } else {
                     if from_len > 0 {
+                       from_len -= 1;
+                       if from_len == 0 {
+                           from_len = from.len();
+                       }
+                       trace!("select3: {} {}", from_len, from_exec_len);
                        let task = from.recv().unwrap();
                        Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                     }
                     if from_exec_len > 0 {
+                       from_exec_len -= 1;
+                       if from_exec_len == 0 {
+                           from_exec_len = from_exec.len();
+                       }
+                       trace!("select4: {} {}", from_len, from_exec_len);
                         let mut processed_execution_environment = from_exec.recv().unwrap();
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                         executing_queue_count -= 1;
