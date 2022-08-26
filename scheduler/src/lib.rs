@@ -167,7 +167,7 @@ pub struct Page {
     current_usage: Usage,
     next_usage: Usage,
     pub contended_unique_weights: TaskIds,
-    provisional_task_ids: std::collections::HashSet<TaskId>,
+    provisional_task_ids: std::collections::HashSet<std::sync::Arc<ProvisioningTracker>>,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
@@ -201,17 +201,17 @@ type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
-    provisioning_trackers: std::collections::HashMap<UniqueWeight, (ProvisioningTracker, TaskInQueue)>, 
     fulfilled_provisional_task_ids: WeightedTaskIds,
 }
 
 struct ProvisioningTracker {
     remaining_count: usize,
+    task: TaskInQueue,
 }
 
 impl ProvisioningTracker {
-    fn new(remaining_count: usize) -> Self {
-        Self { remaining_count }
+    fn new(remaining_count: usize, task: TaskInQueue) -> Self {
+        Self { remaining_count, task }
     }
 
     fn is_fulfilled(&self) -> bool {
@@ -792,15 +792,14 @@ impl ScheduleStage {
                 assert_eq!(unlockable_count, 0);
                 let lock_count = next_task.tx.1.len();
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
-                Self::finalize_lock_for_provisional_execution(
-                    address_book,
-                    &unique_weight,
-                    &mut next_task.tx.1,
-                );
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
                 drop(next_task);
-                address_book.provisioning_trackers.insert(unique_weight, (ProvisioningTracker::new(provisional_count), arc_next_task));
+                Self::finalize_lock_for_provisional_execution(
+                    address_book,
+                    &arc_next_task,
+                    provisional_count,
+                );
 
                 return None;
                 continue;
@@ -826,13 +825,14 @@ impl ScheduleStage {
     #[inline(never)]
     fn finalize_lock_for_provisional_execution(
         address_book: &mut AddressBook,
-        unique_weight: &UniqueWeight,
-        lock_attempts: &mut Vec<LockAttempt>,
+        task: &TaskInQueue,
+        provisional_count: usize,
     ) {
-        for mut l in lock_attempts {
+        let tracker = Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(task)));
+        for mut l in task.tx.1.lock_attempts {
             match l.status {
                 LockStatus::Provisional => {
-                    l.target.page_mut().provisional_task_ids.insert(*unique_weight);
+                    l.target.page_mut().provisional_task_ids.insert(Arc::clone(tracker));
                 }
                 LockStatus::Succeded => {
                     // do nothing
@@ -898,7 +898,7 @@ impl ScheduleStage {
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for task_id in std::mem::take(&mut page.provisional_task_ids).into_iter() {
+                for task in std::mem::take(&mut page.provisional_task_ids).into_iter() {
                     match address_book.provisioning_trackers.entry(task_id) {
                         std::collections::hash_map::Entry::Occupied(mut tracker_entry) => {
                             let (tracker, task) = tracker_entry.get_mut();
