@@ -83,7 +83,7 @@ type TransactionMessage = PreprocessedTransaction;
 //type CompletedTransactionMessage = solana_scheduler::Multiplexed; // (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
 type CompletedTransactionMessage = Box<solana_scheduler::ExecutionEnvironment>;
 type TransactionBatchMessage = Box<solana_scheduler::ExecutionEnvironment>; // Vec<TransactionMessage>;
-type BatchSenderMessage = solana_scheduler::Multiplexed; // Vec<Vec<PreprocessedTransaction>>;
+type BatchSenderMessage = solana_scheduler::TaskInQueue; // Vec<Vec<PreprocessedTransaction>>;
 
 #[derive(Debug, Default)]
 struct TransactionSchedulerBenchMetrics {
@@ -325,7 +325,7 @@ fn execution_worker(
 fn handle_transaction_batch(
     metrics: &TransactionSchedulerBenchMetrics,
     thread_index: usize,
-    completed_transaction_sender: &(Sender<CompletedTransactionMessage>, Sender<solana_scheduler::Multiplexed>),
+    completed_transaction_sender: &(Sender<CompletedTransactionMessage>),
     mut transaction_batch: TransactionBatchMessage,
     execution_per_tx_us: u64,
 ) {
@@ -517,7 +517,7 @@ fn send_packets(
                 //for lock_attempt in t.tx.1.iter() {
                 //    lock_attempt.contended_unique_weights().insert_task(p, solana_scheduler::TaskInQueue::clone(&t));
                 //}
-                packet_batch_sender.send(solana_scheduler::Multiplexed::FromPrevious((p, t))).unwrap();
+                packet_batch_sender.send(t).unwrap();
             }
         }
         
