@@ -20,7 +20,7 @@ pub type TransactionAccount = (Pubkey, AccountSharedData);
 /// Contains account meta data which varies between instruction.
 ///
 /// It also contains indices to other structures for faster lookup.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstructionAccount {
     /// Points to the account and its key in the `TransactionContext`
     pub index_in_transaction: usize,
@@ -41,7 +41,7 @@ pub struct InstructionAccount {
 /// Loaded transaction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a transaction being processed.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
@@ -324,7 +324,7 @@ pub struct TransactionReturnData {
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct InstructionContext {
     nesting_level: usize,
     instruction_accounts_lamport_sum: u128,
