@@ -68,7 +68,7 @@ impl PrunedBankQueueLenReporter {
         if q_len > MAX_DROP_BANK_SIGNAL_QUEUE_SIZE
             && now.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL
         {
-            warn!("Excessive pruned_bank_channel_len: {}", q_len);
+            datapoint_warn!("excessive_pruned_bank_channel_len", ("len", q_len, i64));
             self.last_report_time.store(now, Ordering::Release);
         }
     }
@@ -87,12 +87,8 @@ pub struct SendDroppedBankCallback {
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
         BANK_DROP_QUEUE_REPORTER.report(self.sender.len());
-        match self.sender.send((bank.slot(), bank.bank_id())) {
-            Err(SendError(_)) => {
-                info!("bank DropCallback signal queue disconnected.");
-            }
-            // success
-            Ok(_) => {}
+        if let Err(SendError(_)) = self.sender.send((bank.slot(), bank.bank_id())) {
+            info!("bank DropCallback signal queue disconnected.");
         }
     }
 
@@ -109,7 +105,7 @@ impl Debug for SendDroppedBankCallback {
 
 impl SendDroppedBankCallback {
     pub fn new(sender: DroppedSlotsSender) -> Self {
-        Self { sender: sender }
+        Self { sender }
     }
 }
 
