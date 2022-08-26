@@ -127,11 +127,16 @@ fn spawn_unified_scheduler(
         max_batch_size: usize,
         exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
+    let lane_channel_factor = std::env::var("LANE_CHANNEL_FACTOR")
+        .unwrap_or(format!("{}", 10)
+        .parse::<usize>()
+        .unwrap();
+
     std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
         let mut runnable_queue = solana_scheduler::TaskQueue::default();
 
         solana_scheduler::ScheduleStage::run(
-            num_execution_threads * 10,
+            num_execution_threads * lane_channel_factor,
             &mut runnable_queue,
             &mut address_book,
             &packet_batch_receiver.clone(),
