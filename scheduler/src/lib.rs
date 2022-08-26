@@ -716,7 +716,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn pop_from_queue_then_lock(
-        task_sender: &crossbeam_channel::Sender<(u64, TaskInQueue, Vec<LockAttempt>)>,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
@@ -961,7 +961,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn schedule_next_execution(
-        task_sender: &crossbeam_channel::Sender<(u64, TaskInQueue, Vec<LockAttempt>)>,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
@@ -1020,7 +1020,7 @@ impl ScheduleStage {
 
             (&ee_sender, Some(h))
         };
-        let (task_sender, task_receiver) = crossbeam_channel::unbounded::<(u64, TaskInQueue, Vec<LockAttempt>)>();
+        let (task_sender, task_receiver) = crossbeam_channel::unbounded::<(TaskInQueue, Vec<LockAttempt>)>();
         let indexer_count = std::env::var("INDEXER_COUNT")
             .unwrap_or(format!("{}", 4))
             .parse::<usize>()
