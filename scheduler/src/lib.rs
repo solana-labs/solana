@@ -904,7 +904,7 @@ impl ScheduleStage {
                     tracker.progress();
                     if tracker.is_fulfilled() {
                         trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
-                        address_book.fulfilled_provisional_task_ids.insert(unique_weight, tracker.task);
+                        address_book.fulfilled_provisional_task_ids.insert(unique_weight, TaskInQueue::clone(&tracker.task));
                     } else {
                         trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
                     }
