@@ -661,7 +661,7 @@ impl CompiledInstruction {
 /// Use to query and convey information about the sibling instruction components
 /// when calling the `sol_get_processed_sibling_instruction` syscall.
 #[repr(C)]
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq)]
 pub struct ProcessedSiblingInstruction {
     /// Length of the instruction data
     pub data_len: u64,
