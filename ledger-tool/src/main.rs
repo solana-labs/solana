@@ -336,24 +336,36 @@ fn output_slot(
                         let uq = ee.unique_weight;
                         for mut lock_attempt in ee.lock_attempts.iter_mut() {
                             let contended_unique_weights = lock_attempt.contended_unique_weights();
-                            contended_unique_weights.remove_task(&uq);
                             contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
                                 let mut found = true;
-                                assert_ne!(task_cursor.key(), &uq);
+                                let mut removed = false;
                                 let mut task = task_cursor.value();
+                                //task.trace_timestamps("in_exec(initial list)");
                                 while !task.currently_contended() {
+                                    if task_cursor.key() == &uq {
+                                        assert!(should_remove);
+                                        removed = task_cursor.remove();
+                                        assert!(removed);
+                                    }
+                                    if task.already_finished() {
+                                        task_cursor.remove();
+                                    }
                                     if let Some(new_cursor) = task_cursor.prev() {
                                         assert!(new_cursor.key() < task_cursor.key());
-                                        assert_ne!(new_cursor.key(), &uq);
                                         task_cursor = new_cursor;
                                         task = task_cursor.value();
+                                        //task.trace_timestamps("in_exec(subsequent list)");
                                     } else {
                                         found = false;
                                         break;
                                     }
                                 }
+                                if should_remove && !removed {
+                                    contended_unique_weights.remove_task(&uq);
+                                }
                                 found.then(|| solana_scheduler::TaskInQueue::clone(task))
                             }).flatten().map(|task| {
+                                //task.trace_timestamps(&format!("in_exec(heaviest:{})", transaction_batch.task.queue_time_label()));
                                 lock_attempt.heaviest_uncontended = Some(task);
                                 ()
                             });
@@ -443,15 +455,11 @@ fn output_slot(
                                 }
 
                                 let t = solana_scheduler::Task::new_for_queue(weight, tx);
-                                for lock_attempt in t.tx.1.iter() {
-                                    lock_attempt.contended_unique_weights().insert_task(weight, solana_scheduler::TaskInQueue::clone(&t));
-                                }
+                                //for lock_attempt in t.tx.1.iter() {
+                                //    lock_attempt.contended_unique_weights().insert_task(weight, solana_scheduler::TaskInQueue::clone(&t));
+                                //}
 
-                                muxed_sender
-                                    .send(
-                                        t,
-                                    )
-                                    .unwrap();
+                                muxed_sender.send(t).unwrap();
                                 depth.fetch_add(1, Ordering::Relaxed);
                                 weight -= 1;
                             }
