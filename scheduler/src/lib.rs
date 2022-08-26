@@ -1091,7 +1091,7 @@ impl ScheduleStage {
                 from_exec_len = from_exec.len();
 
                 if from_len == 0 && from_exec_len == 0 {
-                   //trace!("select: back to");
+                   trace!("select: back to");
                    break;
                 } else {
                     if from_len > 0 {
