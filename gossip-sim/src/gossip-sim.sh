@@ -3,11 +3,8 @@
 # Start a a node
 #
 
-echo "greg - in gossip-sim script"
 here=$(dirname "$0")
 source "$here"/common.sh
-
-echo "greg - in gossip-sim.sh script. program: $program"
 
 usage() {
   if [[ -n $1 ]]; then
@@ -78,8 +75,7 @@ while [[ -n $1 ]]; do
   fi
 done
 
-echo "greg - args to run: ${args[@]}"
-echo "greg - writeKeys: $writeKeys"
+echo "args to run: ${args[@]}"
 
 if [[ $writeKeys == "true" ]]; then 
   echo "writeKeys true"

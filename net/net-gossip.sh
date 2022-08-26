@@ -29,7 +29,7 @@ usage() {
 EOM
 )
   cat <<EOF
-usage: $0 [start|stop|restart|sanity|gossip-sim] [command-specific options]
+usage: $0 [start|stop|restart|sanity|gossip-only] [command-specific options]
 
 Operate a configured testnet
 
@@ -297,7 +297,7 @@ syncScripts() {
   declare ipAddress=$1
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     --exclude 'net/log*' \
-    "$SOLANA_ROOT"/{fetch-perf-libs.sh,fetch-spl.sh,scripts,net,multinode-demo,gossip-sim} \
+    "$SOLANA_ROOT"/{fetch-perf-libs.sh,fetch-spl.sh,scripts,net,multinode-demo,gossip-only} \
     "$ipAddress":"$SOLANA_HOME"/ > /dev/null
 }
 
@@ -419,7 +419,6 @@ startGossipBootstrapLeader() {
 }
 
 startGossipNode() {
-  echo "greg - in startGossipNode()"
   declare ipAddress=$1
   declare nodeType=$2
   declare nodeIndex="$3"
@@ -772,11 +771,8 @@ gossipInstancesPerNode() {
 }
 
 gossipDeploy() {
-  echo "greg - in gossipDeploy()"
   declare instancesPerNode=$1
   declare gossipInstances=$2
-  echo "greg - instancesPerNode in gossipDeploy: $instancesPerNode"
-  echo "greg - gossipInstances: $gossipInstances"
   initLogDir
 
   echo "Deployment started at $(date)"
@@ -1247,7 +1243,6 @@ while [[ -n $1 ]]; do
   fi
 done
 
-echo "greg - gossip instances per node: $instancesPerNode"
 if [[ ($instancesPerNode == 0 && $gossipInstances == 0) || ($instancesPerNode != 0 && $gossipInstances != 0) ]]; then 
   usage "need to set either --gossip-instances-per-node OR --gossip-instances (not both)"
 fi
@@ -1386,7 +1381,7 @@ fi
 checkPremptibleInstances
 
 case $command in
-gossip-sim)
+gossip-only)
   prepareDeploy
   stop
   gossipDeploy $instancesPerNode $gossipInstances
