@@ -1047,12 +1047,12 @@ impl ScheduleStage {
 
             crossbeam_channel::select! {
                recv(from) -> maybe_from => {
-                   //trace!("select1: {} {}", from.len(), from_exec.len());
+                   trace!("select1: {} {}", from.len(), from_exec.len());
                    let task = maybe_from.unwrap();
                    Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                }
                recv(from_exec) -> maybe_from_exec => {
-                   //trace!("select2: {} {}", from.len(), from_exec.len());
+                   trace!("select2: {} {}", from.len(), from_exec.len());
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
                     trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                     executing_queue_count -= 1;
@@ -1088,6 +1088,7 @@ impl ScheduleStage {
                 let from_exec_len = from_exec.len();
 
                 if from_len == 0 && from_exec_len == 0 {
+                   trace!("select: back to");
                     break;
                 } else {
                     if from_len > 0 {
