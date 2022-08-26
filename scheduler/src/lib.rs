@@ -1050,14 +1050,14 @@ impl ScheduleStage {
 
             crossbeam_channel::select! {
                recv(from) -> maybe_from => {
-                   trace!("select1: {} {}", from.len(), from_exec.len());
+                   //trace!("select1: {} {}", from.len(), from_exec.len());
                    let task = maybe_from.unwrap();
                    Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                }
                recv(from_exec) -> maybe_from_exec => {
-                   trace!("select2: {} {}", from.len(), from_exec.len());
+                   //trace!("select2: {} {}", from.len(), from_exec.len());
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
-                    trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
+                    //trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                     executing_queue_count -= 1;
 
                     Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
@@ -1069,7 +1069,7 @@ impl ScheduleStage {
             loop {
                 loop {
                     if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
-                        trace!("skip scheduling; outgoing queue full");
+                        //trace!("skip scheduling; outgoing queue full");
                         break;
                     }
 
@@ -1078,7 +1078,7 @@ impl ScheduleStage {
                         Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
 
                     if let Some(ee) = maybe_ee {
-                        trace!("send to execute");
+                        //trace!("send to execute");
                         executing_queue_count += 1;
 
                         to_execute_substage.send(ee).unwrap();
@@ -1091,7 +1091,7 @@ impl ScheduleStage {
                 from_exec_len = from_exec.len();
 
                 if from_len == 0 && from_exec_len == 0 {
-                   trace!("select: back to");
+                   //trace!("select: back to");
                    break;
                 } else {
                     if from_len > 0 {
