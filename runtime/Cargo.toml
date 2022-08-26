@@ -27,7 +27,7 @@ index_list = "0.2.7"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 log = "0.4.17"
-lz4 = "1.23.3"
+lz4 = "1.24.0"
 memmap2 = "0.5.3"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
