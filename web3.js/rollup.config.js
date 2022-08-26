@@ -112,7 +112,6 @@ function generateConfig(configType, format) {
       'node-fetch',
       'rpc-websockets',
       'superstruct',
-      'tweetnacl',
     ];
   }
 
@@ -182,7 +181,6 @@ function generateConfig(configType, format) {
             'react-native-url-polyfill',
             'rpc-websockets',
             'superstruct',
-            'tweetnacl',
           ];
 
           break;

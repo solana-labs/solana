@@ -72,8 +72,7 @@
     "js-sha3": "^0.8.0",
     "node-fetch": "2",
     "rpc-websockets": "^7.5.0",
-    "superstruct": "^0.14.2",
-    "tweetnacl": "^1.0.3"
+    "superstruct": "^0.14.2"
   },
   "devDependencies": {
     "@babel/core": "^7.12.13",
