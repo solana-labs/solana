@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-mem"
-version = "1.10.38"
+version = "1.10.39"
 description = "Solana BPF test program written in Rust"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -13,12 +13,12 @@ edition = "2021"
 no-entrypoint = []
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.10.38" }
+solana-program = { path = "../../../../sdk/program", version = "=1.10.39" }
 
 [dev-dependencies]
-solana-program-runtime = { path = "../../../../program-runtime", version = "=1.10.38" }
-solana-program-test = { path = "../../../../program-test", version = "=1.10.38" }
-solana-sdk = { path = "../../../../sdk", version = "=1.10.38" }
+solana-program-runtime = { path = "../../../../program-runtime", version = "=1.10.39" }
+solana-program-test = { path = "../../../../program-test", version = "=1.10.39" }
+solana-sdk = { path = "../../../../sdk", version = "=1.10.39" }
 
 [lib]
 crate-type = ["cdylib", "lib"]
