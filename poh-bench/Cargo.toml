@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-poh-bench"
-version = "1.10.37"
+version = "1.10.38"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -14,12 +14,12 @@ clap = "2.33.1"
 log = "0.4.14"
 rand = "0.7.0"
 rayon = "1.5.1"
-solana-entry = { path = "../entry", version = "=1.10.37" }
-solana-logger = { path = "../logger", version = "=1.10.37" }
-solana-measure = { path = "../measure", version = "=1.10.37" }
-solana-perf = { path = "../perf", version = "=1.10.37" }
-solana-sdk = { path = "../sdk", version = "=1.10.37" }
-solana-version = { path = "../version", version = "=1.10.37" }
+solana-entry = { path = "../entry", version = "=1.10.38" }
+solana-logger = { path = "../logger", version = "=1.10.38" }
+solana-measure = { path = "../measure", version = "=1.10.38" }
+solana-perf = { path = "../perf", version = "=1.10.38" }
+solana-sdk = { path = "../sdk", version = "=1.10.38" }
+solana-version = { path = "../version", version = "=1.10.38" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

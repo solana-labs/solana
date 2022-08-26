@@ -1,6 +1,6 @@
 [package]
 name = "solana-genesis-utils"
-version = "1.10.37"
+version = "1.10.38"
 description = "Solana Genesis Utils"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -10,9 +10,9 @@ documentation = "https://docs.rs/solana-download-utils"
 edition = "2021"
 
 [dependencies]
-solana-download-utils = { path = "../download-utils", version = "=1.10.37" }
-solana-runtime = { path = "../runtime", version = "=1.10.37" }
-solana-sdk = { path = "../sdk", version = "=1.10.37" }
+solana-download-utils = { path = "../download-utils", version = "=1.10.38" }
+solana-runtime = { path = "../runtime", version = "=1.10.38" }
+solana-sdk = { path = "../sdk", version = "=1.10.38" }
 
 [lib]
 crate-type = ["lib"]
