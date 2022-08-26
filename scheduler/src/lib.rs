@@ -1058,19 +1058,7 @@ impl ScheduleStage {
                     match i {
                         Multiplexed::FromPrevious(weighted_tx) => {
                             trace!("recv from previous");
-
                             Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut sequence_time);
-
-                            while false && from_exec.len() > 0 {
-                                let mut processed_execution_environment = from_exec.recv().unwrap();
-                                trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
-                                executing_queue_count -= 1;
-
-                                Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
-                                // async-ly propagate the result to rpc subsystems
-                                to_next_stage.send(processed_execution_environment).unwrap();
-                            }
-
                         }
                         Multiplexed::FromPreviousBatched(vvv) => {
                             unreachable!();
@@ -1079,26 +1067,17 @@ impl ScheduleStage {
                }
                recv(from_exec) -> maybe_from_exec => {
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
-                    loop {
-                        trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
-                        executing_queue_count -= 1;
+                    trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
+                    executing_queue_count -= 1;
 
-                        Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
-                        // async-ly propagate the result to rpc subsystems
-                        to_next_stage.send(processed_execution_environment).unwrap();
-                        if false && from_exec.len() > 0 {
-                            processed_execution_environment = from_exec.recv().unwrap();
-                        } else {
-                            break;
-                        }
-                    }
+                    Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
+                    // async-ly propagate the result to rpc subsystems
+                    to_next_stage.send(processed_execution_environment).unwrap();
                }
             }
 
             loop {
-                /* if !address_book.uncontended_task_ids.is_empty() {
-                    trace!("prefer emptying n_u_a");
-                } else */ if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
+                if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
                     trace!("skip scheduling; outgoing queue full");
                     break;
                 }
@@ -1112,7 +1091,6 @@ impl ScheduleStage {
                     executing_queue_count += 1;
 
                     to_execute_substage.send(ee).unwrap();
-                    break;
                 } else {
                     break;
                 }
