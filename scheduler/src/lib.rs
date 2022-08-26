@@ -204,6 +204,7 @@ pub struct AddressBook {
     fulfilled_provisional_task_ids: WeightedTaskIds,
 }
 
+#[derive(Debug)]
 struct ProvisioningTracker {
     remaining_count: usize,
     task: TaskInQueue,
