@@ -1095,19 +1095,15 @@ impl ScheduleStage {
                    break;
                 } else {
                     if from_len > 0 {
+                       trace!("select3: {} {}", from_len, from_exec_len);
+                       let task = from.recv().unwrap();
+                       Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                        from_len -= 1;
                        if from_len == 0 {
                            from_len = from.len();
                        }
-                       trace!("select3: {} {}", from_len, from_exec_len);
-                       let task = from.recv().unwrap();
-                       Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                     }
                     if from_exec_len > 0 {
-                       from_exec_len -= 1;
-                       if from_exec_len == 0 {
-                           from_exec_len = from_exec.len();
-                       }
                        trace!("select4: {} {}", from_len, from_exec_len);
                         let mut processed_execution_environment = from_exec.recv().unwrap();
                         trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
@@ -1116,6 +1112,10 @@ impl ScheduleStage {
                         Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
                         // async-ly propagate the result to rpc subsystems
                         to_next_stage.send(processed_execution_environment).unwrap();
+                       from_exec_len -= 1;
+                       if from_exec_len == 0 {
+                           from_exec_len = from_exec.len();
+                       }
                     }
                 }
             }
