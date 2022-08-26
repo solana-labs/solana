@@ -27,3 +27,11 @@ export const generateKeypair = (): Ed25519Keypair => {
   };
 };
 export const getPublicKey = ed25519.sync.getPublicKey;
+export function isOnCurve(publicKey: Uint8Array): boolean {
+  try {
+    ed25519.Point.fromHex(publicKey, true /* strict */);
+    return true;
+  } catch {
+    return false;
+  }
+}
