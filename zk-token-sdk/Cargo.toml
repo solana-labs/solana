@@ -22,6 +22,7 @@ byteorder = "1"
 cipher = "0.4"
 curve25519-dalek = { version = "3.2.1", features = ["serde"] }
 getrandom = { version = "0.1", features = ["dummy"] }
+itertools = "0.10.3"
 lazy_static = "1.4.0"
 merlin = "3"
 rand = "0.7"
