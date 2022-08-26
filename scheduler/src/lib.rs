@@ -843,7 +843,7 @@ impl ScheduleStage {
                 }
             }
         }
-        trace!("provisioning_trackers: {}", address_book.provisioning_trackers.len());
+        //trace!("provisioning_trackers: {}", address_book.provisioning_trackers.len());
     }
 
     #[inline(never)]
@@ -1059,12 +1059,12 @@ impl ScheduleStage {
             }
 
             loop {
-                if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
+                if (executing_queue_count /*+ address_book.provisioning_trackers.len()*/) >= max_executing_queue_count {
                     //trace!("skip scheduling; outgoing queue full");
                     break;
                 }
 
-                let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
+                let prefer_immediate = true; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
                 let maybe_ee =
                     Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
 
@@ -1080,12 +1080,12 @@ impl ScheduleStage {
 
             loop {
                 loop {
-                    if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
+                    if (executing_queue_count /*+ address_book.provisioning_trackers.len()*/) >= max_executing_queue_count {
                         //trace!("skip scheduling; outgoing queue full");
                         break;
                     }
 
-                    let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
+                    let prefer_immediate = true; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
                     let maybe_ee =
                         Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
 
