@@ -105,7 +105,7 @@ else
     solana-net-shaper
     solana-sys-tuner
     solana-validator
-    gossip-only
+    gossip-sim
     rbpf-cli
   )
 

@@ -8,7 +8,7 @@
 #
 
 # shellcheck source=src/common.sh
-echo "greg - in gossip-only common.sh script"
+echo "greg - in gossip-sim common.sh script"
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")"/../.. || exit 1; pwd)"/net/common.sh
 
@@ -40,7 +40,7 @@ if [[ -n $USE_INSTALL || ! -f "$SOLANA_ROOT"/Cargo.toml ]]; then
 
   solana_gossip_only() {
     declare program="$1"
-    printf "gossip-only"
+    printf "gossip-sim"
   }
 else
   solana_program() {
@@ -74,9 +74,9 @@ else
     declare crate="$program"
     if [[ -z $program ]]; then
       crate="cli"
-      program="gossip-only"
+      program="gossip-sim"
     else
-      program="gossip-only"
+      program="gossip-sim"
     fi
 
     if [[ -n $NDEBUG ]]; then

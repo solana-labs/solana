@@ -1835,7 +1835,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gossip-only"
+name = "gossip-sim"
 version = "1.12.0"
 dependencies = [
  "clap 2.33.3",

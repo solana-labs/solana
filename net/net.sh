@@ -29,7 +29,7 @@ usage() {
 EOM
 )
   cat <<EOF
-usage: $0 [start|stop|restart|sanity|gossip-only] [command-specific options]
+usage: $0 [start|stop|restart|sanity|gossip-sim] [command-specific options]
 
 Operate a configured testnet
 
@@ -37,7 +37,7 @@ Operate a configured testnet
  sanity       - Sanity check the network
  stop         - Stop the network
  restart      - Shortcut for stop then start
- gossip-only  - Run gossip-nodes only. Runs prepareDeploy, stop, gossipDeploy (similar to restart)
+ gossip-sim  - Run gossip-nodes only. Runs prepareDeploy, stop, gossipDeploy (similar to restart)
  logs         - Fetch remote logs from each network node
  startnode    - Start an individual node (previously stopped with stopNode)
  stopnode     - Stop an individual node
@@ -109,10 +109,10 @@ Operate a configured testnet
    --full-rpc
                                       - Support full RPC services on all nodes
    --gossip-instances                 - Number of gossip instances to deploy across GCE instances. 
-                                        Does a round robin deployment. Used with `gossip-only` command
+                                        Does a round robin deployment. Used with `gossip-sim` command
                                         Cannot be used with --gossip-instances-per-node
    --gossip-instances-per-node        - Number of gossip instances to deploy on each GCE instance. 
-                                        Used with `gossip-only` command
+                                        Used with `gossip-sim` command
                                         Cannot be used with --gossip-instances
    --tpu-disable-quic
                                       - Disable quic for tpu packet forwarding
@@ -273,7 +273,7 @@ syncScripts() {
   declare ipAddress=$1
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     --exclude 'net/log*' \
-    "$SOLANA_ROOT"/{fetch-perf-libs.sh,fetch-spl.sh,scripts,net,multinode-demo,gossip-only} \
+    "$SOLANA_ROOT"/{fetch-perf-libs.sh,fetch-spl.sh,scripts,net,multinode-demo,gossip-sim} \
     "$ipAddress":"$SOLANA_HOME"/ > /dev/null
 }
 
@@ -1209,7 +1209,7 @@ upgrade)
   deployBootstrapValidator "$bootstrapValidatorIp"
   # (start|stop)Node need refactored to support restarting the bootstrap validator
   ;;
-gossip-only)
+gossip-sim)
   prepareDeploy
   stop
   deploy

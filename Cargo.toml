@@ -92,7 +92,7 @@ members = [
     "version",
     "watchtower",
     "zk-token-sdk",
-    "gossip-only",
+    "gossip-sim",
 ]
 
 exclude = [

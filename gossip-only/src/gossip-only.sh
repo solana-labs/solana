@@ -3,11 +3,11 @@
 # Start a a node
 #
 
-echo "greg - in gossip-only script"
+echo "greg - in gossip-sim script"
 here=$(dirname "$0")
 source "$here"/common.sh
 
-echo "greg - in gossip-only.sh script. program: $program"
+echo "greg - in gossip-sim.sh script. program: $program"
 
 usage() {
   if [[ -n $1 ]]; then
@@ -16,7 +16,7 @@ usage() {
   fi
   cat <<EOF
 
-usage for gossip-only: $0 [OPTIONS] [cluster entry point hostname]
+usage for gossip-sim: $0 [OPTIONS] [cluster entry point hostname]
 
 Start a validator with no stake
 
@@ -83,10 +83,10 @@ echo "greg - writeKeys: $writeKeys"
 
 if [[ $writeKeys == "true" ]]; then 
   echo "writeKeys true"
-  gossip-only "${args[@]}"
+  gossip-sim "${args[@]}"
 else 
   echo "writeKeys false"
-  gossip-only "${args[@]}" &
+  gossip-sim "${args[@]}" &
   pid=$!
   echo "pid: $pid"
 fi

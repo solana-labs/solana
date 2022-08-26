@@ -312,10 +312,10 @@ EOF
     fi
 
     if [[ $instanceIndex != -1 ]]; then
-      chmod +x gossip-only/src/gossip-only.sh
+      chmod +x gossip-sim/src/gossip-sim.sh
       gossipOnlyPort=9001
       args=(
-        --account-file gossip-only/src/accounts.yaml
+        --account-file gossip-sim/src/accounts.yaml
         --bootstrap
         --num-nodes 1
         --entrypoint $entrypointIp:$gossipOnlyPort
@@ -323,7 +323,7 @@ EOF
         --gossip-port $gossipOnlyPort
       )
 cat >> ~/solana/$gossipRunScript <<EOF
-      nohup gossip-only/src/gossip-only.sh ${args[@]} > bootstrap-gossip.log.\$now 2>&1 &
+      nohup gossip-sim/src/gossip-sim.sh ${args[@]} > bootstrap-gossip.log.\$now 2>&1 &
       disown
 EOF
       ~/solana/$gossipRunScript
@@ -391,29 +391,29 @@ EOF
 
     if [[ $instanceIndex != -1 ]]; then
       set -x
-      chmod +x gossip-only/src/gossip-only.sh
+      chmod +x gossip-sim/src/gossip-sim.sh
 
       args=(
-        --account-file gossip-only/src/accounts.yaml
+        --account-file gossip-sim/src/accounts.yaml
         --write-keys 
         --num-keys 1
       )
 
 cat >> ~/solana/$gossipRunKeyScript <<EOF
-      gossip-only/src/gossip-only.sh ${args[@]} > gossip-instance-key-$instanceIndex.log 2>&1
+      gossip-sim/src/gossip-sim.sh ${args[@]} > gossip-instance-key-$instanceIndex.log 2>&1
 EOF
       ~/solana/$gossipRunKeyScript
 
       gossipOnlyPort=9001
       args=(
-        --account-file gossip-only/src/accounts.yaml
+        --account-file gossip-sim/src/accounts.yaml
         --num-nodes 1
         --entrypoint $entrypointIp:$gossipOnlyPort
         --gossip-host $(hostname -i)
       )
 
 cat >> ~/solana/$gossipRunScript <<EOF
-      nohup gossip-only/src/gossip-only.sh ${args[@]} >> gossip-instance-$instanceIndex.log.\$now 2>&1 &
+      nohup gossip-sim/src/gossip-sim.sh ${args[@]} >> gossip-instance-$instanceIndex.log.\$now 2>&1 &
       disown
 EOF
       ~/solana/$gossipRunScript

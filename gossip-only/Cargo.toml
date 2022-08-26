@@ -1,14 +1,14 @@
 [package]
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
-name = "gossip-only"
+name = "gossip-sim"
 description = "Blockchain, Rebuilt for Scale"
 version = "1.12.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/"
-default-run = "gossip-only"
+default-run = "gossip-sim"
 
 [dependencies]
 clap = "2.33.1"

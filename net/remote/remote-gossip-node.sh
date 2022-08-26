@@ -62,31 +62,31 @@ source net/common.sh
 source multinode-demo/common.sh
 loadConfigFile
 
-rm -f gossip-only-run 
-rm -f gossip-only-write-keys
+rm -f gossip-sim-run 
+rm -f gossip-sim-write-keys
 
-cat > ~/solana/gossip-only-run <<EOF
+cat > ~/solana/gossip-sim-run <<EOF
 #!/usr/bin/env bash
 cd ~/solana
 
 now=\$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 ln -sfT validator.log.\$now validator.log
 EOF
-chmod +x ~/solana/gossip-only-run
+chmod +x ~/solana/gossip-sim-run
 
-cat > ~/solana/gossip-only-write-keys <<EOF
+cat > ~/solana/gossip-sim-write-keys <<EOF
 #!/usr/bin/env bash
 cd ~/solana
 
 EOF
-chmod +x ~/solana/gossip-only-write-keys
+chmod +x ~/solana/gossip-sim-write-keys
 
 case $deployMethod in
 local|tar|skip)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
-cat >> ~/solana/gossip-only-run <<EOF
+cat >> ~/solana/gossip-sim-run <<EOF
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
@@ -94,7 +94,7 @@ cat >> ~/solana/gossip-only-run <<EOF
   echo \$! > sys-tuner.pid
 EOF
 
-cat >> ~/solana/gossip-only-write-keys <<EOF
+cat >> ~/solana/gossip-sim-write-keys <<EOF
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
 
@@ -114,21 +114,21 @@ EOF
     fi
 
     echo "greg - bootstrap - entrypoint IP: $entrypointIp"
-      chmod +x gossip-only/src/gossip-only.sh
+      chmod +x gossip-sim/src/gossip-sim.sh
     gossipOnlyPort=9001
     args=(
-      --account-file gossip-only/src/accounts.yaml
+      --account-file gossip-sim/src/accounts.yaml
       --bootstrap
       --num-nodes 1
       --entrypoint $entrypointIp:$gossipOnlyPort
       --gossip-host "$entrypointIp"
       --gossip-port $gossipOnlyPort
     )
-cat >> ~/solana/gossip-only-run <<EOF
-    nohup gossip-only/src/gossip-only.sh ${args[@]} > bootstrap-gossip.log.\$now 2>&1 &
+cat >> ~/solana/gossip-sim-run <<EOF
+    nohup gossip-sim/src/gossip-sim.sh ${args[@]} > bootstrap-gossip.log.\$now 2>&1 &
     disown
 EOF
-    ~/solana/gossip-only-run
+    ~/solana/gossip-sim-run
 
 
     ;;
@@ -145,22 +145,22 @@ EOF
     echo "greg - running write keys - 2 "
     set -x
     echo "greg - validator - entrypoint IP: $entrypointIp"
-    chmod +x gossip-only/src/gossip-only.sh
+    chmod +x gossip-sim/src/gossip-sim.sh
 
     args=(
-      --account-file gossip-only/src/accounts.yaml
+      --account-file gossip-sim/src/accounts.yaml
       --write-keys 
       --num-keys 1
     )
 
-cat >> ~/solana/gossip-only-write-keys <<EOF
-    gossip-only/src/gossip-only.sh ${args[@]} > gossip-instance-key-$instanceIndex.log 2>&1
+cat >> ~/solana/gossip-sim-write-keys <<EOF
+    gossip-sim/src/gossip-sim.sh ${args[@]} > gossip-instance-key-$instanceIndex.log 2>&1
 EOF
-    ~/solana/gossip-only-write-keys
+    ~/solana/gossip-sim-write-keys
 
     gossipOnlyPort=9001
     args=(
-      --account-file gossip-only/src/accounts.yaml
+      --account-file gossip-sim/src/accounts.yaml
       --num-nodes 1
       --entrypoint $entrypointIp:$gossipOnlyPort
       --gossip-host $(hostname -i)
@@ -168,11 +168,11 @@ EOF
 
     echo "greg - instanceIndex: $instanceIndex"
 
-cat >> ~/solana/gossip-only-run <<EOF
-    nohup gossip-only/src/gossip-only.sh ${args[@]} >> gossip-instance-$instanceIndex.log.\$now 2>&1 &
+cat >> ~/solana/gossip-sim-run <<EOF
+    nohup gossip-sim/src/gossip-sim.sh ${args[@]} >> gossip-instance-$instanceIndex.log.\$now 2>&1 &
     disown
 EOF
-    ~/solana/gossip-only-run
+    ~/solana/gossip-sim-run
 
     ;;
   *)

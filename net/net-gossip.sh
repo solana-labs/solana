@@ -29,7 +29,7 @@ usage() {
 EOM
 )
   cat <<EOF
-usage: $0 [start|stop|restart|sanity|gossip-only] [command-specific options]
+usage: $0 [start|stop|restart|sanity|gossip-sim] [command-specific options]
 
 Operate a configured testnet
 
@@ -297,7 +297,7 @@ syncScripts() {
   declare ipAddress=$1
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     --exclude 'net/log*' \
-    "$SOLANA_ROOT"/{fetch-perf-libs.sh,fetch-spl.sh,scripts,net,multinode-demo,gossip-only} \
+    "$SOLANA_ROOT"/{fetch-perf-libs.sh,fetch-spl.sh,scripts,net,multinode-demo,gossip-sim} \
     "$ipAddress":"$SOLANA_HOME"/ > /dev/null
 }
 
@@ -1386,7 +1386,7 @@ fi
 checkPremptibleInstances
 
 case $command in
-gossip-only)
+gossip-sim)
   prepareDeploy
   stop
   gossipDeploy $instancesPerNode $gossipInstances

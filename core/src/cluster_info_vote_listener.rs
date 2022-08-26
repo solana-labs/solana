@@ -714,7 +714,7 @@ impl ClusterInfoVoteListener {
                     // has no new information
 
                     // Note gossip votes will always be processed because those should be unique
-                    // and we need to update the gossip-only stake in the `VoteTracker`.
+                    // and we need to update the gossip-sim stake in the `VoteTracker`.
                     return;
                 }
 
@@ -809,7 +809,7 @@ impl ClusterInfoVoteListener {
                     // By this point we know if the vote was seen in gossip above,
                     // it was not seen in gossip at any point in the past (if it was seen
                     // in gossip in the past, `is_new` would be false and it would have
-                    // been filtered out above), so it's safe to increment the gossip-only
+                    // been filtered out above), so it's safe to increment the gossip-sim
                     // stake
                     Self::sum_stake(&mut gossip_only_stake, epoch_stakes, &pubkey);
                 }
