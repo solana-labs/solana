@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-install"
 description = "The solana cluster software installer"
-version = "1.10.36"
+version = "1.10.37"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -26,12 +26,12 @@ reqwest = { version = "0.11.10", default-features = false, features = ["blocking
 semver = "1.0.6"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_yaml = "0.8.23"
-solana-clap-utils = { path = "../clap-utils", version = "=1.10.36" }
-solana-client = { path = "../client", version = "=1.10.36" }
-solana-config-program = { path = "../programs/config", version = "=1.10.36" }
-solana-logger = { path = "../logger", version = "=1.10.36" }
-solana-sdk = { path = "../sdk", version = "=1.10.36" }
-solana-version = { path = "../version", version = "=1.10.36" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.10.37" }
+solana-client = { path = "../client", version = "=1.10.37" }
+solana-config-program = { path = "../programs/config", version = "=1.10.37" }
+solana-logger = { path = "../logger", version = "=1.10.37" }
+solana-sdk = { path = "../sdk", version = "=1.10.37" }
+solana-version = { path = "../version", version = "=1.10.37" }
 tar = "0.4.38"
 tempfile = "3.3.0"
 url = "2.2.2"
