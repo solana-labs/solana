@@ -13,20 +13,9 @@ usage() {
   fi
   cat <<EOF
 
-usage for gossip-sim: $0 [OPTIONS] [cluster entry point hostname]
+usage for gossip-sim: $0
 
-Start a validator with no stake
-
-OPTIONS:
-  --ledger PATH             - store ledger under this PATH
-  --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --label LABEL             - Append the given label to the configuration files, useful when running
-                              multiple validators in the same workspace
-  --node-sol SOL            - Number of SOL this node has been funded from the genesis config (default: $node_sol)
-  --no-voting               - start node without vote signer
-  --rpc-port port           - custom RPC port for this node
-  --no-restart              - do not restart the node if it exits
-  --no-airdrop              - The genesis config has an account for the node. Airdrops are not required.
+Start a validator node with default stake
 
 EOF
   exit 1
@@ -74,8 +63,6 @@ while [[ -n $1 ]]; do
     shift
   fi
 done
-
-echo "args to run: ${args[@]}"
 
 if [[ $writeKeys == "true" ]]; then
   echo "writeKeys true"

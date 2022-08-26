@@ -82,7 +82,7 @@ chmod +x ~/solana/on-reboot
 
 # setup gossip logs
 if [[ $instanceIndex != -1 ]]; then
-cat > ~/solana/$gossipRunScript <<EOF
+cat > ~/solana/"$gossipRunScript" <<EOF
   #!/usr/bin/env bash
   cd ~/solana
 
@@ -96,9 +96,9 @@ cat > ~/solana/$gossipRunScript <<EOF
   echo \$! > sys-tuner.pid
 
 EOF
-  chmod +x ~/solana/$gossipRunScript
+  chmod +x ~/solana/"$gossipRunScript"
 
-cat > ~/solana/$gossipRunKeyScript <<EOF
+cat > ~/solana/"$gossipRunKeyScript" <<EOF
   #!/usr/bin/env bash
   cd ~/solana
 
@@ -109,7 +109,7 @@ cat > ~/solana/$gossipRunKeyScript <<EOF
   echo \$! > sys-tuner.pid
 
 EOF
-  chmod +x ~/solana/$gossipRunKeyScript
+  chmod +x ~/solana/"$gossipRunKeyScript"
 
 fi
 
@@ -318,15 +318,15 @@ EOF
         --account-file gossip-sim/src/accounts.yaml
         --bootstrap
         --num-nodes 1
-        --entrypoint $entrypointIp:$gossipOnlyPort
+        --entrypoint "$entrypointIp":"$gossipOnlyPort"
         --gossip-host "$entrypointIp"
-        --gossip-port $gossipOnlyPort
+        --gossip-port "$gossipOnlyPort"
       )
-cat >> ~/solana/$gossipRunScript <<EOF
+cat >> ~/solana/"$gossipRunScript" <<EOF
       nohup gossip-sim/src/gossip-sim.sh ${args[@]} > bootstrap-gossip.log.\$now 2>&1 &
       disown
 EOF
-      ~/solana/$gossipRunScript
+      ~/solana/"$gossipRunScript"
     else
       args=(
         --gossip-host "$entrypointIp"
@@ -399,27 +399,27 @@ EOF
         --num-keys 1
       )
 
-cat >> ~/solana/$gossipRunKeyScript <<EOF
+cat >> ~/solana/"$gossipRunKeyScript" <<EOF
       gossip-sim/src/gossip-sim.sh ${args[@]} > gossip-instance-key-$instanceIndex.log 2>&1
 EOF
-      ~/solana/$gossipRunKeyScript
+      ~/solana/"$gossipRunKeyScript"
 
       gossipOnlyPort=9001
       args=(
         --account-file gossip-sim/src/accounts.yaml
         --num-nodes 1
-        --entrypoint $entrypointIp:$gossipOnlyPort
+        --entrypoint "$entrypointIp":"$gossipOnlyPort"
         --gossip-host $(hostname -i)
       )
 
-cat >> ~/solana/$gossipRunScript <<EOF
+cat >> ~/solana/"$gossipRunScript" <<EOF
       nohup gossip-sim/src/gossip-sim.sh ${args[@]} >> gossip-instance-$instanceIndex.log.\$now 2>&1 &
       disown
 EOF
-      ~/solana/$gossipRunScript
+      ~/solana/"$gossipRunScript"
 
-      rm ~/solana/$gossipRunScript
-      rm ~/solana/$gossipRunKeyScript
+      rm ~/solana/"$gossipRunScript"
+      rm ~/solana/"$gossipRunKeyScript"
 
     else
       args=(

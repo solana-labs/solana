@@ -109,10 +109,10 @@ Operate a configured testnet
    --full-rpc
                                       - Support full RPC services on all nodes
    --gossip-instances                 - Number of gossip instances to deploy across GCE instances.
-                                        Does a round robin deployment. Used with `gossip-sim` command
+                                        Does a round robin deployment. Used with 'gossip-sim' command
                                         Cannot be used with --gossip-instances-per-node
    --gossip-instances-per-node        - Number of gossip instances to deploy on each GCE instance.
-                                        Used with `gossip-sim` command
+                                        Used with 'gossip-sim' command
                                         Cannot be used with --gossip-instances
    --tpu-disable-quic
                                       - Disable quic for tpu packet forwarding
@@ -379,7 +379,7 @@ startNode() {
   echo "start log: $logFile"
   (
     set -x
-    startCommon "$ipAddress" $instanceIndex
+    startCommon "$ipAddress" "$instanceIndex"
 
     if [[ $nodeType = blockstreamer ]] && [[ -n $letsEncryptDomainName ]]; then
       #
@@ -678,7 +678,7 @@ deploy() {
         if [[ $gossipDeployLoopCount -lt $leftover ]]; then
           instancesAndLeftoverPerNode=$(($instancesPerNode  + 1))
         fi
-        threadGossipDeploy $instancesAndLeftoverPerNode $ipAddress $nodeType $nodeIndex &
+        threadGossipDeploy $instancesAndLeftoverPerNode "$ipAddress" $nodeType $nodeIndex &
         gossipDeployLoopCount=$(($gossipDeployLoopCount + 1))
       else
         startNode "$ipAddress" $nodeType $nodeIndex
