@@ -826,6 +826,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn finalize_lock_for_provisional_execution(
         address_book: &mut AddressBook,
+        next_task: &mut Task,
         task: &TaskInQueue,
         provisional_count: usize,
     ) {
