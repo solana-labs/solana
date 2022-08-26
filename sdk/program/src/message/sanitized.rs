@@ -439,6 +439,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::get_first)]
     fn test_is_writable_account_cache() {
         let key0 = Pubkey::new_unique();
         let key1 = Pubkey::new_unique();
