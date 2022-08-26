@@ -484,7 +484,7 @@ impl UnprocessedTransactionStorage {
         }
     }
 
-    pub fn maybe_hot_swap(self, bank_forks: &Arc<RwLock<BankForks>>) -> Self {
+    pub fn maybe_hot_swap(self, bank_forks: &Arc<RwLock<BankForks>>) -> (bool, Self) {
         match self {
             Self::TransactionStorage(transaction_storage) => {
                 if let ThreadType::Voting(_) = transaction_storage.thread_type() {
@@ -497,20 +497,36 @@ impl UnprocessedTransactionStorage {
                             && bank.feature_set.is_active(&split_banking_threads::id())
                         {
                             // Met all the conditions, time to hotswap
-                            return Self::VoteStorage(transaction_storage.hotswap());
+                            return (true, Self::VoteStorage(transaction_storage.hotswap()));
                         }
                     }
                 }
-                Self::TransactionStorage(transaction_storage)
+                (false, Self::TransactionStorage(transaction_storage))
             }
-            vote_storage => vote_storage,
+            vote_storage => (false, vote_storage),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {
+        super::*,
+        ::solana_runtime::genesis_utils::{activate_feature, create_genesis_config_with_leader_ex},
+        solana_ledger::genesis_utils::{create_genesis_config, GenesisConfigInfo},
+        solana_perf::packet::{Packet, PacketFlags},
+        solana_sdk::{
+            fee_calculator::FeeRateGovernor,
+            genesis_config::ClusterType,
+            hash::Hash,
+            rent::Rent,
+            signature::{Keypair, Signer},
+            system_transaction,
+        },
+        solana_vote_program::{
+            vote_state::VoteStateUpdate, vote_transaction::new_vote_state_update_transaction,
+        },
+    };
 
     #[test]
     fn test_filter_processed_packets() {
@@ -561,5 +577,180 @@ mod tests {
         };
         filter_processed_packets(retryable_indexes.iter(), f);
         assert_eq!(non_retryable_indexes, vec![(0, 1), (4, 5), (6, 8)]);
+    }
+
+    #[test]
+    fn test_unprocessed_transaction_storage_deserialize_and_insert() {
+        let keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let pubkey = solana_sdk::pubkey::new_rand();
+
+        let small_transfer = Packet::from_data(
+            None,
+            system_transaction::transfer(&keypair, &pubkey, 1, Hash::new_unique()),
+        )
+        .unwrap();
+        let mut vote = Packet::from_data(
+            None,
+            new_vote_state_update_transaction(
+                VoteStateUpdate::default(),
+                Hash::new_unique(),
+                &keypair,
+                &vote_keypair,
+                &vote_keypair,
+                None,
+            ),
+        )
+        .unwrap();
+        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        let big_transfer = Packet::from_data(
+            None,
+            system_transaction::transfer(&keypair, &pubkey, 1000000, Hash::new_unique()),
+        )
+        .unwrap();
+
+        let packet_batch = PacketBatch::new(vec![
+            small_transfer.clone(),
+            vote.clone(),
+            big_transfer.clone(),
+        ]);
+
+        for thread_type in [
+            ThreadType::Transactions,
+            ThreadType::Voting(VoteSource::Gossip),
+            ThreadType::Voting(VoteSource::Tpu),
+        ] {
+            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+                UnprocessedPacketBatches::with_capacity(100),
+                thread_type,
+                None,
+            );
+            transaction_storage
+                .deserialize_and_insert_batch(&packet_batch, &(0..3_usize).collect_vec());
+            let deserialized_packets = transaction_storage
+                .iter()
+                .map(|packet| packet.immutable_section().original_packet().clone())
+                .collect_vec();
+            assert_eq!(3, deserialized_packets.len());
+            assert!(deserialized_packets.contains(&small_transfer));
+            assert!(deserialized_packets.contains(&vote));
+            assert!(deserialized_packets.contains(&big_transfer));
+        }
+
+        for vote_source in [VoteSource::Gossip, VoteSource::Tpu] {
+            let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
+                Arc::new(LatestUnprocessedVotes::new()),
+                vote_source,
+            );
+            transaction_storage
+                .deserialize_and_insert_batch(&packet_batch, &(0..3_usize).collect_vec());
+            assert_eq!(1, transaction_storage.len());
+        }
+    }
+
+    #[test]
+    fn test_unprocessed_transaction_storage_maybe_hotswap() {
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_genesis_config(10000);
+        activate_feature(
+            &mut genesis_config,
+            allow_votes_to_directly_update_vote_state::id(),
+        );
+        activate_feature(&mut genesis_config, split_banking_threads::id());
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+        let all_active_bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+        let mint_keypair = Keypair::new();
+        let voting_keypair = Keypair::new();
+        let genesis_config = create_genesis_config_with_leader_ex(
+            10000,
+            &mint_keypair.pubkey(),
+            &solana_sdk::pubkey::new_rand(),
+            &voting_keypair.pubkey(),
+            &solana_sdk::pubkey::new_rand(),
+            100,
+            42,
+            FeeRateGovernor::new(0, 0),
+            Rent::free(),
+            ClusterType::MainnetBeta,
+            vec![],
+        );
+        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
+        let no_active_bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
+
+        // Even with all features active vote storage should always be vote storage
+        let vote_storage = UnprocessedTransactionStorage::new_vote_storage(
+            Arc::new(LatestUnprocessedVotes::new()),
+            VoteSource::Gossip,
+        );
+        assert!(!vote_storage.maybe_hot_swap(&all_active_bank_forks).0);
+        let vote_storage = UnprocessedTransactionStorage::new_vote_storage(
+            Arc::new(LatestUnprocessedVotes::new()),
+            VoteSource::Tpu,
+        );
+        assert!(!vote_storage.maybe_hot_swap(&all_active_bank_forks).0);
+
+        // Tx threads should never hot swap
+        let transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+            UnprocessedPacketBatches::with_capacity(100),
+            ThreadType::Transactions,
+            None,
+        );
+        assert!(!transaction_storage.maybe_hot_swap(&all_active_bank_forks).0);
+        let transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+            UnprocessedPacketBatches::with_capacity(100),
+            ThreadType::Transactions,
+            Some(Arc::new(LatestUnprocessedVotes::new())),
+        );
+        assert!(!transaction_storage.maybe_hot_swap(&all_active_bank_forks).0);
+
+        // Voting threads shouldn't hot swap before features are activated
+        let transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+            UnprocessedPacketBatches::with_capacity(100),
+            ThreadType::Voting(VoteSource::Gossip),
+            Some(Arc::new(LatestUnprocessedVotes::new())),
+        );
+        assert!(!transaction_storage.maybe_hot_swap(&no_active_bank_forks).0);
+        let transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+            UnprocessedPacketBatches::with_capacity(100),
+            ThreadType::Voting(VoteSource::Tpu),
+            Some(Arc::new(LatestUnprocessedVotes::new())),
+        );
+        assert!(!transaction_storage.maybe_hot_swap(&no_active_bank_forks).0);
+
+        // Voting threads hot swap and port unprocessed votes
+        let keypair = Keypair::new();
+        let vote_keypair = Keypair::new();
+        let vote_hash = Hash::new_unique();
+        let mut vote = Packet::from_data(
+            None,
+            new_vote_state_update_transaction(
+                VoteStateUpdate::default(),
+                vote_hash.clone(),
+                &keypair,
+                &vote_keypair,
+                &vote_keypair,
+                None,
+            ),
+        )
+        .unwrap();
+        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
+        let packet_batch = PacketBatch::new(vec![vote.clone(), vote.clone(), vote.clone()]);
+        for vote_source in [VoteSource::Gossip, VoteSource::Tpu] {
+            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
+                UnprocessedPacketBatches::with_capacity(100),
+                ThreadType::Voting(vote_source),
+                Some(Arc::new(LatestUnprocessedVotes::new())),
+            );
+            transaction_storage
+                .deserialize_and_insert_batch(&packet_batch, &(0..3_usize).collect_vec());
+
+            let (success, vote_storage) =
+                transaction_storage.maybe_hot_swap(&all_active_bank_forks);
+            assert!(success);
+            // Only store latest so 3 votes -> 1
+            assert_eq!(1, vote_storage.len());
+        }
     }
 }

@@ -1145,7 +1145,7 @@ impl BankingStage {
             // Hotswap
             // TODO: figure out how often to check this as it grabs the read lock on bank forks
             // when checking feature_set
-            unprocessed_transaction_storage =
+            (_, unprocessed_transaction_storage) =
                 unprocessed_transaction_storage.maybe_hot_swap(bank_forks);
 
             let my_pubkey = cluster_info.id();
@@ -4474,75 +4474,6 @@ mod tests {
     }
 
     #[test]
-    fn test_unprocessed_transaction_storage_deserialize_and_insert() {
-        let keypair = Keypair::new();
-        let vote_keypair = Keypair::new();
-        let pubkey = solana_sdk::pubkey::new_rand();
-
-        let small_transfer = Packet::from_data(
-            None,
-            system_transaction::transfer(&keypair, &pubkey, 1, Hash::new_unique()),
-        )
-        .unwrap();
-        let mut vote = Packet::from_data(
-            None,
-            new_vote_state_update_transaction(
-                VoteStateUpdate::default(),
-                Hash::new_unique(),
-                &keypair,
-                &vote_keypair,
-                &vote_keypair,
-                None,
-            ),
-        )
-        .unwrap();
-        vote.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
-        let big_transfer = Packet::from_data(
-            None,
-            system_transaction::transfer(&keypair, &pubkey, 1000000, Hash::new_unique()),
-        )
-        .unwrap();
-
-        let packet_batch = PacketBatch::new(vec![
-            small_transfer.clone(),
-            vote.clone(),
-            big_transfer.clone(),
-        ]);
-
-        for thread_type in [
-            ThreadType::Transactions,
-            ThreadType::Voting(VoteSource::Gossip),
-            ThreadType::Voting(VoteSource::Tpu),
-        ] {
-            let mut transaction_storage = UnprocessedTransactionStorage::new_transaction_storage(
-                UnprocessedPacketBatches::with_capacity(100),
-                thread_type,
-                None,
-            );
-            transaction_storage
-                .deserialize_and_insert_batch(&packet_batch, &(0..3_usize).collect_vec());
-            let deserialized_packets = transaction_storage
-                .iter()
-                .map(|packet| packet.immutable_section().original_packet().clone())
-                .collect_vec();
-            assert_eq!(3, deserialized_packets.len());
-            assert!(deserialized_packets.contains(&small_transfer));
-            assert!(deserialized_packets.contains(&vote));
-            assert!(deserialized_packets.contains(&big_transfer));
-        }
-
-        for vote_source in [VoteSource::Gossip, VoteSource::Tpu] {
-            let mut transaction_storage = UnprocessedTransactionStorage::new_vote_storage(
-                Arc::new(LatestUnprocessedVotes::new()),
-                vote_source,
-            );
-            transaction_storage
-                .deserialize_and_insert_batch(&packet_batch, &(0..3_usize).collect_vec());
-            assert_eq!(1, transaction_storage.len());
-        }
-    }
-
-    #[test]
     fn test_unprocessed_transaction_storage_full_send() {
         solana_logger::setup();
         let GenesisConfigInfo {
@@ -4681,5 +4612,14 @@ mod tests {
     }
 
     #[test]
-    fn test_unprocessed_transaction_storage_hotswap() {}
+    fn test_unprocessed_transaction_storage_hotswap() {
+        solana_logger::setup();
+        let GenesisConfigInfo {
+            mut genesis_config, ..
+        } = create_slow_genesis_config(10000);
+        activate_feature(
+            &mut genesis_config,
+            allow_votes_to_directly_update_vote_state::id(),
+        );
+    }
 }
