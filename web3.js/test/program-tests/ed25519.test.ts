@@ -1,5 +1,4 @@
 import {Buffer} from 'buffer';
-import nacl from 'tweetnacl';
 
 import {
   Connection,
@@ -9,6 +8,7 @@ import {
   Transaction,
   Ed25519Program,
 } from '../../src';
+import {sign} from '../../src/utils/ed25519';
 import {url} from '../url';
 
 if (process.env.TEST_LIVE) {
@@ -27,7 +27,7 @@ if (process.env.TEST_LIVE) {
 
     it('create ed25519 instruction', async () => {
       const message = Buffer.from('string address');
-      const signature = nacl.sign.detached(message, privateKey);
+      const signature = sign(message, privateKey);
       const transaction = new Transaction().add(
         Ed25519Program.createInstructionWithPublicKey({
           publicKey,
