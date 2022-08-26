@@ -1,3 +1,19 @@
+//! The discrete log implementation for the twisted ElGamal decryption.
+//!
+//! The implementation uses the baby-step giant-step method, which consists of a precomputation
+//! step and an online step. The precomputation step involves computing a hash table of a number
+//! of Ristretto points that is independent of a discrete log instance. The online phase computes
+//! the final discrete log solution using the discrete log instance and the pre-computed hash
+//! table. More details on the baby-step giant-step algorithm and its implementation can be found
+//! in the [spl documentation](https://spl.solana.com).
+//!
+//! The implementation is NOT intended to run in constant-time. There are some measures to prevent
+//! straightforward timing attacks. For instance, it does not short-circuit the search when a
+//! solution is found. However, the use of hashtables, batching, and threads make the
+//! implementation inherently not constant-time. This may theoretically allow an adversary to gain
+//! information on a discrete log solution depending on the execution time of the implementation.
+//!
+
 #![cfg(not(target_os = "solana"))]
 
 use {
