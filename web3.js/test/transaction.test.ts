@@ -1,6 +1,5 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import nacl from 'tweetnacl';
 import {expect} from 'chai';
 
 import {Connection} from '../src/connection';
@@ -17,6 +16,7 @@ import invariant from '../src/utils/assert';
 import {toBuffer} from '../src/utils/to-buffer';
 import {helpers} from './mocks/rpc-http';
 import {url} from './url';
+import {sign} from '../src/utils/ed25519';
 
 describe('Transaction', () => {
   describe('compileMessage', () => {
@@ -836,7 +836,7 @@ describe('Transaction', () => {
     tx.recentBlockhash = bs58.encode(recentBlockhash);
     tx.setSigners(from.publicKey);
     const tx_bytes = tx.serializeMessage();
-    const signature = nacl.sign.detached(tx_bytes, from.secretKey);
+    const signature = sign(tx_bytes, from.secretKey);
     tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
   });
@@ -855,7 +855,7 @@ describe('Transaction', () => {
     tx.recentBlockhash = bs58.encode(recentBlockhash);
     tx.feePayer = from.publicKey;
     const tx_bytes = tx.serializeMessage();
-    const signature = nacl.sign.detached(tx_bytes, from.secretKey);
+    const signature = sign(tx_bytes, from.secretKey);
     tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
   });
