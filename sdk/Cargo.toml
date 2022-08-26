@@ -1,6 +1,6 @@
 [package]
 name = "solana-sdk"
-version = "1.11.10"
+version = "1.11.11"
 description = "Solana SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -71,11 +71,11 @@ serde_derive = "1.0.103"
 serde_json = { version = "1.0.81", optional = true }
 sha2 = "0.10.2"
 sha3 = { version = "0.10.1", optional = true }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.10" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.10" }
-solana-logger = { path = "../logger", version = "=1.11.10", optional = true }
-solana-program = { path = "program", version = "=1.11.10" }
-solana-sdk-macro = { path = "macro", version = "=1.11.10" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.11" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.11" }
+solana-logger = { path = "../logger", version = "=1.11.11", optional = true }
+solana-program = { path = "program", version = "=1.11.11" }
+solana-sdk-macro = { path = "macro", version = "=1.11.11" }
 thiserror = "1.0"
 uriparse = "0.6.4"
 wasm-bindgen = "0.2"

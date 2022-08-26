@@ -7,7 +7,7 @@ license = "Apache-2.0"
 name = "proto"
 publish = false
 repository = "https://github.com/solana-labs/solana"
-version = "1.11.10"
+version = "1.11.11"
 
 [workspace]
 
