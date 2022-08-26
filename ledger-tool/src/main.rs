@@ -448,11 +448,11 @@ fn output_slot(
                                 }
 
                                 muxed_sender
-                                    .send(solana_scheduler::Multiplexed::FromPrevious((
+                                    .send((
                                         //Weight { ix: weight },
                                         weight,
                                         t,
-                                    )))
+                                    ))
                                     .unwrap();
                                 depth.fetch_add(1, Ordering::Relaxed);
                                 weight -= 1;
