@@ -167,7 +167,7 @@ pub struct Page {
     current_usage: Usage,
     next_usage: Usage,
     pub contended_unique_weights: TaskIds,
-    provisional_task_ids: std::collections::HashSet<std::sync::Arc<ProvisioningTracker>>,
+    provisional_task_ids: std::collections::HashSet<UniqueWeight, std::sync::Arc<ProvisioningTracker>>,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
@@ -833,7 +833,7 @@ impl ScheduleStage {
         for mut l in task.tx.1 {
             match l.status {
                 LockStatus::Provisional => {
-                    l.target.page_mut().provisional_task_ids.insert(std::sync::Arc::clone(&tracker));
+                    l.target.page_mut().provisional_task_ids.insert(task.unique_weight, std::sync::Arc::clone(&tracker));
                 }
                 LockStatus::Succeded => {
                     // do nothing
