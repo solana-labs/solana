@@ -43,3 +43,4 @@ export const sign = (
   message: Parameters<typeof ed25519.sync.sign>[0],
   secretKey: Ed25519SecretKey,
 ) => ed25519.sync.sign(message, secretKey.slice(0, 32));
+export const verify = ed25519.sync.verify;
