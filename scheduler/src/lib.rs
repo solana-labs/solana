@@ -612,12 +612,6 @@ fn attempt_lock_for_execution<'a>(
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
-// multiplexed to reduce the futex syscal per tx down to minimum and to make the schduler to
-// adaptive relative load between sigverify stage and execution substage
-// switched from crossbeam_channel::select! due to observed poor performance
-pub enum Multiplexed {
-    FromPrevious((Weight, TaskInQueue)),
-}
 
 pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
         use solana_program_runtime::compute_budget::ComputeBudget;
@@ -1004,7 +998,7 @@ impl ScheduleStage {
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from: &crossbeam_channel::Receiver<Multiplexed>,
+        from: &crossbeam_channel::Receiver<TaskInQueue>,
         from_exec: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
@@ -1054,13 +1048,8 @@ impl ScheduleStage {
             crossbeam_channel::select! {
                recv(from) -> maybe_from => {
                    trace!("select1: {} {}", from.len(), from_exec.len());
-                   let i = maybe_from.unwrap();
-                    match i {
-                        Multiplexed::FromPrevious(weighted_tx) => {
-                            trace!("recv from previous");
-                            Self::register_runnable_task(weighted_tx, runnable_queue, &mut current_unique_key, &mut sequence_time);
-                        }
-                    }
+                   let task = maybe_from.unwrap();
+                   Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                }
                recv(from_exec) -> maybe_from_exec => {
                    trace!("select2: {} {}", from.len(), from_exec.len());
