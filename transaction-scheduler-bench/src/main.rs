@@ -417,6 +417,7 @@ fn spawn_packet_senders(
         .unwrap_or(format!("{}", 4))
         .parse::<usize>()
         .unwrap();
+    let unique_weight = std::sync::atomic::AtomicU64::default();
     (0..producer_count)
         .map(|i| {
             let num_accounts = if i == 0 && high_conflict_sender > 0 {
@@ -487,7 +488,6 @@ fn send_packets(
 
     let blockhash = Hash::default();
     let start = Instant::now();
-    let mut unique_weight = u64::max_value();
 
     loop {
         if exit.load(Ordering::Relaxed) {
