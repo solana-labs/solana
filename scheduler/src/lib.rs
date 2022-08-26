@@ -1085,7 +1085,7 @@ impl ScheduleStage {
                 }
 
                 let from_len = from.len();
-                let from_exec_len v from_exec.len();
+                let from_exec_len = from_exec.len();
 
                 if from_len == 0 && from_exec_len == 0 {
                     break;
