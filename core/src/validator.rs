@@ -175,6 +175,7 @@ pub struct ValidatorConfig {
     pub wait_to_vote_slot: Option<Slot>,
     pub ledger_column_options: LedgerColumnOptions,
     pub runtime_config: RuntimeConfig,
+    pub replay_slots_concurrently: bool,
 }
 
 impl Default for ValidatorConfig {
@@ -238,6 +239,7 @@ impl Default for ValidatorConfig {
             wait_to_vote_slot: None,
             ledger_column_options: LedgerColumnOptions::default(),
             runtime_config: RuntimeConfig::default(),
+            replay_slots_concurrently: false,
         }
     }
 }
@@ -982,6 +984,7 @@ impl Validator {
                 rocksdb_compaction_interval: config.rocksdb_compaction_interval,
                 rocksdb_max_compaction_jitter: config.rocksdb_compaction_interval,
                 wait_for_vote_to_start_leader,
+                replay_slots_concurrently: config.replay_slots_concurrently,
             },
             &max_slots,
             &cost_model,
