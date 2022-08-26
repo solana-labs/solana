@@ -791,6 +791,13 @@ $(cat "$sshPrivateKey.pub")
 EOK
 chmod 444 /solana-scratch/id_ecdsa
 
+# Create .bash_profile to load .bashrc when accessing through ssh
+cat > /home/solana/.bash_profile <<EOK
+if [ -f ~/.bashrc ]; then
+  . ~/.bashrc
+fi
+EOK
+
 USER=\$(id -un)
 export DEBIAN_FRONTEND=noninteractive
 $(
@@ -840,6 +847,8 @@ chmod +x /solana-scratch/gce-self-destruct-ps1.sh
 
 # Append MOTD and PS1 replacement to .profile
 cat >>~solana/.profile <<'EOS'
+
+cat >>~solana/.bash_profile
 
 # Print self-destruct countdown on login
 source "/solana-scratch/gce-self-destruct.sh"
