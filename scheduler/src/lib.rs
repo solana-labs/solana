@@ -167,7 +167,7 @@ pub struct Page {
     current_usage: Usage,
     next_usage: Usage,
     pub contended_unique_weights: TaskIds,
-    provisional_task_ids: std::collections::HashMap<UniqueWeight, std::sync::Arc<ProvisioningTracker>>,
+    provisional_task_ids: std::collections::Vec<std::sync::Arc<ProvisioningTracker>>,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
@@ -834,7 +834,7 @@ impl ScheduleStage {
         for l in next_task.tx.1.iter_mut() {
             match l.status {
                 LockStatus::Provisional => {
-                    l.target.page_mut().provisional_task_ids.insert(task.unique_weight, std::sync::Arc::clone(&tracker));
+                    l.target.page_mut().provisional_task_ids.push(std::sync::Arc::clone(&tracker));
                 }
                 LockStatus::Succeded => {
                     // do nothing
@@ -900,12 +900,12 @@ impl ScheduleStage {
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for (unique_weight, mut tracker) in std::mem::take(&mut page.provisional_task_ids).into_iter() {
+                for mut tracker in std::mem::take(&mut page.provisional_task_ids).into_iter() {
                     let tracker = unsafe { std::sync::Arc::<ProvisioningTracker>::get_mut_unchecked(&mut tracker) };
                     tracker.progress();
                     if tracker.is_fulfilled() {
                         trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
-                        address_book.fulfilled_provisional_task_ids.insert(unique_weight, TaskInQueue::clone(&tracker.task));
+                        address_book.fulfilled_provisional_task_ids.insert(tracker.task.unique_weight, TaskInQueue::clone(&tracker.task));
                     } else {
                         trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
                     }
