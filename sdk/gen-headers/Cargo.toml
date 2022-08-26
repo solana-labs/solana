@@ -1,6 +1,6 @@
 [package]
 name = "gen-headers"
-version = "1.11.8"
+version = "1.11.9"
 edition = "2021"
 license = "Apache-2.0"
 publish = false

@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-simulation"
-version = "1.11.8"
+version = "1.11.9"
 description = "Solana BPF Program Simulation Differences"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -13,13 +13,13 @@ edition = "2021"
 test-bpf = []
 
 [dependencies]
-solana-program = { path = "../../../../sdk/program", version = "=1.11.8" }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.9" }
 
 [dev-dependencies]
-solana-logger = { path = "../../../../logger", version = "=1.11.8" }
-solana-program-test = { path = "../../../../program-test", version = "=1.11.8" }
-solana-sdk = { path = "../../../../sdk", version = "=1.11.8" }
-solana-validator = { path = "../../../../validator", version = "=1.11.8" }
+solana-logger = { path = "../../../../logger", version = "=1.11.9" }
+solana-program-test = { path = "../../../../program-test", version = "=1.11.9" }
+solana-sdk = { path = "../../../../sdk", version = "=1.11.9" }
+solana-validator = { path = "../../../../validator", version = "=1.11.9" }
 
 [lib]
 crate-type = ["cdylib", "lib"]
