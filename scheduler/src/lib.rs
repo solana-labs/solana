@@ -1067,29 +1067,29 @@ impl ScheduleStage {
             }
 
             loop {
-                if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
-                    //trace!("skip scheduling; outgoing queue full");
-                    break;
+                loop {
+                    if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
+                        //trace!("skip scheduling; outgoing queue full");
+                        break;
+                    }
+
+                    let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
+                    let maybe_ee =
+                        Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
+
+                    if let Some(ee) = maybe_ee {
+                        //trace!("send to execute");
+                        executing_queue_count += 1;
+
+                        to_execute_substage.send(ee).unwrap();
+                    } else {
+                        break;
+                    }
                 }
-
-                let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
-                let maybe_ee =
-                    Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
-
-                if let Some(ee) = maybe_ee {
-                    //trace!("send to execute");
-                    executing_queue_count += 1;
-
-                    to_execute_substage.send(ee).unwrap();
-                } else {
-                    break;
-                }
-            }
 
                 from_len = from.len();
                 from_exec_len = from_exec.len();
 
-            loop {
                 if from_len == 0 && from_exec_len == 0 {
                    trace!("select: back to");
                    break;
@@ -1122,25 +1122,6 @@ impl ScheduleStage {
                                trace!("select3: refill {} {}", from_len, from_exec_len);
                            }
                        }
-                    }
-                }
-                loop {
-                    if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
-                        //trace!("skip scheduling; outgoing queue full");
-                        break;
-                    }
-
-                    let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
-                    let maybe_ee =
-                        Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
-
-                    if let Some(ee) = maybe_ee {
-                        //trace!("send to execute");
-                        executing_queue_count += 1;
-
-                        to_execute_substage.send(ee).unwrap();
-                    } else {
-                        break;
                     }
                 }
             }
