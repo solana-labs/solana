@@ -4102,8 +4102,6 @@ dependencies = [
  "bincode",
  "bytemuck",
  "log",
- "num-derive",
- "num-traits",
  "rustc_version",
  "serde",
  "solana-frozen-abi 1.15.0",
@@ -4832,13 +4830,9 @@ dependencies = [
 name = "solana-frozen-abi"
 version = "1.15.0"
 dependencies = [
- "ahash",
- "blake3",
  "block-buffer 0.9.0",
  "bs58",
  "bv",
- "byteorder 1.4.3",
- "cc",
  "either",
  "generic-array 0.14.6",
  "getrandom 0.1.14",
@@ -5224,7 +5218,6 @@ dependencies = [
  "solana-frozen-abi-macro 1.15.0",
  "solana-sdk-macro 1.15.0",
  "thiserror",
- "tiny-bip39",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -5239,7 +5232,6 @@ dependencies = [
  "enum-iterator",
  "itertools",
  "libc",
- "libloading",
  "log",
  "num-derive",
  "num-traits",
@@ -5633,11 +5625,7 @@ version = "1.15.0"
 dependencies = [
  "bincode",
  "log",
- "num-derive",
- "num-traits",
  "rustc_version",
- "serde",
- "serde_derive",
  "solana-config-program",
  "solana-frozen-abi 1.15.0",
  "solana-frozen-abi-macro 1.15.0",
@@ -5645,7 +5633,6 @@ dependencies = [
  "solana-program-runtime",
  "solana-sdk 1.15.0",
  "solana-vote-program",
- "thiserror",
 ]
 
 [[package]]
