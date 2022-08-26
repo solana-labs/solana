@@ -60,7 +60,7 @@ while [[ -n $1 ]]; do
       writeKeys=true
       args+=("$1")
       shift
-    elif [[ $1 = --num-keys ]]; then 
+    elif [[ $1 = --num-keys ]]; then
       args+=("$1" "$2")
       shift 2
     elif [[ $1 = -h ]]; then
@@ -77,7 +77,7 @@ done
 
 echo "args to run: ${args[@]}"
 
-if [[ $writeKeys == "true" ]]; then 
+if [[ $writeKeys == "true" ]]; then
   echo "writeKeys true"
   gossip-sim "${args[@]}"
 else 
