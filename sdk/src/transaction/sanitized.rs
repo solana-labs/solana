@@ -26,7 +26,7 @@ use {
 pub const MAX_TX_ACCOUNT_LOCKS: usize = 64;
 
 /// Sanitized transaction and the hash of its message
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SanitizedTransaction {
     message: SanitizedMessage,
     message_hash: Hash,
@@ -35,7 +35,7 @@ pub struct SanitizedTransaction {
 }
 
 /// Set of accounts that must be locked for safe transaction processing
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 pub struct TransactionAccountLocks<'a> {
     /// List of readonly account key locks
     pub readonly: Vec<&'a Pubkey>,
