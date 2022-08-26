@@ -437,7 +437,7 @@ fn output_slot(
                     .spawn(move || {
                         for i in 0..loop_count {
                             error!("started!: {} {}", i, txes.len());
-                            for tx in txes.iter().map(|t| Box::new((t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))) {
+                            for tx in txes.iter().map(|t| (t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>())) {
                                 while depth.load(Ordering::Relaxed) > 10_000 {
                                     std::thread::sleep(std::time::Duration::from_micros(10));
                                 }
