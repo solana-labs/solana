@@ -798,7 +798,7 @@ impl ScheduleStage {
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
                     next_task,
-                    &arc_next_task,
+                    &a2,
                     provisional_count,
                 );
 
