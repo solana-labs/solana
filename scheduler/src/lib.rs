@@ -1053,7 +1053,7 @@ impl ScheduleStage {
 
             crossbeam_channel::select! {
                recv(from) -> maybe_from => {
-                   error!("select1: {} {}", from.len(), from_exec.len());
+                   trace!("select1: {} {}", from.len(), from_exec.len());
                    let i = maybe_from.unwrap();
                     match i {
                         Multiplexed::FromPrevious(weighted_tx) => {
@@ -1063,7 +1063,7 @@ impl ScheduleStage {
                     }
                }
                recv(from_exec) -> maybe_from_exec => {
-                   error!("select2: {} {}", from.len(), from_exec.len());
+                   trace!("select2: {} {}", from.len(), from_exec.len());
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
                     trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                     executing_queue_count -= 1;
