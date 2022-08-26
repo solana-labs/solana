@@ -1106,7 +1106,7 @@ impl ScheduleStage {
                         break;
                     }
                 }
-                if false {
+                if true {
                 from_len = from.len();
                 from_exec_len = from_exec.len();
 
