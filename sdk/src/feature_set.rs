@@ -675,7 +675,7 @@ lazy_static! {
 }
 
 /// `FeatureSet` holds the set of currently active/inactive runtime features
-#[derive(AbiExample, Debug, Clone)]
+#[derive(AbiExample, Debug, Clone, Eq, PartialEq)]
 pub struct FeatureSet {
     pub active: HashMap<Pubkey, Slot>,
     pub inactive: HashSet<Pubkey>,
