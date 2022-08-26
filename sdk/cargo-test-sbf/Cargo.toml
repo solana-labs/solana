@@ -1,6 +1,6 @@
 [package]
 name = "solana-cargo-test-sbf"
-version = "1.11.10"
+version = "1.11.11"
 description = "Execute all unit and integration tests after building with the Solana SBF SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
