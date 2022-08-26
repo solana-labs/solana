@@ -833,7 +833,7 @@ impl ScheduleStage {
         for mut l in task.tx.1 {
             match l.status {
                 LockStatus::Provisional => {
-                    l.target.page_mut().provisional_task_ids.insert(Arc::clone(tracker));
+                    l.target.page_mut().provisional_task_ids.insert(std::sync::Arc::clone(tracker));
                 }
                 LockStatus::Succeded => {
                     // do nothing
