@@ -58,6 +58,7 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.12.5",
+    "@noble/ed25519": "^1.7.0",
     "@noble/hashes": "^1.1.2",
     "@noble/secp256k1": "^1.6.3",
     "@solana/buffer-layout": "^4.0.0",
