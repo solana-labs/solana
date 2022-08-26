@@ -1,7 +1,7 @@
 [package]
 name = "solana-measure"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.10.36"
+version = "1.10.37"
 homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-measure"
 readme = "../README.md"
@@ -12,7 +12,7 @@ edition = "2021"
 
 [dependencies]
 log = "0.4.14"
-solana-sdk = { path = "../sdk", version = "=1.10.36" }
+solana-sdk = { path = "../sdk", version = "=1.10.37" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

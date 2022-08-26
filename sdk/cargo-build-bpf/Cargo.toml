@@ -1,6 +1,6 @@
 [package]
 name = "solana-cargo-build-bpf"
-version = "1.10.36"
+version = "1.10.37"
 description = "Compile a local package and all of its dependencies using the Solana BPF SDK"
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 repository = "https://github.com/solana-labs/solana"
@@ -14,8 +14,8 @@ bzip2 = "0.4.3"
 cargo_metadata = "0.14.2"
 clap = { version = "3.1.5", features = ["cargo", "env"] }
 regex = "1.5.4"
-solana-download-utils = { path = "../../download-utils", version = "=1.10.36" }
-solana-sdk = { path = "..", version = "=1.10.36" }
+solana-download-utils = { path = "../../download-utils", version = "=1.10.37" }
+solana-sdk = { path = "..", version = "=1.10.37" }
 tar = "0.4.38"
 
 [dev-dependencies]

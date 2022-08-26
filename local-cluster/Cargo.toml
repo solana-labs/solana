@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-local-cluster"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.10.36"
+version = "1.10.37"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -16,25 +16,25 @@ itertools = "0.10.3"
 log = "0.4.14"
 rand = "0.7.0"
 rayon = "1.5.1"
-solana-client = { path = "../client", version = "=1.10.36" }
-solana-config-program = { path = "../programs/config", version = "=1.10.36" }
-solana-core = { path = "../core", version = "=1.10.36" }
-solana-entry = { path = "../entry", version = "=1.10.36" }
-solana-gossip = { path = "../gossip", version = "=1.10.36" }
-solana-ledger = { path = "../ledger", version = "=1.10.36" }
-solana-runtime = { path = "../runtime", version = "=1.10.36" }
-solana-sdk = { path = "../sdk", version = "=1.10.36" }
-solana-stake-program = { path = "../programs/stake", version = "=1.10.36" }
-solana-streamer = { path = "../streamer", version = "=1.10.36" }
-solana-vote-program = { path = "../programs/vote", version = "=1.10.36" }
+solana-client = { path = "../client", version = "=1.10.37" }
+solana-config-program = { path = "../programs/config", version = "=1.10.37" }
+solana-core = { path = "../core", version = "=1.10.37" }
+solana-entry = { path = "../entry", version = "=1.10.37" }
+solana-gossip = { path = "../gossip", version = "=1.10.37" }
+solana-ledger = { path = "../ledger", version = "=1.10.37" }
+solana-runtime = { path = "../runtime", version = "=1.10.37" }
+solana-sdk = { path = "../sdk", version = "=1.10.37" }
+solana-stake-program = { path = "../programs/stake", version = "=1.10.37" }
+solana-streamer = { path = "../streamer", version = "=1.10.37" }
+solana-vote-program = { path = "../programs/vote", version = "=1.10.37" }
 tempfile = "3.3.0"
 
 [dev-dependencies]
 assert_matches = "1.5.0"
 gag = "1.0.0"
 serial_test = "0.6.0"
-solana-download-utils = { path = "../download-utils", version = "=1.10.36" }
-solana-logger = { path = "../logger", version = "=1.10.36" }
+solana-download-utils = { path = "../download-utils", version = "=1.10.37" }
+solana-logger = { path = "../logger", version = "=1.10.37" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
