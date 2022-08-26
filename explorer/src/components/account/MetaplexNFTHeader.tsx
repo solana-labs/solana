@@ -1,5 +1,4 @@
 import React from "react";
-import "bootstrap/dist/js/bootstrap.min.js";
 import {
   NFTData,
   useFetchAccountInfo,
@@ -13,7 +12,7 @@ import { Link } from "react-router-dom";
 import { EditionInfo } from "providers/accounts/utils/getEditionInfo";
 import { PublicKey } from "@solana/web3.js";
 
-export function NFTHeader({
+export function MetaplexNFTHeader({
   nftData,
   address,
 }: {
