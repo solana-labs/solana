@@ -899,23 +899,14 @@ impl ScheduleStage {
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for task in std::mem::take(&mut page.provisional_task_ids).into_iter() {
-                    match address_book.provisioning_trackers.entry(task_id) {
-                        std::collections::hash_map::Entry::Occupied(mut tracker_entry) => {
-                            let (tracker, task) = tracker_entry.get_mut();
+                for tracker in std::mem::take(&mut page.provisional_task_ids).into_iter() {
                             tracker.progress();
                             if tracker.is_fulfilled() {
                                 trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
-                                let (tracker, task) = tracker_entry.remove();
-                                address_book.fulfilled_provisional_task_ids.insert(task_id, task);
+                                address_book.fulfilled_provisional_task_ids.insert(task.unique_weight, task);
                             } else {
                                 trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
                             }
-                        },
-                        std::collections::hash_map::Entry::Vacant(_) => {
-                            unreachable!();
-                        }
-                    }
                 }
             }
 
