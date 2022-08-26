@@ -1047,12 +1047,12 @@ impl ScheduleStage {
 
             crossbeam_channel::select! {
                recv(from) -> maybe_from => {
-                   trace!("select1: {} {}", from.len(), from_exec.len());
+                   //trace!("select1: {} {}", from.len(), from_exec.len());
                    let task = maybe_from.unwrap();
                    Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                }
                recv(from_exec) -> maybe_from_exec => {
-                   trace!("select2: {} {}", from.len(), from_exec.len());
+                   //trace!("select2: {} {}", from.len(), from_exec.len());
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
                     trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                     executing_queue_count -= 1;
@@ -1064,22 +1064,45 @@ impl ScheduleStage {
             }
 
             loop {
-                if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
-                    trace!("skip scheduling; outgoing queue full");
-                    break;
+                loop {
+                    if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
+                        trace!("skip scheduling; outgoing queue full");
+                        break;
+                    }
+
+                    let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
+                    let maybe_ee =
+                        Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
+
+                    if let Some(ee) = maybe_ee {
+                        trace!("send to execute");
+                        executing_queue_count += 1;
+
+                        to_execute_substage.send(ee).unwrap();
+                    } else {
+                        break;
+                    }
                 }
 
-                let prefer_immediate = address_book.provisioning_trackers.len()/4 > executing_queue_count;
-                let maybe_ee =
-                    Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
+                let from_len = from.len();
+                let from_exec_len v from_exec.len();
 
-                if let Some(ee) = maybe_ee {
-                    trace!("send to execute");
-                    executing_queue_count += 1;
-
-                    to_execute_substage.send(ee).unwrap();
-                } else {
+                if from_len == 0 && from_exec_len == 0 {
                     break;
+                } else {
+                    if from_len > 0 {
+                       let task = from.recv().unwrap();
+                       Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
+                    }
+                    if from_exec_len > 0 {
+                        let mut processed_execution_environment = from_exec.recv().unwrap();
+                        trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
+                        executing_queue_count -= 1;
+
+                        Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
+                        // async-ly propagate the result to rpc subsystems
+                        to_next_stage.send(processed_execution_environment).unwrap();
+                    }
                 }
             }
         }
