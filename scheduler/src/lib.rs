@@ -1066,9 +1066,6 @@ impl ScheduleStage {
                }
             }
 
-            from_len = from.len();
-            from_exec_len = from_exec.len();
-
             loop {
                 loop {
                     if (executing_queue_count + address_book.provisioning_trackers.len()) >= max_executing_queue_count {
@@ -1089,6 +1086,9 @@ impl ScheduleStage {
                         break;
                     }
                 }
+
+                from_len = from.len();
+                from_exec_len = from_exec.len();
 
                 if from_len == 0 && from_exec_len == 0 {
                    trace!("select: back to");
