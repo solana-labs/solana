@@ -811,7 +811,7 @@ pub const DATA_START: usize = SIGNATURE_OFFSETS_SERIALIZED_SIZE + 1;
 /// See the [module documentation][md] for a complete description.
 ///
 /// [md]: self
-#[derive(Default, Serialize, Deserialize, Debug)]
+#[derive(Default, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct SecpSignatureOffsets {
     /// Offset to 64-byte signature plus 1-byte recovery ID.
     pub signature_offset: u16,
