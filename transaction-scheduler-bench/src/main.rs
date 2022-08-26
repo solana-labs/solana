@@ -417,7 +417,7 @@ fn spawn_packet_senders(
         .unwrap_or(format!("{}", 4))
         .parse::<usize>()
         .unwrap();
-    let unique_weight = std::sync::Arc<std::sync::atomic::AtomicU64>::default();
+    let unique_weight = std::sync::Arc::<std::sync::atomic::AtomicU64>::default();
     (0..producer_count)
         .map(|i| {
             let num_accounts = if i == 0 && high_conflict_sender > 0 {
