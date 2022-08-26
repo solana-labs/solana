@@ -320,7 +320,7 @@ impl ConnectionCache {
         }
     }
 
-    fn compute_max_parallel_chunks(&self) -> usize {
+    fn compute_max_parallel_streams(&self) -> usize {
         let (client_type, stake, total_stake) =
             self.maybe_client_pubkey
                 .map_or((ConnectionPeerType::Unstaked, 0, 0), |pubkey| {
@@ -370,7 +370,7 @@ impl ConnectionCache {
                 BaseTpuConnection::Quic(Arc::new(QuicClient::new(
                     endpoint.as_ref().unwrap().clone(),
                     *addr,
-                    self.compute_max_parallel_chunks(),
+                    self.compute_max_parallel_streams(),
                 )))
             };
 
@@ -730,7 +730,7 @@ mod tests {
         solana_logger::setup();
         let mut connection_cache = ConnectionCache::default();
         assert_eq!(
-            connection_cache.compute_max_parallel_chunks(),
+            connection_cache.compute_max_parallel_streams(),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
 
@@ -738,13 +738,13 @@ mod tests {
         let pubkey = Pubkey::new_unique();
         connection_cache.set_staked_nodes(&staked_nodes, &pubkey);
         assert_eq!(
-            connection_cache.compute_max_parallel_chunks(),
+            connection_cache.compute_max_parallel_streams(),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
 
         staked_nodes.write().unwrap().total_stake = 10000;
         assert_eq!(
-            connection_cache.compute_max_parallel_chunks(),
+            connection_cache.compute_max_parallel_streams(),
             QUIC_MAX_UNSTAKED_CONCURRENT_STREAMS
         );
 
@@ -754,7 +754,7 @@ mod tests {
             .pubkey_stake_map
             .insert(pubkey, 1);
         assert_eq!(
-            connection_cache.compute_max_parallel_chunks(),
+            connection_cache.compute_max_parallel_streams(),
             QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
 
@@ -769,7 +769,7 @@ mod tests {
             .pubkey_stake_map
             .insert(pubkey, 1000);
         assert_ne!(
-            connection_cache.compute_max_parallel_chunks(),
+            connection_cache.compute_max_parallel_streams(),
             QUIC_MIN_STAKED_CONCURRENT_STREAMS
         );
     }
