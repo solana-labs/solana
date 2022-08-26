@@ -272,16 +272,7 @@ impl<'a> InvokeContext<'a> {
     }
 
     /// Push a stack frame onto the invocation stack
-    pub fn push(
-        &mut self,
-        instruction_accounts: &[InstructionAccount],
-        program_indices: &[usize],
-        instruction_data: &[u8],
-    ) -> Result<(), InstructionError> {
-        self.transaction_context
-            .get_next_instruction_context()?
-            .configure(program_indices, instruction_accounts, instruction_data);
-
+    pub fn push(&mut self) -> Result<(), InstructionError> {
         let instruction_context = self
             .transaction_context
             .get_instruction_context_at_index_in_trace(
@@ -761,7 +752,10 @@ impl<'a> InvokeContext<'a> {
             verify_caller_result?;
         }
 
-        self.push(instruction_accounts, program_indices, instruction_data)?;
+        self.transaction_context
+            .get_next_instruction_context()?
+            .configure(program_indices, instruction_accounts, instruction_data);
+        self.push()?;
         self.process_executable_chain(compute_units_consumed, timings)
             .and_then(|_| {
                 if self
@@ -1042,8 +1036,11 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
     transaction_context.enable_cap_accounts_data_allocations_per_transaction();
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
-        .push(&preparation.instruction_accounts, &program_indices, &[])
-        .unwrap();
+        .transaction_context
+        .get_next_instruction_context()
+        .unwrap()
+        .configure(&program_indices, &preparation.instruction_accounts, &[]);
+    invoke_context.push().unwrap();
     callback(&mut invoke_context)
 }
 
@@ -1079,12 +1076,17 @@ pub fn mock_process_instruction(
     if let Some(feature_set) = feature_set_override {
         invoke_context.feature_set = feature_set;
     }
-    let result = invoke_context
-        .push(
-            &preparation.instruction_accounts,
+    invoke_context
+        .transaction_context
+        .get_next_instruction_context()
+        .unwrap()
+        .configure(
             &program_indices,
+            &preparation.instruction_accounts,
             instruction_data,
-        )
+        );
+    let result = invoke_context
+        .push()
         .and_then(|_| process_instruction(1, &mut invoke_context));
     let pop_result = invoke_context.pop();
     assert_eq!(result.and(pop_result), expected_result);
@@ -1215,7 +1217,12 @@ mod tests {
                         &MockInstruction::NoopSuccess,
                         metas,
                     );
-                    let result = invoke_context.push(&instruction_accounts, &[3], &[]);
+                    invoke_context
+                        .transaction_context
+                        .get_next_instruction_context()
+                        .unwrap()
+                        .configure(&[3], &instruction_accounts, &[]);
+                    let result = invoke_context.push();
                     assert_eq!(result, Err(InstructionError::UnbalancedInstruction));
                     result?;
                     invoke_context
@@ -1289,9 +1296,12 @@ mod tests {
         // Check call depth increases and has a limit
         let mut depth_reached = 0;
         for _ in 0..invoke_stack.len() {
-            if Err(InstructionError::CallDepth)
-                == invoke_context.push(&instruction_accounts, &[MAX_DEPTH + depth_reached], &[])
-            {
+            invoke_context
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&[MAX_DEPTH + depth_reached], &instruction_accounts, &[]);
+            if Err(InstructionError::CallDepth) == invoke_context.push() {
                 break;
             }
             depth_reached += 1;
@@ -1367,8 +1377,11 @@ mod tests {
         ];
         for case in cases {
             invoke_context
-                .push(&instruction_accounts, &[4], &[])
-                .unwrap();
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&[4], &instruction_accounts, &[]);
+            invoke_context.push().unwrap();
             let inner_instruction =
                 Instruction::new_with_bincode(callee_program_id, &case.0, metas.clone());
             let result = invoke_context
@@ -1382,8 +1395,11 @@ mod tests {
         let expected_results = vec![Ok(()), Err(InstructionError::GenericError)];
         for expected_result in expected_results {
             invoke_context
-                .push(&instruction_accounts, &[4], &[])
-                .unwrap();
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&[4], &instruction_accounts, &[]);
+            invoke_context.push().unwrap();
             let inner_instruction = Instruction::new_with_bincode(
                 callee_program_id,
                 &MockInstruction::ConsumeComputeUnits {
@@ -1426,7 +1442,12 @@ mod tests {
         invoke_context.compute_budget =
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64);
 
-        invoke_context.push(&[], &[0], &[]).unwrap();
+        invoke_context
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(&[0], &[], &[]);
+        invoke_context.push().unwrap();
         assert_eq!(
             *invoke_context.get_compute_budget(),
             ComputeBudget::new(compute_budget::DEFAULT_INSTRUCTION_COMPUTE_UNIT_LIMIT as u64)
