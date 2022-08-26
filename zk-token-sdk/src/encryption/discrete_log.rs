@@ -102,7 +102,7 @@ impl DiscreteLog {
     /// Adjusts number of threads in a discrete log instance.
     pub fn num_threads(&mut self, num_threads: usize) -> Result<(), ProofError> {
         // number of threads must be a positive power-of-two integer
-        if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 {
+        if num_threads == 0 || (num_threads & (num_threads - 1)) != 0 || num_threads > 65536 {
             return Err(ProofError::DiscreteLogThreads);
         }
 
