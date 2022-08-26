@@ -899,7 +899,7 @@ impl ScheduleStage {
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
-                for (unique_weight, tracker) in std::mem::take(&mut page.provisional_task_ids).into_iter() {
+                for (unique_weight, mut tracker) in std::mem::take(&mut page.provisional_task_ids).into_iter() {
                     let tracker = unsafe { std::sync::Arc::<ProvisioningTracker>::get_mut_unchecked(&mut tracker) };
                     tracker.progress();
                     if tracker.is_fulfilled() {
