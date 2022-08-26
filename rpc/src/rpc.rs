@@ -72,7 +72,7 @@ use {
         sysvar::stake_history,
         transaction::{
             self, AddressLoader, MessageHash, SanitizedTransaction, TransactionError,
-            VersionedTransaction,
+            VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
     },
     solana_send_transaction_service::{
@@ -4029,11 +4029,10 @@ pub mod rpc_full {
                 "get_recent_prioritization_fees rpc request received: {:?} pubkeys",
                 pubkey_strs.len()
             );
-            const MAX_FEE_ACCOUNTS: usize = 42; // TODO: what do we actually want here?
-            if pubkey_strs.len() > MAX_FEE_ACCOUNTS {
+            if pubkey_strs.len() > MAX_TX_ACCOUNT_LOCKS {
                 return Err(Error::invalid_params(format!(
                     "Too many inputs provided; max {}",
-                    MAX_FEE_ACCOUNTS
+                    MAX_TX_ACCOUNT_LOCKS
                 )));
             }
             let pubkeys = pubkey_strs
