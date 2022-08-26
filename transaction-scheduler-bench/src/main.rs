@@ -258,7 +258,7 @@ fn main() {
 fn start_execution_threads(
     metrics: Arc<TransactionSchedulerBenchMetrics>,
     transaction_batch_receivers: Vec<Receiver<TransactionBatchMessage>>,
-    completed_transaction_sender: Sender<CompletedTransactionMessage>
+    completed_transaction_sender: Sender<CompletedTransactionMessage>,
     execution_per_tx_us: u64,
     exit: Arc<AtomicBool>,
 ) -> Vec<JoinHandle<()>> {
