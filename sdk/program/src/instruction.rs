@@ -249,9 +249,9 @@ pub enum InstructionError {
     #[error("Provided owner is not allowed")]
     IllegalOwner,
 
-    /// Account data allocation exceeded the maximum accounts data size limit
-    #[error("Account data allocation exceeded the maximum accounts data size limit")]
-    MaxAccountsDataSizeExceeded,
+    /// Accounts data allocations exceeded the maximum allowed per transaction
+    #[error("Accounts data allocations exceeded the maximum allowed per transaction")]
+    MaxAccountsDataAllocationsExceeded,
 
     /// Max accounts exceeded
     #[error("Max accounts exceeded")]

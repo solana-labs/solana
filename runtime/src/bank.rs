@@ -284,7 +284,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "HEJXoycXvGT2pwMuKcUKzzbeemnqbfrUC4jHZx1ncaWv")]
+#[frozen_abi(digest = "7FSSacrCi7vf2QZFm3Ui9JqTii4U6h1XWYD3LKSuVwV8")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -4352,6 +4352,12 @@ impl Bank {
             compute_budget.max_invoke_depth.saturating_add(1),
             tx.message().instructions().len(),
         );
+        if self
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_allocations_per_transaction::id())
+        {
+            transaction_context.enable_cap_accounts_data_allocations_per_transaction();
+        }
 
         let pre_account_state_info =
             self.get_transaction_account_state_info(&transaction_context, tx.message());
@@ -8038,7 +8044,10 @@ pub(crate) mod tests {
                 instruction as stake_instruction,
                 state::{Authorized, Delegation, Lockup, Stake},
             },
-            system_instruction::{self, SystemError, MAX_PERMITTED_DATA_LENGTH},
+            system_instruction::{
+                self, SystemError, MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION,
+                MAX_PERMITTED_DATA_LENGTH,
+            },
             system_program,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
@@ -19482,5 +19491,56 @@ pub(crate) mod tests {
                 bank.get_total_accounts_stats().unwrap().data_len,
             );
         }
+    }
+
+    /// Ensures that if a transaction exceeds the maximum allowed accounts data allocation size:
+    /// 1. The transaction fails
+    /// 2. The bank's accounts_data_size is unmodified
+    #[test]
+    fn test_cap_accounts_data_allocations_per_transaction() {
+        use solana_sdk::signature::KeypairInsecureClone;
+        const NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION: usize =
+            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION as usize
+                / MAX_PERMITTED_DATA_LENGTH as usize;
+
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
+        bank.activate_feature(&feature_set::cap_accounts_data_allocations_per_transaction::id());
+
+        let mut instructions = Vec::new();
+        let mut keypairs = vec![mint_keypair.clone()];
+        for _ in 0..=NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION {
+            let keypair = Keypair::new();
+            let instruction = system_instruction::create_account(
+                &mint_keypair.pubkey(),
+                &keypair.pubkey(),
+                bank.rent_collector()
+                    .rent
+                    .minimum_balance(MAX_PERMITTED_DATA_LENGTH as usize),
+                MAX_PERMITTED_DATA_LENGTH,
+                &solana_sdk::system_program::id(),
+            );
+            keypairs.push(keypair);
+            instructions.push(instruction);
+        }
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        let signers: Vec<_> = keypairs.iter().collect();
+        let transaction = Transaction::new(&signers, message, bank.last_blockhash());
+
+        let accounts_data_size_before = bank.load_accounts_data_size();
+        let result = bank.process_transaction(&transaction);
+        let accounts_data_size_after = bank.load_accounts_data_size();
+
+        assert_eq!(accounts_data_size_before, accounts_data_size_after);
+        assert_eq!(
+            result,
+            Err(TransactionError::InstructionError(
+                NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION as u8,
+                solana_sdk::instruction::InstructionError::MaxAccountsDataAllocationsExceeded,
+            )),
+        );
     }
 }

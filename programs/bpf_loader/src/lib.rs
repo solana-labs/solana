@@ -41,7 +41,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            cap_accounts_data_len, cap_bpf_program_instruction_accounts,
+            cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
             enable_bpf_loader_extend_program_data_ix,
             error_on_syscall_bpf_function_hash_collisions, reject_callx_r10,
@@ -49,7 +49,7 @@ use {
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        program_error::MAX_ACCOUNTS_DATA_SIZE_EXCEEDED,
+        program_error::MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
@@ -1339,13 +1339,14 @@ impl Executor for BpfExecutor {
             }
             match result {
                 Ok(status) if status != SUCCESS => {
-                    let error: InstructionError = if status == MAX_ACCOUNTS_DATA_SIZE_EXCEEDED
+                    let error: InstructionError = if status
+                        == MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED
                         && !invoke_context
                             .feature_set
-                            .is_active(&cap_accounts_data_len::id())
+                            .is_active(&cap_accounts_data_allocations_per_transaction::id())
                     {
-                        // Until the cap_accounts_data_len feature is enabled, map the
-                        // MAX_ACCOUNTS_DATA_SIZE_EXCEEDED error to InvalidError
+                        // Until the cap_accounts_data_allocations_per_transaction feature is
+                        // enabled, map the MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED error to InvalidError
                         InstructionError::InvalidError
                     } else {
                         status.into()
