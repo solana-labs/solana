@@ -1086,11 +1086,10 @@ impl ScheduleStage {
                 }
             }
 
-            loop {
-
                 from_len = from.len();
                 from_exec_len = from_exec.len();
 
+            loop {
                 if from_len == 0 && from_exec_len == 0 {
                    trace!("select: back to");
                    break;
