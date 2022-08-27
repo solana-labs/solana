@@ -975,7 +975,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
     ) {
-        let mut executing_queue_count = 0;
+        let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
         let mut provisioning_tracker_count = 0;
         let mut sequence_time = 0;
