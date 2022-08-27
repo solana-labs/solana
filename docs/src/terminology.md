@@ -229,7 +229,7 @@ The executable code that interprets the [instructions](#instruction) sent inside
 
 ## program derived account (PDA)
 
-An account whose owner is a program and thus is not controlled by a private key like other accounts.
+An account whose signing authority is a program and thus is not controlled by a private key like other accounts.
 
 ## program id
 
