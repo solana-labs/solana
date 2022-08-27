@@ -1819,6 +1819,11 @@ pub fn main() {
                 .value_name("BYTES")
                 .help("Maximum number of bytes written to the program log before truncation")
         )
+        .arg(
+            Arg::with_name("replay_slots_concurrently")
+                .long("replay-slots-concurrently")
+                .help("Allow concurrent replay of slots on different forks")
+        )
         .after_help("The default subcommand is run")
         .subcommand(
             SubCommand::with_name("exit")
@@ -2759,6 +2764,7 @@ pub fn main() {
             ..RuntimeConfig::default()
         },
         staked_nodes_overrides: staked_nodes_overrides.clone(),
+        replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
         ..ValidatorConfig::default()
     };
 

@@ -109,6 +109,7 @@ pub fn generate_durable_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync
     let (mut nonce_keypairs, _extra) = generate_keypairs(seed_keypair, count as u64);
     nonce_keypairs.truncate(count);
 
+    info!("Creating {} nonce accounts...", count);
     let to_fund: Vec<NonceCreateSigners> = authority_keypairs
         .iter()
         .zip(nonce_keypairs.iter())

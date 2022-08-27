@@ -95,6 +95,9 @@ function generateConfig(configType, format) {
     // Prevent dependencies from being bundled
     config.external = [
       /@babel\/runtime/,
+      '@noble/hashes/hmac',
+      '@noble/hashes/sha256',
+      '@noble/secp256k1',
       '@solana/buffer-layout',
       'bigint-buffer',
       'bn.js',
@@ -106,7 +109,6 @@ function generateConfig(configType, format) {
       'js-sha3',
       'node-fetch',
       'rpc-websockets',
-      'secp256k1',
       'superstruct',
       'tweetnacl',
     ];
@@ -159,6 +161,9 @@ function generateConfig(configType, format) {
           config.external = [
             /@babel\/runtime/,
             '@solana/buffer-layout',
+            '@noble/hashes/hmac',
+            '@noble/hashes/sha256',
+            '@noble/secp256k1',
             'bigint-buffer',
             'bn.js',
             'borsh',
@@ -172,7 +177,6 @@ function generateConfig(configType, format) {
             'node-fetch',
             'react-native-url-polyfill',
             'rpc-websockets',
-            'secp256k1',
             'superstruct',
             'tweetnacl',
           ];
@@ -180,11 +184,6 @@ function generateConfig(configType, format) {
           break;
         }
       }
-
-      // TODO: Find a workaround to avoid resolving the following JSON file:
-      // `node_modules/secp256k1/node_modules/elliptic/package.json`
-      config.plugins.push(json());
-
       break;
     case 'node':
       config.output = [

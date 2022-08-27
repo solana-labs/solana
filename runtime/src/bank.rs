@@ -6905,7 +6905,7 @@ impl Bank {
             let accounts_ = Arc::clone(&accounts);
             accounts.accounts_db.verify_accounts_hash_in_bg.start(|| {
                 Builder::new()
-                    .name("solana-bg-hash-verifier".to_string())
+                    .name("solBgHashVerify".into())
                     .spawn(move || {
                         info!(
                             "running initial verification accounts hash calculation in background"
@@ -7521,11 +7521,6 @@ impl Bank {
     fn preserve_rent_epoch_for_rent_exempt_accounts(&self) -> bool {
         self.feature_set
             .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id())
-    }
-
-    pub fn concurrent_replay_of_forks(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::concurrent_replay_of_forks::id())
     }
 
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {

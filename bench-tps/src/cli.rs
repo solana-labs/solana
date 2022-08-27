@@ -313,6 +313,11 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .takes_value(false)
                 .help("Sets random compute-unit-price in range [0..100] to transfer transactions"),
         )
+        .arg(
+            Arg::with_name("use_durable_nonce")
+                .long("use-durable-nonce")
+                .help("Use durable transaction nonce instead of recent blockhash"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -445,6 +450,10 @@ pub fn extract_args(matches: &ArgMatches) -> Config {
 
     if matches.is_present("use_randomized_compute_unit_price") {
         args.use_randomized_compute_unit_price = true;
+    }
+
+    if matches.is_present("use_durable_nonce") {
+        args.use_durable_nonce = true;
     }
 
     args

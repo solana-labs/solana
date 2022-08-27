@@ -100,7 +100,6 @@
     "@types/mz": "^2.7.3",
     "@types/node": "^17.0.24",
     "@types/node-fetch": "2",
-    "@types/secp256k1": "^4.0.1",
     "@types/sinon": "^10.0.0",
     "@types/sinon-chai": "^3.2.8",
     "@typescript-eslint/eslint-plugin": "^4.14.2",

@@ -414,7 +414,11 @@ impl SendTransactionService {
             .spawn(move || loop {
                 let recv_timeout_ms = config.batch_send_rate_ms;
                 let stats = &stats_report.stats;
-                match receiver.recv_timeout(Duration::from_millis(recv_timeout_ms)) {
+                let recv_result = receiver.recv_timeout(Duration::from_millis(recv_timeout_ms));
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
+                match recv_result {
                     Err(RecvTimeoutError::Disconnected) => {
                         info!("Terminating send-transaction-service.");
                         exit.store(true, Ordering::Relaxed);

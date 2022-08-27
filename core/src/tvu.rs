@@ -84,6 +84,7 @@ pub struct TvuConfig {
     pub rocksdb_compaction_interval: Option<u64>,
     pub rocksdb_max_compaction_jitter: Option<u64>,
     pub wait_for_vote_to_start_leader: bool,
+    pub replay_slots_concurrently: bool,
 }
 
 impl Tvu {
@@ -237,6 +238,7 @@ impl Tvu {
             ancestor_hashes_replay_update_sender,
             tower_storage: tower_storage.clone(),
             wait_to_vote_slot,
+            replay_slots_concurrently: tvu_config.replay_slots_concurrently,
         };
 
         let (voting_sender, voting_receiver) = unbounded();

@@ -165,6 +165,7 @@ pub struct ReplayStageConfig {
     // Stops voting until this slot has been reached. Should be used to avoid
     // duplicate voting which can lead to slashing.
     pub wait_to_vote_slot: Option<Slot>,
+    pub replay_slots_concurrently: bool,
 }
 
 #[derive(Default)]
@@ -424,6 +425,7 @@ impl ReplayStage {
             ancestor_hashes_replay_update_sender,
             tower_storage,
             wait_to_vote_slot,
+            replay_slots_concurrently,
         } = config;
 
         trace!("replay stage");
@@ -528,7 +530,8 @@ impl ReplayStage {
                         &ancestor_hashes_replay_update_sender,
                         block_metadata_notifier.clone(),
                         &mut replay_timing,
-                        log_messages_bytes_limit
+                        log_messages_bytes_limit,
+                        replay_slots_concurrently
                     );
                     replay_active_banks_time.stop();
 
@@ -2603,7 +2606,8 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         replay_timing: &mut ReplayTiming,
         log_messages_bytes_limit: Option<usize>,
-    ) -> bool {
+        replay_slots_concurrently: bool,
+    ) -> bool /* completed a bank */ {
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
         let num_active_banks = active_bank_slots.len();
         trace!(
@@ -2612,49 +2616,8 @@ impl ReplayStage {
             active_bank_slots
         );
         if num_active_banks > 0 {
-            let replay_result_vec = if num_active_banks > 1 {
-                if bank_forks
-                    .read()
-                    .unwrap()
-                    .get(active_bank_slots[0])
-                    .unwrap()
-                    .concurrent_replay_of_forks()
-                {
-                    Self::replay_active_banks_concurrently(
-                        blockstore,
-                        bank_forks,
-                        my_pubkey,
-                        vote_account,
-                        progress,
-                        transaction_status_sender,
-                        verify_recyclers,
-                        replay_vote_sender,
-                        replay_timing,
-                        log_messages_bytes_limit,
-                        &active_bank_slots,
-                    )
-                } else {
-                    active_bank_slots
-                        .iter()
-                        .map(|bank_slot| {
-                            Self::replay_active_bank(
-                                blockstore,
-                                bank_forks,
-                                my_pubkey,
-                                vote_account,
-                                progress,
-                                transaction_status_sender,
-                                verify_recyclers,
-                                replay_vote_sender,
-                                replay_timing,
-                                log_messages_bytes_limit,
-                                *bank_slot,
-                            )
-                        })
-                        .collect()
-                }
-            } else {
-                vec![Self::replay_active_bank(
+            let replay_result_vec = if num_active_banks > 1 && replay_slots_concurrently {
+                Self::replay_active_banks_concurrently(
                     blockstore,
                     bank_forks,
                     my_pubkey,
@@ -2665,8 +2628,27 @@ impl ReplayStage {
                     replay_vote_sender,
                     replay_timing,
                     log_messages_bytes_limit,
-                    active_bank_slots[0],
-                )]
+                    &active_bank_slots,
+                )
+            } else {
+                active_bank_slots
+                    .iter()
+                    .map(|bank_slot| {
+                        Self::replay_active_bank(
+                            blockstore,
+                            bank_forks,
+                            my_pubkey,
+                            vote_account,
+                            progress,
+                            transaction_status_sender,
+                            verify_recyclers,
+                            replay_vote_sender,
+                            replay_timing,
+                            log_messages_bytes_limit,
+                            *bank_slot,
+                        )
+                    })
+                    .collect()
             };
 
             Self::process_replay_results(
