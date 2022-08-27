@@ -8,8 +8,8 @@ function Card({ to, header, body }) {
   /* 
   Both the `header` and `body` expect an object with the following type
   header = {
-    label: String, // 
-    translateId: String // 
+    label: String, //
+    translateId: String //
   }
   */
 
