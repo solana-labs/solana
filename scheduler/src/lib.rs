@@ -1067,26 +1067,15 @@ impl ScheduleStage {
                 from_exec_len = from_exec.len();
 
             loop {
-                loop {
-                    if (executing_queue_count /*+ address_book.provisioning_trackers.len()*/) >= max_executing_queue_count {
-                        //trace!("skip scheduling; outgoing queue full");
-                        break;
-                    }
-
+                while (executing_queue_count /*+ address_book.provisioning_trackers.len()*/) >= max_executing_queue_count {
                     let prefer_immediate = false; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
-                    let maybe_ee =
-                        Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock);
-
-                    if let Some(ee) = maybe_ee {
-                        //trace!("send to execute");
+                    if let Some(ee) = Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock) {
                         executing_queue_count += 1;
-
                         to_execute_substage.send(ee).unwrap();
                     } else {
                         break;
                     }
                 }
-                if true {
                 if from_len == 0 && from_exec_len == 0 {
                    trace!("select: back to");
                    break;
@@ -1110,9 +1099,6 @@ impl ScheduleStage {
                     } else {
                         from_len = from.len();
                     }
-                }
-                } else {
-                    break
                 }
             }
         }
