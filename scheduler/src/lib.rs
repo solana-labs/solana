@@ -1067,7 +1067,7 @@ impl ScheduleStage {
                 from_exec_len = from_exec.len();
 
             loop {
-                while (executing_queue_count /*+ address_book.provisioning_trackers.len()*/) >= max_executing_queue_count {
+                while (executing_queue_count /*+ address_book.provisioning_trackers.len()*/) < max_executing_queue_count {
                     let prefer_immediate = false; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
                     if let Some(ee) = Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock) {
                         executing_queue_count += 1;
