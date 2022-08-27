@@ -1044,17 +1044,12 @@ impl ScheduleStage {
 
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
-                   //trace!("select2: {} {}", from.len(), from_exec.len());
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
-                    //trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                     executing_queue_count -= 1;
-
                     Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
-                    // async-ly propagate the result to rpc subsystems
                     to_next_stage.send(processed_execution_environment).unwrap();
                }
                recv(from) -> maybe_from => {
-                   //trace!("select1: {} {}", from.len(), from_exec.len());
                    let task = maybe_from.unwrap();
                    Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                }
@@ -1079,23 +1074,17 @@ impl ScheduleStage {
                 }
                 let (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
                 if empty_from && empty_from_exec {
-                   trace!("select: back to");
                    break;
                 } else {
                     if !empty_from_exec {
-                       trace!("select4: {} {}", from_len, from_exec_len);
                         let mut processed_execution_environment = from_exec.recv().unwrap();
-                        trace!("recv from execute: {:?}", processed_execution_environment.unique_weight);
                         executing_queue_count -= 1;
-
                         Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
-                        // async-ly propagate the result to rpc subsystems
                         to_next_stage.send(processed_execution_environment).unwrap();
                     } else {
                         from_exec_len = from_exec.len();
                     }
                     if !empty_from {
-                       trace!("select3: {} {}", from_len, from_exec_len);
                        let task = from.recv().unwrap();
                        Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
                     } else {
