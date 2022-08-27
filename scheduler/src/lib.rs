@@ -797,7 +797,7 @@ impl ScheduleStage {
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
                 let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(task)));
-                provisioning_tracker_count += 1;
+                *provisioning_tracker_count += 1;
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
                     next_task,
@@ -908,7 +908,7 @@ impl ScheduleStage {
                     if tracker.is_fulfilled() {
                         trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
                         address_book.fulfilled_provisional_task_ids.insert(tracker.task.unique_weight, TaskInQueue::clone(&tracker.task));
-                        provisioning_tracker_count -= 1;
+                        *provisioning_tracker_count -= 1;
                     } else {
                         trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
                     }
