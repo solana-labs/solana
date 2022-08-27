@@ -1061,8 +1061,7 @@ impl ScheduleStage {
             }
 
             let mut first_iteration = true;
-            let mut from_len = 0;
-            let mut from_exec_len = 0;
+            let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
                 while (executing_queue_count /*+ address_book.provisioning_trackers.len()*/) < max_executing_queue_count {
