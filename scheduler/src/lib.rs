@@ -796,13 +796,12 @@ impl ScheduleStage {
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
-                let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(task)));
+                let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(a2)));
                 *provisioning_tracker_count += 1;
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
                     next_task,
-                    &a2,
-                    provisional_count,
+                    &tracker
                 );
 
                 return None;
@@ -830,13 +829,12 @@ impl ScheduleStage {
     fn finalize_lock_for_provisional_execution(
         address_book: &mut AddressBook,
         next_task: &mut Task,
-        task: &TaskInQueue,
-        provisional_count: usize,
+        tracker: &std::sync::Arc<ProvisioningTracker>,
     ) {
         for l in next_task.tx.1.iter_mut() {
             match l.status {
                 LockStatus::Provisional => {
-                    l.target.page_mut().provisional_task_ids.push(std::sync::Arc::clone(&tracker));
+                    l.target.page_mut().provisional_task_ids.push(std::sync::Arc::clone(tracker));
                 }
                 LockStatus::Succeded => {
                     // do nothing
