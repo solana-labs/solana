@@ -1018,8 +1018,6 @@ impl ScheduleStage {
         }
 
         loop {
-            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len());
-
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
@@ -1038,6 +1036,7 @@ impl ScheduleStage {
 
             loop {
                 while (executing_queue_count + provisioning_tracker_count) < max_executing_queue_count {
+                    trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len());
                     let prefer_immediate = provisioning_tracker_count/4 > executing_queue_count;
                     if let Some(ee) = Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock, &mut provisioning_tracker_count) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
