@@ -723,6 +723,7 @@ impl ScheduleStage {
         prefer_immediate: bool,
         sequence_clock: &usize,
         queue_clock: &mut usize,
+        provisioning_tracker_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
@@ -795,6 +796,8 @@ impl ScheduleStage {
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
+                let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(task)));
+                provisioning_tracker_count += 1;
                 Self::finalize_lock_for_provisional_execution(
                     address_book,
                     next_task,
@@ -830,7 +833,6 @@ impl ScheduleStage {
         task: &TaskInQueue,
         provisional_count: usize,
     ) {
-        let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(task)));
         for l in next_task.tx.1.iter_mut() {
             match l.status {
                 LockStatus::Provisional => {
@@ -860,7 +862,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>) {
+    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>, provisioning_tracker_count: &mut usize) {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended = address_book.reset_lock(&mut l, true);
 
@@ -906,6 +908,7 @@ impl ScheduleStage {
                     if tracker.is_fulfilled() {
                         trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
                         address_book.fulfilled_provisional_task_ids.insert(tracker.task.unique_weight, TaskInQueue::clone(&tracker.task));
+                        provisioning_tracker_count -= 1;
                     } else {
                         trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
                     }
@@ -939,7 +942,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize) {
+    fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
         // do par()-ly?
 
         ee.task.record_commit_time(*commit_time);
@@ -947,7 +950,7 @@ impl ScheduleStage {
         //*commit_time = commit_time.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
-        Self::unlock_after_execution(address_book, &mut ee.lock_attempts);
+        Self::unlock_after_execution(address_book, &mut ee.lock_attempts, provisioning_tracker_count);
         ee.task.mark_as_finished();
 
         // block-wide qos validation will be done here
@@ -969,9 +972,10 @@ impl ScheduleStage {
         sequence_time: &usize,
         queue_clock: &mut usize,
         execute_clock: &mut usize,
+        provisioning_tracker_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(task_sender, runnable_queue, address_book, contended_count, prefer_immediate, sequence_time, queue_clock)
+            Self::pop_from_queue_then_lock(task_sender, runnable_queue, address_book, contended_count, prefer_immediate, sequence_time, queue_clock, provisioning_tracker_count)
                 .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock));
         maybe_ee
     }
@@ -1000,6 +1004,7 @@ impl ScheduleStage {
         let mut executing_queue_count = 0;
         let mut current_unique_key = u64::max_value();
         let mut contended_count = 0;
+        let mut provisioning_tracker_count = 0;
         let mut sequence_time = 0;
         let mut queue_clock = 0;
         let mut execute_clock = 0;
@@ -1040,13 +1045,13 @@ impl ScheduleStage {
         }
 
         loop {
-            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, 0/*address_book.provisioning_trackers.len()*/, max_executing_queue_count, address_book.uncontended_task_ids.len());
+            trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len());
 
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
                     executing_queue_count -= 1;
-                    Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
+                    Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                     to_next_stage.send(processed_execution_environment).unwrap();
                }
                recv(from) -> maybe_from => {
@@ -1059,9 +1064,9 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                while (executing_queue_count /*+ address_book.provisioning_trackers.len()*/) < max_executing_queue_count {
-                    let prefer_immediate = false; //address_book.provisioning_trackers.len()/4 > executing_queue_count;
-                    if let Some(ee) = Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock) {
+                while (executing_queue_count + provisioning_tracker_count) < max_executing_queue_count {
+                    let prefer_immediate = provisioning_tracker_count/4 > executing_queue_count;
+                    if let Some(ee) = Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock, &mut provisioning_tracker_count) {
                         executing_queue_count += 1;
                         to_execute_substage.send(ee).unwrap();
                     } else {
@@ -1079,7 +1084,7 @@ impl ScheduleStage {
                     if !empty_from_exec {
                         let mut processed_execution_environment = from_exec.recv().unwrap();
                         executing_queue_count -= 1;
-                        Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock);
+                        Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                         to_next_stage.send(processed_execution_environment).unwrap();
                     } else {
                         from_exec_len = from_exec.len();
