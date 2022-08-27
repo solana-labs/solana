@@ -632,34 +632,11 @@ impl ScheduleStage {
     fn push_to_runnable_queue(
         task: TaskInQueue,
         runnable_queue: &mut TaskQueue,
-        unique_key: &mut u64,
     ) {
-        // manage randomness properly for future scheduling determinism
-        //let mut rng = rand::thread_rng();
-
-        //let ix = 23;
-        //let tx = bank
-        //    .verify_transaction(
-        //        tx,
-        //        solana_sdk::transaction::TransactionVerificationMode::FullVerification,
-        //    )
-        //    .unwrap();
-        //tx.foo();
-        //let unique_weight = (weight << 32) | (*unique_key & 0x0000_0000_ffff_ffff);
-        let unique_weight = task.unique_weight;
-
         runnable_queue.add_to_schedule(
-            /*
-            UniqueWeight {
-                weight,
-                //unique_key: solana_sdk::hash::new_rand(&mut rng),
-                unique_key: *unique_key,
-            },
-            */
-            unique_weight,
+            task.unique_weight,
             task,
         );
-        *unique_key -= 1;
     }
 
     #[inline(never)]
@@ -982,12 +959,11 @@ impl ScheduleStage {
     fn register_runnable_task(
         weighted_tx: TaskInQueue,
         runnable_queue: &mut TaskQueue,
-        unique_key: &mut u64,
         sequence_time: &mut usize,
     ) {
         weighted_tx.record_sequence_time(*sequence_time);
         *sequence_time = sequence_time.checked_add(1).unwrap();
-        Self::push_to_runnable_queue(weighted_tx, runnable_queue, unique_key)
+        Self::push_to_runnable_queue(weighted_tx, runnable_queue)
     }
 
     pub fn run(
@@ -1000,7 +976,6 @@ impl ScheduleStage {
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
     ) {
         let mut executing_queue_count = 0;
-        let mut current_unique_key = u64::max_value();
         let mut contended_count = 0;
         let mut provisioning_tracker_count = 0;
         let mut sequence_time = 0;
@@ -1054,7 +1029,7 @@ impl ScheduleStage {
                }
                recv(from) -> maybe_from => {
                    let task = maybe_from.unwrap();
-                   Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
+                   Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                }
             }
 
@@ -1089,7 +1064,7 @@ impl ScheduleStage {
                     }
                     if !empty_from {
                        let task = from.recv().unwrap();
-                       Self::register_runnable_task(task, runnable_queue, &mut current_unique_key, &mut sequence_time);
+                       Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                     } else {
                         from_len = from.len();
                     }
