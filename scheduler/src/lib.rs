@@ -1023,7 +1023,7 @@ impl ScheduleStage {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
-                    executing_queue_count -= 1;
+                    executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                     Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                     to_next_stage.send(processed_execution_environment).unwrap();
                }
@@ -1040,7 +1040,7 @@ impl ScheduleStage {
                 while (executing_queue_count + provisioning_tracker_count) < max_executing_queue_count {
                     let prefer_immediate = provisioning_tracker_count/4 > executing_queue_count;
                     if let Some(ee) = Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock, &mut provisioning_tracker_count) {
-                        executing_queue_count += 1;
+                        executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ee).unwrap();
                     } else {
                         break;
@@ -1056,7 +1056,7 @@ impl ScheduleStage {
                 } else {
                     if !empty_from_exec {
                         let mut processed_execution_environment = from_exec.recv().unwrap();
-                        executing_queue_count -= 1;
+                        executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                         Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                         to_next_stage.send(processed_execution_environment).unwrap();
                     } else {
