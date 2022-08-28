@@ -1065,12 +1065,14 @@ impl ScheduleStage {
             }).unwrap();
         }
 
+        let (mut from_disconnected, mut from_exec_disconnected) = (false, false);
         loop {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    if maybe_from_exec.is_err() {
                        assert_eq!(from_exec.len(), 0);
-                       if from.len() == 0 {
+                       from_exec_disconnected = true;
+                       if from_disconnected {
                            break;
                        } else {
                            continue;
@@ -1084,7 +1086,8 @@ impl ScheduleStage {
                recv(from) -> maybe_from => {
                    if maybe_from.is_err() {
                        assert_eq!(from.len(), 0);
-                       if from_exec.len() == 0 {
+                       from_disconnected = true;
+                       if from_exec_disconnected {
                            break;
                        } else {
                            continue;
