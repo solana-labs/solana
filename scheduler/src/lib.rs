@@ -1058,6 +1058,7 @@ impl ScheduleStage {
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                         Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                         to_next_stage.send(processed_execution_environment).unwrap();
+                        from_exec_len -= 1;
                     } else {
                         from_exec_len = from_exec.len();
                     }
@@ -1067,6 +1068,7 @@ impl ScheduleStage {
                        if task.is_err() {
                             error!("odd: {} {:?} {} -> {}", from_len, task, old_len, from.len());
                         }
+                       from_len -= 1;
                        Self::register_runnable_task(task.unwrap(), runnable_queue, &mut sequence_time);
                     } else {
                         from_len = from.len();
