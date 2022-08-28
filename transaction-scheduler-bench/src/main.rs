@@ -308,6 +308,7 @@ fn execution_worker(
 ) {
     loop {
         if exit.load(Ordering::Relaxed) {
+            info("executor exit!");
             break;
         }
 
