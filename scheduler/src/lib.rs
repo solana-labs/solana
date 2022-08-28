@@ -1095,6 +1095,7 @@ impl ScheduleStage {
                 }
             }
         }
+        info!("run finished...");
     }
 }
 
