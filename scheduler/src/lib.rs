@@ -891,10 +891,10 @@ impl ScheduleStage {
 
                 if let Some(task) = l.heaviest_uncontended.take() {
                     assert!(!task.already_finished());
-                    assert!(task.currently_contended())
+                    if task.currently_contended() {
                         inserted = true;
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
-                    /*} /*else {
+                    } /*else {
                         let contended_unique_weights = &page.contended_unique_weights;
                         contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
                             let mut found = true;
