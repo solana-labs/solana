@@ -81,7 +81,7 @@ impl ExecutionEnvironment {
                 if should_remove && !removed {
                     contended_unique_weights.remove_task(&uq);
                 }
-                found.then(|| solana_scheduler::TaskInQueue::clone(task))
+                found.then(|| TaskInQueue::clone(task))
             }).flatten().map(|task| {
                 //task.trace_timestamps(&format!("in_exec(heaviest:{})", self.task.queue_time_label()));
                 lock_attempt.heaviest_uncontended = Some(task);
