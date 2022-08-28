@@ -1050,7 +1050,7 @@ impl ScheduleStage {
             }
 
             let mut first_iteration = true;
-            let mut (empty_from, empty_from_exec) = (false, false);
+            let (mut empty_from, mut empty_from_exec) = (false, false);
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
