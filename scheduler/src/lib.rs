@@ -967,7 +967,7 @@ impl ScheduleStage {
 
         //ee.reindex();
         ee.task.record_commit_time(*commit_time);
-        ee.task.trace_timestamps("commit");
+        //ee.task.trace_timestamps("commit");
         //*commit_time = commit_time.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
