@@ -1007,7 +1007,7 @@ impl ScheduleStage {
         for thx in 0..indexer_count {
             let task_receiver = task_receiver.clone();
             let h = std::thread::Builder::new().name(format!("sol-indexer{:02}", thx)).spawn(move || {
-                while let (task, ll) = task_receiver.recv().unwrap() {
+                while let Ok((task, ll)) = task_receiver.recv() {
                     for lock_attempt in ll {
                         if task.already_finished() {
                             break;
@@ -1015,6 +1015,7 @@ impl ScheduleStage {
                         lock_attempt.contended_unique_weights().insert_task(task.unique_weight, TaskInQueue::clone(&task));
                     }
                 }
+                assert_eq!(task_receiver.len(), 0);
             }).unwrap();
         }
 
