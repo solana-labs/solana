@@ -500,7 +500,7 @@ fn send_packets(
         if start.elapsed() > duration {
             info!("stopping packet sending");
             while packet_batch_sender.len() > 0 {
-                std::thread::sleep(Duration::from_micros(10));
+                std::thread::sleep(Duration::from_millis(10));
             }
             break;
         }
