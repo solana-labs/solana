@@ -1082,15 +1082,14 @@ impl ScheduleStage {
                 } else {
                     if !empty_from_exec {
                         let mut processed_execution_environment = from_exec.recv().unwrap();
-                        from_exec_len -= 1;
-
+                        from_exec_len = from_exec_len.checked_sub(1).unwrap();
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                         Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                         to_next_stage.send(processed_execution_environment).unwrap();
                     }
                     if !empty_from {
                        let task = from.recv().unwrap();
-                       from_len -= 1;
+                       from_len = from_len.checked_sub(1).unwrap();
                        Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                     }
                 }
