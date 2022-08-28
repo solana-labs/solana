@@ -1062,9 +1062,10 @@ impl ScheduleStage {
                         from_exec_len = from_exec.len();
                     }
                     if !empty_from {
+                        let old_len = from.len();
                        let task = from.recv();
                        if task.is_err() {
-                            error!("odd: {} {:?}", from_len, task);
+                            error!("odd: {} {:?} {} -> {}", from_len, task, old_len, from.len());
                         }
                        Self::register_runnable_task(task.unwrap(), runnable_queue, &mut sequence_time);
                     } else {
