@@ -48,7 +48,7 @@ impl ExecutionEnvironment {
     //  pass AtomicBool into InvokeContext??
     //}
     //
-    fn reindex(&self) {
+    fn reindex(&mut self) {
         let uq = self.unique_weight;
         //self.task.trace_timestamps("in_exec(self)");
         let should_remove = self.task.contention_count > 0;
