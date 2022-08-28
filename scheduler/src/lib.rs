@@ -1066,8 +1066,16 @@ impl ScheduleStage {
                 if first_iteration {
                     first_iteration = false;
                     (from_len,  from_exec_len) = (from.len(), from_exec.len());
+                } else {
+                    if empty_from {
+                        from_len = from.len();
+                    }
+                    if empty_from_exec {
+                        from_exec_len = from_exec.len();
+                    }
                 }
                 let (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
+
                 if empty_from && empty_from_exec {
                    break;
                 } else {
@@ -1078,15 +1086,11 @@ impl ScheduleStage {
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                         Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                         to_next_stage.send(processed_execution_environment).unwrap();
-                    } else {
-                        from_exec_len = from_exec.len();
                     }
                     if !empty_from {
                        let task = from.recv().unwrap();
                        from_len -= 1;
                        Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
-                    } else {
-                        from_len = from.len();
                     }
                 }
             }
