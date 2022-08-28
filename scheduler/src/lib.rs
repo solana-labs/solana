@@ -489,7 +489,7 @@ impl Task {
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
-        self.sequence_time.store(clock, std::sync::atomic::Ordering::SeqCst);
+        //self.sequence_time.store(clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn sequence_time(&self) -> usize {
@@ -501,8 +501,8 @@ impl Task {
     }
 
     pub fn record_queue_time(&self, seq_clock: usize, queue_clock: usize) {
-        self.sequence_end_time.store(seq_clock, std::sync::atomic::Ordering::SeqCst);
-        self.queue_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
+        //self.sequence_end_time.store(seq_clock, std::sync::atomic::Ordering::SeqCst);
+        //self.queue_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn queue_time(&self) -> usize {
@@ -514,8 +514,8 @@ impl Task {
     }
 
     pub fn record_execute_time(&self, queue_clock: usize, execute_clock: usize) {
-        self.queue_end_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
-        self.execute_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
+        //self.queue_end_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
+        //self.execute_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn execute_time(&self) -> usize {
@@ -523,7 +523,7 @@ impl Task {
     }
 
     pub fn record_commit_time(&self, execute_clock: usize) {
-        self.commit_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
+        //self.commit_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn commit_time(&self) -> usize {
