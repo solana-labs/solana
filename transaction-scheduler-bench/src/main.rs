@@ -309,6 +309,9 @@ fn execution_worker(
     loop {
         if exit.load(Ordering::Relaxed) {
             info!("executor exit!");
+            while completed_transaction_sender.len() > 0 {
+                std::thread::sleep(Duration::from_millis(100));
+            }
             break;
         }
 
