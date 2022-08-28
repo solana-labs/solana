@@ -484,9 +484,6 @@ fn send_packets(
                 let uw = unique_weight.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 let p = (p << 32) | (uw & 0x0000_0000_ffff_ffff);
                 let t = solana_scheduler::Task::new_for_queue(p, v);
-                //for lock_attempt in t.tx.1.iter() {
-                //    lock_attempt.contended_unique_weights().insert_task(p, solana_scheduler::TaskInQueue::clone(&t));
-                //}
                 packet_batch_sender.send(t).unwrap();
             }
         }
