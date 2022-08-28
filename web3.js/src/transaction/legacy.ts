@@ -1,4 +1,3 @@
-import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 
@@ -12,6 +11,7 @@ import invariant from '../utils/assert';
 import type {Signer} from '../keypair';
 import type {Blockhash} from '../blockhash';
 import type {CompiledInstruction} from '../message';
+import {sign, verify} from '../utils/ed25519';
 
 /**
  * Transaction signature as base-58 encoded string
@@ -658,7 +658,7 @@ export class Transaction {
   _partialSign(message: Message, ...signers: Array<Signer>) {
     const signData = message.serialize();
     signers.forEach(signer => {
-      const signature = nacl.sign.detached(signData, signer.secretKey);
+      const signature = sign(signData, signer.secretKey);
       this._addSignature(signer.publicKey, toBuffer(signature));
     });
   }
@@ -706,9 +706,7 @@ export class Transaction {
           return false;
         }
       } else {
-        if (
-          !nacl.sign.detached.verify(signData, signature, publicKey.toBuffer())
-        ) {
+        if (!verify(signature, signData, publicKey.toBuffer())) {
           return false;
         }
       }

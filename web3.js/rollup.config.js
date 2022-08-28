@@ -97,6 +97,8 @@ function generateConfig(configType, format) {
       /@babel\/runtime/,
       '@noble/hashes/hmac',
       '@noble/hashes/sha256',
+      '@noble/hashes/sha512',
+      '@noble/ed25519',
       '@noble/secp256k1',
       '@solana/buffer-layout',
       'bigint-buffer',
@@ -110,7 +112,6 @@ function generateConfig(configType, format) {
       'node-fetch',
       'rpc-websockets',
       'superstruct',
-      'tweetnacl',
     ];
   }
 
@@ -163,6 +164,8 @@ function generateConfig(configType, format) {
             '@solana/buffer-layout',
             '@noble/hashes/hmac',
             '@noble/hashes/sha256',
+            '@noble/hashes/sha512',
+            '@noble/ed25519',
             '@noble/secp256k1',
             'bigint-buffer',
             'bn.js',
@@ -178,7 +181,6 @@ function generateConfig(configType, format) {
             'react-native-url-polyfill',
             'rpc-websockets',
             'superstruct',
-            'tweetnacl',
           ];
 
           break;

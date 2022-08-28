@@ -1,11 +1,11 @@
 import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
-import nacl from 'tweetnacl';
 
 import {Keypair} from '../keypair';
 import {PublicKey} from '../publickey';
 import {TransactionInstruction} from '../transaction';
 import assert from '../utils/assert';
+import {sign} from '../utils/ed25519';
 
 const PRIVATE_KEY_BYTES = 64;
 const PUBLIC_KEY_BYTES = 32;
@@ -142,7 +142,7 @@ export class Ed25519Program {
     try {
       const keypair = Keypair.fromSecretKey(privateKey);
       const publicKey = keypair.publicKey.toBytes();
-      const signature = nacl.sign.detached(message, keypair.secretKey);
+      const signature = sign(message, keypair.secretKey);
 
       return this.createInstructionWithPublicKey({
         publicKey,

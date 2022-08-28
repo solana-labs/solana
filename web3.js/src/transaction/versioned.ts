@@ -1,4 +1,3 @@
-import nacl from 'tweetnacl';
 import * as BufferLayout from '@solana/buffer-layout';
 
 import {Signer} from '../keypair';
@@ -7,6 +6,7 @@ import {VersionedMessage} from '../message/versioned';
 import {SIGNATURE_LENGTH_IN_BYTES} from './constants';
 import * as shortvec from '../utils/shortvec-encoding';
 import * as Layout from '../layout';
+import {sign} from '../utils/ed25519';
 
 export type TransactionVersion = 'legacy' | 0;
 
@@ -99,10 +99,7 @@ export class VersionedTransaction {
         signerIndex >= 0,
         `Cannot sign with non signer key ${signer.publicKey.toBase58()}`,
       );
-      this.signatures[signerIndex] = nacl.sign.detached(
-        messageData,
-        signer.secretKey,
-      );
+      this.signatures[signerIndex] = sign(messageData, signer.secretKey);
     }
   }
 }
