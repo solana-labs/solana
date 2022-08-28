@@ -963,6 +963,7 @@ impl ScheduleStage {
     fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
         // do par()-ly?
 
+        ee.reindex();
         ee.task.record_commit_time(*commit_time);
         ee.task.trace_timestamps("commit");
         //*commit_time = commit_time.checked_add(1).unwrap();
