@@ -1050,6 +1050,7 @@ impl ScheduleStage {
             }
 
             let mut first_iteration = true;
+            let mut (empty_from, empty_from_exec) = (false, false);
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
@@ -1074,7 +1075,7 @@ impl ScheduleStage {
                         from_exec_len = from_exec.len();
                     }
                 }
-                let (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
+                (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
 
                 if empty_from && empty_from_exec {
                    break;
