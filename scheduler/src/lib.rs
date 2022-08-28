@@ -1020,12 +1020,28 @@ impl ScheduleStage {
         loop {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
+                   if maybe_from_exec.is_err() {
+                       assert_eq!(from_exec.len(), 0);
+                       if from.len() == 0 {
+                           break;
+                       } else {
+                           continue;
+                       }
+                   }
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
                     executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                     Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                     to_next_stage.send(processed_execution_environment).unwrap();
                }
                recv(from) -> maybe_from => {
+                   if maybe_from.is_err() {
+                       assert_eq!(from.len(), 0);
+                       if from_exec.len() == 0 {
+                           break;
+                       } else {
+                           continue;
+                       }
+                   }
                    let task = maybe_from.unwrap();
                    Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                }
