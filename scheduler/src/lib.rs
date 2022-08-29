@@ -422,7 +422,7 @@ pub struct Preloader {
 
 impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
-        self.book.entry(address).or_insert_with(|| PageRc(MyRcInner::new(Page::new(Usage::unused()))))
+        PageRc::clone(self.book.entry(address).or_insert_with(|| PageRc(MyRcInner::new(Page::new(Usage::unused())))))
     }
 }
 
