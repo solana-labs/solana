@@ -13,7 +13,8 @@ use {
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::{
         accounts_background_service::{
-            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+            AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
+            PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_index::AccountSecondaryIndexes,
@@ -929,9 +930,12 @@ fn test_snapshots_with_background_services(
         snapshot_request_receiver,
         pending_accounts_package: Arc::clone(&pending_accounts_package),
     });
-    let abs_request_handler = AbsRequestHandler {
-        snapshot_request_handler,
+    let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
+    };
+    let abs_request_handler = AbsRequestHandlers {
+        snapshot_request_handler,
+        pruned_banks_request_handler,
     };
 
     let exit = Arc::new(AtomicBool::new(false));
