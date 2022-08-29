@@ -43,7 +43,9 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+    solana_tpu_client::connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_DISABLE_UDP, DEFAULT_TPU_USE_QUIC,
+    },
     std::{
         collections::{HashMap, HashSet},
         ffi::OsStr,
@@ -809,6 +811,7 @@ impl TestValidator {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
+            DEFAULT_TPU_DISABLE_UDP,
         )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of

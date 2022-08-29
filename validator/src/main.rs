@@ -1246,6 +1246,13 @@ pub fn main() {
                 .help("Do not use QUIC to send transactions."),
         )
         .arg(
+            Arg::with_name("tpu_disable_udp")
+                .long("tpu-disable-udp")
+                .takes_value(false)
+                .conflicts_with("tpu_disable_quic")
+                .help("Do not use UDP for receiving/sending transactions."),
+        )
+        .arg(
             Arg::with_name("disable_quic_servers")
                 .long("disable-quic-servers")
                 .takes_value(false)
@@ -2431,6 +2438,7 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = !matches.is_present("tpu_disable_quic");
+    let tpu_disable_udp = matches.is_present("tpu_disable_udp");
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
@@ -3220,6 +3228,7 @@ pub fn main() {
         socket_addr_space,
         tpu_use_quic,
         tpu_connection_pool_size,
+        tpu_disable_udp,
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);

@@ -99,6 +99,7 @@ impl Tpu {
         log_messages_bytes_limit: Option<usize>,
         staked_nodes: &Arc<RwLock<StakedNodes>>,
         shared_staked_nodes_overrides: Arc<RwLock<HashMap<Pubkey, u64>>>,
+        tpu_disable_udp: bool,
     ) -> Self {
         let TpuSockets {
             transactions: transactions_sockets,
@@ -124,6 +125,7 @@ impl Tpu {
             poh_recorder,
             tpu_coalesce_ms,
             Some(bank_forks.read().unwrap().get_vote_only_mode_signal()),
+            tpu_disable_udp,
         );
 
         let staked_nodes_updater_service = StakedNodesUpdaterService::new(
