@@ -321,6 +321,7 @@ impl ServeRepair {
     }
 
     fn handle_repair(
+        &self,
         recycler: &PacketBatchRecycler,
         from_addr: &SocketAddr,
         blockstore: &Blockstore,
@@ -329,6 +330,16 @@ impl ServeRepair {
         ping_cache: &mut PingCache,
     ) -> Option<PacketBatch> {
         let now = Instant::now();
+
+        let sender = request.sender();
+        let return_addr = match self.cluster_info.lookup_contact_info(sender, |ci| ci.tvu) {
+            Some(addr) => addr,
+            None => {
+                error!("No tvu addr found {:?} using {:?}", &sender, from_addr);
+                *from_addr
+            }
+        };
+
         let (res, label) = {
             match &request {
                 RepairProtocol::WindowIndex {
@@ -341,7 +352,7 @@ impl ServeRepair {
                     (
                         Self::run_window_request(
                             recycler,
-                            from_addr,
+                            &return_addr,
                             blockstore,
                             *slot,
                             *shred_index,
@@ -365,7 +376,7 @@ impl ServeRepair {
                     (
                         Self::run_highest_window_request(
                             recycler,
-                            from_addr,
+                            &return_addr,
                             blockstore,
                             *slot,
                             *highest_index,
@@ -383,7 +394,7 @@ impl ServeRepair {
                     (
                         Self::run_orphan(
                             recycler,
-                            from_addr,
+                            &return_addr,
                             blockstore,
                             *slot,
                             MAX_ORPHAN_REPAIR_RESPONSES,
@@ -806,9 +817,9 @@ impl ServeRepair {
             }
 
             stats.processed += 1;
-            let rsp = match Self::handle_repair(
-                recycler, &from_addr, blockstore, request, stats, ping_cache,
-            ) {
+            let rsp = match self
+                .handle_repair(recycler, &from_addr, blockstore, request, stats, ping_cache)
+            {
                 None => continue,
                 Some(rsp) => rsp,
             };
