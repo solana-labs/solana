@@ -111,6 +111,9 @@ Operate a configured testnet
    --tpu-disable-quic
                                       - Disable quic for tpu packet forwarding
 
+   --tpu-disable-udp
+                                      - Disable UDP for tpu transactions
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -325,6 +328,7 @@ startBootstrapLeader() {
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
+         \"$disableUdp\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -398,6 +402,7 @@ startNode() {
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
+         \"$disableUdp\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -807,6 +812,7 @@ maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
 disableQuic=false
+disableUdp=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -921,6 +927,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 == --tpu-disable-quic ]]; then
       disableQuic=true
+      shift 1
+    elif [[ $1 == --tpu-disable-udp ]]; then
+      disableUdp=true
       shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false

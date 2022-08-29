@@ -29,6 +29,7 @@ waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 disableQuic="${23}"
+disableUdp="${24}"
 
 set +x
 
@@ -290,6 +291,10 @@ EOF
       args+=(--tpu-disable-quic)
     fi
 
+    if $disableUdp; then
+      args+=(--tpu-disable-udp)
+    fi
+
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
@@ -420,6 +425,10 @@ EOF
 
     if $disableQuic; then
       args+=(--tpu-disable-quic)
+    fi
+
+    if $disableUdp; then
+      args+=(--tpu-disable-udp)
     fi
 
 cat >> ~/solana/on-reboot <<EOF
