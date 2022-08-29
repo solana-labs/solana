@@ -5,7 +5,7 @@ import styles from "../src/pages/styles.module.css";
 import Translate from "@docusaurus/Translate";
 
 function Card({ to, header, body }) {
-  /* 
+  /*
   Both the `header` and `body` expect an object with the following type
   header = {
     label: String, //
