@@ -710,7 +710,7 @@ impl TryFrom<tx_by_addr::TransactionError> for TransactionError {
                     47 => InstructionError::ArithmeticOverflow,
                     48 => InstructionError::UnsupportedSysvar,
                     49 => InstructionError::IllegalOwner,
-                    50 => InstructionError::MaxAccountsDataSizeExceeded,
+                    50 => InstructionError::MaxAccountsDataAllocationsExceeded,
                     51 => InstructionError::MaxAccountsExceeded,
                     _ => return Err("Invalid InstructionError"),
                 };
@@ -1025,8 +1025,8 @@ impl From<TransactionError> for tx_by_addr::TransactionError {
                             InstructionError::IllegalOwner => {
                                 tx_by_addr::InstructionErrorType::IllegalOwner
                             }
-                            InstructionError::MaxAccountsDataSizeExceeded => {
-                                tx_by_addr::InstructionErrorType::MaxAccountsDataSizeExceeded
+                            InstructionError::MaxAccountsDataAllocationsExceeded => {
+                                tx_by_addr::InstructionErrorType::MaxAccountsDataAllocationsExceeded
                             }
                             InstructionError::MaxAccountsExceeded => {
                                 tx_by_addr::InstructionErrorType::MaxAccountsExceeded

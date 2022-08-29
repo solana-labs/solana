@@ -142,6 +142,13 @@ pub fn instruction_to_nonce_error(
 /// Maximum permitted size of data: 10 MiB
 pub const MAX_PERMITTED_DATA_LENGTH: u64 = 10 * 1024 * 1024;
 
+/// Maximum permitted size of new allocations per transaction, in bytes
+///
+/// The value was chosen such at least one max sized account could be created,
+/// plus some additional resize allocations.
+pub const MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION: i64 =
+    MAX_PERMITTED_DATA_LENGTH as i64 * 2;
+
 // SBF program entrypoint assumes that the max account data length
 // will fit inside a u32. If this constant no longer fits in a u32,
 // the entrypoint deserialization code in the SDK must be updated.

@@ -1028,6 +1028,7 @@ pub fn with_mock_invoke_context<R, F: FnMut(&mut InvokeContext) -> R>(
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
         1,
     );
+    transaction_context.enable_cap_accounts_data_allocations_per_transaction();
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     invoke_context
         .push(&preparation.instruction_accounts, &program_indices, &[])
@@ -1059,6 +1060,7 @@ pub fn mock_process_instruction(
         ComputeBudget::default().max_invoke_depth.saturating_add(1),
         1,
     );
+    transaction_context.enable_cap_accounts_data_allocations_per_transaction();
     let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
     if let Some(sysvar_cache) = sysvar_cache_override {
         invoke_context.sysvar_cache = Cow::Borrowed(sysvar_cache);

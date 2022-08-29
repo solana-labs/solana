@@ -6,7 +6,9 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         rent::Rent,
-        system_instruction::MAX_PERMITTED_DATA_LENGTH,
+        system_instruction::{
+            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+        },
     },
     std::{
         cell::{RefCell, RefMut},
@@ -52,6 +54,7 @@ pub struct TransactionContext {
     return_data: TransactionReturnData,
     accounts_resize_delta: RefCell<i64>,
     rent: Option<Rent>,
+    is_cap_accounts_data_allocations_per_transaction_enabled: bool,
 }
 
 impl TransactionContext {
@@ -78,6 +81,7 @@ impl TransactionContext {
             return_data: TransactionReturnData::default(),
             accounts_resize_delta: RefCell::new(0),
             rent,
+            is_cap_accounts_data_allocations_per_transaction_enabled: false,
         }
     }
 
@@ -311,6 +315,11 @@ impl TransactionContext {
             .try_borrow()
             .map_err(|_| InstructionError::GenericError)
             .map(|value_ref| *value_ref)
+    }
+
+    /// Enables enforcing a maximum accounts data allocation size per transaction
+    pub fn enable_cap_accounts_data_allocations_per_transaction(&mut self) {
+        self.is_cap_accounts_data_allocations_per_transaction_enabled = true;
     }
 }
 
@@ -859,13 +868,29 @@ impl<'a> BorrowedAccount<'a> {
         {
             return Ok(());
         }
+        let old_length = self.get_data().len();
         // Only the owner can change the length of the data
-        if new_length != self.get_data().len() && !self.is_owned_by_current_program() {
+        if new_length != old_length && !self.is_owned_by_current_program() {
             return Err(InstructionError::AccountDataSizeChanged);
         }
         // The new length can not exceed the maximum permitted length
         if new_length > MAX_PERMITTED_DATA_LENGTH as usize {
             return Err(InstructionError::InvalidRealloc);
+        }
+        if self
+            .transaction_context
+            .is_cap_accounts_data_allocations_per_transaction_enabled
+        {
+            // The resize can not exceed the per-transaction maximum
+            let length_delta = (new_length as i64).saturating_sub(old_length as i64);
+            if self
+                .transaction_context
+                .accounts_resize_delta()?
+                .saturating_add(length_delta)
+                > MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION
+            {
+                return Err(InstructionError::MaxAccountsDataAllocationsExceeded);
+            }
         }
         Ok(())
     }
