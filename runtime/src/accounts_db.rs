@@ -3856,6 +3856,7 @@ impl AccountsDb {
             // sort by pubkey to keep account index lookups close
             let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
             stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+            let stored_accounts = stored_accounts; // get rid of mut
 
             let mut index_read_elapsed = Measure::start("index_read_elapsed");
             let alive_total_collect = AtomicUsize::new(0);
@@ -3895,7 +3896,6 @@ impl AccountsDb {
             let alive_total = alive_total_collect.load(Ordering::Relaxed);
             index_read_elapsed.stop();
             let aligned_total: u64 = Self::page_align(alive_total as u64);
-            // we could sort these
             // could follow what shrink does more closely
             if stored_accounts.is_empty() {
                 continue; // skipping slot with no useful accounts to write
