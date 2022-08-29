@@ -422,18 +422,7 @@ pub struct Preloader {
 
 impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
-        match self.book.entry(address) {
-            AddressMapEntry::Vacant(book_entry) => {
-                let page = PageRc(MyRcInner::new(Page::new(Usage::unused())));
-                let cloned = PageRc::clone(&page);
-                book_entry.insert(page);
-                cloned
-            }
-            AddressMapEntry::Occupied(mut book_entry) => {
-                let page = book_entry.get();
-                PageRc::clone(&page)
-            }
-        }
+        self.book.entry(address).or_insert_with(|| PageRc(MyRcInner::new(Page::new(Usage::unused()))))
     }
 }
 
