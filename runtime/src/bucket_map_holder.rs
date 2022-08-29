@@ -327,7 +327,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
     // intended to execute in a bg thread
     pub fn background(
         &self,
-        exit: Arc<AtomicBool>,
+        exit: Vec<Arc<AtomicBool>>,
         in_mem: Vec<Arc<InMemAccountsIndex<T>>>,
         can_advance_age: bool,
     ) {
@@ -370,7 +370,7 @@ impl<T: IndexValue> BucketMapHolder<T> {
             }
             throttling_wait_ms = None;
 
-            if exit.load(Ordering::Relaxed) {
+            if exit.iter().any(|exit| exit.load(Ordering::Relaxed)) {
                 break;
             }
 

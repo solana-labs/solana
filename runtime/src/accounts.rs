@@ -61,7 +61,7 @@ use {
         ops::RangeBounds,
         path::PathBuf,
         sync::{
-            atomic::{AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
             Arc, Mutex,
         },
     },
@@ -164,6 +164,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
     }
 
@@ -182,6 +183,7 @@ impl Accounts {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
+            &Arc::default(),
         )
     }
 
@@ -193,6 +195,7 @@ impl Accounts {
         shrink_ratio: AccountShrinkThreshold,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
         Self {
             accounts_db: Arc::new(AccountsDb::new_with_config(
@@ -203,6 +206,7 @@ impl Accounts {
                 shrink_ratio,
                 accounts_db_config,
                 accounts_update_notifier,
+                exit,
             )),
             account_locks: Mutex::new(AccountLocks::default()),
         }

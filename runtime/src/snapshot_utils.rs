@@ -47,7 +47,10 @@ use {
         path::{Path, PathBuf},
         process::ExitStatus,
         str::FromStr,
-        sync::{atomic::AtomicU32, Arc},
+        sync::{
+            atomic::{AtomicBool, AtomicU32},
+            Arc,
+        },
     },
     tar::{self, Archive},
     tempfile::TempDir,
@@ -966,6 +969,7 @@ pub fn bank_from_snapshot_archives(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> Result<(Bank, BankFromArchiveTimings)> {
     let (unarchived_full_snapshot, mut unarchived_incremental_snapshot, next_append_vec_id) =
         verify_and_unarchive_snapshots(
@@ -1008,6 +1012,7 @@ pub fn bank_from_snapshot_archives(
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        exit,
     )?;
     measure_rebuild.stop();
     info!("{}", measure_rebuild);
@@ -1056,6 +1061,7 @@ pub fn bank_from_latest_snapshot_archives(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> Result<(
     Bank,
     FullSnapshotArchiveInfo,
@@ -1100,6 +1106,7 @@ pub fn bank_from_latest_snapshot_archives(
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        exit,
     )?;
 
     datapoint_info!(
@@ -1802,6 +1809,7 @@ fn rebuild_bank_from_snapshots(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    exit: &Arc<AtomicBool>,
 ) -> Result<Bank> {
     let (full_snapshot_version, full_snapshot_root_paths) =
         verify_unpacked_snapshots_dir_and_version(
@@ -1851,6 +1859,7 @@ fn rebuild_bank_from_snapshots(
                     verify_index,
                     accounts_db_config,
                     accounts_update_notifier,
+                    exit,
                 ),
             }?,
         )
@@ -3384,6 +3393,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
         .unwrap();
 
@@ -3496,6 +3506,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
         .unwrap();
 
@@ -3628,6 +3639,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
         .unwrap();
 
@@ -3750,6 +3762,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
         .unwrap();
 
@@ -3890,6 +3903,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
         .unwrap();
         assert_eq!(
@@ -3954,6 +3968,7 @@ mod tests {
             false,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
         .unwrap();
         assert_eq!(

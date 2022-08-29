@@ -2013,6 +2013,7 @@ impl AccountsDb {
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
     }
 
@@ -2025,6 +2026,7 @@ impl AccountsDb {
             AccountShrinkThreshold::default(),
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
     }
 
@@ -2036,9 +2038,12 @@ impl AccountsDb {
         shrink_ratio: AccountShrinkThreshold,
         mut accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
+        exit: &Arc<AtomicBool>,
     ) -> Self {
-        let accounts_index =
-            AccountsIndex::new(accounts_db_config.as_mut().and_then(|x| x.index.take()));
+        let accounts_index = AccountsIndex::new(
+            accounts_db_config.as_mut().and_then(|x| x.index.take()),
+            exit,
+        );
         let accounts_hash_cache_path = accounts_db_config
             .as_ref()
             .and_then(|x| x.accounts_hash_cache_path.clone());
@@ -9109,6 +9114,7 @@ impl AccountsDb {
             shrink_ratio,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
+            &Arc::default(),
         )
     }
 

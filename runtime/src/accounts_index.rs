@@ -705,14 +705,14 @@ pub struct AccountsIndex<T: IndexValue> {
 
 impl<T: IndexValue> AccountsIndex<T> {
     pub fn default_for_tests() -> Self {
-        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING))
+        Self::new(Some(ACCOUNTS_INDEX_CONFIG_FOR_TESTING), &Arc::default())
     }
 
-    pub fn new(config: Option<AccountsIndexConfig>) -> Self {
+    pub fn new(config: Option<AccountsIndexConfig>, exit: &Arc<AtomicBool>) -> Self {
         let scan_results_limit_bytes = config
             .as_ref()
             .and_then(|config| config.scan_results_limit_bytes);
-        let (account_maps, bin_calculator, storage) = Self::allocate_accounts_index(config);
+        let (account_maps, bin_calculator, storage) = Self::allocate_accounts_index(config, exit);
         Self {
             account_maps,
             bin_calculator,
@@ -740,6 +740,7 @@ impl<T: IndexValue> AccountsIndex<T> {
 
     fn allocate_accounts_index(
         config: Option<AccountsIndexConfig>,
+        exit: &Arc<AtomicBool>,
     ) -> (
         LockMapType<T>,
         PubkeyBinCalculator24,
@@ -751,7 +752,7 @@ impl<T: IndexValue> AccountsIndex<T> {
             .unwrap_or(BINS_DEFAULT);
         // create bin_calculator early to verify # bins is reasonable
         let bin_calculator = PubkeyBinCalculator24::new(bins);
-        let storage = AccountsIndexStorage::new(bins, &config);
+        let storage = AccountsIndexStorage::new(bins, &config, exit);
         let account_maps = (0..bins)
             .into_iter()
             .map(|bin| Arc::clone(&storage.in_mem[bin]))
@@ -2574,7 +2575,7 @@ pub mod tests {
         } else {
             IndexLimitMb::InMemOnly // in-mem only
         };
-        let index = AccountsIndex::<T>::new(Some(config));
+        let index = AccountsIndex::<T>::new(Some(config), &Arc::default());
         let mut gc = Vec::new();
 
         if upsert {
@@ -4043,7 +4044,7 @@ pub mod tests {
     fn test_illegal_bins() {
         let mut config = AccountsIndexConfig::default();
         config.bins = Some(3);
-        AccountsIndex::<bool>::new(Some(config));
+        AccountsIndex::<bool>::new(Some(config), &Arc::default());
     }
 
     #[test]
