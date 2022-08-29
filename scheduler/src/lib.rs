@@ -421,6 +421,7 @@ pub struct Preloader {
 }
 
 impl Preloader {
+    #[inline(never)]
     pub fn load(&self, address: Pubkey) -> PageRc {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| PageRc(MyRcInner::new(Page::new(Usage::unused())))))
     }
