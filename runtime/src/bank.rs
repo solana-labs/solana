@@ -7997,7 +7997,7 @@ pub(crate) mod tests {
     use {
         super::*,
         crate::{
-            accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
+            accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
             accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
             accounts_index::{AccountIndex, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE},
             ancestors::Ancestors,
@@ -16126,8 +16126,7 @@ pub(crate) mod tests {
     fn test_store_scan_consistency_unrooted() {
         for accounts_db_caching_enabled in &[false, true] {
             let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
-            let abs_request_handler = AbsRequestHandler {
-                snapshot_request_handler: None,
+            let pruned_banks_request_handler = PrunedBanksRequestHandler {
                 pruned_banks_receiver,
             };
             test_store_scan_consistency(
@@ -16211,7 +16210,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.clean_accounts_for_tests();
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
-                        abs_request_handler.handle_pruned_banks(&current_major_fork_bank, true);
+                        pruned_banks_request_handler.handle_request(&current_major_fork_bank, true);
                     }
                 },
                 Some(Box::new(SendDroppedBankCallback::new(

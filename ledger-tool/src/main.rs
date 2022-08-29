@@ -37,7 +37,8 @@ use {
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
         accounts_background_service::{
-            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService,
+            AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
+            PrunedBanksRequestHandler,
         },
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
@@ -1030,9 +1031,12 @@ fn load_bank_forks(
 
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
-    let abs_request_handler = AbsRequestHandler {
-        snapshot_request_handler: None,
+    let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
+    };
+    let abs_request_handler = AbsRequestHandlers {
+        snapshot_request_handler: None,
+        pruned_banks_request_handler,
     };
     let exit = Arc::new(AtomicBool::new(false));
     let accounts_background_service = AccountsBackgroundService::new(

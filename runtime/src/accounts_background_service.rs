@@ -399,12 +399,55 @@ impl AbsRequestSender {
     }
 }
 
-pub struct AbsRequestHandler {
-    pub snapshot_request_handler: Option<SnapshotRequestHandler>,
+#[derive(Debug)]
+pub struct PrunedBanksRequestHandler {
     pub pruned_banks_receiver: DroppedSlotsReceiver,
 }
 
-impl AbsRequestHandler {
+impl PrunedBanksRequestHandler {
+    pub fn handle_request(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
+        let mut count = 0;
+        for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
+            count += 1;
+            bank.rc.accounts.accounts_db.purge_slot(
+                pruned_slot,
+                pruned_bank_id,
+                is_serialized_with_abs,
+            );
+        }
+
+        count
+    }
+
+    fn remove_dead_slots(
+        &self,
+        bank: &Bank,
+        removed_slots_count: &mut usize,
+        total_remove_slots_time: &mut u64,
+    ) {
+        let mut remove_slots_time = Measure::start("remove_slots_time");
+        *removed_slots_count += self.handle_request(bank, true);
+        remove_slots_time.stop();
+        *total_remove_slots_time += remove_slots_time.as_us();
+
+        if *removed_slots_count >= 100 {
+            datapoint_info!(
+                "remove_slots_timing",
+                ("remove_slots_time", *total_remove_slots_time, i64),
+                ("removed_slots_count", *removed_slots_count, i64),
+            );
+            *total_remove_slots_time = 0;
+            *removed_slots_count = 0;
+        }
+    }
+}
+
+pub struct AbsRequestHandlers {
+    pub snapshot_request_handler: Option<SnapshotRequestHandler>,
+    pub pruned_banks_request_handler: PrunedBanksRequestHandler,
+}
+
+impl AbsRequestHandlers {
     // Returns the latest requested snapshot block height, if one exists
     pub fn handle_snapshot_requests(
         &self,
@@ -424,20 +467,6 @@ impl AbsRequestHandler {
                 )
             })
     }
-
-    pub fn handle_pruned_banks(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
-        let mut count = 0;
-        for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
-            count += 1;
-            bank.rc.accounts.accounts_db.purge_slot(
-                pruned_slot,
-                pruned_bank_id,
-                is_serialized_with_abs,
-            );
-        }
-
-        count
-    }
 }
 
 pub struct AccountsBackgroundService {
@@ -448,7 +477,7 @@ impl AccountsBackgroundService {
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
-        request_handler: AbsRequestHandler,
+        request_handlers: AbsRequestHandlers,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
@@ -475,12 +504,13 @@ impl AccountsBackgroundService {
                     let bank = bank_forks.read().unwrap().root_bank().clone();
 
                     // Purge accounts of any dead slots
-                    Self::remove_dead_slots(
-                        &bank,
-                        &request_handler,
-                        &mut removed_slots_count,
-                        &mut total_remove_slots_time,
-                    );
+                    request_handlers
+                        .pruned_banks_request_handler
+                        .remove_dead_slots(
+                            &bank,
+                            &mut removed_slots_count,
+                            &mut total_remove_slots_time,
+                        );
 
                     Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
 
@@ -507,7 +537,7 @@ impl AccountsBackgroundService {
                     // request for `N` to the snapshot request channel before setting a root `R > N`, and
                     // snapshot_request_handler.handle_requests() will always look for the latest
                     // available snapshot in the channel.
-                    let snapshot_block_height_option_result = request_handler
+                    let snapshot_block_height_option_result = request_handlers
                         .handle_snapshot_requests(
                             accounts_db_caching_enabled,
                             test_hash_calculation,
@@ -598,28 +628,6 @@ impl AccountsBackgroundService {
         self.t_background.join()
     }
 
-    fn remove_dead_slots(
-        bank: &Bank,
-        request_handler: &AbsRequestHandler,
-        removed_slots_count: &mut usize,
-        total_remove_slots_time: &mut u64,
-    ) {
-        let mut remove_slots_time = Measure::start("remove_slots_time");
-        *removed_slots_count += request_handler.handle_pruned_banks(bank, true);
-        remove_slots_time.stop();
-        *total_remove_slots_time += remove_slots_time.as_us();
-
-        if *removed_slots_count >= 100 {
-            datapoint_info!(
-                "remove_slots_timing",
-                ("remove_slots_time", *total_remove_slots_time, i64),
-                ("removed_slots_count", *removed_slots_count, i64),
-            );
-            *total_remove_slots_time = 0;
-            *removed_slots_count = 0;
-        }
-    }
-
     fn expire_old_recycle_stores(bank: &Bank, last_expiration_check_time: &mut Instant) {
         let now = Instant::now();
         if now.duration_since(*last_expiration_check_time).as_secs()
@@ -645,8 +653,7 @@ mod test {
         let genesis = create_genesis_config(10);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
-        let request_handler = AbsRequestHandler {
-            snapshot_request_handler: None,
+        let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
         };
 
@@ -661,7 +668,7 @@ mod test {
 
         assert!(!bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
 
-        AccountsBackgroundService::remove_dead_slots(&bank0, &request_handler, &mut 0, &mut 0);
+        pruned_banks_request_handler.remove_dead_slots(&bank0, &mut 0, &mut 0);
 
         assert!(bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
     }
