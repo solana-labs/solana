@@ -573,7 +573,7 @@ impl RpcSubscriptions {
         let blockstore = Blockstore::open(&ledger_path).unwrap();
         let blockstore = Arc::new(blockstore);
 
-        Self::new_with_config(
+        let rpc_subscriptions = Self::new_with_config(
             exit,
             max_complete_transaction_status_slot,
             blockstore,
@@ -581,7 +581,10 @@ impl RpcSubscriptions {
             block_commitment_cache,
             optimistically_confirmed_bank,
             &PubSubConfig::default_for_tests(),
-        )
+        );
+        // Ensure RPC notifier is ready to receive notifications before proceeding
+        std::thread::sleep(Duration::from_millis(100));
+        rpc_subscriptions
     }
 
     pub fn new_for_tests_with_blockstore(
