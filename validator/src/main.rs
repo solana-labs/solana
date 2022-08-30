@@ -71,6 +71,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+    solana_tpu_client::connection_cache::DEFAULT_TPU_DISABLE_UDP,
     solana_validator::{
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
@@ -2438,7 +2439,12 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = !matches.is_present("tpu_disable_quic");
-    let tpu_disable_udp = matches.is_present("tpu_disable_udp");
+    let tpu_disable_udp = if matches.is_present("tpu_disable_udp") {
+        true
+    } else {
+        DEFAULT_TPU_DISABLE_UDP
+    };
+
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
