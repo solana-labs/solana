@@ -1110,7 +1110,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn get_account_read_entry(&self, pubkey: &Pubkey) -> Option<ReadAccountMapEntry<T>> {
-        let lock = self.get_account_maps_read_lock(pubkey);
+        let lock = self.get_bin(pubkey);
         self.get_account_read_entry_with_lock(pubkey, &lock)
     }
 
@@ -1128,7 +1128,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         pubkey: &Pubkey,
         user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
     ) -> Option<RT> {
-        let read_lock = self.get_account_maps_read_lock(pubkey);
+        let read_lock = self.get_bin(pubkey);
         read_lock.slot_list_mut(pubkey, user)
     }
 
@@ -1139,7 +1139,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     ) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
-                let w_index = self.get_account_maps_read_lock(key);
+                let w_index = self.get_bin(key);
                 if w_index.remove_if_slot_list_empty(**key) {
                     // Note it's only safe to remove all the entries for this key
                     // because we have the lock for this key's entry in the AccountsIndex,
@@ -1395,7 +1395,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
     ) -> AccountIndexGetResult<T> {
-        let read_lock = self.get_account_maps_read_lock(pubkey);
+        let read_lock = self.get_bin(pubkey);
         let account = read_lock
             .get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry);
@@ -1524,7 +1524,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         );
     }
 
-    pub(crate) fn get_account_maps_read_lock(&self, pubkey: &Pubkey) -> AccountMapsReadLock<T> {
+    pub(crate) fn get_bin(&self, pubkey: &Pubkey) -> AccountMapsReadLock<T> {
         &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
     }
 
@@ -1650,19 +1650,19 @@ impl<T: IndexValue> AccountsIndex<T> {
             &self.storage.storage,
             store_raw,
         );
-        let map = self.get_account_maps_read_lock(pubkey);
+        let map = self.get_bin(pubkey);
 
         map.upsert(pubkey, new_item, Some(old_slot), reclaims, reclaim);
         self.update_secondary_indexes(pubkey, account, account_indexes);
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        let map = self.get_account_maps_read_lock(pubkey);
+        let map = self.get_bin(pubkey);
         map.unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
-        let map = self.get_account_maps_read_lock(pubkey);
+        let map = self.get_bin(pubkey);
         map.get_internal(pubkey, |entry| {
             (
                 false,
@@ -1739,7 +1739,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // locked and inserted the pubkey in-between when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
-            let w_maps = self.get_account_maps_read_lock(pubkey);
+            let w_maps = self.get_bin(pubkey);
             w_maps.remove_if_slot_list_empty(*pubkey);
         }
     }
@@ -2629,7 +2629,7 @@ pub mod tests {
 
         for lock in &[false, true] {
             let read_lock = if *lock {
-                Some(index.get_account_maps_read_lock(&key))
+                Some(index.get_bin(&key))
             } else {
                 None
             };
@@ -2684,7 +2684,7 @@ pub mod tests {
         assert_eq!((slot, account_info), new_entry.clone().into());
 
         assert_eq!(0, account_maps_stats_len(&index));
-        let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
+        let r_account_maps = index.get_bin(&key.pubkey());
         r_account_maps.upsert(
             &key.pubkey(),
             new_entry,
