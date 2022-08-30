@@ -13,12 +13,8 @@ use {
     },
     solana_rpc_client::rpc_client::RpcClient,
     solana_runtime::{
-        snapshot_archive_info::SnapshotArchiveInfoGetter,
-        snapshot_package::SnapshotType,
-        snapshot_utils::{
-            self, DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-        },
+        snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_package::SnapshotType,
+        snapshot_utils,
     },
     solana_sdk::{
         clock::Slot,
@@ -1164,18 +1160,6 @@ fn download_snapshot(
     desired_snapshot_hash: (Slot, Hash),
     snapshot_type: SnapshotType,
 ) -> Result<(), String> {
-    let (maximum_full_snapshot_archives_to_retain, maximum_incremental_snapshot_archives_to_retain) =
-        if let Some(snapshot_config) = validator_config.snapshot_config.as_ref() {
-            (
-                snapshot_config.maximum_full_snapshot_archives_to_retain,
-                snapshot_config.maximum_incremental_snapshot_archives_to_retain,
-            )
-        } else {
-            (
-                DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-                DEFAULT_MAX_INCREMENTAL_SNAPSHOT_ARCHIVES_TO_RETAIN,
-            )
-        };
     *start_progress.write().unwrap() = ValidatorStartProgress::DownloadingSnapshot {
         slot: desired_snapshot_hash.0,
         rpc_addr: rpc_contact_info.rpc,
@@ -1186,8 +1170,12 @@ fn download_snapshot(
         incremental_snapshot_archives_dir,
         desired_snapshot_hash,
         snapshot_type,
-        maximum_full_snapshot_archives_to_retain,
-        maximum_incremental_snapshot_archives_to_retain,
+        validator_config
+            .snapshot_config
+            .maximum_full_snapshot_archives_to_retain,
+        validator_config
+            .snapshot_config
+            .maximum_incremental_snapshot_archives_to_retain,
         use_progress_bar,
         &mut Some(Box::new(|download_progress: &DownloadProgressRecord| {
             debug!("Download progress: {:?}", download_progress);

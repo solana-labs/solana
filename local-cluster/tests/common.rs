@@ -493,7 +493,7 @@ impl SnapshotValidatorConfig {
 
         // Create the validator config
         let validator_config = ValidatorConfig {
-            snapshot_config: Some(snapshot_config),
+            snapshot_config,
             account_paths: account_storage_paths,
             accounts_hash_interval_slots,
             ..ValidatorConfig::default_for_test()

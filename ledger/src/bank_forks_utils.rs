@@ -45,7 +45,7 @@ pub fn load(
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     shrink_paths: Option<Vec<PathBuf>>,
-    snapshot_config: Option<&SnapshotConfig>,
+    snapshot_config: &SnapshotConfig,
     process_options: ProcessOptions,
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
@@ -80,7 +80,7 @@ pub fn load_bank_forks(
     blockstore: &Blockstore,
     account_paths: Vec<PathBuf>,
     shrink_paths: Option<Vec<PathBuf>>,
-    snapshot_config: Option<&SnapshotConfig>,
+    snapshot_config: &SnapshotConfig,
     process_options: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
@@ -89,7 +89,7 @@ pub fn load_bank_forks(
     LeaderScheduleCache,
     Option<StartingSnapshotHashes>,
 ) {
-    let snapshot_present = if let Some(snapshot_config) = snapshot_config {
+    let snapshot_present = if snapshot_config.is_enabled() {
         info!(
             "Initializing bank snapshot path: {}",
             snapshot_config.bank_snapshots_dir.display()
@@ -121,7 +121,7 @@ pub fn load_bank_forks(
             genesis_config,
             account_paths,
             shrink_paths,
-            snapshot_config.as_ref().unwrap(),
+            snapshot_config,
             process_options,
             accounts_update_notifier,
         )

@@ -2928,7 +2928,7 @@ pub fn main() {
             (Slot::MAX, Slot::MAX)
         };
 
-    validator_config.snapshot_config = Some(SnapshotConfig {
+    validator_config.snapshot_config = SnapshotConfig {
         full_snapshot_archive_interval_slots,
         incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
@@ -2940,7 +2940,7 @@ pub fn main() {
         maximum_incremental_snapshot_archives_to_retain,
         accounts_hash_debug_verify: validator_config.accounts_db_test_hash_calculation,
         packager_thread_niceness_adj: snapshot_packager_niceness_adj,
-    });
+    };
 
     validator_config.accounts_hash_interval_slots =
         value_t_or_exit!(matches, "accounts-hash-interval-slots", u64);

@@ -128,7 +128,7 @@ pub struct ValidatorConfig {
     pub geyser_plugin_config_files: Option<Vec<PathBuf>>,
     pub rpc_addrs: Option<(SocketAddr, SocketAddr)>, // (JsonRpc, JsonRpcPubSub)
     pub pubsub_config: PubSubConfig,
-    pub snapshot_config: Option<SnapshotConfig>,
+    pub snapshot_config: SnapshotConfig,
     pub max_ledger_shreds: Option<u64>,
     pub broadcast_stage_type: BroadcastStageType,
     pub turbine_disabled: Arc<AtomicBool>,
@@ -193,7 +193,7 @@ impl Default for ValidatorConfig {
             geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
-            snapshot_config: None,
+            snapshot_config: SnapshotConfig::disabled(),
             broadcast_stage_type: BroadcastStageType::Standard,
             turbine_disabled: Arc::<AtomicBool>::default(),
             enforce_ulimit_nofile: true,
@@ -580,54 +580,50 @@ impl Validator {
             snapshot_packager_service,
             accounts_background_request_sender,
         ) = {
+            // validator::main() checked if the snapshot config is valid.  Any invalid
+            // snapshot configs at this point are programmer bugs.
+            assert!(is_snapshot_config_valid(
+                config.snapshot_config.full_snapshot_archive_interval_slots,
+                config
+                    .snapshot_config
+                    .incremental_snapshot_archive_interval_slots,
+                config.accounts_hash_interval_slots,
+            ));
+
             let pending_accounts_package = PendingAccountsPackage::default();
-            let (
-                accounts_background_request_sender,
-                snapshot_request_handler,
-                pending_snapshot_package,
-                snapshot_packager_service,
-            ) = if let Some(snapshot_config) = config.snapshot_config.clone() {
-                if !is_snapshot_config_valid(
-                    snapshot_config.full_snapshot_archive_interval_slots,
-                    snapshot_config.incremental_snapshot_archive_interval_slots,
-                    config.accounts_hash_interval_slots,
-                ) {
-                    error!("Snapshot config is invalid");
-                }
+            let (pending_snapshot_package, snapshot_packager_service) =
+                if config.snapshot_config.is_enabled() {
+                    // filler accounts make snapshots invalid for use
+                    // so, do not publish that we have snapshots
+                    let enable_gossip_push = config
+                        .accounts_db_config
+                        .as_ref()
+                        .map(|config| config.filler_accounts_config.count == 0)
+                        .unwrap_or(true);
+                    let pending_snapshot_package = PendingSnapshotPackage::default();
+                    let snapshot_packager_service = SnapshotPackagerService::new(
+                        pending_snapshot_package.clone(),
+                        starting_snapshot_hashes,
+                        &exit,
+                        &cluster_info,
+                        config.snapshot_config.clone(),
+                        enable_gossip_push,
+                    );
+                    (
+                        Some(pending_snapshot_package),
+                        Some(snapshot_packager_service),
+                    )
+                } else {
+                    (None, None)
+                };
 
-                let pending_snapshot_package = PendingSnapshotPackage::default();
-
-                // filler accounts make snapshots invalid for use
-                // so, do not publish that we have snapshots
-                let enable_gossip_push = config
-                    .accounts_db_config
-                    .as_ref()
-                    .map(|config| config.filler_accounts_config.count == 0)
-                    .unwrap_or(true);
-
-                let snapshot_packager_service = SnapshotPackagerService::new(
-                    pending_snapshot_package.clone(),
-                    starting_snapshot_hashes,
-                    &exit,
-                    &cluster_info,
-                    snapshot_config.clone(),
-                    enable_gossip_push,
-                );
-
-                let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
-                (
-                    AbsRequestSender::new(snapshot_request_sender),
-                    Some(SnapshotRequestHandler {
-                        snapshot_config,
-                        snapshot_request_receiver,
-                        pending_accounts_package: pending_accounts_package.clone(),
-                    }),
-                    Some(pending_snapshot_package),
-                    Some(snapshot_packager_service),
-                )
-            } else {
-                (AbsRequestSender::default(), None, None, None)
-            };
+            let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
+            let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+            let snapshot_request_handler = Some(SnapshotRequestHandler {
+                snapshot_config: config.snapshot_config.clone(),
+                snapshot_request_receiver,
+                pending_accounts_package: pending_accounts_package.clone(),
+            });
 
             let accounts_hash_verifier = AccountsHashVerifier::new(
                 Arc::clone(&pending_accounts_package),
@@ -1462,7 +1458,7 @@ fn load_blockstore(
             &blockstore,
             config.account_paths.clone(),
             config.account_shrink_paths.clone(),
-            config.snapshot_config.as_ref(),
+            &config.snapshot_config,
             &process_options,
             transaction_history_services
                 .cache_block_meta_sender
@@ -1699,10 +1695,10 @@ fn maybe_warp_slot(
     leader_schedule_cache: &LeaderScheduleCache,
 ) -> Result<(), String> {
     if let Some(warp_slot) = config.warp_slot {
-        let snapshot_config = match config.snapshot_config.as_ref() {
-            Some(config) => config,
-            None => return Err("warp slot requires a snapshot config".to_owned()),
-        };
+        if config.snapshot_config.is_disabled() {
+            return Err("warp slot requires that snapshots are enabled".to_owned());
+        }
+        let snapshot_config = &config.snapshot_config;
 
         process_blockstore.process()?;
 

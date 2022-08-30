@@ -70,7 +70,7 @@ struct RpcRequestMiddleware {
     ledger_path: PathBuf,
     full_snapshot_archive_path_regex: Regex,
     incremental_snapshot_archive_path_regex: Regex,
-    snapshot_config: Option<SnapshotConfig>,
+    snapshot_config: SnapshotConfig,
     bank_forks: Arc<RwLock<BankForks>>,
     health: Arc<RpcHealth>,
 }
@@ -78,7 +78,7 @@ struct RpcRequestMiddleware {
 impl RpcRequestMiddleware {
     pub fn new(
         ledger_path: PathBuf,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_config: SnapshotConfig,
         bank_forks: Arc<RwLock<BankForks>>,
         health: Arc<RpcHealth>,
     ) -> Self {
@@ -126,7 +126,7 @@ impl RpcRequestMiddleware {
             return true;
         }
 
-        if self.snapshot_config.is_none() {
+        if self.snapshot_config.is_disabled() {
             return false;
         }
 
@@ -166,17 +166,9 @@ impl RpcRequestMiddleware {
             .full_snapshot_archive_path_regex
             .is_match(Path::new("").join(&stem).to_str().unwrap())
         {
-            &self
-                .snapshot_config
-                .as_ref()
-                .unwrap()
-                .full_snapshot_archives_dir
+            &self.snapshot_config.full_snapshot_archives_dir
         } else {
-            &self
-                .snapshot_config
-                .as_ref()
-                .unwrap()
-                .incremental_snapshot_archives_dir
+            &self.snapshot_config.incremental_snapshot_archives_dir
         };
         let local_path = root.join(&stem);
         if local_path.exists() {
@@ -246,14 +238,15 @@ impl RequestMiddleware for RpcRequestMiddleware {
     fn on_request(&self, request: hyper::Request<hyper::Body>) -> RequestMiddlewareAction {
         trace!("request uri: {}", request.uri());
 
-        if let Some(ref snapshot_config) = self.snapshot_config {
+        if self.snapshot_config.is_enabled() {
+            // We assume that if snapshots are enabled then the configured paths are valid
             if request.uri().path() == FULL_SNAPSHOT_REQUEST_PATH
                 || request.uri().path() == INCREMENTAL_SNAPSHOT_REQUEST_PATH
             {
                 // Convenience redirect to the latest snapshot
                 let full_snapshot_archive_info =
                     snapshot_utils::get_highest_full_snapshot_archive_info(
-                        &snapshot_config.full_snapshot_archives_dir,
+                        &self.snapshot_config.full_snapshot_archives_dir,
                     );
                 let snapshot_archive_info =
                     if let Some(full_snapshot_archive_info) = full_snapshot_archive_info {
@@ -261,7 +254,7 @@ impl RequestMiddleware for RpcRequestMiddleware {
                             Some(full_snapshot_archive_info.snapshot_archive_info().clone())
                         } else {
                             snapshot_utils::get_highest_incremental_snapshot_archive_info(
-                                &snapshot_config.incremental_snapshot_archives_dir,
+                                &self.snapshot_config.incremental_snapshot_archives_dir,
                                 full_snapshot_archive_info.slot(),
                             )
                             .map(|incremental_snapshot_archive_info| {
@@ -338,7 +331,7 @@ impl JsonRpcService {
     pub fn new(
         rpc_addr: SocketAddr,
         config: JsonRpcConfig,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_config: SnapshotConfig,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
@@ -624,7 +617,7 @@ mod tests {
         let mut rpc_service = JsonRpcService::new(
             rpc_addr,
             JsonRpcConfig::default(),
-            None,
+            SnapshotConfig::disabled(),
             bank_forks,
             block_commitment_cache,
             blockstore,
@@ -688,13 +681,13 @@ mod tests {
         let bank_forks = create_bank_forks();
         let rrm = RpcRequestMiddleware::new(
             PathBuf::from("/"),
-            None,
+            SnapshotConfig::disabled(),
             bank_forks.clone(),
             RpcHealth::stub(),
         );
         let rrm_with_snapshot_config = RpcRequestMiddleware::new(
             PathBuf::from("/"),
-            Some(SnapshotConfig::default()),
+            SnapshotConfig::default(),
             bank_forks,
             RpcHealth::stub(),
         );
@@ -764,7 +757,7 @@ mod tests {
         let genesis_path = ledger_path.join(DEFAULT_GENESIS_ARCHIVE);
         let rrm = RpcRequestMiddleware::new(
             ledger_path.clone(),
-            None,
+            SnapshotConfig::disabled(),
             create_bank_forks(),
             RpcHealth::stub(),
         );
@@ -819,7 +812,7 @@ mod tests {
     fn test_health_check_with_no_known_validators() {
         let rm = RpcRequestMiddleware::new(
             PathBuf::from("/"),
-            None,
+            SnapshotConfig::disabled(),
             create_bank_forks(),
             RpcHealth::stub(),
         );
@@ -850,7 +843,12 @@ mod tests {
             startup_verification_complete,
         ));
 
-        let rm = RpcRequestMiddleware::new(PathBuf::from("/"), None, create_bank_forks(), health);
+        let rm = RpcRequestMiddleware::new(
+            PathBuf::from("/"),
+            SnapshotConfig::disabled(),
+            create_bank_forks(),
+            health,
+        );
 
         // No account hashes for this node or any known validators
         assert_eq!(rm.health_check(), "unknown");

@@ -117,7 +117,7 @@ impl SnapshotTestConfig {
             snapshot_version,
             ..SnapshotConfig::default()
         };
-        bank_forks.set_snapshot_config(Some(snapshot_config.clone()));
+        bank_forks.set_snapshot_config(snapshot_config.clone());
         SnapshotTestConfig {
             accounts_dir,
             bank_snapshots_dir,
@@ -136,11 +136,7 @@ fn restore_from_snapshot(
     old_genesis_config: &GenesisConfig,
     account_paths: &[PathBuf],
 ) {
-    let full_snapshot_archives_dir = old_bank_forks
-        .snapshot_config
-        .as_ref()
-        .map(|c| &c.full_snapshot_archives_dir)
-        .unwrap();
+    let full_snapshot_archives_dir = &old_bank_forks.snapshot_config.full_snapshot_archives_dir;
 
     let old_last_bank = old_bank_forks.get(old_last_slot).unwrap();
 
@@ -156,11 +152,7 @@ fn restore_from_snapshot(
 
     let (deserialized_bank, _timing) = snapshot_utils::bank_from_snapshot_archives(
         account_paths,
-        &old_bank_forks
-            .snapshot_config
-            .as_ref()
-            .unwrap()
-            .bank_snapshots_dir,
+        &old_bank_forks.snapshot_config.bank_snapshots_dir,
         &full_snapshot_archive_info,
         None,
         old_genesis_config,
@@ -956,7 +948,7 @@ fn test_snapshots_with_background_services(
         None,
         false,
         0,
-        Some(snapshot_test_config.snapshot_config.clone()),
+        snapshot_test_config.snapshot_config.clone(),
     );
 
     let accounts_background_service = AccountsBackgroundService::new(

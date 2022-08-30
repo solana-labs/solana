@@ -63,3 +63,29 @@ impl Default for SnapshotConfig {
         }
     }
 }
+
+impl SnapshotConfig {
+    /// Generate a new snapshot config where snapshots are disabled
+    #[must_use]
+    pub fn disabled() -> Self {
+        Self {
+            full_snapshot_archive_interval_slots: Slot::MAX,
+            incremental_snapshot_archive_interval_slots: Slot::MAX,
+            ..Self::default()
+        }
+    }
+
+    /// Are snapshots disabled?
+    #[must_use]
+    pub fn is_disabled(&self) -> bool {
+        // Only need to check if full snapshots are disabled to know if all snapshots are disabled
+        self.full_snapshot_archive_interval_slots
+            == Self::disabled().full_snapshot_archive_interval_slots
+    }
+
+    /// Are snapshots enabled?
+    #[must_use]
+    pub fn is_enabled(&self) -> bool {
+        !self.is_disabled()
+    }
+}

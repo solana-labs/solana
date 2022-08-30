@@ -46,7 +46,7 @@ pub struct BankForks {
     banks: HashMap<Slot, Arc<Bank>>,
     descendants: HashMap<Slot, HashSet<Slot>>,
     root: Slot,
-    pub snapshot_config: Option<SnapshotConfig>,
+    pub snapshot_config: SnapshotConfig,
 
     pub accounts_hash_interval_slots: Slot,
     last_accounts_hash_slot: Slot,
@@ -163,8 +163,8 @@ impl BankForks {
             root,
             banks,
             descendants,
-            snapshot_config: None,
-            accounts_hash_interval_slots: std::u64::MAX,
+            snapshot_config: SnapshotConfig::disabled(),
+            accounts_hash_interval_slots: Slot::MAX,
             last_accounts_hash_slot: root,
             in_vote_only_mode: Arc::new(AtomicBool::new(false)),
         }
@@ -273,7 +273,7 @@ impl BankForks {
                 is_root_bank_squashed = bank_slot == root;
 
                 let mut snapshot_time = Measure::start("squash::snapshot_time");
-                if self.snapshot_config.is_some()
+                if self.snapshot_config.is_enabled()
                     && accounts_background_request_sender.is_snapshot_creation_enabled()
                 {
                     let snapshot_root_bank = self.root_bank();
@@ -526,7 +526,7 @@ impl BankForks {
         )
     }
 
-    pub fn set_snapshot_config(&mut self, snapshot_config: Option<SnapshotConfig>) {
+    pub fn set_snapshot_config(&mut self, snapshot_config: SnapshotConfig) {
         self.snapshot_config = snapshot_config;
     }
 

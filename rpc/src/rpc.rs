@@ -198,7 +198,7 @@ pub struct JsonRpcRequestProcessor {
     block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
     blockstore: Arc<Blockstore>,
     config: JsonRpcConfig,
-    snapshot_config: Option<SnapshotConfig>,
+    snapshot_config: SnapshotConfig,
     #[allow(dead_code)]
     validator_exit: Arc<RwLock<Exit>>,
     health: Arc<RpcHealth>,
@@ -302,7 +302,7 @@ impl JsonRpcRequestProcessor {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: JsonRpcConfig,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_config: SnapshotConfig,
         bank_forks: Arc<RwLock<BankForks>>,
         block_commitment_cache: Arc<RwLock<BlockCommitmentCache>>,
         blockstore: Arc<Blockstore>,
@@ -373,7 +373,7 @@ impl JsonRpcRequestProcessor {
 
         Self {
             config: JsonRpcConfig::default(),
-            snapshot_config: None,
+            snapshot_config: SnapshotConfig::disabled(),
             bank_forks,
             block_commitment_cache: Arc::new(RwLock::new(BlockCommitmentCache::new(
                 HashMap::new(),
@@ -2656,26 +2656,17 @@ pub mod rpc_minimal {
         fn get_highest_snapshot_slot(&self, meta: Self::Metadata) -> Result<RpcSnapshotSlotInfo> {
             debug!("get_highest_snapshot_slot rpc request received");
 
-            if meta.snapshot_config.is_none() {
+            if meta.snapshot_config.is_disabled() {
                 return Err(RpcCustomError::NoSnapshot.into());
             }
 
-            let (full_snapshot_archives_dir, incremental_snapshot_archives_dir) = meta
-                .snapshot_config
-                .map(|snapshot_config| {
-                    (
-                        snapshot_config.full_snapshot_archives_dir,
-                        snapshot_config.incremental_snapshot_archives_dir,
-                    )
-                })
-                .unwrap();
-
-            let full_snapshot_slot =
-                snapshot_utils::get_highest_full_snapshot_archive_slot(&full_snapshot_archives_dir)
-                    .ok_or(RpcCustomError::NoSnapshot)?;
+            let full_snapshot_slot = snapshot_utils::get_highest_full_snapshot_archive_slot(
+                &meta.snapshot_config.full_snapshot_archives_dir,
+            )
+            .ok_or(RpcCustomError::NoSnapshot)?;
             let incremental_snapshot_slot =
                 snapshot_utils::get_highest_incremental_snapshot_archive_slot(
-                    &incremental_snapshot_archives_dir,
+                    &meta.snapshot_config.incremental_snapshot_archives_dir,
                     full_snapshot_slot,
                 );
 
@@ -4079,14 +4070,14 @@ pub mod rpc_deprecated_v1_9 {
 
         fn get_snapshot_slot(&self, meta: Self::Metadata) -> Result<Slot> {
             debug!("get_snapshot_slot rpc request received");
+            if meta.snapshot_config.is_disabled() {
+                return Err(RpcCustomError::NoSnapshot.into());
+            }
 
-            meta.snapshot_config
-                .and_then(|snapshot_config| {
-                    snapshot_utils::get_highest_full_snapshot_archive_slot(
-                        &snapshot_config.full_snapshot_archives_dir,
-                    )
-                })
-                .ok_or_else(|| RpcCustomError::NoSnapshot.into())
+            snapshot_utils::get_highest_full_snapshot_archive_slot(
+                &meta.snapshot_config.full_snapshot_archives_dir,
+            )
+            .ok_or_else(|| RpcCustomError::NoSnapshot.into())
         }
     }
 }
@@ -4712,7 +4703,7 @@ pub mod tests {
                     enable_rpc_transaction_history: true,
                     ..JsonRpcConfig::default()
                 },
-                None,
+                SnapshotConfig::disabled(),
                 bank_forks.clone(),
                 block_commitment_cache.clone(),
                 blockstore.clone(),
@@ -6286,7 +6277,7 @@ pub mod tests {
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (meta, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
-            None,
+            SnapshotConfig::disabled(),
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
@@ -6555,7 +6546,7 @@ pub mod tests {
         let tpu_address = cluster_info.my_contact_info().tpu;
         let (request_processor, receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
-            None,
+            SnapshotConfig::disabled(),
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,
@@ -8182,7 +8173,7 @@ pub mod tests {
 
         let (meta, _receiver) = JsonRpcRequestProcessor::new(
             JsonRpcConfig::default(),
-            None,
+            SnapshotConfig::disabled(),
             bank_forks.clone(),
             block_commitment_cache,
             blockstore,

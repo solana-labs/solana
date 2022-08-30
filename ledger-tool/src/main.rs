@@ -927,7 +927,7 @@ fn load_bank_forks(
 
     let mut starting_slot = 0; // default start check with genesis
     let snapshot_config = if arg_matches.is_present("no_snapshot") {
-        None
+        SnapshotConfig::disabled()
     } else {
         let full_snapshot_archives_dir =
             snapshot_archive_path.unwrap_or_else(|| blockstore.ledger_path().to_path_buf());
@@ -945,14 +945,14 @@ fn load_bank_forks(
             starting_slot = std::cmp::max(full_snapshot_slot, incremental_snapshot_slot);
         }
 
-        Some(SnapshotConfig {
+        SnapshotConfig {
             full_snapshot_archive_interval_slots: Slot::MAX,
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             bank_snapshots_dir,
             ..SnapshotConfig::default()
-        })
+        }
     };
 
     if let Some(halt_slot) = process_options.halt_at_slot {
@@ -1023,7 +1023,7 @@ fn load_bank_forks(
             blockstore,
             account_paths,
             None,
-            snapshot_config.as_ref(),
+            &snapshot_config,
             &process_options,
             None,
             accounts_update_notifier,

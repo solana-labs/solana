@@ -45,7 +45,7 @@ impl AccountsHashVerifier {
         known_validators: Option<HashSet<Pubkey>>,
         halt_on_known_validators_accounts_hash_mismatch: bool,
         fault_injection_rate_slots: u64,
-        snapshot_config: Option<SnapshotConfig>,
+        snapshot_config: SnapshotConfig,
     ) -> Self {
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
@@ -74,7 +74,7 @@ impl AccountsHashVerifier {
                         &mut hashes,
                         &exit,
                         fault_injection_rate_slots,
-                        snapshot_config.as_ref(),
+                        &snapshot_config,
                     );
                 }
             })
@@ -94,7 +94,7 @@ impl AccountsHashVerifier {
         hashes: &mut Vec<(Slot, Hash)>,
         exit: &Arc<AtomicBool>,
         fault_injection_rate_slots: u64,
-        snapshot_config: Option<&SnapshotConfig>,
+        snapshot_config: &SnapshotConfig,
     ) {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
@@ -271,12 +271,12 @@ impl AccountsHashVerifier {
     fn submit_for_packaging(
         accounts_package: AccountsPackage,
         pending_snapshot_package: Option<&PendingSnapshotPackage>,
-        snapshot_config: Option<&SnapshotConfig>,
+        snapshot_config: &SnapshotConfig,
         accounts_hash: Hash,
     ) {
         if accounts_package.snapshot_type.is_none()
             || pending_snapshot_package.is_none()
-            || snapshot_config.is_none()
+            || snapshot_config.is_disabled()
         {
             return;
         };
@@ -463,7 +463,7 @@ mod tests {
                 &mut hashes,
                 &exit,
                 0,
-                Some(&snapshot_config),
+                &snapshot_config,
             );
 
             // sleep for 1ms to create a newer timestmap for gossip entry
