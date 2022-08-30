@@ -70,8 +70,9 @@ use {
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
-    solana_tpu_client::connection_cache::DEFAULT_TPU_DISABLE_UDP,
+    solana_tpu_client::connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_DISABLE_UDP,
+    },
     solana_validator::{
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
