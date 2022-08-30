@@ -2631,8 +2631,9 @@ impl AccountsDb {
                         let mut not_found_on_fork = 0;
                         let mut missing = 0;
                         let mut useful = 0;
-                        self.accounts_index
-                            .scan(pubkeys.iter(), |pubkey, slots_refs| {
+                        self.accounts_index.scan(
+                            pubkeys.iter(),
+                            |pubkey, slots_refs| {
                                 let mut useless = true;
                                 if let Some((slot_list, ref_count)) = slots_refs {
                                     let index_in_slot_list = self.accounts_index.latest_slot(
@@ -2696,7 +2697,9 @@ impl AccountsDb {
                                 } else {
                                     AccountsIndexScanResult::KeepInMemory
                                 }
-                            });
+                            },
+                            None,
+                        );
                         found_not_zero_accum.fetch_add(found_not_zero, Ordering::Relaxed);
                         not_found_on_fork_accum.fetch_add(not_found_on_fork, Ordering::Relaxed);
                         missing_accum.fetch_add(missing, Ordering::Relaxed);
@@ -3191,6 +3194,7 @@ impl AccountsDb {
                 index += 1;
                 result
             },
+            None,
         );
         assert_eq!(index, std::cmp::min(accounts.len(), count));
         self.shrink_stats
@@ -7598,7 +7602,8 @@ impl AccountsDb {
                         .skip(skip)
                         .take(BATCH_SIZE)
                         .map(|(_slot, pubkey)| pubkey),
-                    |_pubkey, _slots_refs| AccountsIndexScanResult::Unref,
+                    |_pubkey, _slots_refs| /* unused */AccountsIndexScanResult::Unref,
+                    Some(AccountsIndexScanResult::Unref),
                 )
             })
         });
