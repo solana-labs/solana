@@ -4811,10 +4811,6 @@ dependencies = [
 [[package]]
 name = "solana-cargo-test-bpf"
 version = "1.12.0"
-dependencies = [
- "cargo_metadata",
- "clap 3.1.8",
-]
 
 [[package]]
 name = "solana-cargo-test-sbf"
