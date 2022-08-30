@@ -4045,6 +4045,7 @@ impl AccountsDb {
             dropped_roots.iter().for_each(|slot| {
                 self.accounts_index
                     .clean_dead_slot(*slot, &mut AccountsIndexRootsStats::default());
+                self.bank_hashes.write().unwrap().remove(slot);
             });
         }
 
