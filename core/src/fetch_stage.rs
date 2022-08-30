@@ -16,7 +16,7 @@ use {
     solana_streamer::streamer::{
         self, PacketBatchReceiver, PacketBatchSender, StreamerReceiveStats,
     },
-    solana_tpu_client::connection_cache::DEFAULT_TPU_DISABLE_UDP,
+    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     std::{
         net::UdpSocket,
         sync::{
@@ -58,7 +58,7 @@ impl FetchStage {
                 poh_recorder,
                 coalesce_ms,
                 None,
-                DEFAULT_TPU_DISABLE_UDP,
+                DEFAULT_TPU_ENABLE_UDP,
             ),
             receiver,
             vote_receiver,
@@ -78,7 +78,7 @@ impl FetchStage {
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
-        tpu_disable_udp: bool,
+        tpu_enable_udp: bool,
     ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         let tpu_forwards_sockets = tpu_forwards_sockets.into_iter().map(Arc::new).collect();
@@ -95,7 +95,7 @@ impl FetchStage {
             poh_recorder,
             coalesce_ms,
             in_vote_only_mode,
-            tpu_disable_udp,
+            tpu_enable_udp,
         )
     }
 
@@ -154,13 +154,13 @@ impl FetchStage {
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         coalesce_ms: u64,
         in_vote_only_mode: Option<Arc<AtomicBool>>,
-        tpu_disable_udp: bool,
+        tpu_enable_udp: bool,
     ) -> Self {
         let recycler: PacketBatchRecycler = Recycler::warmed(1000, 1024);
 
         let tpu_stats = Arc::new(StreamerReceiveStats::new("tpu_receiver"));
 
-        let tpu_threads: Vec<_> = if !tpu_disable_udp {
+        let tpu_threads: Vec<_> = if tpu_enable_udp {
             tpu_sockets
                 .into_iter()
                 .map(|socket| {
@@ -181,7 +181,7 @@ impl FetchStage {
         };
 
         let tpu_forward_stats = Arc::new(StreamerReceiveStats::new("tpu_forwards_receiver"));
-        let tpu_forwards_threads: Vec<_> = if !tpu_disable_udp {
+        let tpu_forwards_threads: Vec<_> = if tpu_enable_udp {
             tpu_forwards_sockets
                 .into_iter()
                 .map(|socket| {

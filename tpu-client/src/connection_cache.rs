@@ -37,7 +37,7 @@ pub const DEFAULT_TPU_USE_QUIC: bool = true;
 /// Default TPU connection pool size per remote address
 pub const DEFAULT_TPU_CONNECTION_POOL_SIZE: usize = 4;
 
-pub const DEFAULT_TPU_DISABLE_UDP: bool = false;
+pub const DEFAULT_TPU_ENABLE_UDP: bool = false;
 
 #[derive(Default)]
 pub struct ConnectionCacheStats {

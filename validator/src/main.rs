@@ -71,7 +71,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_tpu_client::connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_DISABLE_UDP,
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
     },
     solana_validator::{
         admin_rpc_service,
@@ -1248,11 +1248,10 @@ pub fn main() {
                 .help("Do not use QUIC to send transactions."),
         )
         .arg(
-            Arg::with_name("tpu_disable_udp")
-                .long("tpu-disable-udp")
+            Arg::with_name("tpu_enable_udp")
+                .long("tpu-enable-udp")
                 .takes_value(false)
-                .conflicts_with("tpu_disable_quic")
-                .help("Do not use UDP for receiving/sending transactions."),
+                .help("Enable UDP for receiving/sending transactions."),
         )
         .arg(
             Arg::with_name("disable_quic_servers")
@@ -2440,10 +2439,10 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = !matches.is_present("tpu_disable_quic");
-    let tpu_disable_udp = if matches.is_present("tpu_disable_udp") {
+    let tpu_enable_udp = if matches.is_present("tpu_enable_udp") {
         true
     } else {
-        DEFAULT_TPU_DISABLE_UDP
+        DEFAULT_TPU_ENABLE_UDP
     };
 
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
@@ -3235,7 +3234,7 @@ pub fn main() {
         socket_addr_space,
         tpu_use_quic,
         tpu_connection_pool_size,
-        tpu_disable_udp,
+        tpu_enable_udp,
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);

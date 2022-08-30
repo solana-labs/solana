@@ -111,8 +111,8 @@ Operate a configured testnet
    --tpu-disable-quic
                                       - Disable quic for tpu packet forwarding
 
-   --tpu-disable-udp
-                                      - Disable UDP for tpu transactions
+   --tpu-enable-udp
+                                      - Enable UDP for tpu transactions
 
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
@@ -328,7 +328,7 @@ startBootstrapLeader() {
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
-         \"$disableUdp\" \
+         \"$enableUdp\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -402,7 +402,7 @@ startNode() {
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
-         \"$disableUdp\" \
+         \"$enableUdp\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -812,7 +812,7 @@ maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
 disableQuic=false
-disableUdp=false
+enableUdp=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -928,8 +928,8 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --tpu-disable-quic ]]; then
       disableQuic=true
       shift 1
-    elif [[ $1 == --tpu-disable-udp ]]; then
-      disableUdp=true
+    elif [[ $1 == --tpu-enable-udp ]]; then
+      enableUdp=true
       shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false

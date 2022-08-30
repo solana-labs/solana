@@ -29,7 +29,7 @@ waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
 disableQuic="${23}"
-disableUdp="${24}"
+enableUdp="${24}"
 
 set +x
 
@@ -291,8 +291,8 @@ EOF
       args+=(--tpu-disable-quic)
     fi
 
-    if $disableUdp; then
-      args+=(--tpu-disable-udp)
+    if $enableUdp; then
+      args+=(--tpu-enable-udp)
     fi
 
     if [[ $airdropsEnabled = true ]]; then
@@ -427,8 +427,8 @@ EOF
       args+=(--tpu-disable-quic)
     fi
 
-    if $disableUdp; then
-      args+=(--tpu-disable-udp)
+    if $enableUdp; then
+      args+=(--tpu-enable-udp)
     fi
 
 cat >> ~/solana/on-reboot <<EOF
