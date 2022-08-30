@@ -312,7 +312,6 @@ fn test_two_unbalanced_stakes() {
 
 #[test]
 #[serial]
-#[ignore]
 fn test_forwarding() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // Set up a cluster where one node is never the leader, so all txs sent to this node
@@ -1230,7 +1229,6 @@ fn test_incremental_snapshot_download_with_crossing_full_snapshot_interval_at_st
 #[allow(unused_attributes)]
 #[test]
 #[serial]
-#[ignore]
 fn test_snapshot_restart_tower() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 2 nodes
