@@ -13,10 +13,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
-        collections::{
-            hash_map::{Entry, VacantEntry},
-            HashMap,
-        },
+        collections::{hash_map::Entry, HashMap},
         fmt::Debug,
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
@@ -483,40 +480,26 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         // not in cache, look on disk
                         updated_in_mem = false;
 
-                        // desired to be this for filler accounts: self.storage.get_startup();
-                        // but, this has proven to be far too slow at high account counts
-                        let directly_to_disk = false;
-                        if directly_to_disk {
-                            // We may like this to always run, but it is unclear.
-                            // If disk bucket needs to resize, then this call can stall for a long time.
-                            // Right now, we know it is safe during startup.
-                            let already_existed = self
-                                .upsert_on_disk(vacant, new_value, other_slot, reclaims, reclaim);
-                            if !already_existed {
-                                self.stats().inc_insert();
-                            }
+                        // go to in-mem cache first
+                        let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                        let new_value = if let Some(disk_entry) = disk_entry {
+                            // on disk, so merge new_value with what was on disk
+                            Self::lock_and_update_slot_list(
+                                &disk_entry,
+                                new_value.into(),
+                                other_slot,
+                                reclaims,
+                                reclaim,
+                            );
+                            disk_entry
                         } else {
-                            // go to in-mem cache first
-                            let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                            let new_value = if let Some(disk_entry) = disk_entry {
-                                // on disk, so merge new_value with what was on disk
-                                Self::lock_and_update_slot_list(
-                                    &disk_entry,
-                                    new_value.into(),
-                                    other_slot,
-                                    reclaims,
-                                    reclaim,
-                                );
-                                disk_entry
-                            } else {
-                                // not on disk, so insert new thing
-                                self.stats().inc_insert();
-                                new_value.into_account_map_entry(&self.storage)
-                            };
-                            assert!(new_value.dirty());
-                            vacant.insert(new_value);
-                            self.stats().inc_mem_count(self.bin);
-                        }
+                            // not on disk, so insert new thing
+                            self.stats().inc_insert();
+                            new_value.into_account_map_entry(&self.storage)
+                        };
+                        assert!(new_value.dirty());
+                        vacant.insert(new_value);
+                        self.stats().inc_mem_count(self.bin);
                     }
                 }
 
@@ -709,46 +692,31 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             }
             Entry::Vacant(vacant) => {
                 // not in cache, look on disk
-                let initial_insert_directly_to_disk = false;
-                if initial_insert_directly_to_disk {
-                    // This is more direct, but becomes too slow with very large acct #.
-                    // disk buckets will be improved to make them more performant. Tuning the disks may also help.
-                    // This may become a config tuning option.
-                    let already_existed = self.upsert_on_disk(
-                        vacant,
-                        new_entry,
-                        None, // not changing slots here since it doesn't exist in the index at all
+                let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                self.stats().inc_mem_count(self.bin);
+                if let Some(disk_entry) = disk_entry {
+                    let (slot, account_info) = new_entry.into();
+                    InMemAccountsIndex::lock_and_update_slot_list(
+                        &disk_entry,
+                        (slot, account_info),
+                        // None because we are inserting the first element in the slot list for this pubkey.
+                        // There can be no 'other' slot in the list.
+                        None,
                         &mut Vec::default(),
                         UpsertReclaim::PopulateReclaims,
                     );
-                    (false, already_existed)
+                    vacant.insert(disk_entry);
+                    (
+                        false, /* found in mem */
+                        true,  /* already existed */
+                    )
                 } else {
-                    let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                    self.stats().inc_mem_count(self.bin);
-                    if let Some(disk_entry) = disk_entry {
-                        let (slot, account_info) = new_entry.into();
-                        InMemAccountsIndex::lock_and_update_slot_list(
-                            &disk_entry,
-                            (slot, account_info),
-                            // None because we are inserting the first element in the slot list for this pubkey.
-                            // There can be no 'other' slot in the list.
-                            None,
-                            &mut Vec::default(),
-                            UpsertReclaim::PopulateReclaims,
-                        );
-                        vacant.insert(disk_entry);
-                        (
-                            false, /* found in mem */
-                            true,  /* already existed */
-                        )
-                    } else {
-                        // not on disk, so insert new thing and we're done
-                        let new_entry: AccountMapEntry<T> =
-                            new_entry.into_account_map_entry(&self.storage);
-                        assert!(new_entry.dirty());
-                        vacant.insert(new_entry);
-                        (false, false)
-                    }
+                    // not on disk, so insert new thing and we're done
+                    let new_entry: AccountMapEntry<T> =
+                        new_entry.into_account_map_entry(&self.storage);
+                    assert!(new_entry.dirty());
+                    vacant.insert(new_entry);
+                    (false, false)
                 }
             }
         };
@@ -766,52 +734,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             InsertNewEntryResults::ExistedNewEntryZeroLamports
         } else {
             InsertNewEntryResults::ExistedNewEntryNonZeroLamports
-        }
-    }
-
-    /// return true if item already existed in the index
-    fn upsert_on_disk(
-        &self,
-        vacant: VacantEntry<K, AccountMapEntry<T>>,
-        new_entry: PreAllocatedAccountMapEntry<T>,
-        other_slot: Option<Slot>,
-        reclaims: &mut SlotList<T>,
-        reclaim: UpsertReclaim,
-    ) -> bool {
-        if let Some(disk) = self.bucket.as_ref() {
-            let mut existed = false;
-            let (slot, account_info) = new_entry.into();
-            disk.update(vacant.key(), |current| {
-                if let Some((slot_list, mut ref_count)) = current {
-                    // on disk, so merge and update disk
-                    let mut slot_list = slot_list.to_vec();
-                    let addref = Self::update_slot_list(
-                        &mut slot_list,
-                        slot,
-                        account_info,
-                        other_slot,
-                        reclaims,
-                        reclaim,
-                    );
-                    if addref {
-                        ref_count += 1
-                    };
-                    existed = true; // found on disk, so it did exist
-                    Some((slot_list, ref_count))
-                } else {
-                    // doesn't exist on disk yet, so insert it
-                    let ref_count = if account_info.is_cached() { 0 } else { 1 };
-                    Some((vec![(slot, account_info)], ref_count))
-                }
-            });
-            existed
-        } else {
-            // not using disk, so insert into mem
-            self.stats().inc_mem_count(self.bin);
-            let new_entry: AccountMapEntry<T> = new_entry.into_account_map_entry(&self.storage);
-            assert!(new_entry.dirty());
-            vacant.insert(new_entry);
-            false // not using disk, not in mem, so did not exist
         }
     }
 
