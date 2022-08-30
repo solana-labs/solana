@@ -45,7 +45,6 @@ libc = { version = "0.2.126", features = ["extra_traits"] }
 libsecp256k1 = "0.6.0"
 rand = "0.7"
 rand_chacha = { version = "0.2.2", default-features = true, features = ["simd", "std"] }
-tiny-bip39 = "0.8.2"
 wasm-bindgen = "0.2"
 zeroize = { version = "1.3", default-features = true, features = ["zeroize_derive"] }
 

@@ -4784,11 +4784,6 @@ dependencies = [
 [[package]]
 name = "solana-cargo-build-bpf"
 version = "1.12.0"
-dependencies = [
- "cargo_metadata",
- "clap 3.1.8",
- "solana-sdk 1.12.0",
-]
 
 [[package]]
 name = "solana-cargo-build-sbf"
@@ -4811,10 +4806,6 @@ dependencies = [
 [[package]]
 name = "solana-cargo-test-bpf"
 version = "1.12.0"
-dependencies = [
- "cargo_metadata",
- "clap 3.1.8",
-]
 
 [[package]]
 name = "solana-cargo-test-sbf"
@@ -5836,7 +5827,6 @@ dependencies = [
  "solana-sdk-macro 1.12.0",
  "static_assertions",
  "thiserror",
- "tiny-bip39",
  "wasm-bindgen",
  "zeroize",
 ]
@@ -6589,8 +6579,6 @@ dependencies = [
  "serde_json",
  "solana-account-decoder",
  "solana-address-lookup-table-program",
- "solana-measure",
- "solana-metrics",
  "solana-sdk 1.12.0",
  "solana-vote-program",
  "spl-associated-token-account",
