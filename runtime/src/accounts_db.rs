@@ -7478,7 +7478,7 @@ impl AccountsDb {
         let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
         let mut measure = Measure::start("unref_from_storage");
         if let Some(purged_stored_account_slots) = purged_stored_account_slots {
-            let len = purged_stored_account_slots.len();
+            let len = purged_slot_pubkeys.len();
             const BATCH_SIZE: usize = 10_000;
             let batches = 1 + (len / BATCH_SIZE);
             self.thread_pool_clean.install(|| {
