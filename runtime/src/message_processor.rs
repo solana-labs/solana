@@ -264,7 +264,13 @@ mod tests {
             TransactionContext::new(accounts, Some(Rent::default()), 1, 3);
         let program_indices = vec![vec![2]];
         let executors = Rc::new(RefCell::new(Executors::default()));
-        let account_keys = transaction_context.get_keys_of_accounts().to_vec();
+        let account_keys = (0..transaction_context.get_number_of_accounts())
+            .map(|index| {
+                *transaction_context
+                    .get_key_of_account_at_index(index)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
         let account_metas = vec![
             AccountMeta::new(writable_pubkey, true),
             AccountMeta::new_readonly(readonly_pubkey, false),
