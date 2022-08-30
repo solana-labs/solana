@@ -217,6 +217,8 @@ pub struct BlockstoreRocksFifoOptions {
 // in bytes will equally allocated to both data shreds and coding shreds.
 pub const DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = 250 * 1024 * 1024 * 1024;
 
+pub const MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES: u64 = std::u64::MAX;
+
 impl Default for BlockstoreRocksFifoOptions {
     fn default() -> Self {
         BlockstoreRocksFifoOptions::new(DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES)

@@ -28,7 +28,7 @@ use {
     solana_gossip::{cluster_info::Node, contact_info::ContactInfo},
     solana_ledger::blockstore_options::{
         BlockstoreCompressionType, BlockstoreRecoveryMode, LedgerColumnOptions, ShredStorageType,
-        DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+        MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
     },
     solana_net_utils::VALIDATOR_PORT_RANGE,
     solana_perf::recycler::enable_recycler_warming,
@@ -392,6 +392,21 @@ fn hash_validator(hash: String) -> Result<(), String> {
         .map_err(|e| format!("{:?}", e))
 }
 
+/// Returns the default shred storage size (include both data and coding
+/// shreds) based on the validator config.
+fn default_fifo_shred_storage_size(vc: &ValidatorConfig) -> u64 {
+    // The max shred size is around 1228 bytes.
+    // Here we reserve a little bit more than that to give extra storage for FIFO
+    // to prevent it from purging data that have not yet being marked as obsoleted
+    // by LedgerCleanupService.
+    const RESERVED_BYTES_PER_SHRED: u64 = 1500;
+    match vc.max_ledger_shreds {
+        // x2 as we have data shred and coding shred.
+        Some(max_ledger_shreds) => max_ledger_shreds * RESERVED_BYTES_PER_SHRED * 2,
+        None => MAX_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES,
+    }
+}
+
 // This function is duplicated in ledger-tool/src/main.rs...
 fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     if matches.is_present(name) {
@@ -489,8 +504,6 @@ pub fn main() {
     let default_accounts_shrink_optimize_total_space =
         &DEFAULT_ACCOUNTS_SHRINK_OPTIMIZE_TOTAL_SPACE.to_string();
     let default_accounts_shrink_ratio = &DEFAULT_ACCOUNTS_SHRINK_RATIO.to_string();
-    let default_rocksdb_fifo_shred_storage_size =
-        &DEFAULT_ROCKS_FIFO_SHRED_STORAGE_SIZE_BYTES.to_string();
     let default_tpu_connection_pool_size = &DEFAULT_TPU_CONNECTION_POOL_SIZE.to_string();
     let default_rpc_max_request_body_size = &MAX_REQUEST_BODY_SIZE.to_string();
 
@@ -1043,7 +1056,7 @@ pub fn main() {
                 .takes_value(true)
                 .possible_values(&["level", "fifo"])
                 .default_value("level")
-                .help("EXPERIMENTAL: Controls how RocksDB compacts shreds. \
+                .help("Controls how RocksDB compacts shreds. \
                        *WARNING*: You will lose your ledger data when you switch between options. \
                        Possible values are: \
                        'level': stores shreds using RocksDB's default (level) compaction. \
@@ -1057,9 +1070,13 @@ pub fn main() {
                 .value_name("SHRED_STORAGE_SIZE_BYTES")
                 .takes_value(true)
                 .validator(is_parsable::<u64>)
-                .default_value(default_rocksdb_fifo_shred_storage_size)
                 .help("The shred storage size in bytes. \
-                       The suggested value is 50% of your ledger storage size in bytes."),
+                       The suggested value is at least 50% of your ledger storage size. \
+                       If this argument is unspecified, we will assign a proper \
+                       value based on --limit-ledger-size.  If --limit-ledger-size \
+                       is not presented, it means there is no limitation on the ledger \
+                       size and thus rocksdb_fifo_shred_storage_size will also be \
+                       unbounded."),
         )
         .arg(
             Arg::with_name("rocksdb_ledger_compression")
@@ -3034,11 +3051,16 @@ pub fn main() {
             None => ShredStorageType::default(),
             Some(shred_compaction_string) => match shred_compaction_string {
                 "level" => ShredStorageType::RocksLevel,
-                "fifo" => {
-                    let shred_storage_size =
-                        value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
-                    ShredStorageType::rocks_fifo(shred_storage_size)
-                }
+                "fifo" => match matches.value_of("rocksdb_fifo_shred_storage_size") {
+                    None => ShredStorageType::rocks_fifo(default_fifo_shred_storage_size(
+                        &validator_config,
+                    )),
+                    Some(_) => ShredStorageType::rocks_fifo(value_t_or_exit!(
+                        matches,
+                        "rocksdb_fifo_shred_storage_size",
+                        u64
+                    )),
+                },
                 _ => panic!(
                     "Unrecognized rocksdb-shred-compaction: {}",
                     shred_compaction_string
