@@ -50,6 +50,7 @@ mod common;
 
 #[test]
 #[serial]
+#[ignore]
 // Steps in this test:
 // We want to create a situation like:
 /*
