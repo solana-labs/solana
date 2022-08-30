@@ -3,8 +3,7 @@ name: Community Issue
 about: Create a report describing a problem and a proposed solution
 title: ''
 labels: ["community"]
-assignees:
-  - @solana-labs/community-issue-subscribers
+assignees: @solana-labs/community-issue-subscribers
 ---
 
 #### Problem
