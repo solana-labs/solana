@@ -651,6 +651,7 @@ impl ScanSlotTracker {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum AccountsIndexScanResult {
     /// if the entry is not in the in-memory index, do not add it, make no modifications to it
     None,
@@ -1342,15 +1343,22 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     /// For each pubkey, find the slot list in the accounts index
-    ///   call `callback`
-    pub(crate) fn scan<'a, F, I>(&'a self, pubkeys: I, mut callback: F)
-    where
+    ///   apply 'avoid_callback_result' if specified.
+    ///   otherwise, call `callback`
+    pub(crate) fn scan<'a, F, I>(
+        &'a self,
+        pubkeys: I,
+        mut callback: F,
+        avoid_callback_result: Option<AccountsIndexScanResult>,
+    ) where
         // params:
         //  pubkey looked up
         //  slots_refs is Option<(slot_list, ref_count)>
         //    None if 'pubkey' is not in accounts index.
         //   slot_list: comes from accounts index for 'pubkey'
         //   ref_count: refcount of entry in index
+        // if 'avoid_callback_result' is Some(_), then callback is NOT called
+        //  and _ is returned as if callback were called.
         F: FnMut(&'a Pubkey, Option<(&SlotList<T>, RefCount)>) -> AccountsIndexScanResult,
         I: IntoIterator<Item = &'a Pubkey>,
     {
@@ -1367,8 +1375,12 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let mut cache = false;
                 match entry {
                     Some(locked_entry) => {
-                        let slot_list = &locked_entry.slot_list.read().unwrap();
-                        let result = callback(pubkey, Some((slot_list, locked_entry.ref_count())));
+                        let result = if let Some(result) = avoid_callback_result.as_ref() {
+                            *result
+                        } else {
+                            let slot_list = &locked_entry.slot_list.read().unwrap();
+                            callback(pubkey, Some((slot_list, locked_entry.ref_count())))
+                        };
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
                                 locked_entry.add_un_ref(false);
@@ -1379,7 +1391,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                         };
                     }
                     None => {
-                        callback(pubkey, None);
+                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None));
                     }
                 }
                 (cache, ())
