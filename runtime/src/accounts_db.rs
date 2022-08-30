@@ -3854,9 +3854,11 @@ impl AccountsDb {
             } = self.get_unique_accounts_from_storages(old_storages.iter());
 
             // sort by pubkey to keep account index lookups close
-            let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
-            stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-            let stored_accounts = stored_accounts; // get rid of mut
+            let stored_accounts = {
+                let mut stored_accounts = stored_accounts.into_iter().collect::<Vec<_>>();
+                stored_accounts.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+                stored_accounts
+            };
 
             let mut index_read_elapsed = Measure::start("index_read_elapsed");
             let alive_total_collect = AtomicUsize::new(0);
