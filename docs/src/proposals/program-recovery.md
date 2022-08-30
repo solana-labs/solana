@@ -2,7 +2,7 @@
 
 ## Problem
 
-As of Solana v1.11, the Upgradable Program Loader makes closing programs an irreversible action.
+The Upgradable Program Loader makes closing programs an irreversible action.
 
 After closing a program, the [`Program`] points to a non-existent [`ProgramData`] account.
 Note that the `Program` account itself still exists, as it is executable, and thus immutable.
