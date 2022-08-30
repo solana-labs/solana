@@ -60,6 +60,7 @@ use {
     crate::{
         accounts_db::{AccountStorageMap, AtomicAppendVecId},
         hardened_unpack::streaming_unpack_snapshot,
+        snapshot_utils::snapshot_storage_rebuilder::SnapshotStorageRebuilderResult,
     },
     crossbeam_channel::Sender,
     std::thread::{Builder, JoinHandle},
@@ -130,10 +131,6 @@ impl SnapshotVersion {
     pub fn as_str(self) -> &'static str {
         <&str as From<Self>>::from(self)
     }
-
-    fn maybe_from_string(version_string: &str) -> Option<SnapshotVersion> {
-        version_string.parse::<Self>().ok()
-    }
 }
 
 /// Information about a bank snapshot. Namely the slot of the bank, the path to the snapshot, and
@@ -199,7 +196,7 @@ struct UnarchivedSnapshot {
 #[derive(Debug)]
 struct UnpackedSnapshotsDirAndVersion {
     unpacked_snapshots_dir: PathBuf,
-    snapshot_version: String,
+    snapshot_version: SnapshotVersion,
 }
 
 /// Helper type for passing around account storage map and next append vec id
@@ -1245,7 +1242,6 @@ where
         .prefix(unpacked_snapshots_dir_prefix)
         .tempdir_in(bank_snapshots_dir)?;
     let unpacked_snapshots_dir = unpack_dir.path().join("snapshots");
-    let unpacked_version_file = unpack_dir.path().join("version");
 
     let (file_sender, file_receiver) = crossbeam_channel::unbounded();
     streaming_unarchive_snapshot(
@@ -1260,7 +1256,7 @@ where
     let num_rebuilder_threads = num_cpus::get_physical()
         .saturating_sub(parallel_divisions)
         .max(1);
-    let (storage, measure_untar) = measure!(
+    let (version_and_storages, measure_untar) = measure!(
         SnapshotStorageRebuilder::rebuild_storage(
             file_receiver,
             num_rebuilder_threads,
@@ -1270,8 +1266,10 @@ where
     );
     info!("{}", measure_untar);
 
-    let snapshot_version = snapshot_version_from_file(&unpacked_version_file)?;
-
+    let SnapshotStorageRebuilderResult {
+        snapshot_version,
+        storage,
+    } = version_and_storages;
     Ok(UnarchivedSnapshot {
         unpack_dir,
         storage,
@@ -1709,14 +1707,7 @@ fn verify_unpacked_snapshots_dir_and_version(
         &unpacked_snapshots_dir_and_version.snapshot_version
     );
 
-    let snapshot_version =
-        SnapshotVersion::maybe_from_string(&unpacked_snapshots_dir_and_version.snapshot_version)
-            .ok_or_else(|| {
-                get_io_error(&format!(
-                    "unsupported snapshot version: {}",
-                    &unpacked_snapshots_dir_and_version.snapshot_version,
-                ))
-            })?;
+    let snapshot_version = unpacked_snapshots_dir_and_version.snapshot_version;
     let mut bank_snapshots =
         get_bank_snapshots_post(&unpacked_snapshots_dir_and_version.unpacked_snapshots_dir);
     if bank_snapshots.len() > 1 {

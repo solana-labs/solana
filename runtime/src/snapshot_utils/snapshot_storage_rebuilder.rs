@@ -1,6 +1,7 @@
 //! Provides interfaces for rebuilding snapshot storages
 
 use {
+    super::{snapshot_version_from_file, SnapshotVersion},
     crate::{
         accounts_db::{AccountStorageEntry, AccountStorageMap, AppendVecId, AtomicAppendVecId},
         serde_snapshot::{
@@ -28,10 +29,17 @@ use {
         time::Instant,
     },
 };
+/// Convenient wrapper for snapshot version and rebuilt storages
+pub(crate) struct SnapshotStorageRebuilderResult {
+    /// Snapshot version
+    pub snapshot_version: SnapshotVersion,
+    /// Rebuilt storages
+    pub storage: AccountStorageMap,
+}
 
 /// Stores state for rebuilding snapshot storages
 #[derive(Debug)]
-pub struct SnapshotStorageRebuilder {
+pub(crate) struct SnapshotStorageRebuilder {
     /// Receiver for unpacked snapshot storage files
     file_receiver: Receiver<PathBuf>,
     /// Number of threads to rebuild with
@@ -52,20 +60,32 @@ pub struct SnapshotStorageRebuilder {
 
 impl SnapshotStorageRebuilder {
     /// Synchronously spawns threads to rebuild snapshot storages
-    pub fn rebuild_storage(
+    pub(crate) fn rebuild_storage(
         file_receiver: Receiver<PathBuf>,
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
-    ) -> AccountStorageMap {
-        let (snapshot_file_path, append_vec_files) = Self::get_snapshot_file(&file_receiver);
-        let snapshot_storage_lengths = Self::process_snapshot_file(snapshot_file_path).unwrap();
-        Self::spawn_rebuilder_threads(
+    ) -> SnapshotStorageRebuilderResult {
+        let (snapshot_version_path, snapshot_file_path, append_vec_files) =
+            Self::get_version_and_snapshot_files(&file_receiver);
+        let snapshot_version: SnapshotVersion = snapshot_version_from_file(&snapshot_version_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let snapshot_storage_lengths =
+            Self::process_snapshot_file(snapshot_version, snapshot_file_path).unwrap();
+
+        let account_storage_map = Self::spawn_rebuilder_threads(
             file_receiver,
             num_threads,
             next_append_vec_id,
             snapshot_storage_lengths,
             append_vec_files,
-        )
+        );
+
+        SnapshotStorageRebuilderResult {
+            snapshot_version,
+            storage: account_storage_map,
+        }
     }
 
     /// Create the SnapshotStorageRebuilder for storing state during rebuilding
@@ -98,16 +118,34 @@ impl SnapshotStorageRebuilder {
     /// Waits for snapshot file
     /// Due to parallel unpacking, we may receive some append_vec files before the snapshot file
     /// This function will push append_vec files into a buffer until we receive the snapshot file
-    fn get_snapshot_file(file_receiver: &Receiver<PathBuf>) -> (PathBuf, Vec<PathBuf>) {
+    fn get_version_and_snapshot_files(
+        file_receiver: &Receiver<PathBuf>,
+    ) -> (PathBuf, PathBuf, Vec<PathBuf>) {
         let mut append_vec_files = Vec::with_capacity(1024);
-        let snapshot_file_path = loop {
+        let mut snapshot_version_path = None;
+        let mut snapshot_file_path = None;
+
+        loop {
             if let Ok(path) = file_receiver.recv() {
                 let filename = path.file_name().unwrap().to_str().unwrap();
                 match get_snapshot_file_kind(filename) {
-                    Some(SnapshotFileKind::SnapshotFile) => {
-                        break path;
+                    Some(SnapshotFileKind::Version) => {
+                        snapshot_version_path = Some(path);
+
+                        // break if we have both the snapshot file and the version file
+                        if snapshot_file_path.is_some() {
+                            break;
+                        }
                     }
-                    Some(SnapshotFileKind::StorageFile) => {
+                    Some(SnapshotFileKind::BankFields) => {
+                        snapshot_file_path = Some(path);
+
+                        // break if we have both the snapshot file and the version file
+                        if snapshot_version_path.is_some() {
+                            break;
+                        }
+                    }
+                    Some(SnapshotFileKind::Storage) => {
                         append_vec_files.push(path);
                     }
                     None => {} // do nothing for other kinds of files
@@ -115,21 +153,28 @@ impl SnapshotStorageRebuilder {
             } else {
                 panic!("did not receive snapshot file from unpacking threads");
             }
-        };
+        }
+        let snapshot_version_path = snapshot_version_path.unwrap();
+        let snapshot_file_path = snapshot_file_path.unwrap();
 
-        (snapshot_file_path, append_vec_files)
+        (snapshot_version_path, snapshot_file_path, append_vec_files)
     }
 
     /// Process the snapshot file to get the size of each snapshot storage file
     fn process_snapshot_file(
+        snapshot_version: SnapshotVersion,
         snapshot_file_path: PathBuf,
     ) -> Result<HashMap<Slot, HashMap<usize, usize>>, bincode::Error> {
         let snapshot_file = File::open(snapshot_file_path).unwrap();
         let mut snapshot_stream = BufReader::new(snapshot_file);
-        let (_bank_fields, accounts_fields) =
-            serde_snapshot::fields_from_stream(SerdeStyle::Newer, &mut snapshot_stream)?;
+        match snapshot_version {
+            SnapshotVersion::V1_2_0 => {
+                let (_bank_fields, accounts_fields) =
+                    serde_snapshot::fields_from_stream(SerdeStyle::Newer, &mut snapshot_stream)?;
 
-        Ok(snapshot_storage_lengths_from_fields(&accounts_fields))
+                Ok(snapshot_storage_lengths_from_fields(&accounts_fields))
+            }
+        }
     }
 
     /// Spawn threads for processing buffered append_vec_files, and then received files
@@ -191,7 +236,7 @@ impl SnapshotStorageRebuilder {
     /// Process an append_vec_file
     fn process_append_vec_file(&self, path: PathBuf) -> Result<(), std::io::Error> {
         let filename = path.file_name().unwrap().to_str().unwrap().to_owned();
-        if let Some(SnapshotFileKind::StorageFile) = get_snapshot_file_kind(&filename) {
+        if let Some(SnapshotFileKind::Storage) = get_snapshot_file_kind(&filename) {
             let (slot, slot_complete) = self.insert_slot_storage_file(path, filename);
             if slot_complete {
                 self.process_complete_slot(slot)?;
@@ -290,15 +335,20 @@ impl SnapshotStorageRebuilder {
     }
 }
 
-/// Used to determine if a filename is structured like a snapshot file, storage file, or neither
+/// Used to determine if a filename is structured like a version file, snapshot file, storage file, or neither
 #[derive(PartialEq, Debug)]
 enum SnapshotFileKind {
-    SnapshotFile,
-    StorageFile,
+    Version,
+    BankFields,
+    Storage,
 }
 
 /// Determines `SnapshotFileKind` for `filename` if any
 fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
+    if filename == "version" {
+        return Some(SnapshotFileKind::Version);
+    }
+
     let mut periods = 0;
     let mut saw_numbers = false;
     for x in filename.chars() {
@@ -318,8 +368,8 @@ fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
     }
 
     match (periods, saw_numbers) {
-        (0, true) => Some(SnapshotFileKind::SnapshotFile),
-        (1, true) => Some(SnapshotFileKind::StorageFile),
+        (0, true) => Some(SnapshotFileKind::BankFields),
+        (1, true) => Some(SnapshotFileKind::Storage),
         (_, _) => None,
     }
 }
@@ -342,11 +392,15 @@ mod tests {
     fn test_get_snapshot_file_kind() {
         assert_eq!(None, get_snapshot_file_kind("file.txt"));
         assert_eq!(
-            Some(SnapshotFileKind::SnapshotFile),
+            Some(SnapshotFileKind::Version),
+            get_snapshot_file_kind("version")
+        );
+        assert_eq!(
+            Some(SnapshotFileKind::BankFields),
             get_snapshot_file_kind("1234")
         );
         assert_eq!(
-            Some(SnapshotFileKind::StorageFile),
+            Some(SnapshotFileKind::Storage),
             get_snapshot_file_kind("1000.999")
         );
     }
