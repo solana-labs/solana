@@ -16,15 +16,15 @@ worse.
 Instead of computing and reward stake accounts at epoch boundary, we will
 decouple reward computation and reward credit for stake accounts. At the start
 of the new epoch, a background thread is forked to compute the rewards. At slot
-`N` after the epoch, the rewards will be credited to all stake accounts. We
-could call these `epoch_start..epoch_start+N` slots are `rewarding interval`.
-`N` is chosen to be sufficiently large so that the background computation should
-have completed and the result of the reward computation is available at the end
-of `rewarding interval`. `N` can be fixed such as 100 (roughly equivalent to 50
-seconds), or chosen as a function of the number of stake accounts,
-`f(num_stake_accounts)`. When reached slot `N`, the bank will fetch the reward
-computation results from the background thread, and credit the rewards to all
-the stake accounts.
+`N` after the epoch, where `N` is the first slot on its fork greater than `K`,
+then the rewards will be credited to all stake accounts. We could call these
+`epoch_start..epoch_start+N` slots are `rewarding interval`. `K` is chosen to be
+sufficiently large so that the background computation should have completed and
+the result of the reward computation is available at the end of `rewarding
+interval`. `K` can be fixed such as 100 (roughly equivalent to 50 seconds), or
+chosen as a function of the number of stake accounts, `f(num_stake_accounts)`.
+When reached slot `N`, the bank will fetch the reward computation results from
+the background thread, and credit the rewards to all the stake accounts.
 
 
 ### Challenges
