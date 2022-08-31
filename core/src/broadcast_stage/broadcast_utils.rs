@@ -3,7 +3,7 @@ use {
     bincode::serialized_size,
     crossbeam_channel::Receiver,
     solana_entry::entry::Entry,
-    solana_ledger::shred::ShredData,
+    solana_ledger::shred::{ProcessShredsStats, ShredData},
     solana_poh::poh_recorder::WorkingBankEntry,
     solana_runtime::bank::Bank,
     solana_sdk::clock::Slot,
@@ -30,16 +30,16 @@ pub struct UnfinishedSlotInfo {
     pub parent: Slot,
 }
 
-pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result<ReceiveResults> {
+pub(super) fn recv_slot_entries(
+    receiver: &Receiver<WorkingBankEntry>,
+    process_shreds_stats: Option<&mut ProcessShredsStats>,
+) -> Result<ReceiveResults> {
     let target_serialized_batch_byte_count: u64 =
         32 * ShredData::capacity(/*merkle_proof_size*/ None).unwrap() as u64;
     let timer = Duration::new(1, 0);
     let recv_start = Instant::now();
-
     let (mut bank, (entry, mut last_tick_height)) = receiver.recv_timeout(timer)?;
-
     let mut entries = vec![entry];
-
     assert!(last_tick_height <= bank.max_tick_height());
 
     // Drain channel
@@ -63,14 +63,15 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
     let mut serialized_batch_byte_count = serialized_size(&entries)?;
 
     // Wait up to `ENTRY_COALESCE_DURATION` to try to coalesce entries into a 32 shred batch
-    let mut coalesce_deadline = Instant::now() + ENTRY_COALESCE_DURATION;
+    let mut coalesce_start = Instant::now();
     while last_tick_height != bank.max_tick_height()
         && serialized_batch_byte_count < target_serialized_batch_byte_count
     {
-        let (try_bank, (entry, tick_height)) = match receiver.recv_deadline(coalesce_deadline) {
-            Ok(working_bank_entry) => working_bank_entry,
-            Err(_) => break,
-        };
+        let (try_bank, (entry, tick_height)) =
+            match receiver.recv_deadline(coalesce_start + ENTRY_COALESCE_DURATION) {
+                Ok(working_bank_entry) => working_bank_entry,
+                Err(_) => break,
+            };
         // If the bank changed, that implies the previous slot was interrupted and we do not have to
         // broadcast its entries.
         if try_bank.slot() != bank.slot() {
@@ -78,13 +79,16 @@ pub(super) fn recv_slot_entries(receiver: &Receiver<WorkingBankEntry>) -> Result
             entries.clear();
             serialized_batch_byte_count = 8; // Vec len
             bank = try_bank;
-            coalesce_deadline = Instant::now() + ENTRY_COALESCE_DURATION;
+            coalesce_start = Instant::now();
         }
         last_tick_height = tick_height;
         let entry_bytes = serialized_size(&entry)?;
         serialized_batch_byte_count += entry_bytes;
         entries.push(entry);
         assert!(last_tick_height <= bank.max_tick_height());
+    }
+    if let Some(stats) = process_shreds_stats {
+        stats.coalesce_elapsed_us += coalesce_start.elapsed().as_micros() as u64;
     }
 
     let time_elapsed = recv_start.elapsed();
@@ -145,7 +149,7 @@ mod tests {
 
         let mut res_entries = vec![];
         let mut last_tick_height = 0;
-        while let Ok(result) = recv_slot_entries(&r) {
+        while let Ok(result) = recv_slot_entries(&r, None) {
             assert_eq!(result.bank.slot(), bank1.slot());
             last_tick_height = result.last_tick_height;
             res_entries.extend(result.entries);
@@ -187,7 +191,7 @@ mod tests {
         let mut res_entries = vec![];
         let mut last_tick_height = 0;
         let mut bank_slot = 0;
-        while let Ok(result) = recv_slot_entries(&r) {
+        while let Ok(result) = recv_slot_entries(&r, None) {
             bank_slot = result.bank.slot();
             last_tick_height = result.last_tick_height;
             res_entries = result.entries;

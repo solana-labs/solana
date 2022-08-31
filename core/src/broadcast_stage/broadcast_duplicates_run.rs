@@ -70,7 +70,7 @@ impl BroadcastRun for BroadcastDuplicatesRun {
         blockstore_sender: &Sender<(Arc<Vec<Shred>>, Option<BroadcastShredBatchInfo>)>,
     ) -> Result<()> {
         // 1) Pull entries from banking stage
-        let mut receive_results = broadcast_utils::recv_slot_entries(receiver)?;
+        let mut receive_results = broadcast_utils::recv_slot_entries(receiver, None)?;
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
 
