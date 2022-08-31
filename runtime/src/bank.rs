@@ -1749,8 +1749,7 @@ impl Bank {
 
         let (epoch_stakes, epoch_stakes_time) = measure!(parent.epoch_stakes.clone());
 
-        let (builtin_programs, builtin_programs_time) =
-            measure!(parent.builtin_programs.clone(), "builtin_programs_creation");
+        let (builtin_programs, builtin_programs_time) = measure!(parent.builtin_programs.clone());
 
         let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) = measure!(
             parent.rewards_pool_pubkeys.clone(),
