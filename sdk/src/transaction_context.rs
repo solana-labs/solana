@@ -140,7 +140,7 @@ impl TransactionContext {
             account_touched_flags: RefCell::new(Pin::new(account_touched_flags.into_boxed_slice())),
             instruction_context_capacity,
             instruction_stack: Vec::with_capacity(instruction_context_capacity),
-            instruction_trace: Vec::new(),
+            instruction_trace: vec![InstructionContext::default()],
             return_data: TransactionReturnData::default(),
             accounts_resize_delta: RefCell::new(0),
             rent,
@@ -203,8 +203,10 @@ impl TransactionContext {
     }
 
     /// Returns instruction trace length
+    ///
+    /// Not counting the empty `InstructionContext` at the end.
     pub fn get_instruction_trace_length(&self) -> usize {
-        self.instruction_trace.len()
+        self.instruction_trace.len().saturating_sub(1)
     }
 
     /// Gets an InstructionContext by its index in the trace
@@ -251,6 +253,15 @@ impl TransactionContext {
         self.get_instruction_context_at_nesting_level(level)
     }
 
+    /// Returns the InstructionContext to configure for the next invocation
+    pub fn get_next_instruction_context(
+        &mut self,
+    ) -> Result<&mut InstructionContext, InstructionError> {
+        self.instruction_trace
+            .last_mut()
+            .ok_or(InstructionError::CallDepth)
+    }
+
     /// Pushes a new InstructionContext
     #[cfg(not(target_os = "solana"))]
     pub fn push(
@@ -259,6 +270,7 @@ impl TransactionContext {
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
     ) -> Result<(), InstructionError> {
+        let nesting_level = self.get_instruction_context_stack_height();
         let callee_instruction_accounts_lamport_sum =
             self.instruction_accounts_lamport_sum(instruction_accounts.iter())?;
         if !self.instruction_stack.is_empty()
@@ -277,16 +289,20 @@ impl TransactionContext {
                 return Err(InstructionError::UnbalancedInstruction);
             }
         }
-        let instruction_context = InstructionContext::new(
-            self.instruction_stack.len(),
-            callee_instruction_accounts_lamport_sum,
-            program_accounts.to_vec(),
-            instruction_accounts.to_vec(),
-            instruction_data.to_vec(),
-        );
-        let index_in_trace = self.instruction_trace.len();
-        self.instruction_trace.push(instruction_context);
-        if self.instruction_stack.len() >= self.instruction_context_capacity {
+        {
+            let mut instruction_context = self.get_next_instruction_context()?;
+            instruction_context.nesting_level = nesting_level;
+            instruction_context.instruction_accounts_lamport_sum =
+                callee_instruction_accounts_lamport_sum;
+            instruction_context.configure(
+                program_accounts.to_vec(),
+                instruction_accounts.to_vec(),
+                instruction_data.to_vec(),
+            );
+        }
+        let index_in_trace = self.instruction_trace.len().saturating_sub(1);
+        self.instruction_trace.push(InstructionContext::default());
+        if nesting_level >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
         }
         self.instruction_stack.push(index_in_trace);
@@ -398,7 +414,7 @@ pub struct TransactionReturnData {
 /// Loaded instruction shared between runtime and programs.
 ///
 /// This context is valid for the entire duration of a (possibly cross program) instruction being processed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct InstructionContext {
     nesting_level: usize,
     instruction_accounts_lamport_sum: u128,
@@ -408,22 +424,17 @@ pub struct InstructionContext {
 }
 
 impl InstructionContext {
-    /// New
+    /// Used together with TransactionContext::get_next_instruction_context()
     #[cfg(not(target_os = "solana"))]
-    fn new(
-        nesting_level: usize,
-        instruction_accounts_lamport_sum: u128,
+    pub fn configure(
+        &mut self,
         program_accounts: Vec<usize>,
         instruction_accounts: Vec<InstructionAccount>,
         instruction_data: Vec<u8>,
-    ) -> Self {
-        InstructionContext {
-            nesting_level,
-            instruction_accounts_lamport_sum,
-            program_accounts,
-            instruction_accounts,
-            instruction_data,
-        }
+    ) {
+        self.program_accounts = program_accounts;
+        self.instruction_accounts = instruction_accounts;
+        self.instruction_data = instruction_data;
     }
 
     /// How many Instructions were on the stack after this one was pushed
