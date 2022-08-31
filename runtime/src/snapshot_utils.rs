@@ -1191,6 +1191,7 @@ fn spawn_unpack_snapshot_thread(
 }
 
 /// Streams unpacked files across channel
+#[allow(clippy::needless_collect)]
 fn streaming_unarchive_snapshot(
     file_sender: Sender<PathBuf>,
     account_paths: Vec<PathBuf>,
