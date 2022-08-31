@@ -97,6 +97,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             epoch_stakes: dvb.epoch_stakes,
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
+            epoch_accounts_hash: None,
         }
     }
 }
@@ -317,8 +318,11 @@ impl<'a> TypeContext<'a> for Context {
             .fee_rate_governor
             .clone_with_lamports_per_signature(lamports_per_signature);
 
-        let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(stream))?;
+        let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
+
+        let epoch_accounts_hash = ignore_eof_error(deserialize_from(stream))?;
+        bank_fields.epoch_accounts_hash = epoch_accounts_hash;
 
         Ok((bank_fields, accounts_db_fields))
     }
