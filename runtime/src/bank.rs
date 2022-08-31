@@ -1754,16 +1754,13 @@ impl Bank {
         let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) =
             measure!(parent.rewards_pool_pubkeys.clone());
 
-        let (cached_executors, cached_executors_time) = measure!(
-            {
-                let parent_bank_executors = parent.cached_executors.read().unwrap();
-                RwLock::new(CachedExecutors::new_from_parent_bank_executors(
-                    &parent_bank_executors,
-                    epoch,
-                ))
-            },
-            "cached_executors_creation",
-        );
+        let (cached_executors, cached_executors_time) = measure!({
+            let parent_bank_executors = parent.cached_executors.read().unwrap();
+            RwLock::new(CachedExecutors::new_from_parent_bank_executors(
+                &parent_bank_executors,
+                epoch,
+            ))
+        });
 
         let (transaction_debug_keys, transaction_debug_keys_time) = measure!(
             parent.transaction_debug_keys.clone(),
