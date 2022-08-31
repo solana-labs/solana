@@ -2188,6 +2188,11 @@ impl Blockstore {
         self.transaction_memos_cf.put(*signature, &memos)
     }
 
+    /// Acquires the `lowest_cleanup_slot` lock and returns a tuple of the held lock
+    /// and lowest available slot.
+    ///
+    /// The function will return BlockstoreError::SlotCleanedUp if the input
+    /// `slot` has already been cleaned-up.
     fn check_lowest_cleanup_slot(&self, slot: Slot) -> Result<std::sync::RwLockReadGuard<Slot>> {
         // lowest_cleanup_slot is the last slot that was not cleaned up by LedgerCleanupService
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
@@ -2199,10 +2204,13 @@ impl Blockstore {
         Ok(lowest_cleanup_slot)
     }
 
+    /// Acquires the lock of `lowest_cleanup_slot` and returns the tuple of
+    /// the held lock and the lowest available slot.
+    ///
+    /// This function ensures a consistent result by using lowest_cleanup_slot
+    /// as the lower bound for reading columns that do not employ strong read
+    /// consistency with slot-based delete_range.
     fn ensure_lowest_cleanup_slot(&self) -> (std::sync::RwLockReadGuard<Slot>, Slot) {
-        // Ensures consistent result by using lowest_cleanup_slot as the lower bound
-        // for reading columns that do not employ strong read consistency with slot-based
-        // delete_range
         let lowest_cleanup_slot = self.lowest_cleanup_slot.read().unwrap();
         let lowest_available_slot = (*lowest_cleanup_slot)
             .checked_add(1)
