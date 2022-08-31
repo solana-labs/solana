@@ -1211,19 +1211,6 @@ pub fn main() {
                       [default: all validators]")
         )
         .arg(
-            Arg::with_name("no_rocksdb_compaction")
-                .long("no-rocksdb-compaction")
-                .takes_value(false)
-                .help("Disable manual compaction of the ledger database (this is ignored).")
-        )
-        .arg(
-            Arg::with_name("rocksdb_compaction_interval")
-                .long("rocksdb-compaction-interval-slots")
-                .value_name("ROCKSDB_COMPACTION_INTERVAL_SLOTS")
-                .takes_value(true)
-                .help("Number of slots between compacting ledger"),
-        )
-        .arg(
             Arg::with_name("tpu_coalesce_ms")
                 .long("tpu-coalesce-ms")
                 .value_name("MILLISECS")
@@ -2360,8 +2347,6 @@ pub fn main() {
 
     let private_rpc = matches.is_present("private_rpc");
     let do_port_check = !matches.is_present("no_port_check");
-    let no_rocksdb_compaction = true;
-    let rocksdb_compaction_interval = value_t!(matches, "rocksdb_compaction_interval", u64).ok();
     let rocksdb_max_compaction_jitter =
         value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let tpu_coalesce_ms =
@@ -2731,9 +2716,6 @@ pub fn main() {
         known_validators,
         repair_validators,
         gossip_validators,
-        no_rocksdb_compaction,
-        rocksdb_compaction_interval,
-        rocksdb_max_compaction_jitter,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,

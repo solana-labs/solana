@@ -41,13 +41,8 @@ pub const DEFAULT_MIN_MAX_LEDGER_SHREDS: u64 = 50_000_000;
 // and starve other blockstore users.
 pub const DEFAULT_PURGE_SLOT_INTERVAL: u64 = 512;
 
-// Compacting at a slower interval than purging helps keep IOPS down.
-// Once a day should be ample
-const DEFAULT_COMPACTION_SLOT_INTERVAL: u64 = TICKS_PER_DAY / DEFAULT_TICKS_PER_SLOT;
-
 pub struct LedgerCleanupService {
     t_cleanup: JoinHandle<()>,
-    t_compact: JoinHandle<()>,
 }
 
 impl LedgerCleanupService {
@@ -56,20 +51,13 @@ impl LedgerCleanupService {
         blockstore: Arc<Blockstore>,
         max_ledger_shreds: u64,
         exit: &Arc<AtomicBool>,
-        compaction_interval: Option<u64>,
-        max_compaction_jitter: Option<u64>,
     ) -> Self {
         let exit = exit.clone();
         let mut last_purge_slot = 0;
-        let mut last_compaction_slot = 0;
-        let mut compaction_jitter = 0;
-        let compaction_interval = compaction_interval.unwrap_or(DEFAULT_COMPACTION_SLOT_INTERVAL);
-        let last_compact_slot = Arc::new(AtomicU64::new(0));
-        let last_compact_slot2 = last_compact_slot.clone();
 
         info!(
-            "LedgerCleanupService active. max ledger shreds={}, compaction interval={}",
-            max_ledger_shreds, compaction_interval,
+            "LedgerCleanupService active. max ledger shreds={}",
+            max_ledger_shreds
         );
 
         let exit_compact = exit.clone();
@@ -87,7 +75,6 @@ impl LedgerCleanupService {
                     max_ledger_shreds,
                     &mut last_purge_slot,
                     DEFAULT_PURGE_SLOT_INTERVAL,
-                    &last_compact_slot,
                 ) {
                     match e {
                         RecvTimeoutError::Disconnected => break,
@@ -97,27 +84,8 @@ impl LedgerCleanupService {
             })
             .unwrap();
 
-        let t_compact = Builder::new()
-            .name("solLedgerComp".to_string())
-            .spawn(move || loop {
-                if exit_compact.load(Ordering::Relaxed) {
-                    break;
-                }
-                Self::compact_ledger(
-                    &blockstore_compact,
-                    &mut last_compaction_slot,
-                    compaction_interval,
-                    &last_compact_slot2,
-                    &mut compaction_jitter,
-                    max_compaction_jitter,
-                );
-                sleep(Duration::from_secs(1));
-            })
-            .unwrap();
-
         Self {
             t_cleanup,
-            t_compact,
         }
     }
 
@@ -202,10 +170,6 @@ impl LedgerCleanupService {
     ///   `last_purge_slot` is fewer than `purge_interval`, the function will
     ///   simply return `Ok` without actually running the ledger cleanup.
     ///   In this case, `purge_interval` will remain unchanged.
-    /// - `last_compact_slot`: an output value which indicates the most recent
-    ///   slot which has been cleaned up after this call.  If this parameter is
-    ///   updated after this function call, it means the ledger cleanup has
-    ///   been performed.
     ///
     /// Also see `blockstore::purge_slot`.
     pub fn cleanup_ledger(
@@ -214,7 +178,6 @@ impl LedgerCleanupService {
         max_ledger_shreds: u64,
         last_purge_slot: &mut u64,
         purge_interval: u64,
-        last_compact_slot: &Arc<AtomicU64>,
     ) -> Result<(), RecvTimeoutError> {
         let root = Self::receive_new_roots(new_root_receiver)?;
         if root - *last_purge_slot <= purge_interval {
@@ -236,7 +199,6 @@ impl LedgerCleanupService {
             let purge_complete = Arc::new(AtomicBool::new(false));
             let blockstore = blockstore.clone();
             let purge_complete1 = purge_complete.clone();
-            let last_compact_slot1 = last_compact_slot.clone();
             let _t_purge = Builder::new()
                 .name("solLedgerPurge".to_string())
                 .spawn(move || {
@@ -266,8 +228,6 @@ impl LedgerCleanupService {
                     purge_time.stop();
                     info!("{}", purge_time);
 
-                    last_compact_slot1.store(lowest_cleanup_slot, Ordering::Relaxed);
-
                     purge_complete1.store(true, Ordering::Relaxed);
                 })
                 .unwrap();
@@ -287,39 +247,6 @@ impl LedgerCleanupService {
         Ok(())
     }
 
-    pub fn compact_ledger(
-        blockstore: &Arc<Blockstore>,
-        last_compaction_slot: &mut u64,
-        compaction_interval: u64,
-        highest_compact_slot: &Arc<AtomicU64>,
-        compaction_jitter: &mut u64,
-        max_jitter: Option<u64>,
-    ) {
-        let highest_compaction_slot = highest_compact_slot.load(Ordering::Relaxed);
-        if highest_compaction_slot.saturating_sub(*last_compaction_slot)
-            > (compaction_interval + *compaction_jitter)
-        {
-            info!(
-                "compacting data from slots {} to {}",
-                *last_compaction_slot, highest_compaction_slot,
-            );
-            if let Err(err) =
-                blockstore.compact_storage(*last_compaction_slot, highest_compaction_slot)
-            {
-                // This error is not fatal and indicates an internal error?
-                error!(
-                    "Error: {:?}; Couldn't compact storage from {:?} to {:?}",
-                    err, last_compaction_slot, highest_compaction_slot,
-                );
-            }
-            *last_compaction_slot = highest_compaction_slot;
-            let jitter = max_jitter.unwrap_or(0);
-            if jitter > 0 {
-                *compaction_jitter = thread_rng().gen_range(0, jitter);
-            }
-        }
-    }
-
     fn report_disk_metrics(
         pre: BlockstoreResult<u64>,
         post: BlockstoreResult<u64>,
@@ -337,8 +264,7 @@ impl LedgerCleanupService {
     }
 
     pub fn join(self) -> thread::Result<()> {
-        self.t_cleanup.join()?;
-        self.t_compact.join()
+        self.t_cleanup.join()
     }
 }
 #[cfg(test)]
@@ -402,7 +328,6 @@ mod tests {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         let mut blockstore = Blockstore::open(&blockstore_path).unwrap();
-        blockstore.set_no_compaction(true);
         let blockstore = Arc::new(blockstore);
         let (sender, receiver) = unbounded();
 

@@ -176,7 +176,6 @@ pub struct Blockstore {
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
-    no_compaction: bool,
     pub slots_stats: SlotsStats,
 }
 
@@ -334,7 +333,6 @@ impl Blockstore {
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
-            no_compaction: false,
             slots_stats: SlotsStats::default(),
         };
         if initialize_transaction_status_index {
@@ -406,18 +404,6 @@ impl Blockstore {
             }
             walk.forward();
         }
-    }
-
-    /// Whether to disable compaction in [`Blockstore::compact_storage`], which is used
-    /// by the ledger cleanup service and `solana_core::validator::backup_and_clear_blockstore`.
-    ///
-    /// Note that this setting is not related to the RocksDB's background
-    /// compaction.
-    ///
-    /// To disable RocksDB's background compaction, open the Blockstore
-    /// with AccessType::PrimaryForMaintenance.
-    pub fn set_no_compaction(&mut self, no_compaction: bool) {
-        self.no_compaction = no_compaction;
     }
 
     /// Deletes the blockstore at the specified path.
