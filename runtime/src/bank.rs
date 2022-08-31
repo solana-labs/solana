@@ -1974,8 +1974,7 @@ impl Bank {
             new.update_fees();
         });
 
-        let (_, fill_sysvar_cache_time) =
-            measure!(new.fill_missing_sysvar_cache_entries(), "fill_sysvar_cache");
+        let (_, fill_sysvar_cache_time) = measure!(new.fill_missing_sysvar_cache_entries());
 
         time.stop();
 
