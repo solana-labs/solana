@@ -1852,17 +1852,14 @@ impl Bank {
             fee_structure: parent.fee_structure.clone(),
         };
 
-        let (_, ancestors_time) = measure!(
-            {
-                let mut ancestors = Vec::with_capacity(1 + new.parents().len());
-                ancestors.push(new.slot());
-                new.parents().iter().for_each(|p| {
-                    ancestors.push(p.slot());
-                });
-                new.ancestors = Ancestors::from(ancestors);
-            },
-            "ancestors_creation",
-        );
+        let (_, ancestors_time) = measure!({
+            let mut ancestors = Vec::with_capacity(1 + new.parents().len());
+            ancestors.push(new.slot());
+            new.parents().iter().for_each(|p| {
+                ancestors.push(p.slot());
+            });
+            new.ancestors = Ancestors::from(ancestors);
+        });
 
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
