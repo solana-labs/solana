@@ -1747,8 +1747,7 @@ impl Bank {
         let (stakes_cache, stakes_cache_time) =
             measure!(StakesCache::new(parent.stakes_cache.stakes().clone()));
 
-        let (epoch_stakes, epoch_stakes_time) =
-            measure!(parent.epoch_stakes.clone(), "epoch_stakes_creation");
+        let (epoch_stakes, epoch_stakes_time) = measure!(parent.epoch_stakes.clone());
 
         let (builtin_programs, builtin_programs_time) =
             measure!(parent.builtin_programs.clone(), "builtin_programs_creation");
