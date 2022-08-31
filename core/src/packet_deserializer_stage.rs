@@ -5,9 +5,14 @@ use {
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         sigverify::SigverifyTracerPacketStats,
     },
-    crossbeam_channel::{Receiver as CrossbeamReceiver, RecvTimeoutError},
+    crossbeam_channel::{
+        Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
+    },
     solana_perf::packet::PacketBatch,
-    std::time::{Duration, Instant},
+    std::{
+        thread::Builder,
+        time::{Duration, Instant},
+    },
 };
 
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
@@ -23,6 +28,72 @@ pub struct ReceivePacketResults {
     pub passed_sigverify_count: u64,
     /// Number of packets failing sigverify
     pub failed_sigverify_count: u64,
+}
+
+pub type DeserializedPacketSender = CrossbeamSender<ReceivePacketResults>;
+
+/// Wrapper for arguments to create a group of packet deserializer threads.
+pub struct PacketDeserializationGroup {
+    pub group_name: &'static str,
+    pub receiver: BankingPacketReceiver,
+    pub sender: DeserializedPacketSender,
+    pub thread_count: usize,
+}
+
+/// Receive packets from sigverify stage, deserialize them, and send to banking stage.
+pub struct PacketDeserializerStage {
+    /// Packet deserialization threads
+    pub thread_handles: Vec<std::thread::JoinHandle<()>>,
+}
+
+impl PacketDeserializerStage {
+    pub(crate) fn new(deserialization_groups: &[PacketDeserializationGroup]) -> Self {
+        let mut thread_handles = Vec::with_capacity(
+            deserialization_groups
+                .iter()
+                .map(|group| group.thread_count)
+                .sum(),
+        );
+
+        for group in deserialization_groups {
+            for thread_index in 0..group.thread_count {
+                let receiver = group.receiver.clone();
+                let sender = group.sender.clone();
+                let packet_deserializer = PacketDeserializer::new(receiver);
+                const RECV_TIMEOUT: Duration = Duration::from_millis(10);
+                thread_handles.push(
+                    Builder::new()
+                        .name(format!("{}{:02}", group.group_name, thread_index))
+                        .spawn(move || {
+                            // Loop while receiving from sigverify
+                            loop {
+                                match packet_deserializer.handle_received_packets(RECV_TIMEOUT) {
+                                    Ok(deserialized_packet_results) => {
+                                        // Send deserialized packets to banking stage, exit on error (if banking threads stopped)
+                                        if sender.send(deserialized_packet_results).is_err() {
+                                            break;
+                                        }
+                                    }
+                                    Err(err) => match err {
+                                        RecvTimeoutError::Disconnected => break,
+                                        RecvTimeoutError::Timeout => {}
+                                    },
+                                }
+                            }
+                        })
+                        .unwrap(),
+                );
+            }
+        }
+
+        Self { thread_handles }
+    }
+
+    pub(crate) fn join(self) -> std::thread::Result<()> {
+        self.thread_handles
+            .into_iter()
+            .try_for_each(std::thread::JoinHandle::join)
+    }
 }
 
 pub struct PacketDeserializer {
@@ -41,10 +112,8 @@ impl PacketDeserializer {
     pub fn handle_received_packets(
         &self,
         recv_timeout: Duration,
-        capacity: usize,
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
-        let (packet_batches, sigverify_tracer_stats_option) =
-            self.receive_until(recv_timeout, capacity)?;
+        let (packet_batches, sigverify_tracer_stats_option) = self.receive_until(recv_timeout)?;
         Ok(Self::deserialize_and_collect_packets(
             &packet_batches,
             sigverify_tracer_stats_option,
@@ -52,7 +121,7 @@ impl PacketDeserializer {
     }
 
     /// Deserialize packet batches and collect them into ReceivePacketResults
-    fn deserialize_and_collect_packets(
+    pub fn deserialize_and_collect_packets(
         packet_batches: &[PacketBatch],
         sigverify_tracer_stats_option: Option<SigverifyTracerPacketStats>,
     ) -> ReceivePacketResults {
@@ -81,7 +150,6 @@ impl PacketDeserializer {
     fn receive_until(
         &self,
         recv_timeout: Duration,
-        packet_count_upperbound: usize,
     ) -> Result<(Vec<PacketBatch>, Option<SigverifyTracerPacketStats>), RecvTimeoutError> {
         let start = Instant::now();
         let (mut packet_batches, mut aggregated_tracer_packet_stats_option) =
@@ -106,10 +174,7 @@ impl PacketDeserializer {
                 }
             }
 
-            if start.elapsed() >= recv_timeout
-                || packet_count_overflowed
-                || packets_received >= packet_count_upperbound
-            {
+            if start.elapsed() >= recv_timeout || packet_count_overflowed {
                 break;
             }
             num_packets_received = packets_received;

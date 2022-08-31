@@ -11,6 +11,7 @@ use {
     solana_core::{
         banking_stage::{BankingStage, BankingStageStats},
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
+        packet_deserializer_stage::PacketDeserializer,
         qos_service::QosService,
         unprocessed_packet_batches::*,
     },
@@ -262,7 +263,9 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                 for xv in v {
                     sent += xv.len();
                 }
-                verified_sender.send((v.to_vec(), None)).unwrap();
+                let deserialized_packets =
+                    PacketDeserializer::deserialize_and_collect_packets(v, None);
+                verified_sender.send(deserialized_packets).unwrap();
             }
             check_txs(&signal_receiver2, txes / CHUNKS);
 

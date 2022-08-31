@@ -1,11 +1,12 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     clap::{crate_description, crate_name, Arg, ArgEnum, Command},
     crossbeam_channel::{unbounded, Receiver},
     log::*,
     rand::{thread_rng, Rng},
     rayon::prelude::*,
-    solana_core::banking_stage::BankingStage,
+    solana_core::{banking_stage::BankingStage, packet_deserializer_stage::PacketDeserializer},
     solana_gossip::cluster_info::{ClusterInfo, Node},
     solana_ledger::{
         blockstore::Blockstore,
@@ -377,7 +378,6 @@ fn main() {
             trace!("RUNNING ITERATION {}", current_iteration_index);
             let now = Instant::now();
             let mut sent = 0;
-
             let packets_for_this_iteration = &all_packets[current_iteration_index % num_chunks];
             for (packet_batch_index, packet_batch) in
                 packets_for_this_iteration.packet_batches.iter().enumerate()
@@ -388,9 +388,11 @@ fn main() {
                     packet_batch_index,
                     timestamp(),
                 );
-                verified_sender
-                    .send((vec![packet_batch.clone()], None))
-                    .unwrap();
+                let deserialized_packets = PacketDeserializer::deserialize_and_collect_packets(
+                    &[packet_batch.clone()],
+                    None,
+                );
+                verified_sender.send(deserialized_packets).unwrap();
             }
 
             for tx in &packets_for_this_iteration.transactions {
