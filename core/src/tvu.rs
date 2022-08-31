@@ -43,7 +43,7 @@ use {
     solana_runtime::{
         accounts_background_service::AbsRequestSender, bank_forks::BankForks,
         commitment::BlockCommitmentCache, cost_model::CostModel,
-        vote_sender_types::ReplayVoteSender,
+        prioritization_fee_cache::PrioritizationFeeCache, vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Keypair},
     std::{
@@ -129,7 +129,12 @@ impl Tvu {
         accounts_background_request_sender: AbsRequestSender,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &Arc<ConnectionCache>,
+<<<<<<< HEAD
     ) -> Self {
+=======
+        prioritization_fee_cache: &Arc<PrioritizationFeeCache>,
+    ) -> Result<Self, String> {
+>>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
         let TvuSockets {
             repair: repair_socket,
             fetch: fetch_sockets,
@@ -288,7 +293,12 @@ impl Tvu {
             drop_bank_sender,
             block_metadata_notifier,
             log_messages_bytes_limit,
+<<<<<<< HEAD
         );
+=======
+            prioritization_fee_cache.clone(),
+        )?;
+>>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
 
         let ledger_cleanup_service = tvu_config.max_ledger_shreds.map(|max_ledger_shreds| {
             LedgerCleanupService::new(
@@ -401,6 +411,7 @@ pub mod tests {
         let (_, gossip_confirmed_slots_receiver) = unbounded();
         let bank_forks = Arc::new(RwLock::new(bank_forks));
         let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
+        let _ignored_prioritization_fee_cache = Arc::new(PrioritizationFeeCache::new(0u64));
         let tvu = Tvu::new(
             &vote_keypair.pubkey(),
             Arc::new(RwLock::new(vec![Arc::new(vote_keypair)])),
@@ -450,7 +461,13 @@ pub mod tests {
             AbsRequestSender::default(),
             None,
             &Arc::new(ConnectionCache::default()),
+<<<<<<< HEAD
         );
+=======
+            &_ignored_prioritization_fee_cache,
+        )
+        .expect("assume success");
+>>>>>>> 8bb039d08 (collect min prioritization fees when replaying sanitized transactions (#26709))
         exit.store(true, Ordering::Relaxed);
         tvu.join().unwrap();
         poh_service.join().unwrap();
