@@ -28,7 +28,7 @@ solana-sdk = { path = "../sdk", version = "=1.12.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.12.0" }
 
 [target."cfg(target_os = \"linux\")".dependencies]
-caps = "0.5.3"
+caps = "0.5.4"
 libc = "0.2.131"
 nix = "0.25.0"
 
