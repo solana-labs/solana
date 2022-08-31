@@ -27,10 +27,10 @@
 }
 
 @keyframes fadeInUp {
-  0% {
+  /* 0% {
     opacity: 0;
     transform: translateY(1.5rem);
-  }
+  } */
 }
 
 main {
@@ -44,6 +44,14 @@ main {
   padding: 0 var(--ifm-pre-padding);
 }
 
+.cards__container {
+  margin: 3em 0;
+}
+
+.cards__container .col {
+  margin-bottom: 1em;
+}
+
 .card {
   padding: 1rem;
   margin-top: 0rem;
@@ -51,7 +59,9 @@ main {
   animation-delay: 150ms;
   transition-property: all;
   transition-duration: 200ms;
-  box-shadow: 0 8px 28px 4px rgba(86, 91, 115, 0.15);
+  align-items: start;
+  height: 100%;
+  box-shadow: 0 8px 15px 2px rgba(86, 91, 115, 0.1);
 }
 
 .card a {
