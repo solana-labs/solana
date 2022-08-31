@@ -1888,17 +1888,14 @@ impl Bank {
 
                     let mut metrics = RewardsMetrics::default();
                     // After saving a snapshot of stakes, apply stake rewards and commission
-                    let (_, update_rewards_with_thread_pool_time) = measure!(
-                        {
-                            new.update_rewards_with_thread_pool(
-                                parent_epoch,
-                                reward_calc_tracer,
-                                &thread_pool,
-                                &mut metrics,
-                            )
-                        },
-                        "update_rewards_with_thread_pool",
-                    );
+                    let (_, update_rewards_with_thread_pool_time) = measure!({
+                        new.update_rewards_with_thread_pool(
+                            parent_epoch,
+                            reward_calc_tracer,
+                            &thread_pool,
+                            &mut metrics,
+                        )
+                    });
 
                     datapoint_info!(
                         "bank-new_from_parent-new_epoch_timings",
