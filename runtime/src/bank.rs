@@ -1728,23 +1728,17 @@ impl Bank {
 
         let (status_cache, status_cache_time) = measure!(Arc::clone(&parent.status_cache));
 
-        let ((fee_rate_governor, fee_calculator), fee_components_time) = measure!(
-            {
-                let fee_rate_governor = FeeRateGovernor::new_derived(
-                    &parent.fee_rate_governor,
-                    parent.signature_count(),
-                );
+        let ((fee_rate_governor, fee_calculator), fee_components_time) = measure!({
+            let fee_rate_governor =
+                FeeRateGovernor::new_derived(&parent.fee_rate_governor, parent.signature_count());
 
-                let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id())
-                {
-                    FeeCalculator::default()
-                } else {
-                    fee_rate_governor.create_fee_calculator()
-                };
-                (fee_rate_governor, fee_calculator)
-            },
-            "fee_components_creation",
-        );
+            let fee_calculator = if parent.feature_set.is_active(&disable_fee_calculator::id()) {
+                FeeCalculator::default()
+            } else {
+                fee_rate_governor.create_fee_calculator()
+            };
+            (fee_rate_governor, fee_calculator)
+        });
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
         let (blockhash_queue, blockhash_queue_time) = measure!(
