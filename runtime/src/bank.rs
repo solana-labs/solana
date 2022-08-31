@@ -1863,112 +1863,108 @@ impl Bank {
 
         // Following code may touch AccountsDb, requiring proper ancestors
         let parent_epoch = parent.epoch();
-        let (_, update_epoch_time) = measure!(
-            {
-                if parent_epoch < new.epoch() {
-                    let (thread_pool, thread_pool_time) =
-                        measure!(ThreadPoolBuilder::new().build().unwrap());
+        let (_, update_epoch_time) = measure!({
+            if parent_epoch < new.epoch() {
+                let (thread_pool, thread_pool_time) =
+                    measure!(ThreadPoolBuilder::new().build().unwrap());
 
-                    let (_, apply_feature_activations_time) = measure!(new
-                        .apply_feature_activations(
-                            ApplyFeatureActivationsCaller::NewFromParent,
-                            false
-                        ));
+                let (_, apply_feature_activations_time) = measure!(new.apply_feature_activations(
+                    ApplyFeatureActivationsCaller::NewFromParent,
+                    false
+                ));
 
-                    // Add new entry to stakes.stake_history, set appropriate epoch and
-                    // update vote accounts with warmed up stakes before saving a
-                    // snapshot of stakes in epoch stakes
-                    let (_, activate_epoch_time) =
-                        measure!(new.stakes_cache.activate_epoch(epoch, &thread_pool));
+                // Add new entry to stakes.stake_history, set appropriate epoch and
+                // update vote accounts with warmed up stakes before saving a
+                // snapshot of stakes in epoch stakes
+                let (_, activate_epoch_time) =
+                    measure!(new.stakes_cache.activate_epoch(epoch, &thread_pool));
 
-                    // Save a snapshot of stakes for use in consensus and stake weighted networking
-                    let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    let (_, update_epoch_stakes_time) =
-                        measure!(new.update_epoch_stakes(leader_schedule_epoch));
+                // Save a snapshot of stakes for use in consensus and stake weighted networking
+                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                let (_, update_epoch_stakes_time) =
+                    measure!(new.update_epoch_stakes(leader_schedule_epoch));
 
-                    let mut metrics = RewardsMetrics::default();
-                    // After saving a snapshot of stakes, apply stake rewards and commission
-                    let (_, update_rewards_with_thread_pool_time) = measure!({
-                        new.update_rewards_with_thread_pool(
-                            parent_epoch,
-                            reward_calc_tracer,
-                            &thread_pool,
-                            &mut metrics,
-                        )
-                    });
+                let mut metrics = RewardsMetrics::default();
+                // After saving a snapshot of stakes, apply stake rewards and commission
+                let (_, update_rewards_with_thread_pool_time) = measure!({
+                    new.update_rewards_with_thread_pool(
+                        parent_epoch,
+                        reward_calc_tracer,
+                        &thread_pool,
+                        &mut metrics,
+                    )
+                });
 
-                    datapoint_info!(
-                        "bank-new_from_parent-new_epoch_timings",
-                        ("epoch", new.epoch(), i64),
-                        ("slot", slot, i64),
-                        ("parent_slot", parent.slot(), i64),
-                        ("thread_pool_creation_us", thread_pool_time.as_us(), i64),
-                        (
-                            "apply_feature_activations",
-                            apply_feature_activations_time.as_us(),
-                            i64
-                        ),
-                        ("activate_epoch_Us", activate_epoch_time.as_us(), i64),
-                        (
-                            "update_epoch_stakes_us",
-                            update_epoch_stakes_time.as_us(),
-                            i64
-                        ),
-                        (
-                            "update_rewards_with_thread_pool_us",
-                            update_rewards_with_thread_pool_time.as_us(),
-                            i64
-                        ),
-                        (
-                            "load_vote_and_stake_accounts_us",
-                            metrics.load_vote_and_stake_accounts_us.load(Relaxed),
-                            i64
-                        ),
-                        (
-                            "calculate_points_us",
-                            metrics.calculate_points_us.load(Relaxed),
-                            i64
-                        ),
-                        ("redeem_rewards_us", metrics.redeem_rewards_us, i64),
-                        (
-                            "store_stake_accounts_us",
-                            metrics.store_stake_accounts_us.load(Relaxed),
-                            i64
-                        ),
-                        (
-                            "store_vote_accounts_us",
-                            metrics.store_vote_accounts_us.load(Relaxed),
-                            i64
-                        ),
-                        (
-                            "invalid_cached_vote_accounts",
-                            metrics.invalid_cached_vote_accounts,
-                            i64
-                        ),
-                        (
-                            "invalid_cached_stake_accounts",
-                            metrics.invalid_cached_stake_accounts,
-                            i64
-                        ),
-                        (
-                            "invalid_cached_stake_accounts_rent_epoch",
-                            metrics.invalid_cached_stake_accounts_rent_epoch,
-                            i64
-                        ),
-                        (
-                            "vote_accounts_cache_miss_count",
-                            metrics.vote_accounts_cache_miss_count,
-                            i64
-                        ),
-                    );
-                } else {
-                    // Save a snapshot of stakes for use in consensus and stake weighted networking
-                    let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    new.update_epoch_stakes(leader_schedule_epoch);
-                }
-            },
-            "update_epoch",
-        );
+                datapoint_info!(
+                    "bank-new_from_parent-new_epoch_timings",
+                    ("epoch", new.epoch(), i64),
+                    ("slot", slot, i64),
+                    ("parent_slot", parent.slot(), i64),
+                    ("thread_pool_creation_us", thread_pool_time.as_us(), i64),
+                    (
+                        "apply_feature_activations",
+                        apply_feature_activations_time.as_us(),
+                        i64
+                    ),
+                    ("activate_epoch_Us", activate_epoch_time.as_us(), i64),
+                    (
+                        "update_epoch_stakes_us",
+                        update_epoch_stakes_time.as_us(),
+                        i64
+                    ),
+                    (
+                        "update_rewards_with_thread_pool_us",
+                        update_rewards_with_thread_pool_time.as_us(),
+                        i64
+                    ),
+                    (
+                        "load_vote_and_stake_accounts_us",
+                        metrics.load_vote_and_stake_accounts_us.load(Relaxed),
+                        i64
+                    ),
+                    (
+                        "calculate_points_us",
+                        metrics.calculate_points_us.load(Relaxed),
+                        i64
+                    ),
+                    ("redeem_rewards_us", metrics.redeem_rewards_us, i64),
+                    (
+                        "store_stake_accounts_us",
+                        metrics.store_stake_accounts_us.load(Relaxed),
+                        i64
+                    ),
+                    (
+                        "store_vote_accounts_us",
+                        metrics.store_vote_accounts_us.load(Relaxed),
+                        i64
+                    ),
+                    (
+                        "invalid_cached_vote_accounts",
+                        metrics.invalid_cached_vote_accounts,
+                        i64
+                    ),
+                    (
+                        "invalid_cached_stake_accounts",
+                        metrics.invalid_cached_stake_accounts,
+                        i64
+                    ),
+                    (
+                        "invalid_cached_stake_accounts_rent_epoch",
+                        metrics.invalid_cached_stake_accounts_rent_epoch,
+                        i64
+                    ),
+                    (
+                        "vote_accounts_cache_miss_count",
+                        metrics.vote_accounts_cache_miss_count,
+                        i64
+                    ),
+                );
+            } else {
+                // Save a snapshot of stakes for use in consensus and stake weighted networking
+                let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
+                new.update_epoch_stakes(leader_schedule_epoch);
+            }
+        });
 
         // Update sysvars before processing transactions
         let (_, update_sysvars_time) = measure!(
