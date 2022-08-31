@@ -2059,8 +2059,8 @@ impl Blockstore {
         )
     }
 
-    /// Toggles the active primary index between `0` and `1`, and clears the stored max-slot of the
-    /// frozen index in preparation for pruning.
+    /// Toggles the active primary index between `0` and `1`, and clears the
+    /// stored max-slot of the frozen index in preparation for pruning.
     fn toggle_transaction_status_index(
         &self,
         batch: &mut WriteBatch,
