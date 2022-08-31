@@ -61,8 +61,7 @@ main {
   transition-duration: 200ms;
   align-items: start;
   height: 100%;
-  /* box-shadow: 0 8px 28px 4px rgba(86, 91, 115, 0.15); */
-  /* border: 1px solid #eee; */
+  box-shadow: 0 8px 15px 2px rgba(86, 91, 115, 0.1);
 }
 
 .card a {

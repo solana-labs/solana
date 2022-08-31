@@ -107,19 +107,6 @@ function Developers() {
 
             <div className="row cards__container">
               <Card
-                to="developing/clients/jsonrpc-api"
-                header={{
-                  label: "Essential Tools",
-                  translateId: "developer-tools",
-                }}
-                body={{
-                  label:
-                    "Explore the essential developer tools for building and deploying Solana programs.",
-                  translateId: "explore-tools",
-                }}
-              />
-
-              <Card
                 to="developing/test-validator"
                 header={{
                   label: "Solana Test Validator",
@@ -131,6 +118,32 @@ function Developers() {
                   translateId: "learn-test-validator",
                 }}
               />
+
+              <Card
+                to="developing/clients/jsonrpc-api"
+                header={{
+                  label: "RPC API",
+                  translateId: "rpc-api",
+                }}
+                body={{
+                  label:
+                    "Interact with the Solana clusters via the JSON RPC API.",
+                  translateId: "rpc-api-info",
+                }}
+              />
+              {/* future card to replace the RPC API card */}
+              {/* <Card
+                to="developing/tools"
+                header={{
+                  label: "Essential Tools",
+                  translateId: "developer-tools",
+                }}
+                body={{
+                  label:
+                    "Explore the essential developer tools for building and deploying Solana programs.",
+                  translateId: "explore-tools",
+                }}
+              /> */}
 
               <Card
                 to="developing/on-chain-programs/debugging"
