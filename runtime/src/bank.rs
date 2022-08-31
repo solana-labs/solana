@@ -1883,10 +1883,8 @@ impl Bank {
 
                     // Save a snapshot of stakes for use in consensus and stake weighted networking
                     let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
-                    let (_, update_epoch_stakes_time) = measure!(
-                        new.update_epoch_stakes(leader_schedule_epoch),
-                        "update_epoch_stakes",
-                    );
+                    let (_, update_epoch_stakes_time) =
+                        measure!(new.update_epoch_stakes(leader_schedule_epoch));
 
                     let mut metrics = RewardsMetrics::default();
                     // After saving a snapshot of stakes, apply stake rewards and commission
