@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-validator"
 default-run = "solana-validator"
 
 [dependencies]
-chrono = { version = "0.4.21", features = ["serde"] }
+chrono = { version = "0.4.22", features = ["serde"] }
 clap = "2.33.1"
 console = "0.15.0"
 core_affinity = "0.5.10"
