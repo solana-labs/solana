@@ -1744,10 +1744,8 @@ impl Bank {
         let (blockhash_queue, blockhash_queue_time) =
             measure!(RwLock::new(parent.blockhash_queue.read().unwrap().clone()));
 
-        let (stakes_cache, stakes_cache_time) = measure!(
-            StakesCache::new(parent.stakes_cache.stakes().clone()),
-            "stakes_cache_creation",
-        );
+        let (stakes_cache, stakes_cache_time) =
+            measure!(StakesCache::new(parent.stakes_cache.stakes().clone()));
 
         let (epoch_stakes, epoch_stakes_time) =
             measure!(parent.epoch_stakes.clone(), "epoch_stakes_creation");
