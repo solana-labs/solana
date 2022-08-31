@@ -1,29 +1,18 @@
 ---
-title: "Rust Quickstart Guide"
-description: "This quickstart guide will demonstrate how to quickly setup, build, and deploy your first Rust based Solana program to the blockchain."
-keywords: "rust, cargo, toml, program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
+title: "C/C++ Quickstart Guide"
+description: "This quickstart guide will demonstrate how to quickly setup, build, and deploy your first C/C++ based Solana program to the blockchain."
+keywords: "c lang, cpp, c plus plus, program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
 ---
 
-This quickstart guide will demonstrate how to quickly setup, build, and deploy your first Rust based Solana program to the blockchain.
-
-> **Fact: **
-> Rust is the most common programming language to write Solana programs with. In fact, the Solana blockchain is written in Rust.
+This quickstart guide will demonstrate how to quickly setup, build, and deploy your first C based Solana program to the blockchain.
 
 ## What you will learn
 
-- How to install Rust and the Solana CLI locally
+- How to install the Solana CLI
 - How to setup a localhost Solana cluster/validator
 - How to create a Solana wallet for developing
-- How to program a basic Solana program in Rust
+- How to program a basic Solana program in C
 - How to build and deploy a Solana Rust program
-
-## Install Rust and cargo
-
-To be able to compile Rust based Solana programs, install the Rust language and cargo (the Rust package manager) using [Rustup](https://rustup.rs/):
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
 
 ## Install the Solana CLI
 
@@ -96,65 +85,20 @@ You can check your current wallet's SOL balance any time:
 solana balance
 ```
 
-## Create a new Rust library with Cargo
-
-Solana programs written in Rust are [BFP compiled](../on-chain-programs/overview#berkeley-packet-filter-bpf) Rust _libraries_.
-
-Initialize a new Rust library (named ""_hello_world_"") via the Cargo command line:
-
-```bash
-cargo init hello_world --lib
-cd hello_world
-```
-
-Add the `solana-program` crate to your new Rust library:
-
-```bash
-cargo add solana-program
-```
-
-Open and add these required Rust library configuration settings to the bottom of your `Cargo.toml` file:
-
-```toml
-[lib]
-name = "hello_world"
-crate-type = ["cdylib", "lib"]
-```
+## Create a new C project
 
 ## Create your first Solana program
 
-Update your `src/lib.rs` file the bare minimum dependencies and create the simplest Solana program:
+```c
 
-```rust
-use solana_program::{
-    account_info::AccountInfo,
-    entrypoint,
-    entrypoint::ProgramResult,
-    pubkey::Pubkey,
-    msg,
-};
-
-entrypoint!(process_instruction);
-
-pub fn process_instruction(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-    instruction_data: &[u8]
-) -> ProgramResult {
-    msg!("Hello, world!");
-
-    Ok(())
-}
 ```
 
 This program will simply [log a message](../on-chain-programs/debugging#logging) of "_Hello, world!_" to the blockchain cluster.
 
-## Build your Rust program
-
-Inside a terminal window, you can build your Solana Rust program by running in the root of your project (i.e. the directly with your `Cargo.toml` file):
+## Build your C program
 
 ```bash
-cargo build-bpf
+
 ```
 
 > **NOTE:**
@@ -185,6 +129,8 @@ PS: Check your Solana wallet's balance again after you deployed. See how much SO
 
 See the links below to learn more about writing Rust based Solana programs:
 
+See the links below to learn more about writing Rust based Solana programs:
+
 - [Overview of writing Solana programs](../on-chain-programs/overview)
-- [Learn more about developing Solana programs with Rust](../on-chain-programs/developing-Rust)
+- [Learn more about developing Solana programs with C/C++](../on-chain-programs/developing-c)
 - [Debugging on chain programs](../on-chain-programs/debugging)
