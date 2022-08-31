@@ -159,6 +159,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_TESTING: AccountsDbConfig = AccountsDbConfig {
     skip_rewrites: false,
     ancient_append_vecs: false,
     skip_initial_hash_calc: false,
+    exhaustively_verify_refcounts: false,
 };
 pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig {
     index: Some(ACCOUNTS_INDEX_CONFIG_FOR_BENCHMARKS),
@@ -169,6 +170,7 @@ pub const ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS: AccountsDbConfig = AccountsDbConfig
     skip_rewrites: false,
     ancient_append_vecs: false,
     skip_initial_hash_calc: false,
+    exhaustively_verify_refcounts: false,
 };
 
 pub type BinnedHashData = Vec<Vec<CalculateHashIntermediate>>;
@@ -215,6 +217,7 @@ pub struct AccountsDbConfig {
     pub skip_rewrites: bool,
     pub ancient_append_vecs: bool,
     pub skip_initial_hash_calc: bool,
+    pub exhaustively_verify_refcounts: bool,
 }
 
 pub struct FoundStoredAccount<'a> {
@@ -1184,6 +1187,9 @@ pub struct AccountsDb {
     /// allow disabling noisy log
     pub(crate) log_dead_slots: AtomicBool,
 
+    /// debug feature to scan every append vec and verify refcounts are equal
+    exhaustively_verify_refcounts: bool,
+
     /// A special accounts hash that occurs once per epoch
     #[allow(dead_code)]
     pub(crate) epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
@@ -1984,6 +1990,7 @@ impl AccountsDb {
             filler_account_suffix: None,
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
+            exhaustively_verify_refcounts: false,
             epoch_accounts_hash: Mutex::new(None),
         }
     }
@@ -2045,6 +2052,11 @@ impl AccountsDb {
             .map(|config| config.ancient_append_vecs)
             .unwrap_or_default();
 
+        let exhaustively_verify_refcounts = accounts_db_config
+            .as_ref()
+            .map(|config| config.exhaustively_verify_refcounts)
+            .unwrap_or_default();
+
         let filler_account_suffix = if filler_accounts_config.count > 0 {
             Some(solana_sdk::pubkey::new_rand())
         } else {
@@ -2066,6 +2078,7 @@ impl AccountsDb {
             write_cache_limit_bytes: accounts_db_config
                 .as_ref()
                 .and_then(|x| x.write_cache_limit_bytes),
+            exhaustively_verify_refcounts,
             ..Self::default_with_accounts_index(
                 accounts_index,
                 accounts_hash_cache_path,
@@ -2577,6 +2590,72 @@ impl AccountsDb {
         self.clean_accounts(None, false, None)
     }
 
+    /// called with cli argument to verify refcounts are correct on all accounts
+    /// this is very slow
+    fn exhaustively_verify_refcounts(&self, max_slot_inclusive: Option<Slot>) {
+        let max_slot_inclusive =
+            max_slot_inclusive.unwrap_or_else(|| self.accounts_index.max_root_inclusive());
+        info!("exhaustively verifying refcounts as of slot: {max_slot_inclusive}");
+        let pubkey_refcount = DashMap::<Pubkey, Vec<Slot>>::default();
+        let slots = self.storage.all_slots();
+        // populate
+        slots.into_par_iter().for_each(|slot| {
+            if slot > max_slot_inclusive {
+                return;
+            }
+            for storage in self
+                .storage
+                .get_slot_storage_entries(slot)
+                .unwrap_or_default()
+            {
+                storage.all_accounts().iter().for_each(|account| {
+                    let pk = account.meta.pubkey;
+                    match pubkey_refcount.entry(pk) {
+                        dashmap::mapref::entry::Entry::Occupied(mut occupied_entry) => {
+                            if !occupied_entry.get().iter().any(|s| s == &slot) {
+                                occupied_entry.get_mut().push(slot);
+                            }
+                        }
+                        dashmap::mapref::entry::Entry::Vacant(vacant_entry) => {
+                            vacant_entry.insert(vec![slot]);
+                        }
+                    }
+                });
+            }
+        });
+        let total = pubkey_refcount.len();
+        let failed = AtomicBool::default();
+        let threads = quarter_thread_count();
+        let per_batch = total / threads;
+        (0..=threads).into_par_iter().for_each(|attempt| {
+                pubkey_refcount.iter().skip(attempt * per_batch).take(per_batch).for_each(|entry| {
+                    if failed.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    if let Some(idx) = self.accounts_index.get_account_read_entry(entry.key()) {
+                        match (idx.ref_count() as usize).cmp(&entry.value().len()) {
+                            std::cmp::Ordering::Greater => {
+                            let list = idx.slot_list();
+                            let too_new = list.iter().filter_map(|(slot, _)| (slot > &max_slot_inclusive).then_some(())).count();
+
+                            if ((idx.ref_count() as usize) - too_new) > entry.value().len() {
+                                failed.store(true, Ordering::Relaxed);
+                                error!("exhaustively_verify_refcounts: {} refcount too large: {}, should be: {}, {:?}, {:?}, original: {:?}, too_new: {too_new}", entry.key(), idx.ref_count(), entry.value().len(), *entry.value(), list, idx.slot_list());
+                            }
+                        }
+                        std::cmp::Ordering::Less => {
+                            error!("exhaustively_verify_refcounts: {} refcount too small: {}, should be: {}, {:?}, {:?}", entry.key(), idx.ref_count(), entry.value().len(), *entry.value(), idx.slot_list());
+                        }
+                        _ => {}
+                    }
+                    }
+                });
+            });
+        if failed.load(Ordering::Relaxed) {
+            panic!("exhaustively_verify_refcounts failed");
+        }
+    }
+
     // Purge zero lamport accounts and older rooted account states as garbage
     // collection
     // Only remove those accounts where the entire rooted history of the account
@@ -2587,6 +2666,10 @@ impl AccountsDb {
         is_startup: bool,
         last_full_snapshot_slot: Option<Slot>,
     ) {
+        if self.exhaustively_verify_refcounts {
+            self.exhaustively_verify_refcounts(max_clean_root_inclusive);
+        }
+
         let _guard = self.active_stats.activate(ActiveStatItem::Clean);
 
         let ancient_account_cleans = AtomicU64::default();

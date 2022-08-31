@@ -1228,6 +1228,12 @@ fn main() {
             "Enables faster starting of ledger-tool by skipping shrink. \
                       This option is for use during testing.",
         );
+    let accountsdb_verify_refcounts = Arg::with_name("accounts_db_verify_refcounts")
+        .long("accounts-db-verify-refcounts")
+        .help(
+            "Debug option to scan all append vecs and verify account index refcounts prior to clean",
+        )
+        .hidden(true);
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1651,6 +1657,7 @@ fn main() {
             .arg(&accounts_index_limit)
             .arg(&disable_disk_index)
             .arg(&accountsdb_skip_shrink)
+            .arg(&accountsdb_verify_refcounts)
             .arg(&accounts_filler_count)
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
@@ -2859,6 +2866,8 @@ fn main() {
                     ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
+                    exhaustively_verify_refcounts: arg_matches
+                        .is_present("accounts_db_verify_refcounts"),
                     ..AccountsDbConfig::default()
                 });
 
