@@ -1751,10 +1751,8 @@ impl Bank {
 
         let (builtin_programs, builtin_programs_time) = measure!(parent.builtin_programs.clone());
 
-        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) = measure!(
-            parent.rewards_pool_pubkeys.clone(),
-            "rewards_pool_pubkeys_creation",
-        );
+        let (rewards_pool_pubkeys, rewards_pool_pubkeys_time) =
+            measure!(parent.rewards_pool_pubkeys.clone());
 
         let (cached_executors, cached_executors_time) = measure!(
             {
