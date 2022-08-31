@@ -10,7 +10,7 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer::{PacketDeserializer, ReceivePacketResults},
+        packet_deserializer_stage::{PacketDeserializer, ReceivePacketResults},
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
