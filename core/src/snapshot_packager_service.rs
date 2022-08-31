@@ -37,6 +37,7 @@ impl SnapshotPackagerService {
         snapshot_config: SnapshotConfig,
         enable_gossip_push: bool,
     ) -> Self {
+        assert!(snapshot_config.should_generate_snapshots());
         let exit = exit.clone();
         let cluster_info = cluster_info.clone();
         let max_full_snapshot_hashes = std::cmp::min(

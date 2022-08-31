@@ -24,7 +24,7 @@ use {
     solana_sdk::{
         account::{Account, AccountSharedData},
         client::SyncClient,
-        clock::{Slot, DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
+        clock::{DEFAULT_DEV_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT},
         commitment_config::CommitmentConfig,
         epoch_schedule::EpochSchedule,
         genesis_config::{ClusterType, GenesisConfig},
@@ -741,11 +741,9 @@ impl LocalCluster {
         // node lifecycle.
         // There must be some place holder for now...
         SnapshotConfig {
-            full_snapshot_archive_interval_slots: Slot::MAX,
-            incremental_snapshot_archive_interval_slots: Slot::MAX,
             full_snapshot_archives_dir: DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into(),
             bank_snapshots_dir: DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into(),
-            ..SnapshotConfig::default()
+            ..SnapshotConfig::new_load_only()
         }
     }
 }

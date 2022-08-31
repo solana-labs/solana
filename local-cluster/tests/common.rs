@@ -457,6 +457,7 @@ impl SnapshotValidatorConfig {
     ) -> SnapshotValidatorConfig {
         assert!(accounts_hash_interval_slots > 0);
         assert!(full_snapshot_archive_interval_slots > 0);
+        assert!(full_snapshot_archive_interval_slots != Slot::MAX);
         assert!(full_snapshot_archive_interval_slots % accounts_hash_interval_slots == 0);
         if incremental_snapshot_archive_interval_slots != Slot::MAX {
             assert!(incremental_snapshot_archive_interval_slots > 0);
