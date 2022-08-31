@@ -138,6 +138,8 @@ impl LedgerCleanupService {
         root: Slot,
         max_ledger_shreds: u64,
     ) -> (bool, Slot, u64) {
+        let lowest_confirmed_slot = blockstore.get_lowest_confirmed_slot();
+
         let mut total_slots = Vec::new();
         let mut iterate_time = Measure::start("iterate_time");
         let mut total_shreds = 0;
@@ -160,7 +162,7 @@ impl LedgerCleanupService {
             max_ledger_shreds,
             iterate_time
         );
-        if (total_shreds as u64) < max_ledger_shreds {
+        if (total_shreds as u64) < max_ledger_shreds || lowest_confirmed_slot == 0 {
             return (false, 0, total_shreds);
         }
         let mut num_shreds_to_clean = 0;
@@ -171,6 +173,17 @@ impl LedgerCleanupService {
                 lowest_cleanup_slot = *slot;
                 break;
             }
+        }
+
+        // Only purge up to the lowest confirmed slot.
+        if lowest_cleanup_slot > lowest_confirmed_slot {
+            warn!(
+                "Unable to keep the ledger store within --limit_ledger_size \
+                   limit due to the replay progress.  Consider increasing \
+                   --limit_ledger_size and the ledger disk size, or improving \
+                   hardware performance to speed up the replay."
+            );
+            lowest_cleanup_slot = lowest_confirmed_slot;
         }
 
         (true, lowest_cleanup_slot, total_shreds)
@@ -343,6 +356,7 @@ impl LedgerCleanupService {
 }
 #[cfg(test)]
 mod tests {
+    const TEST_MAX_SLOT: u64 = u64::max_value();
     use {
         super::*,
         crossbeam_channel::unbounded,
@@ -354,6 +368,7 @@ mod tests {
         solana_logger::setup();
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        blockstore.set_lowest_confirmed_slot(TEST_MAX_SLOT);
         let (shreds, _) = make_many_slot_entries(0, 50, 5);
         blockstore.insert_shreds(shreds, None, false).unwrap();
         let blockstore = Arc::new(blockstore);
@@ -380,6 +395,55 @@ mod tests {
             .slot_meta_iterator(0)
             .unwrap()
             .for_each(|(slot, _)| assert!(slot > 40));
+
+        let mut last_compaction_slot = 0;
+        let mut jitter = 0;
+        LedgerCleanupService::compact_ledger(
+            &blockstore,
+            &mut last_compaction_slot,
+            10,
+            &highest_compaction_slot,
+            &mut jitter,
+            None,
+        );
+        assert_eq!(jitter, 0);
+
+        drop(blockstore);
+        Blockstore::destroy(&blockstore_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_cleanup_bound_to_confirmed_slot() {
+        solana_logger::setup();
+        let blockstore_path = get_tmp_ledger_path!();
+        let blockstore = Blockstore::open(&blockstore_path).unwrap();
+        blockstore.set_lowest_confirmed_slot(30);
+        let (shreds, _) = make_many_slot_entries(0, 50, 5);
+        blockstore.insert_shreds(shreds, None, false).unwrap();
+        let blockstore = Arc::new(blockstore);
+        let (sender, receiver) = unbounded();
+
+        //send a signal to kill all but 5 shreds, which will be in the newest slots
+        let mut last_purge_slot = 0;
+        let highest_compaction_slot = Arc::new(AtomicU64::new(0));
+        sender.send(50).unwrap();
+        LedgerCleanupService::cleanup_ledger(
+            &receiver,
+            &blockstore,
+            5,
+            &mut last_purge_slot,
+            10,
+            &highest_compaction_slot,
+        )
+        .unwrap();
+        assert_eq!(last_purge_slot, 50);
+        assert_eq!(highest_compaction_slot.load(Ordering::Relaxed), 30);
+
+        //check that 0-40 don't exist
+        blockstore
+            .slot_meta_iterator(0)
+            .unwrap()
+            .for_each(|(slot, _)| assert!(slot > 30));
 
         let mut last_compaction_slot = 0;
         let mut jitter = 0;

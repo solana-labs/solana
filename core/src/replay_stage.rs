@@ -1732,12 +1732,12 @@ impl ReplayStage {
             bank,
             &mut w_replay_stats,
             &mut w_replay_progress,
-            false,
+            false, // skip_verification
             transaction_status_sender,
             Some(replay_vote_sender),
-            None,
+            None, // entry_callback
             verify_recyclers,
-            false,
+            false, // allow_dead_slots
             log_messages_bytes_limit,
             prioritization_fee_cache,
         )?;

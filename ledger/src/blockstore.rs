@@ -176,6 +176,7 @@ pub struct Blockstore {
     completed_slots_senders: Mutex<Vec<CompletedSlotsSender>>,
     pub shred_timing_point_sender: Option<PohTimingSender>,
     pub lowest_cleanup_slot: RwLock<Slot>,
+    lowest_confirmed_slot: RwLock<Slot>,
     no_compaction: bool,
     pub slots_stats: SlotsStats,
 }
@@ -334,6 +335,7 @@ impl Blockstore {
             insert_shreds_lock: Mutex::<()>::default(),
             last_root,
             lowest_cleanup_slot: RwLock::<Slot>::default(),
+            lowest_confirmed_slot: RwLock::<Slot>::default(),
             no_compaction: false,
             slots_stats: SlotsStats::default(),
         };
@@ -2212,6 +2214,14 @@ impl Blockstore {
         // needed slots here at any given moment.
         // Blockstore callers, like rpc, can process concurrent read queries
         (lowest_cleanup_slot, lowest_available_slot)
+    }
+
+    pub fn set_lowest_confirmed_slot(&self, slot: Slot) {
+        *self.lowest_confirmed_slot.write().unwrap() = slot;
+    }
+
+    pub fn get_lowest_confirmed_slot(&self) -> Slot {
+        *self.lowest_confirmed_slot.read().unwrap()
     }
 
     // Returns a transaction status, as well as a loop counter for unit testing

@@ -367,6 +367,9 @@ mod tests {
             },
         )
         .unwrap();
+        // Set the lowest confirmed slot to max to make ledger cleanup service
+        // skips the check for replay progress during the test.
+        blockstore.set_lowest_confirmed_slot(std::u64::MAX);
         if config.no_compaction {
             blockstore.set_no_compaction(true);
         }
@@ -665,6 +668,9 @@ mod tests {
     fn test_compaction() {
         let blockstore_path = get_tmp_ledger_path!();
         let blockstore = Arc::new(Blockstore::open(&blockstore_path).unwrap());
+        // Set the lowest confirmed slot to max to make ledger cleanup service
+        // skips the check for replay progress during the test.
+        blockstore.set_lowest_confirmed_slot(std::u64::MAX);
 
         let n = 10_000;
         let batch_size_slots = 100;

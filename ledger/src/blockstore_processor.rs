@@ -1120,7 +1120,7 @@ pub fn confirm_slot(
         load_result
     }?;
 
-    confirm_slot_entries(
+    let result = confirm_slot_entries(
         bank,
         slot_entries_load_result,
         timing,
@@ -1132,7 +1132,13 @@ pub fn confirm_slot(
         recyclers,
         log_messages_bytes_limit,
         prioritization_fee_cache,
-    )
+    );
+
+    if result.is_ok() {
+        blockstore.set_lowest_confirmed_slot(slot);
+    }
+
+    result
 }
 
 #[allow(clippy::too_many_arguments)]
