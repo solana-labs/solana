@@ -68,7 +68,7 @@ module.exports = {
           position: "left",
         },
         {
-          to: "developing/programming-model/overview",
+          to: "/developers",
           label: "Developers",
           position: "left",
         },
@@ -131,7 +131,7 @@ module.exports = {
             },
             {
               label: "Developers",
-              to: "developing/programming-model/overview",
+              to: "/developers",
             },
             {
               label: "Validators",

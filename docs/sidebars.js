@@ -48,9 +48,9 @@ module.exports = {
       items: [
         "terminology",
         {
-          type: "ref",
+          type: "link",
+          href: "/developers",
           label: "Developers",
-          id: "developing/programming-model/overview",
         },
         {
           type: "ref",
@@ -75,40 +75,100 @@ module.exports = {
       ],
     },
   ],
-  developingSidebar: [
+  developerSidebar: [
     {
-      type: "doc",
-      id: "developing/programming-model/overview",
+      type: "link",
+      href: "/developers",
       label: "Overview",
+    },
+    {
+      type: "category",
+      label: "Getting Started",
+      items: [
+        {
+          type: "doc",
+          id: "developing/intro/programs",
+          label: "What are Programs?",
+        },
+        {
+          type: "doc",
+          id: "developing/intro/rent",
+          label: "What is Rent?",
+        },
+      ],
     },
     {
       type: "category",
       label: "Core Concepts",
       // collapsed: false,
       items: [
-        "developing/programming-model/transactions",
-        "developing/programming-model/accounts",
-        "developing/programming-model/calling-between-programs",
-        "developing/programming-model/runtime",
+        {
+          type: "doc",
+          id: "developing/programming-model/transactions",
+          label: "Transactions",
+        },
+        {
+          type: "doc",
+          id: "developing/programming-model/accounts",
+          label: "Accounts",
+        },
+        {
+          type: "doc",
+          id: "developing/programming-model/calling-between-programs",
+          label: "Calling between programs",
+        },
+        {
+          type: "doc",
+          id: "developing/programming-model/runtime",
+          label: "Runtime",
+        },
       ],
     },
     {
       type: "category",
       label: "Clients",
       items: [
-        "developing/clients/jsonrpc-api",
-        "developing/clients/javascript-api",
-        "developing/clients/javascript-reference",
-        "developing/clients/rust-api",
+        {
+          type: "doc",
+          id: "developing/clients/jsonrpc-api",
+          label: "JSON RPC API",
+        },
+        {
+          type: "doc",
+          id: "developing/clients/javascript-api",
+          label: "Web3 JavaScript API",
+        },
+        {
+          type: "doc",
+          id: "developing/clients/javascript-reference",
+          label: "Web3 API Reference",
+        },
+        {
+          type: "doc",
+          id: "developing/clients/rust-api",
+          label: "Rust API",
+        },
       ],
     },
     {
       type: "category",
       label: "Writing Programs",
       items: [
-        "developing/on-chain-programs/overview",
-        "developing/on-chain-programs/developing-rust",
-        "developing/on-chain-programs/developing-c",
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/overview",
+          label: "Overview",
+        },
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/developing-rust",
+          label: "Developing with Rust",
+        },
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/developing-c",
+          label: "Developing with C/C++",
+        },
         {
           type: "doc",
           label: "Deploying",
@@ -119,8 +179,16 @@ module.exports = {
           label: "Debugging",
           id: "developing/on-chain-programs/debugging",
         },
-        "developing/on-chain-programs/examples",
-        "developing/on-chain-programs/faq",
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/examples",
+          label: "Program Examples",
+        },
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/faq",
+          label: "FAQ",
+        },
       ],
     },
     {
@@ -132,16 +200,30 @@ module.exports = {
           label: "Overview",
           id: "developing/runtime-facilities/programs",
         },
-        "developing/runtime-facilities/sysvars",
+        {
+          type: "doc",
+          id: "developing/runtime-facilities/sysvars",
+          label: "Sysvar Cluster Data",
+        },
       ],
     },
     {
       type: "category",
       label: "Local Development",
       collapsed: false,
-      items: ["developing/test-validator"],
+      items: [
+        {
+          type: "doc",
+          id: "developing/test-validator",
+          label: "Solana Test Validator",
+        },
+      ],
     },
-    "developing/backwards-compatibility",
+    {
+      type: "doc",
+      id: "developing/backwards-compatibility",
+      label: "Backward Compatibility Policy",
+    },
   ],
   validatorsSidebar: [
     "running-validator",
@@ -174,7 +256,6 @@ module.exports = {
   ],
   cliSidebar: [
     "cli",
-    "cli/install-solana-cli-tools",
     "cli/install-solana-cli-tools",
     {
       type: "category",
