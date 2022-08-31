@@ -1878,10 +1878,8 @@ impl Bank {
                     // Add new entry to stakes.stake_history, set appropriate epoch and
                     // update vote accounts with warmed up stakes before saving a
                     // snapshot of stakes in epoch stakes
-                    let (_, activate_epoch_time) = measure!(
-                        new.stakes_cache.activate_epoch(epoch, &thread_pool),
-                        "activate_epoch",
-                    );
+                    let (_, activate_epoch_time) =
+                        measure!(new.stakes_cache.activate_epoch(epoch, &thread_pool));
 
                     // Save a snapshot of stakes for use in consensus and stake weighted networking
                     let leader_schedule_epoch = epoch_schedule.get_leader_schedule_epoch(slot);
