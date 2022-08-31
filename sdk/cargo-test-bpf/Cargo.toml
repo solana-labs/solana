@@ -16,4 +16,3 @@ clap = { version = "3.1.5", features = ["cargo"] }
 [[bin]]
 name = "cargo-test-bpf"
 path = "src/main.rs"
-
