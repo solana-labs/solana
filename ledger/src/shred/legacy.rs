@@ -100,6 +100,13 @@ impl Shred for ShredData {
         Ok(&self.payload[..SIZE_OF_ERASURE_ENCODED_SLICE])
     }
 
+    fn erasure_shard_as_slice_mut(&mut self) -> Result<&mut [u8], Error> {
+        if self.payload.len() != Self::SIZE_OF_PAYLOAD {
+            return Err(Error::InvalidPayloadSize(self.payload.len()));
+        }
+        Ok(&mut self.payload[..SIZE_OF_ERASURE_ENCODED_SLICE])
+    }
+
     fn sanitize(&self) -> Result<(), Error> {
         match self.common_header.shred_variant {
             ShredVariant::LegacyData => (),
@@ -160,6 +167,13 @@ impl Shred for ShredCode {
             return Err(Error::InvalidPayloadSize(self.payload.len()));
         }
         Ok(&self.payload[Self::SIZE_OF_HEADERS..])
+    }
+
+    fn erasure_shard_as_slice_mut(&mut self) -> Result<&mut [u8], Error> {
+        if self.payload.len() != Self::SIZE_OF_PAYLOAD {
+            return Err(Error::InvalidPayloadSize(self.payload.len()));
+        }
+        Ok(&mut self.payload[Self::SIZE_OF_HEADERS..])
     }
 
     fn sanitize(&self) -> Result<(), Error> {
@@ -284,7 +298,7 @@ impl ShredCode {
     pub(super) fn new_from_parity_shard(
         slot: Slot,
         index: u32,
-        parity_shard: &[u8],
+        parity_shard: Option<&[u8]>,
         fec_set_index: u32,
         num_data_shreds: u16,
         num_coding_shreds: u16,
@@ -309,7 +323,7 @@ impl ShredCode {
         bincode::serialize_into(&mut cursor, &common_header).unwrap();
         bincode::serialize_into(&mut cursor, &coding_header).unwrap();
         // Tests may have an empty parity_shard.
-        if !parity_shard.is_empty() {
+        if let Some(parity_shard) = parity_shard {
             let offset = cursor.position() as usize;
             debug_assert_eq!(offset, Self::SIZE_OF_HEADERS);
             payload[offset..].copy_from_slice(parity_shard);
@@ -404,14 +418,14 @@ mod test {
     #[test]
     fn test_sanitize_coding_shred() {
         let mut shred = ShredCode::new_from_parity_shard(
-            1,   // slot
-            12,  // index
-            &[], // parity_shard
-            11,  // fec_set_index
-            11,  // num_data_shreds
-            11,  // num_coding_shreds
-            8,   // position
-            0,   // version
+            1,    // slot
+            12,   // index
+            None, // parity_shard
+            11,   // fec_set_index
+            11,   // num_data_shreds
+            11,   // num_coding_shreds
+            8,    // position
+            0,    // version
         );
         assert_matches!(shred.sanitize(), Ok(()));
         // index < position is invalid.

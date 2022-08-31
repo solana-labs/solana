@@ -23,6 +23,7 @@ impl ShredData {
     dispatch!(pub(super) fn data(&self) -> Result<&[u8], Error>);
     dispatch!(pub(super) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
     dispatch!(pub(super) fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>);
+    dispatch!(pub(super) fn erasure_shard_as_slice_mut(&mut self) -> Result<&mut [u8], Error>);
     dispatch!(pub(super) fn erasure_shard_index(&self) -> Result<usize, Error>);
     dispatch!(pub(super) fn into_payload(self) -> Vec<u8>);
     dispatch!(pub(super) fn parent(&self) -> Result<Slot, Error>);

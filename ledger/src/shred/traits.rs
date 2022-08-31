@@ -25,6 +25,7 @@ pub(super) trait Shred: Sized {
     fn erasure_shard(self) -> Result<Vec<u8>, Error>;
     // Like Shred::erasure_shard but returning a slice.
     fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>;
+    fn erasure_shard_as_slice_mut(&mut self) -> Result<&mut [u8], Error>;
 
     // Portion of the payload which is signed.
     fn signed_message(&self) -> &[u8];

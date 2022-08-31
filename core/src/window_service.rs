@@ -572,15 +572,15 @@ mod test {
             std::net::{IpAddr, Ipv4Addr},
         };
         solana_logger::setup();
-        let shred = Shred::new_from_parity_shard(
-            5,   // slot
-            5,   // index
-            &[], // parity_shard
-            5,   // fec_set_index
-            6,   // num_data_shreds
-            6,   // num_coding_shreds
-            4,   // position
-            0,   // version
+        let shred = Shred::new_code(
+            5,    // slot
+            5,    // index
+            None, // parity_shard
+            5,    // fec_set_index
+            6,    // num_data_shreds
+            6,    // num_coding_shreds
+            4,    // position
+            0,    // version
         );
         let mut shreds = vec![shred.clone(), shred.clone(), shred];
         let _from_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);

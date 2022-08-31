@@ -312,6 +312,7 @@ impl Shred {
     dispatch!(pub(crate) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
     // Like Shred::erasure_shard but returning a slice.
     dispatch!(pub(crate) fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>);
+    dispatch!(pub(crate) fn erasure_shard_as_slice_mut(&mut self) -> Result<&mut [u8], Error>);
     // Returns the shard index within the erasure coding set.
     dispatch!(pub(crate) fn erasure_shard_index(&self) -> Result<usize, Error>);
 
@@ -374,10 +375,10 @@ impl Shred {
         })
     }
 
-    pub fn new_from_parity_shard(
+    pub fn new_code(
         slot: Slot,
         index: u32,
-        parity_shard: &[u8],
+        parity_shard: Option<&[u8]>,
         fec_set_index: u32,
         num_data_shreds: u16,
         num_coding_shreds: u16,
@@ -1073,14 +1074,14 @@ mod tests {
         ));
         assert_eq!(stats.bad_parent_offset, 1);
 
-        let shred = Shred::new_from_parity_shard(
-            8,   // slot
-            2,   // index
-            &[], // parity_shard
-            10,  // fec_set_index
-            30,  // num_data
-            4,   // num_code
-            1,   // position
+        let shred = Shred::new_code(
+            8,    // slot
+            2,    // index
+            None, // parity_shard
+            10,   // fec_set_index
+            30,   // num_data
+            4,    // num_code
+            1,    // position
             shred_version,
         );
         shred.copy_to_packet(&mut packet);
@@ -1112,14 +1113,14 @@ mod tests {
         ));
         assert_eq!(1, stats.index_out_of_bounds);
 
-        let shred = Shred::new_from_parity_shard(
-            8,   // slot
-            2,   // index
-            &[], // parity_shard
-            10,  // fec_set_index
-            30,  // num_data_shreds
-            4,   // num_coding_shreds
-            3,   // position
+        let shred = Shred::new_code(
+            8,    // slot
+            2,    // index
+            None, // parity_shard
+            10,   // fec_set_index
+            30,   // num_data_shreds
+            4,    // num_coding_shreds
+            3,    // position
             shred_version,
         );
         shred.copy_to_packet(&mut packet);
@@ -1429,10 +1430,10 @@ mod tests {
         let mut parity_shard = vec![0u8; legacy::SIZE_OF_ERASURE_ENCODED_SLICE];
         rng.fill(&mut parity_shard[..]);
         let keypair = Keypair::generate(&mut rng);
-        let mut shred = Shred::new_from_parity_shard(
+        let mut shred = Shred::new_code(
             141945197, // slot
             23418,     // index
-            &parity_shard,
+            Some(&parity_shard),
             21259, // fec_set_index
             32,    // num_data_shreds
             58,    // num_coding_shreds

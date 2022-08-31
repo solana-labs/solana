@@ -30,6 +30,7 @@ impl ShredCode {
     dispatch!(pub(super) fn common_header(&self) -> &ShredCommonHeader);
     dispatch!(pub(super) fn erasure_shard(self) -> Result<Vec<u8>, Error>);
     dispatch!(pub(super) fn erasure_shard_as_slice(&self) -> Result<&[u8], Error>);
+    dispatch!(pub(super) fn erasure_shard_as_slice_mut(&mut self) -> Result<&mut [u8], Error>);
     dispatch!(pub(super) fn erasure_shard_index(&self) -> Result<usize, Error>);
     dispatch!(pub(super) fn first_coding_index(&self) -> Option<u32>);
     dispatch!(pub(super) fn into_payload(self) -> Vec<u8>);
@@ -45,7 +46,7 @@ impl ShredCode {
     pub(super) fn new_from_parity_shard(
         slot: Slot,
         index: u32,
-        parity_shard: &[u8],
+        parity_shard: Option<&[u8]>,
         fec_set_index: u32,
         num_data_shreds: u16,
         num_coding_shreds: u16,
