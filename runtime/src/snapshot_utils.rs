@@ -1202,16 +1202,22 @@ fn streaming_unarchive_snapshot(
     let account_paths = Arc::new(account_paths);
     let ledger_dir = Arc::new(ledger_dir);
     let shared_buffer = untar_snapshot_create_shared_buffer(&snapshot_archive_path, archive_format);
-
-    (0..num_threads)
-        .map(|thread_index| {
+    // All shared buffer readers need to be created before the threads are spawned
+    let archives: Vec<_> = (0..num_threads)
+        .map(|_| {
+            let reader = SharedBufferReader::new(&shared_buffer);
+            Archive::new(reader)
+        })
+        .collect();
+    archives
+        .into_iter()
+        .enumerate()
+        .map(|(thread_index, archive)| {
             let parallel_selector = Some(ParallelSelector {
                 index: thread_index,
                 divisions: num_threads,
             });
 
-            let reader = SharedBufferReader::new(&shared_buffer);
-            let archive = Archive::new(reader);
             spawn_unpack_snapshot_thread(
                 file_sender.clone(),
                 account_paths.clone(),
