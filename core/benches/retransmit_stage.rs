@@ -15,7 +15,7 @@ use {
     solana_ledger::{
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         leader_schedule_cache::LeaderScheduleCache,
-        shred::{ProcessShredsStats, Shredder},
+        shred::{ProcessShredsStats, ReedSolomonCache, Shredder},
     },
     solana_measure::measure::Measure,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
@@ -107,6 +107,7 @@ fn bench_retransmitter(bencher: &mut Bencher) {
         0,    // next_shred_index
         0,    // next_code_index
         true, // merkle_variant
+        &ReedSolomonCache::default(),
         &mut ProcessShredsStats::default(),
     );
 
