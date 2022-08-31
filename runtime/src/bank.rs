@@ -1741,10 +1741,8 @@ impl Bank {
         });
 
         let bank_id = rc.bank_id_generator.fetch_add(1, Relaxed) + 1;
-        let (blockhash_queue, blockhash_queue_time) = measure!(
-            RwLock::new(parent.blockhash_queue.read().unwrap().clone()),
-            "blockhash_queue_creation",
-        );
+        let (blockhash_queue, blockhash_queue_time) =
+            measure!(RwLock::new(parent.blockhash_queue.read().unwrap().clone()));
 
         let (stakes_cache, stakes_cache_time) = measure!(
             StakesCache::new(parent.stakes_cache.stakes().clone()),
