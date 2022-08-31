@@ -1,10 +1,8 @@
 use {
-    crate::{
-        immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
-        transaction_priority_details::TransactionPriorityDetails,
-    },
+    crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
+    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     solana_sdk::{
         feature_set,
         hash::Hash,

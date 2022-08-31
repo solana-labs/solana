@@ -189,14 +189,12 @@ impl ForwardPacketBatchesByAccounts {
 mod tests {
     use {
         super::*,
-        crate::{
-            transaction_priority_details::TransactionPriorityDetails,
-            unprocessed_packet_batches::DeserializedPacket,
-        },
+        crate::unprocessed_packet_batches::DeserializedPacket,
         solana_runtime::{
             bank::Bank,
             bank_forks::BankForks,
             genesis_utils::{create_genesis_config, GenesisConfigInfo},
+            transaction_priority_details::TransactionPriorityDetails,
         },
         solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
         std::sync::RwLock,

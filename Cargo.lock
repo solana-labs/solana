@@ -6110,6 +6110,7 @@ dependencies = [
  "lazy_static",
  "libsecp256k1",
  "log",
+ "lru",
  "lz4",
  "memmap2",
  "num-derive",

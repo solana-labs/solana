@@ -78,6 +78,7 @@ use {
         commitment::BlockCommitmentCache,
         cost_model::CostModel,
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
+        prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
         snapshot_config::SnapshotConfig,
@@ -771,6 +772,10 @@ impl Validator {
             false => Arc::new(ConnectionCache::with_udp(tpu_connection_pool_size)),
         };
 
+        // block min prioritization fee cache should be readable by RPC, and writable by validator
+        // (for now, by replay stage)
+        let prioritization_fee_cache = Arc::new(PrioritizationFeeCache::default());
+
         let rpc_override_health_check = Arc::new(AtomicBool::new(false));
         let (
             json_rpc_service,
@@ -996,6 +1001,7 @@ impl Validator {
             accounts_background_request_sender,
             config.runtime_config.log_messages_bytes_limit,
             &connection_cache,
+            &prioritization_fee_cache,
         )?;
 
         let tpu = Tpu::new(
