@@ -1,5 +1,3 @@
-use solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP;
-
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg},
     crossbeam_channel::unbounded,
@@ -31,6 +29,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::*,
+    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     solana_validator::{
         admin_rpc_service, dashboard::Dashboard, ledger_lockfile, lock_ledger, println_name_value,
         redirect_stderr_to_file,
