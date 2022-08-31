@@ -45,15 +45,14 @@ B1 B1 b1 b2 B2 B2 b2 b3 B3 B3
 ```
 
 Voting subcommittee is composed of a **primary** and **secondary**
-committies. The voting epoch boundary occurs after N super root
-increases. The child bank that detects the Nth SRI is what activates
-the rotation.
+committies. The rotation occurs after N super root increases. The
+child bank that detects the Nth **SRI** is what activates the rotation.
 
 Network should be stable with N = 1. Since the epoch boundary depends
-on the number of **super root increases**, it is not a fixed number
-of slots.  At N=1 the primary rotation is likley to take 1 root,
-and the secondary rotation likely to take many roots as the
-**secondary** catches up with the **primary**.
+on the number of **SRIs**, it is not a fixed number of slots or a
+fixed number of roots.  At N=1 the primary rotation is likley to
+take 1 root, and the secondary rotation likely to take many roots
+as the **secondary** catches up with the **primary**.
 
 The subcommittee rotation is computed before any vote processing
 as part of Bank creation.
