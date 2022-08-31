@@ -10,7 +10,7 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer_stage::{PacketDeserializer, ReceivePacketResults},
+        packet_deserializer_stage::ReceivePacketResults,
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
@@ -97,7 +97,7 @@ const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
 const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
 pub type BankingPacketSender = CrossbeamSender<BankingPacketBatch>;
-pub type BankingPacketReceiver = CrossbeamReceiver<BankingPacketBatch>;
+pub type BankingPacketReceiver = CrossbeamReceiver<ReceivePacketResults>;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -457,7 +457,6 @@ impl BankingStage {
                     _ => (verified_receiver.clone(), ForwardOption::ForwardTransaction),
                 };
 
-                let mut packet_deserializer = PacketDeserializer::new(verified_receiver);
                 let poh_recorder = poh_recorder.clone();
                 let cluster_info = cluster_info.clone();
                 let mut recv_start = Instant::now();
@@ -471,7 +470,7 @@ impl BankingStage {
                     .name(format!("solBanknStgTx{:02}", i))
                     .spawn(move || {
                         Self::process_loop(
-                            &mut packet_deserializer,
+                            &verified_receiver,
                             &poh_recorder,
                             &cluster_info,
                             &mut recv_start,
@@ -1081,7 +1080,7 @@ impl BankingStage {
 
     #[allow(clippy::too_many_arguments)]
     fn process_loop(
-        packet_deserializer: &mut PacketDeserializer,
+        deserialized_packet_receiver: &BankingPacketReceiver,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
@@ -1153,7 +1152,7 @@ impl BankingStage {
 
             let (res, receive_and_buffer_packets_time) = measure!(
                 Self::receive_and_buffer_packets(
-                    packet_deserializer,
+                    deserialized_packet_receiver,
                     recv_start,
                     recv_timeout,
                     id,
@@ -1991,7 +1990,7 @@ impl BankingStage {
     #[allow(clippy::too_many_arguments)]
     /// Receive incoming packets, push into unprocessed buffer with packet indexes
     fn receive_and_buffer_packets(
-        packet_deserializer: &mut PacketDeserializer,
+        deserialized_packet_receiver: &BankingPacketReceiver,
         recv_start: &mut Instant,
         recv_timeout: Duration,
         id: u32,
@@ -2001,16 +2000,15 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
-        let ReceivePacketResults {
-            deserialized_packets,
-            new_tracer_stats_option,
-            passed_sigverify_count,
-            failed_sigverify_count,
-        } = packet_deserializer.handle_received_packets(
+        let deserialized_packet_batches = Self::try_receive_deserialized_packets(
+            deserialized_packet_receiver,
             recv_timeout,
             buffered_packet_batches.capacity() - buffered_packet_batches.len(),
         )?;
-        let packet_count = deserialized_packets.len();
+        let packet_count = deserialized_packet_batches
+            .iter()
+            .map(|receive_result| receive_result.deserialized_packets.len())
+            .sum();
         debug!(
             "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
             timestamp(),
@@ -2019,25 +2017,33 @@ impl BankingStage {
             id,
         );
 
-        if let Some(new_sigverify_stats) = &new_tracer_stats_option {
-            tracer_packet_stats.aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
-        }
-
-        // Track all the packets incoming from sigverify, both valid and invalid
-        slot_metrics_tracker.increment_total_new_valid_packets(passed_sigverify_count);
-        slot_metrics_tracker.increment_newly_failed_sigverify_count(failed_sigverify_count);
-
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
-        Self::push_unprocessed(
-            buffered_packet_batches,
+        for ReceivePacketResults {
             deserialized_packets,
-            &mut dropped_packets_count,
-            &mut newly_buffered_packets_count,
-            banking_stage_stats,
-            slot_metrics_tracker,
-            tracer_packet_stats,
-        );
+            new_tracer_stats_option,
+            passed_sigverify_count,
+            failed_sigverify_count,
+        } in deserialized_packet_batches
+        {
+            if let Some(new_sigverify_stats) = &new_tracer_stats_option {
+                tracer_packet_stats.aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
+            }
+
+            // Track all the packets incoming from sigverify, both valid and invalid
+            slot_metrics_tracker.increment_total_new_valid_packets(passed_sigverify_count);
+            slot_metrics_tracker.increment_newly_failed_sigverify_count(failed_sigverify_count);
+
+            Self::push_unprocessed(
+                buffered_packet_batches,
+                deserialized_packets,
+                &mut dropped_packets_count,
+                &mut newly_buffered_packets_count,
+                banking_stage_stats,
+                slot_metrics_tracker,
+                tracer_packet_stats,
+            );
+        }
         recv_time.stop();
 
         banking_stage_stats
@@ -2060,6 +2066,31 @@ impl BankingStage {
             .swap(buffered_packet_batches.len(), Ordering::Relaxed);
         *recv_start = Instant::now();
         Ok(())
+    }
+
+    fn try_receive_deserialized_packets(
+        deserialized_packet_receiver: &BankingPacketReceiver,
+        recv_timeout: Duration,
+        capacity: usize,
+    ) -> Result<Vec<ReceivePacketResults>, RecvTimeoutError> {
+        let stop = Instant::now() + recv_timeout;
+        let mut deserialized_packet_batches =
+            vec![deserialized_packet_receiver.recv_timeout(recv_timeout)?];
+
+        let mut received_capacity = deserialized_packet_batches[0].deserialized_packets.len();
+
+        while let Ok(deserialized_packets) = deserialized_packet_receiver.try_recv() {
+            let (new_received_capacity, overflowed) =
+                received_capacity.overflowing_add(deserialized_packets.deserialized_packets.len());
+            received_capacity = new_received_capacity;
+            deserialized_packet_batches.push(deserialized_packets);
+
+            if overflowed || received_capacity >= capacity || Instant::now() >= stop {
+                break;
+            }
+        }
+
+        Ok(deserialized_packet_batches)
     }
 
     fn push_unprocessed(
@@ -2151,6 +2182,7 @@ where
 mod tests {
     use {
         super::*,
+        crate::packet_deserializer_stage::PacketDeserializer,
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},
@@ -2400,8 +2432,10 @@ mod tests {
                 .map(|batch| (batch, vec![0u8, 1u8, 1u8]))
                 .collect();
             let packet_batches = convert_from_old_verified(packet_batches);
+            let deserialized_packets =
+                PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
             verified_sender // no_ver, anf, tx
-                .send((packet_batches, None))
+                .send(deserialized_packets)
                 .unwrap();
 
             drop(verified_sender);
@@ -2473,7 +2507,9 @@ mod tests {
             .map(|batch| (batch, vec![1u8]))
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
-        verified_sender.send((packet_batches, None)).unwrap();
+        let deserialized_packets =
+            PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        verified_sender.send(deserialized_packets).unwrap();
 
         // Process a second batch that uses the same from account, so conflicts with above TX
         let tx =
@@ -2484,7 +2520,9 @@ mod tests {
             .map(|batch| (batch, vec![1u8]))
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
-        verified_sender.send((packet_batches, None)).unwrap();
+        let deserialized_packets =
+            PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        verified_sender.send(deserialized_packets).unwrap();
 
         let (vote_sender, vote_receiver) = unbounded();
         let (tpu_vote_sender, tpu_vote_receiver) = unbounded();
