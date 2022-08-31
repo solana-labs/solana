@@ -24,6 +24,7 @@ pub trait GetTransactionPriorityDetails {
             .process_instructions(
                 instructions,
                 true, // use default units per instruction
+                true, // support request_units_deprecated instruction
             )
             .ok()?;
         Some(TransactionPriorityDetails {

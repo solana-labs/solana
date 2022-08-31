@@ -130,6 +130,7 @@ impl ComputeBudget {
         &mut self,
         instructions: impl Iterator<Item = (&'a Pubkey, &'a CompiledInstruction)>,
         default_units_per_instruction: bool,
+        support_request_units_deprecated: bool,
     ) -> Result<PrioritizationFeeDetails, TransactionError> {
         let mut num_non_compute_budget_instructions: usize = 0;
         let mut updated_compute_unit_limit = None;
@@ -148,7 +149,7 @@ impl ComputeBudget {
                     Ok(ComputeBudgetInstruction::RequestUnitsDeprecated {
                         units: compute_unit_limit,
                         additional_fee,
-                    }) => {
+                    }) if support_request_units_deprecated => {
                         if updated_compute_unit_limit.is_some() {
                             return Err(duplicate_instruction_error);
                         }
@@ -243,8 +244,11 @@ mod tests {
                 Hash::default(),
             ));
             let mut compute_budget = ComputeBudget::default();
-            let result =
-                compute_budget.process_instructions(tx.message().program_instructions_iter(), true);
+            let result = compute_budget.process_instructions(
+                tx.message().program_instructions_iter(),
+                true,
+                false, /*not support request_units_deprecated*/
+            );
             assert_eq!($expected_result, result);
             assert_eq!(compute_budget, $expected_budget);
         };
@@ -489,6 +493,23 @@ mod tests {
                 ComputeBudgetInstruction::set_compute_unit_price(u64::MAX),
             ],
             Err(TransactionError::DuplicateInstruction(2)),
+            ComputeBudget::default()
+        );
+
+        // deprecated
+        test!(
+            &[Instruction::new_with_borsh(
+                compute_budget::id(),
+                &compute_budget::ComputeBudgetInstruction::RequestUnitsDeprecated {
+                    units: 1_000,
+                    additional_fee: 10
+                },
+                vec![]
+            )],
+            Err(TransactionError::InstructionError(
+                0,
+                InstructionError::InvalidInstructionData,
+            )),
             ComputeBudget::default()
         );
     }
