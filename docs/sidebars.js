@@ -81,22 +81,12 @@ module.exports = {
       href: "/developers",
       label: "Overview",
     },
-    {
-      type: "category",
-      label: "Getting Started",
-      items: [
-        {
-          type: "doc",
-          id: "developing/intro/programs",
-          label: "What are Programs?",
-        },
-        {
-          type: "doc",
-          id: "developing/intro/rent",
-          label: "What is Rent?",
-        },
-      ],
-    },
+    // future home to this page?
+    // {
+    //   type: "link",
+    //   label: "Getting Started",
+    //   href: "/developing/get-started",
+    // },
     {
       type: "category",
       label: "Core Concepts",
@@ -104,13 +94,23 @@ module.exports = {
       items: [
         {
           type: "doc",
+          id: "developing/programming-model/accounts",
+          label: "Accounts",
+        },
+        {
+          type: "doc",
           id: "developing/programming-model/transactions",
           label: "Transactions",
         },
         {
           type: "doc",
-          id: "developing/programming-model/accounts",
-          label: "Accounts",
+          id: "developing/intro/programs",
+          label: "Programs",
+        },
+        {
+          type: "doc",
+          id: "developing/intro/rent",
+          label: "Rent",
         },
         {
           type: "doc",
@@ -121,6 +121,32 @@ module.exports = {
           type: "doc",
           id: "developing/programming-model/runtime",
           label: "Runtime",
+        },
+      ],
+    },
+    {
+      type: "category",
+      label: "Quick Start Guides",
+      items: [
+        {
+          type: "link",
+          href: "/developing/quickstart",
+          label: "All guides",
+        },
+        {
+          type: "doc",
+          id: "developing/quickstart/rust",
+          label: "Rust",
+        },
+        {
+          type: "doc",
+          id: "developing/quickstart/c",
+          label: "C / C++",
+        },
+        {
+          type: "doc",
+          id: "developing/quickstart/web3js",
+          label: "Web3.js",
         },
       ],
     },
