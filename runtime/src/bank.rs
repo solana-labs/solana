@@ -1869,13 +1869,11 @@ impl Bank {
                     let (thread_pool, thread_pool_time) =
                         measure!(ThreadPoolBuilder::new().build().unwrap());
 
-                    let (_, apply_feature_activations_time) = measure!(
-                        new.apply_feature_activations(
+                    let (_, apply_feature_activations_time) = measure!(new
+                        .apply_feature_activations(
                             ApplyFeatureActivationsCaller::NewFromParent,
                             false
-                        ),
-                        "apply_feature_activation",
-                    );
+                        ));
 
                     // Add new entry to stakes.stake_history, set appropriate epoch and
                     // update vote accounts with warmed up stakes before saving a
