@@ -1715,19 +1715,16 @@ impl Bank {
         let epoch_schedule = parent.epoch_schedule;
         let epoch = epoch_schedule.get_epoch(slot);
 
-        let (rc, bank_rc_time) = measure!(
-            BankRc {
-                accounts: Arc::new(Accounts::new_from_parent(
-                    &parent.rc.accounts,
-                    slot,
-                    parent.slot(),
-                )),
-                parent: RwLock::new(Some(parent.clone())),
+        let (rc, bank_rc_time) = measure!(BankRc {
+            accounts: Arc::new(Accounts::new_from_parent(
+                &parent.rc.accounts,
                 slot,
-                bank_id_generator: parent.rc.bank_id_generator.clone(),
-            },
-            "bank_rc_creation",
-        );
+                parent.slot(),
+            )),
+            parent: RwLock::new(Some(parent.clone())),
+            slot,
+            bank_id_generator: parent.rc.bank_id_generator.clone(),
+        });
 
         let (status_cache, status_cache_time) =
             measure!(Arc::clone(&parent.status_cache), "status_cache_creation",);
