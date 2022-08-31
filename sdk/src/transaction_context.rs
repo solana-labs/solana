@@ -1,14 +1,18 @@
 //! Data shared between program runtime and built-in programs as well as SBF programs
 
+#[cfg(not(target_os = "solana"))]
+use crate::{
+    account::WritableAccount,
+    rent::Rent,
+    system_instruction::{
+        MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
+    },
+};
 use {
     crate::{
-        account::{AccountSharedData, ReadableAccount, WritableAccount},
+        account::{AccountSharedData, ReadableAccount},
         instruction::InstructionError,
         pubkey::Pubkey,
-        rent::Rent,
-        system_instruction::{
-            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION, MAX_PERMITTED_DATA_LENGTH,
-        },
     },
     std::{
         cell::{RefCell, RefMut},
@@ -47,18 +51,22 @@ pub struct InstructionAccount {
 pub struct TransactionContext {
     account_keys: Pin<Box<[Pubkey]>>,
     accounts: Pin<Box<[RefCell<AccountSharedData>]>>,
+    #[cfg(not(target_os = "solana"))]
     account_touched_flags: RefCell<Pin<Box<[bool]>>>,
     instruction_context_capacity: usize,
     instruction_stack: Vec<usize>,
     instruction_trace: Vec<InstructionContext>,
     return_data: TransactionReturnData,
     accounts_resize_delta: RefCell<i64>,
+    #[cfg(not(target_os = "solana"))]
     rent: Option<Rent>,
+    #[cfg(not(target_os = "solana"))]
     is_cap_accounts_data_allocations_per_transaction_enabled: bool,
 }
 
 impl TransactionContext {
     /// Constructs a new TransactionContext
+    #[cfg(not(target_os = "solana"))]
     pub fn new(
         transaction_accounts: Vec<TransactionAccount>,
         rent: Option<Rent>,
@@ -86,6 +94,7 @@ impl TransactionContext {
     }
 
     /// Used in mock_process_instruction
+    #[cfg(not(target_os = "solana"))]
     pub fn deconstruct_without_keys(self) -> Result<Vec<AccountSharedData>, InstructionError> {
         if !self.instruction_stack.is_empty() {
             return Err(InstructionError::CallDepth);
@@ -97,6 +106,7 @@ impl TransactionContext {
     }
 
     /// Returns true if `enable_early_verification_of_account_modifications` is active
+    #[cfg(not(target_os = "solana"))]
     pub fn is_early_verification_of_account_modifications_enabled(&self) -> bool {
         self.rent.is_some()
     }
@@ -116,12 +126,8 @@ impl TransactionContext {
             .ok_or(InstructionError::NotEnoughAccountKeys)
     }
 
-    /// Returns the keys for the accounts loaded in this Transaction
-    pub fn get_keys_of_accounts(&self) -> &[Pubkey] {
-        &self.account_keys
-    }
-
     /// Searches for an account by its key
+    #[cfg(not(target_os = "solana"))]
     pub fn get_account_at_index(
         &self,
         index_in_transaction: usize,
@@ -191,6 +197,7 @@ impl TransactionContext {
     }
 
     /// Pushes a new InstructionContext
+    #[cfg(not(target_os = "solana"))]
     pub fn push(
         &mut self,
         program_accounts: &[usize],
@@ -232,6 +239,7 @@ impl TransactionContext {
     }
 
     /// Pops the current InstructionContext
+    #[cfg(not(target_os = "solana"))]
     pub fn pop(&mut self) -> Result<(), InstructionError> {
         if self.instruction_stack.is_empty() {
             return Err(InstructionError::CallDepth);
@@ -283,6 +291,7 @@ impl TransactionContext {
     }
 
     /// Calculates the sum of all lamports within an instruction
+    #[cfg(not(target_os = "solana"))]
     fn instruction_accounts_lamport_sum<'a, I>(
         &'a self,
         instruction_accounts: I,
@@ -318,6 +327,7 @@ impl TransactionContext {
     }
 
     /// Enables enforcing a maximum accounts data allocation size per transaction
+    #[cfg(not(target_os = "solana"))]
     pub fn enable_cap_accounts_data_allocations_per_transaction(&mut self) {
         self.is_cap_accounts_data_allocations_per_transaction_enabled = true;
     }
@@ -344,6 +354,7 @@ pub struct InstructionContext {
 
 impl InstructionContext {
     /// New
+    #[cfg(not(target_os = "solana"))]
     fn new(
         nesting_level: usize,
         instruction_accounts_lamport_sum: u128,
@@ -365,6 +376,11 @@ impl InstructionContext {
     /// That is the number of nested parent Instructions plus one (itself).
     pub fn get_stack_height(&self) -> usize {
         self.nesting_level.saturating_add(1)
+    }
+
+    /// Returns the sum of lamports of the instruction accounts in this Instruction
+    pub fn get_instruction_accounts_lamport_sum(&self) -> u128 {
+        self.instruction_accounts_lamport_sum
     }
 
     /// Number of program accounts
@@ -609,6 +625,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Assignes the owner of this account (transaction wide)
+    #[cfg(not(target_os = "solana"))]
     pub fn set_owner(&mut self, pubkey: &[u8]) -> Result<(), InstructionError> {
         if self
             .transaction_context
@@ -646,6 +663,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Overwrites the number of lamports of this account (transaction wide)
+    #[cfg(not(target_os = "solana"))]
     pub fn set_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
         if self
             .transaction_context
@@ -674,6 +692,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Adds lamports to this account (transaction wide)
+    #[cfg(not(target_os = "solana"))]
     pub fn checked_add_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
         self.set_lamports(
             self.get_lamports()
@@ -683,6 +702,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Subtracts lamports from this account (transaction wide)
+    #[cfg(not(target_os = "solana"))]
     pub fn checked_sub_lamports(&mut self, lamports: u64) -> Result<(), InstructionError> {
         self.set_lamports(
             self.get_lamports()
@@ -697,6 +717,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns a writable slice of the account data (transaction wide)
+    #[cfg(not(target_os = "solana"))]
     pub fn get_data_mut(&mut self) -> Result<&mut [u8], InstructionError> {
         self.can_data_be_changed()?;
         self.touch()?;
@@ -704,6 +725,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Overwrites the account data and size (transaction wide)
+    #[cfg(not(target_os = "solana"))]
     pub fn set_data(&mut self, data: &[u8]) -> Result<(), InstructionError> {
         self.can_data_be_resized(data.len())?;
         self.can_data_be_changed()?;
@@ -726,6 +748,7 @@ impl<'a> BorrowedAccount<'a> {
     /// Resizes the account data (transaction wide)
     ///
     /// Fills it with zeros at the end if is extended or truncates at the end otherwise.
+    #[cfg(not(target_os = "solana"))]
     pub fn set_data_length(&mut self, new_length: usize) -> Result<(), InstructionError> {
         self.can_data_be_resized(new_length)?;
         self.can_data_be_changed()?;
@@ -746,6 +769,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Deserializes the account data into a state
+    #[cfg(not(target_os = "solana"))]
     pub fn get_state<T: serde::de::DeserializeOwned>(&self) -> Result<T, InstructionError> {
         self.account
             .deserialize_data()
@@ -753,6 +777,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Serializes a state into the account data
+    #[cfg(not(target_os = "solana"))]
     pub fn set_state<T: serde::Serialize>(&mut self, state: &T) -> Result<(), InstructionError> {
         let data = self.get_data_mut()?;
         let serialized_size =
@@ -770,6 +795,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Configures whether this account is executable (transaction wide)
+    #[cfg(not(target_os = "solana"))]
     pub fn set_executable(&mut self, is_executable: bool) -> Result<(), InstructionError> {
         if let Some(rent) = self.transaction_context.rent {
             // To become executable an account must be rent exempt
@@ -799,6 +825,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns the rent epoch of this account (transaction wide)
+    #[cfg(not(target_os = "solana"))]
     pub fn get_rent_epoch(&self) -> u64 {
         self.account.rent_epoch()
     }
@@ -838,6 +865,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns an error if the account data can not be mutated by the current program
+    #[cfg(not(target_os = "solana"))]
     pub fn can_data_be_changed(&self) -> Result<(), InstructionError> {
         if !self
             .transaction_context
@@ -861,6 +889,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns an error if the account data can not be resized to the given length
+    #[cfg(not(target_os = "solana"))]
     pub fn can_data_be_resized(&self, new_length: usize) -> Result<(), InstructionError> {
         if !self
             .transaction_context
@@ -895,6 +924,7 @@ impl<'a> BorrowedAccount<'a> {
         Ok(())
     }
 
+    #[cfg(not(target_os = "solana"))]
     fn touch(&self) -> Result<(), InstructionError> {
         if self
             .transaction_context
@@ -913,6 +943,7 @@ impl<'a> BorrowedAccount<'a> {
 }
 
 /// Everything that needs to be recorded from a TransactionContext after execution
+#[cfg(not(target_os = "solana"))]
 pub struct ExecutionRecord {
     pub accounts: Vec<TransactionAccount>,
     pub return_data: TransactionReturnData,
@@ -921,6 +952,7 @@ pub struct ExecutionRecord {
 }
 
 /// Used by the bank in the runtime to write back the processed accounts and recorded instructions
+#[cfg(not(target_os = "solana"))]
 impl From<TransactionContext> for ExecutionRecord {
     fn from(context: TransactionContext) -> Self {
         let account_touched_flags = context
@@ -948,6 +980,7 @@ impl From<TransactionContext> for ExecutionRecord {
     }
 }
 
+#[cfg(not(target_os = "solana"))]
 fn is_zeroed(buf: &[u8]) -> bool {
     const ZEROS_LEN: usize = 1024;
     const ZEROS: [u8; ZEROS_LEN] = [0; ZEROS_LEN];
