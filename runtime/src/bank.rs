@@ -1866,10 +1866,8 @@ impl Bank {
         let (_, update_epoch_time) = measure!(
             {
                 if parent_epoch < new.epoch() {
-                    let (thread_pool, thread_pool_time) = measure!(
-                        ThreadPoolBuilder::new().build().unwrap(),
-                        "thread_pool_creation",
-                    );
+                    let (thread_pool, thread_pool_time) =
+                        measure!(ThreadPoolBuilder::new().build().unwrap());
 
                     let (_, apply_feature_activations_time) = measure!(
                         new.apply_feature_activations(
