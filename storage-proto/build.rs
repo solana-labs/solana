@@ -19,11 +19,11 @@ fn main() -> Result<(), std::io::Error> {
         .build_server(false)
         .type_attribute(
             "TransactionErrorType",
-            "#[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]",
+            "#[cfg_attr(test, derive(enum_iterator::Sequence))]",
         )
         .type_attribute(
             "InstructionErrorType",
-            "#[cfg_attr(test, derive(enum_iterator::IntoEnumIterator))]",
+            "#[cfg_attr(test, derive(enum_iterator::Sequence))]",
         )
         .compile(&protos, &[proto_base_path])
 }

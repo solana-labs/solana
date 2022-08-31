@@ -1,6 +1,6 @@
 use {
     core::fmt,
-    enum_iterator::IntoEnumIterator,
+    enum_iterator::Sequence,
     solana_sdk::{clock::Slot, pubkey::Pubkey, saturating_add_assign},
     std::{
         collections::HashMap,
@@ -40,7 +40,7 @@ impl ProgramTiming {
 }
 
 /// Used as an index for `Metrics`.
-#[derive(Debug, IntoEnumIterator)]
+#[derive(Debug, Sequence)]
 pub enum ExecuteTimingType {
     CheckUs,
     LoadUs,
@@ -53,7 +53,7 @@ pub enum ExecuteTimingType {
     UpdateTransactionStatuses,
 }
 
-pub struct Metrics([u64; ExecuteTimingType::ITEM_COUNT]);
+pub struct Metrics([u64; ExecuteTimingType::CARDINALITY]);
 
 impl Index<ExecuteTimingType> for Metrics {
     type Output = u64;
@@ -70,7 +70,7 @@ impl IndexMut<ExecuteTimingType> for Metrics {
 
 impl Default for Metrics {
     fn default() -> Self {
-        Metrics([0; ExecuteTimingType::ITEM_COUNT])
+        Metrics([0; ExecuteTimingType::CARDINALITY])
     }
 }
 
@@ -337,7 +337,7 @@ impl ExecuteTimings {
         let idx = timing_type as usize;
         match self.metrics.0.get_mut(idx) {
             Some(elem) => *elem = elem.saturating_add(value_to_add),
-            None => debug_assert!(idx < ExecuteTimingType::ITEM_COUNT, "Index out of bounds"),
+            None => debug_assert!(idx < ExecuteTimingType::CARDINALITY, "Index out of bounds"),
         }
     }
 }
