@@ -20,6 +20,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
 };
 
 #[test]
@@ -27,8 +28,12 @@ fn test_nonce() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     full_battery_tests(test_validator, None, false);
 }
@@ -38,8 +43,12 @@ fn test_nonce_with_seed() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     full_battery_tests(test_validator, Some(String::from("seed")), false);
 }
@@ -49,8 +58,12 @@ fn test_nonce_with_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     full_battery_tests(test_validator, None, true);
 }
@@ -252,6 +265,7 @@ fn test_create_account_with_seed() {
         1,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
     );
 
     let offline_nonce_authority_signer = keypair_from_seed(&[1u8; 32]).unwrap();

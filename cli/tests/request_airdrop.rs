@@ -10,6 +10,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
 };
 
 #[test]
@@ -17,8 +18,12 @@ fn test_cli_request_airdrop() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let mut bob_config = CliConfig::recent_for_tests();
     bob_config.json_rpc_url = test_validator.rpc_url();

@@ -22,6 +22,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
 };
 
 #[test]
@@ -37,6 +38,7 @@ fn test_transfer() {
         1,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
     );
 
     let rpc_client =
@@ -334,6 +336,7 @@ fn test_transfer_multisession_signing() {
         1,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
     );
 
     let to_pubkey = Pubkey::new(&[1u8; 32]);
@@ -486,6 +489,7 @@ fn test_transfer_all() {
         1,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
     );
 
     let rpc_client =
@@ -540,6 +544,7 @@ fn test_transfer_unfunded_recipient() {
         1,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
     );
 
     let rpc_client =
@@ -595,6 +600,7 @@ fn test_transfer_with_seed() {
         1,
         Some(faucet_addr),
         SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
     );
 
     let rpc_client =

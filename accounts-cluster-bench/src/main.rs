@@ -665,6 +665,7 @@ pub mod test {
         solana_measure::measure::Measure,
         solana_sdk::{native_token::sol_to_lamports, poh_config::PohConfig},
         solana_test_validator::TestValidator,
+        solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
         spl_token::{
             solana_program::program_pack::Pack,
             state::{Account, Mint},
@@ -721,6 +722,7 @@ pub mod test {
             1,
             Some(faucet_addr),
             SocketAddrSpace::Unspecified,
+            DEFAULT_TPU_ENABLE_UDP,
         );
         let rpc_client =
             RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());

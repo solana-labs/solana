@@ -35,6 +35,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     solana_transaction_status::{
         BlockEncodingOptions, ConfirmedBlock, TransactionDetails, UiTransactionEncoding,
     },
@@ -56,8 +57,12 @@ fn test_rpc_client() {
     solana_logger::setup();
 
     let alice = Keypair::new();
-    let test_validator =
-        TestValidator::with_no_fees(alice.pubkey(), None, SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        alice.pubkey(),
+        None,
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let bob_pubkey = solana_sdk::pubkey::new_rand();
 

@@ -19,6 +19,7 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     std::{env, fs::File, io::Read, path::PathBuf, str::FromStr},
 };
 
@@ -35,8 +36,12 @@ fn test_cli_program_deploy_non_upgradeable() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -156,8 +161,12 @@ fn test_cli_program_deploy_no_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -242,8 +251,12 @@ fn test_cli_program_deploy_with_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -581,8 +594,12 @@ fn test_cli_program_close_program() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -687,8 +704,12 @@ fn test_cli_program_write_buffer() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1013,8 +1034,12 @@ fn test_cli_program_set_buffer_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1128,8 +1153,12 @@ fn test_cli_program_mismatch_buffer_authority() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1221,8 +1250,12 @@ fn test_cli_program_show() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());
@@ -1408,8 +1441,12 @@ fn test_cli_program_dump() {
     let mint_keypair = Keypair::new();
     let mint_pubkey = mint_keypair.pubkey();
     let faucet_addr = run_local_faucet(mint_keypair, None);
-    let test_validator =
-        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
+    let test_validator = TestValidator::with_no_fees(
+        mint_pubkey,
+        Some(faucet_addr),
+        SocketAddrSpace::Unspecified,
+        DEFAULT_TPU_ENABLE_UDP,
+    );
 
     let rpc_client =
         RpcClient::new_with_commitment(test_validator.rpc_url(), CommitmentConfig::processed());

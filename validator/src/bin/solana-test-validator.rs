@@ -1,3 +1,5 @@
+use solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP;
+
 use {
     clap::{crate_name, value_t, value_t_or_exit, values_t_or_exit, App, Arg},
     crossbeam_channel::unbounded,
@@ -851,7 +853,7 @@ fn main() {
         genesis.compute_unit_limit(compute_unit_limit);
     }
 
-    match genesis.start_with_mint_address(mint_address, socket_addr_space) {
+    match genesis.start_with_mint_address(mint_address, socket_addr_space, DEFAULT_TPU_ENABLE_UDP) {
         Ok(test_validator) => {
             *admin_service_post_init.write().unwrap() =
                 Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
