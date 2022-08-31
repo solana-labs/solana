@@ -1768,8 +1768,7 @@ impl Bank {
         let (transaction_log_collector_config, transaction_log_collector_config_time) =
             measure!(parent.transaction_log_collector_config.clone());
 
-        let (feature_set, feature_set_time) =
-            measure!(parent.feature_set.clone(), "feature_set_creation");
+        let (feature_set, feature_set_time) = measure!(parent.feature_set.clone());
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
         let mut new = Bank {
