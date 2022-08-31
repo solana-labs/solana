@@ -1726,8 +1726,7 @@ impl Bank {
             bank_id_generator: parent.rc.bank_id_generator.clone(),
         });
 
-        let (status_cache, status_cache_time) =
-            measure!(Arc::clone(&parent.status_cache), "status_cache_creation",);
+        let (status_cache, status_cache_time) = measure!(Arc::clone(&parent.status_cache));
 
         let ((fee_rate_governor, fee_calculator), fee_components_time) = measure!(
             {
