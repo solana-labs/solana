@@ -1046,7 +1046,7 @@ impl Blockstore {
             .expect("Couldn't fetch from SlotMeta column family")
         {
             // Clear all slot related information
-            self.run_purge(slot, slot, PurgeType::PrimaryIndex)
+            self.run_purge(slot, slot, PurgeType::CompactionFilter)
                 .expect("Purge database operations failed");
 
             // Clear this slot as a next slot from parent
@@ -2061,59 +2061,6 @@ impl Blockstore {
 
     /// Toggles the active primary index between `0` and `1`, and clears the
     /// stored max-slot of the frozen index in preparation for pruning.
-    fn toggle_transaction_status_index(
-        &self,
-        batch: &mut WriteBatch,
-        w_active_transaction_status_index: &mut u64,
-        to_slot: Slot,
-    ) -> Result<Option<u64>> {
-        let index0 = self.transaction_status_index_cf.get(0)?;
-        if index0.is_none() {
-            return Ok(None);
-        }
-        let mut index0 = index0.unwrap();
-        let mut index1 = self.transaction_status_index_cf.get(1)?.unwrap();
-
-        if !index0.frozen && !index1.frozen {
-            index0.frozen = true;
-            *w_active_transaction_status_index = 1;
-            batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
-            Ok(None)
-        } else {
-            let purge_target_primary_index = if index0.frozen && to_slot > index0.max_slot {
-                info!(
-                    "Pruning expired primary index 0 up to slot {} (max requested: {})",
-                    index0.max_slot, to_slot
-                );
-                Some(0)
-            } else if index1.frozen && to_slot > index1.max_slot {
-                info!(
-                    "Pruning expired primary index 1 up to slot {} (max requested: {})",
-                    index1.max_slot, to_slot
-                );
-                Some(1)
-            } else {
-                None
-            };
-
-            if let Some(purge_target_primary_index) = purge_target_primary_index {
-                *w_active_transaction_status_index = purge_target_primary_index;
-                if index0.frozen {
-                    index0.max_slot = 0
-                };
-                index0.frozen = !index0.frozen;
-                batch.put::<cf::TransactionStatusIndex>(0, &index0)?;
-                if index1.frozen {
-                    index1.max_slot = 0
-                };
-                index1.frozen = !index1.frozen;
-                batch.put::<cf::TransactionStatusIndex>(1, &index1)?;
-            }
-
-            Ok(purge_target_primary_index)
-        }
-    }
-
     fn get_primary_index_to_write(
         &self,
         slot: Slot,
