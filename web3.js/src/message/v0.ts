@@ -12,6 +12,10 @@ import {PublicKey, PUBLIC_KEY_LENGTH} from '../publickey';
 import * as shortvec from '../utils/shortvec-encoding';
 import assert from '../utils/assert';
 import {PACKET_DATA_SIZE, VERSION_PREFIX_MASK} from '../transaction/constants';
+import {TransactionInstruction} from '../transaction';
+import {AddressLookupTableAccount} from '../programs';
+import {CompiledKeys} from './compiled-keys';
+import {AccountKeysFromLookups, MessageAccountKeys} from './account-keys';
 
 /**
  * Message constructor arguments
@@ -27,6 +31,13 @@ export type MessageV0Args = {
   compiledInstructions: MessageCompiledInstruction[];
   /** Instructions that will be executed in sequence and committed in one atomic transaction if all succeed. */
   addressTableLookups: MessageAddressTableLookup[];
+};
+
+export type CompileV0Args = {
+  payerKey: PublicKey;
+  instructions: Array<TransactionInstruction>;
+  recentBlockhash: Blockhash;
+  addressLookupTableAccounts?: Array<AddressLookupTableAccount>;
 };
 
 export class MessageV0 {
@@ -46,6 +57,42 @@ export class MessageV0 {
 
   get version(): 0 {
     return 0;
+  }
+
+  static compile(args: CompileV0Args): MessageV0 {
+    const compiledKeys = CompiledKeys.compile(args.instructions, args.payerKey);
+
+    const addressTableLookups = new Array<MessageAddressTableLookup>();
+    const accountKeysFromLookups: AccountKeysFromLookups = {
+      writable: new Array(),
+      readonly: new Array(),
+    };
+    const lookupTableAccounts = args.addressLookupTableAccounts || [];
+    for (const lookupTable of lookupTableAccounts) {
+      const extractResult = compiledKeys.extractTableLookup(lookupTable);
+      if (extractResult !== undefined) {
+        const [addressTableLookup, {writable, readonly}] = extractResult;
+        addressTableLookups.push(addressTableLookup);
+        accountKeysFromLookups.writable.push(...writable);
+        accountKeysFromLookups.readonly.push(...readonly);
+      }
+    }
+
+    const [header, staticAccountKeys] = compiledKeys.getMessageComponents();
+    const accountKeys = new MessageAccountKeys(
+      staticAccountKeys,
+      accountKeysFromLookups,
+    );
+    const compiledInstructions = accountKeys.compileInstructions(
+      args.instructions,
+    );
+    return new MessageV0({
+      header,
+      staticAccountKeys,
+      recentBlockhash: args.recentBlockhash,
+      compiledInstructions,
+      addressTableLookups,
+    });
   }
 
   serialize(): Uint8Array {
