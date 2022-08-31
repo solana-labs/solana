@@ -203,7 +203,7 @@ fn bench_shredder_decoding_raptorq(bencher: &mut Bencher) {
         let mut result = None;
         for packet in &packets {
             result = decoder.decode(packet.clone());
-            if result != None {
+            if result.is_some() {
                 break;
             }
         }
