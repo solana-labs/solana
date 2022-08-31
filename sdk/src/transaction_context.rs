@@ -262,17 +262,17 @@ impl TransactionContext {
             .ok_or(InstructionError::CallDepth)
     }
 
-    /// Pushes a new InstructionContext
+    /// Pushes the next InstructionContext
     #[cfg(not(target_os = "solana"))]
-    pub fn push(
-        &mut self,
-        program_accounts: &[usize],
-        instruction_accounts: &[InstructionAccount],
-        instruction_data: &[u8],
-    ) -> Result<(), InstructionError> {
+    pub fn push(&mut self) -> Result<(), InstructionError> {
         let nesting_level = self.get_instruction_context_stack_height();
-        let callee_instruction_accounts_lamport_sum =
-            self.instruction_accounts_lamport_sum(instruction_accounts.iter())?;
+        let caller_instruction_context = self
+            .instruction_trace
+            .last()
+            .ok_or(InstructionError::CallDepth)?;
+        let callee_instruction_accounts_lamport_sum = self.instruction_accounts_lamport_sum(
+            caller_instruction_context.instruction_accounts.iter(),
+        )?;
         if !self.instruction_stack.is_empty()
             && self.is_early_verification_of_account_modifications_enabled()
         {
@@ -294,11 +294,6 @@ impl TransactionContext {
             instruction_context.nesting_level = nesting_level;
             instruction_context.instruction_accounts_lamport_sum =
                 callee_instruction_accounts_lamport_sum;
-            instruction_context.configure(
-                program_accounts.to_vec(),
-                instruction_accounts.to_vec(),
-                instruction_data.to_vec(),
-            );
         }
         let index_in_trace = self.instruction_trace.len().saturating_sub(1);
         self.instruction_trace.push(InstructionContext::default());

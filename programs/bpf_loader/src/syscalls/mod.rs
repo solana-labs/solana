@@ -3253,8 +3253,10 @@ mod tests {
                     is_writable: false,
                 }];
                 transaction_context
-                    .push(&[0], &instruction_accounts, &[index_in_trace as u8])
-                    .unwrap();
+                    .get_next_instruction_context()
+                    .unwrap()
+                    .configure(&[0], &instruction_accounts, &[index_in_trace as u8]);
+                transaction_context.push().unwrap();
             }
         }
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);

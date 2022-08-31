@@ -18849,8 +18849,10 @@ pub(crate) mod tests {
             }
             if stack_height > transaction_context.get_instruction_context_stack_height() {
                 transaction_context
-                    .push(&[], &[], &[index_in_trace as u8])
-                    .unwrap();
+                    .get_next_instruction_context()
+                    .unwrap()
+                    .configure(&[], &[], &[index_in_trace as u8]);
+                transaction_context.push().unwrap();
             }
         }
         let inner_instructions =

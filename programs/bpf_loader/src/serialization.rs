@@ -502,8 +502,10 @@ mod tests {
             let mut transaction_context =
                 TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             transaction_context
-                .push(&program_indices, &instruction_accounts, &instruction_data)
-                .unwrap();
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&program_indices, &instruction_accounts, &instruction_data);
+            transaction_context.push().unwrap();
             let instruction_context = transaction_context
                 .get_instruction_context_at_index_in_trace(0)
                 .unwrap();

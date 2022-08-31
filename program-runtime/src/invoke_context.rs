@@ -349,7 +349,9 @@ impl<'a> InvokeContext<'a> {
 
         self.syscall_context.push(None);
         self.transaction_context
-            .push(program_indices, instruction_accounts, instruction_data)
+            .get_next_instruction_context()?
+            .configure(program_indices, instruction_accounts, instruction_data);
+        self.transaction_context.push()
     }
 
     /// Pop a stack frame from the invocation stack
