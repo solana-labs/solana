@@ -70,3 +70,7 @@ We will need to exclude such account_db actions for stake_accounts during
 The view of total epoch capitalization, instead of being available at every
 epoch boundary, is only available after the `rewarding interval`. Any logic that
 depends on total epoch capitalization need to wait after `rewarding interval`.
+
+5. `getInflationReward` JSONRPC API method call
+
+Today, the `getInflationReward` JSONRPC API method call can simply grab the first block in the target epoch and lookup the target stake account's rewards entry.  With these changes, the call will need updated to derive the target stake account's credit block, grab _that_ block, then lookup rewards.  Additionally we'll need to return more informative errors for queries made during the lockout period, so users can know that their rewards are pending for the target epoch
