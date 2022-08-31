@@ -38,7 +38,7 @@ use {
     solana_runtime::{
         accounts_background_service::{
             AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
-            PrunedBanksRequestHandler,
+            PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
@@ -53,6 +53,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
+        snapshot_package::PendingAccountsPackage,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -1027,13 +1028,20 @@ fn load_bank_forks(
             accounts_update_notifier,
         );
 
+    let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+    let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let snapshot_request_handler = SnapshotRequestHandler {
+        snapshot_config: SnapshotConfig::new_load_only(),
+        snapshot_request_receiver,
+        pending_accounts_package: PendingAccountsPackage::default(),
+    };
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
     let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
     };
     let abs_request_handler = AbsRequestHandlers {
-        snapshot_request_handler: None,
+        snapshot_request_handler,
         pruned_banks_request_handler,
     };
     let exit = Arc::new(AtomicBool::new(false));
@@ -1053,7 +1061,7 @@ fn load_bank_forks(
         &process_options,
         None,
         None,
-        &AbsRequestSender::default(),
+        &accounts_background_request_sender,
     )
     .map(|_| (bank_forks, starting_snapshot_hashes));
 
