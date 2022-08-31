@@ -43,7 +43,9 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+    solana_tpu_client::connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+    },
     std::{
         collections::{HashMap, HashSet},
         ffi::OsStr,
@@ -495,10 +497,10 @@ impl TestValidatorGenesis {
             .unwrap_or_else(|err| panic!("Test validator failed to start: {}", err))
     }
 
-    pub async fn start_async(&self, tpu_enable_udp: bool) -> (TestValidator, Keypair) {
+    pub async fn start_async(&self) -> (TestValidator, Keypair) {
         self.start_async_with_socket_addr_space(
             SocketAddrSpace::new(/*allow_private_addr=*/ true),
-            tpu_enable_udp,
+            DEFAULT_TPU_ENABLE_UDP,
         )
         .await
     }
@@ -993,9 +995,7 @@ mod test {
 
     #[tokio::test]
     async fn nonblocking_get_health() {
-        let (test_validator, _payer) = TestValidatorGenesis::default()
-            .start_async(DEFAULT_TPU_USE_QUIC)
-            .await;
+        let (test_validator, _payer) = TestValidatorGenesis::default().start_async().await;
         test_validator.set_startup_verification_complete();
         let rpc_client = test_validator.get_async_rpc_client();
         rpc_client.get_health().await.expect("health");

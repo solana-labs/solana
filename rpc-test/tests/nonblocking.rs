@@ -2,7 +2,6 @@ use {
     solana_sdk::{clock::DEFAULT_MS_PER_SLOT, pubkey::Pubkey, system_transaction},
     solana_test_validator::TestValidatorGenesis,
     solana_tpu_client::{
-        connection_cache::DEFAULT_TPU_ENABLE_UDP,
         nonblocking::tpu_client::{LeaderTpuService, TpuClient},
         tpu_client::TpuClientConfig,
     },
@@ -15,9 +14,7 @@ use {
 
 #[tokio::test]
 async fn test_tpu_send_transaction() {
-    let (test_validator, mint_keypair) = TestValidatorGenesis::default()
-        .start_async(DEFAULT_TPU_ENABLE_UDP)
-        .await;
+    let (test_validator, mint_keypair) = TestValidatorGenesis::default().start_async().await;
     let rpc_client = Arc::new(test_validator.get_async_rpc_client());
     let mut tpu_client = TpuClient::new(
         rpc_client.clone(),
@@ -50,9 +47,7 @@ async fn test_tpu_send_transaction() {
 
 #[tokio::test]
 async fn test_tpu_cache_slot_updates() {
-    let (test_validator, _) = TestValidatorGenesis::default()
-        .start_async(DEFAULT_TPU_ENABLE_UDP)
-        .await;
+    let (test_validator, _) = TestValidatorGenesis::default().start_async().await;
     let rpc_client = Arc::new(test_validator.get_async_rpc_client());
     let exit = Arc::new(AtomicBool::new(false));
     let mut leader_tpu_service =
