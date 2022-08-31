@@ -1,5 +1,5 @@
 ---
-title: Stake Reward At Epoch Boundary
+title: Partitioned Inflationary Rewards Distribution
 ---
 
 ## Problem
