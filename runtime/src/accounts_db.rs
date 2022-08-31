@@ -3798,8 +3798,13 @@ impl AccountsDb {
         }
         let storage = all_storages.first().unwrap();
         let accounts = &storage.accounts;
-        if is_full_ancient(accounts) {
-            if self.is_candidate_for_shrink(storage, true) {
+
+        // randomly shrink ancient slots
+        // this exercises the ancient shrink code more often
+        let random_shrink = thread_rng().gen_range(0, 100) == 0 && is_ancient(accounts);
+
+        if is_full_ancient(accounts) || random_shrink {
+            if self.is_candidate_for_shrink(storage, true) || random_shrink {
                 // we are full, but we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate some contents
                 info!("ancient_append_vec: shrinking full ancient: {}", slot);
