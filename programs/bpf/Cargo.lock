@@ -4339,6 +4339,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bpf-rust-instruction-padding"
+version = "1.12.0"
+dependencies = [
+ "solana-program 1.12.0",
+ "solana-program-test",
+ "solana-sdk 1.12.0",
+]
+
+[[package]]
 name = "solana-bpf-rust-invoke"
 version = "1.15.0"
 dependencies = [

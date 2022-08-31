@@ -64,6 +64,7 @@ members = [
     "rust/get_minimum_delegation",
     "rust/inner_instruction_alignment_check",
     "rust/instruction_introspection",
+    "rust/instruction_padding",
     "rust/invoke",
     "rust/invoke_and_error",
     "rust/invoke_and_ok",
