@@ -26,7 +26,7 @@ lazy_static! {
 
 // Maps number of data shreds to the optimal erasure batch size which has the
 // same recovery probabilities as a 32:32 erasure batch.
-const ERASURE_BATCH_SIZE: [usize; 33] = [
+pub(crate) const ERASURE_BATCH_SIZE: [usize; 33] = [
     0, 18, 20, 22, 23, 25, 27, 28, 30, // 8
     32, 33, 35, 36, 38, 39, 41, 42, // 16
     43, 45, 46, 48, 49, 51, 52, 53, // 24
