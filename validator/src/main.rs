@@ -315,7 +315,7 @@ fn wait_for_restart_window(
                                 .incremental
                                 .unwrap_or(snapshot_slot_info.full)
                         });
-                        if restart_snapshot == None {
+                        if restart_snapshot.is_none() {
                             restart_snapshot = snapshot_slot;
                         }
                         if restart_snapshot == snapshot_slot && !monitoring_another_validator {
