@@ -55,31 +55,42 @@ Reads to those stake accounts may not will return the value that the user are
 expecting (viz. not include the recent epoch stake rewards). Writes to those
 stake accounts will be lost once the reward are credited on block
 `epoch_start+N+M`. We will need to modify the runtime to restrict read/writes to
-stake accounts during the `rewarding interval`.
+stake accounts during the `rewarding interval`. Any transactions, which involves
+stake accounts, will result in a new execution error, i.e. "stake rewards
+pending, account access is restricted". However, normal rpc queries, such as
+'getBalance', will return the current lamport of the account. The user can
+expect the rewards to be credit as some time point during the 'rewarding
+interval'.
 
 2. snapshot taken during the `rewarding interval`
 
 If a snapshot is taken during the `rewarding interval`, it would miss the
 rewards for the stake accounts. Any plain restart from those snapshots will be
 wrong, unless we reconstruct the rewards from the recent epoch boundary. This
-will some complexity to validator restart. Alternatively, we can force not
-taking any snapshot during the `rewarding interval`.
+will add some complexity to validator restart. In the first implementation, we
+will force *not* taking any snapshot and *not* performing accounts hash
+calculation during the `rewarding interval`. In future, if needed, we can
+revisit to enable taking snapshots and perform hash calculation during reward
+interval.
 
 3. account-db related action during the `rewarding interval`
 
 Account-db related action such as flush, clean, squash, shrink etc. may touch
-and evict the stake accounts from account db's cache during the
-`rewarding interval`. This will slow down the credit in the future at bank `epoch_start+N`.
+and evict the stake accounts from account db's cache during the `rewarding
+interval`. This will slow down the credit in the future at bank `epoch_start+N`.
 We may need to exclude such account_db actions for stake_accounts during
-`rewarding interval`. Or we could leave the account-db actions as it is and make
-the `credit interval` larger to accommodate the performance hit when writing
-back those accounts.
+`rewarding interval`. This is going to be a performance tuning problem. In the
+first implementation, for simplicity, we will keep the account-db action as it
+is, and make the `credit interval` larger to accommodate the performance hit
+when writing back those accounts. In future, we can continue tuning account db
+actions during 'rewarding interval'.
 
 4. view of total epoch capitalization change
 
 The view of total epoch capitalization, instead of being available at every
-epoch boundary, is only available after the `rewarding interval`. Any logic that
-depends on total epoch capitalization need to wait after `rewarding interval`.
+epoch boundary, is only available after the `rewarding interval`. Any third
+party application logic, which depends on total epoch capitalization, need to
+wait after `rewarding interval`.
 
 5. `getInflationReward` JSONRPC API method call
 
