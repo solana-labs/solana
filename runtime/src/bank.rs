@@ -1967,15 +1967,12 @@ impl Bank {
         });
 
         // Update sysvars before processing transactions
-        let (_, update_sysvars_time) = measure!(
-            {
-                new.update_slot_hashes();
-                new.update_stake_history(Some(parent_epoch));
-                new.update_clock(Some(parent_epoch));
-                new.update_fees();
-            },
-            "update_sysvars",
-        );
+        let (_, update_sysvars_time) = measure!({
+            new.update_slot_hashes();
+            new.update_stake_history(Some(parent_epoch));
+            new.update_clock(Some(parent_epoch));
+            new.update_fees();
+        });
 
         let (_, fill_sysvar_cache_time) =
             measure!(new.fill_missing_sysvar_cache_entries(), "fill_sysvar_cache");
