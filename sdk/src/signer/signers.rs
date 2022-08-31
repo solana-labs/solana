@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::blacklisted_name)]
+    #[allow(clippy::disallowed_names)]
     fn test_dyn_keypairs_by_ref_compile() {
         let foo = Foo {};
         let bar = Bar {};
