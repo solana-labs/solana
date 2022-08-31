@@ -14,9 +14,7 @@ impl BenchTpsClient for TpuClient {
         Ok(signature)
     }
     fn send_batch(&self, transactions: Vec<Transaction>) -> Result<()> {
-        for transaction in transactions {
-            BenchTpsClient::send_transaction(self, transaction)?;
-        }
+        self.try_send_transaction_batch(&transactions)?;
         Ok(())
     }
     fn get_latest_blockhash(&self) -> Result<Hash> {
