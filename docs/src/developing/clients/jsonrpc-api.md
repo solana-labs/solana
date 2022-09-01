@@ -657,7 +657,7 @@ Returns recent block production information from the current or previous epoch.
 #### Parameters:
 
 - `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `range: <object>` - Slot range to return block production for. If parameter not provided, defaults to current epoch.
     - `firstSlot: <u64>` - first slot to return block production information for (inclusive)
     - (optional) `lastSlot: <u64>` - last slot to return block production information for (inclusive). If parameter not provided, defaults to the highest slot
@@ -805,7 +805,8 @@ Returns a list of confirmed blocks between two slots
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - (optional) end_slot, as u64 integer (must be no more than 500,000 blocks higher than the `start_slot`)
-- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
@@ -837,7 +838,8 @@ Returns a list of confirmed blocks starting at the given slot
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - limit, as u64 integer (must be no more than 500,000 blocks higher than the `start_slot`)
-- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
@@ -1044,7 +1046,8 @@ Get the fee the network will charge for a particular Message
 #### Parameters:
 
 - `message: <string>` - Base-64 encoded Message
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+- `<object>` - (optional) Configuration object containing the following optional fields:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
 
 #### Results:
 
@@ -1292,7 +1295,8 @@ Returns the current inflation governor
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -1437,7 +1441,7 @@ Returns the 20 largest accounts, by lamport balance (results may be cached up to
 #### Parameters:
 
 - `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `filter: <string>` - filter results by account type; currently supported: `circulating|nonCirculating`
 
 #### Results:
@@ -1611,7 +1615,7 @@ Returns the leader schedule for an epoch
 - `<u64>` - (optional) Fetch the leader schedule for the epoch that corresponds to the provided slot.
   If unspecified, the leader schedule for the current epoch is fetched
 - `<object>` - (optional) Configuration object containing the following field:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `identity: <string>` - Only return results for this validator identity (base-58 encoded)
 
 #### Results:
@@ -1740,7 +1744,8 @@ Returns minimum balance required to make account rent exempt.
 #### Parameters:
 
 - `<usize>` - account data length
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -2480,7 +2485,8 @@ Returns the stake minimum delegation, in lamports.
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -2520,7 +2526,7 @@ Returns information about the current supply.
 #### Parameters:
 
 - `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `excludeNonCirculatingAccountsList: <bool>` - exclude non circulating accounts list from response
 
 #### Results:
@@ -2574,7 +2580,8 @@ Returns the token balance of an SPL Token account.
 #### Parameters:
 
 - `<string>` - Pubkey of Token account to query, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -2838,7 +2845,8 @@ Returns the 20 largest accounts of a particular SPL Token type.
 #### Parameters:
 
 - `<string>` - Pubkey of token Mint to query, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -2895,7 +2903,8 @@ Returns the total supply of an SPL Token type.
 #### Parameters:
 
 - `<string>` - Pubkey of token Mint to query, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -2944,7 +2953,7 @@ Returns transaction details for a confirmed transaction
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json".
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
   - (optional) `maxSupportedTransactionVersion: <number>` - set the max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned. If this parameter is omitted, only legacy transactions will be returned, and any versioned transaction will prompt the error.
 
 #### Results:
@@ -3160,7 +3169,7 @@ Returns the account info and associated stake for all the voting accounts in the
 #### Parameters:
 
 - `<object>` - (optional) Configuration object containing the following field:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `votePubkey: <string>` - Only return results for this validator vote address (base-58 encoded)
   - (optional) `keepUnstakedDelinquents: <bool>` - Do not filter out delinquent validators with no stake
   - (optional) `delinquentSlotDistance: <u64>` - Specify the number of slots behind the tip that a validator must fall to be considered delinquent. **NOTE:** For the sake of consistency between ecosystem products, _it is **not** recommended that this argument be specified._
@@ -3356,7 +3365,8 @@ Requests an airdrop of lamports to a Pubkey
 
 - `<string>` - Pubkey of account to receive lamports, as base-58 encoded string
 - `<integer>` - lamports, as a u64
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash and verifying airdrop success)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash and verifying airdrop success)
 
 #### Results:
 
@@ -3558,7 +3568,7 @@ Subscribe to an account to receive notifications when the lamports or data for a
 
 - `<string>` - account Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
-  - `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to binary encoding, detectable when the `data` field is type `<string>`.
 
@@ -3709,7 +3719,7 @@ Subscribe to receive notification anytime a new block is Confirmed or Finalized.
   - "all" - include all transactions in block
   - `{ "mentionsAccountOrProgram": <string> }` - return only transactions that mention the provided public key (as base-58 encoded string). If no mentions in a given block, then no notification will be sent.
 - `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - (optional) `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`. Default is "base64".
   - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
@@ -3999,7 +4009,7 @@ Subscribe to transaction logging
   - "allWithVotes" - subscribe to all transactions including simple vote transactions
   - `{ "mentions": [ <string> ] }` - subscribe to all transactions that mention the provided Pubkey (as base-58 encoded string)
 - `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -4103,7 +4113,7 @@ Subscribe to a program to receive notifications when the lamports or data for a 
 
 - `<string>` - program_id Pubkey, as base-58 encoded string
 - `<object>` - (optional) Configuration object containing the following optional fields:
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
   - `encoding: <string>` - encoding for Account data, either "base58" (_slow_), "base64", "base64+zstd" or "jsonParsed".
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific state parsers to return more human-readable and explicit account state data. If "jsonParsed" is requested but a parser cannot be found, the field falls back to base64 encoding, detectable when the `data` field is type `<string>`.
   - (optional) `filters: <array>` - filter results using various [filter objects](jsonrpc-api.md#filters); account must meet all filter criteria to be included in results
@@ -4270,7 +4280,8 @@ Subscribe to a transaction signature to receive notification when the transactio
 #### Parameters:
 
 - `<string>` - Transaction Signature, as base-58 encoded string
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -4697,7 +4708,7 @@ Returns identity and transaction information about a confirmed block in the ledg
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
   - (optional) `transactionDetails: <string>` - level of transaction detail to return, either "full", "signatures", or "none". If parameter not provided, the default detail level is "full".
   - (optional) `rewards: bool` - whether to populate the `rewards` array. If parameter not provided, the default includes rewards.
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
@@ -4863,7 +4874,8 @@ Returns a list of confirmed blocks between two slots
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - (optional) end_slot, as u64 integer
-- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
@@ -4898,7 +4910,8 @@ Returns a list of confirmed blocks starting at the given slot
 
 - `<u64>` - start_slot, as u64 integer
 - `<u64>` - limit, as u64 integer
-- (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
@@ -4938,7 +4951,7 @@ provided signature or most recent confirmed block
   - `before: <string>` - (optional) start searching backwards from this transaction signature.
     If not provided the search starts from the top of the highest max confirmed block.
   - `until: <string>` - (optional) search until this transaction signature, if found before limit reached.
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
@@ -5003,7 +5016,7 @@ Returns transaction details for a confirmed transaction
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) `encoding: <string>` - encoding for each returned Transaction, either "json", "jsonParsed", "base58" (_slow_), "base64". If parameter not provided, the default encoding is "json".
     ["jsonParsed" encoding](jsonrpc-api.md#parsed-responses) attempts to use program-specific instruction parsers to return more human-readable and explicit data in the `transaction.message.instructions` list. If "jsonParsed" is requested but a parser cannot be found, the instruction falls back to regular JSON encoding (`accounts`, `data`, and `programIdIndex` fields).
-  - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment); "processed" is not supported. If parameter not provided, the default is "finalized".
 
 #### Results:
 
@@ -5261,7 +5274,8 @@ which the blockhash will be valid.
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
@@ -5313,7 +5327,8 @@ Returns a recent block hash from the ledger, and a fee schedule that can be used
 
 #### Parameters:
 
-- `<object>` - (optional) [Commitment](jsonrpc-api.md#configuring-state-commitment)
+- `<object>` - (optional) Configuration object containing the following field:
+  - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment)
 
 #### Results:
 
