@@ -913,10 +913,6 @@ export type ConfirmedTransactionMeta = {
   preTokenBalances?: Array<TokenBalance> | null;
   /** The token balances of the transaction accounts after processing */
   postTokenBalances?: Array<TokenBalance> | null;
-  /** The addresses of the accounts loaded for the transaction */
-  loadedAddresses?: LoadedAddresses | null;
-  /** The compute units consumed after processing the transaction */
-  computeUnitsConsumed?: number | null;
   /** The error result of transaction processing */
   err: TransactionError | null;
   /** The collection of addresses loaded using address lookup tables */
@@ -1997,7 +1993,6 @@ const ConfirmedTransactionMetaResult = pick({
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
   loadedAddresses: optional(LoadedAddressesResult),
-  computeUnitsConsumed: optional(number()),
 });
 
 /**
@@ -2022,7 +2017,6 @@ const ParsedConfirmedTransactionMetaResult = pick({
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
   loadedAddresses: optional(LoadedAddressesResult),
-  computeUnitsConsumed: optional(number()),
 });
 
 const TransactionVersionStruct = union([literal(0), literal('legacy')]);
