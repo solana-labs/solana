@@ -8,7 +8,7 @@ With the increase of number of stake accounts, computing and redeeming the stake
 rewards at the start block of the epoch boundary becomes very expensive.
 Currently, with 550K stake accounts, the stake reward time has already taken
 more than 10 seconds. This prolonged computation slows down the network, and can
-cause large number of forks at the epoch boundary, which make the matter even
+cause large number of forks at the epoch boundary, which makes the matter even
 worse.
 
 ## Proposed Solutions
@@ -20,9 +20,11 @@ first phase - reward computation. When reaching block height `N` after the
 epoch, the bank starts the second phase - reward credit, in which the rewards
 are credited to the stake accounts, which will last for `M` blocks.
 
-We call them (a) `calculating interval` (`epoch_start..epoch_start+N`) and (b)
-`credit interval` (`epoch_start+N, epoch_start+N+M`), respectively. And the
-combined interval (`epoch_start..epoch_start+N+M`) is called `rewarding interval`.
+We call them:
+(a) `calculating interval` (`epoch_start..epoch_start+N`)
+(b) `credit interval` (`epoch_start+N, epoch_start+N+M`), respectively.
+And the combined interval (`epoch_start..epoch_start+N+M`) is called
+`rewarding interval`.
 
 For `calculating interval`, `N` is chosen to be sufficiently large so that the
 background computation should have completed and the result of the reward
@@ -41,6 +43,10 @@ dependent value can be the epoch number, total rewards for the epoch, the leader
 pubkey for the epoch block, etc. `M` can be choses based on 50K account per
 block, which equal to `ceil(num_stake_accounts/50,000)`.
 
+`num_stake_account` is extracted from leader_schedule_epoch block, so we don't
+run into discrepancy where new transactions right before an epoch boundary
+creates one fork with `X` stake accounts and another fork with `Y` stake accounts.
+
 In order to avoid putting extra burden of computing and credit the stake reward
 for blocks produced during the `rewarding interval`, we can reduce the compute
 budget limits on those blocks in `rewarding interval`, and reserve some computing
@@ -51,7 +57,7 @@ and read/write capacity to perform stake rewarding.
 1. stake accounts reads/writes during the `rewarding interval`
 
 `epoch_start..epoch_start+N+M` Because of the delayed credit of the rewards,
-Reads to those stake accounts may not will return the value that the user are
+Reads to those stake accounts will not return the value that the user are
 expecting (viz. not include the recent epoch stake rewards). Writes to those
 stake accounts will be lost once the reward are credited on block
 `epoch_start+N+M`. We will need to modify the runtime to restrict read/writes to
@@ -78,7 +84,7 @@ interval.
 Account-db related action such as flush, clean, squash, shrink etc. may touch
 and evict the stake accounts from account db's cache during the `rewarding
 interval`. This will slow down the credit in the future at bank `epoch_start+N`.
-We may need to exclude such account_db actions for stake_accounts during
+We may need to exclude such accounts_db actions for stake_accounts during
 `rewarding interval`. This is going to be a performance tuning problem. In the
 first implementation, for simplicity, we will keep the account-db action as it
 is, and make the `credit interval` larger to accommodate the performance hit
