@@ -1115,7 +1115,7 @@ impl BankingStage {
                         Self::collect_retained_packets(
                             buffered_packet_batches,
                             &packets_to_process,
-                            &Self::preapre_filtered_packet_indexes(
+                            &Self::prepare_filtered_packet_indexes(
                                 &transaction_to_packet_indexes,
                                 &retained_transaction_indexes,
                             ),
@@ -1131,7 +1131,8 @@ impl BankingStage {
                 })
                 .collect();
 
-        Self::replace_priority_queue(buffered_packet_batches, retained_priority_queue);
+        // replace packet priority queue
+        buffered_packet_batches.packet_priority_queue = retained_priority_queue;
 
         inc_new_counter_info!(
             "banking_stage-dropped_tx_before_forwarding",
@@ -1154,13 +1155,6 @@ impl BankingStage {
             &mut buffered_packet_batches.packet_priority_queue,
             MinMaxHeap::with_capacity(capacity),
         )
-    }
-
-    fn replace_priority_queue(
-        buffered_packet_batches: &mut UnprocessedPacketBatches,
-        priority_queue: MinMaxHeap<Rc<ImmutableDeserializedPacket>>,
-    ) {
-        buffered_packet_batches.packet_priority_queue = priority_queue;
     }
 
     /// sanitize un-forwarded packet into SanitizedTransaction for validation and forwarding.
@@ -1213,7 +1207,7 @@ impl BankingStage {
         (transactions, transaction_to_packet_indexes)
     }
 
-    /// Checks sanitied transactions against bank, returns valid transaction indexes
+    /// Checks sanitized transactions against bank, returns valid transaction indexes
     fn filter_invalid_transactions(
         transactions: &[SanitizedTransaction],
         bank: &Arc<Bank>,
@@ -1247,7 +1241,7 @@ impl BankingStage {
             .collect_vec()
     }
 
-    fn preapre_filtered_packet_indexes(
+    fn prepare_filtered_packet_indexes(
         transaction_to_packet_indexes: &[usize],
         retained_transaction_indexes: &[usize],
     ) -> Vec<usize> {
