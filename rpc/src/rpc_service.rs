@@ -30,6 +30,7 @@ use {
     solana_poh::poh_recorder::PohRecorder,
     solana_runtime::{
         bank_forks::BankForks, commitment::BlockCommitmentCache,
+        prioritization_fee_cache::PrioritizationFeeCache,
         snapshot_archive_info::SnapshotArchiveInfoGetter, snapshot_config::SnapshotConfig,
         snapshot_utils,
     },
@@ -355,7 +356,12 @@ impl JsonRpcService {
         leader_schedule_cache: Arc<LeaderScheduleCache>,
         connection_cache: Arc<ConnectionCache>,
         current_transaction_status_slot: Arc<AtomicU64>,
+<<<<<<< HEAD
     ) -> Self {
+=======
+        prioritization_fee_cache: Arc<PrioritizationFeeCache>,
+    ) -> Result<Self, String> {
+>>>>>>> 9b8bed86f (Add getRecentPrioritizationFees RPC endpoint (#27278))
         info!("rpc bound to {:?}", rpc_addr);
         info!("rpc configuration: {:?}", config);
         let rpc_threads = 1.max(config.rpc_threads);
@@ -460,6 +466,7 @@ impl JsonRpcService {
             max_slots,
             leader_schedule_cache,
             current_transaction_status_slot,
+            prioritization_fee_cache,
         );
 
         let leader_info =
@@ -641,7 +648,13 @@ mod tests {
             Arc::new(LeaderScheduleCache::default()),
             connection_cache,
             Arc::new(AtomicU64::default()),
+<<<<<<< HEAD
         );
+=======
+            Arc::new(PrioritizationFeeCache::default()),
+        )
+        .expect("assume successful JsonRpcService start");
+>>>>>>> 9b8bed86f (Add getRecentPrioritizationFees RPC endpoint (#27278))
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solJsonRpcSvc");
 
