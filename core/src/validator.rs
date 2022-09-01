@@ -823,6 +823,34 @@ impl Validator {
             } else {
                 None
             };
+<<<<<<< HEAD
+=======
+
+            let json_rpc_service = JsonRpcService::new(
+                rpc_addr,
+                config.rpc_config.clone(),
+                config.snapshot_config.clone(),
+                bank_forks.clone(),
+                block_commitment_cache.clone(),
+                blockstore.clone(),
+                cluster_info.clone(),
+                Some(poh_recorder.clone()),
+                genesis_config.hash(),
+                ledger_path,
+                config.validator_exit.clone(),
+                config.known_validators.clone(),
+                rpc_override_health_check.clone(),
+                startup_verification_complete,
+                optimistically_confirmed_bank.clone(),
+                config.send_transaction_service_config.clone(),
+                max_slots.clone(),
+                leader_schedule_cache.clone(),
+                connection_cache.clone(),
+                max_complete_transaction_status_slot,
+                prioritization_fee_cache.clone(),
+            )?;
+
+>>>>>>> 9b8bed86f9 (Add getRecentPrioritizationFees RPC endpoint (#27278))
             (
                 Some(JsonRpcService::new(
                     rpc_addr,
