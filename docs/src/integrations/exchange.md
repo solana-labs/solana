@@ -175,6 +175,37 @@ greater security. If so, you will need to move SOL to hot accounts using our
 When a user wants to deposit SOL into your exchange, instruct them to send a
 transfer to the appropriate deposit address.
 
+### Versioned Transaction Migration
+
+When the Mainnet Beta network starts processing versioned transactions, exchanges
+**MUST** make changes. If no changes are made, deposit detection will no longer
+work properly because fetching a versioned transaction or a block containing
+versioned transactions will return an error.
+
+- `{"maxSupportedTransactionVersion": 0}`
+
+  The `maxSupportedTransactionVersion` parameter must be added to `getBlock` and
+  `getTransaction` requests to avoid disruption to deposit detection. The latest
+  transaction version is `0` and should be specified as the max supported
+  transaction version value.
+
+It's important to understand that versioned transactions allow users to create
+transactions that use another set of account keys loaded from on-chain address
+lookup tables.
+
+- `{"encoding": "jsonParsed"}`
+
+  When fetching blocks and transactions, it's now recommended to use the
+  `"jsonParsed"` encoding because it includes all transaction account keys
+  (including those from lookup tables) in the message `"accountKeys"` list.
+  This makes it straightforward to resolve balance changes detailed in
+  `preBalances` / `postBalances` and `preTokenBalances` / `postTokenBalances`.
+
+  If the `"json"` encoding is used instead, entries in `preBalances` /
+  `postBalances` and `preTokenBalances` / `postTokenBalances` may refer to
+  account keys that are **NOT** in the `"accountKeys"` list and need to be
+  resolved using `"loadedAddresses"` entries in the transaction metadata.
+
 ### Poll for Blocks
 
 To track all the deposit accounts for your exchange, poll for each confirmed
@@ -195,30 +226,45 @@ Not every slot produces a block, so there may be gaps in the sequence of integer
 - For each block, request its contents with a [`getBlock` request](developing/clients/jsonrpc-api.md#getblock):
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getBlock","params":[5, "json"]}' localhost:8899
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1, "method":"getBlock","params":[148696677, {"encoding":"jsonParsed","rewards":false,"maxSupportedTransactionVersion":0}]}' \
+  http://localhost:8899
 
 {
   "jsonrpc": "2.0",
   "result": {
-    "blockhash": "2WcrsKSVANoe6xQHKtCcqNdUpCQPQ3vb6QTgi1dcE2oL",
-    "parentSlot": 4,
-    "previousBlockhash": "7ZDoGW83nXgP14vnn9XhGSaGjbuLdLWkQAoUQ7pg6qDZ",
-    "rewards": [],
+    "blockHeight": 134239354,
+    "blockTime": 1662064341,
+    "blockhash": "AuPLyvFX2yA1aVFUqvFfyiB2Sxwu2McL8ALhwbU6w7er",
+    "parentSlot": 148696675,
+    "previousBlockhash": "AKu155zCvrgrPvcVBFyboAfY2GF33S3ZDkj2Pa8x19XM",
     "transactions": [
       {
         "meta": {
           "err": null,
           "fee": 5000,
+          "innerInstructions": [],
+          "loadedAddresses": {
+            "writable": [],
+            "readonly": []
+          },
+          "logMessages": [
+            "Program 11111111111111111111111111111111 invoke [1]",
+            "Program 11111111111111111111111111111111 success"
+          ],
           "postBalances": [
-            2033973061360,
-            218099990000,
-            42000000003
+            7161091286,
+            2769675090,
+            1
           ],
+          "postTokenBalances": [],
           "preBalances": [
-            2044973066360,
-            207099990000,
-            42000000003
+            8130576328,
+            1800195048,
+            1
           ],
+          "preTokenBalances": [],
+          "rewards": [],
           "status": {
             "Ok": null
           }
@@ -226,31 +272,44 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
         "transaction": {
           "message": {
             "accountKeys": [
-              "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-              "47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi",
-              "11111111111111111111111111111111"
-            ],
-            "header": {
-              "numReadonlySignedAccounts": 0,
-              "numReadonlyUnsignedAccounts": 1,
-              "numRequiredSignatures": 1
-            },
-            "instructions": [
               {
-                "accounts": [
-                  0,
-                  1
-                ],
-                "data": "3Bxs3zyH82bhpB8j",
-                "programIdIndex": 2
+                "pubkey": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri",
+                "signer": true,
+                "writable": true
+              },
+              {
+                "pubkey": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
+                "signer": false,
+                "writable": true
+              },
+              {
+                "pubkey": "11111111111111111111111111111111",
+                "signer": false,
+                "writable": false
               }
             ],
-            "recentBlockhash": "7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"
+            "addressTableLookups": null,
+            "instructions": [
+              {
+                "parsed": {
+                  "info": {
+                    "destination": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
+                    "lamports": 969480042,
+                    "source": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri"
+                  },
+                  "type": "transfer"
+                },
+                "program": "system",
+                "programId": "11111111111111111111111111111111"
+              }
+            ],
+            "recentBlockhash": "3rD1wetABxx8NurveZGN6kDhQTRL2GQbT3S4rAkpRVm6"
           },
           "signatures": [
-            "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
+            "36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs"
           ]
-        }
+        },
+        "version": "legacy"
       }
     ]
   },
@@ -262,9 +321,9 @@ The `preBalances` and `postBalances` fields allow you to track the balance
 changes in every account without having to parse the entire transaction. They
 list the starting and ending balances of each account in
 [lamports](../terminology.md#lamport), indexed to the `accountKeys` list. For
-example, if the deposit address if interest is
-`47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi`, this transaction represents a
-transfer of 218099990000 - 207099990000 = 11000000000 lamports = 11 SOL
+example, if the deposit address of interest is
+`3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN`, this transaction represents a
+transfer of 2769675090 - 1800195048 = 969,480,042 lamports = 0.969485042 SOL
 
 If you need more information about the transaction type or other specifics, you
 can request the block from RPC in binary format, and parse it using either our
@@ -282,28 +341,34 @@ time.
   request to the api node:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getSignaturesForAddress","params":["6H94zdiaYfRfPfKjYLjyr2VFBg6JHXygy84r3qhc3NsC", {"limit": 3}]}' localhost:8899
+curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getSignaturesForAddress","params":["3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN", {"limit": 3}]}' localhost:8899
 
 {
   "jsonrpc": "2.0",
   "result": [
     {
+      "blockTime": 1662064640,
+      "confirmationStatus": "finalized",
       "err": null,
       "memo": null,
-      "signature": "35YGay1Lwjwgxe9zaH6APSHbt9gYQUCtBWTNL3aVwVGn9xTFw2fgds7qK5AL29mP63A9j3rh8KpN1TgSR62XCaby",
-      "slot": 114
+      "signature": "3EDRvnD5TbbMS2mCusop6oyHLD8CgnjncaYQd5RXpgnjYUXRCYwiNPmXb6ZG5KdTK4zAaygEhfdLoP7TDzwKBVQp",
+      "slot": 148697216
     },
     {
+      "blockTime": 1662064434,
+      "confirmationStatus": "finalized",
       "err": null,
       "memo": null,
-      "signature": "4bJdGN8Tt2kLWZ3Fa1dpwPSEkXWWTSszPSf1rRVsCwNjxbbUdwTeiWtmi8soA26YmwnKD4aAxNp8ci1Gjpdv4gsr",
-      "slot": 112
+      "signature": "4rPQ5wthgSP1kLdLqcRgQnkYkPAZqjv5vm59LijrQDSKuL2HLmZHoHjdSLDXXWFwWdaKXUuryRBGwEvSxn3TQckY",
+      "slot": 148696843
     },
     {
+      "blockTime": 1662064341,
+      "confirmationStatus": "finalized",
       "err": null,
       "memo": null,
-      "signature": "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6",
-      "slot": 108
+      "signature": "36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs",
+      "slot": 148696677
     }
   ],
   "id": 1
@@ -314,58 +379,86 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"m
   [`getTransaction`](developing/clients/jsonrpc-api.md#gettransaction) request:
 
 ```bash
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id":1,"method":"getTransaction","params":["dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6", "json"]}' localhost:8899
+curl -X POST -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1, "method":"getTransaction","params":["36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs", {"encoding":"jsonParsed","maxSupportedTransactionVersion":0}]}' \
+  http://localhost:8899
 
 // Result
 {
   "jsonrpc": "2.0",
   "result": {
-    "slot": 5,
-    "transaction": {
-      "message": {
-        "accountKeys": [
-          "Bbqg1M4YVVfbhEzwA9SpC9FhsaG83YMTYoR4a8oTDLX",
-          "47Sbuv6jL7CViK9F2NMW51aQGhfdpUu7WNvKyH645Rfi",
-          "11111111111111111111111111111111"
-        ],
-        "header": {
-          "numReadonlySignedAccounts": 0,
-          "numReadonlyUnsignedAccounts": 1,
-          "numRequiredSignatures": 1
-        },
-        "instructions": [
-          {
-            "accounts": [
-              0,
-              1
-            ],
-            "data": "3Bxs3zyH82bhpB8j",
-            "programIdIndex": 2
-          }
-        ],
-        "recentBlockhash": "7GytRgrWXncJWKhzovVoP9kjfLwoiuDb3cWjpXGnmxWh"
-      },
-      "signatures": [
-        "dhjhJp2V2ybQGVfELWM1aZy98guVVsxRCB5KhNiXFjCBMK5KEyzV8smhkVvs3xwkAug31KnpzJpiNPtcD5bG1t6"
-      ]
-    },
+    "blockTime": 1662064341,
     "meta": {
       "err": null,
       "fee": 5000,
+      "innerInstructions": [],
+      "loadedAddresses": {
+        "writable": [],
+        "readonly": []
+      },
+      "logMessages": [
+        "Program 11111111111111111111111111111111 invoke [1]",
+        "Program 11111111111111111111111111111111 success"
+      ],
       "postBalances": [
-        2033973061360,
-        218099990000,
-        42000000003
+        7161091286,
+        2769675090,
+        1
       ],
+      "postTokenBalances": [],
       "preBalances": [
-        2044973066360,
-        207099990000,
-        42000000003
+        8130576328,
+        1800195048,
+        1
       ],
+      "preTokenBalances": [],
+      "rewards": [],
       "status": {
         "Ok": null
       }
-    }
+    },
+    "slot": 148696677,
+    "transaction": {
+      "message": {
+        "accountKeys": [
+          {
+            "pubkey": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri",
+            "signer": true,
+            "writable": true
+          },
+          {
+            "pubkey": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
+            "signer": false,
+            "writable": true
+          },
+          {
+            "pubkey": "11111111111111111111111111111111",
+            "signer": false,
+            "writable": false
+          }
+        ],
+        "addressTableLookups": null,
+        "instructions": [
+          {
+            "parsed": {
+              "info": {
+                "destination": "3M2b3tLji7rvscqrLAHMukYxDK2nB96Q9hwfV6QkdzBN",
+                "lamports": 969480042,
+                "source": "ogDsdvMKRRRMmsrT2hTPdkQBu1qY2z1jBDzgpi8HZri"
+              },
+              "type": "transfer"
+            },
+            "program": "system",
+            "programId": "11111111111111111111111111111111"
+          }
+        ],
+        "recentBlockhash": "3rD1wetABxx8NurveZGN6kDhQTRL2GQbT3S4rAkpRVm6"
+      },
+      "signatures": [
+        "36Q383JMiqiobuPV9qBqy41xjMsVnQBm9rdZSdpbrLTGhSQDTGZJnocM4TQTVfUGfV2vEX9ZB3sex6wUBUWzjEvs"
+      ]
+    },
+    "version": "legacy"
   },
   "id": 1
 }
@@ -722,7 +815,7 @@ identify the token mint and account owner (main wallet address) of the affected
 account.
 
 Note that if a receiving account is created during the transaction, it will have no
-`preTokenBalance` entry as there is no existing account state.  In this
+`preTokenBalance` entry as there is no existing account state. In this
 case, the initial balance can be assumed to be zero.
 
 ### Withdrawing
@@ -734,7 +827,7 @@ the exchange should check the address as
 [described above](#validating-user-supplied-account-addresses-for-withdrawals).
 Additionally this address must be owned by the System Program and have no
 account data. If the address has no SOL balance, user confirmation should be
-obtained before proceeding with the withdrawal.  All other withdrawal addresses
+obtained before proceeding with the withdrawal. All other withdrawal addresses
 must be rejected.
 
 From the withdrawal address, the [Associated Token Account](https://spl.solana.com/associated-token-account)
