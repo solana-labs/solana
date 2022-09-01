@@ -3725,8 +3725,8 @@ impl AccountsDb {
     }
 
     /// 'accounts' are about to be appended to an ancient append vec. That ancient append vec may already have some accounts.
-    /// unref each account in 'accounts' that already exists in 'ancient_store'
-    /// as a side effect, on exit, 'existing_ancient_pubkeys' will contain all pubkeys in 'accounts'.
+    /// Unref each account in 'accounts' that already exists in 'existing_ancient_pubkeys'.
+    /// As a side effect, on exit, 'existing_ancient_pubkeys' will now contain all pubkeys in 'accounts'.
     fn unref_accounts_already_in_storage(
         &self,
         accounts: &[(&Pubkey, &StoredAccountMeta<'_>, u64)],
@@ -3956,7 +3956,6 @@ impl AccountsDb {
                 ancient_store,
                 &to_store,
                 StorageSelector::Primary,
-                // we are adding accounts to an existing append vec from a different slot. We need to unref each account that exists already in 'ancient_store'.
             );
 
             // handle accounts from 'slot' which did not fit into the current ancient append vec
