@@ -48,6 +48,7 @@ gives a convenient interface for the RPC methods.
 - [getMultipleAccounts](jsonrpc-api.md#getmultipleaccounts)
 - [getProgramAccounts](jsonrpc-api.md#getprogramaccounts)
 - [getRecentPerformanceSamples](jsonrpc-api.md#getrecentperformancesamples)
+- [getRecentPrioritizationFees](jsonrpc-api.md#getrecentprioritizationfees)
 - [getSignaturesForAddress](jsonrpc-api.md#getsignaturesforaddress)
 - [getSignatureStatuses](jsonrpc-api.md#getsignaturestatuses)
 - [getSlot](jsonrpc-api.md#getslot)
@@ -2090,6 +2091,65 @@ Result:
       "numTransactions": 125,
       "samplePeriodSecs": 60,
       "slot": 347748
+    }
+  ],
+  "id": 1
+}
+```
+
+### getRecentPrioritizationFees
+
+Returns a list of minimum prioritization fees from recent blocks. Currently, a
+node's prioritization-fee cache stores data from up to 150 blocks.
+
+#### Parameters:
+
+- `<array>` - (optional) An array of account address strings. If this parameter is provided, the response will reflect the minimum prioritization fee to land a transaction locking all of the provided accounts as writable.
+
+#### Results:
+
+An array of:
+
+- `RpcPrioritizationFee<object>`
+  - `slot: <u64>` - Slot in which minimum fee was observed
+  - `prioritizationFee: <u64>` - Minimum fee paid for a successfully landed transaction
+
+#### Example:
+
+Request:
+
+```bash
+// Request
+curl http://localhost:8899 -X POST -H "Content-Type: application/json" -d '
+  {"jsonrpc":"2.0", "id":1, "method":"getRecentPrioritizationFees", "params": [["CxELquR1gPP8wHe33gZ4QxqGB3sZ9RSwsJ2KshVewkFY"]]}
+'
+```
+
+Result:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "result": [
+    {
+      "slot": 348125,
+      "prioritizationFee": 0,
+    },
+    {
+      "slot": 348126,
+      "prioritizationFee": 1000,
+    },
+    {
+      "slot": 348127,
+      "prioritizationFee": 500,
+    },
+    {
+      "slot": 348128,
+      "prioritizationFee": 0,
+    },
+    {
+      "slot": 348129,
+      "prioritizationFee": 1234,
     }
   ],
   "id": 1
