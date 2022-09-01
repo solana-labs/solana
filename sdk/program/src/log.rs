@@ -7,7 +7,7 @@
 //! The most common way to emit logs is through the [`msg!`] macro, which logs
 //! simple strings, as well as [formatted strings][fs].
 //!
-//! [`msg!`]: msg
+//! [`msg!`]: crate::msg!
 //! [fs]: https://doc.rust-lang.org/std/fmt/
 //!
 //! Logs can be viewed in multiple ways:
