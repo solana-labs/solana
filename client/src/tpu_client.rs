@@ -11,6 +11,7 @@ use {
     },
     bincode::serialize,
     log::*,
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_sdk::{
         clock::Slot,
         commitment_config::CommitmentConfig,
@@ -111,6 +112,17 @@ impl TpuClient {
         self.try_send_wire_transaction(wire_transaction)
     }
 
+    /// Serialize and send a batch of transactions to the current and upcoming leader TPUs according
+    /// to fanout size
+    /// Returns the last error if all sends fail
+    pub fn try_send_transaction_batch(&self, transactions: &[Transaction]) -> TransportResult<()> {
+        let wire_transactions = transactions
+            .into_par_iter()
+            .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
+            .collect::<Vec<_>>();
+        self.try_send_wire_transaction_batch(wire_transactions)
+    }
+
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
     fn try_send_wire_transaction(&self, wire_transaction: Vec<u8>) -> TransportResult<()> {
@@ -123,6 +135,39 @@ impl TpuClient {
         {
             let conn = self.connection_cache.get_connection(&tpu_address);
             let result = conn.send_wire_transaction_async(wire_transaction.clone());
+            if let Err(err) = result {
+                last_error = Some(err);
+            } else {
+                some_success = true;
+            }
+        }
+        if !some_success {
+            Err(if let Some(err) = last_error {
+                err
+            } else {
+                std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Send a batch of wire transactions to the current and upcoming leader TPUs according to
+    /// fanout size
+    /// Returns the last error if all sends fail
+    fn try_send_wire_transaction_batch(
+        &self,
+        wire_transactions: Vec<Vec<u8>>,
+    ) -> TransportResult<()> {
+        let mut last_error: Option<TransportError> = None;
+        let mut some_success = false;
+
+        for tpu_address in self
+            .leader_tpu_service
+            .leader_tpu_sockets(self.fanout_slots)
+        {
+            let conn = self.connection_cache.get_connection(&tpu_address);
+            let result = conn.send_wire_transaction_batch_async(wire_transactions.clone());
             if let Err(err) = result {
                 last_error = Some(err);
             } else {
