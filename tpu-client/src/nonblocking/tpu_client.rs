@@ -263,18 +263,6 @@ impl TpuClient {
         self.try_send_wire_transaction(wire_transaction).await
     }
 
-    pub async fn try_send_transaction_batch(
-        &self,
-        transactions: &[Transaction],
-    ) -> TransportResult<()> {
-        let wire_transactions = transactions
-            .iter()
-            .map(|tx| serialize(tx).expect("serialization should succeed"))
-            .collect();
-        self.try_send_wire_transaction_batch(wire_transactions)
-            .await
-    }
-
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
     /// Returns the last error if all sends fail
     pub async fn try_send_wire_transaction(
@@ -318,6 +306,9 @@ impl TpuClient {
         }
     }
 
+    /// Send a batch of wire transactions to the current and upcoming leader TPUs according to
+    /// fanout size
+    /// Returns the last error if all sends fail
     pub async fn try_send_wire_transaction_batch(
         &self,
         wire_transactions: Vec<Vec<u8>>,

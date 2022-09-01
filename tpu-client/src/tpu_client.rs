@@ -4,6 +4,7 @@ use {
         connection_cache::ConnectionCache,
         nonblocking::tpu_client::TpuClient as NonblockingTpuClient,
     },
+    rayon::iter::{IntoParallelIterator, ParallelIterator},
     solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{clock::Slot, transaction::Transaction, transport::Result as TransportResult},
     std::{
@@ -77,8 +78,18 @@ impl TpuClient {
         self.invoke(self.tpu_client.try_send_transaction(transaction))
     }
 
+    /// Serialize and send a batch of transactions to the current and upcoming leader TPUs according
+    /// to fanout size
+    /// Returns the last error if all sends fail
     pub fn try_send_transaction_batch(&self, transactions: &[Transaction]) -> TransportResult<()> {
-        self.invoke(self.tpu_client.try_send_transaction_batch(transactions))
+        let wire_transactions = transactions
+            .into_par_iter()
+            .map(|tx| bincode::serialize(&tx).expect("serialize Transaction in send_batch"))
+            .collect::<Vec<_>>();
+        self.invoke(
+            self.tpu_client
+                .try_send_wire_transaction_batch(wire_transactions),
+        )
     }
 
     /// Send a wire transaction to the current and upcoming leader TPUs according to fanout size
