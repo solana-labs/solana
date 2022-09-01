@@ -803,13 +803,18 @@ export type TransactionReturnData = {
 };
 
 export type SimulateTransactionConfig = {
+  /** Optional parameter used to enable signature verification before simulation */
   sigVerify?: boolean;
+  /** Optional parameter used to replace the simulated transaction's recent blockhash with the latest blockhash */
   replaceRecentBlockhash?: boolean;
+  /** Optional parameter used to set the commitment level when selecting the latest block */
   commitment?: Commitment;
+  /** Optional parameter used to specify a list of account addresses to return post simulation state for */
   accounts?: {
     encoding: 'base64';
     addresses: string[];
   };
+  /** Optional parameter used to specify the minimum block slot that can be used for simulation */
   minContextSlot?: number;
 };
 
