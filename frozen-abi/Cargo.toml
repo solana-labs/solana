@@ -30,7 +30,7 @@ block-buffer = { version = "0.9.0", features = ["block-padding"] }
 byteorder = { version = "1.4.3", features = ["default", "i128", "std"] }
 cc = { version = "1.0.73", features = ["jobserver", "parallel"] }
 either = { version = "1.7.0", features = ["use_std"] }
-generic-array = { version = "0.14.5", default-features = false, features = [
+generic-array = { version = "0.14.6", default-features = false, features = [
 	"serde",
 	"more_lengths"
 ] }
