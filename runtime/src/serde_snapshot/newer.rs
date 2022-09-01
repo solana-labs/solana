@@ -314,7 +314,9 @@ impl<'a> TypeContext<'a> for Context {
             .clone_with_lamports_per_signature(lamports_per_signature);
 
         let _incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence> =
-            ignore_eof_error(deserialize_from(stream))?;
+            ignore_eof_error(deserialize_from(&mut stream))?;
+
+        let _epoch_accounts_hash: Option<Hash> = ignore_eof_error(deserialize_from(stream))?;
 
         Ok((bank_fields, accounts_db_fields))
     }
