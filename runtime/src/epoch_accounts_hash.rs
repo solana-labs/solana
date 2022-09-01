@@ -27,6 +27,7 @@ impl AsRef<Hash> for EpochAccountsHash {
 /// slot the EAH is based on.  This slot will be at an offset into the epoch, and referred to as
 /// the "start" slot for the EAH calculation.
 #[must_use]
+#[allow(dead_code)]
 pub fn calculation_offset_start(bank: &Bank) -> Slot {
     let slots_per_epoch = bank.epoch_schedule().slots_per_epoch;
     slots_per_epoch / 4
@@ -37,6 +38,7 @@ pub fn calculation_offset_start(bank: &Bank) -> Slot {
 /// and referred to as the "stop" slot for the EAH calculation.  All nodes must complete the EAH
 /// calculation before this slot!
 #[must_use]
+#[allow(dead_code)]
 pub fn calculation_offset_stop(bank: &Bank) -> Slot {
     let slots_per_epoch = bank.epoch_schedule().slots_per_epoch;
     slots_per_epoch / 4 * 3

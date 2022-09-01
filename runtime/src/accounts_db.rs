@@ -1185,6 +1185,7 @@ pub struct AccountsDb {
     pub(crate) log_dead_slots: AtomicBool,
 
     /// A special accounts hash that occurs once per epoch
+    #[allow(dead_code)]
     pub(crate) epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
 }
 
