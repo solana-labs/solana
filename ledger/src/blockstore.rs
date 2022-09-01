@@ -2046,8 +2046,6 @@ impl Blockstore {
         )
     }
 
-    /// Toggles the active primary index between `0` and `1`, and clears the
-    /// stored max-slot of the frozen index in preparation for pruning.
     fn get_primary_index_to_write(
         &self,
         slot: Slot,
