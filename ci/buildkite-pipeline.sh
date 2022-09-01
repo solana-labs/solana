@@ -127,8 +127,8 @@ wait_step() {
 }
 
 all_test_steps() {
-  command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
-  wait_step
+  # command_step checks ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_nightly_docker_image ci/test-checks.sh" 20
+  # wait_step
 
   # Coverage...
   if affects \
@@ -147,144 +147,144 @@ all_test_steps() {
   fi
 
   # Full test suite
-  command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
-
-  # Docs tests
-  if affects \
-             .rs$ \
-             ^ci/rust-version.sh \
-             ^ci/test-docs.sh \
-      ; then
-    command_step doctest "ci/test-docs.sh" 15
-  else
-    annotate --style info --context test-docs \
-      "Docs skipped as no .rs files were modified"
-  fi
-  wait_step
-
-  # BPF test suite
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-bpf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-bpf.sh"
-    name: "stable-bpf"
-    timeout_in_minutes: 35
-    artifact_paths: "bpf-dumps.tar.bz2"
-    agents:
-      queue: "gcp"
-EOF
-  else
-    annotate --style info \
-      "Stable-BPF skipped as no relevant files were modified"
-  fi
-
-  # Perf test suite
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "ci/test-stable-perf.sh"
-    name: "stable-perf"
-    timeout_in_minutes: 20
-    artifact_paths: "log-*.txt"
-    agents:
-      queue: "cuda"
-EOF
-  else
-    annotate --style info \
-      "Stable-perf skipped as no relevant files were modified"
-  fi
-
-  # Downstream backwards compatibility
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-stable-perf.sh \
-             ^ci/test-stable.sh \
-             ^ci/test-local-cluster.sh \
-             ^core/build.rs \
-             ^fetch-perf-libs.sh \
-             ^programs/ \
-             ^sdk/ \
-             ^scripts/build-downstream-projects.sh \
-      ; then
-    cat >> "$output_file" <<"EOF"
-  - command: "scripts/build-downstream-projects.sh"
-    name: "downstream-projects"
-    timeout_in_minutes: 35
-    agents:
-      queue: "solana"
-EOF
-  else
-    annotate --style info \
-      "downstream-projects skipped as no relevant files were modified"
-  fi
-
-  # Wasm support
-  if affects \
-             ^ci/test-wasm.sh \
-             ^ci/test-stable.sh \
-             ^sdk/ \
-      ; then
-    command_step wasm ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-wasm.sh" 20
-  else
-    annotate --style info \
-      "wasm skipped as no relevant files were modified"
-  fi
-
-  # Benches...
-  if affects \
-             .rs$ \
-             Cargo.lock$ \
-             Cargo.toml$ \
-             ^ci/rust-version.sh \
-             ^ci/test-coverage.sh \
-             ^ci/test-bench.sh \
-      ; then
-    command_step bench "ci/test-bench.sh" 40
-  else
-    annotate --style info --context test-bench \
-      "Bench skipped as no .rs files were modified"
-  fi
-
-  command_step "local-cluster" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
-    40
-
-  command_step "local-cluster-flakey" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
-    10
-
-  command_step "local-cluster-slow-1" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-1.sh" \
-    40
-
-  command_step "local-cluster-slow-2" \
-    ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-2.sh" \
-    40
+#   command_step stable ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-stable.sh" 70
+#
+#   # Docs tests
+#   if affects \
+#              .rs$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-docs.sh \
+#       ; then
+#     command_step doctest "ci/test-docs.sh" 15
+#   else
+#     annotate --style info --context test-docs \
+#       "Docs skipped as no .rs files were modified"
+#   fi
+#   wait_step
+#
+#   # BPF test suite
+#   if affects \
+#              .rs$ \
+#              Cargo.lock$ \
+#              Cargo.toml$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-stable-bpf.sh \
+#              ^ci/test-stable.sh \
+#              ^ci/test-local-cluster.sh \
+#              ^core/build.rs \
+#              ^fetch-perf-libs.sh \
+#              ^programs/ \
+#              ^sdk/ \
+#       ; then
+#     cat >> "$output_file" <<"EOF"
+#   - command: "ci/test-stable-bpf.sh"
+#     name: "stable-bpf"
+#     timeout_in_minutes: 35
+#     artifact_paths: "bpf-dumps.tar.bz2"
+#     agents:
+#       queue: "gcp"
+# EOF
+#   else
+#     annotate --style info \
+#       "Stable-BPF skipped as no relevant files were modified"
+#   fi
+#
+#   # Perf test suite
+#   if affects \
+#              .rs$ \
+#              Cargo.lock$ \
+#              Cargo.toml$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-stable-perf.sh \
+#              ^ci/test-stable.sh \
+#              ^ci/test-local-cluster.sh \
+#              ^core/build.rs \
+#              ^fetch-perf-libs.sh \
+#              ^programs/ \
+#              ^sdk/ \
+#       ; then
+#     cat >> "$output_file" <<"EOF"
+#   - command: "ci/test-stable-perf.sh"
+#     name: "stable-perf"
+#     timeout_in_minutes: 20
+#     artifact_paths: "log-*.txt"
+#     agents:
+#       queue: "cuda"
+# EOF
+#   else
+#     annotate --style info \
+#       "Stable-perf skipped as no relevant files were modified"
+#   fi
+#
+#   # Downstream backwards compatibility
+#   if affects \
+#              .rs$ \
+#              Cargo.lock$ \
+#              Cargo.toml$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-stable-perf.sh \
+#              ^ci/test-stable.sh \
+#              ^ci/test-local-cluster.sh \
+#              ^core/build.rs \
+#              ^fetch-perf-libs.sh \
+#              ^programs/ \
+#              ^sdk/ \
+#              ^scripts/build-downstream-projects.sh \
+#       ; then
+#     cat >> "$output_file" <<"EOF"
+#   - command: "scripts/build-downstream-projects.sh"
+#     name: "downstream-projects"
+#     timeout_in_minutes: 35
+#     agents:
+#       queue: "solana"
+# EOF
+#   else
+#     annotate --style info \
+#       "downstream-projects skipped as no relevant files were modified"
+#   fi
+#
+#   # Wasm support
+#   if affects \
+#              ^ci/test-wasm.sh \
+#              ^ci/test-stable.sh \
+#              ^sdk/ \
+#       ; then
+#     command_step wasm ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-wasm.sh" 20
+#   else
+#     annotate --style info \
+#       "wasm skipped as no relevant files were modified"
+#   fi
+#
+#   # Benches...
+#   if affects \
+#              .rs$ \
+#              Cargo.lock$ \
+#              Cargo.toml$ \
+#              ^ci/rust-version.sh \
+#              ^ci/test-coverage.sh \
+#              ^ci/test-bench.sh \
+#       ; then
+#     command_step bench "ci/test-bench.sh" 40
+#   else
+#     annotate --style info --context test-bench \
+#       "Bench skipped as no .rs files were modified"
+#   fi
+#
+#   command_step "local-cluster" \
+#     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster.sh" \
+#     40
+#
+#   command_step "local-cluster-flakey" \
+#     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-flakey.sh" \
+#     10
+#
+#   command_step "local-cluster-slow-1" \
+#     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-1.sh" \
+#     40
+#
+#   command_step "local-cluster-slow-2" \
+#     ". ci/rust-version.sh; ci/docker-run.sh \$\$rust_stable_docker_image ci/test-local-cluster-slow-2.sh" \
+#     40
 }
 
 pull_or_push_steps() {
