@@ -460,6 +460,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_prioritization_fee_cache_update() {
         solana_logger::setup();
         let write_account_a = Pubkey::new_unique();
@@ -520,6 +521,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_available_block_count() {
         let prioritization_fee_cache = PrioritizationFeeCache::default();
 
@@ -553,6 +555,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_get_prioritization_fees() {
         solana_logger::setup();
         let write_account_a = Pubkey::new_unique();
@@ -666,6 +669,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_get_account_prioritization_fees() {
         solana_logger::setup();
         let write_account_a = Pubkey::new_unique();

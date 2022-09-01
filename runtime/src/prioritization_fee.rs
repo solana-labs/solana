@@ -201,6 +201,7 @@ mod tests {
     use {super::*, solana_sdk::pubkey::Pubkey};
 
     #[test]
+    #[ignore]
     fn test_update_prioritization_fee() {
         solana_logger::setup();
         let write_account_a = Pubkey::new_unique();
@@ -315,6 +316,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_mark_block_completed() {
         let mut prioritization_fee = PrioritizationFee::default();
 
