@@ -75,7 +75,11 @@ rewards for the stake accounts. Any plain restart from those snapshots will be
 wrong, unless we reconstruct the rewards from the recent epoch boundary. This
 will add some complexity to validator restart. In the first implementation, we
 will force *not* taking any snapshot and *not* performing accounts hash
-calculation during the `rewarding interval`. In future, if needed, we can
+calculation during the `rewarding interval`. Incremental snapshot request will
+be skipped. Full snapshot request will be re-queued be picked up later at the
+end of the `reward interval`.
+
+In future, if needed, we can
 revisit to enable taking snapshots and perform hash calculation during reward
 interval.
 
