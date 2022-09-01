@@ -99,7 +99,7 @@ impl ShredData {
     // Maximum size of ledger data that can be embedded in a data-shred.
     // merkle_proof_size is the number of proof entries in the merkle tree
     // branch. None indicates a legacy data-shred.
-    pub fn capacity(merkle_proof_size: Option<u8>) -> Result<usize, Error> {
+    pub(crate) fn capacity(merkle_proof_size: Option<u8>) -> Result<usize, Error> {
         match merkle_proof_size {
             None => Ok(legacy::ShredData::CAPACITY),
             Some(proof_size) => merkle::ShredData::capacity(proof_size),
