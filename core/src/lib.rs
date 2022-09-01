@@ -38,6 +38,7 @@ pub mod ledger_cleanup_service;
 pub mod ledger_metric_report_service;
 pub mod optimistic_confirmation_verifier;
 pub mod outstanding_requests;
+pub mod packet_deserializer;
 mod packet_hasher;
 pub mod packet_threshold;
 pub mod poh_timing_report_service;
