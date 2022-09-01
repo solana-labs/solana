@@ -1048,6 +1048,7 @@ Get the fee the network will charge for a particular Message
 - `message: <string>` - Base-64 encoded Message
 - `<object>` - (optional) Configuration object containing the following optional fields:
   - (optional) `commitment: <string>` - [Commitment](jsonrpc-api.md#configuring-state-commitment) (used for retrieving blockhash)
+  - (optional) `minContextSlot: <number>` - set the minimum slot that the request can be evaluated at.
 
 #### Results:
 
