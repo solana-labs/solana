@@ -45,26 +45,36 @@ impl PacketDeserializer {
     ) -> Result<ReceivePacketResults, RecvTimeoutError> {
         let (packet_batches, sigverify_tracer_stats_option) =
             self.receive_until(recv_timeout, capacity)?;
+        Ok(Self::deserialize_and_collect_packets(
+            &packet_batches,
+            sigverify_tracer_stats_option,
+        ))
+    }
 
+    /// Deserialize packet batches and collect them into ReceivePacketResults
+    fn deserialize_and_collect_packets(
+        packet_batches: &[PacketBatch],
+        sigverify_tracer_stats_option: Option<SigverifyTracerPacketStats>,
+    ) -> ReceivePacketResults {
         let packet_count: usize = packet_batches.iter().map(|x| x.len()).sum();
         let mut passed_sigverify_count: usize = 0;
         let mut failed_sigverify_count: usize = 0;
         let mut deserialized_packets = Vec::with_capacity(packet_count);
         for packet_batch in packet_batches {
-            let packet_indexes = Self::generate_packet_indexes(&packet_batch);
+            let packet_indexes = Self::generate_packet_indexes(packet_batch);
 
             passed_sigverify_count += packet_indexes.len();
             failed_sigverify_count += packet_batch.len().saturating_sub(packet_indexes.len());
 
-            deserialized_packets.extend(Self::deserialize_packets(&packet_batch, &packet_indexes));
+            deserialized_packets.extend(Self::deserialize_packets(packet_batch, &packet_indexes));
         }
 
-        Ok(ReceivePacketResults {
+        ReceivePacketResults {
             deserialized_packets,
             new_tracer_stats_option: sigverify_tracer_stats_option,
             passed_sigverify_count: passed_sigverify_count as u64,
             failed_sigverify_count: failed_sigverify_count as u64,
-        })
+        }
     }
 
     /// Receives packet batches from sigverify stage with a timeout, and aggregates tracer packet stats
