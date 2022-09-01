@@ -10,7 +10,7 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer::PacketDeserializer,
+        packet_deserializer::{PacketDeserializer, ReceivePacketResults},
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
@@ -2001,12 +2001,12 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
-        let (
+        let ReceivePacketResults {
             deserialized_packets,
-            new_sigverify_stats_option,
+            new_tracer_stats_option,
             passed_sigverify_count,
             failed_sigverify_count,
-        ) = packet_deserializer.handle_received_packets(
+        } = packet_deserializer.handle_received_packets(
             recv_timeout,
             buffered_packet_batches.capacity() - buffered_packet_batches.len(),
         )?;
@@ -2019,7 +2019,7 @@ impl BankingStage {
             id,
         );
 
-        if let Some(new_sigverify_stats) = &new_sigverify_stats_option {
+        if let Some(new_sigverify_stats) = &new_tracer_stats_option {
             tracer_packet_stats.aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
         }
 

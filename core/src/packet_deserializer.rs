@@ -12,12 +12,18 @@ use {
 
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
 pub type BankingPacketReceiver = CrossbeamReceiver<BankingPacketBatch>;
-pub type ReceivePacketResults = (
-    Vec<ImmutableDeserializedPacket>,
-    Option<SigverifyTracerPacketStats>,
-    u64, // passed sigverify
-    u64, // failed sigverify
-);
+
+/// Results from deserializing packet batches.
+pub struct ReceivePacketResults {
+    /// Deserialized packets from all received packet batches
+    pub deserialized_packets: Vec<ImmutableDeserializedPacket>,
+    /// Aggregate tracer stats for all received packet batches
+    pub new_tracer_stats_option: Option<SigverifyTracerPacketStats>,
+    /// Number of packets passing sigverify
+    pub passed_sigverify_count: u64,
+    /// Number of packets failing sigverify
+    pub failed_sigverify_count: u64,
+}
 
 pub struct PacketDeserializer {
     /// Receiver for packet batches from sigverify stage
@@ -53,12 +59,12 @@ impl PacketDeserializer {
             deserialized_packets.extend(Self::deserialize_packets(&packet_batch, &packet_indexes));
         }
 
-        Ok((
+        Ok(ReceivePacketResults {
             deserialized_packets,
-            sigverify_tracer_stats_option,
-            passed_sigverify_count as u64,
-            failed_sigverify_count as u64,
-        ))
+            new_tracer_stats_option: sigverify_tracer_stats_option,
+            passed_sigverify_count: passed_sigverify_count as u64,
+            failed_sigverify_count: failed_sigverify_count as u64,
+        })
     }
 
     /// Receives packet batches from sigverify stage with a timeout, and aggregates tracer packet stats
