@@ -23,6 +23,59 @@ use {
 
 pub type TransactionAccount = (Pubkey, AccountSharedData);
 
+/// For addressing (nested) properties of the TransactionContext
+#[repr(u16)]
+pub enum TransactionContextAttribute {
+    /// TransactionContext -> &[u8]
+    ReturnData,
+    /// TransactionContext -> u128
+    AccountsResizeDelta,
+    /// TransactionContext -> u16
+    TransactionAccountCount,
+    /// TransactionContext -> &[TransactionAccount] -> Pubkey
+    TransactionAccountKey,
+    /// TransactionContext -> &[TransactionAccount] -> Pubkey
+    TransactionAccountOwner,
+    /// TransactionContext -> &[TransactionAccount] -> u64
+    TransactionAccountLamports,
+    /// TransactionContext -> &[TransactionAccount] -> &[u8]
+    TransactionAccountData,
+    /// TransactionContext -> &[TransactionAccount] -> bool
+    TransactionAccountIsExecutable,
+    /// TransactionContext -> &[TransactionAccount] -> u64
+    TransactionAccountRentEpoch,
+    /// TransactionContext -> &[TransactionAccount] -> bool
+    TransactionAccountTouchedFlag,
+    /// TransactionContext -> u8
+    InstructionStackHeight,
+    /// TransactionContext -> u8
+    InstructionStackCapacity,
+    /// TransactionContext -> &[u8]
+    InstructionStackEntry,
+    /// TransactionContext -> u16
+    InstructionTraceLength,
+    /// TransactionContext -> u16
+    InstructionTraceCapacity,
+    /// TransactionContext -> &[InstructionContext] -> u8
+    InstructionTraceNestingLevel,
+    /// TransactionContext -> &[InstructionContext] -> u128
+    InstructionTraceLamportSum,
+    /// TransactionContext -> &[InstructionContext] -> &[u8]
+    InstructionTraceInstructionData,
+    /// TransactionContext -> &[InstructionContext] -> &[u16]
+    InstructionTraceProgramAccount,
+    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> u16
+    InstructionAccountIndexInTransaction,
+    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> u16
+    InstructionAccountIndexInCaller,
+    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> u16
+    InstructionAccountIndexInCallee,
+    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> bool
+    InstructionAccountIsSigner,
+    /// TransactionContext -> &[InstructionContext] -> &[InstructionAccount] -> bool
+    InstructionAccountIsWritable,
+}
+
 /// Contains account meta data which varies between instruction.
 ///
 /// It also contains indices to other structures for faster lookup.
