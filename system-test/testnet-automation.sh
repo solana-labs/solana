@@ -13,7 +13,7 @@ Test failed during step:
 ${STEP}
 
 Failure occured when running the following command:
-$(eval echo "$@")"
+$*"
   fi
 
 # shellcheck disable=SC2034
