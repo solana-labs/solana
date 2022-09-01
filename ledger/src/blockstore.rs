@@ -1032,6 +1032,7 @@ impl Blockstore {
             .expect("Couldn't fetch from SlotMeta column family")
         {
             // Clear all slot related information
+            // todo: is this new PurgeType correct in this context?
             self.run_purge(slot, slot, PurgeType::CompactionFilter)
                 .expect("Purge database operations failed");
 

@@ -441,6 +441,7 @@ pub mod tests {
                 .unwrap();
         }
         // Purge to freeze index 0
+        // todo: is this new PurgeType correct in this context?
         blockstore.run_purge(0, 1, PurgeType::Exact).unwrap();
 
         for x in max_slot..2 * max_slot {
