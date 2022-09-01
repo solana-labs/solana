@@ -1,0 +1,166 @@
+diff --git a/node_modules/borsh/lib/index.d.ts b/node_modules/borsh/lib/index.d.ts
+index f42a8f0..5ae491a 100644
+--- a/node_modules/borsh/lib/index.d.ts
++++ b/node_modules/borsh/lib/index.d.ts
+@@ -1,5 +1,5 @@
+ /// <reference types="node" />
+-import BN from "bn.js";
++import type BN from 'bn.js';
+ export declare function baseEncode(value: Uint8Array | string): string;
+ export declare function baseDecode(value: string): Buffer;
+ export declare type Schema = Map<Function, any>;
+@@ -17,10 +17,11 @@ export declare class BinaryWriter {
+     writeU8(value: number): void;
+     writeU16(value: number): void;
+     writeU32(value: number): void;
+-    writeU64(value: number | BN): void;
+-    writeU128(value: number | BN): void;
+-    writeU256(value: number | BN): void;
+-    writeU512(value: number | BN): void;
++    private writeBigInteger;
++    writeU64(value: number | bigint | BN): void;
++    writeU128(value: number | bigint | BN): void;
++    writeU256(value: number | bigint | BN): void;
++    writeU512(value: number | bigint | BN): void;
+     private writeBuffer;
+     writeString(str: string): void;
+     writeFixedArray(array: Uint8Array): void;
+@@ -34,10 +35,11 @@ export declare class BinaryReader {
+     readU8(): number;
+     readU16(): number;
+     readU32(): number;
+-    readU64(): BN;
+-    readU128(): BN;
+-    readU256(): BN;
+-    readU512(): BN;
++    private readBigInteger;
++    readU64(): bigint;
++    readU128(): bigint;
++    readU256(): bigint;
++    readU512(): bigint;
+     private readBuffer;
+     readString(): string;
+     readFixedArray(len: number): Uint8Array;
+diff --git a/node_modules/borsh/lib/index.js b/node_modules/borsh/lib/index.js
+index 49ba99e..8e30bed 100644
+--- a/node_modules/borsh/lib/index.js
++++ b/node_modules/borsh/lib/index.js
+@@ -1,7 +1,11 @@
+ "use strict";
+ var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+     if (k2 === undefined) k2 = k;
+-    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
++    var desc = Object.getOwnPropertyDescriptor(m, k);
++    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
++      desc = { enumerable: true, get: function() { return m[k]; } };
++    }
++    Object.defineProperty(o, k2, desc);
+ }) : (function(o, m, k, k2) {
+     if (k2 === undefined) k2 = k;
+     o[k2] = m[k];
+@@ -20,7 +24,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
+ var __importStar = (this && this.__importStar) || function (mod) {
+     if (mod && mod.__esModule) return mod;
+     var result = {};
+-    if (mod != null) for (var k in mod) if (k !== "default" && Object.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
++    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+     __setModuleDefault(result, mod);
+     return result;
+ };
+@@ -29,7 +33,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
+ };
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.deserializeUnchecked = exports.deserialize = exports.serialize = exports.BinaryReader = exports.BinaryWriter = exports.BorshError = exports.baseDecode = exports.baseEncode = void 0;
+-const bn_js_1 = __importDefault(require("bn.js"));
++const bigint_buffer_1 = require("bigint-buffer");
+ const bs58_1 = __importDefault(require("bs58"));
+ // TODO: Make sure this polyfill not included when not required
+ const encoding = __importStar(require("text-encoding-utf-8"));
+@@ -50,7 +54,6 @@ const INITIAL_LENGTH = 1024;
+ class BorshError extends Error {
+     constructor(message) {
+         super(message);
+-        this.fieldPath = [];
+         this.originalMessage = message;
+     }
+     addToFieldPath(fieldName) {
+@@ -86,21 +89,32 @@ class BinaryWriter {
+         this.buf.writeUInt32LE(value, this.length);
+         this.length += 4;
+     }
+-    writeU64(value) {
++    writeBigInteger(value, bytes) {
+         this.maybeResize();
+-        this.writeBuffer(Buffer.from(new bn_js_1.default(value).toArray("le", 8)));
++        let buffer;
++        if (typeof value === "object") {
++            // By process of elimination, `value` is an instance of `BN`.
++            buffer = value.toBuffer("le", bytes);
++        }
++        else {
++            if (typeof value === "number") {
++                value = BigInt(value);
++            }
++            buffer = (0, bigint_buffer_1.toBufferLE)(value, bytes);
++        }
++        this.writeBuffer(buffer);
++    }
++    writeU64(value) {
++        this.writeBigInteger(value, 8);
+     }
+     writeU128(value) {
+-        this.maybeResize();
+-        this.writeBuffer(Buffer.from(new bn_js_1.default(value).toArray("le", 16)));
++        this.writeBigInteger(value, 16);
+     }
+     writeU256(value) {
+-        this.maybeResize();
+-        this.writeBuffer(Buffer.from(new bn_js_1.default(value).toArray("le", 32)));
++        this.writeBigInteger(value, 32);
+     }
+     writeU512(value) {
+-        this.maybeResize();
+-        this.writeBuffer(Buffer.from(new bn_js_1.default(value).toArray("le", 64)));
++        this.writeBigInteger(value, 64);
+     }
+     writeBuffer(buffer) {
+         // Buffer.from is needed as this.buf.subarray can return plain Uint8Array in browser
+@@ -170,21 +184,21 @@ class BinaryReader {
+         this.offset += 4;
+         return value;
+     }
++    readBigInteger(bytes) {
++        const buf = this.readBuffer(bytes);
++        return (0, bigint_buffer_1.toBigIntLE)(buf);
++    }
+     readU64() {
+-        const buf = this.readBuffer(8);
+-        return new bn_js_1.default(buf, "le");
++        return this.readBigInteger(8);
+     }
+     readU128() {
+-        const buf = this.readBuffer(16);
+-        return new bn_js_1.default(buf, "le");
++        return this.readBigInteger(16);
+     }
+     readU256() {
+-        const buf = this.readBuffer(32);
+-        return new bn_js_1.default(buf, "le");
++        return this.readBigInteger(32);
+     }
+     readU512() {
+-        const buf = this.readBuffer(64);
+-        return new bn_js_1.default(buf, "le");
++        return this.readBigInteger(64);
+     }
+     readBuffer(len) {
+         if (this.offset + len > this.buf.length) {
+@@ -378,7 +392,7 @@ function deserializeField(schema, fieldName, fieldType, reader) {
+             return undefined;
+         }
+         if (fieldType.kind === "map") {
+-            let map = new Map();
++            const map = new Map();
+             const length = reader.readU32();
+             for (let i = 0; i < length; i++) {
+                 const key = deserializeField(schema, fieldName, fieldType.key, reader);
