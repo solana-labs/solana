@@ -45,6 +45,7 @@ use {
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
+        epoch_accounts_hash::EpochAccountsHash,
         expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
@@ -1182,6 +1183,10 @@ pub struct AccountsDb {
     /// Used to disable logging dead slots during removal.
     /// allow disabling noisy log
     pub(crate) log_dead_slots: AtomicBool,
+
+    /// A special accounts hash that occurs once per epoch
+    #[allow(dead_code)]
+    pub(crate) epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
 }
 
 #[derive(Debug, Default)]
@@ -1979,6 +1984,7 @@ impl AccountsDb {
             filler_account_suffix: None,
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
+            epoch_accounts_hash: Mutex::new(None),
         }
     }
 
