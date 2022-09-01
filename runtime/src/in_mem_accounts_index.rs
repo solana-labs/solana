@@ -633,6 +633,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         }
                     } else {
                         found_other_slot = true;
+                        if !is_cur_account_cached {
+                            // current info at 'other_slot' is NOT cached, so we should NOT addref. This slot already has a ref count for this pubkey.
+                            addref = false;
+                        }
                     }
                 }
             });
@@ -1716,8 +1720,10 @@ mod tests {
         let other_slot = Some(unique_other_slot);
         let mut reclaims = Vec::default();
         assert!(
-            // upserting into slot_list that does NOT contain an entry at 'new-slot', so always addref
-            InMemAccountsIndex::update_slot_list(
+            // upserting into slot_list that does NOT contain an entry at 'new_slot'
+            // but, it DOES contain an entry at other_slot, so we do NOT add-ref. The assumption is that 'other_slot' is going away
+            // and that the previously held add-ref is now used by 'new_slot'
+            !InMemAccountsIndex::update_slot_list(
                 &mut slot_list,
                 new_slot,
                 info,
@@ -1822,8 +1828,8 @@ mod tests {
 
                     // calculate expected results
                     let mut expected_reclaims = Vec::default();
-                    // addref iff the slot_list did NOT previously contain an entry at 'new_slot'
-                    let expected_result = !expected.iter().any(|(slot, _info)| slot == &new_slot);
+                    // addref iff the slot_list did NOT previously contain an entry at 'new_slot' and it also did not contain an entry at 'other_slot'
+                    let expected_result = !expected.iter().any(|(slot, _info)| slot == &new_slot || Some(*slot) == other_slot);
                     {
                         // this is the logical equivalent of 'InMemAccountsIndex::update_slot_list', but slower (and ignoring addref)
                         expected.retain(|(slot, info)| {
