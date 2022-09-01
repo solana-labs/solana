@@ -2104,7 +2104,7 @@ node's prioritization-fee cache stores data from up to 150 blocks.
 
 #### Parameters:
 
-- `<array>` - (optional) An array of account address strings. If this parameter is provided, the response will reflect the minimum prioritization fee to land a transaction locking any of the provided accounts as writable.
+- `<array>` - (optional) An array of account address strings. If this parameter is provided, the response will reflect the minimum prioritization fee to land a transaction locking all of the provided accounts as writable.
 
 #### Results:
 
