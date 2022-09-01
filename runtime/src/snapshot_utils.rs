@@ -1191,7 +1191,6 @@ fn spawn_unpack_snapshot_thread(
 }
 
 /// Streams unpacked files across channel
-#[allow(clippy::needless_collect)]
 fn streaming_unarchive_snapshot(
     file_sender: Sender<PathBuf>,
     account_paths: Vec<PathBuf>,
@@ -1203,13 +1202,16 @@ fn streaming_unarchive_snapshot(
     let account_paths = Arc::new(account_paths);
     let ledger_dir = Arc::new(ledger_dir);
     let shared_buffer = untar_snapshot_create_shared_buffer(&snapshot_archive_path, archive_format);
+
     // All shared buffer readers need to be created before the threads are spawned
+    #[allow(clippy::needless_collect)]
     let archives: Vec<_> = (0..num_threads)
         .map(|_| {
             let reader = SharedBufferReader::new(&shared_buffer);
             Archive::new(reader)
         })
         .collect();
+
     archives
         .into_iter()
         .enumerate()
