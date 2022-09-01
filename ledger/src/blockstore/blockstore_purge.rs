@@ -152,7 +152,7 @@ impl Blockstore {
             .batch()
             .expect("Database Error: Failed to get write batch");
         let mut delete_range_timer = Measure::start("delete_range");
-        let mut columns_purged = self
+        let columns_purged = self
             .db
             .delete_range_cf::<cf::SlotMeta>(&mut write_batch, from_slot, to_slot)
             .is_ok()
@@ -212,7 +212,7 @@ impl Blockstore {
                 .db
                 .delete_range_cf::<cf::OptimisticSlots>(&mut write_batch, from_slot, to_slot)
                 .is_ok();
-        let mut w_active_transaction_status_index =
+        let w_active_transaction_status_index =
             self.active_transaction_status_index.write().unwrap();
         match purge_type {
             PurgeType::Exact => {

@@ -6,20 +6,19 @@
 
 use {
     crossbeam_channel::{Receiver, RecvTimeoutError},
-    rand::{thread_rng, Rng},
     solana_ledger::{
         blockstore::{Blockstore, PurgeType},
         blockstore_db::Result as BlockstoreResult,
     },
     solana_measure::measure::Measure,
-    solana_sdk::clock::{Slot, DEFAULT_TICKS_PER_SLOT, TICKS_PER_DAY},
+    solana_sdk::clock::Slot,
     std::{
         string::ToString,
         sync::{
-            atomic::{AtomicBool, AtomicU64, Ordering},
+            atomic::{AtomicBool, Ordering},
             Arc,
         },
-        thread::{self, sleep, Builder, JoinHandle},
+        thread::{self, Builder, JoinHandle},
         time::Duration,
     },
 };
@@ -60,9 +59,6 @@ impl LedgerCleanupService {
             max_ledger_shreds
         );
 
-        let exit_compact = exit.clone();
-        let blockstore_compact = blockstore.clone();
-
         let t_cleanup = Builder::new()
             .name("solLedgerClean".to_string())
             .spawn(move || loop {
@@ -84,9 +80,7 @@ impl LedgerCleanupService {
             })
             .unwrap();
 
-        Self {
-            t_cleanup,
-        }
+        Self { t_cleanup }
     }
 
     /// A helper function to `cleanup_ledger` which returns a tuple of the

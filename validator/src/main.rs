@@ -1263,13 +1263,6 @@ pub fn main() {
                             Format of the file: `staked_map_id: {<pubkey>: <SOL stake amount>}"),
         )
         .arg(
-            Arg::with_name("rocksdb_max_compaction_jitter")
-                .long("rocksdb-max-compaction-jitter-slots")
-                .value_name("ROCKSDB_MAX_COMPACTION_JITTER_SLOTS")
-                .takes_value(true)
-                .help("Introduce jitter into the compaction to offset compaction operation"),
-        )
-        .arg(
             Arg::with_name("bind_address")
                 .long("bind-address")
                 .value_name("HOST")
@@ -2347,8 +2340,6 @@ pub fn main() {
 
     let private_rpc = matches.is_present("private_rpc");
     let do_port_check = !matches.is_present("no_port_check");
-    let rocksdb_max_compaction_jitter =
-        value_t!(matches, "rocksdb_max_compaction_jitter", u64).ok();
     let tpu_coalesce_ms =
         value_t!(matches, "tpu_coalesce_ms", u64).unwrap_or(DEFAULT_TPU_COALESCE_MS);
     let wal_recovery_mode = matches
