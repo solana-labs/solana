@@ -514,6 +514,10 @@ pub mod cap_accounts_data_allocations_per_transaction {
     solana_sdk::declare_id!("9gxu85LYRAcZL38We8MYJ4A9AwgBBPtVBAqebMcT1241");
 }
 
+pub mod epoch_accounts_hash {
+    solana_sdk::declare_id!("5GpmAKxaGsWWbPp4bNXFLJxZVvG92ctxf7jQnzTQjF3n");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -637,6 +641,7 @@ lazy_static! {
         (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
         (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         (cap_accounts_data_allocations_per_transaction::id(), "cap accounts data allocations per transaction #27375"),
+        (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()
