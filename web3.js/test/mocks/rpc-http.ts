@@ -1,5 +1,5 @@
+import {toBufferLE} from 'bigint-buffer';
 import bs58 from 'bs58';
-import BN from 'bn.js';
 import * as mockttp from 'mockttp';
 
 import {mockRpcMessage} from './rpc-websockets';
@@ -10,12 +10,12 @@ import type {Commitment, HttpHeaders, RpcParams} from '../../src/connection';
 export const mockServer: mockttp.Mockttp | undefined =
   process.env.TEST_LIVE === undefined ? mockttp.getLocal() : undefined;
 
-let uniqueCounter = 0;
+let uniqueCounter = 0n;
 export const uniqueSignature = () => {
-  return bs58.encode(new BN(++uniqueCounter).toArray(undefined, 64));
+  return bs58.encode(toBufferLE(++uniqueCounter, 64));
 };
 export const uniqueBlockhash = () => {
-  return bs58.encode(new BN(++uniqueCounter).toArray(undefined, 32));
+  return bs58.encode(toBufferLE(++uniqueCounter, 32));
 };
 
 export const mockErrorMessage = 'Invalid';

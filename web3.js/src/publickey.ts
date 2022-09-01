@@ -1,4 +1,5 @@
-import BN from 'bn.js';
+import {toBigIntLE, toBufferLE} from 'bigint-buffer';
+import type BN from 'bn.js';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import {sha256} from '@noble/hashes/sha256';
@@ -21,10 +22,12 @@ export const PUBLIC_KEY_LENGTH = 32;
  * Value to be converted into public key
  */
 export type PublicKeyInitData =
+  | bigint
   | number
   | string
   | Uint8Array
   | Array<number>
+  | PublicKey
   | PublicKeyData;
 
 /**
@@ -32,11 +35,15 @@ export type PublicKeyInitData =
  */
 export type PublicKeyData = {
   /** @internal */
-  _bn: BN;
+  _bn: BN | bigint;
 };
 
-function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
-  return (value as PublicKeyData)._bn !== undefined;
+function isPublicKeyData(
+  value: PublicKeyInitData,
+): value is PublicKeyData | PublicKey {
+  return (
+    value instanceof PublicKey || (value as PublicKeyData)._bn !== undefined
+  );
 }
 
 // local counter used by PublicKey.unique()
@@ -47,7 +54,7 @@ let uniquePublicKeyCounter = 1;
  */
 export class PublicKey extends Struct {
   /** @internal */
-  _bn: BN;
+  _bn: bigint;
 
   /**
    * Create a new PublicKey object
@@ -56,22 +63,41 @@ export class PublicKey extends Struct {
   constructor(value: PublicKeyInitData) {
     super({});
     if (isPublicKeyData(value)) {
-      this._bn = value._bn;
-    } else {
-      if (typeof value === 'string') {
-        // assume base 58 encoding by default
-        const decoded = bs58.decode(value);
-        if (decoded.length != PUBLIC_KEY_LENGTH) {
-          throw new Error(`Invalid public key input`);
-        }
-        this._bn = new BN(decoded);
+      if (typeof value._bn === 'object') {
+        // Legacy implementation of public key storage as a `BN` instance.
+        this._bn = toBigIntLE(value._bn.toBuffer('le', 32));
       } else {
-        this._bn = new BN(value);
+        this._bn = value._bn;
       }
-
-      if (this._bn.byteLength() > PUBLIC_KEY_LENGTH) {
+    } else if (typeof value === 'number') {
+      this._bn = BigInt(value);
+    } else if (typeof value === 'bigint') {
+      this._bn = value;
+      if (
+        this._bn >=
+        // 2^256
+        BigInt(
+          '115792089237316195423570985008687907853269984665640564039457584007913129639936',
+        )
+      ) {
         throw new Error(`Invalid public key input`);
       }
+    } else {
+      let buffer: Buffer;
+      if (typeof value === 'string') {
+        // assume base 58 encoding by default
+        buffer = bs58.decode(value);
+      } else if (Array.isArray(value)) {
+        buffer = Buffer.from(new Uint8Array(value));
+      } else if (value instanceof Uint8Array) {
+        buffer = Buffer.from(value);
+      } else {
+        buffer = value;
+      }
+      if (buffer.byteLength !== PUBLIC_KEY_LENGTH) {
+        throw new Error(`Invalid public key input`);
+      }
+      this._bn = toBigIntLE(buffer);
     }
   }
 
@@ -94,7 +120,7 @@ export class PublicKey extends Struct {
    * Checks if two publicKeys are equal
    */
   equals(publicKey: PublicKey): boolean {
-    return this._bn.eq(publicKey._bn);
+    return this._bn === publicKey._bn;
   }
 
   /**
@@ -120,14 +146,7 @@ export class PublicKey extends Struct {
    * Return the Buffer representation of the public key in big endian
    */
   toBuffer(): Buffer {
-    const b = this._bn.toArrayLike(Buffer);
-    if (b.length === PUBLIC_KEY_LENGTH) {
-      return b;
-    }
-
-    const zeroPad = Buffer.alloc(32);
-    b.copy(zeroPad, 32 - b.length);
-    return zeroPad;
+    return toBufferLE(this._bn, PUBLIC_KEY_LENGTH);
   }
 
   get [Symbol.toStringTag](): string {

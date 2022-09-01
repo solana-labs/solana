@@ -24,6 +24,10 @@ describe('PublicKey', function () {
     }).to.throw();
 
     expect(() => {
+      new PublicKey(2n ** 256n);
+    }).to.throw();
+
+    expect(() => {
       new PublicKey(
         '0x300000000000000000000000000000000000000000000000000000000000000',
       );
