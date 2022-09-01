@@ -1195,7 +1195,7 @@ pub struct AccountsDb {
     /// The cadence is once per epoch, all nodes calculate a full accounts hash as of a known slot calculated using 'N'
     /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
     /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
-    pub(crate) epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
+    pub epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
 }
 
 #[derive(Debug, Default)]

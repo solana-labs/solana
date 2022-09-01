@@ -34,7 +34,7 @@ pub mod commitment;
 pub mod contains;
 pub mod cost_model;
 pub mod cost_tracker;
-mod epoch_accounts_hash;
+pub mod epoch_accounts_hash;
 pub mod epoch_stakes;
 pub mod execute_cost_table;
 mod expected_rent_collection;
