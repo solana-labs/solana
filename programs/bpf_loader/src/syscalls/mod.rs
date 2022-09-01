@@ -167,6 +167,7 @@ pub fn register_syscalls(
     let disable_fees_sysvar = invoke_context
         .feature_set
         .is_active(&disable_fees_sysvar::id());
+    let is_abi_v2 = false;
 
     let mut syscall_registry = SyscallRegistry::default();
 
@@ -304,58 +305,67 @@ pub fn register_syscalls(
         SyscallMemset::call,
     )?;
 
-    // Cross-program invocation
-    syscall_registry.register_syscall_by_name(
-        b"sol_invoke_signed_c",
-        SyscallInvokeSignedC::init,
-        SyscallInvokeSignedC::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_invoke_signed_rust",
-        SyscallInvokeSignedRust::init,
-        SyscallInvokeSignedRust::call,
-    )?;
+    if is_abi_v2 {
+        // Set account attributes
+        syscall_registry.register_syscall_by_name(
+            b"sol_set_account_attributes",
+            SyscallSetAccountProperties::init,
+            SyscallSetAccountProperties::call,
+        )?;
+    } else {
+        // Processed sibling instructions
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_processed_sibling_instruction",
+            SyscallGetProcessedSiblingInstruction::init,
+            SyscallGetProcessedSiblingInstruction::call,
+        )?;
 
-    // Memory allocator
-    register_feature_gated_syscall!(
-        syscall_registry,
-        !disable_deploy_of_alloc_free_syscall,
-        b"sol_alloc_free_",
-        SyscallAllocFree::init,
-        SyscallAllocFree::call,
-    )?;
+        // Stack height
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_stack_height",
+            SyscallGetStackHeight::init,
+            SyscallGetStackHeight::call,
+        )?;
 
-    // Return data
-    syscall_registry.register_syscall_by_name(
-        b"sol_set_return_data",
-        SyscallSetReturnData::init,
-        SyscallSetReturnData::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_return_data",
-        SyscallGetReturnData::init,
-        SyscallGetReturnData::call,
-    )?;
+        // Return data
+        syscall_registry.register_syscall_by_name(
+            b"sol_set_return_data",
+            SyscallSetReturnData::init,
+            SyscallSetReturnData::call,
+        )?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_return_data",
+            SyscallGetReturnData::init,
+            SyscallGetReturnData::call,
+        )?;
+
+        // Cross-program invocation
+        syscall_registry.register_syscall_by_name(
+            b"sol_invoke_signed_c",
+            SyscallInvokeSignedC::init,
+            SyscallInvokeSignedC::call,
+        )?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_invoke_signed_rust",
+            SyscallInvokeSignedRust::init,
+            SyscallInvokeSignedRust::call,
+        )?;
+
+        // Memory allocator
+        register_feature_gated_syscall!(
+            syscall_registry,
+            !disable_deploy_of_alloc_free_syscall,
+            b"sol_alloc_free_",
+            SyscallAllocFree::init,
+            SyscallAllocFree::call,
+        )?;
+    }
 
     // Log data
     syscall_registry.register_syscall_by_name(
         b"sol_log_data",
         SyscallLogData::init,
         SyscallLogData::call,
-    )?;
-
-    // Processed sibling instructions
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_processed_sibling_instruction",
-        SyscallGetProcessedSiblingInstruction::init,
-        SyscallGetProcessedSiblingInstruction::call,
-    )?;
-
-    // Stack height
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_stack_height",
-        SyscallGetStackHeight::init,
-        SyscallGetStackHeight::call,
     )?;
 
     Ok(syscall_registry)
