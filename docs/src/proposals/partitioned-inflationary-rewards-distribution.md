@@ -21,9 +21,9 @@ epoch, the bank starts the second phase - reward credit, in which the rewards
 are credited to the stake accounts, which will last for `M` blocks.
 
 We call them:
-(a) `calculating interval` (`epoch_start..epoch_start+N`)
-(b) `credit interval` (`epoch_start+N, epoch_start+N+M`), respectively.
-And the combined interval (`epoch_start..epoch_start+N+M`) is called
+(a) `calculating interval` `[epoch_start, epoch_start+N]`
+(b) `credit interval` `[epoch_start+N+1, epoch_start+N+M]`), respectively.
+And the combined interval `[epoch_start, epoch_start+N+M]`) is called
 `rewarding interval`.
 
 For `calculating interval`, `N` is chosen to be sufficiently large so that the
