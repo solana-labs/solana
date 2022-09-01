@@ -106,4 +106,5 @@ entry.  With these changes, the call will need updated to derive the target
 stake account's credit block, grab _that_ block, then lookup rewards.
 Additionally we'll need to return more informative errors for queries made
 during the lockout period, so users can know that their rewards are pending for
-the target epoch.
+the target epoch. A new rpc API, i.e. `getRewardInterval`, will be added for
+querying the `rewarding interval` for the current epoch.
