@@ -3813,6 +3813,83 @@ describe('Connection', function () {
       const {value} = await connection.getStakeMinimumDelegation();
       expect(value).to.be.a('number');
     });
+
+    it('sendTransaction', async () => {
+      const connection = new Connection(url, 'confirmed');
+      const payer = Keypair.generate();
+
+      await helpers.airdrop({
+        connection,
+        address: payer.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+
+      const recentBlockhash = await (
+        await helpers.latestBlockhash({connection})
+      ).blockhash;
+
+      const versionedTx = new VersionedTransaction(
+        new Message({
+          header: {
+            numRequiredSignatures: 1,
+            numReadonlySignedAccounts: 0,
+            numReadonlyUnsignedAccounts: 0,
+          },
+          recentBlockhash,
+          instructions: [],
+          accountKeys: [payer.publicKey.toBase58()],
+        }),
+      );
+
+      versionedTx.sign([payer]);
+      await connection.sendTransaction(versionedTx);
+    });
+
+    it('simulateTransaction', async () => {
+      const connection = new Connection(url, 'confirmed');
+      const payer = Keypair.generate();
+
+      await helpers.airdrop({
+        connection,
+        address: payer.publicKey,
+        amount: LAMPORTS_PER_SOL,
+      });
+
+      const recentBlockhash = await (
+        await helpers.latestBlockhash({connection})
+      ).blockhash;
+
+      const versionedTx = new VersionedTransaction(
+        new Message({
+          header: {
+            numRequiredSignatures: 1,
+            numReadonlySignedAccounts: 0,
+            numReadonlyUnsignedAccounts: 0,
+          },
+          recentBlockhash,
+          instructions: [],
+          accountKeys: [payer.publicKey.toBase58()],
+        }),
+      );
+
+      const response = await connection.simulateTransaction(versionedTx, {
+        accounts: {
+          encoding: 'base64',
+          addresses: [payer.publicKey.toBase58()],
+        },
+      });
+      expect(response.value.err).to.be.null;
+      expect(response.value.accounts).to.eql([
+        {
+          data: ['', 'base64'],
+          executable: false,
+          lamports: LAMPORTS_PER_SOL - 5000,
+          owner: SystemProgram.programId.toBase58(),
+          rentEpoch: 0,
+        },
+      ]);
+    });
+
     it('simulate transaction with message', async () => {
       connection._commitment = 'confirmed';
 
