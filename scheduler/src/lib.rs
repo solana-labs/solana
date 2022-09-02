@@ -98,7 +98,7 @@ impl ExecutionEnvironment {
 unsafe trait AtScheduleThread {}
 
 impl PageRc {
-    fn page_mut/*<ST: AtScheduleThread>*/(&mut self) -> std::cell::RefMut<'_, Page> {
+    fn page_mut<ST: AtScheduleThread>(&mut self) -> std::cell::RefMut<'_, Page> {
         //unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
         self.0.borrow_mut()
     }
@@ -285,7 +285,7 @@ impl ProvisioningTracker {
 
 impl AddressBook {
     #[inline(never)]
-    fn attempt_lock_address(
+    fn attempt_lock_address<AST: AtScheduleThread>(
         from_runnable: bool,
         prefer_immediate: bool,
         unique_weight: &UniqueWeight,
@@ -293,7 +293,7 @@ impl AddressBook {
     ) {
         let LockAttempt {target, requested_usage, status/*, remembered*/, ..} = attempt;
 
-                let mut page = target.page_mut();
+                let mut page = target.page_mut::<AST>();
 
                 let next_usage = page.next_usage;
                 match page.current_usage {
@@ -351,16 +351,16 @@ impl AddressBook {
                 }
     }
 
-    fn reset_lock(&mut self, attempt: &mut LockAttempt, after_execution: bool) -> bool {
+    fn reset_lock<AST: AtScheduleThread>(&mut self, attempt: &mut LockAttempt, after_execution: bool) -> bool {
         match attempt.status {
             LockStatus::Succeded => {
-                self.unlock(attempt)
+                self.unlock::<AST>(attempt)
             },
             LockStatus::Provisional => {
                 if after_execution {
-                    self.unlock(attempt)
+                    self.unlock::<AST>(attempt)
                 } else {
-                    self.cancel(attempt);
+                    self.cancel::<AST>(attempt);
                     false
                 }
             }
@@ -371,12 +371,12 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn unlock(&mut self, attempt: &mut LockAttempt) -> bool {
+    fn unlock<AST: AtScheduleThread>(&mut self, attempt: &mut LockAttempt) -> bool {
         //debug_assert!(attempt.is_success());
 
         let mut newly_uncontended = false;
 
-        let mut page = attempt.target.page_mut();
+        let mut page = attempt.target.page_mut::<AST>();
 
         match &mut page.current_usage {
             Usage::Readonly(ref mut count) => match &attempt.requested_usage {
@@ -406,8 +406,8 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn cancel(&mut self, attempt: &mut LockAttempt) {
-        let mut page = attempt.target.page_mut();
+    fn cancel<AST: AtScheduleThread>(&mut self, attempt: &mut LockAttempt) {
+        let mut page = attempt.target.page_mut::<AST>();
 
         match page.next_usage {
             Usage::Unused => {
@@ -638,7 +638,7 @@ impl TaskQueue {
 }
 
 #[inline(never)]
-fn attempt_lock_for_execution<'a>(
+fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     from_runnable: bool,
     prefer_immediate: bool,
     address_book: &mut AddressBook,
@@ -651,7 +651,7 @@ fn attempt_lock_for_execution<'a>(
     let mut provisional_count = 0;
 
     for attempt in placeholder_attempts.iter_mut() {
-        AddressBook::attempt_lock_address(from_runnable, prefer_immediate, unique_weight, attempt);
+        AddressBook::attempt_lock_address::<AST>(from_runnable, prefer_immediate, unique_weight, attempt);
         match attempt.status {
             LockStatus::Succeded => {},
             LockStatus::Failed => {
@@ -679,12 +679,6 @@ pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
             )
             .map(|d| d.get_priority()).unwrap_or_default()
 }
-
-#[derive(Debug)]
-struct AtTopOfScheduleThread;
-unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
-impl !Send for AtTopOfScheduleThread {}
-impl !Sync for AtTopOfScheduleThread {}
 
 pub struct ScheduleStage {}
 
@@ -752,7 +746,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn pop_from_queue_then_lock(
+    fn pop_from_queue_then_lock<AST: AtScheduleThread>(
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -787,7 +781,7 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (unlockable_count, provisional_count) = attempt_lock_for_execution(
+            let (unlockable_count, provisional_count) = attempt_lock_for_execution::<AST>(
                 from_runnable,
                 prefer_immediate,
                 address_book,
@@ -798,7 +792,7 @@ impl ScheduleStage {
 
             if unlockable_count > 0 {
                 //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
-                Self::reset_lock_for_failed_execution(
+                Self::reset_lock_for_failed_execution::<AST>(
                     address_book,
                     &unique_weight,
                     &mut next_task.tx.1,
@@ -836,7 +830,7 @@ impl ScheduleStage {
                 next_task.mark_as_uncontended();
                 let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(&a2)));
                 *provisioning_tracker_count = provisioning_tracker_count.checked_add(1).unwrap();
-                Self::finalize_lock_for_provisional_execution(
+                Self::finalize_lock_for_provisional_execution::<AST>(
                     address_book,
                     next_task,
                     tracker
@@ -864,7 +858,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn finalize_lock_for_provisional_execution(
+    fn finalize_lock_for_provisional_execution<AST: AtScheduleThread>(
         address_book: &mut AddressBook,
         next_task: &mut Task,
         tracker: std::sync::Arc<ProvisioningTracker>,
@@ -872,7 +866,7 @@ impl ScheduleStage {
         for l in next_task.tx.1.iter_mut() {
             match l.status {
                 LockStatus::Provisional => {
-                    l.target.page_mut().provisional_task_ids.push(std::sync::Arc::clone(&tracker));
+                    l.target.page_mut::<AST>().provisional_task_ids.push(std::sync::Arc::clone(&tracker));
                 }
                 LockStatus::Succeded => {
                     // do nothing
@@ -886,23 +880,23 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn reset_lock_for_failed_execution(
+    fn reset_lock_for_failed_execution<AST: AtScheduleThread>(
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut Vec<LockAttempt>,
         from_runnable: bool,
     ) {
         for l in lock_attempts {
-            address_book.reset_lock(l, false);
+            address_book.reset_lock::<AST>(l, false);
         }
     }
 
     #[inline(never)]
-    fn unlock_after_execution(address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>, provisioning_tracker_count: &mut usize) {
+    fn unlock_after_execution<AST: AtScheduleThread>(address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>, provisioning_tracker_count: &mut usize) {
         for mut l in lock_attempts.into_iter() {
-            let newly_uncontended = address_book.reset_lock(&mut l, true);
+            let newly_uncontended = address_book.reset_lock::<AST>(&mut l, true);
 
-            let mut page = l.target.page_mut();
+            let mut page = l.target.page_mut::<AST>();
             if newly_uncontended && page.next_usage == Usage::Unused {
                 let mut inserted = false;
 
@@ -981,8 +975,12 @@ impl ScheduleStage {
         })
     }
 
+    fn commit_completed_execution2<AST: AtScheduleThread>() {
+        panic!();
+    }
+
     #[inline(never)]
-    fn commit_completed_execution(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
+    fn commit_completed_execution<AST: AtScheduleThread>(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
         // do par()-ly?
 
         //ee.reindex();
@@ -991,7 +989,7 @@ impl ScheduleStage {
         //*commit_time = commit_time.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
-        Self::unlock_after_execution(address_book, &mut ee.lock_attempts, provisioning_tracker_count);
+        Self::unlock_after_execution::<AST>(address_book, &mut ee.lock_attempts, provisioning_tracker_count);
         ee.task.mark_as_finished();
 
         // block-wide qos validation will be done here
@@ -1004,7 +1002,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn schedule_next_execution(
+    fn schedule_next_execution<AST: AtScheduleThread>(
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -1016,7 +1014,7 @@ impl ScheduleStage {
         provisioning_tracker_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee =
-            Self::pop_from_queue_then_lock(task_sender, runnable_queue, address_book, contended_count, prefer_immediate, sequence_time, queue_clock, provisioning_tracker_count)
+            Self::pop_from_queue_then_lock::<AST>(task_sender, runnable_queue, address_book, contended_count, prefer_immediate, sequence_time, queue_clock, provisioning_tracker_count)
                 .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock));
         maybe_ee
     }
@@ -1032,7 +1030,8 @@ impl ScheduleStage {
         Self::push_to_runnable_queue(weighted_tx, runnable_queue)
     }
 
-    pub fn run<AST = AtTopOfScheduleThread>(
+    fn _run<AST: AtScheduleThread>(
+        ast: AST,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -1082,6 +1081,7 @@ impl ScheduleStage {
                         lock_attempt.contended_unique_weights().insert_task(task.unique_weight, TaskInQueue::clone(&task));
                     }
                 }
+                Self::commit_completed_execution2::<AST>(ast);
                 assert_eq!(task_receiver.len(), 0);
             }).unwrap();
         }
@@ -1101,7 +1101,7 @@ impl ScheduleStage {
                    }
                    let mut processed_execution_environment = maybe_from_exec.unwrap();
                     executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                    Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
+                    Self::commit_completed_execution::<AST>(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                     to_next_stage.send(processed_execution_environment).unwrap();
                }
                recv(from) -> maybe_from => {
@@ -1127,7 +1127,7 @@ impl ScheduleStage {
                 while (executing_queue_count + provisioning_tracker_count) < max_executing_queue_count {
                     trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len());
                     let prefer_immediate = provisioning_tracker_count/4 > executing_queue_count;
-                    if let Some(ee) = Self::schedule_next_execution(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock, &mut provisioning_tracker_count) {
+                    if let Some(ee) = Self::schedule_next_execution::<AST>(&task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock, &mut provisioning_tracker_count) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ee).unwrap();
                     } else {
@@ -1156,7 +1156,7 @@ impl ScheduleStage {
                         from_exec_len = from_exec_len.checked_sub(1).unwrap();
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                        Self::commit_completed_execution(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
+                        Self::commit_completed_execution::<AST>(&mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                         to_next_stage.send(processed_execution_environment).unwrap();
                     }
                     if !empty_from {
@@ -1169,6 +1169,24 @@ impl ScheduleStage {
             }
         }
         info!("run finished...");
+    }
+
+    pub fn run(
+        max_executing_queue_count: usize,
+        runnable_queue: &mut TaskQueue,
+        address_book: &mut AddressBook,
+        from: &crossbeam_channel::Receiver<TaskInQueue>,
+        from_exec: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
+        to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
+    ) {
+        #[derive(Debug)]
+        struct AtTopOfScheduleThread;
+        unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
+        impl !Send for AtTopOfScheduleThread {}
+        impl !Sync for AtTopOfScheduleThread {}
+
+        Self::_run::<AtTopOfScheduleThread>(AtTopOfScheduleThread, max_executing_queue_count, runnable_queue, address_book, from, from_exec, to_execute_substage, maybe_to_next_stage)
     }
 }
 
