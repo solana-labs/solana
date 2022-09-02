@@ -50,7 +50,7 @@ use {
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
@@ -2929,6 +2929,11 @@ pub fn main() {
         };
 
     validator_config.snapshot_config = Some(SnapshotConfig {
+        usage: if full_snapshot_archive_interval_slots == Slot::MAX {
+            SnapshotUsage::LoadOnly
+        } else {
+            SnapshotUsage::LoadAndGenerate
+        },
         full_snapshot_archive_interval_slots,
         incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
