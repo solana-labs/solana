@@ -1084,7 +1084,6 @@ impl ScheduleStage {
                 assert_eq!(task_receiver.len(), 0);
             }).unwrap();
         }
-                Self::commit_completed_execution2(ast);
 
         let (mut from_disconnected, mut from_exec_disconnected) = (false, false);
         loop {
