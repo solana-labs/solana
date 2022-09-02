@@ -217,7 +217,6 @@ impl TaskIds {
 pub struct Page {
     current_usage: Usage,
     next_usage: Usage,
-    contended_unique_weights: TaskIds,
     provisional_task_ids: Vec<std::sync::Arc<ProvisioningTracker>>,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
