@@ -1008,6 +1008,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn schedule_next_execution<AST: AtScheduleThread>(
+        ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
