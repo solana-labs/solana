@@ -1,4 +1,6 @@
 #![feature(map_first_last)]
+#![feature(negative_impls)]
+//#![feature(get_mut_unchecked)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
@@ -93,8 +95,10 @@ impl ExecutionEnvironment {
     }
 }
 
+unsafe trait AtScheduleThread {}
+
 impl PageRc {
-    fn page_mut(&mut self) -> std::cell::RefMut<'_, Page> {
+    fn page_mut/*<ST: AtScheduleThread>*/(&mut self) -> std::cell::RefMut<'_, Page> {
         //unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
         self.0.borrow_mut()
     }
@@ -676,6 +680,12 @@ pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
             .map(|d| d.get_priority()).unwrap_or_default()
 }
 
+#[derive(Debug)]
+struct AtTopOfScheduleThread;
+unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
+impl !Send for AtTopOfScheduleThread {}
+impl !Sync for AtTopOfScheduleThread {}
+
 pub struct ScheduleStage {}
 
 impl ScheduleStage {
@@ -754,7 +764,7 @@ impl ScheduleStage {
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
-            let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut a.1) };
+            let next_task: &mut TaskInQueue = unsafe { panic!(); /*TaskInQueue::get_mut_unchecked(&mut a.1)*/ };
 
             let lock_attempts = std::mem::take(&mut next_task.tx.1);
 
@@ -770,7 +780,7 @@ impl ScheduleStage {
                 *queue_clock = queue_clock.checked_add(1).unwrap();
             }
             let a2 = TaskInQueue::clone(&arc_next_task);
-            let next_task = unsafe { TaskInQueue::get_mut_unchecked(&mut arc_next_task) };
+            let next_task: &mut TaskInQueue = unsafe { panic!(); /*TaskInQueue::get_mut_unchecked(&mut arc_next_task)*/ };
             let unique_weight = next_task.unique_weight;
             let message_hash = next_task.tx.0.message_hash();
 
@@ -1031,6 +1041,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
     ) {
+
         let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
         let mut provisioning_tracker_count = 0;
