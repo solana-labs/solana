@@ -1032,7 +1032,7 @@ impl ScheduleStage {
         Self::push_to_runnable_queue(weighted_tx, runnable_queue)
     }
 
-    pub fn run(
+    pub fn run<AST = AtTopOfScheduleThread>(
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
