@@ -6,6 +6,14 @@ pub struct ParsedAccount {
     pub pubkey: String,
     pub writable: bool,
     pub signer: bool,
+    pub source: ParsedAccountSource,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ParsedAccountSource {
+    Transaction,
+    LookupTable,
 }
 
 pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
@@ -15,6 +23,7 @@ pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
             pubkey: account_key.to_string(),
             writable: message.is_writable(i),
             signer: message.is_signer(i),
+            source: ParsedAccountSource::Transaction,
         });
     }
     accounts
@@ -23,10 +32,16 @@ pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
 pub fn parse_v0_message_accounts(message: &LoadedMessage) -> Vec<ParsedAccount> {
     let mut accounts: Vec<ParsedAccount> = vec![];
     for (i, account_key) in message.account_keys().iter().enumerate() {
+        let source = if i < message.static_account_keys().len() {
+            ParsedAccountSource::Transaction
+        } else {
+            ParsedAccountSource::LookupTable
+        };
         accounts.push(ParsedAccount {
             pubkey: account_key.to_string(),
             writable: message.is_writable(i),
             signer: message.is_signer(i),
+            source,
         });
     }
     accounts
@@ -65,21 +80,25 @@ mod test {
                     pubkey: pubkey0.to_string(),
                     writable: true,
                     signer: true,
+                    source: ParsedAccountSource::Transaction,
                 },
                 ParsedAccount {
                     pubkey: pubkey1.to_string(),
                     writable: false,
                     signer: true,
+                    source: ParsedAccountSource::Transaction,
                 },
                 ParsedAccount {
                     pubkey: pubkey2.to_string(),
                     writable: true,
                     signer: false,
+                    source: ParsedAccountSource::Transaction,
                 },
                 ParsedAccount {
                     pubkey: pubkey3.to_string(),
                     writable: false,
                     signer: false,
+                    source: ParsedAccountSource::Transaction,
                 },
             ]
         );
@@ -116,31 +135,37 @@ mod test {
                     pubkey: pubkey0.to_string(),
                     writable: true,
                     signer: true,
+                    source: ParsedAccountSource::Transaction,
                 },
                 ParsedAccount {
                     pubkey: pubkey1.to_string(),
                     writable: false,
                     signer: true,
+                    source: ParsedAccountSource::Transaction,
                 },
                 ParsedAccount {
                     pubkey: pubkey2.to_string(),
                     writable: true,
                     signer: false,
+                    source: ParsedAccountSource::Transaction,
                 },
                 ParsedAccount {
                     pubkey: pubkey3.to_string(),
                     writable: false,
                     signer: false,
+                    source: ParsedAccountSource::Transaction,
                 },
                 ParsedAccount {
                     pubkey: pubkey4.to_string(),
                     writable: true,
                     signer: false,
+                    source: ParsedAccountSource::LookupTable,
                 },
                 ParsedAccount {
                     pubkey: pubkey5.to_string(),
                     writable: false,
                     signer: false,
+                    source: ParsedAccountSource::LookupTable,
                 },
             ]
         );
