@@ -149,7 +149,8 @@ impl LockAttempt {
     }
 
     pub fn contended_unique_weights(&self) -> &TaskIds {
-        self.target.page_ref().contended_unique_weights
+        //&self.target.page_ref().contended_unique_weights
+        panic!()
     }
 }
 
