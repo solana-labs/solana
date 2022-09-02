@@ -1188,7 +1188,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
     ) {
-        #[derive(Copy, Debug)]
+        #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
         //impl !Send for AtTopOfScheduleThread {}
