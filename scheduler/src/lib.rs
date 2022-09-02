@@ -100,12 +100,12 @@ unsafe trait AtScheduleThread: Copy {}
 impl PageRc {
     fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
         //unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
-        self.0.borrow_mut()
+        self.0.0.borrow_mut()
     }
 
     fn page_ref(&self) -> std::cell::Ref<'_, Page> {
         //<MyRcInner as std::borrow::Borrow<_>>::borrow(&self.0)
-        self.0.borrow()
+        self.0.0.borrow()
         //&*(self.0)
     }
 }
