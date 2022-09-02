@@ -98,7 +98,7 @@ impl ExecutionEnvironment {
 unsafe trait AtScheduleThread {}
 
 impl PageRc {
-    fn page_mut<ST: AtScheduleThread>(&mut self) -> std::cell::RefMut<'_, Page> {
+    fn page_mut<AST: AtScheduleThread>(&mut self, _ast: AST) -> std::cell::RefMut<'_, Page> {
         //unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
         self.0.borrow_mut()
     }
