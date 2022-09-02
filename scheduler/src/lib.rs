@@ -22,7 +22,7 @@ type MyRcInner<T> = std::rc::Rc<T>;
 unsafe impl Send for PageRc {}
 */
 
-type MyRcInner = std::sync::Arc<(std::cell::RefCell<Page>, usize)>;
+type MyRcInner = std::sync::Arc<(std::cell::RefCell<Page>, TaskIds)>;
 
 #[derive(Debug, Clone)]
 pub struct PageRc(MyRcInner);
