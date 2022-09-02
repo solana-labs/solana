@@ -16,7 +16,7 @@ use {
             atomic::{AtomicU64, Ordering},
             Arc, Mutex, RwLock,
         },
-        thread::{Builder, JoinHandle},
+        thread::Builder,
     },
 };
 
@@ -127,7 +127,6 @@ enum CacheServiceUpdate {
     BankFrozen {
         slot: Slot,
     },
-    Exit,
 }
 
 /// Stores up to MAX_NUM_RECENT_BLOCKS recent block's prioritization fee,
@@ -135,7 +134,6 @@ enum CacheServiceUpdate {
 /// and collecting stats and reporting metrics.
 pub struct PrioritizationFeeCache {
     cache: Arc<RwLock<LruCache<Slot, Arc<Mutex<PrioritizationFee>>>>>,
-    service_thread: Option<JoinHandle<()>>,
     sender: Sender<CacheServiceUpdate>,
     metrics: Arc<PrioritizationFeeCacheMetrics>,
 }
@@ -143,17 +141,6 @@ pub struct PrioritizationFeeCache {
 impl Default for PrioritizationFeeCache {
     fn default() -> Self {
         Self::new(MAX_NUM_RECENT_BLOCKS)
-    }
-}
-
-impl Drop for PrioritizationFeeCache {
-    fn drop(&mut self) {
-        let _ = self.sender.send(CacheServiceUpdate::Exit);
-        self.service_thread
-            .take()
-            .unwrap()
-            .join()
-            .expect("Prioritization fee cache servicing thread failed to join");
     }
 }
 
@@ -165,7 +152,7 @@ impl PrioritizationFeeCache {
 
         let cache_clone = cache.clone();
         let metrics_clone = metrics.clone();
-        let service_thread = Some(
+        let _service_thread = Some(
             Builder::new()
                 .name("prioritization-fee-cache-servicing-thread".to_string())
                 .spawn(move || {
@@ -176,7 +163,6 @@ impl PrioritizationFeeCache {
 
         PrioritizationFeeCache {
             cache,
-            service_thread,
             sender,
             metrics,
         }
@@ -330,9 +316,6 @@ impl PrioritizationFeeCache {
                     Self::finalize_slot(cache.clone(), &slot, metrics.clone());
 
                     metrics.report(slot);
-                }
-                CacheServiceUpdate::Exit => {
-                    break;
                 }
             }
         }
