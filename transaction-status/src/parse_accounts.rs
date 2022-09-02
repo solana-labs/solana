@@ -6,7 +6,7 @@ pub struct ParsedAccount {
     pub pubkey: String,
     pub writable: bool,
     pub signer: bool,
-    pub source: ParsedAccountSource,
+    pub source: Option<ParsedAccountSource>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -23,7 +23,7 @@ pub fn parse_legacy_message_accounts(message: &Message) -> Vec<ParsedAccount> {
             pubkey: account_key.to_string(),
             writable: message.is_writable(i),
             signer: message.is_signer(i),
-            source: ParsedAccountSource::Transaction,
+            source: Some(ParsedAccountSource::Transaction),
         });
     }
     accounts
@@ -41,7 +41,7 @@ pub fn parse_v0_message_accounts(message: &LoadedMessage) -> Vec<ParsedAccount> 
             pubkey: account_key.to_string(),
             writable: message.is_writable(i),
             signer: message.is_signer(i),
-            source,
+            source: Some(source),
         });
     }
     accounts
@@ -80,25 +80,25 @@ mod test {
                     pubkey: pubkey0.to_string(),
                     writable: true,
                     signer: true,
-                    source: ParsedAccountSource::Transaction,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey1.to_string(),
                     writable: false,
                     signer: true,
-                    source: ParsedAccountSource::Transaction,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey2.to_string(),
                     writable: true,
                     signer: false,
-                    source: ParsedAccountSource::Transaction,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey3.to_string(),
                     writable: false,
                     signer: false,
-                    source: ParsedAccountSource::Transaction,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
             ]
         );
@@ -135,37 +135,37 @@ mod test {
                     pubkey: pubkey0.to_string(),
                     writable: true,
                     signer: true,
-                    source: ParsedAccountSource::Transaction,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey1.to_string(),
                     writable: false,
                     signer: true,
-                    source: ParsedAccountSource::Transaction,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey2.to_string(),
                     writable: true,
                     signer: false,
-                    source: ParsedAccountSource::Transaction,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey3.to_string(),
                     writable: false,
                     signer: false,
-                    source: ParsedAccountSource::Transaction,
+                    source: Some(ParsedAccountSource::Transaction),
                 },
                 ParsedAccount {
                     pubkey: pubkey4.to_string(),
                     writable: true,
                     signer: false,
-                    source: ParsedAccountSource::LookupTable,
+                    source: Some(ParsedAccountSource::LookupTable),
                 },
                 ParsedAccount {
                     pubkey: pubkey5.to_string(),
                     writable: false,
                     signer: false,
-                    source: ParsedAccountSource::LookupTable,
+                    source: Some(ParsedAccountSource::LookupTable),
                 },
             ]
         );
