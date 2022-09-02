@@ -150,7 +150,6 @@ impl LockAttempt {
 
     pub fn contended_unique_weights(&self) -> &TaskIds {
         &self.target.0.1
-        //panic!()
     }
 }
 
