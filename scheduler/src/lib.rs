@@ -21,10 +21,12 @@ type MyRcInner<T> = std::rc::Rc<T>;
 unsafe impl Send for PageRc {}
 */
 
-type MyRcInner = std::sync::Arc<Page>;
+type MyRcInner = std::sync::Arc<std::cell::RefCell<Page>>;
 
 #[derive(Debug, Clone)]
 pub struct PageRc(MyRcInner);
+unsafe impl Send for PageRc {}
+unsafe impl Sync for PageRc {}
 
 
 #[derive(Debug)]
@@ -93,13 +95,15 @@ impl ExecutionEnvironment {
 }
 
 impl PageRc {
-    fn page_mut(&mut self) -> &mut Page {
-        unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
+    fn page_mut(&mut self) -> std::cell::RefMut<'_, Page> {
+        //unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
+        self.0.borrow_mut()
     }
 
-    fn page_ref(&self) -> &Page {
+    fn page_ref(&self) -> std::cell::Ref<'_, Page> {
         //<MyRcInner as std::borrow::Borrow<_>>::borrow(&self.0)
-        &*(self.0)
+        self.0.borrow()
+        //&*(self.0)
     }
 }
 
@@ -142,7 +146,8 @@ impl LockAttempt {
     }
 
     pub fn contended_unique_weights(&self) -> &TaskIds {
-        &self.target.page_ref().contended_unique_weights
+        //&self.target.page_ref().contended_unique_weights
+        panic!()
     }
 }
 
@@ -209,7 +214,7 @@ impl TaskIds {
 pub struct Page {
     current_usage: Usage,
     next_usage: Usage,
-    pub contended_unique_weights: TaskIds,
+    contended_unique_weights: TaskIds,
     provisional_task_ids: Vec<std::sync::Arc<ProvisioningTracker>>,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
@@ -287,6 +292,7 @@ impl AddressBook {
 
                 let mut page = target.page_mut();
 
+                let next_usage = page.next_usage;
                 match page.current_usage {
                     Usage::Unused => {
                         assert_eq!(page.next_usage, Usage::Unused);
@@ -296,7 +302,7 @@ impl AddressBook {
                     Usage::Readonly(ref mut count) => match requested_usage {
                         RequestedUsage::Readonly => {
                             // prevent newer read-locks (even from runnable too)
-                            match page.next_usage {
+                            match next_usage {
                                 Usage::Unused => {
                                     *count += 1;
                                     *status = LockStatus::Succeded;
@@ -423,7 +429,7 @@ pub struct Preloader {
 impl Preloader {
     #[inline(never)]
     pub fn load(&self, address: Pubkey) -> PageRc {
-        PageRc::clone(&self.book.entry(address).or_insert_with(|| PageRc(MyRcInner::new(Page::new(Usage::unused())))))
+        PageRc::clone(&self.book.entry(address).or_insert_with(|| PageRc(MyRcInner::new(core::cell::RefCell::new(Page::new(Usage::unused()))))))
     }
 }
 
@@ -475,7 +481,19 @@ pub struct Task {
 
 impl Task {
     pub fn new_for_queue(unique_weight: UniqueWeight, tx: (SanitizedTransaction, Vec<LockAttempt>)) -> std::sync::Arc<Self> {
-        TaskInQueue::new(Self { for_indexer: tx.1.iter().map(|a| a.clone_for_test()).collect(), unique_weight, tx, contention_count: 0, uncontended: Default::default(), sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()), commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),  })
+        TaskInQueue::new(Self {
+            for_indexer: tx.1.iter().map(|a| a.clone_for_test()).collect(),
+            unique_weight,
+            tx,
+            contention_count: 0,
+            uncontended: Default::default(),
+            sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
+            commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value())
+        })
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
@@ -875,7 +893,7 @@ impl ScheduleStage {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended = address_book.reset_lock(&mut l, true);
 
-            let page = l.target.page_mut();
+            let mut page = l.target.page_mut();
             if newly_uncontended && page.next_usage == Usage::Unused {
                 let mut inserted = false;
 
@@ -913,6 +931,8 @@ impl ScheduleStage {
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
                 page.switch_to_next_usage();
                 for mut tracker in std::mem::take(&mut page.provisional_task_ids).into_iter() {
+                    panic!();
+                    /*
                     let tracker = unsafe { std::sync::Arc::<ProvisioningTracker>::get_mut_unchecked(&mut tracker) };
                     tracker.progress();
                     if tracker.is_fulfilled() {
@@ -922,6 +942,7 @@ impl ScheduleStage {
                     } else {
                         trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
                     }
+                    */
                 }
             }
 
