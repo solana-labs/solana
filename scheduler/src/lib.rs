@@ -1081,10 +1081,10 @@ impl ScheduleStage {
                         lock_attempt.contended_unique_weights().insert_task(task.unique_weight, TaskInQueue::clone(&task));
                     }
                 }
-                Self::commit_completed_execution2::<AST>(ast);
                 assert_eq!(task_receiver.len(), 0);
             }).unwrap();
         }
+                Self::commit_completed_execution2::<AST>(ast);
 
         let (mut from_disconnected, mut from_exec_disconnected) = (false, false);
         loop {
