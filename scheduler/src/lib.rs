@@ -228,7 +228,6 @@ impl Page {
         Self {
             current_usage,
             next_usage: Usage::Unused,
-            contended_unique_weights: Default::default(),
             provisional_task_ids: Default::default(),
         }
     }
