@@ -475,7 +475,7 @@ mod tests {
         let slot = bank.slot();
 
         let mut prioritization_fee_cache = PrioritizationFeeCache::default();
-        prioritization_fee_cache.update(bank, txs.iter());
+        sync_update(&mut prioritization_fee_cache, bank, txs.iter());
 
         // assert block minimum fee and account a, b, c fee accordingly
         {
