@@ -202,9 +202,10 @@ impl TransactionContext {
         self.account_keys.iter().rposition(|key| key == pubkey)
     }
 
-    /// Returns instruction trace length
+    /// Returns the instruction trace length.
     ///
-    /// Not counting the empty `InstructionContext` at the end.
+    /// Not counting the last empty InstructionContext which is always pre-reserved for the next instruction.
+    /// See also `get_next_instruction_context()`.
     pub fn get_instruction_trace_length(&self) -> usize {
         self.instruction_trace.len().saturating_sub(1)
     }
@@ -253,7 +254,9 @@ impl TransactionContext {
         self.get_instruction_context_at_nesting_level(level)
     }
 
-    /// Returns the InstructionContext to configure for the next invocation
+    /// Returns the InstructionContext to configure for the next invocation.
+    ///
+    /// The last InstructionContext is always empty and pre-reserved for the next instruction.
     pub fn get_next_instruction_context(
         &mut self,
     ) -> Result<&mut InstructionContext, InstructionError> {
