@@ -26,7 +26,7 @@ type MyRcInner = std::sync::Arc<std::cell::RefCell<Page>>;
 
 #[derive(Debug, Clone)]
 pub struct PageRc(MyRcInner);
-unsafe impl Sync for PageRc {}
+unsafe impl Send for PageRc {}
 
 
 #[derive(Debug)]
