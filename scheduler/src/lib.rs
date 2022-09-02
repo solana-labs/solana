@@ -975,7 +975,7 @@ impl ScheduleStage {
         })
     }
 
-    fn commit_completed_execution2<AST: AtScheduleThread>() {
+    fn commit_completed_execution2<AST: AtScheduleThread>(_a: AST) {
         panic!();
     }
 
