@@ -286,6 +286,7 @@ impl ProvisioningTracker {
 impl AddressBook {
     #[inline(never)]
     fn attempt_lock_address<AST: AtScheduleThread>(
+        ast: AST,
         from_runnable: bool,
         prefer_immediate: bool,
         unique_weight: &UniqueWeight,
@@ -351,7 +352,7 @@ impl AddressBook {
                 }
     }
 
-    fn reset_lock<AST: AtScheduleThread>(&mut self, attempt: &mut LockAttempt, after_execution: bool) -> bool {
+    fn reset_lock<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt, after_execution: bool) -> bool {
         match attempt.status {
             LockStatus::Succeded => {
                 self.unlock::<AST>(attempt)
@@ -371,7 +372,7 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn unlock<AST: AtScheduleThread>(&mut self, attempt: &mut LockAttempt) -> bool {
+    fn unlock<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt) -> bool {
         //debug_assert!(attempt.is_success());
 
         let mut newly_uncontended = false;
@@ -406,7 +407,7 @@ impl AddressBook {
     }
 
     #[inline(never)]
-    fn cancel<AST: AtScheduleThread>(&mut self, attempt: &mut LockAttempt) {
+    fn cancel<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt) {
         let mut page = attempt.target.page_mut::<AST>();
 
         match page.next_usage {
@@ -639,6 +640,7 @@ impl TaskQueue {
 
 #[inline(never)]
 fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
+    ast: AST,
     from_runnable: bool,
     prefer_immediate: bool,
     address_book: &mut AddressBook,
@@ -747,6 +749,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn pop_from_queue_then_lock<AST: AtScheduleThread>(
+        ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -859,6 +862,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn finalize_lock_for_provisional_execution<AST: AtScheduleThread>(
+        ast: AST,
         address_book: &mut AddressBook,
         next_task: &mut Task,
         tracker: std::sync::Arc<ProvisioningTracker>,
@@ -881,6 +885,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn reset_lock_for_failed_execution<AST: AtScheduleThread>(
+        ast: AST,
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut Vec<LockAttempt>,
@@ -892,7 +897,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution<AST: AtScheduleThread>(address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>, provisioning_tracker_count: &mut usize) {
+    fn unlock_after_execution<AST: AtScheduleThread>(ast: AST, address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>, provisioning_tracker_count: &mut usize) {
         for mut l in lock_attempts.into_iter() {
             let newly_uncontended = address_book.reset_lock::<AST>(&mut l, true);
 
@@ -980,7 +985,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_completed_execution<AST: AtScheduleThread>(ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
+    fn commit_completed_execution<AST: AtScheduleThread>(ast: AST, ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
         // do par()-ly?
 
         //ee.reindex();
