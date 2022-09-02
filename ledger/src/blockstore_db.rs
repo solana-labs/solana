@@ -49,6 +49,9 @@ const BLOCKSTORE_METRICS_ERROR: i64 = -1;
 
 const MAX_WRITE_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB
 const FIFO_WRITE_BUFFER_SIZE: u64 = 2 * MAX_WRITE_BUFFER_SIZE;
+// Use same size as FIFO as we want to reduce the number of L0 files,
+// the same reason as FIFO.
+const SLOT_TTL_WRITE_BUFFER_SIZE: u64 = FIFO_WRITE_BUFFER_SIZE;
 
 // Column family for metadata about a leader slot
 const META_CF: &str = "meta";
@@ -1590,11 +1593,61 @@ fn new_cf_descriptor_pair_shreds<
             new_cf_descriptor::<D>(options, oldest_slot),
             new_cf_descriptor::<C>(options, oldest_slot),
         ),
+        ShredStorageType::RocksSlotTtl => (
+            new_cf_descriptor_slot_ttl::<D>(options),
+            new_cf_descriptor_slot_ttl::<C>(options),
+        ),
         ShredStorageType::RocksFifo(fifo_options) => (
             new_cf_descriptor_fifo::<D>(&fifo_options.shred_data_cf_size, &options.column_options),
             new_cf_descriptor_fifo::<C>(&fifo_options.shred_code_cf_size, &options.column_options),
         ),
     }
+}
+
+fn new_cf_descriptor_slot_ttl<C: 'static + Column + ColumnName>(
+    options: &BlockstoreOptions,
+) -> ColumnFamilyDescriptor {
+    ColumnFamilyDescriptor::new(C::NAME, get_cf_options_slot_ttl::<C>(options))
+}
+
+fn get_cf_options_slot_ttl<C: 'static + Column + ColumnName>(
+    options: &BlockstoreOptions,
+) -> Options {
+    let mut cf_options = Options::default();
+
+    cf_options.set_max_write_buffer_number(8);
+    cf_options.set_write_buffer_size(SLOT_TTL_WRITE_BUFFER_SIZE as usize);
+    // This will allow flushes within four write_buffer_size to output
+    // a single sst file, while in most cases we expect the sst file size
+    // to be similar to write_buffer_size.
+    cf_options.set_target_file_size_base(SLOT_TTL_WRITE_BUFFER_SIZE * 4);
+    cf_options.set_target_file_size_multiplier(1);
+
+    // Same as FIFO, we will put all its file in L0, and it is suggested
+    // to have unlimited number of open files.  The actual total number
+    // of open files will be close to max_cf_size / write_buffer_size.
+    cf_options.set_max_open_files(-1);
+
+    // Disable auto-compaction, just like FIFO compaction.
+    // We rely on the ledger-cleanup-service to perform the Slot-based FIFO.
+    cf_options.set_disable_auto_compactions(true);
+
+    // As we have disabled auto-compactions, the following settings should be
+    // unused, but we set the max_bytes to u64::MAX to make sure that each
+    // level can hold as many bytes as they can.
+    cf_options.set_max_bytes_for_level_base(std::u64::MAX);
+    cf_options.set_max_bytes_for_level_multiplier(1.0);
+
+    // we don't trigger any L0 -> L1 compaction.
+    cf_options.set_level_zero_file_num_compaction_trigger(-1);
+    // we never slowdown writes
+    cf_options.set_level_zero_slowdown_writes_trigger(-1);
+    // we never stop writes.  In other words, no write stalls.
+    cf_options.set_level_zero_stop_writes_trigger(-1);
+
+    process_cf_options_advanced::<C>(&mut cf_options, &options.column_options);
+
+    cf_options
 }
 
 fn new_cf_descriptor_fifo<C: 'static + Column + ColumnName>(

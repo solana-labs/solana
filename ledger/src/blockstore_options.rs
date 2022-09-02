@@ -108,6 +108,7 @@ impl LedgerColumnOptions {
     pub fn get_storage_type_string(&self) -> &'static str {
         match self.shred_storage_type {
             ShredStorageType::RocksLevel => "rocks_level",
+            ShredStorageType::RocksSlotTtl => "rocks_slot_ttl",
             ShredStorageType::RocksFifo(_) => "rocks_fifo",
         }
     }
@@ -126,6 +127,11 @@ impl LedgerColumnOptions {
 pub enum ShredStorageType {
     // Stores shreds under RocksDB's default compaction (level).
     RocksLevel,
+    // Stores shreds under RocksDB with slot-based TTL that purges older
+    // files.  This storage type is compatible to RocksLevel and has similar
+    // to performance benefits as RocksFifo in that it also allows ledger
+    // store to reclaim storage more efficiently with lower I/O overhead.
+    RocksSlotTtl,
     // (Experimental) Stores shreds under RocksDB's FIFO compaction which
     // allows ledger store to reclaim storage more efficiently with
     // lower I/O overhead.
@@ -153,6 +159,9 @@ impl ShredStorageType {
     pub fn blockstore_directory(&self) -> &str {
         match self {
             ShredStorageType::RocksLevel => BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
+            // Use the same directory as RocksLevel since RocksSlotTtl is
+            // compatible with RocksLevel.
+            ShredStorageType::RocksSlotTtl => BLOCKSTORE_DIRECTORY_ROCKS_LEVEL,
             ShredStorageType::RocksFifo(_) => BLOCKSTORE_DIRECTORY_ROCKS_FIFO,
         }
     }

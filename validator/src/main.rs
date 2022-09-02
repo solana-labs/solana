@@ -1039,14 +1039,17 @@ pub fn main() {
                 .long("rocksdb-shred-compaction")
                 .value_name("ROCKSDB_COMPACTION_STYLE")
                 .takes_value(true)
-                .possible_values(&["level", "fifo"])
+                .possible_values(&["level", "fifo", "slot-ttl"])
                 .default_value("level")
                 .help("EXPERIMENTAL: Controls how RocksDB compacts shreds. \
                        *WARNING*: You will lose your ledger data when you switch between options. \
                        Possible values are: \
                        'level': stores shreds using RocksDB's default (level) compaction. \
                        'fifo': stores shreds under RocksDB's FIFO compaction. \
-                           This option is more efficient on disk-write-bytes of the ledger store."),
+                           This option is more efficient on disk-write-bytes of the ledger store. \
+                       'slot-ttl': stores shreds using RocksDB's with Solana's slot-based TTL. \
+                           This option offers efficient disk-write-bytes and disk-space reclaiming. \
+                           This shred compaction is compatible with 'level'."),
         )
         .arg(
             Arg::with_name("rocksdb_fifo_shred_storage_size")
@@ -3000,6 +3003,7 @@ pub fn main() {
             None => ShredStorageType::default(),
             Some(shred_compaction_string) => match shred_compaction_string {
                 "level" => ShredStorageType::RocksLevel,
+                "slot-ttl" => ShredStorageType::RocksSlotTtl,
                 "fifo" => {
                     let shred_storage_size =
                         value_t_or_exit!(matches, "rocksdb_fifo_shred_storage_size", u64);
