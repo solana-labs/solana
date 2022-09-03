@@ -239,12 +239,15 @@ type WeightedTaskIds = std::collections::BTreeMap<TaskId, TaskInQueue>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 
+type StuckTaskId = (CU, TaskId);
+
 // needs ttl mechanism and prune
 #[derive(Default)]
 pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
     fulfilled_provisional_task_ids: WeightedTaskIds,
+    stuck_tasks: std::collections::BTreeMap<StuckTaskId, TaskInQueue>,
 }
 
 #[derive(Debug)]
@@ -632,7 +635,7 @@ impl Task {
         task_sender.send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut()))).unwrap();
     }
 
-    fn key_for_stuck_queue(&self) -> (CU, TaskId) {
+    fn task_id_as_stuck(&self) -> StuckTaskId {
         (self.busiest_page_cu.load(std::sync::atomic::Ordering::SeqCst), self.unique_weight)
     }
 }
