@@ -837,7 +837,7 @@ impl ScheduleStage {
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
-                let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(&a2)));
+                let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(&next_task)));
                 *provisioning_tracker_count = provisioning_tracker_count.checked_add(1).unwrap();
                 Self::finalize_lock_for_provisional_execution(
                     ast,
