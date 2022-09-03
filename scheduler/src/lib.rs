@@ -867,7 +867,7 @@ impl ScheduleStage {
                     // todo: remove this task from stuck_tasks before update_busiest_page_cu
                     address_book.stuck_tasks.remove(&next_task.stuck_task_id());
                     next_task.update_busiest_page_cu(busiest_page_cu);
-                    address_book.stuck_tasks.insert(next_task.stuck_task_id(), Task::clone_in_queue(next_task));
+                    address_book.stuck_tasks.insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
                     return None;
                 }
             } else if provisional_count > 0 {
