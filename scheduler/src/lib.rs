@@ -1068,7 +1068,7 @@ impl ScheduleStage {
                 #[derive(Clone, Copy, Debug)]
                 struct NotAtTopOfScheduleThread;
                 unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
-                let nast = NotAtScheduleThread;
+                let nast = NotAtTopOfScheduleThread;
 
                 while let Ok(mut a) = ee_receiver.recv() {
                     assert!(a.task.lock_attempts_not_mut(nast).is_empty());
