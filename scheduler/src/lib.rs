@@ -760,12 +760,12 @@ impl ScheduleStage {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
                 let t = heaviest_runnable_entry.remove();
-                return Some((true, t))
+                Some((true, t))
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
                 let t = weight_from_contended.remove();
-                return Some(( false, t))
+                Some(( false, t))
             },
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
@@ -774,11 +774,11 @@ impl ScheduleStage {
                 if weight_from_runnable > uw {
                     trace!("select: runnable > contended");
                     let t = heaviest_runnable_entry.remove();
-                    return Some((true, t))
+                    Some((true, t))
                 } else if uw > weight_from_runnable {
                     trace!("select: contended > runnnable");
                     let t = weight_from_contended.remove();
-                    return Some(( false, t))
+                    Some(( false, t))
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
@@ -787,7 +787,7 @@ impl ScheduleStage {
             }
             (None, None) => {
                 trace!("select: none");
-                return None
+                None
             }
         }
     }
