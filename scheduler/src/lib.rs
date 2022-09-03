@@ -457,7 +457,7 @@ struct Bundle {
 pub struct Task {
     unique_weight: UniqueWeight,
     pub tx: (SanitizedTransaction, LockAttemptsInCell), // actually should be Bundle
-    pub contention_count: usize,
+    pub contention_count: std::sync::atomic::AtomicUsize,
     pub uncontended: std::sync::atomic::AtomicUsize,
     pub sequence_time: std::sync::atomic::AtomicUsize,
     pub sequence_end_time: std::sync::atomic::AtomicUsize,
@@ -491,7 +491,7 @@ impl Task {
             for_indexer: tx.1.iter().map(|a| a.clone_for_test()).collect(),
             unique_weight,
             tx: (tx.0, LockAttemptsInCell::new(std::cell::RefCell::new(tx.1))),
-            contention_count: 0,
+            contention_count: Default::default(),
             uncontended: Default::default(),
             sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
@@ -811,7 +811,7 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 let lock_count = next_task.lock_attempts_mut(ast).len();
-                panic!();//next_task.contention_count += 1;
+                next_task.contention_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
                 if from_runnable {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
