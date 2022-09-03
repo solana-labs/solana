@@ -261,15 +261,15 @@ impl ProvisioningTracker {
     }
 
     fn progress(&self) {
-        self.remaining_count = self.remaining_count.checked_sub(1).unwrap();
+        self.remaining_count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     fn prev_count(&self) -> usize {
-        self.remaining_count + 1
+        self.count() + 1
     }
 
     fn count(&self) -> usize {
-        self.remaining_count
+        self.remaining_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
