@@ -7869,7 +7869,7 @@ impl Bank {
     }
 
     fn wait_for_scheduler(&self) {
-        let h = self.scheduler.write().unwrap().scheduler_thread_handle.take();
+        let h = self.scheduler.write().unwrap().scheduler_thread_handle.take().unwrap();
         h.join();
     }
 }
