@@ -474,7 +474,7 @@ pub struct Task {
 }
 
 #[derive(Debug)]
-struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
+pub struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
 
 unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
