@@ -498,7 +498,7 @@ impl Task {
     }
 
     fn lock_attempts_mut(&mut self) -> &mut Vec<LockAttempt> {
-        &mut self.tx.1
+        self.tx.1.borrow_mut()
     }
 
     fn lock_attempts_not_mut(&self) -> &Vec<LockAttempt> {
