@@ -1207,17 +1207,20 @@ impl Default for Scheduler {
         let mut runnable_queue = solana_scheduler::TaskQueue::default();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
+        let (packet_batch_sender, packet_batch_receiver) = crossbeam_channel::unbounded();
+        let (completed_transaction_sender, completed_transaction_receiver) = crossbeam_channel::unbounded();
+        let (transaction_batch_sender, transaction_batch_receiver) = crossbeam_channel::unbounded();
 
         let scheduler_thread_handle = std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
 
             solana_scheduler::ScheduleStage::run(
-                num_execution_threads * lane_channel_factor,
+                100,
                 &mut runnable_queue,
                 &mut address_book,
                 &packet_batch_receiver.clone(),
                 &completed_transaction_receiver,
-                &transaction_batch_senders[0],
+                &transaction_batch_sender,
                 None,//&completed_transaction_receiver
             );
             Ok(())
