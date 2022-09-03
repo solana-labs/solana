@@ -811,7 +811,7 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (unlockable_count, provisional_count, busiest_page_cu) = attempt_lock_for_execution(
+            let (unlockable_count, provisional_count, _busiest_page_cu) = attempt_lock_for_execution(
                 ast,
                 from_runnable,
                 prefer_immediate,
