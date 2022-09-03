@@ -1207,7 +1207,7 @@ impl Default for Scheduler {
         }).unwrap();
 
         Self {
-            scheduler_thread_handle
+            scheduler_thread_handle: Some(scheduler_thread_handle),
         }
     }
 }
