@@ -868,6 +868,7 @@ impl ScheduleStage {
                 }
 
                 if from_runnable {
+                    next_task.update_busiest_page_cu(busiest_page_cu);
                     let a = address_book.stuck_tasks.insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
                     assert!(a.is_none());
                     continue;
