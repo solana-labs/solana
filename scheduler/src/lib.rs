@@ -1065,8 +1065,13 @@ impl ScheduleStage {
             (to_next_stage, None)
         } else {
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
+                #[derive(Clone, Copy, Debug)]
+                struct NotAtTopOfScheduleThread;
+                unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
+                let nast = NotAtScheduleThread;
+
                 while let Ok(mut a) = ee_receiver.recv() {
-                    assert!(a.task.lock_attempts_not_mut().is_empty());
+                    assert!(a.task.lock_attempts_not_mut(nast).is_empty());
                     //assert!(a.task.sequence_time() != usize::max_value());
                     //let lock_attempts = std::mem::take(&mut a.lock_attempts);
                     //drop(lock_attempts);
