@@ -1210,8 +1210,8 @@ impl Scheduler {
         struct NotAtTopOfScheduleThread;
         unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
         let nast = NotAtTopOfScheduleThread;
-
-        self.transaction_sender.send(solana_scheduler::SchedulablePayload(sani)).unwrap();
+        let t = solana_scheduler::Task::new_for_queue(nast, 0, sani);
+        self.transaction_sender.send(solana_scheduler::SchedulablePayload(t)).unwrap();
     }
 }
 
