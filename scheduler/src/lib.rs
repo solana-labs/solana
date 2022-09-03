@@ -831,7 +831,7 @@ impl ScheduleStage {
                     next_task.mark_as_contended();
                     *contended_count = contended_count.checked_add(1).unwrap();
 
-                    next_task.index();
+                    Task::index(next_task);
 
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
