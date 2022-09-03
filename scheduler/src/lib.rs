@@ -865,6 +865,7 @@ impl ScheduleStage {
                     continue;
                 } else {
                     // todo: remove this task from stuck_tasks before update_busiest_page_cu
+                    address_book.stuck_tasks.remove(&next_task.stuck_task_id());
                     next_task.update_busiest_page_cu(busiest_page_cu);
                     return None;
                 }
