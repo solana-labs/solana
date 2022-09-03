@@ -1426,7 +1426,7 @@ impl ScheduleStage {
                             &mut execute_clock,
                             &mut provisioning_tracker_count,
                         );
-                        to_next_stage.send(processed_execution_environment).unwrap();
+                        to_next_stage.send(PersistablePlayload(processed_execution_environment)).unwrap();
                     }
                     if !empty_from {
                         let task = from.recv().unwrap().0;
