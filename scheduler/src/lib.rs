@@ -1392,7 +1392,7 @@ impl ScheduleStage {
                         &mut provisioning_tracker_count,
                     ) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
-                        to_execute_substage.send(ee).unwrap();
+                        to_execute_substage.send(ExecutablePayload(ee)).unwrap();
                     } else {
                         break;
                     }
