@@ -1229,7 +1229,7 @@ impl Default for Scheduler {
                 &completed_ee_receiver,
                 None,//&completed_transaction_receiver
             );
-            drop(transaction_sender);
+            drop(transaction_receiver);
             drop(scheduled_ee_sender);
             drop(completed_ee_receiver);
 
