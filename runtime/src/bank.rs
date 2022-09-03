@@ -1209,6 +1209,17 @@ impl Default for Scheduler {
         let preloader = Arc::new(address_book.preloader());
 
         let scheduler_thread_handle = std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
+            let mut runnable_queue = solana_scheduler::TaskQueue::default();
+
+            solana_scheduler::ScheduleStage::run(
+                num_execution_threads * lane_channel_factor,
+                &mut runnable_queue,
+                &mut address_book,
+                &packet_batch_receiver.clone(),
+                &completed_transaction_receiver,
+                &transaction_batch_senders[0],
+                None,//&completed_transaction_receiver
+            );
             Ok(())
         }).unwrap();
 
