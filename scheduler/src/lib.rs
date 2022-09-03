@@ -341,6 +341,7 @@ impl AddressBook {
                         }
                     },
                 }
+        page.cu
     }
 
     fn reset_lock<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt, after_execution: bool) -> bool {
