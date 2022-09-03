@@ -473,6 +473,7 @@ pub struct Task {
     pub for_indexer: Vec<LockAttempt>,
 }
 
+#[derive(Debug)]
 struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
 
 unsafe impl Send for LockAttemptsInCell {}
