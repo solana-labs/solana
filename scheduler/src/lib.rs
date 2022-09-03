@@ -27,11 +27,12 @@ pub struct PageRc(PageRcInner);
 unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 
+type CU = u64;
 
 #[derive(Debug)]
 pub struct ExecutionEnvironment {
     //accounts: Vec<i8>,
-    pub cu: usize,
+    pub cu: CU,
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
