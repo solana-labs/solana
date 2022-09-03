@@ -2023,7 +2023,12 @@ mod tests {
             let mut $transaction_context =
                 TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
-            $invoke_context.push(&[], &[0, 1], &[]).unwrap();
+            $invoke_context
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&[0, 1], &[], &[]);
+            $invoke_context.push().unwrap();
         };
     }
 
@@ -3253,8 +3258,10 @@ mod tests {
                     is_writable: false,
                 }];
                 transaction_context
-                    .push(&[0], &instruction_accounts, &[index_in_trace as u8])
-                    .unwrap();
+                    .get_next_instruction_context()
+                    .unwrap()
+                    .configure(&[0], &instruction_accounts, &[index_in_trace as u8]);
+                transaction_context.push().unwrap();
             }
         }
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
@@ -3395,9 +3402,11 @@ mod tests {
         ];
         let mut transaction_context =
             TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
-        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
-        invoke_context
-            .push(
+        transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(
+                &[0, 1],
                 &[
                     InstructionAccount {
                         index_in_transaction: 2,
@@ -3414,10 +3423,10 @@ mod tests {
                         is_writable: true,
                     },
                 ],
-                &[0, 1],
                 &[],
-            )
-            .unwrap();
+            );
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        invoke_context.push().unwrap();
 
         let keys = [loader_key];
         let updates_list = [

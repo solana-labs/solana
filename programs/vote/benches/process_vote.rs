@@ -115,8 +115,11 @@ fn bench_process_vote_instruction(
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
-            .push(&instruction_accounts, &[0], &instruction_data)
-            .unwrap();
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(&[0], &instruction_accounts, &instruction_data);
+        invoke_context.push().unwrap();
         assert!(
             solana_vote_program::vote_processor::process_instruction(1, &mut invoke_context)
                 .is_ok()

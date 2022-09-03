@@ -130,8 +130,18 @@ impl MessageProcessor {
             let result = if is_precompile {
                 invoke_context
                     .transaction_context
-                    .push(program_indices, &instruction_accounts, &instruction.data)
-                    .and_then(|_| invoke_context.transaction_context.pop())
+                    .get_next_instruction_context()
+                    .map(|instruction_context| {
+                        instruction_context.configure(
+                            program_indices,
+                            &instruction_accounts,
+                            &instruction.data,
+                        );
+                    })
+                    .and_then(|_| {
+                        invoke_context.transaction_context.push()?;
+                        invoke_context.transaction_context.pop()
+                    })
             } else {
                 let mut time = Measure::start("execute_instruction");
                 let mut compute_units_consumed = 0;
