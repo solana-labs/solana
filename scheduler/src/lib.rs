@@ -501,6 +501,10 @@ impl Task {
         })
     }
 
+    pub fn clone_in_queue(this: &TaskInQueue) -> TaskInQueue {
+        TaskInQueue::clone(this)
+    }
+
     fn lock_attempts_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
         self.tx.1.0.borrow_mut()
     }
@@ -618,10 +622,6 @@ pub struct TaskQueue {
 }
 
 pub type TaskInQueue = std::sync::Arc<Task>;
-
-impl TaskInQueue {
-    fn clone2() {}
-}
 
 //type TaskQueueEntry<'a> = im::ordmap::Entry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueOccupiedEntry<'a> = im::ordmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
