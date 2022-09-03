@@ -1448,7 +1448,7 @@ impl ScheduleStage {
         from: &crossbeam_channel::Receiver<SchedulablePayload>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<PersistablePlayload>, // assume nonblocking
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<PersistablePlayload>>, // assume nonblocking
     ) {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
@@ -1468,7 +1468,7 @@ impl ScheduleStage {
 }
 
 pub struct SchedulablePayload(TaskInQueue);
-pub struct ExecutablePayload(Box<ExecutionEnvironment>)
+pub struct ExecutablePayload(Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(Box<ExecutionEnvironment>);
 pub struct PersistablePlayload(Box<ExecutionEnvironment>);
 
