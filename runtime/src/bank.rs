@@ -1387,7 +1387,7 @@ pub struct Bank {
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
 
-    scheduler: Scheduler,
+    scheduler: ArcSwap<Scheduler>,
 }
 
 struct VoteWithStakeDelegations {
