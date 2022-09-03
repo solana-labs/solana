@@ -792,7 +792,9 @@ impl ScheduleStage {
                 trace!("select: none");
                 if runnable_queue.task_count() == 0 && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0 {
                     error!("handling stuck...");
-                    Some((false, address_book.stuck_tasks.pop_first().unwrap().1))
+                    let task = address_book.stuck_tasks.pop_first().unwrap().1;
+                    task.mark_as_contended();
+                    Some((false, task))
                 } else {
                     None
                 }
