@@ -1578,7 +1578,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler: Scheduler::default(),
+            scheduler: Default::default(),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1818,7 +1818,7 @@ impl Bank {
             measure!(parent.feature_set.clone(), "feature_set_creation");
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
-        let scheduler = Scheduler::default();
+        let scheduler = Default::default();
 
         let mut new = Bank {
             incremental_snapshot_persistence: None,
@@ -2244,7 +2244,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            scheduler: Scheduler::default(),
+            scheduler: Default::default(),
         };
         bank.finish_init(
             genesis_config,
