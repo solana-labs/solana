@@ -1203,8 +1203,11 @@ struct Scheduler {
 
 impl Default for Scheduler {
     fn default() -> Self {
+        let mut runnable_queue = solana_scheduler::TaskQueue::default();
+        let mut address_book = solana_scheduler::AddressBook::default();
+        let preloader = address_book.preloader();
+
         let scheduler_thread_handle = std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
-            let mut runnable_queue = solana_scheduler::TaskQueue::default();
             Ok(())
         }).unwrap();
 
