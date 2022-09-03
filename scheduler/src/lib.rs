@@ -995,10 +995,6 @@ impl ScheduleStage {
         })
     }
 
-    fn commit_completed_execution2<AST: AtScheduleThread>(_a: AST) {
-        panic!();
-    }
-
     #[inline(never)]
     fn commit_completed_execution<AST: AtScheduleThread>(ast: AST, ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
         // do par()-ly?
