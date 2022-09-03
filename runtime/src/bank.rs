@@ -1198,7 +1198,7 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Debug)]
 struct Scheduler {
-    scheduler_thread_handle: std::thread::JoinHandle<()>,
+    scheduler_thread_handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Default for Scheduler {
