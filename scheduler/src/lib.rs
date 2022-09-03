@@ -971,7 +971,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
         task: TaskInQueue,
-        lock_attempts: Vec<LockAttempt>,
+        finalized_lock_attempts: Vec<LockAttempt>,
         queue_clock: &usize,
         execute_clock: &mut usize,
     ) -> Box<ExecutionEnvironment> {
@@ -984,7 +984,7 @@ impl ScheduleStage {
             task,
             unique_weight,
             cu: rng.gen_range(3, 1000),
-            lock_attempts,
+            finalized_lock_attempts,
         })
     }
 
