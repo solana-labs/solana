@@ -618,6 +618,11 @@ pub struct TaskQueue {
 }
 
 pub type TaskInQueue = std::sync::Arc<Task>;
+
+impl TaskInQueue {
+    fn clone2() {}
+}
+
 //type TaskQueueEntry<'a> = im::ordmap::Entry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueOccupiedEntry<'a> = im::ordmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueEntry<'a> = im::hashmap::Entry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
