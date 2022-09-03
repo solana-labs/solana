@@ -16,14 +16,14 @@ use {
 };
 
 /*
-type MyRcInner<T> = std::rc::Rc<T>;
+type PageRcInner<T> = std::rc::Rc<T>;
 unsafe impl Send for PageRc {}
 */
 
-type MyRcInner = std::sync::Arc<(std::cell::RefCell<Page>, TaskIds)>;
+type PageRcInner = std::sync::Arc<(std::cell::RefCell<Page>, TaskIds)>;
 
 #[derive(Debug, Clone)]
-pub struct PageRc(MyRcInner);
+pub struct PageRc(PageRcInner);
 unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 
@@ -422,7 +422,7 @@ pub struct Preloader {
 impl Preloader {
     #[inline(never)]
     pub fn load(&self, address: Pubkey) -> PageRc {
-        PageRc::clone(&self.book.entry(address).or_insert_with(|| PageRc(MyRcInner::new((core::cell::RefCell::new(Page::new(Usage::unused())), Default::default())))))
+        PageRc::clone(&self.book.entry(address).or_insert_with(|| PageRc(PageRcInner::new((core::cell::RefCell::new(Page::new(Usage::unused())), Default::default())))))
     }
 }
 
