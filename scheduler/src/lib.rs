@@ -1467,10 +1467,10 @@ impl ScheduleStage {
     }
 }
 
-pub struct SchedulablePayload(TaskInQueue);
-pub struct ExecutablePayload(Box<ExecutionEnvironment>);
-pub struct UnlockablePayload(Box<ExecutionEnvironment>);
-pub struct PersistablePlayload(Box<ExecutionEnvironment>);
+pub struct SchedulablePayload(pub TaskInQueue);
+pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
+pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
+pub struct PersistablePlayload(pub Box<ExecutionEnvironment>);
 
 struct ExecuteStage {
     //bank: Bank,
