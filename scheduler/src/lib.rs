@@ -1360,7 +1360,7 @@ impl ScheduleStage {
                            continue;
                        }
                    }
-                   let task = maybe_from.unwrap();
+                   let task = maybe_from.unwrap().0;
                    Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                }
             }
