@@ -759,14 +759,14 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     address_book: &mut AddressBook,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
-    placeholder_attempts: &mut Vec<LockAttempt>,
+    lock_attempts: &mut [LockAttempt],
 ) -> (usize, usize, CU) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
     let mut provisional_count = 0;
     let mut busiest_page_cu = 1;
 
-    for attempt in placeholder_attempts.iter_mut() {
+    for attempt in lock_attempts.iter_mut() {
         let cu = AddressBook::attempt_lock_address(
             ast,
             from_runnable,
