@@ -497,7 +497,7 @@ impl Task {
         })
     }
 
-    fn lock_attempts(&mut self) -> &mut Vec<LockAttempt> {
+    fn lock_attempts_mut(&mut self) -> &mut Vec<LockAttempt> {
         &mut self.tx.1
     }
 
@@ -768,7 +768,7 @@ impl ScheduleStage {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
             let next_task: &mut TaskInQueue = unsafe { panic!(); /*TaskInQueue::get_mut_unchecked(&mut a.1)*/ };
 
-            let lock_attempts = std::mem::take(next_task.lock_attempts());
+            let lock_attempts = std::mem::take(next_task.lock_attempts_mut());
 
             return Some((a.0, a.1, lock_attempts));
         }
@@ -796,7 +796,7 @@ impl ScheduleStage {
                 address_book,
                 &unique_weight,
                 &message_hash,
-                next_task.lock_attempts(),
+                next_task.lock_attempts_mut(),
             );
 
             if unlockable_count > 0 {
@@ -805,10 +805,10 @@ impl ScheduleStage {
                     ast,
                     address_book,
                     &unique_weight,
-                    next_task.lock_attempts(),
+                    next_task.lock_attempts_mut(),
                     from_runnable,
                 );
-                let lock_count = next_task.lock_attempts().len();
+                let lock_count = next_task.lock_attempts_mut().len();
                 next_task.contention_count += 1;
 
                 if from_runnable {
@@ -834,7 +834,7 @@ impl ScheduleStage {
             } else if provisional_count > 0 {
                 assert!(!from_runnable);
                 assert_eq!(unlockable_count, 0);
-                let lock_count = next_task.lock_attempts().len();
+                let lock_count = next_task.lock_attempts_mut().len();
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
@@ -857,7 +857,7 @@ impl ScheduleStage {
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
             }
-            let lock_attempts = std::mem::take(next_task.lock_attempts());
+            let lock_attempts = std::mem::take(next_task.lock_attempts_mut());
 
             return Some((unique_weight, arc_next_task, lock_attempts));
         } else {
@@ -875,7 +875,7 @@ impl ScheduleStage {
         next_task: &mut Task,
         tracker: std::sync::Arc<ProvisioningTracker>,
     ) {
-        for l in next_task.lock_attempts().iter_mut() {
+        for l in next_task.lock_attempts_mut().iter_mut() {
             match l.status {
                 LockStatus::Provisional => {
                     l.target.page_mut(ast).provisional_task_ids.push(std::sync::Arc::clone(&tracker));
