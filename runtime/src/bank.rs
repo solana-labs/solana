@@ -7896,7 +7896,10 @@ impl Bank {
     }
 
     pub fn wait_for_scheduler(&self) -> Result<()> {
-        let h = self.scheduler.write().unwrap().scheduler_thread_handle.take().unwrap();
+        let scheduler = self.scheduler.write().unwrap();
+        let transaction_sender = scheduler.transaction_sender.take().unwrap();
+        drop(transaction_sender);
+        let h = scheduler.scheduler_thread_handle.take().unwrap();
         h.join().unwrap()?;
 
         Ok(())
