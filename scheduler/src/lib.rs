@@ -463,7 +463,7 @@ struct Bundle {
 #[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
-    pub tx: (SanitizedTransaction, std::cell::RefCell<Vec<LockAttempt>>), // actually should be Bundle
+    pub tx: (SanitizedTransaction, (Vec<LockAttempt>, usize)), // actually should be Bundle
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
     pub sequence_time: std::sync::atomic::AtomicUsize,
@@ -495,6 +495,10 @@ impl Task {
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value())
         })
+    }
+
+    fn lock_attempts(&mut self) -> &mut Vec<LockAttempt> {
+        &mut self.tx.1
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
