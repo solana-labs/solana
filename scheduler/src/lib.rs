@@ -902,6 +902,7 @@ impl ScheduleStage {
 
             trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count.load(std::sync::atomic::Ordering::SeqCst));
 
+            assert!(!self.already_finished());
             if !from_runnable {
                 *contended_count = contended_count.checked_sub(1).unwrap_or_default();
                 next_task.mark_as_uncontended();
