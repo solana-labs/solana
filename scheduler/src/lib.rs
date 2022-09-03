@@ -927,7 +927,7 @@ impl ScheduleStage {
             if newly_uncontended && page.next_usage == Usage::Unused {
                 //let mut inserted = false;
 
-                if let Some(task) = l.heaviest_uncontended {
+                if let Some(task) = &l.heaviest_uncontended {
                     //assert!(!task.already_finished());
                     if /*true ||*/ task.currently_contended() {
                         //assert!(task.currently_contended());
