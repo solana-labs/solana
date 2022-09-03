@@ -1,4 +1,6 @@
 #![feature(map_first_last)]
+#![feature(negative_impls)]
+//#![feature(get_mut_unchecked)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
@@ -1193,8 +1195,8 @@ impl ScheduleStage {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
-        //impl !Send for AtTopOfScheduleThread {}
-        //impl !Sync for AtTopOfScheduleThread {}
+        impl !Send for AtTopOfScheduleThread {}
+        impl !Sync for AtTopOfScheduleThread {}
 
         Self::_run::<AtTopOfScheduleThread>(AtTopOfScheduleThread, max_executing_queue_count, runnable_queue, address_book, from, from_exec, to_execute_substage, maybe_to_next_stage)
     }
