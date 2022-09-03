@@ -1215,6 +1215,7 @@ impl Default for Scheduler {
             while let Ok(solana_scheduler::ExecutablePayload(ee)) = scheduled_ee_receiver.recv() {
                 completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
+            Ok(())
         }).unwrap();
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
