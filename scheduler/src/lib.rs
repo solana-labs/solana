@@ -260,7 +260,7 @@ impl ProvisioningTracker {
         self.remaining_count == 0
     }
 
-    fn progress(&mut self) {
+    fn progress(&self) {
         self.remaining_count = self.remaining_count.checked_sub(1).unwrap();
     }
 
