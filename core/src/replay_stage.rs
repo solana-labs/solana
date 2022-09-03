@@ -2472,7 +2472,28 @@ impl ReplayStage {
 
             assert_eq!(bank_slot, bank.slot());
             if bank.is_complete() {
-                bank.wait_for_scheduler();
+                let r = bank.wait_for_scheduler();
+                if let Err(err) = r {
+                        // Error means the slot needs to be marked as dead
+                        Self::mark_dead_slot(
+                            blockstore,
+                            bank,
+                            bank_forks.read().unwrap().root(),
+                            err,
+                            rpc_subscriptions,
+                            duplicate_slots_tracker,
+                            gossip_duplicate_confirmed_slots,
+                            epoch_slots_frozen_slots,
+                            progress,
+                            heaviest_subtree_fork_choice,
+                            duplicate_slots_to_repair,
+                            ancestor_hashes_replay_update_sender,
+                        );
+                        // If the bank was corrupted, don't try to run the below logic to check if the
+                        // bank is completed
+                        continue;
+                }
+
                 let mut bank_complete_time = Measure::start("bank_complete_time");
                 let bank_progress = progress
                     .get_mut(&bank.slot())
