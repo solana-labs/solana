@@ -927,12 +927,12 @@ impl ScheduleStage {
             if newly_uncontended && page.next_usage == Usage::Unused {
                 //let mut inserted = false;
 
-                if let Some(task) = &l.heaviest_uncontended {
+                if let Some(task) = l.heaviest_uncontended.take() {
                     //assert!(!task.already_finished());
                     if /*true ||*/ task.currently_contended() {
                         //assert!(task.currently_contended());
                         //inserted = true;
-                        address_book.uncontended_task_ids.insert(task.unique_weight, Task::clone_in_queue(task));
+                        address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     } /*else {
                         let contended_unique_weights = &page.contended_unique_weights;
                         contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
