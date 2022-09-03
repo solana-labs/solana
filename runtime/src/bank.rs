@@ -1198,7 +1198,7 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Debug)]
 struct Scheduler {
-    cheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
+    scheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
     executing_thread_handle: Option<std::thread::JoinHandle<()>>,
     preloader: Arc<solana_scheduler::Preloader>,
 }
