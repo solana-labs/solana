@@ -7867,6 +7867,10 @@ impl Bank {
 
         total_accounts_stats
     }
+
+    fn wait_for_scheduler(&self) {
+        self.scheduler.scheduler_thread_handle.join()
+    }
 }
 
 /// Compute how much an account has changed size.  This function is useful when the data size delta
