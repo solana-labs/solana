@@ -830,7 +830,7 @@ impl ScheduleStage {
             } else if provisional_count > 0 {
                 assert!(!from_runnable);
                 assert_eq!(unlockable_count, 0);
-                let lock_count = next_task.tx.1.len();
+                let lock_count = next_task.lock_attempts().len();
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
