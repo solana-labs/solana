@@ -795,9 +795,11 @@ impl ScheduleStage {
                     let (stuck_task_id, task) = address_book.stuck_tasks.pop_first().unwrap();
                     assert_eq!(task.stuck_task_id(), stuck_task_id);
 
-                    task.mark_as_contended(); // why this is needed???
-
-                    Some((false, task))
+                    if task.currently_contended() {
+                        Some((false, task))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
