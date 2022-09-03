@@ -95,7 +95,7 @@ impl ExecutionEnvironment {
 }
 
 unsafe trait AtScheduleThread: Copy {}
-unsafe pub trait NotAtScheduleThread: Copy {}
+pub unsafe trait NotAtScheduleThread: Copy {}
 
 impl PageRc {
     fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
