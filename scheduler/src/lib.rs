@@ -788,7 +788,11 @@ impl ScheduleStage {
             }
             (None, None) => {
                 trace!("select: none");
-                None
+                if runnable_queue.len() == 0 && contended_count == 0 {
+                    todo!("handle stuck!");
+                } else {
+                    None
+                }
             }
         }
     }
