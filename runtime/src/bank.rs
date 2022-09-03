@@ -1211,7 +1211,7 @@ impl Default for Scheduler {
         let preloader = Arc::new(address_book.preloader());
         let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded();
-        let (completed_transaction_sender, completed_transaction_receiver) = crossbeam_channel::unbounded();
+        let (completed_ee_sender, completed_ee_receiver) = crossbeam_channel::unbounded();
         let executing_thread_handle = std::thread::Builder::new().name(format!("sol-exec-{}", 0)).spawn(move || {
         }).unwrap();
 
@@ -1224,7 +1224,7 @@ impl Default for Scheduler {
                 &mut address_book,
                 &transaction_receiver.clone(),
                 &ee_sender,
-                &completed_transaction_receiver,
+                &completed_ee_receiver,
                 None,//&completed_transaction_receiver
             );
             Ok(())
