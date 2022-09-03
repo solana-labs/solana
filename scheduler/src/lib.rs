@@ -853,7 +853,7 @@ impl ScheduleStage {
                 continue;
             }
 
-            trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count);
+            trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count.load(std::sync::atomic::Ordering::SeqCst));
 
             if !from_runnable {
                 *contended_count = contended_count.checked_sub(1).unwrap();
