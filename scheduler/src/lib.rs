@@ -479,6 +479,12 @@ struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
 unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
 
+impl LockAttemptsInCell {
+    fn new(ll: std::cell:RefCell<Vec<LockAttempt>>) -> Self {
+        Self(ll)
+    }
+}
+
 // sequence_time -> seq clock
 // queue_time -> queue clock
 // execute_time ---> exec clock
