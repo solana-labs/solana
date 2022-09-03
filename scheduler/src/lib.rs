@@ -923,6 +923,9 @@ impl ScheduleStage {
         for mut l in lock_attempts {
             let newly_uncontended = address_book.reset_lock(ast, &mut l, true);
 
+            l.cu += cu;
+
+
             let mut page = l.target.page_mut(ast);
             if newly_uncontended && page.next_usage == Usage::Unused {
                 //let mut inserted = false;
