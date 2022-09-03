@@ -51,7 +51,7 @@ impl ExecutionEnvironment {
     //}
     //
     #[inline(never)]
-    pub fn reindex(&mut self) {
+    pub fn reindex_to_address_book(&mut self) {
         let uq = self.unique_weight;
         //self.task.trace_timestamps("in_exec(self)");
         let should_remove = self.task.contention_count.load(std::sync::atomic::Ordering::SeqCst) > 0;
@@ -627,7 +627,7 @@ impl Task {
     }
 
     #[inline(never)]
-    fn index(this: &TaskInQueue, task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>) {
+    fn index_to_address_book(this: &TaskInQueue, task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>) {
         //for lock_attempt in self.lock_attempts_mut(ast).iter() {
         //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&self));
         //}
