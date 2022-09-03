@@ -801,7 +801,7 @@ impl ScheduleStage {
                     ast,
                     address_book,
                     &unique_weight,
-                    &mut next_task.tx.1,
+                    next_task.lock_attempts(),
                     from_runnable,
                 );
                 let lock_count = next_task.lock_attempts().len();
