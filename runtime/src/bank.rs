@@ -1114,6 +1114,7 @@ impl PartialEq for Bank {
             accounts_data_size_delta_off_chain: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
+            scheduler: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
             // Adding ".." will remove compile-time checks that if a new field
             // is added to the struct, this ParitalEq is accordingly updated.
@@ -1192,6 +1193,22 @@ pub struct BuiltinPrograms {
 impl AbiExample for BuiltinPrograms {
     fn example() -> Self {
         Self::default()
+    }
+}
+
+#[derive(Debug)]
+struct Scheduler {
+    scheduler_thread_handle: std::thread::JoinHandle<()>,
+}
+
+impl Default for Scheduler {
+    fn default() -> Self {
+        let scheduler_thread_handle = std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
+        }).unwrap();
+
+        Self {
+            scheduler_thread_handle
+        }
     }
 }
 
@@ -1369,6 +1386,8 @@ pub struct Bank {
     pub fee_structure: FeeStructure,
 
     pub incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
+
+    scheduler: Scheduler,
 }
 
 struct VoteWithStakeDelegations {
@@ -1559,6 +1578,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            scheduler: Scheduler::default(),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1798,6 +1818,8 @@ impl Bank {
             measure!(parent.feature_set.clone(), "feature_set_creation");
 
         let accounts_data_size_initial = parent.load_accounts_data_size();
+        let scheduler = Scheduler::default();
+
         let mut new = Bank {
             incremental_snapshot_persistence: None,
             rewrites_skipped_this_slot: Rewrites::default(),
@@ -1877,6 +1899,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
+            scheduler
         };
 
         let (_, ancestors_time) = measure!(
@@ -2221,6 +2244,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            scheduler: Scheduler::default(),
         };
         bank.finish_init(
             genesis_config,
