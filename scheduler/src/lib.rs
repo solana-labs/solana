@@ -824,7 +824,7 @@ impl ScheduleStage {
 
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
-                    trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count);
+                    trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count.load(std::sync::atomic::Ordering::SeqCst));
                     //address_book.uncontended_task_ids.clear();
                 }
 
