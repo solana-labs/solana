@@ -638,7 +638,7 @@ impl Task {
     fn stuck_task_id(&self) -> StuckTaskId {
         let cu = self.busiest_page_cu.load(std::sync::atomic::Ordering::SeqCst);
         assert_ne!(cu, 0);
-        (cu, self.unique_weight)
+        (cu, TaskId::max_value() - self.unique_weight)
     }
 }
 
