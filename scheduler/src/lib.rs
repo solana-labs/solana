@@ -570,7 +570,7 @@ impl Task {
     }
 
 
-    pub fn clone_for_test<NAST: NotAtTopOfScheduleThread>(&self, nast: NAST) -> Self {
+    pub fn clone_for_test<NAST: NotAtScheduleThread>(&self, nast: NAST) -> Self {
         Self {
             unique_weight: self.unique_weight,
             for_indexer: self.lock_attempts_not_mut().iter().map(|a| a.clone_for_test(nast)).collect(),
