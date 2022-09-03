@@ -792,6 +792,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
 
+/*
 pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
     use solana_program_runtime::compute_budget::ComputeBudget;
     let mut compute_budget = ComputeBudget::default();
@@ -803,6 +804,7 @@ pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
         .map(|d| d.get_priority())
         .unwrap_or_default()
 }
+*/
 
 pub struct ScheduleStage {}
 
