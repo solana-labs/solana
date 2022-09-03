@@ -1209,10 +1209,10 @@ impl Default for Scheduler {
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
         let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
-        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded();
+        let (scheduled_ee_sender, scheduled_ee_receiver) = crossbeam_channel::unbounded();
         let (completed_ee_sender, completed_ee_receiver) = crossbeam_channel::unbounded();
         let executing_thread_handle = std::thread::Builder::new().name(format!("sol-exec-{}", 0)).spawn(move || {
-            while let Ok(a) = ee_receiver.recv() {
+            while let Ok(a) = scheduled_ee_receiver.recv() {
             }
         }).unwrap();
 
@@ -1224,7 +1224,7 @@ impl Default for Scheduler {
                 &mut runnable_queue,
                 &mut address_book,
                 &transaction_receiver.clone(),
-                &ee_sender,
+                &scheduled_ee_sender,
                 &completed_ee_receiver,
                 None,//&completed_transaction_receiver
             );
