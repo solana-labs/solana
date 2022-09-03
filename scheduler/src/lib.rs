@@ -283,7 +283,7 @@ impl AddressBook {
         prefer_immediate: bool,
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
-    ) -> usize {
+    ) -> CU {
         let LockAttempt {target, requested_usage, status/*, remembered*/, ..} = attempt;
 
                 let mut page = target.page_mut(ast);
