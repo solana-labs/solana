@@ -54,42 +54,50 @@ impl ExecutionEnvironment {
     pub fn reindex_to_address_book(&mut self) {
         let uq = self.unique_weight;
         //self.task.trace_timestamps("in_exec(self)");
-        let should_remove = self.task.contention_count.load(std::sync::atomic::Ordering::SeqCst) > 0;
+        let should_remove = self
+            .task
+            .contention_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > 0;
         for mut lock_attempt in self.finalized_lock_attempts.iter_mut() {
             let contended_unique_weights = lock_attempt.contended_unique_weights();
-            contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
-                let mut found = true;
-                let mut removed = false;
-                let mut task = task_cursor.value();
-                //task.trace_timestamps("in_exec(initial list)");
-                while !task.currently_contended() {
-                    if task_cursor.key() == &uq {
-                        assert!(should_remove);
-                        removed = task_cursor.remove();
-                        assert!(removed);
+            contended_unique_weights
+                .heaviest_task_cursor()
+                .map(|mut task_cursor| {
+                    let mut found = true;
+                    let mut removed = false;
+                    let mut task = task_cursor.value();
+                    //task.trace_timestamps("in_exec(initial list)");
+                    while !task.currently_contended() {
+                        if task_cursor.key() == &uq {
+                            assert!(should_remove);
+                            removed = task_cursor.remove();
+                            assert!(removed);
+                        }
+                        if task.already_finished() {
+                            task_cursor.remove();
+                        }
+                        if let Some(new_cursor) = task_cursor.prev() {
+                            assert!(new_cursor.key() < task_cursor.key());
+                            task_cursor = new_cursor;
+                            task = task_cursor.value();
+                            //task.trace_timestamps("in_exec(subsequent list)");
+                        } else {
+                            found = false;
+                            break;
+                        }
                     }
-                    if task.already_finished() {
-                        task_cursor.remove();
+                    if should_remove && !removed {
+                        contended_unique_weights.remove_task(&uq);
                     }
-                    if let Some(new_cursor) = task_cursor.prev() {
-                        assert!(new_cursor.key() < task_cursor.key());
-                        task_cursor = new_cursor;
-                        task = task_cursor.value();
-                        //task.trace_timestamps("in_exec(subsequent list)");
-                    } else {
-                        found = false;
-                        break;
-                    }
-                }
-                if should_remove && !removed {
-                    contended_unique_weights.remove_task(&uq);
-                }
-                found.then(|| Task::clone_in_queue(task))
-            }).flatten().map(|task| {
-                //task.trace_timestamps(&format!("in_exec(heaviest:{})", self.task.queue_time_label()));
-                lock_attempt.heaviest_uncontended = Some(task);
-                ()
-            });
+                    found.then(|| Task::clone_in_queue(task))
+                })
+                .flatten()
+                .map(|task| {
+                    //task.trace_timestamps(&format!("in_exec(heaviest:{})", self.task.queue_time_label()));
+                    lock_attempt.heaviest_uncontended = Some(task);
+                    ()
+                });
         }
     }
 }
@@ -99,14 +107,14 @@ pub unsafe trait NotAtScheduleThread: Copy {}
 
 impl PageRc {
     fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
-        self.0.0.borrow_mut()
+        self.0 .0.borrow_mut()
     }
 }
 
 #[derive(Clone, Debug)]
 enum LockStatus {
     Succeded,
-    Provisional, 
+    Provisional,
     Failed,
 }
 
@@ -142,7 +150,7 @@ impl LockAttempt {
     }
 
     pub fn contended_unique_weights(&self) -> &TaskIds {
-        &self.target.0.1
+        &self.target.0 .1
     }
 }
 
@@ -200,7 +208,9 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    pub fn heaviest_task_cursor(&self) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue>> {
+    pub fn heaviest_task_cursor(
+        &self,
+    ) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue>> {
         self.task_ids.back()
     }
 }
@@ -258,7 +268,10 @@ struct ProvisioningTracker {
 
 impl ProvisioningTracker {
     fn new(remaining_count: usize, task: TaskInQueue) -> Self {
-        Self { remaining_count: std::sync::atomic::AtomicUsize::new(remaining_count), task }
+        Self {
+            remaining_count: std::sync::atomic::AtomicUsize::new(remaining_count),
+            task,
+        }
     }
 
     fn is_fulfilled(&self) -> bool {
@@ -266,7 +279,8 @@ impl ProvisioningTracker {
     }
 
     fn progress(&self) {
-        self.remaining_count.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        self.remaining_count
+            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
     }
 
     fn prev_count(&self) -> usize {
@@ -274,7 +288,8 @@ impl ProvisioningTracker {
     }
 
     fn count(&self) -> usize {
-        self.remaining_count.load(std::sync::atomic::Ordering::SeqCst)
+        self.remaining_count
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -287,72 +302,80 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> CU {
-        let LockAttempt {target, requested_usage, status/*, remembered*/, ..} = attempt;
+        let LockAttempt {
+            target,
+            requested_usage,
+            status, /*, remembered*/
+            ..
+        } = attempt;
 
-                let mut page = target.page_mut(ast);
+        let mut page = target.page_mut(ast);
 
-                let next_usage = page.next_usage;
-                match page.current_usage {
-                    Usage::Unused => {
-                        assert_eq!(page.next_usage, Usage::Unused);
-                        page.current_usage = Usage::renew(*requested_usage);
-                        *status = LockStatus::Succeded;
-                    }
-                    Usage::Readonly(ref mut count) => match requested_usage {
-                        RequestedUsage::Readonly => {
-                            // prevent newer read-locks (even from runnable too)
-                            match next_usage {
-                                Usage::Unused => {
-                                    *count += 1;
-                                    *status = LockStatus::Succeded;
-                                },
-                                Usage::Readonly(_) | Usage::Writable => {
-                                    *status = LockStatus::Failed;
-                                }
-                            }
+        let next_usage = page.next_usage;
+        match page.current_usage {
+            Usage::Unused => {
+                assert_eq!(page.next_usage, Usage::Unused);
+                page.current_usage = Usage::renew(*requested_usage);
+                *status = LockStatus::Succeded;
+            }
+            Usage::Readonly(ref mut count) => match requested_usage {
+                RequestedUsage::Readonly => {
+                    // prevent newer read-locks (even from runnable too)
+                    match next_usage {
+                        Usage::Unused => {
+                            *count += 1;
+                            *status = LockStatus::Succeded;
                         }
-                        RequestedUsage::Writable => {
-                            if from_runnable || prefer_immediate {
-                                *status = LockStatus::Failed;
-                            } else {
-                                match page.next_usage {
-                                    Usage::Unused => {
-                                        *status = LockStatus::Provisional;
-                                        page.next_usage = Usage::renew(*requested_usage);
-                                    },
-                                    // support multiple readonly locks!
-                                    Usage::Readonly(_) | Usage::Writable => {
-                                        *status = LockStatus::Failed;
-                                    },
-                                }
-                            }
-                        }
-                    },
-                    Usage::Writable => {
-                        if from_runnable || prefer_immediate {
+                        Usage::Readonly(_) | Usage::Writable => {
                             *status = LockStatus::Failed;
-                        } else {
-                            match page.next_usage {
-                                Usage::Unused => {
-                                    *status = LockStatus::Provisional;
-                                    page.next_usage = Usage::renew(*requested_usage);
-                                },
-                                // support multiple readonly locks!
-                                Usage::Readonly(_) | Usage::Writable => {
-                                    *status = LockStatus::Failed;
-                                },
+                        }
+                    }
+                }
+                RequestedUsage::Writable => {
+                    if from_runnable || prefer_immediate {
+                        *status = LockStatus::Failed;
+                    } else {
+                        match page.next_usage {
+                            Usage::Unused => {
+                                *status = LockStatus::Provisional;
+                                page.next_usage = Usage::renew(*requested_usage);
+                            }
+                            // support multiple readonly locks!
+                            Usage::Readonly(_) | Usage::Writable => {
+                                *status = LockStatus::Failed;
                             }
                         }
-                    },
+                    }
                 }
+            },
+            Usage::Writable => {
+                if from_runnable || prefer_immediate {
+                    *status = LockStatus::Failed;
+                } else {
+                    match page.next_usage {
+                        Usage::Unused => {
+                            *status = LockStatus::Provisional;
+                            page.next_usage = Usage::renew(*requested_usage);
+                        }
+                        // support multiple readonly locks!
+                        Usage::Readonly(_) | Usage::Writable => {
+                            *status = LockStatus::Failed;
+                        }
+                    }
+                }
+            }
+        }
         page.cu
     }
 
-    fn reset_lock<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt, after_execution: bool) -> bool {
+    fn reset_lock<AST: AtScheduleThread>(
+        &mut self,
+        ast: AST,
+        attempt: &mut LockAttempt,
+        after_execution: bool,
+    ) -> bool {
         match attempt.status {
-            LockStatus::Succeded => {
-                self.unlock(ast, attempt)
-            },
+            LockStatus::Succeded => self.unlock(ast, attempt),
             LockStatus::Provisional => {
                 if after_execution {
                     self.unlock(ast, attempt)
@@ -409,16 +432,18 @@ impl AddressBook {
         match page.next_usage {
             Usage::Unused => {
                 unreachable!();
-            },
+            }
             // support multiple readonly locks!
             Usage::Readonly(_) | Usage::Writable => {
                 page.next_usage = Usage::Unused;
-            },
+            }
         }
     }
 
     pub fn preloader(&self) -> Preloader {
-        Preloader{book: std::sync::Arc::clone(&self.book)}
+        Preloader {
+            book: std::sync::Arc::clone(&self.book),
+        }
     }
 }
 
@@ -429,7 +454,12 @@ pub struct Preloader {
 impl Preloader {
     #[inline(never)]
     pub fn load(&self, address: Pubkey) -> PageRc {
-        PageRc::clone(&self.book.entry(address).or_insert_with(|| PageRc(PageRcInner::new((core::cell::RefCell::new(Page::new(Usage::unused())), Default::default())))))
+        PageRc::clone(&self.book.entry(address).or_insert_with(|| {
+            PageRc(PageRcInner::new((
+                core::cell::RefCell::new(Page::new(Usage::unused())),
+                Default::default(),
+            )))
+        }))
     }
 }
 
@@ -493,9 +523,15 @@ impl LockAttemptsInCell {
 // commit_time  -+
 
 impl Task {
-    pub fn new_for_queue<NAST: NotAtScheduleThread>(nast: NAST, unique_weight: UniqueWeight, tx: (SanitizedTransaction, Vec<LockAttempt>)) -> TaskInQueue {
+    pub fn new_for_queue<NAST: NotAtScheduleThread>(
+        nast: NAST,
+        unique_weight: UniqueWeight,
+        tx: (SanitizedTransaction, Vec<LockAttempt>),
+    ) -> TaskInQueue {
         TaskInQueue::new(Self {
-            for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(tx.1.iter().map(|a| a.clone_for_test()).collect())),
+            for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(
+                tx.1.iter().map(|a| a.clone_for_test()).collect(),
+            )),
             unique_weight,
             tx: (tx.0, LockAttemptsInCell::new(std::cell::RefCell::new(tx.1))),
             contention_count: Default::default(),
@@ -506,7 +542,7 @@ impl Task {
             queue_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             queue_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             execute_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
-            commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value())
+            commit_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
         })
     }
 
@@ -515,16 +551,23 @@ impl Task {
         TaskInQueue::clone(this)
     }
 
-    fn lock_attempts_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
-        self.tx.1.0.borrow_mut()
+    fn lock_attempts_mut<AST: AtScheduleThread>(
+        &self,
+        _ast: AST,
+    ) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
+        self.tx.1 .0.borrow_mut()
     }
 
-    fn lock_attempts_not_mut<NAST: NotAtScheduleThread>(&self, _nast: NAST) -> std::cell::Ref<'_, Vec<LockAttempt>> {
-        self.tx.1.0.borrow()
+    fn lock_attempts_not_mut<NAST: NotAtScheduleThread>(
+        &self,
+        _nast: NAST,
+    ) -> std::cell::Ref<'_, Vec<LockAttempt>> {
+        self.tx.1 .0.borrow()
     }
 
     fn update_busiest_page_cu(&self, cu: CU) {
-        self.busiest_page_cu.store(cu, std::sync::atomic::Ordering::SeqCst);
+        self.busiest_page_cu
+            .store(cu, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
@@ -536,7 +579,8 @@ impl Task {
     }
 
     pub fn sequence_end_time(&self) -> usize {
-        self.sequence_end_time.load(std::sync::atomic::Ordering::SeqCst)
+        self.sequence_end_time
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub fn record_queue_time(&self, seq_clock: usize, queue_clock: usize) {
@@ -549,7 +593,8 @@ impl Task {
     }
 
     pub fn queue_end_time(&self) -> usize {
-        self.queue_end_time.load(std::sync::atomic::Ordering::SeqCst)
+        self.queue_end_time
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 
     pub fn record_execute_time(&self, queue_clock: usize, execute_clock: usize) {
@@ -570,9 +615,12 @@ impl Task {
     }
 
     pub fn queue_time_label(&self) -> String {
-        format!("queue: [{}qT..{}qT; {}qD]", 
-              self.queue_time(), self.queue_end_time(), self.queue_end_time() - self.queue_time(), 
-              )
+        format!(
+            "queue: [{}qT..{}qT; {}qD]",
+            self.queue_time(),
+            self.queue_end_time(),
+            self.queue_end_time() - self.queue_time(),
+        )
     }
 
     pub fn trace_timestamps(&self, prefix: &str) {
@@ -582,16 +630,28 @@ impl Task {
               self.sequence_time(),
               self.sequence_end_time(),
               self.sequence_end_time() - self.sequence_time(),
-              self.queue_time(), self.queue_end_time(), self.queue_end_time() - self.queue_time(), 
+              self.queue_time(), self.queue_end_time(), self.queue_end_time() - self.queue_time(),
               self.execute_time(), self.commit_time(), self.commit_time() - self.execute_time());
     }
-
 
     pub fn clone_for_test<NAST: NotAtScheduleThread>(&self, nast: NAST) -> Self {
         Self {
             unique_weight: self.unique_weight,
-            for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(self.lock_attempts_not_mut(nast).iter().map(|a| a.clone_for_test()).collect())),
-            tx: (self.tx.0.clone(), LockAttemptsInCell::new(std::cell::RefCell::new(self.lock_attempts_not_mut(nast).iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))),
+            for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(
+                self.lock_attempts_not_mut(nast)
+                    .iter()
+                    .map(|a| a.clone_for_test())
+                    .collect(),
+            )),
+            tx: (
+                self.tx.0.clone(),
+                LockAttemptsInCell::new(std::cell::RefCell::new(
+                    self.lock_attempts_not_mut(nast)
+                        .iter()
+                        .map(|l| l.clone_for_test())
+                        .collect::<Vec<_>>(),
+                )),
+            ),
             contention_count: Default::default(),
             busiest_page_cu: Default::default(),
             uncontended: Default::default(),
@@ -613,30 +673,40 @@ impl Task {
     }
 
     fn mark_as_contended(&self) {
-        self.uncontended.store(1, std::sync::atomic::Ordering::SeqCst)
+        self.uncontended
+            .store(1, std::sync::atomic::Ordering::SeqCst)
     }
 
     fn mark_as_uncontended(&self) {
         assert!(self.currently_contended());
-        self.uncontended.store(2, std::sync::atomic::Ordering::SeqCst)
+        self.uncontended
+            .store(2, std::sync::atomic::Ordering::SeqCst)
     }
 
     fn mark_as_finished(&self) {
         assert!(!self.already_finished() && !self.currently_contended());
-        self.uncontended.store(3, std::sync::atomic::Ordering::SeqCst)
+        self.uncontended
+            .store(3, std::sync::atomic::Ordering::SeqCst)
     }
 
     #[inline(never)]
-    fn index_to_address_book(this: &TaskInQueue, task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>) {
+    fn index_to_address_book(
+        this: &TaskInQueue,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
+    ) {
         //for lock_attempt in self.lock_attempts_mut(ast).iter() {
         //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&self));
         //}
         let a = Task::clone_in_queue(this);
-        task_sender.send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut()))).unwrap();
+        task_sender
+            .send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut())))
+            .unwrap();
     }
 
     fn stuck_task_id(&self) -> StuckTaskId {
-        let cu = self.busiest_page_cu.load(std::sync::atomic::Ordering::SeqCst);
+        let cu = self
+            .busiest_page_cu
+            .load(std::sync::atomic::Ordering::SeqCst);
         assert_ne!(cu, 0);
         (cu, TaskId::max_value() - self.unique_weight)
     }
@@ -660,7 +730,8 @@ pub type TaskInQueue = triomphe::Arc<Task>;
 //type TaskQueueEntry<'a> = dashmap::mapref::entry::Entry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueOccupiedEntry<'a> = dashmap::mapref::entry::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
 type TaskQueueEntry<'a> = std::collections::btree_map::Entry<'a, UniqueWeight, TaskInQueue>;
-type TaskQueueOccupiedEntry<'a> = std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
+type TaskQueueOccupiedEntry<'a> =
+    std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
 
 impl TaskQueue {
     #[inline(never)]
@@ -671,9 +742,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn heaviest_entry_to_execute(
-        &mut self,
-    ) -> Option<TaskQueueOccupiedEntry<'_>> {
+    fn heaviest_entry_to_execute(&mut self) -> Option<TaskQueueOccupiedEntry<'_>> {
         self.tasks.last_entry()
     }
 
@@ -698,17 +767,23 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     let mut busiest_page_cu = 1;
 
     for attempt in placeholder_attempts.iter_mut() {
-        let cu = AddressBook::attempt_lock_address(ast, from_runnable, prefer_immediate, unique_weight, attempt);
+        let cu = AddressBook::attempt_lock_address(
+            ast,
+            from_runnable,
+            prefer_immediate,
+            unique_weight,
+            attempt,
+        );
         busiest_page_cu = busiest_page_cu.max(cu);
 
         match attempt.status {
-            LockStatus::Succeded => {},
+            LockStatus::Succeded => {}
             LockStatus::Failed => {
                 unlockable_count += 1;
-            },
+            }
             LockStatus::Provisional => {
                 provisional_count += 1;
-            },
+            }
         }
     }
 
@@ -718,32 +793,29 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
 
 pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
-        use solana_program_runtime::compute_budget::ComputeBudget;
-        let mut compute_budget = ComputeBudget::default();
-        compute_budget
-            .process_instructions(
-                tx.message().program_instructions_iter(),
-                true, // use default units per instruction
-                true, // don't reject txs that use set compute unit price ix
-            )
-            .map(|d| d.get_priority()).unwrap_or_default()
+    use solana_program_runtime::compute_budget::ComputeBudget;
+    let mut compute_budget = ComputeBudget::default();
+    compute_budget
+        .process_instructions(
+            tx.message().program_instructions_iter(),
+            true, // use default units per instruction
+            true, // don't reject txs that use set compute unit price ix
+        )
+        .map(|d| d.get_priority())
+        .unwrap_or_default()
 }
 
 pub struct ScheduleStage {}
 
 impl ScheduleStage {
-    fn push_to_runnable_queue(
-        task: TaskInQueue,
-        runnable_queue: &mut TaskQueue,
-    ) {
-        runnable_queue.add_to_schedule(
-            task.unique_weight,
-            task,
-        );
+    fn push_to_runnable_queue(task: TaskInQueue, runnable_queue: &mut TaskQueue) {
+        runnable_queue.add_to_schedule(task.unique_weight, task);
     }
 
     #[inline(never)]
-    fn get_heaviest_from_contended<'a>(address_book: &'a mut AddressBook) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>> {
+    fn get_heaviest_from_contended<'a>(
+        address_book: &'a mut AddressBook,
+    ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>> {
         address_book.uncontended_task_ids.last_entry()
     }
 
@@ -752,10 +824,7 @@ impl ScheduleStage {
         runnable_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &usize,
-    ) -> Option<(
-        bool,
-        TaskInQueue,
-    )> {
+    ) -> Option<(bool, TaskInQueue)> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
             Self::get_heaviest_from_contended(address_book),
@@ -768,8 +837,8 @@ impl ScheduleStage {
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
                 let t = weight_from_contended.remove();
-                Some(( false, t))
-            },
+                Some((false, t))
+            }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
                 let uw = weight_from_contended.key();
@@ -781,7 +850,7 @@ impl ScheduleStage {
                 } else if uw > weight_from_runnable {
                     trace!("select: contended > runnnable");
                     let t = weight_from_contended.remove();
-                    Some(( false, t))
+                    Some((false, t))
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
@@ -790,7 +859,8 @@ impl ScheduleStage {
             }
             (None, None) => {
                 trace!("select: none");
-                if runnable_queue.task_count() == 0 && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0 {
+                if runnable_queue.task_count() == 0 && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0
+                {
                     trace!("handling stuck...");
                     let (stuck_task_id, task) = address_book.stuck_tasks.pop_first().unwrap();
                     // ensure proper rekeying
@@ -822,7 +892,10 @@ impl ScheduleStage {
         provisioning_tracker_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
-            trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
+            trace!(
+                "expediate pop from provisional queue [rest: {}]",
+                address_book.fulfilled_provisional_task_ids.len()
+            );
 
             let lock_attempts = std::mem::take(&mut *a.1.lock_attempts_mut(ast));
 
@@ -831,104 +904,140 @@ impl ScheduleStage {
 
         trace!("pop begin");
         loop {
-        if let Some((from_runnable, mut next_task)) = Self::select_next_task(runnable_queue, address_book, contended_count) {
-            trace!("pop loop iteration");
-            if from_runnable {
-                next_task.record_queue_time(*sequence_clock, *queue_clock);
-                *queue_clock = queue_clock.checked_add(1).unwrap();
-            }
-            let unique_weight = next_task.unique_weight;
-            let message_hash = next_task.tx.0.message_hash();
-
-            // plumb message_hash into StatusCache or implmenent our own for duplicate tx
-            // detection?
-
-            let (unlockable_count, provisional_count, busiest_page_cu) = attempt_lock_for_execution(
-                ast,
-                from_runnable,
-                prefer_immediate,
-                address_book,
-                &unique_weight,
-                &message_hash,
-                &mut next_task.lock_attempts_mut(ast),
-            );
-
-            if unlockable_count > 0 {
-                //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
-                Self::reset_lock_for_failed_execution(
-                    ast,
-                    address_book,
-                    &unique_weight,
-                    &mut next_task.lock_attempts_mut(ast),
-                    from_runnable,
-                );
-                let lock_count = next_task.lock_attempts_mut(ast).len();
-                next_task.contention_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
+            if let Some((from_runnable, mut next_task)) =
+                Self::select_next_task(runnable_queue, address_book, contended_count)
+            {
+                trace!("pop loop iteration");
                 if from_runnable {
-                    trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
-                    next_task.mark_as_contended();
-                    *contended_count = contended_count.checked_add(1).unwrap();
-
-                    Task::index_to_address_book(&next_task, task_sender);
-
-                    // maybe run lightweight prune logic on contended_queue here.
-                } else {
-                    trace!("relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}", unlockable_count, provisional_count, lock_count, &unique_weight, next_task.contention_count.load(std::sync::atomic::Ordering::SeqCst));
-                    //address_book.uncontended_task_ids.clear();
+                    next_task.record_queue_time(*sequence_clock, *queue_clock);
+                    *queue_clock = queue_clock.checked_add(1).unwrap();
                 }
+                let unique_weight = next_task.unique_weight;
+                let message_hash = next_task.tx.0.message_hash();
 
-                if from_runnable {
+                // plumb message_hash into StatusCache or implmenent our own for duplicate tx
+                // detection?
+
+                let (unlockable_count, provisional_count, busiest_page_cu) =
+                    attempt_lock_for_execution(
+                        ast,
+                        from_runnable,
+                        prefer_immediate,
+                        address_book,
+                        &unique_weight,
+                        &message_hash,
+                        &mut next_task.lock_attempts_mut(ast),
+                    );
+
+                if unlockable_count > 0 {
+                    //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
+                    Self::reset_lock_for_failed_execution(
+                        ast,
+                        address_book,
+                        &unique_weight,
+                        &mut next_task.lock_attempts_mut(ast),
+                        from_runnable,
+                    );
+                    let lock_count = next_task.lock_attempts_mut(ast).len();
+                    next_task
+                        .contention_count
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+                    if from_runnable {
+                        trace!(
+                            "move to contended due to lock failure [{}/{}/{}]",
+                            unlockable_count,
+                            provisional_count,
+                            lock_count
+                        );
+                        next_task.mark_as_contended();
+                        *contended_count = contended_count.checked_add(1).unwrap();
+
+                        Task::index_to_address_book(&next_task, task_sender);
+
+                        // maybe run lightweight prune logic on contended_queue here.
+                    } else {
+                        trace!(
+                            "relock failed [{}/{}/{}]; remains in contended: {:?} contention: {}",
+                            unlockable_count,
+                            provisional_count,
+                            lock_count,
+                            &unique_weight,
+                            next_task
+                                .contention_count
+                                .load(std::sync::atomic::Ordering::SeqCst)
+                        );
+                        //address_book.uncontended_task_ids.clear();
+                    }
+
+                    if from_runnable {
+                        next_task.update_busiest_page_cu(busiest_page_cu);
+                        let a = address_book
+                            .stuck_tasks
+                            .insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
+                        assert!(a.is_none());
+                        continue;
+                    } else {
+                        // todo: remove this task from stuck_tasks before update_busiest_page_cu
+                        let removed = address_book
+                            .stuck_tasks
+                            .remove(&next_task.stuck_task_id())
+                            .unwrap();
+                        next_task.update_busiest_page_cu(busiest_page_cu);
+                        let a = address_book
+                            .stuck_tasks
+                            .insert(next_task.stuck_task_id(), removed);
+                        assert!(a.is_none());
+                        return None;
+                    }
+                } else if provisional_count > 0 {
+                    assert!(!from_runnable);
+                    assert_eq!(unlockable_count, 0);
+                    let lock_count = next_task.lock_attempts_mut(ast).len();
+                    trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
+                    *contended_count = contended_count.checked_sub(1).unwrap();
+                    next_task.mark_as_uncontended();
+                    address_book.stuck_tasks.remove(&next_task.stuck_task_id());
                     next_task.update_busiest_page_cu(busiest_page_cu);
-                    let a = address_book.stuck_tasks.insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
-                    assert!(a.is_none());
-                    continue;
-                } else {
-                    // todo: remove this task from stuck_tasks before update_busiest_page_cu
-                    let removed = address_book.stuck_tasks.remove(&next_task.stuck_task_id()).unwrap();
-                    next_task.update_busiest_page_cu(busiest_page_cu);
-                    let a = address_book.stuck_tasks.insert(next_task.stuck_task_id(), removed);
-                    assert!(a.is_none());
+
+                    let tracker = triomphe::Arc::new(ProvisioningTracker::new(
+                        provisional_count,
+                        Task::clone_in_queue(&next_task),
+                    ));
+                    *provisioning_tracker_count =
+                        provisioning_tracker_count.checked_add(1).unwrap();
+                    Self::finalize_lock_for_provisional_execution(
+                        ast,
+                        address_book,
+                        &next_task,
+                        tracker,
+                    );
+
                     return None;
+                    continue;
                 }
-            } else if provisional_count > 0 {
-                assert!(!from_runnable);
-                assert_eq!(unlockable_count, 0);
-                let lock_count = next_task.lock_attempts_mut(ast).len();
-                trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
-                *contended_count = contended_count.checked_sub(1).unwrap();
-                next_task.mark_as_uncontended();
-                address_book.stuck_tasks.remove(&next_task.stuck_task_id());
-                next_task.update_busiest_page_cu(busiest_page_cu);
 
-                let tracker = triomphe::Arc::new(ProvisioningTracker::new(provisional_count, Task::clone_in_queue(&next_task)));
-                *provisioning_tracker_count = provisioning_tracker_count.checked_add(1).unwrap();
-                Self::finalize_lock_for_provisional_execution(
-                    ast,
-                    address_book,
-                    &next_task,
-                    tracker
+                trace!(
+                    "successful lock: (from_runnable: {}) after {} contentions",
+                    from_runnable,
+                    next_task
+                        .contention_count
+                        .load(std::sync::atomic::Ordering::SeqCst)
                 );
 
-                return None;
-                continue;
-            }
+                assert!(!next_task.already_finished());
+                if !from_runnable {
+                    *contended_count = contended_count.checked_sub(1).unwrap();
+                    next_task.mark_as_uncontended();
+                } else {
+                    next_task.update_busiest_page_cu(busiest_page_cu);
+                }
+                let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut(ast));
 
-            trace!("successful lock: (from_runnable: {}) after {} contentions", from_runnable, next_task.contention_count.load(std::sync::atomic::Ordering::SeqCst));
-
-            assert!(!next_task.already_finished());
-            if !from_runnable {
-                *contended_count = contended_count.checked_sub(1).unwrap();
-                next_task.mark_as_uncontended();
+                return Some((unique_weight, next_task, lock_attempts));
             } else {
-                next_task.update_busiest_page_cu(busiest_page_cu);
+                break;
             }
-            let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut(ast));
-
-            return Some((unique_weight, next_task, lock_attempts));
-        } else {
-            break;
-        }
         }
 
         None
@@ -944,7 +1053,10 @@ impl ScheduleStage {
         for l in next_task.lock_attempts_mut(ast).iter_mut() {
             match l.status {
                 LockStatus::Provisional => {
-                    l.target.page_mut(ast).provisional_task_ids.push(triomphe::Arc::clone(&tracker));
+                    l.target
+                        .page_mut(ast)
+                        .provisional_task_ids
+                        .push(triomphe::Arc::clone(&tracker));
                 }
                 LockStatus::Succeded => {
                     // do nothing
@@ -971,7 +1083,13 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution<AST: AtScheduleThread>(ast: AST, address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt], provisioning_tracker_count: &mut usize, cu: CU) {
+    fn unlock_after_execution<AST: AtScheduleThread>(
+        ast: AST,
+        address_book: &mut AddressBook,
+        lock_attempts: &mut [LockAttempt],
+        provisioning_tracker_count: &mut usize,
+        cu: CU,
+    ) {
         for mut l in lock_attempts {
             let newly_uncontended = address_book.reset_lock(ast, &mut l, true);
 
@@ -982,33 +1100,37 @@ impl ScheduleStage {
 
                 if let Some(task) = l.heaviest_uncontended.take() {
                     //assert!(!task.already_finished());
-                    if /*true ||*/ task.currently_contended() {
+                    if
+                    /*true ||*/
+                    task.currently_contended() {
                         //assert!(task.currently_contended());
                         //inserted = true;
-                        address_book.uncontended_task_ids.insert(task.unique_weight, task);
+                        address_book
+                            .uncontended_task_ids
+                            .insert(task.unique_weight, task);
                     } /*else {
-                        let contended_unique_weights = &page.contended_unique_weights;
-                        contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
-                            let mut found = true;
-                            //assert_ne!(task_cursor.key(), &task.uq);
-                            let mut task = task_cursor.value();
-                            while !task.currently_contended() {
-                                if let Some(new_cursor) = task_cursor.prev() {
-                                    assert!(new_cursor.key() < task_cursor.key());
-                                    //assert_ne!(new_cursor.key(), &uq);
-                                    task_cursor = new_cursor;
-                                    task = task_cursor.value();
-                                } else {
-                                    found = false;
-                                    break;
-                                }
-                            }
-                            found.then(|| Task::clone_in_queue(task))
-                        }).flatten().map(|task| {
-                            address_book.uncontended_task_ids.insert(task.unique_weight, task);
-                            ()
-                        });
-                    }*/
+                          let contended_unique_weights = &page.contended_unique_weights;
+                          contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
+                              let mut found = true;
+                              //assert_ne!(task_cursor.key(), &task.uq);
+                              let mut task = task_cursor.value();
+                              while !task.currently_contended() {
+                                  if let Some(new_cursor) = task_cursor.prev() {
+                                      assert!(new_cursor.key() < task_cursor.key());
+                                      //assert_ne!(new_cursor.key(), &uq);
+                                      task_cursor = new_cursor;
+                                      task = task_cursor.value();
+                                  } else {
+                                      found = false;
+                                      break;
+                                  }
+                              }
+                              found.then(|| Task::clone_in_queue(task))
+                          }).flatten().map(|task| {
+                              address_book.uncontended_task_ids.insert(task.unique_weight, task);
+                              ()
+                          });
+                      }*/
                 }
             }
             if page.current_usage == Usage::Unused && page.next_usage != Usage::Unused {
@@ -1016,11 +1138,23 @@ impl ScheduleStage {
                 for tracker in std::mem::take(&mut page.provisional_task_ids).into_iter() {
                     tracker.progress();
                     if tracker.is_fulfilled() {
-                        trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
-                        address_book.fulfilled_provisional_task_ids.insert(tracker.task.unique_weight, Task::clone_in_queue(&tracker.task));
-                        *provisioning_tracker_count = provisioning_tracker_count.checked_sub(1).unwrap();
+                        trace!(
+                            "provisioning tracker progress: {} => {} (!)",
+                            tracker.prev_count(),
+                            tracker.count()
+                        );
+                        address_book.fulfilled_provisional_task_ids.insert(
+                            tracker.task.unique_weight,
+                            Task::clone_in_queue(&tracker.task),
+                        );
+                        *provisioning_tracker_count =
+                            provisioning_tracker_count.checked_sub(1).unwrap();
                     } else {
-                        trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
+                        trace!(
+                            "provisioning tracker progress: {} => {}",
+                            tracker.prev_count(),
+                            tracker.count()
+                        );
                     }
                 }
             }
@@ -1052,7 +1186,13 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_completed_execution<AST: AtScheduleThread>(ast: AST, ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
+    fn commit_completed_execution<AST: AtScheduleThread>(
+        ast: AST,
+        ee: &mut ExecutionEnvironment,
+        address_book: &mut AddressBook,
+        commit_time: &mut usize,
+        provisioning_tracker_count: &mut usize,
+    ) {
         // do par()-ly?
 
         //ee.reindex();
@@ -1061,7 +1201,13 @@ impl ScheduleStage {
         //*commit_time = commit_time.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
-        Self::unlock_after_execution(ast, address_book, &mut ee.finalized_lock_attempts, provisioning_tracker_count, ee.cu);
+        Self::unlock_after_execution(
+            ast,
+            address_book,
+            &mut ee.finalized_lock_attempts,
+            provisioning_tracker_count,
+            ee.cu,
+        );
         ee.task.mark_as_finished();
 
         address_book.stuck_tasks.remove(&ee.task.stuck_task_id());
@@ -1088,9 +1234,20 @@ impl ScheduleStage {
         execute_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
-        let maybe_ee =
-            Self::pop_from_queue_then_lock(ast, task_sender, runnable_queue, address_book, contended_count, prefer_immediate, sequence_time, queue_clock, provisioning_tracker_count)
-                .map(|(uw, t,ll)| Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock));
+        let maybe_ee = Self::pop_from_queue_then_lock(
+            ast,
+            task_sender,
+            runnable_queue,
+            address_book,
+            contended_count,
+            prefer_immediate,
+            sequence_time,
+            queue_clock,
+            provisioning_tracker_count,
+        )
+        .map(|(uw, t, ll)| {
+            Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock)
+        });
         maybe_ee
     }
 
@@ -1115,7 +1272,6 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
     ) {
-
         let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
         let mut provisioning_tracker_count = 0;
@@ -1127,42 +1283,51 @@ impl ScheduleStage {
         let (to_next_stage, maybe_jon_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
             (to_next_stage, None)
         } else {
-            let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
-                #[derive(Clone, Copy, Debug)]
-                struct NotAtTopOfScheduleThread;
-                unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
-                let nast = NotAtTopOfScheduleThread;
+            let h = std::thread::Builder::new()
+                .name("sol-reaper".to_string())
+                .spawn(move || {
+                    #[derive(Clone, Copy, Debug)]
+                    struct NotAtTopOfScheduleThread;
+                    unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
+                    let nast = NotAtTopOfScheduleThread;
 
-                while let Ok(mut a) = ee_receiver.recv() {
-                    assert!(a.task.lock_attempts_not_mut(nast).is_empty());
-                    //assert!(a.task.sequence_time() != usize::max_value());
-                    //let lock_attempts = std::mem::take(&mut a.lock_attempts);
-                    //drop(lock_attempts);
-                    //TaskInQueue::get_mut(&mut a.task).unwrap();
-                }
-                assert_eq!(ee_receiver.len(), 0);
-            }).unwrap();
+                    while let Ok(mut a) = ee_receiver.recv() {
+                        assert!(a.task.lock_attempts_not_mut(nast).is_empty());
+                        //assert!(a.task.sequence_time() != usize::max_value());
+                        //let lock_attempts = std::mem::take(&mut a.lock_attempts);
+                        //drop(lock_attempts);
+                        //TaskInQueue::get_mut(&mut a.task).unwrap();
+                    }
+                    assert_eq!(ee_receiver.len(), 0);
+                })
+                .unwrap();
 
             (&ee_sender, Some(h))
         };
-        let (task_sender, task_receiver) = crossbeam_channel::unbounded::<(TaskInQueue, Vec<LockAttempt>)>();
+        let (task_sender, task_receiver) =
+            crossbeam_channel::unbounded::<(TaskInQueue, Vec<LockAttempt>)>();
         let indexer_count = std::env::var("INDEXER_COUNT")
             .unwrap_or(format!("{}", 4))
             .parse::<usize>()
             .unwrap();
         for thx in 0..indexer_count {
             let task_receiver = task_receiver.clone();
-            let h = std::thread::Builder::new().name(format!("sol-indexer{:02}", thx)).spawn(move || {
-                while let Ok((task, ll)) = task_receiver.recv() {
-                    for lock_attempt in ll {
-                        if task.already_finished() {
-                            break;
+            let h = std::thread::Builder::new()
+                .name(format!("sol-indexer{:02}", thx))
+                .spawn(move || {
+                    while let Ok((task, ll)) = task_receiver.recv() {
+                        for lock_attempt in ll {
+                            if task.already_finished() {
+                                break;
+                            }
+                            lock_attempt
+                                .contended_unique_weights()
+                                .insert_task(task.unique_weight, Task::clone_in_queue(&task));
                         }
-                        lock_attempt.contended_unique_weights().insert_task(task.unique_weight, Task::clone_in_queue(&task));
                     }
-                }
-                assert_eq!(task_receiver.len(), 0);
-            }).unwrap();
+                    assert_eq!(task_receiver.len(), 0);
+                })
+                .unwrap();
         }
         let mut start = std::time::Instant::now();
 
@@ -1204,14 +1369,27 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                while (executing_queue_count + provisioning_tracker_count) < max_executing_queue_count {
+                while (executing_queue_count + provisioning_tracker_count)
+                    < max_executing_queue_count
+                {
                     trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
                     if start.elapsed() > std::time::Duration::from_millis(1000) {
                         start = std::time::Instant::now();
                         info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
                     }
-                    let prefer_immediate = provisioning_tracker_count/4 > executing_queue_count;
-                    if let Some(ee) = Self::schedule_next_execution(ast, &task_sender, runnable_queue, address_book, &mut contended_count, prefer_immediate, &sequence_time, &mut queue_clock, &mut execute_clock, &mut provisioning_tracker_count) {
+                    let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
+                    if let Some(ee) = Self::schedule_next_execution(
+                        ast,
+                        &task_sender,
+                        runnable_queue,
+                        address_book,
+                        &mut contended_count,
+                        prefer_immediate,
+                        &sequence_time,
+                        &mut queue_clock,
+                        &mut execute_clock,
+                        &mut provisioning_tracker_count,
+                    ) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ee).unwrap();
                     } else {
@@ -1221,7 +1399,7 @@ impl ScheduleStage {
                 //break;
                 if first_iteration {
                     first_iteration = false;
-                    (from_len,  from_exec_len) = (from.len(), from_exec.len());
+                    (from_len, from_exec_len) = (from.len(), from_exec.len());
                 } else {
                     if empty_from {
                         from_len = from.len();
@@ -1233,21 +1411,27 @@ impl ScheduleStage {
                 (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
 
                 if empty_from && empty_from_exec {
-                   break;
+                    break;
                 } else {
                     if !empty_from_exec {
                         let mut processed_execution_environment = from_exec.recv().unwrap();
                         from_exec_len = from_exec_len.checked_sub(1).unwrap();
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                        Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
+                        Self::commit_completed_execution(
+                            ast,
+                            &mut processed_execution_environment,
+                            address_book,
+                            &mut execute_clock,
+                            &mut provisioning_tracker_count,
+                        );
                         to_next_stage.send(processed_execution_environment).unwrap();
                     }
                     if !empty_from {
-                       let task = from.recv().unwrap();
-                       from_len = from_len.checked_sub(1).unwrap();
-                       empty_from = from_len == 0;
-                       Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                        let task = from.recv().unwrap();
+                        from_len = from_len.checked_sub(1).unwrap();
+                        empty_from = from_len == 0;
+                        Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                     }
                 }
             }
@@ -1269,7 +1453,16 @@ impl ScheduleStage {
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
 
-        Self::_run::<AtTopOfScheduleThread>(AtTopOfScheduleThread, max_executing_queue_count, runnable_queue, address_book, from, from_exec, to_execute_substage, maybe_to_next_stage)
+        Self::_run::<AtTopOfScheduleThread>(
+            AtTopOfScheduleThread,
+            max_executing_queue_count,
+            runnable_queue,
+            address_book,
+            from,
+            from_exec,
+            to_execute_substage,
+            maybe_to_next_stage,
+        )
     }
 }
 
