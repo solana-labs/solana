@@ -792,7 +792,7 @@ impl ScheduleStage {
                 address_book,
                 &unique_weight,
                 &message_hash,
-                &mut next_task.tx.1,
+                next_task.lock_attempts(),
             );
 
             if unlockable_count > 0 {
