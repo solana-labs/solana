@@ -857,7 +857,7 @@ impl ScheduleStage {
                 if from_runnable {
                     continue;
                 } else {
-                    // remove this task from stuck_tasks
+                    // todo: remove this task from stuck_tasks
                     next_task.update_busiest_page_cu(busiest_page_cu);
                     return None;
                 }
