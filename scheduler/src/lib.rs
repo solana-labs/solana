@@ -1138,7 +1138,7 @@ impl ScheduleStage {
                 assert_eq!(task_receiver.len(), 0);
             }).unwrap();
         }
-        let mut start = Instant::new();
+        let mut start = std::time::Instant::new();
 
         let (mut from_disconnected, mut from_exec_disconnected) = (false, false);
         loop {
@@ -1181,7 +1181,7 @@ impl ScheduleStage {
                 while (executing_queue_count + provisioning_tracker_count) < max_executing_queue_count {
                     trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len());
                     if start.elapsed > Duration::from_millis(100) {
-                        start = Instant::now();
+                        start = std::time::Instant::now();
                         info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len());
                     }
                     let prefer_immediate = provisioning_tracker_count/4 > executing_queue_count;
