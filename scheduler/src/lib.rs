@@ -500,7 +500,7 @@ impl Task {
         })
     }
 
-    fn lock_attempts_mut(&mut self) -> std::cell::RefMut<'_, Vec<LockAttempt>>/*&mut Vec<LockAttempt>*/ {
+    fn lock_attempts_mut(&self) -> std::cell::RefMut<'_, Vec<LockAttempt>>/*&mut Vec<LockAttempt>*/ {
         self.tx.1.borrow_mut()
     }
 
