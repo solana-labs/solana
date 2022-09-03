@@ -6200,8 +6200,6 @@ dependencies = [
  "solana-logger 1.12.0",
  "solana-measure",
  "solana-metrics",
- "solana-program-runtime",
- "solana-runtime",
  "solana-sdk 1.12.0",
  "solana-version",
  "triomphe",
