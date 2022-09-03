@@ -905,7 +905,7 @@ impl ScheduleStage {
 
             assert!(!next_task.already_finished());
             if !from_runnable {
-                *contended_count = contended_count.checked_sub(1).unwrap();
+                *contended_count = contended_count.checked_sub(1).unwrap_or_default();
                 next_task.mark_as_uncontended();
             }
             let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut(ast));
