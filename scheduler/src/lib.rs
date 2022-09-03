@@ -924,10 +924,10 @@ impl ScheduleStage {
             let newly_uncontended = address_book.reset_lock(ast, &mut l, true);
 
             let mut page = l.target.page_mut(ast);
-            if newly_uncontended && page.next_usage == Usage::Unused && l.maybe_currently_contended() {
+            if newly_uncontended && page.next_usage == Usage::Unused {
                 //let mut inserted = false;
 
-                if let Some(task) = l.heaviest_uncontended.take() {
+                if let Some(task) = l.heaviest_uncontended {
                     //assert!(!task.already_finished());
                     if /*true ||*/ task.currently_contended() {
                         //assert!(task.currently_contended());
