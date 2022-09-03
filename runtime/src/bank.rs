@@ -1198,7 +1198,8 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Debug)]
 struct Scheduler {
-    scheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
+    cheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
+    executing_thread_handle: Option<std::thread::JoinHandle<()>>,
     preloader: Arc<solana_scheduler::Preloader>,
 }
 
@@ -1210,11 +1211,11 @@ impl Default for Scheduler {
         let (packet_batch_sender, packet_batch_receiver) = crossbeam_channel::unbounded();
         let (completed_transaction_sender, completed_transaction_receiver) = crossbeam_channel::unbounded();
         let (transaction_batch_sender, transaction_batch_receiver) = crossbeam_channel::unbounded();
+        let executing_thread_handle = std::thread::Builder::new().name(format!("sol-exec-{}", 0)).spawn(move || {
+        }).unwrap();
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
-            let e = std::thread::Builder::new().name(format!("sol-exec-{}", 0)).spawn(move || {
-            }).unwrap();
 
             solana_scheduler::ScheduleStage::run(
                 100,
@@ -1230,6 +1231,7 @@ impl Default for Scheduler {
 
         Self {
             scheduler_thread_handle: Some(scheduler_thread_handle),
+            executing_thread_handle,
             preloader,
         }
     }
