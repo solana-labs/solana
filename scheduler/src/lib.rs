@@ -99,7 +99,6 @@ unsafe trait AtScheduleThread: Copy {}
 
 impl PageRc {
     fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
-        //unsafe { MyRcInner::get_mut_unchecked(&mut self.0) }
         self.0.0.borrow_mut()
     }
 
@@ -777,14 +776,12 @@ impl ScheduleStage {
 
         trace!("pop begin");
         loop {
-        if let Some((from_runnable, mut arc_next_task)) = Self::select_next_task(runnable_queue, address_book) {
+        if let Some((from_runnable, mut next_task)) = Self::select_next_task(runnable_queue, address_book) {
             trace!("pop loop iteration");
             if from_runnable {
-                arc_next_task.record_queue_time(*sequence_clock, *queue_clock);
+                next_task.record_queue_time(*sequence_clock, *queue_clock);
                 *queue_clock = queue_clock.checked_add(1).unwrap();
             }
-            let a2 = TaskInQueue::clone(&arc_next_task);
-            let next_task: &mut TaskInQueue = unsafe { panic!(); /*TaskInQueue::get_mut_unchecked(&mut arc_next_task)*/ };
             let unique_weight = next_task.unique_weight;
             let message_hash = next_task.tx.0.message_hash();
 
