@@ -674,13 +674,15 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     placeholder_attempts: &mut Vec<LockAttempt>,
-) -> (usize, usize) {
+) -> (usize, usize, usize) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
     let mut provisional_count = 0;
+    let mut busiest_page_cu = 0;
 
     for attempt in placeholder_attempts.iter_mut() {
-        AddressBook::attempt_lock_address(ast, from_runnable, prefer_immediate, unique_weight, attempt);
+        let cu = AddressBook::attempt_lock_address(ast, from_runnable, prefer_immediate, unique_weight, attempt);
+        busiest_page_cu = busiest_page_cu.max(cu);
 
         match attempt.status {
             LockStatus::Succeded => {},
@@ -693,7 +695,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
         }
     }
 
-    (unlockable_count, provisional_count)
+    (unlockable_count, provisional_count, busiest_page_cu)
 }
 
 type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
@@ -916,14 +918,10 @@ impl ScheduleStage {
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
         from_runnable: bool,
-    ) -> usize {
-        let mut busiest_page_cu = 0;
+    ) {
         for l in lock_attempts {
-            let cu = address_book.reset_lock(ast, l, false);
-            busiest_page_cu = busiest_page_cu.max(cu);
+            address_book.reset_lock(ast, l, false);
         }
-
-        busiest_page_cu
     }
 
     #[inline(never)]
