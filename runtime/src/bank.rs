@@ -1206,6 +1206,11 @@ struct Scheduler {
 
 impl Scheduler {
     fn schedule(&self, sani: &SanitizedTransaction) {
+        #[derive(Clone, Copy, Debug)]
+        struct NotAtTopOfScheduleThread;
+        unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
+        let nast = NotAtTopOfScheduleThread;
+
         self.transaction_sender.send(solana_scheduler::SchedulablePayload(sani)).unwrap();
     }
 }
