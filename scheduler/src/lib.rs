@@ -887,6 +887,9 @@ impl ScheduleStage {
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
+                let removed = address_book.stuck_tasks.remove(&next_task.stuck_task_id());
+                assert!(removed.is_some());
+
                 let tracker = triomphe::Arc::new(ProvisioningTracker::new(provisional_count, Task::clone_in_queue(&next_task)));
                 *provisioning_tracker_count = provisioning_tracker_count.checked_add(1).unwrap();
                 Self::finalize_lock_for_provisional_execution(
