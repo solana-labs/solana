@@ -568,8 +568,8 @@ impl Task {
     pub fn clone_for_test(&self) -> Self {
         Self {
             unique_weight: self.unique_weight,
-            for_indexer: self.lock_attempts().iter().map(|a| a.clone_for_test()).collect(),
-            tx: (self.tx.0.clone(), self.lock_attempts().iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()),
+            for_indexer: self.lock_attempts_not_mut().iter().map(|a| a.clone_for_test()).collect(),
+            tx: (self.tx.0.clone(), self.lock_attempts_not_mut().iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()),
             contention_count: Default::default(),
             uncontended: Default::default(),
             sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
