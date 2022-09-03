@@ -502,11 +502,11 @@ impl Task {
     }
 
     fn lock_attempts_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
-        self.tx.1.borrow_mut()
+        self.tx.1.0.borrow_mut()
     }
 
     fn lock_attempts_not_mut(&self) -> std::cell::Ref<'_, Vec<LockAttempt>> {
-        self.tx.1.borrow()
+        self.tx.1.0.borrow()
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
