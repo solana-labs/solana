@@ -871,7 +871,7 @@ impl ScheduleStage {
         next_task: &mut Task,
         tracker: std::sync::Arc<ProvisioningTracker>,
     ) {
-        for l in next_task.tx.1.iter_mut() {
+        for l in next_task.lock_attempts().iter_mut() {
             match l.status {
                 LockStatus::Provisional => {
                     l.target.page_mut(ast).provisional_task_ids.push(std::sync::Arc::clone(&tracker));
