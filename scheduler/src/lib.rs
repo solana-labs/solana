@@ -932,7 +932,7 @@ impl ScheduleStage {
                     if /*true ||*/ task.currently_contended() {
                         //assert!(task.currently_contended());
                         //inserted = true;
-                        address_book.uncontended_task_ids.insert(task.unique_weight, task);
+                        address_book.uncontended_task_ids.insert(task.unique_weight, Task::clone_in_queue(task));
                     } /*else {
                         let contended_unique_weights = &page.contended_unique_weights;
                         contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
