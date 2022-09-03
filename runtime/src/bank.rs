@@ -1211,7 +1211,7 @@ impl Scheduler {
         unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
         let nast = NotAtTopOfScheduleThread;
         let t = solana_scheduler::Task::new_for_queue(nast, 0, sani);
-        self.transaction_sender.send(solana_scheduler::SchedulablePayload(t)).unwrap();
+        self.transaction_sender.unwrap().send(solana_scheduler::SchedulablePayload(t)).unwrap();
     }
 }
 
