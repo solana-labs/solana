@@ -804,7 +804,7 @@ impl ScheduleStage {
                     &mut next_task.tx.1,
                     from_runnable,
                 );
-                let lock_count = next_task.tx.1.len();
+                let lock_count = next_task.lock_attempts().len();
                 next_task.contention_count += 1;
 
                 if from_runnable {
