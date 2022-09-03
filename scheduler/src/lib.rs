@@ -822,11 +822,12 @@ impl ScheduleStage {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
                     next_task.mark_as_contended();
                     *contended_count = contended_count.checked_add(1).unwrap();
-                    for lock_attempt in next_task.lock_attempts_mut(ast).iter() {
-                        lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&next_task));
-                    }
-                    //let a = Task::clone_in_queue(&next_task);
-                    //task_sender.send((a, std::mem::take(&mut *next_task.for_indexer.0.borrow_mut()))).unwrap();
+
+                    //for lock_attempt in next_task.lock_attempts_mut(ast).iter() {
+                    //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&next_task));
+                    //}
+                    let a = Task::clone_in_queue(&next_task);
+                    task_sender.send((a, std::mem::take(&mut *next_task.for_indexer.0.borrow_mut()))).unwrap();
 
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
@@ -996,7 +997,7 @@ impl ScheduleStage {
     fn commit_completed_execution<AST: AtScheduleThread>(ast: AST, ee: &mut ExecutionEnvironment, address_book: &mut AddressBook, commit_time: &mut usize, provisioning_tracker_count: &mut usize) {
         // do par()-ly?
 
-        ee.reindex();
+        //ee.reindex();
         ee.task.record_commit_time(*commit_time);
         //ee.task.trace_timestamps("commit");
         //*commit_time = commit_time.checked_add(1).unwrap();

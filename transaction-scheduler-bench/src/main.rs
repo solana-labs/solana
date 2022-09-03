@@ -360,7 +360,7 @@ fn handle_transaction_batch(
         .priority_collected
         .fetch_add(priority_collected, Ordering::Relaxed);
 
-    //transaction_batch.reindex();
+    transaction_batch.reindex();
     completed_transaction_sender
         .send(transaction_batch)
         .unwrap();
