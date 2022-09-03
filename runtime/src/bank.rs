@@ -1212,6 +1212,8 @@ impl Default for Scheduler {
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded();
         let (completed_ee_sender, completed_ee_receiver) = crossbeam_channel::unbounded();
         let executing_thread_handle = std::thread::Builder::new().name(format!("sol-exec-{}", 0)).spawn(move || {
+            while let Ok(a) = ee_receiver.recv() {
+            }
         }).unwrap();
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
