@@ -2474,13 +2474,12 @@ impl ReplayStage {
             if bank.is_complete() {
                 let r = bank.wait_for_scheduler();
                 if let Err(err) = r {
-                    use solana_ledger::blockstore_db::BlockstoreError;
                         // Error means the slot needs to be marked as dead
                         Self::mark_dead_slot(
                             blockstore,
                             bank,
                             bank_forks.read().unwrap().root(),
-                            BlockstoreError::InvalidTransaction(err.into()),
+                            BlockstoreProcessorError::InvalidTransaction(err.into()),
                             rpc_subscriptions,
                             duplicate_slots_tracker,
                             gossip_duplicate_confirmed_slots,
