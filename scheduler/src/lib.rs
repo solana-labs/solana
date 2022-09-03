@@ -506,7 +506,7 @@ impl Task {
         self.tx.1.0.borrow_mut()
     }
 
-    fn lock_attempts_not_mut(&self) -> std::cell::Ref<'_, Vec<LockAttempt>> {
+    fn lock_attempts_not_mut<NAST: NotAtScheduleThread>(&self) -> std::cell::Ref<'_, Vec<LockAttempt>> {
         self.tx.1.0.borrow()
     }
 
