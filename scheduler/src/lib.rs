@@ -920,18 +920,18 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn unlock_after_execution<AST: AtScheduleThread>(ast: AST, address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>, provisioning_tracker_count: &mut usize) {
-        for mut l in lock_attempts.into_iter() {
+        for mut l in lock_attempts.iter_mut() {
             let newly_uncontended = address_book.reset_lock(ast, &mut l, true);
 
             let mut page = l.target.page_mut(ast);
             if newly_uncontended && page.next_usage == Usage::Unused {
-                let mut inserted = false;
+                //let mut inserted = false;
 
                 if let Some(task) = l.heaviest_uncontended.take() {
                     //assert!(!task.already_finished());
                     if /*true ||*/ task.currently_contended() {
                         //assert!(task.currently_contended());
-                        inserted = true;
+                        //inserted = true;
                         address_book.uncontended_task_ids.insert(task.unique_weight, task);
                     } /*else {
                         let contended_unique_weights = &page.contended_unique_weights;
