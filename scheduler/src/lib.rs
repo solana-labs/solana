@@ -869,7 +869,8 @@ impl ScheduleStage {
                     let removed = address_book.stuck_tasks.remove(&next_task.stuck_task_id());
                     assert!(removed.is_some());
                     next_task.update_busiest_page_cu(busiest_page_cu);
-                    address_book.stuck_tasks.insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
+                    let a = address_book.stuck_tasks.insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
+                    assert!(a);
                     return None;
                 }
             } else if provisional_count > 0 {
