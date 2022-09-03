@@ -54,7 +54,7 @@ impl ExecutionEnvironment {
     pub fn reindex(&mut self) {
         let uq = self.unique_weight;
         //self.task.trace_timestamps("in_exec(self)");
-        let should_remove = self.task.contention_count > 0;
+        let should_remove = self.task.contention_count.load(std::sync::atomic::Ordering::SeqCst) > 0;
         for mut lock_attempt in self.finalized_lock_attempts.iter_mut() {
             let contended_unique_weights = lock_attempt.contended_unique_weights();
             contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
