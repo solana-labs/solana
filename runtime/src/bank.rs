@@ -1200,7 +1200,7 @@ impl AbiExample for BuiltinPrograms {
 struct Scheduler {
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
     executing_thread_handle: Option<std::thread::JoinHandle<()>>,
-    transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::TransactionPayload>>,
+    transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
 }
 

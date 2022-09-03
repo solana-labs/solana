@@ -1467,6 +1467,8 @@ impl ScheduleStage {
     }
 }
 
+pub struct SchedulablePayload(TaskInQueue);
+
 struct ExecuteStage {
     //bank: Bank,
 }
