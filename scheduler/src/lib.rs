@@ -1268,7 +1268,7 @@ impl ScheduleStage {
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from: &crossbeam_channel::Receiver<TaskInQueue>,
+        from: &crossbeam_channel::Receiver<SchedulablePayload>,
         from_exec: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
@@ -1445,7 +1445,7 @@ impl ScheduleStage {
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from: &crossbeam_channel::Receiver<TaskInQueue>,
+        from: &crossbeam_channel::Receiver<SchedulablePayload>,
         from_exec: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
         to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
