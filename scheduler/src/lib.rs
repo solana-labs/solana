@@ -612,12 +612,12 @@ impl Task {
         self.uncontended.store(3, std::sync::atomic::Ordering::SeqCst)
     }
 
-    fn index(self: &TaskInQueue, task_sender: usize) {
+    fn index(this: &TaskInQueue, task_sender: usize) {
         //for lock_attempt in self.lock_attempts_mut(ast).iter() {
         //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&self));
         //}
-        let a = Task::clone_in_queue(self);
-        task_sender.send((a, std::mem::take(&mut *self.for_indexer.0.borrow_mut()))).unwrap();
+        let a = Task::clone_in_queue(this);
+        task_sender.send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut()))).unwrap();
     }
 }
 
