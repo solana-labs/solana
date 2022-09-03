@@ -635,7 +635,7 @@ impl Task {
         task_sender.send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut()))).unwrap();
     }
 
-    fn task_id_as_stuck(&self) -> StuckTaskId {
+    fn stuck_task_id(&self) -> StuckTaskId {
         (self.busiest_page_cu.load(std::sync::atomic::Ordering::SeqCst), self.unique_weight)
     }
 }
@@ -1035,7 +1035,7 @@ impl ScheduleStage {
         Self::unlock_after_execution(ast, address_book, &mut ee.finalized_lock_attempts, provisioning_tracker_count, ee.cu);
         ee.task.mark_as_finished();
 
-        address_book.stuck_tasks.remove(ee.task.task_id_as_stuck());
+        address_book.stuck_tasks.remove(ee.task.stuck_task_id());
 
         // block-wide qos validation will be done here
         // if error risen..:
