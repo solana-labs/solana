@@ -871,7 +871,7 @@ impl ScheduleStage {
     fn finalize_lock_for_provisional_execution<AST: AtScheduleThread>(
         ast: AST,
         address_book: &mut AddressBook,
-        next_task: &mut Task,
+        next_task: &Task,
         tracker: std::sync::Arc<ProvisioningTracker>,
     ) {
         for l in next_task.lock_attempts_mut().iter_mut() {
