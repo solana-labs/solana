@@ -1354,7 +1354,8 @@ impl ScheduleStage {
                    if maybe_from.is_err() {
                        assert_eq!(from_prev.len(), 0);
                        from_disconnected = true;
-                       if from_exec_disconnected {
+                       let finished = runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
+                       if from_exec_disconnected || finished {
                            break;
                        } else {
                            continue;
