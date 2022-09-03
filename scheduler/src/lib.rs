@@ -823,7 +823,7 @@ impl ScheduleStage {
                     next_task.mark_as_contended();
                     *contended_count = contended_count.checked_add(1).unwrap();
                     for lock_attempt in next_task.lock_attempts_mut(ast).iter() {
-                        lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&a2));
+                        lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&next_task));
                     }
                     //let a = Task::clone_in_queue(&next_task);
                     //task_sender.send((a, std::mem::take(&mut *next_task.for_indexer.0.borrow_mut()))).unwrap();
