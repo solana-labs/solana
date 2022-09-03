@@ -1200,6 +1200,7 @@ impl AbiExample for BuiltinPrograms {
 struct Scheduler {
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
     executing_thread_handle: Option<std::thread::JoinHandle<()>>,
+    transaction_sender: Option<usize>,
     preloader: Arc<solana_scheduler::Preloader>,
 }
 
@@ -1232,6 +1233,7 @@ impl Default for Scheduler {
         Self {
             scheduler_thread_handle: Some(scheduler_thread_handle),
             executing_thread_handle: Some(executing_thread_handle),
+            transaction_sender: Some(transaction_sender),
             preloader,
         }
     }
