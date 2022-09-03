@@ -910,7 +910,7 @@ impl ScheduleStage {
         ast: AST,
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
-        lock_attempts: &mut Vec<LockAttempt>,
+        lock_attempts: &mut [LockAttempt],
         from_runnable: bool,
     ) {
         for l in lock_attempts {
