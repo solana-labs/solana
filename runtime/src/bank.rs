@@ -1229,6 +1229,7 @@ impl Default for Scheduler {
                 &completed_ee_receiver,
                 None,//&completed_transaction_receiver
             );
+            drop(completed_ee_receiver);
             Ok(())
         }).unwrap();
 
