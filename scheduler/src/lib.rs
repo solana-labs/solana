@@ -749,6 +749,7 @@ impl ScheduleStage {
     fn select_next_task<'a>(
         runnable_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
+        contended_count: &usize,
     ) -> Option<(
         bool,
         TaskInQueue,
@@ -814,7 +815,7 @@ impl ScheduleStage {
 
         trace!("pop begin");
         loop {
-        if let Some((from_runnable, mut next_task)) = Self::select_next_task(runnable_queue, address_book) {
+        if let Some((from_runnable, mut next_task)) = Self::select_next_task(runnable_queue, address_book, contended_count) {
             trace!("pop loop iteration");
             if from_runnable {
                 next_task.record_queue_time(*sequence_clock, *queue_clock);
