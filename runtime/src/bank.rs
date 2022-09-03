@@ -1199,6 +1199,7 @@ impl AbiExample for BuiltinPrograms {
 #[derive(Debug)]
 struct Scheduler {
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
+    preloader: usize,
 }
 
 impl Default for Scheduler {
@@ -1213,6 +1214,7 @@ impl Default for Scheduler {
 
         Self {
             scheduler_thread_handle: Some(scheduler_thread_handle),
+            preloader,
         }
     }
 }
