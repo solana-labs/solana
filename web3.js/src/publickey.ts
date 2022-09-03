@@ -1,4 +1,3 @@
-import BN from 'bn.js';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
 import {sha256} from '@noble/hashes/sha256';
@@ -21,7 +20,6 @@ export const PUBLIC_KEY_LENGTH = 32;
  * Value to be converted into public key
  */
 export type PublicKeyInitData =
-  | number
   | string
   | Buffer
   | Uint8Array
@@ -33,19 +31,31 @@ export type PublicKeyInitData =
  */
 export type PublicKeyData = {
   /** @internal */
-  _bn: BN;
+  _buffer: Uint8Array;
+};
+
+export const byteArrayEquals = (a: Uint8Array, b: Uint8Array): boolean => {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
 };
 
 function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
-  return (value as PublicKeyData)._bn !== undefined;
+  return (value as PublicKeyData)._buffer !== undefined;
 }
 
 /**
  * A public key
  */
-export class PublicKey extends Struct {
+export class PublicKey extends Struct implements PublicKeyData {
   /** @internal */
-  _bn: BN;
+  _buffer: Uint8Array;
 
   /**
    * Create a new PublicKey object
@@ -54,22 +64,24 @@ export class PublicKey extends Struct {
   constructor(value: PublicKeyInitData) {
     super({});
     if (isPublicKeyData(value)) {
-      this._bn = value._bn;
-    } else {
-      if (typeof value === 'string') {
-        // assume base 58 encoding by default
-        const decoded = bs58.decode(value);
-        if (decoded.length != PUBLIC_KEY_LENGTH) {
-          throw new Error(`Invalid public key input`);
-        }
-        this._bn = new BN(decoded);
-      } else {
-        this._bn = new BN(value);
-      }
-
-      if (this._bn.byteLength() > 32) {
+      this._buffer = value._buffer;
+    } else if (typeof value === 'string') {
+      // assume base 58 encoding by default
+      const decoded = bs58.decode(value);
+      if (decoded.length != PUBLIC_KEY_LENGTH) {
         throw new Error(`Invalid public key input`);
       }
+      this._buffer = decoded;
+    } else if (value instanceof Uint8Array) {
+      this._buffer = value;
+    } else if (Array.isArray(value)) {
+      this._buffer = Uint8Array.from(value);
+    } else {
+      this._buffer = Uint8Array.from(value);
+    }
+
+    if (this._buffer.byteLength > PUBLIC_KEY_LENGTH) {
+      throw new Error(`Invalid public key input`);
     }
   }
 
@@ -82,7 +94,7 @@ export class PublicKey extends Struct {
    * Checks if two publicKeys are equal
    */
   equals(publicKey: PublicKey): boolean {
-    return this._bn.eq(publicKey._bn);
+    return byteArrayEquals(this._buffer, publicKey._buffer);
   }
 
   /**
@@ -100,21 +112,14 @@ export class PublicKey extends Struct {
    * Return the byte array representation of the public key
    */
   toBytes(): Uint8Array {
-    return this.toBuffer();
+    return this._buffer.slice();
   }
 
   /**
    * Return the Buffer representation of the public key
    */
   toBuffer(): Buffer {
-    const b = this._bn.toArrayLike(Buffer);
-    if (b.length === PUBLIC_KEY_LENGTH) {
-      return b;
-    }
-
-    const zeroPad = Buffer.alloc(32);
-    b.copy(zeroPad, 32 - b.length);
-    return zeroPad;
+    return Buffer.from(this.toBytes());
   }
 
   /**
@@ -234,5 +239,5 @@ export class PublicKey extends Struct {
 
 SOLANA_SCHEMA.set(PublicKey, {
   kind: 'struct',
-  fields: [['_bn', 'u256']],
+  fields: [['_buffer', 'u256']],
 });
