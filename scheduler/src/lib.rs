@@ -590,6 +590,7 @@ impl Task {
             for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(self.lock_attempts_not_mut(nast).iter().map(|a| a.clone_for_test()).collect())),
             tx: (self.tx.0.clone(), LockAttemptsInCell::new(std::cell::RefCell::new(self.lock_attempts_not_mut(nast).iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))),
             contention_count: Default::default(),
+            busiest_page_cu: Default::default(),
             uncontended: Default::default(),
             sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
