@@ -7905,6 +7905,8 @@ impl Bank {
         let mut scheduler = self.scheduler.write().unwrap();
         let mut transaction_sender = scheduler.transaction_sender.take().unwrap();
         drop(transaction_sender);
+        let h = scheduler.executing_thread_handle.take().unwrap();
+        h.join().unwrap()?;
         let h = scheduler.scheduler_thread_handle.take().unwrap();
         h.join().unwrap()?;
 
