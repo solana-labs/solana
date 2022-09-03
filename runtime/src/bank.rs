@@ -7868,10 +7868,10 @@ impl Bank {
         total_accounts_stats
     }
 
-    pub fn wait_for_scheduler(&self) -> Result<(), ()> {
+    pub fn wait_for_scheduler(&self) -> Result<()> {
         let h = self.scheduler.write().unwrap().scheduler_thread_handle.take().unwrap();
         h.join();
-        Ok()
+        Ok(())
     }
 }
 
