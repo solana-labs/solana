@@ -476,6 +476,10 @@ fn send_packets(
             Ordering::Relaxed,
         );
         let mut rng = rand::thread_rng();
+        #[derive(Clone, Copy, Debug)]
+        struct NotAtTopOfScheduleThread;
+        unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
+        let nast = NotAtTopOfScheduleThread;
 
         for vv in packet_batches {
             for v in vv {
@@ -483,7 +487,7 @@ fn send_packets(
                 //let p = (p << 32) | (rng.gen::<u64>() & 0x0000_0000_ffff_ffff);
                 let uw = unique_weight.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 let p = (p << 32) | (uw & 0x0000_0000_ffff_ffff);
-                let t = solana_scheduler::Task::new_for_queue(p, v);
+                let t = solana_scheduler::Task::new_for_queue(nast, p, v);
                 packet_batch_sender.send(t).unwrap();
             }
         }
