@@ -842,7 +842,7 @@ impl ScheduleStage {
                 Self::finalize_lock_for_provisional_execution(
                     ast,
                     address_book,
-                    next_task,
+                    &next_task,
                     tracker
                 );
 
