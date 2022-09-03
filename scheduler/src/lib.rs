@@ -257,7 +257,7 @@ impl ProvisioningTracker {
     }
 
     fn is_fulfilled(&self) -> bool {
-        self.remaining_count == 0
+        self.count() == 0
     }
 
     fn progress(&self) {
