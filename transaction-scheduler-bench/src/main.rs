@@ -4,7 +4,6 @@ use {
     log::*,
     rand::Rng,
     solana_core::{
-        transaction_priority_details::GetTransactionPriorityDetails,
         transaction_scheduler::TransactionScheduler,
     },
     solana_measure::measure,
@@ -351,6 +350,7 @@ fn handle_transaction_batch(
         rand::thread_rng().gen_range(0..=execution_per_tx_us)
     ));
 
+    use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
     let priority_collected = transaction_batch.task.tx.0.get_transaction_priority_details().unwrap().priority;
 
     metrics

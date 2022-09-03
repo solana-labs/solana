@@ -53,29 +53,45 @@ module.exports = {
       },
       items: [
         {
-          href: "https://spl.solana.com",
-          label: "Program Library »",
-          position: "left",
-        },
-        {
-          to: "developing/programming-model/overview",
-          label: "Develop",
-          position: "left",
-        },
-        {
-          to: "running-validator",
-          label: "Validate",
-          position: "left",
-        },
-        {
-          to: "integrations/exchange",
-          label: "Integrate",
+          to: "introduction",
+          label: "Learn",
           position: "left",
         },
         {
           to: "cluster/overview",
-          label: "Learn",
+          label: "Architecture",
           position: "left",
+        },
+        {
+          to: "cli",
+          label: "CLI",
+          position: "left",
+        },
+        {
+          to: "/developers",
+          label: "Developers",
+          position: "left",
+        },
+        {
+          to: "running-validator",
+          label: "Validators",
+          position: "left",
+        },
+        {
+          label: "More",
+          position: "left",
+          items: [
+            { label: "Terminology", to: "terminology" },
+            { label: "Staking", to: "staking" },
+            { label: "Integrations", to: "integrations/exchange" },
+            { label: "Economics", to: "economics_overview" },
+            { label: "Proposals", to: "proposals" },
+            {
+              href: "https://spl.solana.com",
+              label: "Solana Program Library »",
+              position: "left",
+            },
+          ],
         },
         {
           type: "localeDropdown",
@@ -83,12 +99,16 @@ module.exports = {
         },
         {
           href: "https://discordapp.com/invite/pquxPsq",
-          label: "Chat",
+          // label: "Discord",
+          className: "header-link-icon header-discord-link",
+          "aria-label": "Solana Discord",
           position: "right",
         },
         {
           href: "https://github.com/solana-labs/solana",
-          label: "GitHub",
+          // label: "GitHub",
+          className: "header-link-icon header-github-link",
+          "aria-label": "GitHub repository",
           position: "right",
         },
       ],
@@ -103,11 +123,27 @@ module.exports = {
       style: "dark",
       links: [
         {
-          title: "Docs",
+          title: "Documentation",
           items: [
             {
-              label: "Introduction",
+              label: "Learn",
               to: "introduction",
+            },
+            {
+              label: "Developers",
+              to: "/developers",
+            },
+            {
+              label: "Validators",
+              to: "running-validator",
+            },
+            {
+              label: "Command Line",
+              to: "cli",
+            },
+            {
+              label: "Architecture",
+              to: "cluster/overview",
             },
           ],
         },
@@ -115,25 +151,41 @@ module.exports = {
           title: "Community",
           items: [
             {
-              label: "Discord",
+              label: "Stack Exchange »",
+              href: "https://solana.stackexchange.com/",
+            },
+            {
+              label: "GitHub »",
+              href: "https://github.com/solana-labs/solana",
+            },
+            {
+              label: "Discord »",
               href: "https://discordapp.com/invite/pquxPsq",
             },
             {
-              label: "Twitter",
+              label: "Twitter »",
               href: "https://twitter.com/solana",
             },
             {
-              label: "Forums",
+              label: "Forums »",
               href: "https://forums.solana.com",
             },
           ],
         },
         {
-          title: "More",
+          title: "Resources",
           items: [
             {
-              label: "GitHub",
-              href: "https://github.com/solana-labs/solana",
+              label: "Proposals",
+              to: "proposals",
+            },
+            {
+              label: "Integrations",
+              to: "integrations/exchange",
+            },
+            {
+              href: "https://spl.solana.com",
+              label: "Solana Program Library »",
             },
           ],
         },

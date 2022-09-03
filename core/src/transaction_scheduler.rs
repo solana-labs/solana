@@ -2,14 +2,16 @@
 
 use {
     crate::{
-        transaction_priority_details::GetTransactionPriorityDetails,
-        unprocessed_packet_batches::{self, ImmutableDeserializedPacket},
+        unprocessed_packet_batches::{self},
+        immutable_deserialized_packet::ImmutableDeserializedPacket,
     },
     crossbeam_channel::{Receiver, Sender, TryRecvError},
     dashmap::DashMap,
     solana_measure::{measure, measure::Measure},
     solana_perf::packet::PacketBatch,
-    solana_runtime::{bank::Bank, bank_forks::BankForks},
+    solana_runtime::{bank::Bank, bank_forks::BankForks,
+        transaction_priority_details::GetTransactionPriorityDetails,
+    },
     solana_sdk::{
         pubkey::Pubkey,
         transaction::{SanitizedTransaction, TransactionError},
@@ -80,6 +82,7 @@ type TransactionRef = TransactionPriority;
 
 impl TransactionPriority {
     fn new(transaction: SanitizedTransaction, num_conflicts: u64) -> TransactionRef {
+        use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
         let packet_priority = transaction
             .get_transaction_priority_details()
             .unwrap()
@@ -179,7 +182,7 @@ impl PacketBatchHandler {
 
     /// Count conflicts
     fn get_num_conflicts(&self, transaction: &SanitizedTransaction) -> u64 {
-        let account_locks = transaction.get_account_locks().unwrap();
+        let account_locks = transaction.get_account_locks(usize::max_value()).unwrap();
 
         // let mut read_conflicts = 0;
         for account in account_locks.readonly.into_iter() {
@@ -203,7 +206,7 @@ impl PacketBatchHandler {
     fn insert_transactions(&self, transactions: Vec<TransactionRef>) {
         for tx in &transactions {
             // Get account locks
-            let account_locks = tx.transaction.get_account_locks().unwrap();
+            let account_locks = tx.transaction.get_account_locks(usize::max_value()).unwrap();
             for account in account_locks.readonly.into_iter() {
                 self.transactions_by_account.entry(*account).or_default();
                 // .reads
@@ -649,7 +652,7 @@ impl TransactionScheduler {
     ) -> Option<HashSet<TransactionBatchId>> {
         let mut conflicting_batches = HashSet::default();
 
-        let account_locks = transaction.transaction.get_account_locks().unwrap();
+        let account_locks = transaction.transaction.get_account_locks(usize::max_value()).unwrap();
 
         // Read accounts will only be blocked by writes on other threads
         for account in account_locks.readonly.into_iter() {
@@ -689,7 +692,7 @@ impl TransactionScheduler {
         transaction: &TransactionRef,
         batch_id: TransactionBatchId,
     ) {
-        let accounts = transaction.transaction.get_account_locks().unwrap();
+        let accounts = transaction.transaction.get_account_locks(usize::max_value()).unwrap();
         for account in accounts.readonly {
             let mut queue = self.transactions_by_account.get_mut(account).unwrap();
             queue.scheduled_lock.lock_on_batch(batch_id, false);
@@ -807,7 +810,7 @@ impl TransactionBatch {
         self.scheduled = true;
         self.num_transactions = self.transactions.len();
         for transaction in self.transactions.iter() {
-            let account_locks = transaction.transaction.get_account_locks().unwrap();
+            let account_locks = transaction.transaction.get_account_locks(usize::max_value()).unwrap();
 
             for account in account_locks.readonly.into_iter() {
                 self.account_locks

@@ -5,7 +5,7 @@
 use {
     crate::rpc_subscriptions::RpcSubscriptions,
     crossbeam_channel::{Receiver, RecvTimeoutError, Sender},
-    solana_client::rpc_response::{SlotTransactionStats, SlotUpdate},
+    solana_rpc_client_api::response::{SlotTransactionStats, SlotUpdate},
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, timing::timestamp},
     std::{
@@ -71,7 +71,7 @@ impl OptimisticallyConfirmedBankTracker {
         let mut last_notified_confirmed_slot: Slot = 0;
         let mut highest_confirmed_slot: Slot = 0;
         let thread_hdl = Builder::new()
-            .name("solana-optimistic-bank-tracker".to_string())
+            .name("solOpConfBnkTrk".to_string())
             .spawn(move || loop {
                 if exit_.load(Ordering::Relaxed) {
                     break;

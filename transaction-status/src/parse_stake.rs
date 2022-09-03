@@ -276,7 +276,7 @@ pub fn parse_stake(
         StakeInstruction::DeactivateDelinquent => {
             check_num_stake_accounts(&instruction.accounts, 3)?;
             Ok(ParsedInstructionEnum {
-                instruction_type: "deactivateDeactive".to_string(),
+                instruction_type: "deactivateDelinquent".to_string(),
                 info: json!({
                     "stakeAccount": account_keys[instruction.accounts[0] as usize].to_string(),
                     "voteAccount": account_keys[instruction.accounts[1] as usize].to_string(),

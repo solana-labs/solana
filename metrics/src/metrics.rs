@@ -173,7 +173,11 @@ impl MetricsAgent {
         max_points_per_sec: usize,
     ) -> Self {
         let (sender, receiver) = unbounded::<MetricsCommand>();
-        thread::spawn(move || Self::run(&receiver, &writer, write_frequency, max_points_per_sec));
+
+        thread::Builder::new()
+            .name("solMetricsAgent".into())
+            .spawn(move || Self::run(&receiver, &writer, write_frequency, max_points_per_sec))
+            .unwrap();
 
         Self { sender }
     }

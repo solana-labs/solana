@@ -1,5 +1,5 @@
 ---
-title: "Debugging"
+title: "Debugging Programs"
 ---
 
 Solana programs run on-chain, so debugging them in the wild can be challenging.

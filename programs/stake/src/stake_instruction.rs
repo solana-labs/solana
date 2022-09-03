@@ -2267,7 +2267,7 @@ mod tests {
     fn test_stake_delegate(feature_set: FeatureSet) {
         let mut vote_state = VoteState::default();
         for i in 0..1000 {
-            vote_state.process_slot_vote_unchecked(i);
+            vote_state::process_slot_vote_unchecked(&mut vote_state, i);
         }
         let vote_state_credits = vote_state.credits();
         let vote_address = solana_sdk::pubkey::new_rand();

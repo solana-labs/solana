@@ -1,6 +1,6 @@
 [package]
 name = "solana-storage-bigtable"
-version = "1.11.5"
+version = "1.12.0"
 description = "Solana Storage BigTable"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,28 +12,28 @@ edition = "2021"
 [dependencies]
 backoff = { version = "0.4.0", features = ["tokio"] }
 bincode = "1.3.3"
-bytes = "1.0"
+bytes = "1.2"
 bzip2 = "0.4.3"
-enum-iterator = "0.8.1"
+enum-iterator = "1.2.0"
 flate2 = "1.0.24"
-futures = "0.3.21"
-goauth = "0.13.0"
+futures = "0.3.23"
+goauth = "0.13.1"
 http = "0.2.8"
 hyper = "0.14.20"
 hyper-proxy = "0.9.1"
 log = "0.4.17"
-prost = "0.10.4"
-prost-types = "0.10.0"
-serde = "1.0.138"
+prost = "0.11.0"
+prost-types = "0.11.1"
+serde = "1.0.143"
 serde_derive = "1.0.103"
 smpl_jwt = "0.7.1"
-solana-metrics = { path = "../metrics", version = "=1.11.5" }
-solana-sdk = { path = "../sdk", version = "=1.11.5" }
-solana-storage-proto = { path = "../storage-proto", version = "=1.11.5" }
-solana-transaction-status = { path = "../transaction-status", version = "=1.11.5" }
+solana-metrics = { path = "../metrics", version = "=1.12.0" }
+solana-sdk = { path = "../sdk", version = "=1.12.0" }
+solana-storage-proto = { path = "../storage-proto", version = "=1.12.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.12.0" }
 thiserror = "1.0"
-tokio = "~1.14.1"
-tonic = { version = "0.7.2", features = ["tls", "transport"] }
+tokio = "1"
+tonic = { version = "0.8.0", features = ["tls", "transport"] }
 zstd = "0.11.2"
 
 # openssl is a dependency of the goauth and smpl_jwt crates, but explicitly

@@ -1,6 +1,7 @@
 use {
     crate::{
         cli::{CliCommand, CliCommandInfo, CliConfig, CliError, ProcessResult},
+        compute_unit_price::WithComputeUnitPrice,
         spend_utils::{resolve_spend_tx_and_check_account_balance, SpendAmount},
     },
     clap::{value_t, value_t_or_exit, App, AppSettings, Arg, ArgMatches, SubCommand},
@@ -8,6 +9,7 @@ use {
     crossbeam_channel::unbounded,
     serde::{Deserialize, Serialize},
     solana_clap_utils::{
+        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         input_parsers::*,
         input_validators::*,
         keypair::DefaultSigner,
@@ -21,26 +23,25 @@ use {
         },
         *,
     },
-    solana_client::{
-        client_error::ClientErrorKind,
-        pubsub_client::PubsubClient,
-        rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
-        rpc_config::{
+    solana_pubsub_client::pubsub_client::PubsubClient,
+    solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::{GetConfirmedSignaturesForAddress2Config, RpcClient},
+    solana_rpc_client_api::{
+        client_error::ErrorKind as ClientErrorKind,
+        config::{
             RpcAccountInfoConfig, RpcBlockConfig, RpcGetVoteAccountsConfig,
             RpcLargestAccountsConfig, RpcLargestAccountsFilter, RpcProgramAccountsConfig,
             RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
         },
-        rpc_filter,
-        rpc_request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
-        rpc_response::SlotInfo,
+        filter::{Memcmp, RpcFilterType},
+        request::DELINQUENT_VALIDATOR_SLOT_DISTANCE,
+        response::SlotInfo,
     },
-    solana_remote_wallet::remote_wallet::RemoteWalletManager,
     solana_sdk::{
         account::from_account,
         account_utils::StateMut,
         clock::{self, Clock, Slot},
         commitment_config::CommitmentConfig,
-        compute_budget::ComputeBudgetInstruction,
         epoch_schedule::Epoch,
         hash::Hash,
         message::Message,
@@ -271,13 +272,7 @@ impl ClusterQuerySubCommands for App<'_, '_> {
                         .default_value("15")
                         .help("Wait up to timeout seconds for transaction confirmation"),
                 )
-                .arg(
-                    Arg::with_name("compute_unit_price")
-                        .long("compute-unit-price")
-                        .value_name("MICRO-LAMPORTS")
-                        .takes_value(true)
-                        .help("Set the price in micro-lamports of each transaction compute unit"),
-                )
+                .arg(compute_unit_price_arg())
                 .arg(blockhash_arg()),
         )
         .subcommand(
@@ -529,7 +524,7 @@ pub fn parse_cluster_ping(
     let timeout = Duration::from_secs(value_t_or_exit!(matches, "timeout", u64));
     let blockhash = value_of(matches, BLOCKHASH_ARG.name);
     let print_timestamp = matches.is_present("print_timestamp");
-    let compute_unit_price = value_of(matches, "compute_unit_price");
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
     Ok(CliCommandInfo {
         command: CliCommand::Ping {
             interval,
@@ -1396,7 +1391,7 @@ pub fn process_ping(
     timeout: &Duration,
     fixed_blockhash: &Option<Hash>,
     print_timestamp: bool,
-    compute_unit_price: &Option<u64>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let (signal_sender, signal_receiver) = unbounded();
     ctrlc::set_handler(move || {
@@ -1436,16 +1431,12 @@ pub fn process_ping(
         lamports += 1;
 
         let build_message = |lamports| {
-            let mut ixs = vec![system_instruction::transfer(
+            let ixs = vec![system_instruction::transfer(
                 &config.signers[0].pubkey(),
                 &to,
                 lamports,
-            )];
-            if let Some(compute_unit_price) = compute_unit_price {
-                ixs.push(ComputeBudgetInstruction::set_compute_unit_price(
-                    *compute_unit_price,
-                ));
-            }
+            )]
+            .with_compute_unit_price(compute_unit_price);
             Message::new(&ixs, Some(&config.signers[0].pubkey()))
         };
         let (message, _) = resolve_spend_tx_and_check_account_balance(
@@ -1779,12 +1770,9 @@ pub fn process_show_stakes(
         if vote_account_pubkeys.len() == 1 {
             program_accounts_config.filters = Some(vec![
                 // Filter by `StakeState::Stake(_, _)`
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp::new_base58_encoded(
-                    0,
-                    &[2, 0, 0, 0],
-                )),
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(0, &[2, 0, 0, 0])),
                 // Filter by `Delegation::voter_pubkey`, which begins at byte offset 124
-                rpc_filter::RpcFilterType::Memcmp(rpc_filter::Memcmp::new_base58_encoded(
+                RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
                     124,
                     vote_account_pubkeys[0].as_ref(),
                 )),
@@ -1794,9 +1782,10 @@ pub fn process_show_stakes(
 
     if let Some(withdraw_authority_pubkey) = withdraw_authority_pubkey {
         // withdrawer filter
-        let withdrawer_filter = rpc_filter::RpcFilterType::Memcmp(
-            rpc_filter::Memcmp::new_base58_encoded(44, withdraw_authority_pubkey.as_ref()),
-        );
+        let withdrawer_filter = RpcFilterType::Memcmp(Memcmp::new_base58_encoded(
+            44,
+            withdraw_authority_pubkey.as_ref(),
+        ));
 
         let filters = program_accounts_config.filters.get_or_insert(vec![]);
         filters.push(withdrawer_filter);

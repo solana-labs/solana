@@ -16,13 +16,13 @@ use {
     jsonrpc_derive::rpc,
     jsonrpc_pubsub::{typed::Subscriber, SubscriptionId as PubSubSubscriptionId},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
-    solana_client::{
-        rpc_config::{
+    solana_rpc_client_api::{
+        config::{
             RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
             RpcProgramAccountsConfig, RpcSignatureSubscribeConfig, RpcTransactionLogsConfig,
             RpcTransactionLogsFilter,
         },
-        rpc_response::{
+        response::{
             Response as RpcResponse, RpcBlockUpdate, RpcKeyedAccount, RpcLogsResponse,
             RpcSignatureResult, RpcVersionInfo, RpcVote, SlotInfo, SlotUpdate,
         },
@@ -601,7 +601,7 @@ mod tests {
         jsonrpc_core::{IoHandler, Response},
         serial_test::serial,
         solana_account_decoder::{parse_account_data::parse_account_data, UiAccountEncoding},
-        solana_client::rpc_response::{
+        solana_rpc_client_api::response::{
             ProcessedSignatureResult, ReceivedSignatureResult, RpcSignatureResult, SlotInfo,
         },
         solana_runtime::{

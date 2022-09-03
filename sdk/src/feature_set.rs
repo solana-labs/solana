@@ -201,8 +201,6 @@ pub mod do_support_realloc {
     solana_sdk::declare_id!("75m6ysz33AfLA5DDEzWM1obBrnPQRSsdVQ2nRmc8Vuu1");
 }
 
-// Note: when this feature is cleaned up, also remove the secp256k1 program from
-// the list of builtins and remove its files from /programs
 pub mod prevent_calling_precompiles_as_programs {
     solana_sdk::declare_id!("4ApgRX3ud6p7LNMJmsuaAcZY5HWctGPr5obAsjB3A54d");
 }
@@ -488,12 +486,32 @@ pub mod sign_repair_requests {
     solana_sdk::declare_id!("sigrs6u1EWeHuoKFkY8RR7qcSsPmrAeBBPESyf5pnYe");
 }
 
-pub mod concurrent_replay_of_forks {
-    solana_sdk::declare_id!("9F2Dcu8xkBPKxiiy65XKPZYdCG3VZDpjDTuSmeYLozJe");
+pub mod check_ping_ancestor_requests {
+    solana_sdk::declare_id!("AXLB87anNaUQtqBSsxkm4gvNzYY985aLtNtpJC94uWLJ");
 }
 
 pub mod incremental_snapshot_only_incremental_hash_calculation {
     solana_sdk::declare_id!("25vqsfjk7Nv1prsQJmA4Xu1bN61s8LXCBGUPp8Rfy1UF");
+}
+
+pub mod disable_cpi_setting_executable_and_rent_epoch {
+    solana_sdk::declare_id!("B9cdB55u4jQsDNsdTK525yE9dmSc5Ga7YBaBrDFvEhM9");
+}
+
+pub mod relax_authority_signer_check_for_lookup_table_creation {
+    solana_sdk::declare_id!("FKAcEvNgSY79RpqsPNUV5gDyumopH4cEHqUxyfm8b8Ap");
+}
+
+pub mod stop_sibling_instruction_search_at_parent {
+    solana_sdk::declare_id!("EYVpEP7uzH1CoXzbD6PubGhYmnxRXPeq3PPsm1ba3gpo");
+}
+
+pub mod vote_state_update_root_fix {
+    solana_sdk::declare_id!("G74BkWBzmsByZ1kxHy44H3wjwp5hp7JbrGRuDpco22tY");
+}
+
+pub mod cap_accounts_data_allocations_per_transaction {
+    solana_sdk::declare_id!("9gxu85LYRAcZL38We8MYJ4A9AwgBBPtVBAqebMcT1241");
 }
 
 lazy_static! {
@@ -612,8 +630,13 @@ lazy_static! {
         (use_default_units_in_fee_calculation::id(), "use default units per instruction in fee calculation #26785"),
         (compact_vote_state_updates::id(), "Compact vote state updates to lower block size"),
         (sign_repair_requests::id(), "sign repair requests #26834"),
-        (concurrent_replay_of_forks::id(), "Allow slots from different forks to be replayed concurrently #26465"),
+        (check_ping_ancestor_requests::id(), "ancestor hash repair socket ping/pong support #26963"),
         (incremental_snapshot_only_incremental_hash_calculation::id(), "only hash accounts in incremental snapshot during incremental snapshot creation #26799"),
+        (disable_cpi_setting_executable_and_rent_epoch::id(), "disable setting is_executable and_rent_epoch in CPI #26987"),
+        (relax_authority_signer_check_for_lookup_table_creation::id(), "relax authority signer check for lookup table creation #27205"),
+        (stop_sibling_instruction_search_at_parent::id(), "stop the search in get_processed_sibling_instruction when the parent instruction is reached #27289"),
+        (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
+        (cap_accounts_data_allocations_per_transaction::id(), "cap accounts data allocations per transaction #27375"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

@@ -384,7 +384,7 @@ where
                         .map(|path_buf| path_buf.as_path())
                     {
                         Some(path) => {
-                            accounts_path_processor(*file, path);
+                            accounts_path_processor(file, path);
                             UnpackPath::Valid(path)
                         }
                         None => UnpackPath::Invalid,

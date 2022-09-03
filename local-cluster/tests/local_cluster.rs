@@ -6,13 +6,6 @@ use {
     gag::BufferRedirect,
     log::*,
     serial_test::serial,
-    solana_client::{
-        pubsub_client::PubsubClient,
-        rpc_client::RpcClient,
-        rpc_config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
-        rpc_response::RpcSignatureResult,
-        thin_client::ThinClient,
-    },
     solana_core::{
         broadcast_stage::BroadcastStageType,
         consensus::{Tower, SWITCH_FORK_THRESHOLD, VOTE_THRESHOLD_DEPTH},
@@ -32,6 +25,12 @@ use {
         cluster_tests,
         local_cluster::{ClusterConfig, LocalCluster},
         validator_configs::*,
+    },
+    solana_pubsub_client::pubsub_client::PubsubClient,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        config::{RpcProgramAccountsConfig, RpcSignatureSubscribeConfig},
+        response::RpcSignatureResult,
     },
     solana_runtime::{
         hardened_unpack::open_genesis_config,
@@ -54,6 +53,7 @@ use {
         system_program, system_transaction,
     },
     solana_streamer::socket::SocketAddrSpace,
+    solana_thin_client::thin_client::ThinClient,
     solana_vote_program::vote_state::MAX_LOCKOUT_HISTORY,
     std::{
         collections::{HashMap, HashSet},
@@ -173,6 +173,7 @@ fn test_spend_and_verify_all_nodes_3() {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_local_cluster_signature_subscribe() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     let num_nodes = 2;
@@ -191,7 +192,7 @@ fn test_local_cluster_signature_subscribe() {
         .unwrap();
     let non_bootstrap_info = cluster.get_contact_info(&non_bootstrap_id).unwrap();
 
-    let (rpc, tpu) = non_bootstrap_info.client_facing_addr();
+    let (rpc, tpu) = cluster_tests::get_client_facing_addr(non_bootstrap_info);
     let tx_client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
     let (blockhash, _) = tx_client
@@ -418,7 +419,7 @@ fn test_mainnet_beta_cluster_type() {
     .unwrap();
     assert_eq!(cluster_nodes.len(), 1);
 
-    let (rpc, tpu) = cluster.entry_point_info.client_facing_addr();
+    let (rpc, tpu) = cluster_tests::get_client_facing_addr(&cluster.entry_point_info);
     let client = ThinClient::new(rpc, tpu, cluster.connection_cache.clone());
 
     // Programs that are available at epoch 0
@@ -2520,6 +2521,7 @@ fn run_test_load_program_accounts_partition(scan_commitment: CommitmentConfig) {
 
 #[test]
 #[serial]
+#[ignore]
 fn test_votes_land_in_fork_during_long_partition() {
     let total_stake = 3 * DEFAULT_NODE_STAKE;
     // Make `lighter_stake` insufficient for switching threshold

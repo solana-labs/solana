@@ -7,12 +7,9 @@ use {
         test_utils::check_ready,
     },
     solana_cli_output::{parse_sign_only_reply_string, OutputFormat},
-    solana_client::{
-        blockhash_query::{self, BlockhashQuery},
-        nonce_utils,
-        rpc_client::RpcClient,
-    },
     solana_faucet::faucet::run_local_faucet,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_nonce_utils::blockhash_query::{self, BlockhashQuery},
     solana_sdk::{
         commitment_config::CommitmentConfig,
         hash::Hash,
@@ -116,6 +113,7 @@ fn full_battery_tests(
         nonce_authority: optional_authority,
         memo: None,
         amount: SpendAmount::Some(sol_to_lamports(1000.0)),
+        compute_unit_price: None,
     };
 
     process_command(&config_payer).unwrap();
@@ -153,6 +151,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: index,
         memo: None,
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -173,6 +172,7 @@ fn full_battery_tests(
         memo: None,
         destination_account_pubkey: payee_pubkey,
         lamports: sol_to_lamports(100.0),
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
     check_balance!(
@@ -197,6 +197,7 @@ fn full_battery_tests(
         nonce_authority: index,
         memo: None,
         new_authority: new_authority.pubkey(),
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -205,6 +206,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: index,
         memo: None,
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap_err();
 
@@ -214,6 +216,7 @@ fn full_battery_tests(
         nonce_account,
         nonce_authority: 1,
         memo: None,
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
 
@@ -224,6 +227,7 @@ fn full_battery_tests(
         memo: None,
         destination_account_pubkey: payee_pubkey,
         lamports: sol_to_lamports(100.0),
+        compute_unit_price: None,
     };
     process_command(&config_payer).unwrap();
     check_balance!(
@@ -302,6 +306,7 @@ fn test_create_account_with_seed() {
         nonce_authority: Some(authority_pubkey),
         memo: None,
         amount: SpendAmount::Some(sol_to_lamports(241.0)),
+        compute_unit_price: None,
     };
     process_command(&creator_config).unwrap();
     check_balance!(sol_to_lamports(241.0), &rpc_client, &nonce_address);
@@ -318,12 +323,12 @@ fn test_create_account_with_seed() {
     check_balance!(0, &rpc_client, &to_address);
 
     // Fetch nonce hash
-    let nonce_hash = nonce_utils::get_account_with_commitment(
+    let nonce_hash = solana_rpc_client_nonce_utils::get_account_with_commitment(
         &rpc_client,
         &nonce_address,
         CommitmentConfig::processed(),
     )
-    .and_then(|ref a| nonce_utils::data_from_account(a))
+    .and_then(|ref a| solana_rpc_client_nonce_utils::data_from_account(a))
     .unwrap()
     .blockhash();
 
@@ -349,6 +354,7 @@ fn test_create_account_with_seed() {
         fee_payer: 0,
         derived_address_seed: None,
         derived_address_program_id: None,
+        compute_unit_price: None,
     };
     authority_config.output_format = OutputFormat::JsonCompact;
     let sign_only_reply = process_command(&authority_config).unwrap();
@@ -378,6 +384,7 @@ fn test_create_account_with_seed() {
         fee_payer: 0,
         derived_address_seed: None,
         derived_address_program_id: None,
+        compute_unit_price: None,
     };
     process_command(&submit_config).unwrap();
     check_balance!(sol_to_lamports(241.0), &rpc_client, &nonce_address);

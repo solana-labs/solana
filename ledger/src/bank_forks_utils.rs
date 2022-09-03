@@ -9,6 +9,7 @@ use {
     },
     log::*,
     solana_runtime::{
+        accounts_background_service::AbsRequestSender,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank_forks::BankForks,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -68,7 +69,7 @@ pub fn load(
         &process_options,
         transaction_status_sender,
         cache_block_meta_sender,
-        &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+        &AbsRequestSender::default(),
     )
     .map(|_| (bank_forks, leader_schedule_cache, starting_snapshot_hashes))
 }
@@ -192,13 +193,14 @@ fn bank_forks_from_snapshot(
         process::exit(1);
     }
 
-    let (mut deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
+    let (deserialized_bank, full_snapshot_archive_info, incremental_snapshot_archive_info) =
         snapshot_utils::bank_from_latest_snapshot_archives(
             &snapshot_config.bank_snapshots_dir,
             &snapshot_config.full_snapshot_archives_dir,
             &snapshot_config.incremental_snapshot_archives_dir,
             &account_paths,
             genesis_config,
+            &process_options.runtime_config,
             process_options.debug_keys.clone(),
             Some(&crate::builtins::get(
                 process_options.runtime_config.bpf_jit,
@@ -218,8 +220,6 @@ fn bank_forks_from_snapshot(
     if let Some(shrink_paths) = shrink_paths {
         deserialized_bank.set_shrink_paths(shrink_paths);
     }
-
-    deserialized_bank.set_compute_budget(process_options.runtime_config.compute_budget);
 
     let full_snapshot_hash = FullSnapshotHash {
         hash: (

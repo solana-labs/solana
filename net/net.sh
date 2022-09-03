@@ -107,6 +107,10 @@ Operate a configured testnet
                                       - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
    --full-rpc
                                       - Support full RPC services on all nodes
+
+   --tpu-disable-quic
+                                      - Disable quic for tpu packet forwarding
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -320,6 +324,7 @@ startBootstrapLeader() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$disableQuic\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -392,6 +397,7 @@ startNode() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$disableQuic\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -595,7 +601,7 @@ deploy() {
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log"
+      startBootstrapLeader "$nodeAddress" "$nodeIndex" "$netLogDir/bootstrap-validator-$ipAddress.log"
       bootstrapNodeDeployTime=$SECONDS
       $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
@@ -603,7 +609,7 @@ deploy() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" $nodeType $nodeIndex
+      startNode "$ipAddress" "$nodeType" "$nodeIndex"
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
@@ -800,6 +806,7 @@ maybeWarpSlot=
 maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
+disableQuic=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -911,6 +918,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 == --full-rpc ]]; then
       maybeFullRpc=true
+      shift 1
+    elif [[ $1 == --tpu-disable-quic ]]; then
+      disableQuic=true
       shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
@@ -1114,7 +1124,7 @@ startnode)
   nodeType=
   nodeIndex=
   getNodeType
-  startNode "$nodeAddress" $nodeType $nodeIndex
+  startNode "$nodeAddress" "$nodeType" "$nodeIndex"
   ;;
 startclients)
   startClients

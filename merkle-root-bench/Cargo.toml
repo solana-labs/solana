@@ -2,7 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-merkle-root-bench"
-version = "1.11.5"
+version = "1.12.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -11,11 +11,11 @@ publish = false
 [dependencies]
 clap = "2.33.1"
 log = "0.4.17"
-solana-logger = { path = "../logger", version = "=1.11.5" }
-solana-measure = { path = "../measure", version = "=1.11.5" }
-solana-runtime = { path = "../runtime", version = "=1.11.5" }
-solana-sdk = { path = "../sdk", version = "=1.11.5" }
-solana-version = { path = "../version", version = "=1.11.5" }
+solana-logger = { path = "../logger", version = "=1.12.0" }
+solana-measure = { path = "../measure", version = "=1.12.0" }
+solana-runtime = { path = "../runtime", version = "=1.12.0" }
+solana-sdk = { path = "../sdk", version = "=1.12.0" }
+solana-version = { path = "../version", version = "=1.12.0" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

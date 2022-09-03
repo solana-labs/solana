@@ -14,7 +14,10 @@ use {
     },
     crossbeam_channel::{unbounded, Receiver, RecvError, RecvTimeoutError, Sender},
     itertools::Itertools,
-    solana_gossip::cluster_info::{ClusterInfo, ClusterInfoError, DATA_PLANE_FANOUT},
+    solana_gossip::{
+        cluster_info::{ClusterInfo, ClusterInfoError},
+        contact_info::ContactInfo,
+    },
     solana_ledger::{blockstore::Blockstore, shred::Shred},
     solana_measure::measure::Measure,
     solana_metrics::{inc_new_counter_error, inc_new_counter_info},
@@ -32,7 +35,6 @@ use {
     },
     std::{
         collections::{HashMap, HashSet},
-        iter::repeat,
         net::UdpSocket,
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -253,7 +255,7 @@ impl BroadcastStage {
             let blockstore = blockstore.clone();
             let cluster_info = cluster_info.clone();
             Builder::new()
-                .name("solana-broadcaster".to_string())
+                .name("solBroadcast".to_string())
                 .spawn(move || {
                     let _finalizer = Finalizer::new(exit);
                     Self::run(
@@ -275,7 +277,7 @@ impl BroadcastStage {
             let cluster_info = cluster_info.clone();
             let bank_forks = bank_forks.clone();
             let t = Builder::new()
-                .name("solana-broadcaster-transmit".to_string())
+                .name("solBroadcastTx".to_string())
                 .spawn(move || loop {
                     let res =
                         bs_transmit.transmit(&socket_receiver, &cluster_info, &sock, &bank_forks);
@@ -293,7 +295,7 @@ impl BroadcastStage {
             let mut bs_record = broadcast_stage_run.clone();
             let btree = blockstore.clone();
             let t = Builder::new()
-                .name("solana-broadcaster-record".to_string())
+                .name("solBroadcastRec".to_string())
                 .spawn(move || loop {
                     let res = bs_record.record(&blockstore_receiver, &btree);
                     let res = Self::handle_error(res, "solana-broadcaster-record");
@@ -306,7 +308,7 @@ impl BroadcastStage {
         }
 
         let retransmit_thread = Builder::new()
-            .name("solana-broadcaster-retransmit".to_string())
+            .name("solBroadcastRtx".to_string())
             .spawn(move || loop {
                 if let Some(res) = Self::handle_error(
                     Self::check_retransmit_signals(
@@ -390,8 +392,8 @@ fn update_peer_stats(
     }
 }
 
-/// broadcast messages from the leader to layer 1 nodes
-/// # Remarks
+/// Broadcasts shreds from the leader (i.e. this node) to the root of the
+/// turbine retransmit tree for each shred.
 pub fn broadcast_shreds(
     s: &UdpSocket,
     shreds: &[Shred],
@@ -416,14 +418,10 @@ pub fn broadcast_shreds(
             let cluster_nodes =
                 cluster_nodes_cache.get(slot, &root_bank, &working_bank, cluster_info);
             update_peer_stats(&cluster_nodes, last_datapoint_submit);
-            let root_bank = root_bank.clone();
             shreds.flat_map(move |shred| {
-                repeat(shred.payload()).zip(cluster_nodes.get_broadcast_addrs(
-                    &shred.id(),
-                    &root_bank,
-                    DATA_PLANE_FANOUT,
-                    socket_addr_space,
-                ))
+                let node = cluster_nodes.get_broadcast_peer(&shred.id())?;
+                ContactInfo::is_valid_address(&node.tvu, socket_addr_space)
+                    .then(|| (shred.payload(), node.tvu))
             })
         })
         .collect();

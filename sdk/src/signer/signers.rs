@@ -1,7 +1,11 @@
 #![cfg(feature = "full")]
-use crate::{
-    pubkey::Pubkey,
-    signature::{Signature, Signer, SignerError},
+
+use {
+    crate::{
+        pubkey::Pubkey,
+        signature::{Signature, Signer, SignerError},
+    },
+    std::sync::Arc,
 };
 
 /// Convenience trait for working with mixed collections of `Signer`s
@@ -56,6 +60,14 @@ impl Signers for [Box<dyn Signer>] {
 }
 
 impl Signers for Vec<Box<dyn Signer>> {
+    default_keypairs_impl!();
+}
+
+impl Signers for [Arc<dyn Signer>] {
+    default_keypairs_impl!();
+}
+
+impl Signers for Vec<Arc<dyn Signer>> {
     default_keypairs_impl!();
 }
 

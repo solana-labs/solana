@@ -4,6 +4,7 @@ use {
             log_instruction_custom_error, request_and_confirm_airdrop, CliCommand, CliCommandInfo,
             CliConfig, CliError, ProcessResult,
         },
+        compute_unit_price::WithComputeUnitPrice,
         memo::WithMemo,
         nonce::check_nonce_account,
         spend_utils::{resolve_spend_tx_and_check_account_balances, SpendAmount},
@@ -11,6 +12,7 @@ use {
     clap::{value_t_or_exit, App, Arg, ArgMatches, SubCommand},
     solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_clap_utils::{
+        compute_unit_price::{compute_unit_price_arg, COMPUTE_UNIT_PRICE_ARG},
         fee_payer::*,
         input_parsers::*,
         input_validators::*,
@@ -24,11 +26,10 @@ use {
         return_signers_with_config, CliAccount, CliBalance, CliSignatureVerificationStatus,
         CliTransaction, CliTransactionConfirmation, OutputFormat, ReturnSignersConfig,
     },
-    solana_client::{
-        blockhash_query::BlockhashQuery, nonce_utils, rpc_client::RpcClient,
-        rpc_config::RpcTransactionConfig, rpc_response::RpcKeyedAccount,
-    },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{config::RpcTransactionConfig, response::RpcKeyedAccount},
+    solana_rpc_client_nonce_utils::blockhash_query::BlockhashQuery,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         message::Message,
@@ -270,7 +271,8 @@ impl WalletSubCommands for App<'_, '_> {
                 .offline_args()
                 .nonce_args(false)
                 .arg(memo_arg())
-                .arg(fee_payer_arg()),
+                .arg(fee_payer_arg())
+                .arg(compute_unit_price_arg()),
         )
     }
 }
@@ -415,6 +417,7 @@ pub fn parse_transfer(
 
     let signer_info =
         default_signer.generate_unique_signers(bulk_signers, matches, wallet_manager)?;
+    let compute_unit_price = value_of(matches, COMPUTE_UNIT_PRICE_ARG.name);
 
     let derived_address_seed = matches
         .value_of("derived_address_seed")
@@ -438,6 +441,7 @@ pub fn parse_transfer(
             from: signer_info.index_of(from_pubkey).unwrap(),
             derived_address_seed,
             derived_address_program_id,
+            compute_unit_price,
         },
         signers: signer_info.signers,
     })
@@ -671,6 +675,7 @@ pub fn process_transfer(
     fee_payer: SignerIndex,
     derived_address_seed: Option<String>,
     derived_address_program_id: Option<&Pubkey>,
+    compute_unit_price: Option<&u64>,
 ) -> ProcessResult {
     let from = config.signers[from];
     let mut from_pubkey = from.pubkey();
@@ -715,8 +720,11 @@ pub fn process_transfer(
                 lamports,
             )]
             .with_memo(memo)
+            .with_compute_unit_price(compute_unit_price)
         } else {
-            vec![system_instruction::transfer(&from_pubkey, to, lamports)].with_memo(memo)
+            vec![system_instruction::transfer(&from_pubkey, to, lamports)]
+                .with_memo(memo)
+                .with_compute_unit_price(compute_unit_price)
         };
 
         if let Some(nonce_account) = &nonce_account {
@@ -754,7 +762,7 @@ pub fn process_transfer(
         )
     } else {
         if let Some(nonce_account) = &nonce_account {
-            let nonce_account = nonce_utils::get_account_with_commitment(
+            let nonce_account = solana_rpc_client_nonce_utils::get_account_with_commitment(
                 rpc_client,
                 nonce_account,
                 config.commitment,

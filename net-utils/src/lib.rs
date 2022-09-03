@@ -144,15 +144,18 @@ fn do_verify_reachable_ports(
     for (port, tcp_listener) in tcp_listeners {
         let (sender, receiver) = unbounded();
         let listening_addr = tcp_listener.local_addr().unwrap();
-        let thread_handle = std::thread::spawn(move || {
-            debug!("Waiting for incoming connection on tcp/{}", port);
-            match tcp_listener.incoming().next() {
-                Some(_) => sender
-                    .send(())
-                    .unwrap_or_else(|err| warn!("send failure: {}", err)),
-                None => warn!("tcp incoming failed"),
-            }
-        });
+        let thread_handle = std::thread::Builder::new()
+            .name(format!("solVrfyTcp{:05}", port))
+            .spawn(move || {
+                debug!("Waiting for incoming connection on tcp/{}", port);
+                match tcp_listener.incoming().next() {
+                    Some(_) => sender
+                        .send(())
+                        .unwrap_or_else(|err| warn!("send failure: {}", err)),
+                    None => warn!("tcp incoming failed"),
+                }
+            })
+            .unwrap();
         match receiver.recv_timeout(timeout) {
             Ok(_) => {
                 info!("tcp/{} is reachable", port);
@@ -222,33 +225,37 @@ fn do_verify_reachable_ports(
                     let port = udp_socket.local_addr().unwrap().port();
                     let udp_socket = udp_socket.try_clone().expect("Unable to clone udp socket");
                     let reachable_ports = reachable_ports.clone();
-                    std::thread::spawn(move || {
-                        let start = Instant::now();
 
-                        let original_read_timeout = udp_socket.read_timeout().unwrap();
-                        udp_socket
-                            .set_read_timeout(Some(Duration::from_millis(250)))
-                            .unwrap();
-                        loop {
-                            if reachable_ports.read().unwrap().contains(&port)
-                                || Instant::now().duration_since(start) >= timeout
-                            {
-                                break;
+                    std::thread::Builder::new()
+                        .name(format!("solVrfyUdp{:05}", port))
+                        .spawn(move || {
+                            let start = Instant::now();
+
+                            let original_read_timeout = udp_socket.read_timeout().unwrap();
+                            udp_socket
+                                .set_read_timeout(Some(Duration::from_millis(250)))
+                                .unwrap();
+                            loop {
+                                if reachable_ports.read().unwrap().contains(&port)
+                                    || Instant::now().duration_since(start) >= timeout
+                                {
+                                    break;
+                                }
+
+                                let recv_result = udp_socket.recv(&mut [0; 1]);
+                                debug!(
+                                    "Waited for incoming datagram on udp/{}: {:?}",
+                                    port, recv_result
+                                );
+
+                                if recv_result.is_ok() {
+                                    reachable_ports.write().unwrap().insert(port);
+                                    break;
+                                }
                             }
-
-                            let recv_result = udp_socket.recv(&mut [0; 1]);
-                            debug!(
-                                "Waited for incoming datagram on udp/{}: {:?}",
-                                port, recv_result
-                            );
-
-                            if recv_result.is_ok() {
-                                reachable_ports.write().unwrap().insert(port);
-                                break;
-                            }
-                        }
-                        udp_socket.set_read_timeout(original_read_timeout).unwrap();
-                    })
+                            udp_socket.set_read_timeout(original_read_timeout).unwrap();
+                        })
+                        .unwrap()
                 })
                 .collect();
 
@@ -519,31 +526,34 @@ pub fn bind_common(
         .and_then(|_| TcpListener::bind(&addr).map(|listener| (sock.into(), listener)))
 }
 
-pub fn bind_two_consecutive_in_range(
+pub fn bind_two_in_range_with_offset(
     ip_addr: IpAddr,
     range: PortRange,
+    offset: u16,
 ) -> io::Result<((u16, UdpSocket), (u16, UdpSocket))> {
-    let mut first: Option<UdpSocket> = None;
+    if range.1.saturating_sub(range.0) < offset {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "range too small to find two ports with the correct offset".to_string(),
+        ));
+    }
     for port in range.0..range.1 {
-        if let Ok(bind) = bind_to(ip_addr, port, false) {
-            match first {
-                Some(first_bind) => {
+        if let Ok(first_bind) = bind_to(ip_addr, port, false) {
+            if range.1.saturating_sub(port) >= offset {
+                if let Ok(second_bind) = bind_to(ip_addr, port + offset, false) {
                     return Ok((
                         (first_bind.local_addr().unwrap().port(), first_bind),
-                        (bind.local_addr().unwrap().port(), bind),
+                        (second_bind.local_addr().unwrap().port(), second_bind),
                     ));
                 }
-                None => {
-                    first = Some(bind);
-                }
+            } else {
+                break;
             }
-        } else {
-            first = None;
         }
     }
     Err(io::Error::new(
         io::ErrorKind::Other,
-        "couldn't find two consecutive ports in range".to_string(),
+        "couldn't find two ports with the correct offset in range".to_string(),
     ))
 }
 
@@ -818,12 +828,21 @@ mod tests {
     }
 
     #[test]
-    fn test_bind_two_consecutive_in_range() {
+    fn test_bind_two_in_range_with_offset() {
         solana_logger::setup();
         let ip_addr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
-        if let Ok(((port1, _), (port2, _))) = bind_two_consecutive_in_range(ip_addr, (1024, 65535))
+        let offset = 6;
+        if let Ok(((port1, _), (port2, _))) =
+            bind_two_in_range_with_offset(ip_addr, (1024, 65535), offset)
         {
-            assert!(port2 == port1 + 1);
+            assert!(port2 == port1 + offset);
         }
+        let offset = 42;
+        if let Ok(((port1, _), (port2, _))) =
+            bind_two_in_range_with_offset(ip_addr, (1024, 65535), offset)
+        {
+            assert!(port2 == port1 + offset);
+        }
+        assert!(bind_two_in_range_with_offset(ip_addr, (1024, 1044), offset).is_err());
     }
 }

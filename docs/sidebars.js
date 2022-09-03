@@ -1,203 +1,389 @@
 module.exports = {
-  docs: {
-    About: ["introduction", "terminology", "history"],
-    Wallets: [
-      "wallet-guide",
-      {
-        type: "category",
-        label: "Command-line Wallets",
-        items: [
-          "wallet-guide/cli",
-          "wallet-guide/paper-wallet",
-          {
-            type: "category",
-            label: "Hardware Wallets",
-            items: [
-              "wallet-guide/hardware-wallets",
-              "wallet-guide/hardware-wallets/ledger",
-            ],
-          },
-          "wallet-guide/file-system-wallet",
-        ],
-      },
-      "wallet-guide/support",
-    ],
-    Staking: ["staking", "staking/stake-accounts"],
-    "Command Line": [
-      "cli",
-      "cli/install-solana-cli-tools",
-      "cli/conventions",
-      "cli/choose-a-cluster",
-      "cli/transfer-tokens",
-      "cli/delegate-stake",
-      "cli/deploy-a-program",
-      "offline-signing",
-      "offline-signing/durable-nonce",
-      "cli/usage",
-    ],
-    Developing: [
-      {
-        type: "category",
-        label: "Programming Model",
-        items: [
-          "developing/programming-model/overview",
-          "developing/programming-model/transactions",
-          "developing/programming-model/accounts",
-          "developing/programming-model/runtime",
-          "developing/programming-model/calling-between-programs",
-        ],
-      },
-      {
-        type: "category",
-        label: "Clients",
-        items: [
-          "developing/clients/jsonrpc-api",
-          "developing/clients/javascript-api",
-          "developing/clients/javascript-reference",
-          "developing/clients/rust-api",
-        ],
-      },
-      {
-        type: "category",
-        label: "Runtime Facilities",
-        items: [
-          "developing/runtime-facilities/programs",
-          "developing/runtime-facilities/sysvars",
-        ],
-      },
-      {
-        type: "category",
-        label: "On-chain Programs",
-        items: [
-          "developing/on-chain-programs/overview",
-          "developing/on-chain-programs/developing-rust",
-          "developing/on-chain-programs/developing-c",
-          "developing/on-chain-programs/deploying",
-          "developing/on-chain-programs/debugging",
-          "developing/on-chain-programs/examples",
-          "developing/on-chain-programs/faq",
-        ],
-      },
-      "developing/test-validator",
-      "developing/backwards-compatibility",
-      "developing/plugins/geyser-plugins",
-    ],
-    Integrating: [
-      "integrations/exchange",
-      "integrations/retrying-transactions",
-    ],
-    Validating: [
-      "running-validator",
-      "running-validator/validator-reqs",
-      "running-validator/validator-start",
-      "running-validator/vote-accounts",
-      "running-validator/validator-stake",
-      "running-validator/validator-monitor",
-      "running-validator/validator-info",
-      "running-validator/validator-failover",
-      "running-validator/validator-troubleshoot",
-    ],
-    Clusters: [
-      "clusters",
-      "cluster/rpc-endpoints",
-      "cluster/bench-tps",
-      "cluster/performance-metrics",
-    ],
-    Architecture: [
-      {
-        type: "category",
-        label: "Cluster",
-        items: [
-          "cluster/overview",
-          "cluster/synchronization",
-          "cluster/leader-rotation",
-          "cluster/fork-generation",
-          "cluster/managing-forks",
-          "cluster/turbine-block-propagation",
-          "cluster/vote-signing",
-          "cluster/stake-delegation-and-rewards",
-        ],
-      },
-      {
-        type: "category",
-        label: "Validator",
-        items: [
-          "validator/anatomy",
-          "validator/tpu",
-          "validator/tvu",
-          "validator/blockstore",
-          "validator/gossip",
-          "validator/runtime",
-        ],
-      },
-    ],
-    Economics: [
-      "economics_overview",
-      {
-        type: "category",
-        label: "Inflation Design",
-        items: [
-          "inflation/terminology",
-          "inflation/inflation_schedule",
-          "inflation/adjusted_staking_yield",
-        ],
-      },
-      "transaction_fees",
-      "storage_rent_economics",
-    ],
-    "Design Proposals": [
-      {
-        type: "category",
-        label: "Implemented",
-        items: [
-          "implemented-proposals/implemented-proposals",
-          "implemented-proposals/abi-management",
-          "implemented-proposals/bank-timestamp-correction",
-          "implemented-proposals/commitment",
-          "implemented-proposals/durable-tx-nonces",
-          "implemented-proposals/installer",
-          "implemented-proposals/instruction_introspection",
-          "implemented-proposals/leader-leader-transition",
-          "implemented-proposals/leader-validator-transition",
-          "implemented-proposals/persistent-account-storage",
-          "implemented-proposals/readonly-accounts",
-          "implemented-proposals/reliable-vote-transmission",
-          "implemented-proposals/rent",
-          "implemented-proposals/repair-service",
-          "implemented-proposals/rpc-transaction-history",
-          "implemented-proposals/snapshot-verification",
-          "implemented-proposals/staking-rewards",
-          "implemented-proposals/testing-programs",
-          "implemented-proposals/tower-bft",
-          "implemented-proposals/transaction-fees",
-          "implemented-proposals/validator-timestamp-oracle",
-        ],
-      },
-      {
-        type: "category",
-        label: "Accepted",
-        items: [
-          "proposals/accepted-design-proposals",
-          "proposals/bankless-leader",
-          "proposals/block-confirmation",
-          "proposals/cluster-test-framework",
-          "proposals/embedding-move",
-          "proposals/handle-duplicate-block",
-          "proposals/interchain-transaction-verification",
-          "proposals/ledger-replication-to-implement",
-          "proposals/optimistic-confirmation-and-slashing",
-          "proposals/optimistic_confirmation",
-          "proposals/rip-curl",
-          "proposals/rust-clients",
-          "proposals/simple-payment-and-state-verification",
-          "proposals/slashing",
-          "proposals/snapshot-verification",
-          "proposals/tick-verification",
-          "proposals/transactions-v2",
-          "proposals/validator-proposal",
-          "proposals/vote-signing-to-implement",
-        ],
-      },
-    ],
-  },
+  introductionSidebar: [
+    {
+      type: "category",
+      collapsed: false,
+      label: "Introduction to Solana",
+      items: [
+        {
+          type: "doc",
+          id: "introduction",
+          label: "What is Solana?",
+        },
+        // This will be the future home for the economics overview page
+        // {
+        //   type: "doc",
+        //   id: "economics_overview",
+        //   label: "How do the economics work?",
+        // },
+        {
+          type: "doc",
+          id: "history",
+          label: "History of Solana",
+        },
+      ],
+    },
+    {
+      type: "category",
+      collapsed: false,
+      label: "Getting started with Solana",
+      items: [
+        {
+          type: "doc",
+          id: "wallet-guide",
+          label: "Wallets",
+        },
+        // This will be the future home of the `staking` page, with the introductory info on what staking on Solana looks like
+        // {
+        //   type: "doc",
+        //   id: "staking",
+        //   label: "Staking",
+        // },
+      ],
+    },
+    {
+      type: "category",
+      collapsed: false,
+      label: "Dive into Solana",
+      items: [
+        "terminology",
+        {
+          type: "link",
+          href: "/developers",
+          label: "Developers",
+        },
+        {
+          type: "ref",
+          label: "Validators",
+          id: "running-validator",
+        },
+        {
+          type: "ref",
+          label: "Command Line",
+          id: "cli",
+        },
+        {
+          type: "ref",
+          label: "Economics",
+          id: "economics_overview",
+        },
+        {
+          type: "ref",
+          label: "Proposals",
+          id: "proposals",
+        },
+      ],
+    },
+  ],
+  developerSidebar: [
+    {
+      type: "link",
+      href: "/developers",
+      label: "Overview",
+    },
+    {
+      type: "category",
+      label: "Getting Started",
+      items: [
+        {
+          type: "doc",
+          id: "developing/intro/programs",
+          label: "What are Programs?",
+        },
+        {
+          type: "doc",
+          id: "developing/intro/rent",
+          label: "What is Rent?",
+        },
+      ],
+    },
+    {
+      type: "category",
+      label: "Core Concepts",
+      // collapsed: false,
+      items: [
+        {
+          type: "doc",
+          id: "developing/programming-model/transactions",
+          label: "Transactions",
+        },
+        {
+          type: "doc",
+          id: "developing/programming-model/accounts",
+          label: "Accounts",
+        },
+        {
+          type: "doc",
+          id: "developing/programming-model/calling-between-programs",
+          label: "Calling between programs",
+        },
+        {
+          type: "doc",
+          id: "developing/programming-model/runtime",
+          label: "Runtime",
+        },
+      ],
+    },
+    {
+      type: "category",
+      label: "Clients",
+      items: [
+        {
+          type: "doc",
+          id: "developing/clients/jsonrpc-api",
+          label: "JSON RPC API",
+        },
+        {
+          type: "doc",
+          id: "developing/clients/javascript-api",
+          label: "Web3 JavaScript API",
+        },
+        {
+          type: "doc",
+          id: "developing/clients/javascript-reference",
+          label: "Web3 API Reference",
+        },
+        {
+          type: "doc",
+          id: "developing/clients/rust-api",
+          label: "Rust API",
+        },
+      ],
+    },
+    {
+      type: "category",
+      label: "Writing Programs",
+      items: [
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/overview",
+          label: "Overview",
+        },
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/developing-rust",
+          label: "Developing with Rust",
+        },
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/developing-c",
+          label: "Developing with C/C++",
+        },
+        {
+          type: "doc",
+          label: "Deploying",
+          id: "developing/on-chain-programs/deploying",
+        },
+        {
+          type: "doc",
+          label: "Debugging",
+          id: "developing/on-chain-programs/debugging",
+        },
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/examples",
+          label: "Program Examples",
+        },
+        {
+          type: "doc",
+          id: "developing/on-chain-programs/faq",
+          label: "FAQ",
+        },
+      ],
+    },
+    {
+      type: "category",
+      label: "Native Programs",
+      items: [
+        {
+          type: "doc",
+          label: "Overview",
+          id: "developing/runtime-facilities/programs",
+        },
+        {
+          type: "doc",
+          id: "developing/runtime-facilities/sysvars",
+          label: "Sysvar Cluster Data",
+        },
+      ],
+    },
+    {
+      type: "category",
+      label: "Local Development",
+      collapsed: false,
+      items: [
+        {
+          type: "doc",
+          id: "developing/test-validator",
+          label: "Solana Test Validator",
+        },
+      ],
+    },
+    {
+      type: "doc",
+      id: "developing/backwards-compatibility",
+      label: "Backward Compatibility Policy",
+    },
+  ],
+  validatorsSidebar: [
+    "running-validator",
+    {
+      type: "category",
+      label: "Getting Started",
+      collapsed: false,
+      items: ["running-validator/validator-reqs"],
+    },
+    {
+      type: "category",
+      label: "Voting Setup",
+      collapsed: false,
+      items: [
+        "running-validator/validator-start",
+        "running-validator/vote-accounts",
+        "running-validator/validator-stake",
+        "running-validator/validator-monitor",
+        "running-validator/validator-info",
+        "running-validator/validator-failover",
+        "running-validator/validator-troubleshoot",
+      ],
+    },
+    {
+      type: "category",
+      label: "Geyser",
+      collapsed: false,
+      items: ["developing/plugins/geyser-plugins"],
+    },
+  ],
+  cliSidebar: [
+    "cli",
+    "cli/install-solana-cli-tools",
+    {
+      type: "category",
+      label: "Command-line Wallets",
+      items: [
+        "wallet-guide/cli",
+        "wallet-guide/paper-wallet",
+        {
+          type: "category",
+          label: "Hardware Wallets",
+          items: [
+            "wallet-guide/hardware-wallets",
+            "wallet-guide/hardware-wallets/ledger",
+          ],
+        },
+        "wallet-guide/file-system-wallet",
+        "wallet-guide/support",
+      ],
+    },
+    "cli/conventions",
+    "cli/choose-a-cluster",
+    "cli/transfer-tokens",
+    "cli/delegate-stake",
+    "cli/deploy-a-program",
+    "offline-signing",
+    "offline-signing/durable-nonce",
+    "cli/usage",
+  ],
+  architectureSidebar: [
+    {
+      type: "doc",
+      label: "What is a Solana Cluster?",
+      id: "cluster/overview",
+    },
+    {
+      type: "category",
+      label: "Clusters",
+      collapsed: false,
+      items: [
+        "clusters",
+        {
+          type: "doc",
+          label: "RPC Endpoints",
+          id: "cluster/rpc-endpoints",
+        },
+        "cluster/bench-tps",
+        "cluster/performance-metrics",
+      ],
+    },
+    {
+      type: "category",
+      label: "Consensus",
+      collapsed: false,
+      items: [
+        "cluster/synchronization",
+        "cluster/leader-rotation",
+        "cluster/fork-generation",
+        "cluster/managing-forks",
+        "cluster/turbine-block-propagation",
+        "cluster/commitments",
+        "cluster/vote-signing",
+        "cluster/stake-delegation-and-rewards",
+      ],
+    },
+    {
+      type: "category",
+      label: "Validators",
+      collapsed: false,
+      items: [
+        {
+          type: "doc",
+          label: "Overview",
+          id: "validator/anatomy",
+        },
+        "validator/tpu",
+        "validator/tvu",
+        "validator/blockstore",
+        "validator/gossip",
+        "validator/runtime",
+      ],
+    },
+  ],
+  "Design Proposals": [
+    "proposals",
+    {
+      type: "category",
+      label: "Accepted Proposals",
+      collapsed: true,
+      items: [
+        {
+          type: "autogenerated",
+          dirName: "proposals",
+        },
+      ],
+    },
+    {
+      type: "category",
+      label: "Implemented  Proposals",
+      collapsed: true,
+      items: [
+        {
+          type: "autogenerated",
+          dirName: "implemented-proposals",
+        },
+      ],
+    },
+  ],
+  stakingSidebar: ["staking", "staking/stake-accounts"],
+  integratingSidebar: [
+    "integrations/exchange",
+    "integrations/retrying-transactions",
+  ],
+  economicsSidebar: [
+    {
+      type: "doc",
+      id: "economics_overview",
+      // label: "How do the economics work?",
+    },
+    {
+      type: "category",
+      label: "Inflation Design",
+      items: [
+        "inflation/terminology",
+        "inflation/inflation_schedule",
+        "inflation/adjusted_staking_yield",
+      ],
+    },
+    "transaction_fees",
+    "storage_rent_economics",
+  ],
 };

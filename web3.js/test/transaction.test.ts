@@ -1,19 +1,22 @@
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import nacl from 'tweetnacl';
 import {expect} from 'chai';
 
 import {Connection} from '../src/connection';
 import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';
-import {Transaction, TransactionInstruction} from '../src/transaction';
-import {StakeProgram} from '../src/stake-program';
-import {SystemProgram} from '../src/system-program';
+import {
+  Transaction,
+  TransactionInstruction,
+  VersionedTransaction,
+} from '../src/transaction';
+import {StakeProgram, SystemProgram} from '../src/programs';
 import {Message} from '../src/message';
-import invariant from '../src/util/assert';
-import {toBuffer} from '../src/util/to-buffer';
+import invariant from '../src/utils/assert';
+import {toBuffer} from '../src/utils/to-buffer';
 import {helpers} from './mocks/rpc-http';
 import {url} from './url';
+import {sign} from '../src/utils/ed25519';
 
 describe('Transaction', () => {
   describe('compileMessage', () => {
@@ -833,7 +836,7 @@ describe('Transaction', () => {
     tx.recentBlockhash = bs58.encode(recentBlockhash);
     tx.setSigners(from.publicKey);
     const tx_bytes = tx.serializeMessage();
-    const signature = nacl.sign.detached(tx_bytes, from.secretKey);
+    const signature = sign(tx_bytes, from.secretKey);
     tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
   });
@@ -852,9 +855,29 @@ describe('Transaction', () => {
     tx.recentBlockhash = bs58.encode(recentBlockhash);
     tx.feePayer = from.publicKey;
     const tx_bytes = tx.serializeMessage();
-    const signature = nacl.sign.detached(tx_bytes, from.secretKey);
+    const signature = sign(tx_bytes, from.secretKey);
     tx.addSignature(from.publicKey, toBuffer(signature));
     expect(tx.verifySignatures()).to.be.true;
+  });
+
+  it('deserializes versioned transactions', () => {
+    const serializedVersionedTx = Buffer.from(
+      'AdTIDASR42TgVuXKkd7mJKk373J3LPVp85eyKMVcrboo9KTY8/vm6N/Cv0NiHqk2I8iYw6VX5ZaBKG8z' +
+        '9l1XjwiAAQACA+6qNbqfjaIENwt9GzEK/ENiB/ijGwluzBUmQ9xlTAMcCaS0ctnyxTcXXlJr7u2qtnaM' +
+        'gIAO2/c7RBD0ipHWUcEDBkZv5SEXMv/srbpyw5vnvIzlu8X3EmssQ5s6QAAAAJbI7VNs6MzREUlnzRaJ' +
+        'pBKP8QQoDn2dWQvD0KIgHFDiAwIACQAgoQcAAAAAAAIABQEAAAQAATYPBwAKBDIBAyQWIw0oCxIdCA4i' +
+        'JzQRKwUZHxceHCohMBUJJiwpMxAaGC0TLhQxGyAMBiU2NS8VDgAAAADuAgAAAAAAAAIAAAAAAAAAAdGCT' +
+        'Qiq5yw3+3m1sPoRNj0GtUNNs0FIMocxzt3zuoSZHQABAwQFBwgLDA8RFBcYGhwdHh8iIyUnKiwtLi8yF' +
+        'wIGCQoNDhASExUWGRsgISQmKCkrMDEz',
+      'base64',
+    );
+
+    expect(() => Transaction.from(serializedVersionedTx)).to.throw(
+      'Versioned messages must be deserialized with VersionedMessage.deserialize()',
+    );
+
+    const versionedTx = VersionedTransaction.deserialize(serializedVersionedTx);
+    expect(versionedTx.message.version).to.eq(0);
   });
 
   it('can serialize, deserialize, and reserialize with a partial signer', () => {

@@ -1,12 +1,9 @@
 //! Vote program processor
 
 use {
-    crate::{
-        id,
-        vote_instruction::VoteInstruction,
-        vote_state::{self, VoteAuthorize, VoteStateUpdate},
-    },
+    crate::vote_state,
     log::*,
+    solana_program::vote::{instruction::VoteInstruction, program::id, state::VoteAuthorize},
     solana_program_runtime::{
         invoke_context::InvokeContext, sysvar_cache::get_sysvar_with_account_check,
     },
@@ -143,7 +140,7 @@ pub fn process_instruction(
                 get_sysvar_with_account_check::slot_hashes(invoke_context, instruction_context, 1)?;
             let clock =
                 get_sysvar_with_account_check::clock(invoke_context, instruction_context, 2)?;
-            vote_state::process_vote(
+            vote_state::process_vote_with_account(
                 &mut me,
                 &slot_hashes,
                 &clock,
@@ -185,11 +182,12 @@ pub fn process_instruction(
                 let sysvar_cache = invoke_context.get_sysvar_cache();
                 let slot_hashes = sysvar_cache.get_slot_hashes()?;
                 let clock = sysvar_cache.get_clock()?;
+                let vote_state_update = compact_vote_state_update.uncompact()?;
                 vote_state::process_vote_state_update(
                     &mut me,
                     slot_hashes.slot_hashes(),
                     &clock,
-                    VoteStateUpdate::from(compact_vote_state_update),
+                    vote_state_update,
                     &signers,
                     &invoke_context.feature_set,
                 )
@@ -264,7 +262,7 @@ mod tests {
                 vote_switch, withdraw, VoteInstruction,
             },
             vote_state::{
-                Lockout, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
+                self, Lockout, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
                 VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate, VoteStateVersions,
             },
         },
@@ -462,7 +460,7 @@ mod tests {
         let (vote_pubkey, vote_account) = create_test_account();
         let vote_account_space = vote_account.data().len();
 
-        let mut vote_state = VoteState::from(&vote_account).unwrap();
+        let mut vote_state = vote_state::from(&vote_account).unwrap();
         vote_state.authorized_withdrawer = vote_pubkey;
         vote_state.epoch_credits = Vec::new();
 
@@ -482,7 +480,7 @@ mod tests {
         let mut vote_account_with_epoch_credits =
             AccountSharedData::new(lamports, vote_account_space, &id());
         let versioned = VoteStateVersions::new_current(vote_state);
-        VoteState::to(&versioned, &mut vote_account_with_epoch_credits);
+        vote_state::to(&versioned, &mut vote_account_with_epoch_credits);
 
         (vote_pubkey, vote_account_with_epoch_credits)
     }

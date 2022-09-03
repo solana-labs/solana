@@ -1,0 +1,31 @@
+[package]
+name = "solana-rpc-client-api"
+version = "1.12.0"
+description = "Solana Client Common Utilities"
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-rpc-client-api"
+edition = "2021"
+
+[dependencies]
+base64 = "0.13.0"
+bs58 = "0.4.0"
+jsonrpc-core = "18.0.0"
+reqwest = { version = "0.11.11", default-features = false, features = ["blocking", "brotli", "deflate", "gzip", "rustls-tls", "json"] }
+semver = "1.0.13"
+serde = "1.0.143"
+serde_derive = "1.0.103"
+serde_json = "1.0.83"
+solana-account-decoder = { path = "../account-decoder", version = "=1.12.0" }
+solana-sdk = { path = "../sdk", version = "=1.12.0" }
+solana-transaction-status = { path = "../transaction-status", version = "=1.12.0" }
+solana-version = { path = "../version", version = "=1.12.0" }
+spl-token-2022 = { version = "=0.4.3", features = ["no-entrypoint"] }
+thiserror = "1.0"
+
+[dev-dependencies]
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

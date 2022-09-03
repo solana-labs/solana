@@ -46,7 +46,7 @@ impl Versions {
             Self::Current(state) => match **state {
                 State::Uninitialized => None,
                 State::Initialized(ref data) => {
-                    (recent_blockhash == &data.blockhash()).then(|| data)
+                    (recent_blockhash == &data.blockhash()).then_some(data)
                 }
             },
         }

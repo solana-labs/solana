@@ -13,10 +13,7 @@ use {
     solana_measure::measure::Measure,
     solana_sdk::{clock::Slot, pubkey::Pubkey},
     std::{
-        collections::{
-            hash_map::{Entry, VacantEntry},
-            HashMap,
-        },
+        collections::{hash_map::Entry, HashMap},
         fmt::Debug,
         ops::{Bound, RangeBounds, RangeInclusive},
         sync::{
@@ -29,6 +26,61 @@ type K = Pubkey;
 type CacheRangesHeld = RwLock<Vec<RangeInclusive<Pubkey>>>;
 
 type InMemMap<T> = HashMap<Pubkey, AccountMapEntry<T>>;
+
+#[derive(Debug)]
+pub struct PossibleEvictions<T: IndexValue> {
+    /// vec per age in the future, up to size 'ages_to_stay_in_cache'
+    possible_evictions: Vec<FlushScanResult<T>>,
+    /// next index to use into 'possible_evictions'
+    /// if 'index' >= 'possible_evictions.len()', then there are no available entries
+    index: usize,
+}
+
+impl<T: IndexValue> PossibleEvictions<T> {
+    fn new(max_ages: Age) -> Self {
+        Self {
+            possible_evictions: (0..max_ages).map(|_| FlushScanResult::default()).collect(),
+            index: max_ages as usize, // initially no data
+        }
+    }
+
+    /// remove the possible evictions. This is required because we need ownership of the Arc strong counts to transfer to caller so entries can be removed from the accounts index
+    fn get_possible_evictions(&mut self) -> Option<FlushScanResult<T>> {
+        self.possible_evictions.get_mut(self.index).map(|result| {
+            self.index += 1;
+            // remove the list from 'possible_evictions'
+            std::mem::take(result)
+        })
+    }
+
+    /// clear existing data and prepare to add 'entries' more ages of data
+    fn reset(&mut self, entries: Age) {
+        self.possible_evictions.iter_mut().for_each(|entry| {
+            entry.evictions_random.clear();
+            entry.evictions_age_possible.clear();
+        });
+        let entries = entries as usize;
+        assert!(
+            entries <= self.possible_evictions.len(),
+            "entries: {}, len: {}",
+            entries,
+            self.possible_evictions.len()
+        );
+        self.index = self.possible_evictions.len() - entries;
+    }
+
+    /// insert 'entry' at 'relative_age' in the future into 'possible_evictions'
+    fn insert(&mut self, relative_age: Age, key: Pubkey, entry: AccountMapEntry<T>, random: bool) {
+        let index = self.index + (relative_age as usize);
+        let list = &mut self.possible_evictions[index];
+        if random {
+            &mut list.evictions_random
+        } else {
+            &mut list.evictions_age_possible
+        }
+        .push((key, entry));
+    }
+}
 
 // one instance of this represents one bin of the accounts index.
 pub struct InMemAccountsIndex<T: IndexValue> {
@@ -52,6 +104,12 @@ pub struct InMemAccountsIndex<T: IndexValue> {
 
     /// info to streamline initial index generation
     startup_info: Mutex<StartupInfo<T>>,
+
+    /// possible evictions for next few slots coming up
+    possible_evictions: RwLock<PossibleEvictions<T>>,
+    /// when age % ages_to_stay_in_cache == 'age_to_flush_bin_offset', then calculate the next 'ages_to_stay_in_cache' 'possible_evictions'
+    /// this causes us to scan the entire in-mem hash map every 1/'ages_to_stay_in_cache' instead of each age
+    age_to_flush_bin_mod: Age,
 }
 
 impl<T: IndexValue> Debug for InMemAccountsIndex<T> {
@@ -74,6 +132,7 @@ struct StartupInfo<T: IndexValue> {
     duplicates: Vec<(Slot, Pubkey)>,
 }
 
+#[derive(Default, Debug)]
 /// result from scanning in-mem index during flush
 struct FlushScanResult<T> {
     /// pubkeys whose age indicates they may be evicted now, pending further checks.
@@ -84,6 +143,7 @@ struct FlushScanResult<T> {
 
 impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn new(storage: &Arc<BucketMapHolder<T>>, bin: usize) -> Self {
+        let ages_to_stay_in_cache = storage.ages_to_stay_in_cache;
         Self {
             map_internal: RwLock::default(),
             storage: Arc::clone(storage),
@@ -100,6 +160,23 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             // initialize this to max, to make it clear we have not flushed at age 0, the starting age
             last_age_flushed: AtomicU8::new(Age::MAX),
             startup_info: Mutex::default(),
+            possible_evictions: RwLock::new(PossibleEvictions::new(ages_to_stay_in_cache)),
+            // Spread out the scanning across all ages within the window.
+            // This causes us to scan 1/N of the bins each 'Age'
+            age_to_flush_bin_mod: thread_rng().gen_range(0, ages_to_stay_in_cache),
+        }
+    }
+
+    /// # ages to scan ahead
+    fn ages_to_scan_ahead(&self, current_age: Age) -> Age {
+        let ages_to_stay_in_cache = self.storage.ages_to_stay_in_cache;
+        if (self.age_to_flush_bin_mod == current_age % ages_to_stay_in_cache)
+            && !self.storage.get_startup()
+        {
+            // scan ahead multiple ages
+            ages_to_stay_in_cache
+        } else {
+            1 // just current age
         }
     }
 
@@ -189,6 +266,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     fn get_only_in_mem<RT>(
         &self,
         pubkey: &K,
+        update_age: bool,
         callback: impl for<'a> FnOnce(Option<&'a AccountMapEntry<T>>) -> RT,
     ) -> RT {
         let mut found = true;
@@ -199,7 +277,9 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             m.stop();
 
             callback(if let Some(entry) = result {
-                entry.set_age(self.storage.future_age_to_flush());
+                if update_age {
+                    self.set_age_to_future(entry, false);
+                }
                 Some(entry)
             } else {
                 drop(map);
@@ -225,6 +305,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         self.get_internal(pubkey, |entry| (true, entry.map(Arc::clone)))
     }
 
+    /// set age of 'entry' to the future
+    /// if 'is_cached', age will be set farther
+    fn set_age_to_future(&self, entry: &AccountMapEntry<T>, is_cached: bool) {
+        entry.set_age(self.storage.future_age_to_flush(is_cached));
+    }
+
     /// lookup 'pubkey' in index (in_mem or disk).
     /// call 'callback' whether found or not
     pub(crate) fn get_internal<RT>(
@@ -233,13 +319,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // return true if item should be added to in_mem cache
         callback: impl for<'a> FnOnce(Option<&AccountMapEntry<T>>) -> (bool, RT),
     ) -> RT {
-        self.get_only_in_mem(pubkey, |entry| {
+        self.get_only_in_mem(pubkey, true, |entry| {
             if let Some(entry) = entry {
-                entry.set_age(self.storage.future_age_to_flush());
                 callback(Some(entry)).1
             } else {
                 // not in cache, look on disk
-                let stats = &self.stats();
+                let stats = self.stats();
                 let disk_entry = self.load_account_entry_from_disk(pubkey);
                 if disk_entry.is_none() {
                     return callback(None).1;
@@ -368,16 +453,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     ) {
         let mut updated_in_mem = true;
         // try to get it just from memory first using only a read lock
-        self.get_only_in_mem(pubkey, |entry| {
+        self.get_only_in_mem(pubkey, false, |entry| {
             if let Some(entry) = entry {
-                Self::lock_and_update_slot_list(
-                    entry,
-                    new_value.into(),
-                    other_slot,
-                    reclaims,
-                    reclaim,
-                );
-                // age is incremented by caller
+                let new_value: (Slot, T) = new_value.into();
+                let upsert_cached = new_value.1.is_cached();
+                Self::lock_and_update_slot_list(entry, new_value, other_slot, reclaims, reclaim);
+                self.set_age_to_future(entry, upsert_cached);
             } else {
                 let mut m = Measure::start("entry");
                 let mut map = self.map_internal.write().unwrap();
@@ -386,56 +467,43 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 let found = matches!(entry, Entry::Occupied(_));
                 match entry {
                     Entry::Occupied(mut occupied) => {
+                        let new_value: (Slot, T) = new_value.into();
+                        let upsert_cached = new_value.1.is_cached();
                         let current = occupied.get_mut();
                         Self::lock_and_update_slot_list(
-                            current,
-                            new_value.into(),
-                            other_slot,
-                            reclaims,
-                            reclaim,
+                            current, new_value, other_slot, reclaims, reclaim,
                         );
-                        current.set_age(self.storage.future_age_to_flush());
+                        self.set_age_to_future(current, upsert_cached);
                     }
                     Entry::Vacant(vacant) => {
                         // not in cache, look on disk
                         updated_in_mem = false;
 
-                        // desired to be this for filler accounts: self.storage.get_startup();
-                        // but, this has proven to be far too slow at high account counts
-                        let directly_to_disk = false;
-                        if directly_to_disk {
-                            // We may like this to always run, but it is unclear.
-                            // If disk bucket needs to resize, then this call can stall for a long time.
-                            // Right now, we know it is safe during startup.
-                            let already_existed = self
-                                .upsert_on_disk(vacant, new_value, other_slot, reclaims, reclaim);
-                            if !already_existed {
-                                self.stats().inc_insert();
-                            }
+                        // go to in-mem cache first
+                        let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                        let new_value = if let Some(disk_entry) = disk_entry {
+                            let new_value: (Slot, T) = new_value.into();
+                            let upsert_cached = new_value.1.is_cached();
+                            // on disk, so merge new_value with what was on disk
+                            Self::lock_and_update_slot_list(
+                                &disk_entry,
+                                new_value,
+                                other_slot,
+                                reclaims,
+                                reclaim,
+                            );
+                            self.set_age_to_future(&disk_entry, upsert_cached);
+                            disk_entry
                         } else {
-                            // go to in-mem cache first
-                            let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                            let new_value = if let Some(disk_entry) = disk_entry {
-                                // on disk, so merge new_value with what was on disk
-                                Self::lock_and_update_slot_list(
-                                    &disk_entry,
-                                    new_value.into(),
-                                    other_slot,
-                                    reclaims,
-                                    reclaim,
-                                );
-                                disk_entry
-                            } else {
-                                // not on disk, so insert new thing
-                                self.stats().inc_insert();
-                                new_value.into_account_map_entry(&self.storage)
-                            };
-                            assert!(new_value.dirty());
-                            vacant.insert(new_value);
-                            self.stats().inc_mem_count(self.bin);
-                        }
+                            // not on disk, so insert new thing
+                            self.stats().inc_insert();
+                            new_value.into_account_map_entry(&self.storage)
+                        };
+                        assert!(new_value.dirty());
+                        vacant.insert(new_value);
+                        self.stats().inc_mem_count(self.bin);
                     }
-                }
+                };
 
                 drop(map);
                 self.update_entry_stats(m, found);
@@ -447,7 +515,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     }
 
     fn update_entry_stats(&self, stopped_measure: Measure, found: bool) {
-        let stats = &self.stats();
+        let stats = self.stats();
         let (count, time) = if found {
             (&stats.entries_from_mem, &stats.entry_mem_us)
         } else {
@@ -626,46 +694,31 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             }
             Entry::Vacant(vacant) => {
                 // not in cache, look on disk
-                let initial_insert_directly_to_disk = false;
-                if initial_insert_directly_to_disk {
-                    // This is more direct, but becomes too slow with very large acct #.
-                    // disk buckets will be improved to make them more performant. Tuning the disks may also help.
-                    // This may become a config tuning option.
-                    let already_existed = self.upsert_on_disk(
-                        vacant,
-                        new_entry,
-                        None, // not changing slots here since it doesn't exist in the index at all
+                let disk_entry = self.load_account_entry_from_disk(vacant.key());
+                self.stats().inc_mem_count(self.bin);
+                if let Some(disk_entry) = disk_entry {
+                    let (slot, account_info) = new_entry.into();
+                    InMemAccountsIndex::lock_and_update_slot_list(
+                        &disk_entry,
+                        (slot, account_info),
+                        // None because we are inserting the first element in the slot list for this pubkey.
+                        // There can be no 'other' slot in the list.
+                        None,
                         &mut Vec::default(),
                         UpsertReclaim::PopulateReclaims,
                     );
-                    (false, already_existed)
+                    vacant.insert(disk_entry);
+                    (
+                        false, /* found in mem */
+                        true,  /* already existed */
+                    )
                 } else {
-                    let disk_entry = self.load_account_entry_from_disk(vacant.key());
-                    self.stats().inc_mem_count(self.bin);
-                    if let Some(disk_entry) = disk_entry {
-                        let (slot, account_info) = new_entry.into();
-                        InMemAccountsIndex::lock_and_update_slot_list(
-                            &disk_entry,
-                            (slot, account_info),
-                            // None because we are inserting the first element in the slot list for this pubkey.
-                            // There can be no 'other' slot in the list.
-                            None,
-                            &mut Vec::default(),
-                            UpsertReclaim::PopulateReclaims,
-                        );
-                        vacant.insert(disk_entry);
-                        (
-                            false, /* found in mem */
-                            true,  /* already existed */
-                        )
-                    } else {
-                        // not on disk, so insert new thing and we're done
-                        let new_entry: AccountMapEntry<T> =
-                            new_entry.into_account_map_entry(&self.storage);
-                        assert!(new_entry.dirty());
-                        vacant.insert(new_entry);
-                        (false, false)
-                    }
+                    // not on disk, so insert new thing and we're done
+                    let new_entry: AccountMapEntry<T> =
+                        new_entry.into_account_map_entry(&self.storage);
+                    assert!(new_entry.dirty());
+                    vacant.insert(new_entry);
+                    (false, false)
                 }
             }
         };
@@ -683,52 +736,6 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             InsertNewEntryResults::ExistedNewEntryZeroLamports
         } else {
             InsertNewEntryResults::ExistedNewEntryNonZeroLamports
-        }
-    }
-
-    /// return true if item already existed in the index
-    fn upsert_on_disk(
-        &self,
-        vacant: VacantEntry<K, AccountMapEntry<T>>,
-        new_entry: PreAllocatedAccountMapEntry<T>,
-        other_slot: Option<Slot>,
-        reclaims: &mut SlotList<T>,
-        reclaim: UpsertReclaim,
-    ) -> bool {
-        if let Some(disk) = self.bucket.as_ref() {
-            let mut existed = false;
-            let (slot, account_info) = new_entry.into();
-            disk.update(vacant.key(), |current| {
-                if let Some((slot_list, mut ref_count)) = current {
-                    // on disk, so merge and update disk
-                    let mut slot_list = slot_list.to_vec();
-                    let addref = Self::update_slot_list(
-                        &mut slot_list,
-                        slot,
-                        account_info,
-                        other_slot,
-                        reclaims,
-                        reclaim,
-                    );
-                    if addref {
-                        ref_count += 1
-                    };
-                    existed = true; // found on disk, so it did exist
-                    Some((slot_list, ref_count))
-                } else {
-                    // doesn't exist on disk yet, so insert it
-                    let ref_count = if account_info.is_cached() { 0 } else { 1 };
-                    Some((vec![(slot, account_info)], ref_count))
-                }
-            });
-            existed
-        } else {
-            // not using disk, so insert into mem
-            self.stats().inc_mem_count(self.bin);
-            let new_entry: AccountMapEntry<T> = new_entry.into_account_map_entry(&self.storage);
-            assert!(new_entry.dirty());
-            vacant.insert(new_entry);
-            false // not using disk, not in mem, so did not exist
         }
     }
 
@@ -867,7 +874,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         if let Some(disk) = self.bucket.as_ref() {
             let mut map = self.map_internal.write().unwrap();
             let items = disk.items_in_range(range); // map's lock has to be held while we are getting items from disk
-            let future_age = self.storage.future_age_to_flush();
+            let future_age = self.storage.future_age_to_flush(false);
             for item in items {
                 let entry = map.entry(item.pubkey);
                 match entry {
@@ -973,34 +980,40 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         startup: bool,
         _flush_guard: &FlushGuard,
     ) -> FlushScanResult<T> {
+        let mut possible_evictions = self.possible_evictions.write().unwrap();
+        if let Some(result) = possible_evictions.get_possible_evictions() {
+            // we have previously calculated the possible evictions for this age
+            return result;
+        }
+        // otherwise, we need to scan some number of ages into the future now
+        let ages_to_scan = self.ages_to_scan_ahead(current_age);
+        possible_evictions.reset(ages_to_scan);
+
         let m;
-        let mut evictions_random = Vec::default();
-        let mut evictions_age_possible;
         {
             let map = self.map_internal.read().unwrap();
-            evictions_age_possible = Vec::with_capacity(map.len());
             m = Measure::start("flush_scan"); // we don't care about lock time in this metric - bg threads can wait
             for (k, v) in map.iter() {
                 let random = Self::random_chance_of_eviction();
-                if !random && !Self::should_evict_based_on_age(current_age, v, startup) {
-                    // not planning to evict this item from memory now, so don't write it to disk yet
-                    continue;
-                }
-
-                if random {
-                    &mut evictions_random
+                let age_offset = if random {
+                    thread_rng().gen_range(0, ages_to_scan)
+                } else if startup {
+                    0
                 } else {
-                    &mut evictions_age_possible
-                }
-                .push((*k, Arc::clone(v)));
+                    let ages_in_future = v.age().wrapping_sub(current_age);
+                    if ages_in_future >= ages_to_scan {
+                        // not planning to evict this item from memory within the next few ages
+                        continue;
+                    }
+                    ages_in_future
+                };
+
+                possible_evictions.insert(age_offset, *k, Arc::clone(v), random);
             }
         }
         Self::update_time_stat(&self.stats().flush_scan_us, m);
 
-        FlushScanResult {
-            evictions_age_possible,
-            evictions_random,
-        }
+        possible_evictions.get_possible_evictions().unwrap()
     }
 
     fn write_startup_info_to_disk(&self) {
@@ -1224,7 +1237,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
 
         let stop_evictions_changes_at_start = self.get_stop_evictions_changes();
-        let next_age_on_failure = self.storage.future_age_to_flush();
+        let next_age_on_failure = self.storage.future_age_to_flush(false);
         if self.get_stop_evictions() {
             // ranges were changed
             self.move_ages_to_future(next_age_on_failure, current_age, &evictions);
@@ -1332,6 +1345,8 @@ impl<'a> FlushGuard<'a> {
     #[must_use = "if unused, the `flushing` flag will immediately clear"]
     fn lock(flushing: &'a AtomicBool) -> Option<Self> {
         let already_flushing = flushing.swap(true, Ordering::AcqRel);
+        // Eager evaluation here would result in dropping Self and clearing flushing flag
+        #[allow(clippy::unnecessary_lazy_evaluations)]
         (!already_flushing).then(|| Self { flushing })
     }
 }

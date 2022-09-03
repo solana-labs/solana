@@ -18,8 +18,10 @@ import {
   sendAndConfirmTransaction,
   Keypair,
   Message,
+  AddressLookupTableProgram,
+  SYSTEM_INSTRUCTION_LAYOUTS,
 } from '../src';
-import invariant from '../src/util/assert';
+import invariant from '../src/utils/assert';
 import {MOCK_PORT, url} from './url';
 import {
   AccountInfo,
@@ -35,7 +37,7 @@ import {
   SignatureResult,
   SlotInfo,
 } from '../src/connection';
-import {sleep} from '../src/util/sleep';
+import {sleep} from '../src/utils/sleep';
 import {
   helpers,
   mockErrorMessage,
@@ -49,16 +51,20 @@ import {
   restoreRpcWebSocket,
   mockRpcMessage,
 } from './mocks/rpc-websockets';
-import {TransactionInstruction, TransactionSignature} from '../src/transaction';
+import {
+  TransactionInstruction,
+  TransactionSignature,
+  TransactionExpiredBlockheightExceededError,
+  TransactionExpiredTimeoutError,
+} from '../src/transaction';
 import type {
   SignatureStatus,
   TransactionError,
   KeyedAccountInfo,
 } from '../src/connection';
-import {
-  TransactionExpiredBlockheightExceededError,
-  TransactionExpiredTimeoutError,
-} from '../src/util/tx-expiry-custom-errors';
+import {VersionedTransaction} from '../src/transaction/versioned';
+import {MessageV0} from '../src/message/v0';
+import {encodeData} from '../src/instruction';
 
 use(chaiAsPromised);
 
@@ -3250,7 +3256,6 @@ describe('Connection', function () {
           11111,
         );
 
-        console.log('create mint');
         const mintPubkey2 = await splToken.createMint(
           connection as any,
           payerKeypair,
@@ -4242,5 +4247,285 @@ describe('Connection', function () {
       const version = await connection.getVersion();
       expect(version['solana-core']).to.be.ok;
     }).timeout(20 * 1000);
+
+    let lookupTableKey: PublicKey;
+    const lookupTableAddresses = new Array(10)
+      .fill(0)
+      .map(() => Keypair.generate().publicKey);
+
+    describe('address lookup table program', () => {
+      const connection = new Connection(url);
+      const payer = Keypair.generate();
+
+      before(async () => {
+        await helpers.airdrop({
+          connection,
+          address: payer.publicKey,
+          amount: 10 * LAMPORTS_PER_SOL,
+        });
+      });
+
+      it('createLookupTable', async () => {
+        const recentSlot = await connection.getSlot('finalized');
+
+        let createIx: TransactionInstruction;
+        [createIx, lookupTableKey] =
+          AddressLookupTableProgram.createLookupTable({
+            recentSlot,
+            payer: payer.publicKey,
+            authority: payer.publicKey,
+          });
+
+        await helpers.processTransaction({
+          connection,
+          transaction: new Transaction().add(createIx),
+          signers: [payer],
+          commitment: 'processed',
+        });
+      });
+
+      it('extendLookupTable', async () => {
+        const transaction = new Transaction().add(
+          AddressLookupTableProgram.extendLookupTable({
+            lookupTable: lookupTableKey,
+            addresses: lookupTableAddresses,
+            authority: payer.publicKey,
+            payer: payer.publicKey,
+          }),
+        );
+
+        await helpers.processTransaction({
+          connection,
+          transaction,
+          signers: [payer],
+          commitment: 'processed',
+        });
+      });
+
+      it('freezeLookupTable', async () => {
+        const transaction = new Transaction().add(
+          AddressLookupTableProgram.freezeLookupTable({
+            lookupTable: lookupTableKey,
+            authority: payer.publicKey,
+          }),
+        );
+
+        await helpers.processTransaction({
+          connection,
+          transaction,
+          signers: [payer],
+          commitment: 'processed',
+        });
+      });
+
+      it('getAddressLookupTable', async () => {
+        const lookupTableResponse = await connection.getAddressLookupTable(
+          lookupTableKey,
+          {
+            commitment: 'processed',
+          },
+        );
+        const lookupTableAccount = lookupTableResponse.value;
+        if (!lookupTableAccount) {
+          expect(lookupTableAccount).to.be.ok;
+          return;
+        }
+        expect(lookupTableAccount.isActive()).to.be.true;
+        expect(lookupTableAccount.state.authority).to.be.undefined;
+        expect(lookupTableAccount.state.addresses).to.eql(lookupTableAddresses);
+      });
+    });
+
+    describe('v0 transaction', () => {
+      const connection = new Connection(url);
+      const payer = Keypair.generate();
+
+      before(async () => {
+        await helpers.airdrop({
+          connection,
+          address: payer.publicKey,
+          amount: 10 * LAMPORTS_PER_SOL,
+        });
+      });
+
+      // wait for lookup table to be usable
+      before(async () => {
+        const lookupTableResponse = await connection.getAddressLookupTable(
+          lookupTableKey,
+          {
+            commitment: 'processed',
+          },
+        );
+
+        const lookupTableAccount = lookupTableResponse.value;
+        if (!lookupTableAccount) {
+          expect(lookupTableAccount).to.be.ok;
+          return;
+        }
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const latestSlot = await connection.getSlot('confirmed');
+          if (latestSlot > lookupTableAccount.state.lastExtendedSlot) {
+            break;
+          } else {
+            console.log('Waiting for next slot...');
+            await sleep(500);
+          }
+        }
+      });
+
+      let signature;
+      let addressTableLookups;
+      it('send and confirm', async () => {
+        const {blockhash, lastValidBlockHeight} =
+          await connection.getLatestBlockhash();
+        const transferIxData = encodeData(SYSTEM_INSTRUCTION_LAYOUTS.Transfer, {
+          lamports: BigInt(LAMPORTS_PER_SOL),
+        });
+        addressTableLookups = [
+          {
+            accountKey: lookupTableKey,
+            writableIndexes: [0],
+            readonlyIndexes: [],
+          },
+        ];
+        const transaction = new VersionedTransaction(
+          new MessageV0({
+            header: {
+              numRequiredSignatures: 1,
+              numReadonlySignedAccounts: 0,
+              numReadonlyUnsignedAccounts: 1,
+            },
+            staticAccountKeys: [payer.publicKey, SystemProgram.programId],
+            recentBlockhash: blockhash,
+            compiledInstructions: [
+              {
+                programIdIndex: 1,
+                accountKeyIndexes: [0, 2],
+                data: transferIxData,
+              },
+            ],
+            addressTableLookups,
+          }),
+        );
+        transaction.sign([payer]);
+        signature = bs58.encode(transaction.signatures[0]);
+        const serializedTransaction = transaction.serialize();
+        await connection.sendRawTransaction(serializedTransaction, {
+          preflightCommitment: 'confirmed',
+        });
+
+        await connection.confirmTransaction(
+          {
+            signature,
+            blockhash,
+            lastValidBlockHeight,
+          },
+          'confirmed',
+        );
+
+        const transferToKey = lookupTableAddresses[0];
+        const transferToAccount = await connection.getAccountInfo(
+          transferToKey,
+          'confirmed',
+        );
+        expect(transferToAccount?.lamports).to.be.eq(LAMPORTS_PER_SOL);
+      });
+
+      it('getTransaction (failure)', async () => {
+        await expect(
+          connection.getTransaction(signature, {
+            commitment: 'confirmed',
+          }),
+        ).to.be.rejectedWith(
+          'failed to get transaction: Transaction version (0) is not supported',
+        );
+      });
+
+      let transactionSlot;
+      it('getTransaction', async () => {
+        // fetch v0 transaction
+        const fetchedTransaction = await connection.getTransaction(signature, {
+          commitment: 'confirmed',
+          maxSupportedTransactionVersion: 0,
+        });
+        if (fetchedTransaction === null) {
+          expect(fetchedTransaction).to.not.be.null;
+          return;
+        }
+        transactionSlot = fetchedTransaction.slot;
+        expect(fetchedTransaction.version).to.eq(0);
+        expect(fetchedTransaction.meta?.loadedAddresses).to.eql({
+          readonly: [],
+          writable: [lookupTableAddresses[0]],
+        });
+        expect(fetchedTransaction.meta?.computeUnitsConsumed).to.not.be
+          .undefined;
+        expect(
+          fetchedTransaction.transaction.message.addressTableLookups,
+        ).to.eql(addressTableLookups);
+      });
+
+      it('getParsedTransaction (failure)', async () => {
+        await expect(
+          connection.getParsedTransaction(signature, {
+            commitment: 'confirmed',
+          }),
+        ).to.be.rejectedWith(
+          'failed to get transaction: Transaction version (0) is not supported',
+        );
+      });
+
+      it('getParsedTransaction', async () => {
+        const parsedTransaction = await connection.getParsedTransaction(
+          signature,
+          {
+            commitment: 'confirmed',
+            maxSupportedTransactionVersion: 0,
+          },
+        );
+        expect(parsedTransaction).to.not.be.null;
+        expect(parsedTransaction?.version).to.eq(0);
+        expect(parsedTransaction?.meta?.loadedAddresses).to.eql({
+          readonly: [],
+          writable: [lookupTableAddresses[0]],
+        });
+        expect(parsedTransaction?.meta?.computeUnitsConsumed).to.not.be
+          .undefined;
+        expect(
+          parsedTransaction?.transaction.message.addressTableLookups,
+        ).to.eql(addressTableLookups);
+      });
+
+      it('getBlock (failure)', async () => {
+        await expect(
+          connection.getBlock(transactionSlot, {
+            maxSupportedTransactionVersion: undefined,
+            commitment: 'confirmed',
+          }),
+        ).to.be.rejectedWith(
+          'failed to get confirmed block: Transaction version (0) is not supported',
+        );
+      });
+
+      it('getBlock', async () => {
+        const block = await connection.getBlock(transactionSlot, {
+          maxSupportedTransactionVersion: 0,
+          commitment: 'confirmed',
+        });
+        expect(block).to.not.be.null;
+        if (block === null) throw new Error(); // unreachable
+
+        let foundTx = false;
+        for (const tx of block.transactions) {
+          if (tx.transaction.signatures[0] === signature) {
+            foundTx = true;
+            expect(tx.version).to.eq(0);
+          }
+        }
+        expect(foundTx).to.be.true;
+      });
+    }).timeout(5 * 1000);
   }
 });

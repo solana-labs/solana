@@ -72,7 +72,7 @@ impl BgThreads {
 
                     // note that using rayon here causes us to exhaust # rayon threads and many tests running in parallel deadlock
                     Builder::new()
-                        .name("solana-idx-flusher".to_string())
+                        .name(format!("solIdxFlusher{:02}", idx))
                         .spawn(move || {
                             storage_.background(exit_, in_mem_, can_advance_age);
                         })
