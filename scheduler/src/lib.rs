@@ -1,6 +1,4 @@
 #![feature(map_first_last)]
-#![feature(negative_impls)]
-//#![feature(get_mut_unchecked)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
