@@ -504,8 +504,8 @@ impl Task {
         self.tx.1.borrow_mut()
     }
 
-    fn lock_attempts_not_mut(&self) -> &Vec<LockAttempt> {
-        &self.tx.1
+    fn lock_attempts_not_mut(&self) -> std::cell::Ref<'_, Vec<LockAttempt>>/*&Vec<LockAttempt>*/ {
+        self.tx.1.borrow()
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
