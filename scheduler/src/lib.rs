@@ -36,7 +36,7 @@ pub struct ExecutionEnvironment {
     pub cu: usize,
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
-    pub lock_attempts: Vec<LockAttempt>,
+    pub finalized_lock_attempts: Vec<LockAttempt>,
 }
 
 impl ExecutionEnvironment {
