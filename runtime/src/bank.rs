@@ -1227,7 +1227,7 @@ impl Default for Scheduler {
                 &transaction_receiver,
                 &scheduled_ee_sender,
                 &completed_ee_receiver,
-                None,//&completed_transaction_receiver
+                None,
             );
             drop(transaction_receiver);
             drop(scheduled_ee_sender);
