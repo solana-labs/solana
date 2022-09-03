@@ -631,6 +631,10 @@ impl Task {
         let a = Task::clone_in_queue(this);
         task_sender.send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut()))).unwrap();
     }
+
+    fn key_for_stuck_queue(&self) -> (CU, TaskId) {
+        (self.busiest_page_cu.load(std::sync::atomic::Ordering::SeqCst), self.unique_weight)
+    }
 }
 
 // RunnableQueue, ContendedQueue?
