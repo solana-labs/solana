@@ -788,7 +788,7 @@ impl ScheduleStage {
             }
             (None, None) => {
                 trace!("select: none");
-                if runnable_queue.task_count() == 0 && *contended_count == 0 && stuck_tasks.len() > 0 {
+                if runnable_queue.task_count() == 0 && *contended_count == 0 && address_book.stuck_tasks.len() > 0 {
                     todo!("handle stuck!");
                 } else {
                     None
