@@ -83,7 +83,7 @@ impl ExecutionEnvironment {
                 if should_remove && !removed {
                     contended_unique_weights.remove_task(&uq);
                 }
-                found.then(|| TaskInQueue::clone(task))
+                found.then(|| Task::clone_in_queue(task))
             }).flatten().map(|task| {
                 //task.trace_timestamps(&format!("in_exec(heaviest:{})", self.task.queue_time_label()));
                 lock_attempt.heaviest_uncontended = Some(task);
@@ -822,7 +822,7 @@ impl ScheduleStage {
                     next_task.mark_as_contended();
                     *contended_count = contended_count.checked_add(1).unwrap();
                     //for lock_attempt in next_task.tx.1.iter() {
-                    //    lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&a2));
+                    //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&a2));
                     //}
                     let a = Task::clone_in_queue(&next_task);
                     task_sender.send((a, std::mem::take(&mut *next_task.for_indexer.0.borrow_mut()))).unwrap();
@@ -845,7 +845,7 @@ impl ScheduleStage {
                 trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
-                let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, TaskInQueue::clone(&next_task)));
+                let tracker = std::sync::Arc::new(ProvisioningTracker::new(provisional_count, Task::clone_in_queue(&next_task)));
                 *provisioning_tracker_count = provisioning_tracker_count.checked_add(1).unwrap();
                 Self::finalize_lock_for_provisional_execution(
                     ast,
@@ -943,7 +943,7 @@ impl ScheduleStage {
                                     break;
                                 }
                             }
-                            found.then(|| TaskInQueue::clone(task))
+                            found.then(|| Task::clone_in_queue(task))
                         }).flatten().map(|task| {
                             address_book.uncontended_task_ids.insert(task.unique_weight, task);
                             ()
@@ -957,7 +957,7 @@ impl ScheduleStage {
                     tracker.progress();
                     if tracker.is_fulfilled() {
                         trace!("provisioning tracker progress: {} => {} (!)", tracker.prev_count(), tracker.count());
-                        address_book.fulfilled_provisional_task_ids.insert(tracker.task.unique_weight, TaskInQueue::clone(&tracker.task));
+                        address_book.fulfilled_provisional_task_ids.insert(tracker.task.unique_weight, Task::clone_in_queue(&tracker.task));
                         *provisioning_tracker_count = provisioning_tracker_count.checked_sub(1).unwrap();
                     } else {
                         trace!("provisioning tracker progress: {} => {}", tracker.prev_count(), tracker.count());
@@ -1096,7 +1096,7 @@ impl ScheduleStage {
                         if task.already_finished() {
                             break;
                         }
-                        lock_attempt.contended_unique_weights().insert_task(task.unique_weight, TaskInQueue::clone(&task));
+                        lock_attempt.contended_unique_weights().insert_task(task.unique_weight, Task::clone_in_queue(&task));
                     }
                 }
                 assert_eq!(task_receiver.len(), 0);
