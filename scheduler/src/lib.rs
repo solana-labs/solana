@@ -480,7 +480,7 @@ unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
 
 impl LockAttemptsInCell {
-    fn new(ll: std::cell:RefCell<Vec<LockAttempt>>) -> Self {
+    fn new(ll: std::cell::RefCell<Vec<LockAttempt>>) -> Self {
         Self(ll)
     }
 }
