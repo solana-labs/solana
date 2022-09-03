@@ -857,7 +857,7 @@ impl ScheduleStage {
                 *contended_count = contended_count.checked_sub(1).unwrap();
                 next_task.mark_as_uncontended();
             }
-            let lock_attempts = std::mem::take(next_task.lock_attempts_mut());
+            let lock_attempts = std::mem::take(&mut next_task.lock_attempts_mut());
 
             return Some((unique_weight, arc_next_task, lock_attempts));
         } else {
