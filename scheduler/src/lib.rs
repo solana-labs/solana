@@ -488,7 +488,7 @@ impl Task {
         TaskInQueue::new(Self {
             for_indexer: tx.1.iter().map(|a| a.clone_for_test()).collect(),
             unique_weight,
-            tx,
+            tx: (std::cell::RefCell::new(tx.0), tx.1),
             contention_count: 0,
             uncontended: Default::default(),
             sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
