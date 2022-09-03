@@ -518,6 +518,10 @@ impl Task {
         self.tx.1.0.borrow()
     }
 
+    fn update_busiest_page_cu(&self, cu: CU) {
+        self.busiest_page_cu.store(cu, std::sync::atomic::Ordering::SeqCst);
+    }
+
     pub fn record_sequence_time(&self, clock: usize) {
         //self.sequence_time.store(clock, std::sync::atomic::Ordering::SeqCst);
     }
@@ -812,7 +816,7 @@ impl ScheduleStage {
             // plumb message_hash into StatusCache or implmenent our own for duplicate tx
             // detection?
 
-            let (unlockable_count, provisional_count, _busiest_page_cu) = attempt_lock_for_execution(
+            let (unlockable_count, provisional_count, busiest_page_cu) = attempt_lock_for_execution(
                 ast,
                 from_runnable,
                 prefer_immediate,
@@ -821,6 +825,7 @@ impl ScheduleStage {
                 &message_hash,
                 &mut next_task.lock_attempts_mut(ast),
             );
+            next_task.update_busiest_page_cu(busiest_page_cu);
 
             if unlockable_count > 0 {
                 //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
