@@ -1231,7 +1231,6 @@ impl Default for Scheduler {
             );
             Ok(())
         }).unwrap();
-        drop(completed_ee_receiver);
 
         Self {
             scheduler_thread_handle: Some(scheduler_thread_handle),
