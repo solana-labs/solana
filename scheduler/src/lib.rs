@@ -95,16 +95,11 @@ impl ExecutionEnvironment {
 }
 
 unsafe trait AtScheduleThread: Copy {}
+unsafe trait NotAtScheduleThread: Copy {}
 
 impl PageRc {
     fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
         self.0.0.borrow_mut()
-    }
-
-    fn page_ref(&self) -> std::cell::Ref<'_, Page> {
-        //<MyRcInner as std::borrow::Borrow<_>>::borrow(&self.0)
-        self.0.0.borrow()
-        //&*(self.0)
     }
 }
 
