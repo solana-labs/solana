@@ -2479,7 +2479,7 @@ impl ReplayStage {
                             blockstore,
                             bank,
                             bank_forks.read().unwrap().root(),
-                            BlockstoreProcessorError::InvalidTransaction(err.into()),
+                            &BlockstoreProcessorError::InvalidTransaction(err.into()),
                             rpc_subscriptions,
                             duplicate_slots_tracker,
                             gossip_duplicate_confirmed_slots,
