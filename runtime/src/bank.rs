@@ -7869,7 +7869,7 @@ impl Bank {
     }
 
     fn wait_for_scheduler(&self) {
-        self.scheduler.scheduler_thread_handle.join()
+        self.scheduler.scheduler_thread_handle.join();
     }
 }
 
