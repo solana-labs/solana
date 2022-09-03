@@ -1213,6 +1213,8 @@ impl Default for Scheduler {
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
+            let e = std::thread::Builder::new().name(format!("sol-exec-{}", thread_index)).spawn(move || {
+            }).unwrap();
 
             solana_scheduler::ScheduleStage::run(
                 100,
