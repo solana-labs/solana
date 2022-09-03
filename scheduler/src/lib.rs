@@ -475,6 +475,9 @@ pub struct Task {
     pub for_indexer: Vec<LockAttempt>,
 }
 
+unsafe impl Send for Task {}
+unsafe impl Sync for Task {}
+
 // sequence_time -> seq clock
 // queue_time -> queue clock
 // execute_time ---> exec clock
