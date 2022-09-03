@@ -611,6 +611,14 @@ impl Task {
         assert!(!self.already_finished() && !self.currently_contended());
         self.uncontended.store(3, std::sync::atomic::Ordering::SeqCst)
     }
+
+    fn index(&self, task_sender: usize) {
+        //for lock_attempt in self.lock_attempts_mut(ast).iter() {
+        //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&self));
+        //}
+        let a = Task::clone_in_queue(&self);
+        task_sender.send((a, std::mem::take(&mut *self.for_indexer.0.borrow_mut()))).unwrap();
+    }
 }
 
 // RunnableQueue, ContendedQueue?
@@ -823,11 +831,7 @@ impl ScheduleStage {
                     next_task.mark_as_contended();
                     *contended_count = contended_count.checked_add(1).unwrap();
 
-                    //for lock_attempt in next_task.lock_attempts_mut(ast).iter() {
-                    //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&next_task));
-                    //}
-                    let a = Task::clone_in_queue(&next_task);
-                    task_sender.send((a, std::mem::take(&mut *next_task.for_indexer.0.borrow_mut()))).unwrap();
+                    next_task.index();
 
                     // maybe run lightweight prune logic on contended_queue here.
                 } else {
