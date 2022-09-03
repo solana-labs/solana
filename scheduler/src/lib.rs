@@ -808,7 +808,7 @@ impl ScheduleStage {
                     from_runnable,
                 );
                 let lock_count = next_task.lock_attempts_mut().len();
-                next_task.contention_count += 1;
+                panic!();//next_task.contention_count += 1;
 
                 if from_runnable {
                     trace!("move to contended due to lock failure [{}/{}/{}]", unlockable_count, provisional_count, lock_count);
