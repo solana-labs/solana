@@ -573,7 +573,7 @@ impl Task {
     pub fn clone_for_test<NAST: NotAtScheduleThread>(&self, nast: NAST) -> Self {
         Self {
             unique_weight: self.unique_weight,
-            for_indexer: LockAttemptsInCell::new(self.lock_attempts_not_mut(nast).iter().map(|a| a.clone_for_test()).collect()),
+            for_indexer: LockAttemptsInCell::new(self.lock_attempts_not_mut(nast).iter().map(|a| a.clone_for_test()).collect::<Vec<_>>()),
             tx: (self.tx.0.clone(), LockAttemptsInCell::new(std::cell::RefCell::new(self.lock_attempts_not_mut(nast).iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()))),
             contention_count: Default::default(),
             uncontended: Default::default(),
