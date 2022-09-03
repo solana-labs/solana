@@ -821,7 +821,7 @@ impl ScheduleStage {
                     //    lock_attempt.contended_unique_weights().insert_task(unique_weight, TaskInQueue::clone(&a2));
                     //}
                     let a = TaskInQueue::clone(&next_task);
-                    let nn = unsafe { TaskInQueue::get_mut_unchecked(&mut next_task) };
+                    let nn = unsafe { TaskInQueue::get_mut_unchecked(next_task) };
                     task_sender.send((a, std::mem::take(&mut nn.for_indexer))).unwrap();
 
                     // maybe run lightweight prune logic on contended_queue here.
