@@ -769,9 +769,8 @@ impl ScheduleStage {
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!("expediate pop from provisional queue [rest: {}]", address_book.fulfilled_provisional_task_ids.len());
-            let next_task: &mut TaskInQueue = unsafe { panic!(); /*TaskInQueue::get_mut_unchecked(&mut a.1)*/ };
 
-            let lock_attempts = std::mem::take(&mut *next_task.lock_attempts_mut());
+            let lock_attempts = std::mem::take(&mut *a.1.lock_attempts_mut());
 
             return Some((a.0, a.1, lock_attempts));
         }
