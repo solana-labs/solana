@@ -799,6 +799,7 @@ impl ScheduleStage {
                     if task.currently_contended() {
                         Some((false, task))
                     } else {
+                        // is it expected for uncontended taks is in the stuck queue?
                         None
                     }
                 } else {
