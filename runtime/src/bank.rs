@@ -1199,7 +1199,7 @@ impl AbiExample for BuiltinPrograms {
 #[derive(Debug)]
 struct Scheduler {
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
-    preloader: usize,
+    preloader: Arc<solana_scheduler::Preloader>,
 }
 
 impl Default for Scheduler {
