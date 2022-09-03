@@ -446,6 +446,7 @@ impl AddressBook {
     }
 }
 
+#[derive(Debug)]
 pub struct Preloader {
     book: AddressMap,
 }
