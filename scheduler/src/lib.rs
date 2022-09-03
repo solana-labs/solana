@@ -1205,7 +1205,7 @@ impl ScheduleStage {
             loop {
                 while (executing_queue_count + provisioning_tracker_count) < max_executing_queue_count {
                     trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
-                    if start.elapsed() > std::time::Duration::from_millis(100) {
+                    if start.elapsed() > std::time::Duration::from_millis(1000) {
                         start = std::time::Instant::now();
                         info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
                     }
