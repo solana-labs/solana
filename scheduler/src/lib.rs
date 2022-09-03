@@ -828,7 +828,6 @@ impl ScheduleStage {
                 &message_hash,
                 &mut next_task.lock_attempts_mut(ast),
             );
-            next_task.update_busiest_page_cu(busiest_page_cu);
 
             if unlockable_count > 0 {
                 //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
@@ -858,6 +857,7 @@ impl ScheduleStage {
                 if from_runnable {
                     continue;
                 } else {
+                    next_task.update_busiest_page_cu(busiest_page_cu);
                     return None;
                 }
             } else if provisional_count > 0 {
