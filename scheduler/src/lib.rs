@@ -1138,7 +1138,7 @@ impl ScheduleStage {
                 assert_eq!(task_receiver.len(), 0);
             }).unwrap();
         }
-        let mut start = std::time::Instant::new();
+        let mut start = std::time::Instant::now();
 
         let (mut from_disconnected, mut from_exec_disconnected) = (false, false);
         loop {
