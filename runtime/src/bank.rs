@@ -1222,7 +1222,7 @@ impl Default for Scheduler {
                 100,
                 &mut runnable_queue,
                 &mut address_book,
-                &packet_batch_receiver.clone(),
+                &transaction_receiver.clone(),
                 &completed_transaction_receiver,
                 &transaction_batch_sender,
                 None,//&completed_transaction_receiver
