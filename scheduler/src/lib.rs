@@ -1,5 +1,5 @@
 #![feature(map_first_last)]
-//#![feature(get_mut_unchecked)]
+#![feature(get_mut_unchecked)]
 
 use {
     crossbeam_channel::{bounded, unbounded},
