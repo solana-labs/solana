@@ -498,7 +498,7 @@ impl Task {
     }
 
     fn lock_attempts(&mut self) -> &mut Vec<LockAttempt> {
-        &mut self.tx.1
+        &mut self.tx.1.0
     }
 
     pub fn record_sequence_time(&self, clock: usize) {
@@ -1064,7 +1064,7 @@ impl ScheduleStage {
         } else {
             let h = std::thread::Builder::new().name("sol-reaper".to_string()).spawn(move || {
                 while let Ok(mut a) = ee_receiver.recv() {
-                    assert!(a.task.tx.1.is_empty());
+                    assert!(a.task.lock_attempts().is_empty());
                     //assert!(a.task.sequence_time() != usize::max_value());
                     //let lock_attempts = std::mem::take(&mut a.lock_attempts);
                     //drop(lock_attempts);
