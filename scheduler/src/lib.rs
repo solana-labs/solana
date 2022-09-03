@@ -496,6 +496,7 @@ impl Task {
             unique_weight,
             tx: (tx.0, LockAttemptsInCell::new(std::cell::RefCell::new(tx.1))),
             contention_count: Default::default(),
+            busiest_page_cu: Default::default(),
             uncontended: Default::default(),
             sequence_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
             sequence_end_time: std::sync::atomic::AtomicUsize::new(usize::max_value()),
