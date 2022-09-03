@@ -1268,7 +1268,7 @@ impl ScheduleStage {
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from: &crossbeam_channel::Receiver<SchedulablePayload>,
+        from_prev: &crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<PersistablePlayload>>, // assume nonblocking
@@ -1350,9 +1350,9 @@ impl ScheduleStage {
                     Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                     to_next_stage.send(PersistablePlayload(processed_execution_environment)).unwrap();
                }
-               recv(from) -> maybe_from => {
+               recv(from_prev) -> maybe_from => {
                    if maybe_from.is_err() {
-                       assert_eq!(from.len(), 0);
+                       assert_eq!(from_prev.len(), 0);
                        from_disconnected = true;
                        if from_exec_disconnected {
                            break;
@@ -1373,10 +1373,10 @@ impl ScheduleStage {
                 while (executing_queue_count + provisioning_tracker_count)
                     < max_executing_queue_count
                 {
-                    trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
+                    trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
                     if start.elapsed() > std::time::Duration::from_millis(1000) {
                         start = std::time::Instant::now();
-                        info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
+                        info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
                     }
                     let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
                     if let Some(ee) = Self::schedule_next_execution(
@@ -1400,10 +1400,10 @@ impl ScheduleStage {
                 //break;
                 if first_iteration {
                     first_iteration = false;
-                    (from_len, from_exec_len) = (from.len(), from_exec.len());
+                    (from_len, from_exec_len) = (from_prev.len(), from_exec.len());
                 } else {
                     if empty_from {
-                        from_len = from.len();
+                        from_len = from_prev.len();
                     }
                     if empty_from_exec {
                         from_exec_len = from_exec.len();
@@ -1429,7 +1429,7 @@ impl ScheduleStage {
                         to_next_stage.send(PersistablePlayload(processed_execution_environment)).unwrap();
                     }
                     if !empty_from {
-                        let task = from.recv().unwrap().0;
+                        let task = from_prev.recv().unwrap().0;
                         from_len = from_len.checked_sub(1).unwrap();
                         empty_from = from_len == 0;
                         Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
@@ -1438,7 +1438,7 @@ impl ScheduleStage {
             }
         }
         info!("run finished...");
-        info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
+        info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
     }
 
     pub fn run(
