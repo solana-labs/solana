@@ -1231,7 +1231,7 @@ impl Default for Scheduler {
 
         Self {
             scheduler_thread_handle: Some(scheduler_thread_handle),
-            executing_thread_handle,
+            executing_thread_handle: Some(executing_thread_handle),
             preloader,
         }
     }
