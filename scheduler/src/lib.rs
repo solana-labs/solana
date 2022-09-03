@@ -1028,7 +1028,7 @@ impl ScheduleStage {
         Self::unlock_after_execution(ast, address_book, &mut ee.finalized_lock_attempts, provisioning_tracker_count, ee.cu);
         ee.task.mark_as_finished();
 
-        address_book.stuck_tasks.remove(ee.task_stuck_key());
+        address_book.stuck_tasks.remove(ee.task.key_for_stuck_queue());
 
         // block-wide qos validation will be done here
         // if error risen..:
