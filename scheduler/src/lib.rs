@@ -463,7 +463,7 @@ struct Bundle {
 #[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
-    pub tx: (SanitizedTransaction, Vec<LockAttempt>), // actually should be Bundle
+    pub tx: (SanitizedTransaction, std::cell::RefCell<Vec<LockAttempt>>), // actually should be Bundle
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
     pub sequence_time: std::sync::atomic::AtomicUsize,
