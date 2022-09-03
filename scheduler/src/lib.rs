@@ -498,11 +498,11 @@ impl Task {
         })
     }
 
-    fn lock_attempts_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Vec<LockAttempt>>/*&mut Vec<LockAttempt>*/ {
+    fn lock_attempts_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
         self.tx.1.borrow_mut()
     }
 
-    fn lock_attempts_not_mut(&self) -> std::cell::Ref<'_, Vec<LockAttempt>>/*&Vec<LockAttempt>*/ {
+    fn lock_attempts_not_mut(&self) -> std::cell::Ref<'_, Vec<LockAttempt>> {
         self.tx.1.borrow()
     }
 
