@@ -1279,7 +1279,7 @@ impl ScheduleStage {
         let mut sequence_time = 0;
         let mut queue_clock = 0;
         let mut execute_clock = 0;
-        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<Box<ExecutionEnvironment>>();
+        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<PersistablePlayload>();
 
         let (to_next_stage, maybe_jon_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
             (to_next_stage, None)
