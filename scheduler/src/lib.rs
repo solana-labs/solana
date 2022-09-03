@@ -873,10 +873,9 @@ impl ScheduleStage {
                     continue;
                 } else {
                     // todo: remove this task from stuck_tasks before update_busiest_page_cu
-                    let removed = address_book.stuck_tasks.remove(&next_task.stuck_task_id());
-                    assert!(removed.is_some());
+                    let removed = address_book.stuck_tasks.remove(&next_task.stuck_task_id()).unwrap();
                     next_task.update_busiest_page_cu(busiest_page_cu);
-                    let a = address_book.stuck_tasks.insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
+                    let a = address_book.stuck_tasks.insert(next_task.stuck_task_id(), removed);
                     assert!(a.is_none());
                     return None;
                 }
