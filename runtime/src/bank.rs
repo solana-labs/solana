@@ -1206,6 +1206,7 @@ struct Scheduler {
 
 impl Scheduler {
     fn schedule(&self, sani: &SanitizedTransaction) {
+        self.transaction_sender.send(solana_scheduler::SchedulablePayload(sani)).unwrap();
     }
 }
 
