@@ -1348,7 +1348,7 @@ impl ScheduleStage {
                    let mut processed_execution_environment = maybe_from_exec.unwrap().0;
                     executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                     Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
-                    to_next_stage.send(processed_execution_environment).unwrap();
+                    to_next_stage.send(PersistablePlayload(processed_execution_environment)).unwrap();
                }
                recv(from) -> maybe_from => {
                    if maybe_from.is_err() {
