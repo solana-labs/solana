@@ -1204,6 +1204,11 @@ struct Scheduler {
     preloader: Arc<solana_scheduler::Preloader>,
 }
 
+impl Scheduler {
+    fn schedule(&self, sani: &SanitizedTransaction) {
+    }
+}
+
 impl Default for Scheduler {
     fn default() -> Self {
         let mut address_book = solana_scheduler::AddressBook::default();
@@ -4557,6 +4562,16 @@ impl Bank {
                 accounts_data_len_delta,
             },
             executors,
+        }
+    }
+
+    pub fn schedule_transaction_batch_to_be_commited(
+        &self,
+        batch: &TransactionBatch,
+    ) {
+        let scheduler = self.scheduler.read().unwrap();
+        for st in batch.sanitized_transactions() {
+            scheduler.schedule(st);
         }
     }
 
