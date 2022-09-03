@@ -1008,7 +1008,7 @@ impl ScheduleStage {
         //*commit_time = commit_time.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
-        Self::unlock_after_execution(ast, address_book, &mut ee.finalized_lock_attempts, provisioning_tracker_count);
+        Self::unlock_after_execution(ast, address_book, &mut ee.finalized_lock_attempts, provisioning_tracker_count, ee.cu);
         ee.task.mark_as_finished();
 
         // block-wide qos validation will be done here
