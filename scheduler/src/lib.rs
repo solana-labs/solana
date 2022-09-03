@@ -564,7 +564,7 @@ impl Task {
     pub fn clone_for_test(&self) -> Self {
         Self {
             unique_weight: self.unique_weight,
-            for_indexer: self.tx.1.iter().map(|a| a.clone_for_test()).collect(),
+            for_indexer: self.lock_attempts().iter().map(|a| a.clone_for_test()).collect(),
             tx: (self.tx.0.clone(), self.lock_attempts().iter().map(|l| l.clone_for_test()).collect::<Vec<_>>()),
             contention_count: Default::default(),
             uncontended: Default::default(),
