@@ -1269,9 +1269,9 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         from: &crossbeam_channel::Receiver<SchedulablePayload>,
-        from_exec: &crossbeam_channel::Receiver<Box<ExecutionEnvironment>>,
-        to_execute_substage: &crossbeam_channel::Sender<Box<ExecutionEnvironment>>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<Box<ExecutionEnvironment>>>, // assume nonblocking
+        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
+        from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<PersistablePlayload>>, // assume nonblocking
     ) {
         let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
@@ -1446,8 +1446,8 @@ impl ScheduleStage {
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         from: &crossbeam_channel::Receiver<SchedulablePayload>,
-        from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
+        from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<PersistablePlayload>>, // assume nonblocking
     ) {
         #[derive(Clone, Copy, Debug)]
@@ -1460,8 +1460,8 @@ impl ScheduleStage {
             runnable_queue,
             address_book,
             from,
-            from_exec,
             to_execute_substage,
+            from_execute_substage,
             maybe_to_next_stage,
         )
     }
