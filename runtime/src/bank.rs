@@ -7871,7 +7871,7 @@ impl Bank {
 
     pub fn wait_for_scheduler(&self) -> Result<()> {
         let h = self.scheduler.write().unwrap().scheduler_thread_handle.take().unwrap();
-        let a: usize = h.join();
+        let a: usize = h.join().unwrap();
 
         Ok(())
     }
