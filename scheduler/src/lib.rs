@@ -919,7 +919,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution<AST: AtScheduleThread>(ast: AST, address_book: &mut AddressBook, lock_attempts: &mut Vec<LockAttempt>, provisioning_tracker_count: &mut usize) {
+    fn unlock_after_execution<AST: AtScheduleThread>(ast: AST, address_book: &mut AddressBook, lock_attempts: &mut [LockAttempt], provisioning_tracker_count: &mut usize) {
         for mut l in lock_attempts.iter_mut() {
             let newly_uncontended = address_book.reset_lock(ast, &mut l, true);
 
