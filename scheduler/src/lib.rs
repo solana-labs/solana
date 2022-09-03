@@ -501,6 +501,7 @@ impl Task {
         })
     }
 
+    #[inline(never)]
     pub fn clone_in_queue(this: &TaskInQueue) -> TaskInQueue {
         TaskInQueue::clone(this)
     }
