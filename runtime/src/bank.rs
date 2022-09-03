@@ -1211,7 +1211,7 @@ impl Default for Scheduler {
         let (completed_transaction_sender, completed_transaction_receiver) = crossbeam_channel::unbounded();
         let (transaction_batch_sender, transaction_batch_receiver) = crossbeam_channel::unbounded();
 
-        let scheduler_thread_handle = std::thread::Builder::new().name("sol-scheduler".to_string()).spawn(move || {
+        let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
 
             solana_scheduler::ScheduleStage::run(
