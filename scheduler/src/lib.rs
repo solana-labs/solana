@@ -675,7 +675,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     placeholder_attempts: &mut Vec<LockAttempt>,
-) -> (usize, usize, usize) {
+) -> (usize, usize, CU) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
     let mut provisional_count = 0;
