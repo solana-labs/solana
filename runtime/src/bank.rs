@@ -1206,7 +1206,6 @@ struct Scheduler {
 
 impl Default for Scheduler {
     fn default() -> Self {
-        let mut runnable_queue = solana_scheduler::TaskQueue::default();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
         let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
