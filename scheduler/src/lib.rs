@@ -461,7 +461,7 @@ struct Bundle {
 #[derive(Debug)]
 pub struct Task {
     unique_weight: UniqueWeight,
-    pub tx: (SanitizedTransaction, std::cell::RefCell<Vec<LockAttempt>>), // actually should be Bundle
+    pub tx: (SanitizedTransaction, LockAttemptsInCell), // actually should be Bundle
     pub contention_count: usize,
     pub uncontended: std::sync::atomic::AtomicUsize,
     pub sequence_time: std::sync::atomic::AtomicUsize,
@@ -473,8 +473,10 @@ pub struct Task {
     pub for_indexer: Vec<LockAttempt>,
 }
 
-//unsafe impl Send for Task {}
-//unsafe impl Sync for Task {}
+struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
+
+unsafe impl Send for LockAttemptsInCell {}
+unsafe impl Sync for LockAttemptsInCell {}
 
 // sequence_time -> seq clock
 // queue_time -> queue clock
