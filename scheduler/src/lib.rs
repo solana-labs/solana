@@ -465,7 +465,7 @@ pub struct Task {
     pub queue_end_time: std::sync::atomic::AtomicUsize,
     pub execute_time: std::sync::atomic::AtomicUsize,
     pub commit_time: std::sync::atomic::AtomicUsize,
-    pub for_indexer: Vec<LockAttempt>,
+    pub for_indexer: LockAttemptsInCell,
 }
 
 #[derive(Debug)]
