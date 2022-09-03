@@ -6099,6 +6099,7 @@ dependencies = [
  "solana-runtime",
  "solana-sdk 1.11.5",
  "solana-version",
+ "triomphe",
 ]
 
 [[package]]
@@ -7544,6 +7545,16 @@ name = "trees"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0de5f738ceab88e2491a94ddc33c3feeadfa95fedc60363ef110845df12f3878"
+
+[[package]]
+name = "triomphe"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fe1b3800b35f9b936c28dc59dbda91b195371269396784d931fe2a5a2be3d2f"
+dependencies = [
+ "serde",
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "try-lock"

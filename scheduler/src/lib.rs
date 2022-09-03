@@ -622,7 +622,7 @@ pub struct TaskQueue {
     //tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
 }
 
-pub type TaskInQueue = std::sync::Arc<Task>;
+pub type TaskInQueue = triomphe::Arc<Task>;
 
 //type TaskQueueEntry<'a> = im::ordmap::Entry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueOccupiedEntry<'a> = im::ordmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
