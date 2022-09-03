@@ -488,7 +488,7 @@ impl LockAttemptsInCell {
 impl Task {
     pub fn new_for_queue<NAST: NotAtScheduleThread>(nast: NAST, unique_weight: UniqueWeight, tx: (SanitizedTransaction, Vec<LockAttempt>)) -> std::sync::Arc<Self> {
         TaskInQueue::new(Self {
-            for_indexer: tx.1.iter().map(|a| a.clone_for_test()).collect(),
+            for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(tx.1.iter().map(|a| a.clone_for_test()).collect())),
             unique_weight,
             tx: (tx.0, LockAttemptsInCell::new(std::cell::RefCell::new(tx.1))),
             contention_count: Default::default(),
