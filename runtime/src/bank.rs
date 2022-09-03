@@ -1223,8 +1223,8 @@ impl Default for Scheduler {
                 &mut runnable_queue,
                 &mut address_book,
                 &transaction_receiver.clone(),
-                &completed_transaction_receiver,
                 &transaction_batch_sender,
+                &completed_transaction_receiver,
                 None,//&completed_transaction_receiver
             );
             Ok(())
