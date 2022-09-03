@@ -478,7 +478,7 @@ fn send_packets(
         let mut rng = rand::thread_rng();
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
-        unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
+        unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
         let nast = NotAtTopOfScheduleThread;
 
         for vv in packet_batches {
