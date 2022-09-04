@@ -1205,7 +1205,7 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    fn schedule(&self, sanitized_tx: &SanitizedTransaction) {
+    fn schedule(&self, sanitized_tx: SanitizedTransaction) {
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
         unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
