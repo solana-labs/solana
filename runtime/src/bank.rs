@@ -1202,6 +1202,7 @@ struct Scheduler {
     executing_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
+    graceful_stop_initiated: bool,
 }
 
 impl Scheduler {
@@ -1265,12 +1266,19 @@ impl Default for Scheduler {
             executing_thread_handle: Some(executing_thread_handle),
             transaction_sender: Some(transaction_sender),
             preloader,
+            graceful_stop_initiated: Default::default(),
         }
     }
 }
 
 impl Scheduler {
     fn gracefully_stop(&mut self) -> Result<()> {
+        if self.graceful_stop_initiated {
+            return Ok(());
+        }
+        self.graceful_stop_initiated = true;
+
+        info!("Scheduler::gracefully_stop()..");
         let mut transaction_sender = self.transaction_sender.take().unwrap();
         drop(transaction_sender);
         let h = self.executing_thread_handle.take().unwrap();
@@ -1284,7 +1292,9 @@ impl Scheduler {
 
 impl Drop for Scheduler {
     fn drop(&mut self) {
+        info!("Scheduler::drop(): begin..");
         self.gracefully_stop().unwrap();
+        info!("Scheduler::drop(): end...");
     }
 }
 
