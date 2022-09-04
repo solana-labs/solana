@@ -1312,7 +1312,7 @@ impl ScheduleStage {
             .unwrap_or(format!("{}", 4))
             .parse::<usize>()
             .unwrap();
-        let indexer_handles = (0..indexer_count).iter().map({
+        let indexer_handles = (0..indexer_count).map({
             let task_receiver = task_receiver.clone();
             let h = std::thread::Builder::new()
                 .name(format!("sol-indexer{:02}", thx))
