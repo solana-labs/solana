@@ -190,6 +190,10 @@ fn execute_batch(
 
     let pre_process_units: u64 = aggregate_total_execution_units(timings);
 
+    batch.bank().schedule_and_commit_transactions(
+        batch,
+        transaction_indexes,
+    );
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
