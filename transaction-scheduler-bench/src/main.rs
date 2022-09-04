@@ -80,9 +80,9 @@ struct Args {
 type PreprocessedTransaction = (SanitizedTransaction, Vec<solana_scheduler::LockAttempt>);
 type TransactionMessage = PreprocessedTransaction;
 //type CompletedTransactionMessage = solana_scheduler::Multiplexed; // (usize, Box<solana_scheduler::ExecutionEnvironment>); //(usize, TransactionMessage); // thread index and transaction message
-type CompletedTransactionMessage = Box<solana_scheduler::ExecutionEnvironment>;
-type TransactionBatchMessage = Box<solana_scheduler::ExecutionEnvironment>; // Vec<TransactionMessage>;
-type BatchSenderMessage = solana_scheduler::TaskInQueue; // Vec<Vec<PreprocessedTransaction>>;
+type CompletedTransactionMessage = solana_scheduler::UnlockablePayload; //Box<solana_scheduler::ExecutionEnvironment>;
+type TransactionBatchMessage = solana_scheduler::ExecutablePayload; // Box<solana_scheduler::ExecutionEnvironment>; // Vec<TransactionMessage>;
+type BatchSenderMessage = solana_scheduler::SchedulablePayload; // solana_scheduler::TaskInQueue; // Vec<Vec<PreprocessedTransaction>>;
 
 #[derive(Debug, Default)]
 struct TransactionSchedulerBenchMetrics {
@@ -119,7 +119,7 @@ struct PacketSendingConfig {
 fn spawn_unified_scheduler(
         mut address_book: solana_scheduler::AddressBook,
         num_execution_threads: usize,
-        packet_batch_receiver: Receiver<BatchSenderMessage>,
+        packet_batch_receiver: Receiver<solana_scheduler::SchedulablePayload>,
         transaction_batch_senders: Vec<Sender<TransactionBatchMessage>>,
         completed_transaction_receiver: Receiver<CompletedTransactionMessage>,
         bank_forks: Arc<RwLock<BankForks>>,
@@ -351,7 +351,7 @@ fn handle_transaction_batch(
     ));
 
     use solana_runtime::transaction_priority_details::GetTransactionPriorityDetails;
-    let priority_collected = transaction_batch.task.tx.0.get_transaction_priority_details().unwrap().priority;
+    let priority_collected = transaction_batch.0.task.tx.0.get_transaction_priority_details().unwrap().priority;
 
     metrics
         .num_transactions_completed
@@ -360,9 +360,9 @@ fn handle_transaction_batch(
         .priority_collected
         .fetch_add(priority_collected, Ordering::Relaxed);
 
-    transaction_batch.reindex_to_address_book();
+    transaction_batch.0.reindex_to_address_book();
     completed_transaction_sender
-        .send(transaction_batch)
+        .send(solana_scheduler::UnlockablePayload(transaction_batch.0))
         .unwrap();
 }
 
@@ -434,6 +434,18 @@ fn spawn_packet_sender(
     }).unwrap()
 }
 
+pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
+    use solana_program_runtime::compute_budget::ComputeBudget;
+    let mut compute_budget = ComputeBudget::default();
+    compute_budget
+        .process_instructions(
+            tx.message().program_instructions_iter(),
+            true, // use default units per instruction
+        )
+        .map(|d| d.get_priority())
+        .unwrap_or_default()
+}
+
 fn send_packets(
     unique_weight: std::sync::Arc<std::sync::atomic::AtomicU64>,
     producer_count: usize,
@@ -483,12 +495,12 @@ fn send_packets(
 
         for vv in packet_batches {
             for v in vv {
-                let p = solana_scheduler::get_transaction_priority_details(&v.0);
+                let p = get_transaction_priority_details(&v.0);
                 //let p = (p << 32) | (rng.gen::<u64>() & 0x0000_0000_ffff_ffff);
                 let uw = unique_weight.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 let p = (p << 32) | (uw & 0x0000_0000_ffff_ffff);
                 let t = solana_scheduler::Task::new_for_queue(nast, p, v);
-                packet_batch_sender.send(t).unwrap();
+                packet_batch_sender.send(solana_scheduler::SchedulablePayload(t)).unwrap();
             }
         }
         

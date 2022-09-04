@@ -6643,6 +6643,7 @@ dependencies = [
  "solana-logger 1.12.0",
  "solana-measure",
  "solana-perf",
+ "solana-program-runtime",
  "solana-runtime",
  "solana-scheduler",
  "solana-sdk 1.12.0",

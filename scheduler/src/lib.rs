@@ -1442,6 +1442,9 @@ impl ScheduleStage {
         }
         drop(to_next_stage);
         drop(ee_sender);
+        drop(task_sender);
+        drop(task_receiver);
+        info!("run finished...");
         if let Some(h) = maybe_reaper_thread_handle {
             h.join().unwrap().unwrap();
         }
@@ -1449,7 +1452,6 @@ impl ScheduleStage {
             indexer_handle.join().unwrap().unwrap();
         }
 
-        info!("run finished...");
         info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
     }
 
