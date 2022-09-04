@@ -6315,7 +6315,7 @@ impl Bank {
         transaction_indexes: &Vec<usize>,
     ) {
         let scheduler = self.scheduler.read().unwrap();
-        for (st, i) in batch.sanitized_transactions().iter().zip(transaction_indexes.iter()) {
+        for (st, &i) in batch.sanitized_transactions().iter().zip(transaction_indexes.iter()) {
             scheduler.schedule(st, i);
         }
     }
