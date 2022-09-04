@@ -1223,7 +1223,7 @@ impl Scheduler {
         let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
 
         let t = solana_scheduler::Task::new_for_queue(nast, 0, (sanitized_tx.clone(), locks));
-        self.transaction_sender.unwrap().send(solana_scheduler::SchedulablePayload(t)).unwrap();
+        self.transaction_sender.as_ref().unwrap().send(solana_scheduler::SchedulablePayload(t)).unwrap();
     }
 }
 
