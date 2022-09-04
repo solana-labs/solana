@@ -1314,7 +1314,7 @@ impl ScheduleStage {
             .unwrap();
         let indexer_handles = (0..indexer_count).map(|thx| {
             let task_receiver = task_receiver.clone();
-            let h = std::thread::Builder::new()
+            std::thread::Builder::new()
                 .name(format!("sol-indexer{:02}", thx))
                 .spawn(move || {
                     while let Ok((task, ll)) = task_receiver.recv() {
