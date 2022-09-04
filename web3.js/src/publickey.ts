@@ -65,23 +65,32 @@ export class PublicKey extends Struct implements PublicKeyData {
     super({});
     if (isPublicKeyData(value)) {
       this._buffer = value._buffer;
-    } else if (typeof value === 'string') {
-      // assume base 58 encoding by default
-      const decoded = bs58.decode(value);
-      if (decoded.length != PUBLIC_KEY_LENGTH) {
+    } else {
+      if (typeof value === 'string') {
+        // assume base 58 encoding by default
+        const decoded = bs58.decode(value);
+        if (decoded.length != PUBLIC_KEY_LENGTH) {
+          throw new Error(`Invalid public key input`);
+        }
+        this._buffer = decoded;
+      } else if (value instanceof Uint8Array) {
+        this._buffer = value;
+      } else if (Array.isArray(value)) {
+        this._buffer = Uint8Array.from(value);
+      } else {
+        this._buffer = Uint8Array.from(value);
+      }
+
+      if (this._buffer.byteLength > PUBLIC_KEY_LENGTH) {
         throw new Error(`Invalid public key input`);
       }
-      this._buffer = decoded;
-    } else if (value instanceof Uint8Array) {
-      this._buffer = value;
-    } else if (Array.isArray(value)) {
-      this._buffer = Uint8Array.from(value);
-    } else {
-      this._buffer = Uint8Array.from(value);
     }
 
-    if (this._buffer.byteLength > PUBLIC_KEY_LENGTH) {
-      throw new Error(`Invalid public key input`);
+    // Zero-pad to 32 bytes.
+    if (this._buffer.length !== PUBLIC_KEY_LENGTH) {
+      const orig = Buffer.from(this._buffer);
+      this._buffer = Buffer.alloc(PUBLIC_KEY_LENGTH);
+      orig.copy(this._buffer, PUBLIC_KEY_LENGTH - orig.length);
     }
   }
 
