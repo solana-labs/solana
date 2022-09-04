@@ -1329,7 +1329,7 @@ impl ScheduleStage {
                     }
                     assert_eq!(task_receiver.len(), 0);
                 })
-                .unwrap();
+                .unwrap()
         }).collect::<Vec<_>>();
         let mut start = std::time::Instant::now();
 
