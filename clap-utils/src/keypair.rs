@@ -1130,15 +1130,16 @@ pub fn derivation_path_from_path(
         legacy: _,
     } = parse_signer_source(path)?;
     match kind {
-        SignerSourceKind::Prompt => Ok(derivation_path),
+        SignerSourceKind::Prompt => {
+            Ok(derivation_path)
+        },
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!(
                 "Signer of type `{:?}` does not support derivation path",
                 kind
             ),
-        )
-        .into()),
+        ).into()),
     }
 }
 

@@ -96,10 +96,7 @@ where
 }
 
 // Return an error if a `SignerSourceKind::Prompt` cannot be parsed
-pub fn is_prompt_signer_source_or_ask_keyword<T>(
-    string: T,
-    allow_ask_keyword: bool,
-) -> Result<(), String>
+pub fn is_prompt_signer_source_or_ask_keyword<T>(string: T, allow_ask_keyword: bool) -> Result<(), String>
 where
     T: AsRef<str> + Display,
 {
@@ -111,19 +108,17 @@ where
         .kind
     {
         SignerSourceKind::Prompt => Ok(()),
-        _ => {
-            if allow_ask_keyword {
-                Err(format!(
-                    "Unable to parse input as `prompt:` URI scheme or `ASK` keyword: {}",
-                    string
-                ))
-            } else {
-                Err(format!(
-                    "Unable to parse input as `prompt:` URI scheme: {}",
-                    string
-                ))
-            }
-        }
+        _ => if allow_ask_keyword {
+            Err(format!(
+                "Unable to parse input as `prompt:` URI scheme or `ASK` keyword: {}",
+                string
+            ))
+        } else {
+            Err(format!(
+                "Unable to parse input as `prompt:` URI scheme: {}",
+                string
+            ))
+        },
     }
 }
 
