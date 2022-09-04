@@ -38,6 +38,7 @@ use {
 };
 
 const NO_PASSPHRASE: &str = "";
+const DEFAULT_DERIVATION_PATH: &str = "m/44'/501'/0'/0'";
 
 struct GrindMatch {
     starts: String,
@@ -329,6 +330,33 @@ fn grind_parse_args(
     grind_matches
 }
 
+fn derivation_path_arg<'a>() -> Arg<'a> {
+    Arg::new("derivation_path")
+        .long("derivation-path")
+        .value_name("DERIVATION_PATH")
+        .takes_value(true)
+        .min_values(0)
+        .max_values(1)
+        .help("Derivation path. All indexes will be promoted to hardened. \
+            If arg is not presented then derivation path will not be used. \
+            If arg is presented with empty DERIVATION_PATH value then m/44'/501'/0'/0' will be used."
+        )
+}
+
+fn acquire_derivation_path(
+    matches: &ArgMatches,
+) -> Result<Option<DerivationPath>, Box<dyn error::Error>> {
+    if matches.is_present("derivation_path") {
+        Ok(Some(DerivationPath::from_absolute_path_str(
+            matches
+                .value_of("derivation_path")
+                .unwrap_or(DEFAULT_DERIVATION_PATH),
+        )?))
+    } else {
+        Ok(None)
+    }
+}
+
 fn main() -> Result<(), Box<dyn error::Error>> {
     let default_num_threads = num_cpus::get().to_string();
     let matches = Command::new(crate_name!())
@@ -394,12 +422,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
                 .arg(
-                    Arg::with_name("use_derivation_path")
-                        .long("use-derivation-path")
-                        .value_name("PATH")
-                        .takes_value(true)
-                        .default_value("m/44/501/0/0")
-                        .help("Use derivation path. All indexes will be promoted to hardened")
+                    derivation_path_arg()
                 )
                 .key_generation_common_args()
                 .arg(no_outfile_arg()
@@ -463,12 +486,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
                 )
                 .arg(
-                    Arg::with_name("use_derivation_path")
-                        .long("use-derivation-path")
-                        .value_name("PATH")
-                        .takes_value(true)
-                        .default_value("m/44/501/0/0")
-                        .help("Use derivation path. All indexes will be promoted to hardened")
+                    derivation_path_arg()
                         .requires("use_mnemonic")
                 )
                 .key_generation_common_args()
@@ -598,17 +616,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 println!("Generating a new keypair");
             }
 
-            let derivation_path = matches.value_of("use_derivation_path");
+            let derivation_path = acquire_derivation_path(matches)?;
 
             let mnemonic = Mnemonic::new(mnemonic_type, language);
             let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
 
             let seed = Seed::new(&mnemonic, &passphrase);
             let keypair = match derivation_path {
-                Some(derivation_path) => keypair_from_seed_and_derivation_path(
-                    seed.as_bytes(),
-                    Some(DerivationPath::from_absolute_path_str(derivation_path).unwrap()),
-                ),
+                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path),
                 None => keypair_from_seed(seed.as_bytes()),
             }?;
 
@@ -701,14 +716,7 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             let use_mnemonic = matches.is_present("use_mnemonic");
 
-            let (use_derivation_path, derivation_path) =
-                match matches.value_of("use_derivation_path") {
-                    Some(derivation_path) => (
-                        true,
-                        Some(DerivationPath::from_absolute_path_str(derivation_path).unwrap()),
-                    ),
-                    None => (false, None),
-                };
+            let derivation_path = acquire_derivation_path(matches)?;
 
             let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
@@ -753,14 +761,10 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         let (keypair, phrase) = if use_mnemonic {
                             let mnemonic = Mnemonic::new(mnemonic_type, language);
                             let seed = Seed::new(&mnemonic, &passphrase);
-                            let keypair = if use_derivation_path {
-                                keypair_from_seed_and_derivation_path(
-                                    seed.as_bytes(),
-                                    derivation_path.clone()
-                                ).unwrap()
-                            } else {
-                                keypair_from_seed(seed.as_bytes()).unwrap()
-                            };
+                            let keypair = match derivation_path {
+                                Some(_) => keypair_from_seed_and_derivation_path(seed.as_bytes(), derivation_path.clone()),
+                                None => keypair_from_seed(seed.as_bytes()),
+                            }.unwrap();
                             (keypair, mnemonic.phrase().to_string())
                         } else {
                             (Keypair::new(), "".to_string())
