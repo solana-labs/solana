@@ -4,10 +4,10 @@ use {
     clap::{crate_description, crate_name, Arg, ArgMatches, Command},
     solana_clap_v3_utils::{
         input_parsers::STDOUT_OUTFILE_TOKEN,
-        input_validators::{is_parsable, is_prompt_signer_source_or_ask_keyword},
+        input_validators::{is_parsable, is_prompt_signer_source},
         keypair::{
-            derivation_path_from_path, keypair_from_seed_phrase, prompt_passphrase,
-            signer_from_path, SKIP_SEED_PHRASE_VALIDATION_ARG,
+            keypair_from_path, keypair_from_seed_phrase, prompt_passphrase, signer_from_path,
+            SKIP_SEED_PHRASE_VALIDATION_ARG,
         },
         ArgConstant, DisplayError,
     },
@@ -111,19 +111,6 @@ fn no_outfile_arg<'a>() -> Arg<'a> {
         .help(NO_OUTFILE_ARG.help)
 }
 
-fn prompt_signer<'a, 'b>(allow_ask_keyword: bool) -> Arg<'a, 'b> {
-    Arg::with_name("prompt_signer")
-        .index(1)
-        .value_name("PROMPT")
-        .takes_value(true)
-        .validator(move |x| is_prompt_signer_source_or_ask_keyword(x, allow_ask_keyword))
-        .help(if allow_ask_keyword {
-            "`prompt:` URI scheme or `ASK` keyword"
-        } else {
-            "`prompt:` URI scheme"
-        })
-}
-
 trait KeyGenerationCommonArgs {
     fn key_generation_common_args(self) -> Self;
 }
@@ -159,14 +146,6 @@ fn get_keypair_from_matches(
         path.to_str().unwrap()
     };
     signer_from_path(matches, path, "pubkey recovery", wallet_manager)
-}
-
-fn get_derivation_path_from_matches(matches: &ArgMatches) -> Option<DerivationPath> {
-    if let Some(path) = matches.value_of("prompt_signer") {
-        derivation_path_from_path(path).unwrap()
-    } else {
-        None
-    }
 }
 
 fn output_keypair(
@@ -414,11 +393,18 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("silent")
                         .help("Do not display seed phrase. Useful when piping output to other programs that prompt for user input, like gpg"),
                 )
+                .arg(
+                    Arg::with_name("use_derivation_path")
+                        .long("use-derivation-path")
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .default_value("m/44/501/0/0")
+                        .help("Use derivation path. All indexes will be promoted to hardened")
+                )
                 .key_generation_common_args()
                 .arg(no_outfile_arg()
                     .conflicts_with_all(&["outfile", "silent"])
                 )
-                .arg(prompt_signer(false))
         )
         .subcommand(
             Command::new("grind")
@@ -476,15 +462,20 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .long("use-mnemonic")
                         .help("Generate using a mnemonic key phrase.  Expect a significant slowdown in this mode"),
                 )
+                .arg(
+                    Arg::with_name("use_derivation_path")
+                        .long("use-derivation-path")
+                        .value_name("PATH")
+                        .takes_value(true)
+                        .default_value("m/44/501/0/0")
+                        .help("Use derivation path. All indexes will be promoted to hardened")
+                        .requires("use_mnemonic")
+                )
                 .key_generation_common_args()
                 .arg(
                     no_outfile_arg()
                     // Require a seed phrase to avoid generating a keypair
                     // but having no way to get the private key
-                    .requires("use_mnemonic")
-                )
-                .arg(
-                    prompt_signer(false)
                     .requires("use_mnemonic")
                 )
         )
@@ -523,7 +514,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
             Command::new("recover")
                 .about("Recover keypair from seed phrase and optional BIP39 passphrase")
                 .disable_version_flag(true)
-                .arg(prompt_signer(true))
+                .arg(
+                    Arg::new("prompt_signer")
+                        .index(1)
+                        .value_name("KEYPAIR")
+                        .takes_value(true)
+                        .validator(is_prompt_signer_source)
+                        .help("`prompt:` URI scheme or `ASK` keyword"),
+                )
                 .arg(
                     Arg::new("outfile")
                         .short('o')
@@ -600,14 +598,17 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 println!("Generating a new keypair");
             }
 
+            let derivation_path = matches.value_of("use_derivation_path");
+
             let mnemonic = Mnemonic::new(mnemonic_type, language);
             let (passphrase, passphrase_message) = acquire_passphrase_and_message(matches).unwrap();
 
             let seed = Seed::new(&mnemonic, &passphrase);
-            let keypair = match get_derivation_path_from_matches(matches) {
-                Some(derivation_path) => {
-                    keypair_from_seed_and_derivation_path(seed.as_bytes(), Some(derivation_path))
-                }
+            let keypair = match derivation_path {
+                Some(derivation_path) => keypair_from_seed_and_derivation_path(
+                    seed.as_bytes(),
+                    Some(DerivationPath::from_absolute_path_str(derivation_path).unwrap()),
+                ),
                 None => keypair_from_seed(seed.as_bytes()),
             }?;
 
@@ -638,16 +639,13 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                 check_for_overwrite(outfile, matches);
             }
 
-            let derivation_path = get_derivation_path_from_matches(matches);
-            let legacy = derivation_path == None;
-
-            let keypair = keypair_from_seed_phrase(
-                "recover",
-                matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name),
-                true,
-                derivation_path,
-                legacy,
-            )?;
+            let keypair_name = "recover";
+            let keypair = if let Some(path) = matches.value_of("prompt_signer") {
+                keypair_from_path(matches, path, keypair_name, true)?
+            } else {
+                let skip_validation = matches.is_present(SKIP_SEED_PHRASE_VALIDATION_ARG.name);
+                keypair_from_seed_phrase(keypair_name, skip_validation, true, None, true)?
+            };
             output_keypair(&keypair, outfile, "recovered")?;
         }
         ("grind", matches) => {
@@ -703,7 +701,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
 
             let use_mnemonic = matches.is_present("use_mnemonic");
 
-            let derivation_path = get_derivation_path_from_matches(matches);
+            let (use_derivation_path, derivation_path) =
+                match matches.value_of("use_derivation_path") {
+                    Some(derivation_path) => (
+                        true,
+                        Some(DerivationPath::from_absolute_path_str(derivation_path).unwrap()),
+                    ),
+                    None => (false, None),
+                };
 
             let word_count: usize = matches.value_of_t(WORD_COUNT_ARG.name).unwrap();
             let mnemonic_type = MnemonicType::for_word_count(word_count)?;
@@ -748,13 +753,14 @@ fn do_main(matches: &ArgMatches) -> Result<(), Box<dyn error::Error>> {
                         let (keypair, phrase) = if use_mnemonic {
                             let mnemonic = Mnemonic::new(mnemonic_type, language);
                             let seed = Seed::new(&mnemonic, &passphrase);
-                            let keypair = match derivation_path {
-                                Some(_) => keypair_from_seed_and_derivation_path(
+                            let keypair = if use_derivation_path {
+                                keypair_from_seed_and_derivation_path(
                                     seed.as_bytes(),
                                     derivation_path.clone()
-                                ),
-                                None => keypair_from_seed(seed.as_bytes())
-                            }.unwrap();
+                                ).unwrap()
+                            } else {
+                                keypair_from_seed(seed.as_bytes()).unwrap()
+                            };
                             (keypair, mnemonic.phrase().to_string())
                         } else {
                             (Keypair::new(), "".to_string())
