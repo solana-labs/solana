@@ -1300,6 +1300,7 @@ impl ScheduleStage {
                         //TaskInQueue::get_mut(&mut a.task).unwrap();
                     }
                     assert_eq!(ee_receiver.len(), 0);
+                    Ok(())
                 })
                 .unwrap();
 
