@@ -6646,20 +6646,18 @@ impl AccountsDb {
     }
 
     /// storages are sorted by slot and have range info.
-    /// if we know slots_per_epoch, then add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
-    fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Option<Slot>) {
-        if let Some(slots_per_epoch) = slots_per_epoch {
-            let max = storages.max_slot_inclusive();
-            let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
-            let sub = slots_per_epoch + acceptable_straggler_slot_count;
-            let in_epoch_range_start = max.saturating_sub(sub);
-            for (slot, storages) in storages.iter_range(..in_epoch_range_start) {
-                if let Some(storages) = storages {
-                    storages.iter().for_each(|store| {
-                        self.dirty_stores
-                            .insert((slot, store.append_vec_id()), store.clone());
-                    });
-                }
+    /// add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
+    fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Slot) {
+        let max = storages.max_slot_inclusive();
+        let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
+        let sub = slots_per_epoch + acceptable_straggler_slot_count;
+        let in_epoch_range_start = max.saturating_sub(sub);
+        for (slot, storages) in storages.iter_range(..in_epoch_range_start) {
+            if let Some(storages) = storages {
+                storages.iter().for_each(|store| {
+                    self.dirty_stores
+                        .insert((slot, store.append_vec_id()), store.clone());
+                });
             }
         }
     }
@@ -6888,7 +6886,7 @@ impl AccountsDb {
 
         stats.oldest_root = storages.range().start;
 
-        self.mark_old_slots_as_dirty(storages, Some(config.epoch_schedule.slots_per_epoch));
+        self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch);
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
         let use_bg_thread_pool = config.use_bg_thread_pool;
@@ -7480,7 +7478,7 @@ impl AccountsDb {
         let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
         let mut measure = Measure::start("unref_from_storage");
         if let Some(purged_stored_account_slots) = purged_stored_account_slots {
-            let len = purged_stored_account_slots.len();
+            let len = purged_slot_pubkeys.len();
             const BATCH_SIZE: usize = 10_000;
             let batches = 1 + (len / BATCH_SIZE);
             self.thread_pool_clean.install(|| {

@@ -164,8 +164,16 @@ fn wait_for_restart_window(
 
     let progress_bar = new_spinner_progress_bar();
     let monitor_start_time = SystemTime::now();
+
+    let mut seen_incremential_snapshot = false;
     loop {
         let snapshot_slot_info = rpc_client.get_highest_snapshot_slot().ok();
+        let snapshot_slot_info_has_incremential = snapshot_slot_info
+            .as_ref()
+            .map(|snapshot_slot_info| snapshot_slot_info.incremental.is_some())
+            .unwrap_or_default();
+        seen_incremential_snapshot |= snapshot_slot_info_has_incremential;
+
         let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::processed())?;
         let healthy = rpc_client.get_health().ok().is_some();
         let delinquent_stake_percentage = {
@@ -294,16 +302,16 @@ fn wait_for_restart_window(
                     }
                 };
 
-                let snapshot_slot = snapshot_slot_info.map(|snapshot_slot_info| {
-                    snapshot_slot_info
-                        .incremental
-                        .unwrap_or(snapshot_slot_info.full)
-                });
                 match in_leader_schedule_hole {
                     Ok(_) => {
                         if skip_new_snapshot_check {
                             break; // Restart!
                         }
+                        let snapshot_slot = snapshot_slot_info.map(|snapshot_slot_info| {
+                            snapshot_slot_info
+                                .incremental
+                                .unwrap_or(snapshot_slot_info.full)
+                        });
                         if restart_snapshot == None {
                             restart_snapshot = snapshot_slot;
                         }
@@ -313,6 +321,16 @@ fn wait_for_restart_window(
                             >= (max_delinquency_percentage as f64 / 100.)
                         {
                             style("Delinquency too high").red().to_string()
+                        } else if seen_incremential_snapshot && !snapshot_slot_info_has_incremential
+                        {
+                            // Restarts using just a full snapshot will put the node significantly
+                            // further behind than if an incremental snapshot is also used, as full
+                            // snapshots are larger and take much longer to create.
+                            //
+                            // Therefore if the node just created a new full snapshot, wait a
+                            // little longer until it creates the first incremental snapshot for
+                            // the full snapshot.
+                            "Waiting for incremental snapshot".to_string()
                         } else {
                             break; // Restart!
                         }

@@ -1,6 +1,6 @@
 [package]
 name = "solana-bpf-rust-alt-bn128"
-version = "1.11.10"
+version = "1.11.11"
 description = "Solana BPF test program written in Rust"
 authors = ["NeonLabs Team <at@neonlabs.org>"]
 repository = "https://github.com/solana-labs/solana"
@@ -12,7 +12,7 @@ edition = "2021"
 array-bytes = "=1.4.1"
 serde = "1.0.112"
 serde_json = "1.0.56"
-solana-program = { path = "../../../../sdk/program", version = "=1.11.10" }
+solana-program = { path = "../../../../sdk/program", version = "=1.11.11" }
 
 [lib]
 crate-type = ["cdylib"]

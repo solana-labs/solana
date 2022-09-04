@@ -3,7 +3,7 @@ authors = ["Solana Maintainers <maintainers@solana.foundation>"]
 edition = "2021"
 name = "solana-gossip"
 description = "Blockchain, Rebuilt for Scale"
-version = "1.11.10"
+version = "1.11.11"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
@@ -27,24 +27,24 @@ rayon = "1.5.3"
 serde = "1.0.138"
 serde_bytes = "0.11"
 serde_derive = "1.0.103"
-solana-bloom = { path = "../bloom", version = "=1.11.10" }
-solana-clap-utils = { path = "../clap-utils", version = "=1.11.10" }
-solana-client = { path = "../client", version = "=1.11.10" }
-solana-entry = { path = "../entry", version = "=1.11.10" }
-solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.10" }
-solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.10" }
-solana-ledger = { path = "../ledger", version = "=1.11.10" }
-solana-logger = { path = "../logger", version = "=1.11.10" }
-solana-measure = { path = "../measure", version = "=1.11.10" }
-solana-metrics = { path = "../metrics", version = "=1.11.10" }
-solana-net-utils = { path = "../net-utils", version = "=1.11.10" }
-solana-perf = { path = "../perf", version = "=1.11.10" }
-solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.10" }
-solana-runtime = { path = "../runtime", version = "=1.11.10" }
-solana-sdk = { path = "../sdk", version = "=1.11.10" }
-solana-streamer = { path = "../streamer", version = "=1.11.10" }
-solana-version = { path = "../version", version = "=1.11.10" }
-solana-vote-program = { path = "../programs/vote", version = "=1.11.10" }
+solana-bloom = { path = "../bloom", version = "=1.11.11" }
+solana-clap-utils = { path = "../clap-utils", version = "=1.11.11" }
+solana-client = { path = "../client", version = "=1.11.11" }
+solana-entry = { path = "../entry", version = "=1.11.11" }
+solana-frozen-abi = { path = "../frozen-abi", version = "=1.11.11" }
+solana-frozen-abi-macro = { path = "../frozen-abi/macro", version = "=1.11.11" }
+solana-ledger = { path = "../ledger", version = "=1.11.11" }
+solana-logger = { path = "../logger", version = "=1.11.11" }
+solana-measure = { path = "../measure", version = "=1.11.11" }
+solana-metrics = { path = "../metrics", version = "=1.11.11" }
+solana-net-utils = { path = "../net-utils", version = "=1.11.11" }
+solana-perf = { path = "../perf", version = "=1.11.11" }
+solana-rayon-threadlimit = { path = "../rayon-threadlimit", version = "=1.11.11" }
+solana-runtime = { path = "../runtime", version = "=1.11.11" }
+solana-sdk = { path = "../sdk", version = "=1.11.11" }
+solana-streamer = { path = "../streamer", version = "=1.11.11" }
+solana-version = { path = "../version", version = "=1.11.11" }
+solana-vote-program = { path = "../programs/vote", version = "=1.11.11" }
 thiserror = "1.0"
 
 [dev-dependencies]
