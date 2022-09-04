@@ -4612,16 +4612,6 @@ impl Bank {
         }
     }
 
-    pub fn schedule_transaction_batch_to_be_commited(
-        &self,
-        batch: &TransactionBatch,
-    ) {
-        let scheduler = self.scheduler.read().unwrap();
-        for st in batch.sanitized_transactions() {
-            scheduler.schedule(st);
-        }
-    }
-
     #[allow(clippy::type_complexity)]
     pub fn load_and_execute_transactions(
         &self,
@@ -6315,6 +6305,16 @@ impl Bank {
         // unwrap is safe; self.cluster_type is ensured to be Some() always...
         // we only using Option here for ABI compatibility...
         self.cluster_type.unwrap()
+    }
+
+    pub fn schedule_transaction_to_commit(
+        &self,
+        batch: &TransactionBatch,
+    ) {
+        let scheduler = self.scheduler.read().unwrap();
+        for st in batch.sanitized_transactions() {
+            scheduler.schedule(st);
+        }
     }
 
     /// Process a batch of transactions.
