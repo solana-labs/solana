@@ -1205,12 +1205,24 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    fn schedule(&self, sani: &SanitizedTransaction) {
+    fn schedule(&self, sanitized_tx: &SanitizedTransaction) {
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
         unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
         let nast = NotAtTopOfScheduleThread;
-        let t = solana_scheduler::Task::new_for_queue(nast, 0, sani);
+
+        let locks = sanitized_tx.get_account_locks_unchecked();
+        let writable_lock_iter = locks
+            .writable
+            .iter()
+            .map(|address| solana_scheduler::LockAttempt::new(preloader.load(**address), solana_scheduler::RequestedUsage::Writable));
+        let readonly_lock_iter = locks
+            .readonly
+            .iter()
+            .map(|address| solana_scheduler::LockAttempt::new(preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
+        let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
+
+        let t = solana_scheduler::Task::new_for_queue(nast, 0, sanitized_txs);
         self.transaction_sender.unwrap().send(solana_scheduler::SchedulablePayload(t)).unwrap();
     }
 }
