@@ -1284,7 +1284,7 @@ impl ScheduleStage {
         let (to_next_stage, maybe_reaper_thread_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
             (to_next_stage, None)
         } else {
-            let h: JoinHandle<Result<(), ()> = std::thread::Builder::new()
+            let h: JoinHandle::<Result<(), ()> = std::thread::Builder::new()
                 .name("sol-reaper".to_string())
                 .spawn(move || {
                     #[derive(Clone, Copy, Debug)]
