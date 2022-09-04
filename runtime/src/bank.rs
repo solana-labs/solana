@@ -1245,7 +1245,7 @@ impl Default for Scheduler {
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
 
             solana_scheduler::ScheduleStage::run(
-                100,
+                123,
                 &mut runnable_queue,
                 &mut address_book,
                 &transaction_receiver,
@@ -1267,6 +1267,9 @@ impl Default for Scheduler {
             preloader,
         }
     }
+}
+
+impl Drop for Scheduler {
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
