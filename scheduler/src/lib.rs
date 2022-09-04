@@ -1312,7 +1312,7 @@ impl ScheduleStage {
             .unwrap_or(format!("{}", 4))
             .parse::<usize>()
             .unwrap();
-        for thx in 0..indexer_count {
+        let indexer_handles = (0..indexer_count).iter().map({
             let task_receiver = task_receiver.clone();
             let h = std::thread::Builder::new()
                 .name(format!("sol-indexer{:02}", thx))
@@ -1330,7 +1330,7 @@ impl ScheduleStage {
                     assert_eq!(task_receiver.len(), 0);
                 })
                 .unwrap();
-        }
+        }).collect::<Vec<_>();
         let mut start = std::time::Instant::now();
 
         let (mut from_disconnected, mut from_exec_disconnected) = (false, false);
