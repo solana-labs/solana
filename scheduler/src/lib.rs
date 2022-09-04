@@ -1328,6 +1328,7 @@ impl ScheduleStage {
                         }
                     }
                     assert_eq!(task_receiver.len(), 0);
+                    Ok(())
                 })
                 .unwrap()
         }).collect::<Vec<_>>();
