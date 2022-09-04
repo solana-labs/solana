@@ -111,8 +111,8 @@ fn no_outfile_arg<'a>() -> Arg<'a> {
         .help(NO_OUTFILE_ARG.help)
 }
 
-fn prompt_signer<'a>(allow_ask_keyword: bool) -> Arg<'a> {
-    Arg::new("prompt_signer")
+fn prompt_signer<'a, 'b>(allow_ask_keyword: bool) -> Arg<'a, 'b> {
+    Arg::with_name("prompt_signer")
         .index(1)
         .value_name("PROMPT")
         .takes_value(true)

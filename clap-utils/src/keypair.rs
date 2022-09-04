@@ -1121,6 +1121,27 @@ fn sanitize_seed_phrase(seed_phrase: &str) -> String {
         .join(" ")
 }
 
+pub fn derivation_path_from_path(
+    path: &str,
+) -> Result<Option<DerivationPath>, Box<dyn error::Error>> {
+    let SignerSource {
+        kind,
+        derivation_path,
+        legacy: _,
+    } = parse_signer_source(path)?;
+    match kind {
+        SignerSourceKind::Prompt => Ok(derivation_path),
+        _ => Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+                "Signer of type `{:?}` does not support derivation path",
+                kind
+            ),
+        )
+        .into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use {

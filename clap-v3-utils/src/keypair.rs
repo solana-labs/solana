@@ -1114,27 +1114,6 @@ pub fn keypair_from_seed_phrase(
     Ok(keypair)
 }
 
-pub fn derivation_path_from_path(
-    prompt: &str,
-) -> Result<Option<DerivationPath>, Box<dyn error::Error>> {
-    let SignerSource {
-        kind,
-        derivation_path,
-        legacy: _,
-    } = parse_signer_source(prompt)?;
-    match kind {
-        SignerSourceKind::Prompt => Ok(derivation_path),
-        _ => Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-                "Signer of type `{:?}` does not support derivation path",
-                kind
-            ),
-        )
-        .into()),
-    }
-}
-
 fn sanitize_seed_phrase(seed_phrase: &str) -> String {
     seed_phrase
         .split_whitespace()
