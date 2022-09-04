@@ -1269,7 +1269,23 @@ impl Default for Scheduler {
     }
 }
 
+impl Scheduler {
+    fn gracefully_stop(&mut self) -> Result<()> {
+        let mut transaction_sender = self.transaction_sender.take().unwrap();
+        drop(transaction_sender);
+        let h = self.executing_thread_handle.take().unwrap();
+        h.join().unwrap()?;
+        let h = self.scheduler_thread_handle.take().unwrap();
+        h.join().unwrap()?;
+
+        Ok(())
+    }
+}
+
 impl Drop for Scheduler {
+    fn drop(&mut self) {
+        self.gracefully_stop().unwrap();
+    }
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
@@ -7940,12 +7956,6 @@ impl Bank {
 
     pub fn wait_for_scheduler(&self) -> Result<()> {
         let mut scheduler = self.scheduler.write().unwrap();
-        let mut transaction_sender = scheduler.transaction_sender.take().unwrap();
-        drop(transaction_sender);
-        let h = scheduler.executing_thread_handle.take().unwrap();
-        h.join().unwrap()?;
-        let h = scheduler.scheduler_thread_handle.take().unwrap();
-        h.join().unwrap()?;
 
         Ok(())
     }
