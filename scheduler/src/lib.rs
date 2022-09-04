@@ -1281,7 +1281,7 @@ impl ScheduleStage {
         let mut execute_clock = 0;
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<PersistablePlayload>();
 
-        let (to_next_stage, maybe_jon_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
+        let (to_next_stage, maybe_reaper_thread_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
             (to_next_stage, None)
         } else {
             let h = std::thread::Builder::new()
@@ -1440,6 +1440,9 @@ impl ScheduleStage {
         }
         drop(to_next_stage);
         drop(ee_sender);
+        if let Some(h) = maybe_reaper_thread_handle {
+            h.join().unwrap()
+        }
         info!("run finished...");
         info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
     }
