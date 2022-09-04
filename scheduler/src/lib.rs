@@ -1286,7 +1286,7 @@ impl ScheduleStage {
         } else {
             let h = std::thread::Builder::new()
                 .name("sol-reaper".to_string())
-                .spawn(move || {
+                .spawn(|| {
                     #[derive(Clone, Copy, Debug)]
                     struct NotAtTopOfScheduleThread;
                     unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
