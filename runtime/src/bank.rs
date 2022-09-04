@@ -1222,7 +1222,7 @@ impl Scheduler {
             .map(|address| solana_scheduler::LockAttempt::new(self.preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
         let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
 
-        let t = solana_scheduler::Task::new_for_queue(nast, 0, sanitized_tx);
+        let t = solana_scheduler::Task::new_for_queue(nast, 0, (sanitized_tx, locks));
         self.transaction_sender.unwrap().send(solana_scheduler::SchedulablePayload(t)).unwrap();
     }
 }
