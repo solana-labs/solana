@@ -1206,7 +1206,7 @@ struct Scheduler {
 }
 
 impl Scheduler {
-    fn schedule(&self, sanitized_tx: &SanitizedTransaction) {
+    fn schedule(&self, sanitized_tx: &SanitizedTransaction, index: usize) {
         #[derive(Clone, Copy, Debug)]
         struct NotAtTopOfScheduleThread;
         unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
@@ -1223,7 +1223,7 @@ impl Scheduler {
             .map(|address| solana_scheduler::LockAttempt::new(self.preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
         let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
 
-        let t = solana_scheduler::Task::new_for_queue(nast, 0, (sanitized_tx.clone(), locks));
+        let t = solana_scheduler::Task::new_for_queue(nast, usize::max_value() - index, (sanitized_tx.clone(), locks));
         self.transaction_sender.as_ref().unwrap().send(solana_scheduler::SchedulablePayload(t)).unwrap();
     }
 }
@@ -6308,13 +6308,14 @@ impl Bank {
         self.cluster_type.unwrap()
     }
 
-    pub fn schedule_transaction_to_commit(
+    pub fn schedule_and_commit_transactions(
         &self,
         batch: &TransactionBatch,
+        transaction_indexes: &Vec<usize>,
     ) {
         let scheduler = self.scheduler.read().unwrap();
-        for st in batch.sanitized_transactions() {
-            scheduler.schedule(st);
+        for (st, i) in batch.sanitized_transactions().zip(transaction_indexes.iter()) {
+            scheduler.schedule(st, i);
         }
     }
 
