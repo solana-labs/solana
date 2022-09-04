@@ -1330,7 +1330,7 @@ impl ScheduleStage {
                     assert_eq!(task_receiver.len(), 0);
                 })
                 .unwrap();
-        }).collect::<Vec<_>();
+        }).collect::<Vec<_>>();
         let mut start = std::time::Instant::now();
 
         let (mut from_disconnected, mut from_exec_disconnected) = (false, false);
