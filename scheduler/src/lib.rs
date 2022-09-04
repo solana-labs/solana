@@ -1286,13 +1286,13 @@ impl ScheduleStage {
         } else {
             let h = std::thread::Builder::new()
                 .name("sol-reaper".to_string())
-                .spawn(|| {
+                .spawn(move || {
                     #[derive(Clone, Copy, Debug)]
                     struct NotAtTopOfScheduleThread;
                     unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
                     let nast = NotAtTopOfScheduleThread;
 
-                    while let Ok(PersistablePlayload(mut a)) = &ee_receiver.recv() {
+                    while let Ok(PersistablePlayload(mut a)) = ee_receiver.recv() {
                         assert!(a.task.lock_attempts_not_mut(nast).is_empty());
                         //assert!(a.task.sequence_time() != usize::max_value());
                         //let lock_attempts = std::mem::take(&mut a.lock_attempts);
