@@ -1300,7 +1300,7 @@ impl ScheduleStage {
     fn _run<AST: AtScheduleThread, T>(
         ast: AST,
         max_executing_queue_count: usize,
-        runnable_queue: &mut TaskQueue,
+        runnable_queue: &mut TaskQueue<T>,
         address_book: &mut AddressBook,
         from_prev: &crossbeam_channel::Receiver<SchedulablePayload<T>>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload<T>>,
