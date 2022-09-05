@@ -1247,7 +1247,7 @@ impl Default for Scheduler {
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
 
             solana_scheduler::ScheduleStage::run(
-                1,
+                123,
                 &mut runnable_queue,
                 &mut address_book,
                 &transaction_receiver,

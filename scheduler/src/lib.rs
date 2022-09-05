@@ -1303,6 +1303,8 @@ impl ScheduleStage {
         let mut queue_clock = 0;
         let mut execute_clock = 0;
         let mut completed_count = 0_usize;
+        assert!(max_executing_queue_count > 0);
+
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<PersistablePlayload>();
 
         let (to_next_stage, maybe_reaper_thread_handle) = if let Some(to_next_stage) = maybe_to_next_stage {

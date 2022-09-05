@@ -194,7 +194,7 @@ fn execute_batch(
         batch,
         transaction_indexes,
     );
-    // bank().handle_unexpected_errors() -> Option<Vec<_>>
+    // bank().handle_any_unexpected_errors() -> Option<Vec<_>>
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
