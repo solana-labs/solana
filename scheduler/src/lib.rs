@@ -1523,9 +1523,9 @@ impl ScheduleStage {
 }
 
 pub struct SchedulablePayload(pub TaskInQueue);
-pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
-pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
-pub struct DroppablePayload(pub Box<ExecutionEnvironment>);
+pub struct ExecutablePayload<T>(pub Box<ExecutionEnvironment<T>>);
+pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment<T>>);
+pub struct DroppablePayload<T>(pub Box<ExecutionEnvironment<T>>);
 
 struct ExecuteStage {
     //bank: Bank,
