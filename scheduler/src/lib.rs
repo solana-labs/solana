@@ -532,12 +532,12 @@ impl LockAttemptsInCell {
 // execute_time ---> exec clock
 // commit_time  -+
 
-impl Task {
+impl<T> Task<T> {
     pub fn new_for_queue<NAST: NotAtScheduleThread>(
         nast: NAST,
         unique_weight: UniqueWeight,
         tx: (SanitizedTransaction, Vec<LockAttempt>),
-    ) -> TaskInQueue {
+    ) -> TaskInQueue<T> {
         TaskInQueue::new(Self {
             for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(
                 tx.1.iter().map(|a| a.clone_for_test()).collect(),
@@ -557,8 +557,8 @@ impl Task {
     }
 
     #[inline(never)]
-    pub fn clone_in_queue(this: &TaskInQueue) -> TaskInQueue {
-        TaskInQueue::clone(this)
+    pub fn clone_in_queue(this: &TaskInQueue<T>) -> TaskInQueue<T> {
+        TaskInQueue<T>::clone(this)
     }
 
     fn lock_attempts_mut<AST: AtScheduleThread>(
