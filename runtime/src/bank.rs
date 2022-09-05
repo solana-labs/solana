@@ -1259,7 +1259,7 @@ impl Default for Scheduler {
 
 
                 let (tx_results, _balances) = bank.load_execute_and_commit_transactions(
-                    batch,
+                    &batch,
                     MAX_PROCESSING_AGE,
                     false,
                     false,
