@@ -135,10 +135,7 @@ pub fn parse_vote(
                 }),
             })
         }
-        VoteInstruction::CompactUpdateVoteState(compact_vote_state_update) => {
-            let vote_state_update = compact_vote_state_update.uncompact().map_err(|_| {
-                ParseInstructionError::InstructionNotParsable(ParsableProgram::Vote)
-            })?;
+        VoteInstruction::CompactUpdateVoteState(vote_state_update) => {
             check_num_vote_accounts(&instruction.accounts, 2)?;
             let vote_state_update = json!({
                 "lockouts": vote_state_update.lockouts,
@@ -155,10 +152,7 @@ pub fn parse_vote(
                 }),
             })
         }
-        VoteInstruction::CompactUpdateVoteStateSwitch(compact_vote_state_update, hash) => {
-            let vote_state_update = compact_vote_state_update.uncompact().map_err(|_| {
-                ParseInstructionError::InstructionNotParsable(ParsableProgram::Vote)
-            })?;
+        VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, hash) => {
             check_num_vote_accounts(&instruction.accounts, 2)?;
             let vote_state_update = json!({
                 "lockouts": vote_state_update.lockouts,
@@ -770,7 +764,7 @@ mod test {
     #[test]
     fn test_parse_compact_vote_state_update_ix() {
         let vote_state_update = VoteStateUpdate::from(vec![(0, 3), (1, 2), (2, 1)]);
-        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
+        let compact_vote_state_update = vote_state_update.clone();
 
         let vote_pubkey = Pubkey::new_unique();
         let authorized_voter_pubkey = Pubkey::new_unique();
@@ -813,7 +807,7 @@ mod test {
     #[test]
     fn test_parse_compact_vote_state_update_switch_ix() {
         let vote_state_update = VoteStateUpdate::from(vec![(0, 3), (1, 2), (2, 1)]);
-        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
+        let compact_vote_state_update = vote_state_update.clone();
 
         let vote_pubkey = Pubkey::new_unique();
         let authorized_voter_pubkey = Pubkey::new_unique();

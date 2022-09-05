@@ -172,8 +172,8 @@ pub fn process_instruction(
                 Err(InstructionError::InvalidInstructionData)
             }
         }
-        VoteInstruction::CompactUpdateVoteState(compact_vote_state_update)
-        | VoteInstruction::CompactUpdateVoteStateSwitch(compact_vote_state_update, _) => {
+        VoteInstruction::CompactUpdateVoteState(vote_state_update)
+        | VoteInstruction::CompactUpdateVoteStateSwitch(vote_state_update, _) => {
             if invoke_context
                 .feature_set
                 .is_active(&feature_set::allow_votes_to_directly_update_vote_state::id())
@@ -184,7 +184,6 @@ pub fn process_instruction(
                 let sysvar_cache = invoke_context.get_sysvar_cache();
                 let slot_hashes = sysvar_cache.get_slot_hashes()?;
                 let clock = sysvar_cache.get_clock()?;
-                let vote_state_update = compact_vote_state_update.uncompact()?;
                 vote_state::process_vote_state_update(
                     &mut me,
                     slot_hashes.slot_hashes(),
