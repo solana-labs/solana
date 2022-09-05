@@ -745,7 +745,7 @@ type TaskQueueOccupiedEntry<'a> =
 
 impl TaskQueue {
     #[inline(never)]
-    fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue) {
+    fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue<T>) {
         //trace!("TaskQueue::add(): {:?}", unique_weight);
         let pre_existed = self.tasks.insert(unique_weight, task);
         assert!(pre_existed.is_none()); //, "identical shouldn't exist: {:?}", unique_weight);
