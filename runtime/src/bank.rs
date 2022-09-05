@@ -1199,7 +1199,7 @@ impl AbiExample for BuiltinPrograms {
 #[derive(Debug)]
 struct Scheduler {
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
-    executing_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
+    executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<()>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
@@ -1240,13 +1240,16 @@ impl Default for Scheduler {
         let (completed_ee_sender, completed_ee_receiver) = crossbeam_channel::unbounded();
         let (droppable_ee_sender, droppable_ee_receiver) = crossbeam_channel::unbounded();
 
-        let executing_thread_handle = std::thread::Builder::new().name(format!("solExec{:02}", 0)).spawn(move || {
+        let executing_thread_handles = (0..8).map(|thx| {
+            let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
+
+            std::thread::Builder::new().name(format!("solExec{:02}", thx)).spawn(move || {
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
                 ee.reindex_with_address_book();
                 completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
             Ok(())
-        }).unwrap();
+        }).unwrap()}).collect();
 
         let errors = Arc::new(std::sync::Mutex::new(Vec::new()));
         let errors_in_collector_thread = Arc::clone(&errors);
@@ -1281,7 +1284,7 @@ impl Default for Scheduler {
 
         Self {
             scheduler_thread_handle: Some(scheduler_thread_handle),
-            executing_thread_handle: Some(executing_thread_handle),
+            executing_thread_handles: Some(executing_thread_handles),
             error_collector_thread_handle: Some(error_collector_thread_handle),
             transaction_sender: Some(transaction_sender),
             preloader,
@@ -1302,8 +1305,9 @@ impl Scheduler {
         info!("Scheduler::gracefully_stop(): waiting..");
         let transaction_sender = self.transaction_sender.take().unwrap();
         drop(transaction_sender);
-        let h = self.executing_thread_handle.take().unwrap();
-        h.join().unwrap()?;
+        for executing_thread_handle in self.executing_thread_handles.take().unwrap() {
+            executing_thread_handle.join().unwrap()?;
+        }
         let h = self.scheduler_thread_handle.take().unwrap();
         h.join().unwrap()?;
         let h = self.error_collector_thread_handle.take().unwrap();

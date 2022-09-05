@@ -1305,7 +1305,8 @@ impl ScheduleStage {
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload>>, // assume nonblocking
     ) {
-        info!("schedule_once:initial");
+        let random_id = rand::thread_rng().gen::<u64>();
+        info!("schedule_once:initial id_{:016x}", random_id);
 
         let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
@@ -1491,7 +1492,7 @@ impl ScheduleStage {
             indexer_handle.join().unwrap().unwrap();
         }
 
-        info!("schedule_once:final(from_disconnected: {}, from_exec_disconnected: {}, no_more_work: {}) (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_disconnected, from_exec_disconnected, no_more_work, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+        info!("schedule_once:final id_{:016x} (from_disconnected: {}, from_exec_disconnected: {}, no_more_work: {}) (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_disconnected, from_exec_disconnected, no_more_work, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
     }
 
     pub fn run(

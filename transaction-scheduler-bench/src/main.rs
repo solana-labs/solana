@@ -360,7 +360,7 @@ fn handle_transaction_batch(
         .priority_collected
         .fetch_add(priority_collected, Ordering::Relaxed);
 
-    transaction_batch.0.reindex_to_address_book();
+    transaction_batch.0.reindex_with_address_book();
     completed_transaction_sender
         .send(solana_scheduler::UnlockablePayload(transaction_batch.0))
         .unwrap();
