@@ -1081,7 +1081,7 @@ impl ScheduleStage {
         ast: AST,
         address_book: &mut AddressBook,
         next_task: &Task<T>,
-        tracker: triomphe::Arc<ProvisioningTracker>,
+        tracker: triomphe::Arc<ProvisioningTracker<T>>,
     ) {
         for l in next_task.lock_attempts_mut(ast).iter_mut() {
             match l.status {
