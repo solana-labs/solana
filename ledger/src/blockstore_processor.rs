@@ -194,7 +194,7 @@ fn execute_batch(
         batch,
         transaction_indexes,
     );
-    if let Some(first_error_from_scheduler) = batch.bank().handle_aborted_transactions().iter().next() {
+    if let Some(first_error_from_scheduler) = batch.bank().handle_aborted_transactions().into_iter().next() {
         first_error_from_scheduler?
     }
 
