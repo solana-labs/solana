@@ -6382,7 +6382,7 @@ impl Bank {
         let scheduler = {
             let r = self.scheduler.read().unwrap();
 
-            if scheduler.bank.read().unwrap().is_none() {
+            if r.bank.read().unwrap().is_none() {
                 drop(r);
                 panic!();
             } else {
