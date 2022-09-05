@@ -511,7 +511,7 @@ pub struct Task<T> {
     pub queue_end_time: std::sync::atomic::AtomicUsize,
     pub execute_time: std::sync::atomic::AtomicUsize,
     pub commit_time: std::sync::atomic::AtomicUsize,
-    pub for_indexer: LockAttemptsInCell,
+    pub for_indexer: LockAttemptsInCell<T>,
     pub extra: T,
 }
 
