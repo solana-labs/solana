@@ -198,7 +198,9 @@ fn execute_batch(
     if let Some(first_error_from_scheduler) = batch.bank().handle_aborted_transactions().into_iter().next() {
         first_error_from_scheduler?
     }
+    return Ok(());
 
+    /*
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
@@ -271,6 +273,7 @@ fn execute_batch(
 
     let first_err = get_first_error(batch, fee_collection_results);
     first_err.map(|(result, _)| result).unwrap_or(Ok(()))
+    */
 }
 
 #[derive(Default)]
