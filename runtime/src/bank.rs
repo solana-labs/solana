@@ -1310,7 +1310,7 @@ impl Scheduler {
     }
 
     fn handle_aborted_executions(&self) -> Vec<Result<()>> {
-        self.lock().unwrap().take()
+        self.errors.lock().unwrap().take()
     }
 }
 
