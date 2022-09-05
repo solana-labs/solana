@@ -762,11 +762,11 @@ impl<T> TaskQueue<T> {
 }
 
 #[inline(never)]
-fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
+fn attempt_lock_for_execution<'a, AST: AtScheduleThread, T>(
     ast: AST,
     from_runnable: bool,
     prefer_immediate: bool,
-    address_book: &mut AddressBook,
+    address_book: &mut AddressBook<T>,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
     lock_attempts: &mut [LockAttempt],
@@ -777,7 +777,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
     let mut busiest_page_cu = 1;
 
     for attempt in lock_attempts.iter_mut() {
-        let cu = AddressBook::attempt_lock_address(
+        let cu = AddressBook::<T>::attempt_lock_address(
             ast,
             from_runnable,
             prefer_immediate,
