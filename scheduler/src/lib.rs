@@ -301,7 +301,7 @@ impl<T> ProvisioningTracker<T> {
     }
 }
 
-impl AddressBook {
+impl<T> AddressBook<T> {
     #[inline(never)]
     fn attempt_lock_address<AST: AtScheduleThread>(
         ast: AST,
