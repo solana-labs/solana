@@ -895,15 +895,6 @@ impl<'a> InvokeContext<'a> {
         &self.sysvar_cache
     }
 
-    // Get pubkey of account at index
-    pub fn get_key_of_account_at_index(
-        &self,
-        index_in_transaction: usize,
-    ) -> Result<&Pubkey, InstructionError> {
-        self.transaction_context
-            .get_key_of_account_at_index(index_in_transaction)
-    }
-
     // Set this instruction syscall context
     pub fn set_syscall_context(
         &mut self,

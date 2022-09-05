@@ -70,7 +70,7 @@ pub fn process_instruction(
         return Err(InstructionError::InvalidAccountOwner);
     }
 
-    let signers = instruction_context.get_signers(transaction_context);
+    let signers = instruction_context.get_signers(transaction_context)?;
     match limited_deserialize(data)? {
         VoteInstruction::InitializeAccount(vote_init) => {
             let rent = get_sysvar_with_account_check::rent(invoke_context, instruction_context, 1)?;
