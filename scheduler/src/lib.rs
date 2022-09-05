@@ -826,7 +826,7 @@ enum TaskSource {
 }
 
 impl ScheduleStage {
-    fn push_to_runnable_queue(task: TaskInQueue<T>, runnable_queue: &mut TaskQueue) {
+    fn push_to_runnable_queue(task: TaskInQueue<T>, runnable_queue: &mut TaskQueue<T>) {
         runnable_queue.add_to_schedule(task.unique_weight, task);
     }
 
@@ -902,7 +902,7 @@ impl ScheduleStage {
     fn pop_from_queue_then_lock<AST: AtScheduleThread, T>(
         ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
-        runnable_queue: &mut TaskQueue,
+        runnable_queue: &mut TaskQueue<T>,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
@@ -1260,7 +1260,7 @@ impl ScheduleStage {
     fn schedule_next_execution<AST: AtScheduleThread, T>(
         ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
-        runnable_queue: &mut TaskQueue,
+        runnable_queue: &mut TaskQueue<T>,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
         prefer_immediate: bool,
