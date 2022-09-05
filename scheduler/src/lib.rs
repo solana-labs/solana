@@ -19,7 +19,7 @@ type PageRcInner<T> = std::rc::Rc<T>;
 unsafe impl Send for PageRc {}
 */
 
-type PageRcInner = triomphe::Arc<(std::cell::RefCell<Page>, TaskIds)>;
+type PageRcInner<T> = triomphe::Arc<(std::cell::RefCell<Page<T>>, TaskIds<T>)>;
 
 #[derive(Debug, Clone)]
 pub struct PageRc(PageRcInner);
