@@ -6385,7 +6385,7 @@ impl Bank {
             if r.bank.read().unwrap().is_none() {
                 drop(r);
                 let w = self.scheduler.write().unwrap();
-                w.bank.write().unwrap() = Some(Arc::clone(batch.bank));
+                w.bank.write().unwrap() = Some(Arc::clone(batch.bank()));
                 panic!();
             } else {
                 r
