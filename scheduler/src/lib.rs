@@ -1286,7 +1286,7 @@ impl ScheduleStage {
             (to_next_stage, None)
         } else {
             let h = std::thread::Builder::new()
-                .name("sol-reaper".to_string())
+                .name("solReaper".to_string())
                 .spawn(move || {
                     #[derive(Clone, Copy, Debug)]
                     struct NotAtTopOfScheduleThread;
@@ -1316,7 +1316,7 @@ impl ScheduleStage {
         let indexer_handles = (0..indexer_count).map(|thx| {
             let task_receiver = task_receiver.clone();
             std::thread::Builder::new()
-                .name(format!("sol-indexer{:02}", thx))
+                .name(format!("solIndexer{:02}", thx))
                 .spawn(move || {
                     while let Ok((task, ll)) = task_receiver.recv() {
                         for lock_attempt in ll {
