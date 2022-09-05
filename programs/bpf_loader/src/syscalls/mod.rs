@@ -1812,12 +1812,14 @@ declare_syscall!(
                 let account_metas = question_mark!(
                     (0..instruction_context.get_number_of_instruction_accounts())
                         .map(|instruction_account_index| Ok(AccountMeta {
-                            pubkey: *invoke_context.get_key_of_account_at_index(
-                                instruction_context
-                                    .get_index_of_instruction_account_in_transaction(
-                                        instruction_account_index
-                                    )?
-                            )?,
+                            pubkey: *invoke_context
+                                .transaction_context
+                                .get_key_of_account_at_index(
+                                    instruction_context
+                                        .get_index_of_instruction_account_in_transaction(
+                                            instruction_account_index
+                                        )?
+                                )?,
                             is_signer: instruction_context
                                 .is_instruction_account_signer(instruction_account_index)?,
                             is_writable: instruction_context
