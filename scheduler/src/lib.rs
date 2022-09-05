@@ -224,10 +224,10 @@ impl TaskIds {
 }
 
 #[derive(Debug)]
-pub struct Page {
+pub struct Page<T> {
     current_usage: Usage,
     next_usage: Usage,
-    provisional_task_ids: Vec<triomphe::Arc<ProvisioningTracker>>,
+    provisional_task_ids: Vec<triomphe::Arc<ProvisioningTracker<T>>>,
     cu: CU,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
