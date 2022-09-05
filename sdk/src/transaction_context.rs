@@ -1,4 +1,5 @@
 //! Data shared between program runtime and built-in programs as well as SBF programs
+#![deny(clippy::indexing_slicing)]
 
 #[cfg(target_os = "solana")]
 use crate::instruction::AccountPropertyUpdate;
@@ -482,7 +483,7 @@ impl InstructionContext {
         self.program_accounts
             .iter()
             .position(|index_in_transaction| {
-                &transaction_context.account_keys[*index_in_transaction] == pubkey
+                transaction_context.account_keys.get(*index_in_transaction) == Some(pubkey)
             })
     }
 
@@ -495,8 +496,10 @@ impl InstructionContext {
         self.instruction_accounts
             .iter()
             .position(|instruction_account| {
-                &transaction_context.account_keys[instruction_account.index_in_transaction]
-                    == pubkey
+                transaction_context
+                    .account_keys
+                    .get(instruction_account.index_in_transaction)
+                    == Some(pubkey)
             })
     }
 
@@ -649,7 +652,10 @@ impl InstructionContext {
         for instruction_account in self.instruction_accounts.iter() {
             if instruction_account.is_signer {
                 result.insert(
-                    transaction_context.account_keys[instruction_account.index_in_transaction],
+                    *transaction_context
+                        .account_keys
+                        .get(instruction_account.index_in_transaction)
+                        .unwrap(),
                 );
             }
         }
@@ -675,7 +681,9 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns the public key of this account (transaction wide)
     pub fn get_key(&self) -> &Pubkey {
-        &self.transaction_context.account_keys[self.index_in_transaction]
+        self.transaction_context
+            .get_key_of_account_at_index(self.index_in_transaction)
+            .unwrap()
     }
 
     /// Returns the owner of this account (transaction wide)
