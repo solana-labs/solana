@@ -1205,6 +1205,7 @@ struct Scheduler {
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
     errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
+    bank: usize,
 }
 
 impl Scheduler {
@@ -1322,6 +1323,7 @@ impl Default for Scheduler {
             preloader,
             graceful_stop_initiated: Default::default(),
             errors,
+            bank,
         }
     }
 }
