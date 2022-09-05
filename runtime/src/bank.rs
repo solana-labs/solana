@@ -1240,11 +1240,39 @@ impl Default for Scheduler {
         let (completed_ee_sender, completed_ee_receiver) = crossbeam_channel::unbounded();
         let (droppable_ee_sender, droppable_ee_receiver) = crossbeam_channel::unbounded();
 
+        let bank = Arc::new(Mutex::new(None::<Option<Arc<Bank>>>));
+
         let executing_thread_handles = (0..8).map(|thx| {
             let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
 
             std::thread::Builder::new().name(format!("solExec{:02}", thx)).spawn(move || {
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
+                let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
+                let lock_result = ee.transaction
+                    .get_account_locks(tx_account_lock_limit)
+                    .map(|_| ());
+                let mut batch =
+                    TransactionBatch::new(vec![lock_result], ee.bank(), Cow::Owned(vec![ee.transaction]));
+                batch.set_needs_unlock(false);
+
+
+                let (tx_results, _balances) = bank.load_execute_and_commit_transactions(
+                    batch,
+                    MAX_PROCESSING_AGE,
+                    false,
+                    false,
+                    false,
+                    false,
+                    Default::default(),
+                    None
+                );
+                let TransactionResults {
+                    fee_collection_results,
+                    ..
+                } = tx_results;
+                ee.execution_result = fee_collection_results.iter().collect::<Result<_>>();
+
+
                 ee.reindex_with_address_book();
                 completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
