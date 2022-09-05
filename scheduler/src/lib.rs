@@ -1303,7 +1303,7 @@ impl ScheduleStage {
         from_prev: &crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<PersistablePlayload>>, // assume nonblocking
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload>>, // assume nonblocking
     ) {
         info!("schedule_once:initial");
 
@@ -1316,7 +1316,7 @@ impl ScheduleStage {
         let mut completed_count = 0_usize;
         assert!(max_executing_queue_count > 0);
 
-        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<PersistablePlayload>();
+        let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<DroppablePayload>();
 
         let (to_next_stage, maybe_reaper_thread_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
             (to_next_stage, None)
@@ -1329,7 +1329,7 @@ impl ScheduleStage {
                     unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
                     let nast = NotAtTopOfScheduleThread;
 
-                    while let Ok(PersistablePlayload(mut a)) = ee_receiver.recv() {
+                    while let Ok(DroppablePayload(mut a)) = ee_receiver.recv() {
                         assert!(a.task.lock_attempts_not_mut(nast).is_empty());
                         //assert!(a.task.sequence_time() != usize::max_value());
                         //let lock_attempts = std::mem::take(&mut a.lock_attempts);
@@ -1388,7 +1388,7 @@ impl ScheduleStage {
                     executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                     completed_count = completed_count.checked_add(1).unwrap();
                     Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
-                    to_next_stage.send(PersistablePlayload(processed_execution_environment)).unwrap();
+                    to_next_stage.send(DroppablePayload(processed_execution_environment)).unwrap();
                }
                recv(from_prev) -> maybe_from => {
                    if maybe_from.is_err() {
@@ -1468,7 +1468,7 @@ impl ScheduleStage {
                             &mut execute_clock,
                             &mut provisioning_tracker_count,
                         );
-                        to_next_stage.send(PersistablePlayload(processed_execution_environment)).unwrap();
+                        to_next_stage.send(DroppablePayload(processed_execution_environment)).unwrap();
                     }
                     if !empty_from {
                         let task = from_prev.recv().unwrap().0;
@@ -1501,7 +1501,7 @@ impl ScheduleStage {
         from: &crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<PersistablePlayload>>, // assume nonblocking
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload>>, // assume nonblocking
     ) {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
@@ -1523,7 +1523,7 @@ impl ScheduleStage {
 pub struct SchedulablePayload(pub TaskInQueue);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
-pub struct PersistablePlayload(pub Box<ExecutionEnvironment>);
+pub struct DroppablePayload(pub Box<ExecutionEnvironment>);
 
 struct ExecuteStage {
     //bank: Bank,
