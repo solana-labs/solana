@@ -903,7 +903,7 @@ impl ScheduleStage {
         ast: AST,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue<T>,
-        address_book: &mut AddressBook,
+        address_book: &mut AddressBook<T>,
         contended_count: &mut usize,
         prefer_immediate: bool,
         sequence_clock: &usize,
