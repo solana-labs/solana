@@ -36,7 +36,7 @@ pub struct ExecutionEnvironment {
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub is_reindexed: bool,
-    pub execution_result: usize,
+    pub execution_result: Option<usize>,
 }
 
 impl ExecutionEnvironment {
@@ -1214,6 +1214,7 @@ impl ScheduleStage {
             cu: rng.gen_range(3, 1000),
             finalized_lock_attempts,
             is_reindexed: Default::default(),
+            execution_result: Default::default(),
         })
     }
 
