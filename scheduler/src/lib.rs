@@ -274,7 +274,7 @@ struct ProvisioningTracker<T> {
     task: TaskInQueue<T>,
 }
 
-impl<T> ProvisioningTracker {
+impl<T> ProvisioningTracker<T> {
     fn new(remaining_count: usize, task: TaskInQueue<T>) -> Self {
         Self {
             remaining_count: std::sync::atomic::AtomicUsize::new(remaining_count),
@@ -839,7 +839,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn select_next_task<'a, T>(
-        runnable_queue: &'a mut TaskQueue,
+        runnable_queue: &'a mut TaskQueue<T>,
         address_book: &mut AddressBook,
         contended_count: &usize,
     ) -> Option<(TaskSource, TaskInQueue<T>)> {
