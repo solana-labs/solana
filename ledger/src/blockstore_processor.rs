@@ -192,6 +192,7 @@ fn execute_batch(
 
     batch.bank().schedule_and_commit_transactions(
         batch,
+        bank,
         transaction_indexes,
     );
     if let Some(first_error_from_scheduler) = batch.bank().handle_aborted_transactions().into_iter().next() {
