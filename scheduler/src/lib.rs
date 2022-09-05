@@ -253,7 +253,7 @@ impl Page {
 //type AddressMap = std::collections::HashMap<Pubkey, PageRc>;
 type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
 type TaskId = UniqueWeight;
-type WeightedTaskIds = std::collections::BTreeMap<TaskId, TaskInQueue>;
+type WeightedTaskIds<T> = std::collections::BTreeMap<TaskId, TaskInQueue<T>>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
 type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
 
@@ -261,10 +261,10 @@ type StuckTaskId = (CU, TaskId);
 
 // needs ttl mechanism and prune
 #[derive(Default)]
-pub struct AddressBook {
+pub struct<T> AddressBook<T> {
     book: AddressMap,
-    uncontended_task_ids: WeightedTaskIds,
-    fulfilled_provisional_task_ids: WeightedTaskIds,
+    uncontended_task_ids: WeightedTaskIds<T>,
+    fulfilled_provisional_task_ids: WeightedTaskIds<T>,
     stuck_tasks: std::collections::BTreeMap<StuckTaskId, TaskInQueue<T>>,
 }
 
