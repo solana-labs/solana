@@ -1523,7 +1523,7 @@ impl ScheduleStage {
     }
 }
 
-pub struct SchedulablePayload(pub TaskInQueue<T>);
+pub struct SchedulablePayload<T>(pub TaskInQueue<T>);
 pub struct ExecutablePayload<T>(pub Box<ExecutionEnvironment<T>>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment<T>>);
 pub struct DroppablePayload<T>(pub Box<ExecutionEnvironment<T>>);
