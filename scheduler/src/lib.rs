@@ -29,13 +29,14 @@ unsafe impl Sync for PageRc {}
 type CU = u64;
 
 #[derive(Debug)]
-pub struct ExecutionEnvironment {
+pub struct ExecutionEnvironment<T> {
     //accounts: Vec<i8>,
     pub cu: CU,
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub is_reindexed: bool,
+    pub extra: T,
 }
 
 impl ExecutionEnvironment {
