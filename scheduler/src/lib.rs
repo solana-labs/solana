@@ -899,9 +899,9 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn pop_from_queue_then_lock<AST: AtScheduleThread>(
+    fn pop_from_queue_then_lock<AST: AtScheduleThread, T>(
         ast: AST,
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
@@ -909,7 +909,7 @@ impl ScheduleStage {
         sequence_clock: &usize,
         queue_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
-    ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
+    ) -> Option<(UniqueWeight, TaskInQueue<T>, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!(
                 "expediate pop from provisional queue [rest: {}]",
