@@ -36,6 +36,7 @@ pub struct ExecutionEnvironment {
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub is_reindexed: bool,
+    pub execution_result: usize,
 }
 
 impl ExecutionEnvironment {
