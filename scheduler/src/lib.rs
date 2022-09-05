@@ -885,7 +885,7 @@ impl ScheduleStage {
             }
             (None, None) => {
                 trace!("select: none");
-                if runnable_queue.task_count() == 0 && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0
+                if false && runnable_queue.task_count() == 0 && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0
                 {
                     trace!("handling stuck...");
                     let (stuck_task_id, task) = address_book.stuck_tasks.pop_first().unwrap();
@@ -1002,10 +1002,13 @@ impl ScheduleStage {
                         // stuck_tasks, so pretend to add anew one.
                         // todo: optimize this needless operation
                         next_task.update_busiest_page_cu(busiest_page_cu);
+                        /*
                         let a = address_book
                             .stuck_tasks
                             .insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
                         assert!(a.is_none());
+                        */
+
                         if from_runnable {
                             continue; // continue to prefer depleting the possibly-non-empty runnable queue
                         } else if task_source == TaskSource::Stuck {
@@ -1020,6 +1023,7 @@ impl ScheduleStage {
                         }
                     } else {
                         // todo: remove this task from stuck_tasks before update_busiest_page_cu
+                        /*
                         let removed = address_book
                             .stuck_tasks
                             .remove(&next_task.stuck_task_id())
@@ -1029,6 +1033,7 @@ impl ScheduleStage {
                             .stuck_tasks
                             .insert(next_task.stuck_task_id(), removed);
                         assert!(a.is_none());
+                        */
                         break;
                     }
                 } else if provisional_count > 0 {
@@ -1038,7 +1043,7 @@ impl ScheduleStage {
                     trace!("provisional exec: [{}/{}]", provisional_count, lock_count);
                     *contended_count = contended_count.checked_sub(1).unwrap();
                     next_task.mark_as_uncontended();
-                    address_book.stuck_tasks.remove(&next_task.stuck_task_id());
+                    //address_book.stuck_tasks.remove(&next_task.stuck_task_id());
                     next_task.update_busiest_page_cu(busiest_page_cu);
 
                     let tracker = triomphe::Arc::new(ProvisioningTracker::new(
@@ -1254,7 +1259,7 @@ impl ScheduleStage {
         );
         ee.task.mark_as_finished();
 
-        address_book.stuck_tasks.remove(&ee.task.stuck_task_id());
+        //address_book.stuck_tasks.remove(&ee.task.stuck_task_id());
 
         // block-wide qos validation will be done here
         // if error risen..:
