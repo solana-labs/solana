@@ -52,7 +52,7 @@ impl ExecutionEnvironment {
     //
     #[inline(never)]
     pub fn reindex_with_address_book(&mut self) {
-        assert!(!self.is_reindexed);
+        assert!(!self.is_reindexed());
         self.is_reindexed = true;
 
         let uq = self.unique_weight;
