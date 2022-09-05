@@ -200,7 +200,7 @@ pub struct TaskIds {
 
 impl TaskIds {
     #[inline(never)]
-    pub fn insert_task(&self, u: TaskId, task: TaskInQueue) {
+    pub fn insert_task<T>(&self, u: TaskId, task: TaskInQueue<T>) {
         let mut is_inserted = false;
         self.task_ids.get_or_insert_with(u, || {
             is_inserted = true;
