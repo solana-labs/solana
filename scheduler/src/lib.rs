@@ -110,7 +110,7 @@ impl ExecutionEnvironment {
     }
 
     fn is_aborted(&self) -> bool {
-        if let Some(r) = self.execution_result {
+        if let Some(r) = &self.execution_result {
             r.is_err()
         } else {
             false
