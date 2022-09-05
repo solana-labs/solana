@@ -1249,7 +1249,7 @@ impl Default for Scheduler {
         }).unwrap();
 
         let errors = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let errors_in_collector_thread = Arc::clone(errors);
+        let errors_in_collector_thread = Arc::clone(&errors);
 
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solErrorCol{:02}", 0)).spawn(move || {
             while let Ok(solana_scheduler::DroppablePayload(ee)) = droppable_ee_receiver.recv() {
