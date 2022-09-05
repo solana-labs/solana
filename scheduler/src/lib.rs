@@ -39,7 +39,7 @@ pub struct ExecutionEnvironment<T> {
     pub extra: T,
 }
 
-impl ExecutionEnvironment {
+impl<T> ExecutionEnvironment<T> {
     //fn new(cu: usize) -> Self {
     //    Self {
     //        cu,
