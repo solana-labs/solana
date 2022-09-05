@@ -1105,7 +1105,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn reset_lock_for_failed_execution<AST: AtScheduleThread>(
         ast: AST,
-        address_book: &mut AddressBook,
+        address_book: &mut AddressBook<T>,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
     ) {
@@ -1117,7 +1117,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn unlock_after_execution<AST: AtScheduleThread>(
         ast: AST,
-        address_book: &mut AddressBook,
+        address_book: &mut AddressBook<T>,
         lock_attempts: &mut [LockAttempt],
         provisioning_tracker_count: &mut usize,
         cu: CU,
