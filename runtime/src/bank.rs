@@ -1241,7 +1241,7 @@ impl Default for Scheduler {
 
         let executing_thread_handle = std::thread::Builder::new().name(format!("solExec{:02}", 0)).spawn(move || {
             while let Ok(solana_scheduler::ExecutablePayload(ee)) = scheduled_ee_receiver.recv() {
-                ee.reindex_to_address_book();
+                ee.reindex_with_address_book();
                 completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
             Ok(())
