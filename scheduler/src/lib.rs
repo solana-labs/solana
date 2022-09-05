@@ -157,7 +157,7 @@ impl<T> LockAttempt<T> {
         }
     }
 
-    pub fn contended_unique_weights(&self) -> &TaskIds {
+    pub fn contended_unique_weights<T>(&self) -> &TaskIds<T> {
         &self.target.0 .1
     }
 }
