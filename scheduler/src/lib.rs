@@ -127,12 +127,12 @@ enum LockStatus {
 }
 
 #[derive(Debug)]
-pub struct LockAttempt {
+pub struct LockAttempt<T> {
     target: PageRc,
     status: LockStatus,
     requested_usage: RequestedUsage,
     //pub heaviest_uncontended: arc_swap::ArcSwapOption<Task>,
-    pub heaviest_uncontended: Option<TaskInQueue>,
+    pub heaviest_uncontended: Option<TaskInQueue<T>>,
     //remembered: bool,
 }
 
@@ -194,11 +194,11 @@ pub enum RequestedUsage {
 }
 
 #[derive(Debug, Default)]
-pub struct TaskIds {
+pub struct TaskIds<T> {
     task_ids: crossbeam_skiplist::SkipMap<UniqueWeight, TaskInQueue<T>>,
 }
 
-impl TaskIds {
+impl<T> TaskIds<T> {
     #[inline(never)]
     pub fn insert_task<T>(&self, u: TaskId, task: TaskInQueue<T>) {
         let mut is_inserted = false;
@@ -558,7 +558,7 @@ impl<T> Task<T> {
 
     #[inline(never)]
     pub fn clone_in_queue(this: &TaskInQueue<T>) -> TaskInQueue<T> {
-        TaskInQueue<T>::clone(this)
+        TaskInQueue::<T>::clone(this)
     }
 
     fn lock_attempts_mut<AST: AtScheduleThread>(
@@ -826,7 +826,7 @@ enum TaskSource {
 }
 
 impl ScheduleStage {
-    fn push_to_runnable_queue(task: TaskInQueue<T>, runnable_queue: &mut TaskQueue<T>) {
+    fn push_to_runnable_queue<T>(task: TaskInQueue<T>, runnable_queue: &mut TaskQueue<T>) {
         runnable_queue.add_to_schedule(task.unique_weight, task);
     }
 
