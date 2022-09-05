@@ -1247,6 +1247,8 @@ impl Default for Scheduler {
 
             std::thread::Builder::new().name(format!("solExec{:02}", thx)).spawn(move || {
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
+                let bank = bank.read().unwrap().unwrap();
+
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
                 let lock_result = ee.transaction
                     .get_account_locks(tx_account_lock_limit)
