@@ -261,7 +261,7 @@ type StuckTaskId = (CU, TaskId);
 
 // needs ttl mechanism and prune
 #[derive(Default)]
-pub struct<T> AddressBook<T> {
+pub struct AddressBook<T> {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds<T>,
     fulfilled_provisional_task_ids: WeightedTaskIds<T>,
