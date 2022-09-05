@@ -1275,11 +1275,12 @@ impl Default for Scheduler {
 impl Scheduler {
     fn gracefully_stop(&mut self) -> Result<()> {
         if self.graceful_stop_initiated {
+            info!("Scheduler::gracefully_stop(): (skipped..?)");
             return Ok(());
         }
         self.graceful_stop_initiated = true;
 
-        info!("Scheduler::gracefully_stop()..");
+        info!("Scheduler::gracefully_stop(): waiting..");
         let mut transaction_sender = self.transaction_sender.take().unwrap();
         drop(transaction_sender);
         let h = self.executing_thread_handle.take().unwrap();
