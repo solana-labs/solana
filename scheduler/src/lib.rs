@@ -1500,7 +1500,7 @@ impl ScheduleStage {
     pub fn run<T>(
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue<T>,
-        address_book: &mut AddressBook,
+        address_book: &mut AddressBook<T>,
         from: &crossbeam_channel::Receiver<SchedulablePayload<T>>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload<T>>,
         from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
