@@ -826,14 +826,14 @@ enum TaskSource {
 }
 
 impl ScheduleStage {
-    fn push_to_runnable_queue(task: TaskInQueue, runnable_queue: &mut TaskQueue) {
+    fn push_to_runnable_queue(task: TaskInQueue<T>, runnable_queue: &mut TaskQueue) {
         runnable_queue.add_to_schedule(task.unique_weight, task);
     }
 
     #[inline(never)]
     fn get_heaviest_from_contended<'a>(
         address_book: &'a mut AddressBook,
-    ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>> {
+    ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue<T>>> {
         address_book.uncontended_task_ids.last_entry()
     }
 
