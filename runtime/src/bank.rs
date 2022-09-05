@@ -1272,7 +1272,7 @@ impl Default for Scheduler {
                     fee_collection_results,
                     ..
                 } = tx_results;
-                ee.execution_result = fee_collection_results.into_iter().copied().collect::<Result<_>>();
+                ee.execution_result = fee_collection_results.into_iter().collect::<Result<_>>();
 
 
                 ee.reindex_with_address_book();
