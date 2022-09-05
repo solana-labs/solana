@@ -114,7 +114,7 @@ unsafe trait AtScheduleThread: Copy {}
 pub unsafe trait NotAtScheduleThread: Copy {}
 
 impl PageRc {
-    fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
+    fn page_mut<AST: AtScheduleThread, T>(&self, _ast: AST) -> std::cell::RefMut<'_, Page, T> {
         self.0 .0.borrow_mut()
     }
 }
