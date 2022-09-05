@@ -1197,7 +1197,7 @@ impl ScheduleStage {
 
     #[inline(never)]
     fn prepare_scheduled_execution<T>(
-        address_book: &mut AddressBook,
+        address_book: &mut AddressBook<T>,
         unique_weight: UniqueWeight,
         task: TaskInQueue<T>,
         finalized_lock_attempts: Vec<LockAttempt>,
@@ -1222,7 +1222,7 @@ impl ScheduleStage {
     fn commit_completed_execution<AST: AtScheduleThread, T>(
         ast: AST,
         ee: &mut ExecutionEnvironment<T>,
-        address_book: &mut AddressBook,
+        address_book: &mut AddressBook<T>,
         commit_time: &mut usize,
         provisioning_tracker_count: &mut usize,
     ) {
