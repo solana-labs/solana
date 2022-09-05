@@ -18,7 +18,7 @@ use {
         saturating_add_assign,
         sysvar::instructions,
         transaction::TransactionError,
-        transaction_context::{InstructionAccount, TransactionContext},
+        transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
     std::{borrow::Cow, cell::RefCell, rc::Rc, sync::Arc},
 };
@@ -52,7 +52,7 @@ impl MessageProcessor {
     pub fn process_message(
         builtin_programs: &[BuiltinProgram],
         message: &SanitizedMessage,
-        program_indices: &[Vec<usize>],
+        program_indices: &[Vec<IndexOfAccount>],
         transaction_context: &mut TransactionContext,
         rent: Rent,
         log_collector: Option<Rc<RefCell<LogCollector>>>,
@@ -116,11 +116,12 @@ impl MessageProcessor {
                     .ok_or(TransactionError::InvalidAccountIndex)?
                     .iter()
                     .position(|account_index| account_index == index_in_transaction)
-                    .unwrap_or(instruction_account_index);
+                    .unwrap_or(instruction_account_index)
+                    as IndexOfAccount;
                 let index_in_transaction = *index_in_transaction as usize;
                 instruction_accounts.push(InstructionAccount {
-                    index_in_transaction,
-                    index_in_caller: index_in_transaction,
+                    index_in_transaction: index_in_transaction as IndexOfAccount,
+                    index_in_caller: index_in_transaction as IndexOfAccount,
                     index_in_callee,
                     is_signer: message.is_signer(index_in_transaction),
                     is_writable: message.is_writable(index_in_transaction),
@@ -216,7 +217,7 @@ mod tests {
         }
 
         fn mock_system_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -428,7 +429,7 @@ mod tests {
         }
 
         fn mock_system_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -642,7 +643,7 @@ mod tests {
     fn test_precompile() {
         let mock_program_id = Pubkey::new_unique();
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> Result<(), InstructionError> {
             Err(InstructionError::Custom(0xbabb1e))

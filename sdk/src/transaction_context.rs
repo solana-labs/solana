@@ -77,21 +77,24 @@ pub enum TransactionContextAttribute {
     InstructionAccountIsWritable,
 }
 
+/// Index of an account inside of the TransactionContext or an InstructionContext.
+pub type IndexOfAccount = u16;
+
 /// Contains account meta data which varies between instruction.
 ///
 /// It also contains indices to other structures for faster lookup.
 #[derive(Clone, Debug)]
 pub struct InstructionAccount {
     /// Points to the account and its key in the `TransactionContext`
-    pub index_in_transaction: usize,
+    pub index_in_transaction: IndexOfAccount,
     /// Points to the first occurrence in the parent `InstructionContext`
     ///
     /// This excludes the program accounts.
-    pub index_in_caller: usize,
+    pub index_in_caller: IndexOfAccount,
     /// Points to the first occurrence in the current `InstructionContext`
     ///
     /// This excludes the program accounts.
-    pub index_in_callee: usize,
+    pub index_in_callee: IndexOfAccount,
     /// Is this account supposed to sign
     pub is_signer: bool,
     /// Is this account allowed to become writable
@@ -169,17 +172,17 @@ impl TransactionContext {
     }
 
     /// Returns the total number of accounts loaded in this Transaction
-    pub fn get_number_of_accounts(&self) -> usize {
-        self.accounts.len()
+    pub fn get_number_of_accounts(&self) -> IndexOfAccount {
+        self.accounts.len() as IndexOfAccount
     }
 
     /// Searches for an account by its key
     pub fn get_key_of_account_at_index(
         &self,
-        index_in_transaction: usize,
+        index_in_transaction: IndexOfAccount,
     ) -> Result<&Pubkey, InstructionError> {
         self.account_keys
-            .get(index_in_transaction)
+            .get(index_in_transaction as usize)
             .ok_or(InstructionError::NotEnoughAccountKeys)
     }
 
@@ -187,21 +190,27 @@ impl TransactionContext {
     #[cfg(not(target_os = "solana"))]
     pub fn get_account_at_index(
         &self,
-        index_in_transaction: usize,
+        index_in_transaction: IndexOfAccount,
     ) -> Result<&RefCell<AccountSharedData>, InstructionError> {
         self.accounts
-            .get(index_in_transaction)
+            .get(index_in_transaction as usize)
             .ok_or(InstructionError::NotEnoughAccountKeys)
     }
 
     /// Searches for an account by its key
-    pub fn find_index_of_account(&self, pubkey: &Pubkey) -> Option<usize> {
-        self.account_keys.iter().position(|key| key == pubkey)
+    pub fn find_index_of_account(&self, pubkey: &Pubkey) -> Option<IndexOfAccount> {
+        self.account_keys
+            .iter()
+            .position(|key| key == pubkey)
+            .map(|index| index as IndexOfAccount)
     }
 
     /// Searches for a program account by its key
-    pub fn find_index_of_program_account(&self, pubkey: &Pubkey) -> Option<usize> {
-        self.account_keys.iter().rposition(|key| key == pubkey)
+    pub fn find_index_of_program_account(&self, pubkey: &Pubkey) -> Option<IndexOfAccount> {
+        self.account_keys
+            .iter()
+            .rposition(|key| key == pubkey)
+            .map(|index| index as IndexOfAccount)
     }
 
     /// Returns the instruction trace length.
@@ -416,7 +425,7 @@ pub struct TransactionReturnData {
 pub struct InstructionContext {
     nesting_level: usize,
     instruction_accounts_lamport_sum: u128,
-    program_accounts: Vec<usize>,
+    program_accounts: Vec<IndexOfAccount>,
     instruction_accounts: Vec<InstructionAccount>,
     instruction_data: Vec<u8>,
 }
@@ -426,7 +435,7 @@ impl InstructionContext {
     #[cfg(not(target_os = "solana"))]
     pub fn configure(
         &mut self,
-        program_accounts: &[usize],
+        program_accounts: &[IndexOfAccount],
         instruction_accounts: &[InstructionAccount],
         instruction_data: &[u8],
     ) {
@@ -448,19 +457,19 @@ impl InstructionContext {
     }
 
     /// Number of program accounts
-    pub fn get_number_of_program_accounts(&self) -> usize {
-        self.program_accounts.len()
+    pub fn get_number_of_program_accounts(&self) -> IndexOfAccount {
+        self.program_accounts.len() as IndexOfAccount
     }
 
     /// Number of accounts in this Instruction (without program accounts)
-    pub fn get_number_of_instruction_accounts(&self) -> usize {
-        self.instruction_accounts.len()
+    pub fn get_number_of_instruction_accounts(&self) -> IndexOfAccount {
+        self.instruction_accounts.len() as IndexOfAccount
     }
 
     /// Assert that enough account were supplied to this Instruction
     pub fn check_number_of_instruction_accounts(
         &self,
-        expected_at_least: usize,
+        expected_at_least: IndexOfAccount,
     ) -> Result<(), InstructionError> {
         if self.get_number_of_instruction_accounts() < expected_at_least {
             Err(InstructionError::NotEnoughAccountKeys)
@@ -479,12 +488,16 @@ impl InstructionContext {
         &self,
         transaction_context: &TransactionContext,
         pubkey: &Pubkey,
-    ) -> Option<usize> {
+    ) -> Option<IndexOfAccount> {
         self.program_accounts
             .iter()
             .position(|index_in_transaction| {
-                transaction_context.account_keys.get(*index_in_transaction) == Some(pubkey)
+                transaction_context
+                    .account_keys
+                    .get(*index_in_transaction as usize)
+                    == Some(pubkey)
             })
+            .map(|index| index as IndexOfAccount)
     }
 
     /// Searches for an instruction account by its key
@@ -492,49 +505,50 @@ impl InstructionContext {
         &self,
         transaction_context: &TransactionContext,
         pubkey: &Pubkey,
-    ) -> Option<usize> {
+    ) -> Option<IndexOfAccount> {
         self.instruction_accounts
             .iter()
             .position(|instruction_account| {
                 transaction_context
                     .account_keys
-                    .get(instruction_account.index_in_transaction)
+                    .get(instruction_account.index_in_transaction as usize)
                     == Some(pubkey)
             })
+            .map(|index| index as IndexOfAccount)
     }
 
     /// Translates the given instruction wide program_account_index into a transaction wide index
     pub fn get_index_of_program_account_in_transaction(
         &self,
-        program_account_index: usize,
-    ) -> Result<usize, InstructionError> {
+        program_account_index: IndexOfAccount,
+    ) -> Result<IndexOfAccount, InstructionError> {
         Ok(*self
             .program_accounts
-            .get(program_account_index)
+            .get(program_account_index as usize)
             .ok_or(InstructionError::NotEnoughAccountKeys)?)
     }
 
     /// Translates the given instruction wide instruction_account_index into a transaction wide index
     pub fn get_index_of_instruction_account_in_transaction(
         &self,
-        instruction_account_index: usize,
-    ) -> Result<usize, InstructionError> {
+        instruction_account_index: IndexOfAccount,
+    ) -> Result<IndexOfAccount, InstructionError> {
         Ok(self
             .instruction_accounts
-            .get(instruction_account_index)
+            .get(instruction_account_index as usize)
             .ok_or(InstructionError::NotEnoughAccountKeys)?
-            .index_in_transaction)
+            .index_in_transaction as IndexOfAccount)
     }
 
     /// Returns `Some(instruction_account_index)` if this is a duplicate
     /// and `None` if it is the first account with this key
     pub fn is_instruction_account_duplicate(
         &self,
-        instruction_account_index: usize,
-    ) -> Result<Option<usize>, InstructionError> {
+        instruction_account_index: IndexOfAccount,
+    ) -> Result<Option<IndexOfAccount>, InstructionError> {
         let index_in_callee = self
             .instruction_accounts
-            .get(instruction_account_index)
+            .get(instruction_account_index as usize)
             .ok_or(InstructionError::NotEnoughAccountKeys)?
             .index_in_callee;
         Ok(if index_in_callee == instruction_account_index {
@@ -560,12 +574,12 @@ impl InstructionContext {
     fn try_borrow_account<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
-        index_in_transaction: usize,
-        index_in_instruction: usize,
+        index_in_transaction: IndexOfAccount,
+        index_in_instruction: IndexOfAccount,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
         let account = transaction_context
             .accounts
-            .get(index_in_transaction)
+            .get(index_in_transaction as usize)
             .ok_or(InstructionError::MissingAccount)?
             .try_borrow_mut()
             .map_err(|_| InstructionError::AccountBorrowFailed)?;
@@ -595,7 +609,7 @@ impl InstructionContext {
     pub fn try_borrow_program_account<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
-        program_account_index: usize,
+        program_account_index: IndexOfAccount,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
         let index_in_transaction =
             self.get_index_of_program_account_in_transaction(program_account_index)?;
@@ -610,7 +624,7 @@ impl InstructionContext {
     pub fn try_borrow_instruction_account<'a, 'b: 'a>(
         &'a self,
         transaction_context: &'b TransactionContext,
-        instruction_account_index: usize,
+        instruction_account_index: IndexOfAccount,
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
         let index_in_transaction =
             self.get_index_of_instruction_account_in_transaction(instruction_account_index)?;
@@ -625,11 +639,11 @@ impl InstructionContext {
     /// Returns whether an instruction account is a signer
     pub fn is_instruction_account_signer(
         &self,
-        instruction_account_index: usize,
+        instruction_account_index: IndexOfAccount,
     ) -> Result<bool, InstructionError> {
         Ok(self
             .instruction_accounts
-            .get(instruction_account_index)
+            .get(instruction_account_index as usize)
             .ok_or(InstructionError::MissingAccount)?
             .is_signer)
     }
@@ -637,11 +651,11 @@ impl InstructionContext {
     /// Returns whether an instruction account is writable
     pub fn is_instruction_account_writable(
         &self,
-        instruction_account_index: usize,
+        instruction_account_index: IndexOfAccount,
     ) -> Result<bool, InstructionError> {
         Ok(self
             .instruction_accounts
-            .get(instruction_account_index)
+            .get(instruction_account_index as usize)
             .ok_or(InstructionError::MissingAccount)?
             .is_writable)
     }
@@ -669,14 +683,14 @@ impl InstructionContext {
 pub struct BorrowedAccount<'a> {
     transaction_context: &'a TransactionContext,
     instruction_context: &'a InstructionContext,
-    index_in_transaction: usize,
-    index_in_instruction: usize,
+    index_in_transaction: IndexOfAccount,
+    index_in_instruction: IndexOfAccount,
     account: RefMut<'a, AccountSharedData>,
 }
 
 impl<'a> BorrowedAccount<'a> {
     /// Returns the index of this account (transaction wide)
-    pub fn get_index_in_transaction(&self) -> usize {
+    pub fn get_index_in_transaction(&self) -> IndexOfAccount {
         self.index_in_transaction
     }
 
@@ -1043,7 +1057,7 @@ impl<'a> BorrowedAccount<'a> {
                 .account_touched_flags
                 .try_borrow_mut()
                 .map_err(|_| InstructionError::GenericError)?
-                .get_mut(self.index_in_transaction)
+                .get_mut(self.index_in_transaction as usize)
                 .ok_or(InstructionError::NotEnoughAccountKeys)? = true;
         }
         Ok(())

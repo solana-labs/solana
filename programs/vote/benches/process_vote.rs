@@ -11,7 +11,9 @@ use {
         pubkey::Pubkey,
         slot_hashes::{SlotHashes, MAX_ENTRIES},
         sysvar,
-        transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
+        transaction_context::{
+            IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
+        },
     },
     solana_vote_program::{
         vote_instruction::VoteInstruction,
@@ -82,7 +84,7 @@ fn create_accounts() -> (
     ];
     let mut instruction_accounts = (0..4)
         .map(|index_in_callee| InstructionAccount {
-            index_in_transaction: 1usize.saturating_add(index_in_callee),
+            index_in_transaction: (1 as IndexOfAccount).saturating_add(index_in_callee),
             index_in_caller: index_in_callee,
             index_in_callee,
             is_signer: false,

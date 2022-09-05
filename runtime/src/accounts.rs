@@ -53,7 +53,7 @@ use {
         system_program,
         sysvar::{self, epoch_schedule::EpochSchedule, instructions::construct_instructions_data},
         transaction::{Result, SanitizedTransaction, TransactionAccountLocks, TransactionError},
-        transaction_context::TransactionAccount,
+        transaction_context::{IndexOfAccount, TransactionAccount},
     },
     std::{
         cmp::Reverse,
@@ -125,7 +125,7 @@ pub struct Accounts {
 
 // for the load instructions
 pub type TransactionRent = u64;
-pub type TransactionProgramIndices = Vec<Vec<usize>>;
+pub type TransactionProgramIndices = Vec<Vec<IndexOfAccount>>;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: Vec<TransactionAccount>,
@@ -313,7 +313,7 @@ impl Accounts {
                             Self::validate_fee_payer(
                                 key,
                                 &mut account,
-                                i,
+                                i as IndexOfAccount,
                                 error_counters,
                                 rent_collector,
                                 feature_set,
@@ -379,11 +379,11 @@ impl Accounts {
                         self.load_executable_accounts(
                             ancestors,
                             &mut accounts,
-                            instruction.program_id_index as usize,
+                            instruction.program_id_index as IndexOfAccount,
                             error_counters,
                         )
                     })
-                    .collect::<Result<Vec<Vec<usize>>>>()?;
+                    .collect::<Result<Vec<Vec<IndexOfAccount>>>>()?;
 
                 Ok(LoadedTransaction {
                     accounts,
@@ -401,7 +401,7 @@ impl Accounts {
     fn validate_fee_payer(
         payer_address: &Pubkey,
         payer_account: &mut AccountSharedData,
-        payer_index: usize,
+        payer_index: IndexOfAccount,
         error_counters: &mut TransactionErrorMetrics,
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
@@ -450,11 +450,11 @@ impl Accounts {
         &self,
         ancestors: &Ancestors,
         accounts: &mut Vec<TransactionAccount>,
-        mut program_account_index: usize,
+        mut program_account_index: IndexOfAccount,
         error_counters: &mut TransactionErrorMetrics,
-    ) -> Result<Vec<usize>> {
+    ) -> Result<Vec<IndexOfAccount>> {
         let mut account_indices = Vec::new();
-        let mut program_id = match accounts.get(program_account_index) {
+        let mut program_id = match accounts.get(program_account_index as usize) {
             Some(program_account) => program_account.0,
             None => {
                 error_counters.account_not_found += 1;
@@ -474,7 +474,7 @@ impl Accounts {
                 .load_with_fixed_root(ancestors, &program_id)
             {
                 Some((program_account, _)) => {
-                    let account_index = accounts.len();
+                    let account_index = accounts.len() as IndexOfAccount;
                     accounts.push((program_id, program_account));
                     account_index
                 }
@@ -483,7 +483,7 @@ impl Accounts {
                     return Err(TransactionError::ProgramAccountNotFound);
                 }
             };
-            let program = &accounts[program_account_index].1;
+            let program = &accounts[program_account_index as usize].1;
             if !program.executable() {
                 error_counters.invalid_program_for_execution += 1;
                 return Err(TransactionError::InvalidProgramForExecution);
@@ -503,7 +503,7 @@ impl Accounts {
                         .load_with_fixed_root(ancestors, &programdata_address)
                     {
                         Some((programdata_account, _)) => {
-                            let account_index = accounts.len();
+                            let account_index = accounts.len() as IndexOfAccount;
                             accounts.push((programdata_address, programdata_account));
                             account_index
                         }
@@ -2028,11 +2028,11 @@ mod tests {
                     for (i, program_index) in program_indices.iter().enumerate() {
                         // +1 to skip first not loader account
                         assert_eq!(
-                            loaded_transaction.accounts[*program_index].0,
+                            loaded_transaction.accounts[*program_index as usize].0,
                             accounts[i + 1].0
                         );
                         assert_eq!(
-                            loaded_transaction.accounts[*program_index].1,
+                            loaded_transaction.accounts[*program_index as usize].1,
                             accounts[i + 1].1
                         );
                     }
@@ -2262,7 +2262,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[2]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[2]
+        );
     }
 
     #[test]
@@ -2345,7 +2348,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[5]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[5]
+        );
 
         // Solution 2: mark programdata as readonly
         message.account_keys = vec![key0, key1, key2]; // revert key change
@@ -2357,9 +2363,18 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[5]);
-        assert_eq!(result.accounts[result.program_indices[0][1]], accounts[4]);
-        assert_eq!(result.accounts[result.program_indices[0][2]], accounts[3]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[5]
+        );
+        assert_eq!(
+            result.accounts[result.program_indices[0][1] as usize],
+            accounts[4]
+        );
+        assert_eq!(
+            result.accounts[result.program_indices[0][2] as usize],
+            accounts[3]
+        );
     }
 
     #[test]
@@ -2428,7 +2443,7 @@ mod tests {
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts_with_upgradeable_loader[..2]);
         assert_eq!(
-            result.accounts[result.program_indices[0][0]],
+            result.accounts[result.program_indices[0][0] as usize],
             accounts_with_upgradeable_loader[2]
         );
 
@@ -2442,7 +2457,10 @@ mod tests {
         assert_eq!(loaded_accounts.len(), 1);
         let result = loaded_accounts[0].0.as_ref().unwrap();
         assert_eq!(result.accounts[..2], accounts[..2]);
-        assert_eq!(result.accounts[result.program_indices[0][0]], accounts[2]);
+        assert_eq!(
+            result.accounts[result.program_indices[0][0] as usize],
+            accounts[2]
+        );
     }
 
     #[test]

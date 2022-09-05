@@ -8052,6 +8052,7 @@ pub(crate) mod tests {
             system_program,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
+            transaction_context::IndexOfAccount,
         },
         solana_vote_program::{
             vote_instruction,
@@ -9061,7 +9062,7 @@ pub(crate) mod tests {
         }
 
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -12670,7 +12671,7 @@ pub(crate) mod tests {
             Pubkey::new(&[42u8; 32])
         }
         fn mock_vote_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -12729,7 +12730,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_vote_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
@@ -12777,7 +12778,7 @@ pub(crate) mod tests {
         let mut bank = create_simple_test_bank(500);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
@@ -14051,7 +14052,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -14111,7 +14112,7 @@ pub(crate) mod tests {
 
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             Ok(())
@@ -14333,7 +14334,7 @@ pub(crate) mod tests {
 
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ok_vote_processor(
-        _first_instruction_account: usize,
+        _first_instruction_account: IndexOfAccount,
         _invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
@@ -14581,7 +14582,7 @@ pub(crate) mod tests {
     #[test]
     fn test_same_program_id_uses_unqiue_executable_accounts() {
         fn nested_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -14851,7 +14852,7 @@ pub(crate) mod tests {
     fn test_add_builtin_no_overwrite() {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
@@ -14887,7 +14888,7 @@ pub(crate) mod tests {
     fn test_add_builtin_loader_no_overwrite() {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
@@ -15207,7 +15208,7 @@ pub(crate) mod tests {
     impl Executor for TestExecutor {
         fn execute(
             &self,
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
@@ -17016,7 +17017,7 @@ pub(crate) mod tests {
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let mock_program_id = Pubkey::new(&[2u8; 32]);
@@ -17214,7 +17215,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -17424,7 +17425,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
@@ -17468,7 +17469,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
@@ -17519,7 +17520,7 @@ pub(crate) mod tests {
             .unwrap();
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
@@ -18023,7 +18024,7 @@ pub(crate) mod tests {
     }
 
     fn mock_transfer_process_instruction(
-        _first_instruction_account: usize,
+        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -18878,7 +18879,7 @@ pub(crate) mod tests {
     }
 
     fn mock_realloc_process_instruction(
-        _first_instruction_account: usize,
+        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;

@@ -62,6 +62,7 @@ use {
 pub use {
     solana_banks_client::{BanksClient, BanksClientError},
     solana_program_runtime::invoke_context::InvokeContext,
+    solana_sdk::transaction_context::IndexOfAccount,
 };
 
 pub mod programs;
@@ -94,7 +95,7 @@ fn get_invoke_context<'a, 'b>() -> &'a mut InvokeContext<'b> {
 
 pub fn builtin_process_instruction(
     process_instruction: solana_sdk::entrypoint::ProcessInstruction,
-    _first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     set_invoke_context(invoke_context);
@@ -113,7 +114,7 @@ pub fn builtin_process_instruction(
     );
 
     // Copy indices_in_instruction into a HashSet to ensure there are no duplicates
-    let deduplicated_indices: HashSet<usize> = instruction_account_indices.collect();
+    let deduplicated_indices: HashSet<IndexOfAccount> = instruction_account_indices.collect();
 
     // Serialize entrypoint parameters with BPF ABI
     let (mut parameter_bytes, _account_lengths) = serialize_parameters(
@@ -177,7 +178,7 @@ pub fn builtin_process_instruction(
 macro_rules! processor {
     ($process_instruction:expr) => {
         Some(
-            |first_instruction_account: usize,
+            |first_instruction_account: $crate::IndexOfAccount,
              invoke_context: &mut solana_program_test::InvokeContext| {
                 $crate::builtin_process_instruction(
                     $process_instruction,
