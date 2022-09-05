@@ -273,19 +273,16 @@ impl TransactionContext {
             .instruction_trace
             .last()
             .ok_or(InstructionError::CallDepth)?;
-        let callee_instruction_accounts_lamport_sum = self.instruction_accounts_lamport_sum(
-            caller_instruction_context.instruction_accounts.iter(),
-        )?;
+        let callee_instruction_accounts_lamport_sum =
+            self.instruction_accounts_lamport_sum(caller_instruction_context)?;
         if !self.instruction_stack.is_empty()
             && self.is_early_verification_of_account_modifications_enabled()
         {
             let caller_instruction_context = self.get_current_instruction_context()?;
             let original_caller_instruction_accounts_lamport_sum =
                 caller_instruction_context.instruction_accounts_lamport_sum;
-            let current_caller_instruction_accounts_lamport_sum = self
-                .instruction_accounts_lamport_sum(
-                    caller_instruction_context.instruction_accounts.iter(),
-                )?;
+            let current_caller_instruction_accounts_lamport_sum =
+                self.instruction_accounts_lamport_sum(caller_instruction_context)?;
             if original_caller_instruction_accounts_lamport_sum
                 != current_caller_instruction_accounts_lamport_sum
             {
@@ -324,13 +321,11 @@ impl TransactionContext {
                                 .try_borrow_mut()
                                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?;
                         }
-                        self.instruction_accounts_lamport_sum(
-                            instruction_context.instruction_accounts.iter(),
-                        )
-                        .map(|instruction_accounts_lamport_sum| {
-                            instruction_context.instruction_accounts_lamport_sum
-                                != instruction_accounts_lamport_sum
-                        })
+                        self.instruction_accounts_lamport_sum(instruction_context)
+                            .map(|instruction_accounts_lamport_sum| {
+                                instruction_context.instruction_accounts_lamport_sum
+                                    != instruction_accounts_lamport_sum
+                            })
                     })
             } else {
                 Ok(false)
@@ -361,23 +356,26 @@ impl TransactionContext {
 
     /// Calculates the sum of all lamports within an instruction
     #[cfg(not(target_os = "solana"))]
-    fn instruction_accounts_lamport_sum<'a, I>(
-        &'a self,
-        instruction_accounts: I,
-    ) -> Result<u128, InstructionError>
-    where
-        I: Iterator<Item = &'a InstructionAccount>,
-    {
+    fn instruction_accounts_lamport_sum(
+        &self,
+        instruction_context: &InstructionContext,
+    ) -> Result<u128, InstructionError> {
         if !self.is_early_verification_of_account_modifications_enabled() {
             return Ok(0);
         }
         let mut instruction_accounts_lamport_sum: u128 = 0;
-        for (instruction_account_index, instruction_account) in instruction_accounts.enumerate() {
-            if instruction_account_index != instruction_account.index_in_callee {
+        for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts()
+        {
+            if instruction_context
+                .is_instruction_account_duplicate(instruction_account_index)?
+                .is_some()
+            {
                 continue; // Skip duplicate account
             }
+            let index_in_transaction = instruction_context
+                .get_index_of_instruction_account_in_transaction(instruction_account_index)?;
             instruction_accounts_lamport_sum = (self
-                .get_account_at_index(instruction_account.index_in_transaction)?
+                .get_account_at_index(index_in_transaction)?
                 .try_borrow()
                 .map_err(|_| InstructionError::AccountBorrowOutstanding)?
                 .lamports() as u128)
