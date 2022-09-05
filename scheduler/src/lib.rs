@@ -743,7 +743,7 @@ type TaskQueueEntry<'a, T> = std::collections::btree_map::Entry<'a, UniqueWeight
 type TaskQueueOccupiedEntry<'a, T> =
     std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue<T>>;
 
-impl TaskQueue {
+impl<T> TaskQueue<T> {
     #[inline(never)]
     fn add_to_schedule(&mut self, unique_weight: UniqueWeight, task: TaskInQueue<T>) {
         //trace!("TaskQueue::add(): {:?}", unique_weight);
@@ -752,7 +752,7 @@ impl TaskQueue {
     }
 
     #[inline(never)]
-    fn heaviest_entry_to_execute(&mut self) -> Option<TaskQueueOccupiedEntry<'_>> {
+    fn heaviest_entry_to_execute(&mut self) -> Option<TaskQueueOccupiedEntry<'_, T>> {
         self.tasks.last_entry()
     }
 
