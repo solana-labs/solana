@@ -6388,7 +6388,8 @@ impl Bank {
             } else {
                 r
             }
-        }
+        };
+
         for (st, &i) in batch.sanitized_transactions().iter().zip(transaction_indexes.iter()) {
             scheduler.schedule(st, i);
         }
