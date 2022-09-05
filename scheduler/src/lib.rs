@@ -713,7 +713,7 @@ impl Task {
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
     ) {
         for lock_attempt in this.lock_attempts_mut(ast).iter() {
-            lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(this));
+            lock_attempt.contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
         }
         //let a = Task::clone_in_queue(this);
         //task_sender
