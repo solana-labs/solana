@@ -1251,7 +1251,7 @@ impl Default for Scheduler {
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
                 let bank_r = bank.read().unwrap();
                 let bank_o = (&bank_r).as_ref().unwrap();
-                let bank = bank_o.as_ref().unwrap();
+                let bank = bank_o.as_ref();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
                 let lock_result = ee.task.tx.0
