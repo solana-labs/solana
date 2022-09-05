@@ -1253,7 +1253,7 @@ impl Default for Scheduler {
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solErrorCol{:02}", 0)).spawn(move || {
             while let Ok(solana_scheduler::DroppablePayload(ee)) = droppable_ee_receiver.recv() {
                 if false /* ee.is_aborted() */ {
-                    errors.push(Ok(()))
+                    errors.lock().unwrap().push(Ok(()))
                 }
             }
             Ok(())
