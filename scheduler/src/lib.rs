@@ -521,7 +521,7 @@ pub struct LockAttemptsInCell<T>(std::cell::RefCell<Vec<LockAttempt<T>>>);
 unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
 
-impl LockAttemptsInCell {
+impl<T> LockAttemptsInCell<T> {
     fn new(ll: std::cell::RefCell<Vec<LockAttempt<T>>>) -> Self {
         Self(ll)
     }
