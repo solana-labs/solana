@@ -1212,6 +1212,7 @@ impl ScheduleStage {
             unique_weight,
             cu: rng.gen_range(3, 1000),
             finalized_lock_attempts,
+            is_reindexed: Default::default(),
         })
     }
 
