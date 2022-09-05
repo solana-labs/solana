@@ -831,8 +831,8 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn get_heaviest_from_contended<'a>(
-        address_book: &'a mut AddressBook,
+    fn get_heaviest_from_contended<'a, T>(
+        address_book: &'a mut AddressBook<T>,
     ) -> Option<std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue<T>>> {
         address_book.uncontended_task_ids.last_entry()
     }
@@ -840,7 +840,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn select_next_task<'a, T>(
         runnable_queue: &'a mut TaskQueue<T>,
-        address_book: &mut AddressBook,
+        address_book: &mut AddressBook<T>,
         contended_count: &usize,
     ) -> Option<(TaskSource, TaskInQueue<T>)> {
         match (
