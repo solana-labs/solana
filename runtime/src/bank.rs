@@ -1297,6 +1297,8 @@ impl Default for Scheduler {
                     );
                     errors_in_collector_thread.lock().unwrap().push(ee.execution_result.take().unwrap());
                 }
+
+                drop(ee);
             }
             Ok(())
         }).unwrap();
