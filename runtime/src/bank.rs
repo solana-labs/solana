@@ -1241,7 +1241,7 @@ impl Default for Scheduler {
         let (droppable_ee_sender, droppable_ee_receiver) = crossbeam_channel::unbounded();
 
         let executing_thread_handle = std::thread::Builder::new().name(format!("solExec{:02}", 0)).spawn(move || {
-            while let Ok(solana_scheduler::ExecutablePayload(ee)) = scheduled_ee_receiver.recv() {
+            while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
                 ee.reindex_with_address_book();
                 completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
@@ -1299,7 +1299,7 @@ impl Scheduler {
         self.graceful_stop_initiated = true;
 
         info!("Scheduler::gracefully_stop(): waiting..");
-        let mut transaction_sender = self.transaction_sender.take().unwrap();
+        let transaction_sender = self.transaction_sender.take().unwrap();
         drop(transaction_sender);
         let h = self.executing_thread_handle.take().unwrap();
         h.join().unwrap()?;
