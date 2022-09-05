@@ -161,8 +161,8 @@ if [[ -z "$validatorOnly" ]]; then
   "$cargo" $maybeRustVersion build --manifest-path programs/bpf_loader/gen-syscall-list/Cargo.toml
   # shellcheck disable=SC2086 # Don't want to double quote $rust_version
   "$cargo" $maybeRustVersion run --bin gen-headers
-  mkdir -p "$installDir"/bin/sdk/bpf
-  cp -a sdk/bpf/* "$installDir"/bin/sdk/bpf
+  mkdir -p "$installDir"/lib/solana/sdk/bpf
+  cp -a sdk/bpf/* "$installDir"/lib/solana/sdk/bpf
 fi
 
 (
