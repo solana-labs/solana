@@ -838,11 +838,11 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn select_next_task<'a>(
+    fn select_next_task<'a, T>(
         runnable_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &usize,
-    ) -> Option<(TaskSource, TaskInQueue)> {
+    ) -> Option<(TaskSource, TaskInQueue<T>)> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
             Self::get_heaviest_from_contended(address_book),
