@@ -980,6 +980,9 @@ impl ScheduleStage {
                     }
 
                     if from_runnable || task_source == TaskSource::Stuck {
+                        // for the case of being struck, we have already removed it from
+                        // stuck_tasks, so pretend to add anew one.
+                        // todo: optimize this needless operation
                         next_task.update_busiest_page_cu(busiest_page_cu);
                         let a = address_book
                             .stuck_tasks
@@ -987,8 +990,15 @@ impl ScheduleStage {
                         assert!(a.is_none());
                         if from_runnable {
                             continue; // continue to prefer depleting the possibly-non-empty runnable queue
+                        } else if task_source == TaskSource::Stuck {
+                            // need to bail out immediately to avoid going to infinite loop of re-processing
+                            // the struck task again.
+                            // todo?: buffer restuck tasks until readd to the stuck tasks until
+                            // some scheduling state tick happens and try 2nd idling stuck task in
+                            // the collection?
+                            break;
                         } else {
-                            break; // 
+                            unreachable!();
                         }
                     } else {
                         // todo: remove this task from stuck_tasks before update_busiest_page_cu
@@ -1346,13 +1356,13 @@ impl ScheduleStage {
         }).collect::<Vec<_>>();
         let mut start = std::time::Instant::now();
 
-        let (mut from_disconnected, mut from_exec_disconnected) = (false, false);
+        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work) = Default::default();
         loop {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    if maybe_from_exec.is_err() {
                        assert_eq!(from_exec.len(), 0);
-                       from_exec_disconnected = true;
+                       from_exec_disconnected ||= true;
                        if from_disconnected {
                            break;
                        } else {
@@ -1368,9 +1378,9 @@ impl ScheduleStage {
                recv(from_prev) -> maybe_from => {
                    if maybe_from.is_err() {
                        assert_eq!(from_prev.len(), 0);
-                       from_disconnected = true;
-                       let finished = runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
-                       if from_exec_disconnected || finished {
+                       from_disconnected ||= true;
+                       no_more_work ||= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
+                       if from_exec_disconnected || no_more_work {
                            break;
                        } else {
                            continue;
@@ -1466,7 +1476,7 @@ impl ScheduleStage {
             indexer_handle.join().unwrap().unwrap();
         }
 
-        info!("schedule_once:final (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+        info!("schedule_once:final(from_disconnected: {}, from_exec_disconnected: {}, no_more_work: {}) (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_disconnected, from_exec_disconnected, no_more_work, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
     }
 
     pub fn run(
