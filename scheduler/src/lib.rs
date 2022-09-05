@@ -456,13 +456,13 @@ impl<T> AddressBook<T> {
 }
 
 #[derive(Debug)]
-pub struct Preloader {
-    book: AddressMap,
+pub struct Preloader<T> {
+    book: AddressMap<T>,
 }
 
-impl Preloader {
+impl<T> Preloader<T> {
     #[inline(never)]
-    pub fn load<T>(&self, address: Pubkey) -> PageRc<T> {
+    pub fn load(&self, address: Pubkey) -> PageRc<T> {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
             PageRc(PageRcInner::new((
                 core::cell::RefCell::new(Page::new(Usage::unused())),
