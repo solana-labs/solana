@@ -34,7 +34,7 @@ pub struct ExecutionEnvironment<T> {
     pub cu: CU,
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue<T>,
-    pub finalized_lock_attempts: Vec<LockAttempt>,
+    pub finalized_lock_attempts: Vec<LockAttempt<T>>,
     pub is_reindexed: bool,
     pub extra: T,
 }
@@ -136,7 +136,7 @@ pub struct LockAttempt<T> {
     //remembered: bool,
 }
 
-impl LockAttempt {
+impl<T> LockAttempt<T> {
     pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
         Self {
             target,
@@ -308,7 +308,7 @@ impl<T> AddressBook<T> {
         from_runnable: bool,
         prefer_immediate: bool,
         unique_weight: &UniqueWeight,
-        attempt: &mut LockAttempt,
+        attempt: &mut LockAttempt<T>,
     ) -> CU {
         let LockAttempt {
             target,
@@ -379,7 +379,7 @@ impl<T> AddressBook<T> {
     fn reset_lock<AST: AtScheduleThread>(
         &mut self,
         ast: AST,
-        attempt: &mut LockAttempt,
+        attempt: &mut LockAttempt<T>,
         after_execution: bool,
     ) -> bool {
         match attempt.status {
@@ -399,7 +399,7 @@ impl<T> AddressBook<T> {
     }
 
     #[inline(never)]
-    fn unlock<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt) -> bool {
+    fn unlock<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt<T>) -> bool {
         //debug_assert!(attempt.is_success());
 
         let mut newly_uncontended = false;
@@ -434,7 +434,7 @@ impl<T> AddressBook<T> {
     }
 
     #[inline(never)]
-    fn cancel<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt) {
+    fn cancel<AST: AtScheduleThread>(&mut self, ast: AST, attempt: &mut LockAttempt<T>) {
         let mut page = attempt.target.page_mut(ast);
 
         match page.next_usage {
@@ -516,13 +516,13 @@ pub struct Task<T> {
 }
 
 #[derive(Debug)]
-pub struct LockAttemptsInCell(std::cell::RefCell<Vec<LockAttempt>>);
+pub struct LockAttemptsInCell<T>(std::cell::RefCell<Vec<LockAttempt<T>>>);
 
 unsafe impl Send for LockAttemptsInCell {}
 unsafe impl Sync for LockAttemptsInCell {}
 
 impl LockAttemptsInCell {
-    fn new(ll: std::cell::RefCell<Vec<LockAttempt>>) -> Self {
+    fn new(ll: std::cell::RefCell<Vec<LockAttempt<T>>>) -> Self {
         Self(ll)
     }
 }
@@ -536,7 +536,7 @@ impl<T> Task<T> {
     pub fn new_for_queue<NAST: NotAtScheduleThread>(
         nast: NAST,
         unique_weight: UniqueWeight,
-        tx: (SanitizedTransaction, Vec<LockAttempt>),
+        tx: (SanitizedTransaction, Vec<LockAttempt<T>>),
     ) -> TaskInQueue<T> {
         TaskInQueue::new(Self {
             for_indexer: LockAttemptsInCell::new(std::cell::RefCell::new(
@@ -564,14 +564,14 @@ impl<T> Task<T> {
     fn lock_attempts_mut<AST: AtScheduleThread>(
         &self,
         _ast: AST,
-    ) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
+    ) -> std::cell::RefMut<'_, Vec<LockAttempt<T>>> {
         self.tx.1 .0.borrow_mut()
     }
 
     fn lock_attempts_not_mut<NAST: NotAtScheduleThread>(
         &self,
         _nast: NAST,
-    ) -> std::cell::Ref<'_, Vec<LockAttempt>> {
+    ) -> std::cell::Ref<'_, Vec<LockAttempt<T>>> {
         self.tx.1 .0.borrow()
     }
 
@@ -702,7 +702,7 @@ impl<T> Task<T> {
     #[inline(never)]
     fn index_with_address_book(
         this: &TaskInQueue<T>,
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt<T>>)>,
     ) {
         //for lock_attempt in self.lock_attempts_mut(ast).iter() {
         //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&self));
@@ -769,7 +769,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread, T>(
     address_book: &mut AddressBook<T>,
     unique_weight: &UniqueWeight,
     message_hash: &'a Hash,
-    lock_attempts: &mut [LockAttempt],
+    lock_attempts: &mut [LockAttempt<T>],
 ) -> (usize, usize, CU) {
     // no short-cuircuit; we at least all need to add to the contended queue
     let mut unlockable_count = 0;
@@ -800,7 +800,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread, T>(
     (unlockable_count, provisional_count, busiest_page_cu)
 }
 
-type PreprocessedTransaction = (SanitizedTransaction, Vec<LockAttempt>);
+type PreprocessedTransaction<T> = (SanitizedTransaction, Vec<LockAttempt<T>>);
 
 /*
 pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
@@ -901,7 +901,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn pop_from_queue_then_lock<AST: AtScheduleThread, T>(
         ast: AST,
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt<T>>)>,
         runnable_queue: &mut TaskQueue<T>,
         address_book: &mut AddressBook<T>,
         contended_count: &mut usize,
@@ -909,7 +909,7 @@ impl ScheduleStage {
         sequence_clock: &usize,
         queue_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
-    ) -> Option<(UniqueWeight, TaskInQueue<T>, Vec<LockAttempt>)> {
+    ) -> Option<(UniqueWeight, TaskInQueue<T>, Vec<LockAttempt<T>>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!(
                 "expediate pop from provisional queue [rest: {}]",
@@ -1107,7 +1107,7 @@ impl ScheduleStage {
         ast: AST,
         address_book: &mut AddressBook<T>,
         unique_weight: &UniqueWeight,
-        lock_attempts: &mut [LockAttempt],
+        lock_attempts: &mut [LockAttempt<T>],
     ) {
         for l in lock_attempts {
             address_book.reset_lock(ast, l, false);
@@ -1118,7 +1118,7 @@ impl ScheduleStage {
     fn unlock_after_execution<AST: AtScheduleThread, T>(
         ast: AST,
         address_book: &mut AddressBook<T>,
-        lock_attempts: &mut [LockAttempt],
+        lock_attempts: &mut [LockAttempt<T>],
         provisioning_tracker_count: &mut usize,
         cu: CU,
     ) {
@@ -1191,7 +1191,7 @@ impl ScheduleStage {
                 }
             }
 
-            // todo: mem::forget and panic in LockAttempt::drop()
+            // todo: mem::forget and panic in LockAttempt<T>::drop()
         }
     }
 
@@ -1200,7 +1200,7 @@ impl ScheduleStage {
         address_book: &mut AddressBook<T>,
         unique_weight: UniqueWeight,
         task: TaskInQueue<T>,
-        finalized_lock_attempts: Vec<LockAttempt>,
+        finalized_lock_attempts: Vec<LockAttempt<T>>,
         queue_clock: &usize,
         execute_clock: &mut usize,
     ) -> Box<ExecutionEnvironment<T>> {
@@ -1259,7 +1259,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn schedule_next_execution<AST: AtScheduleThread, T>(
         ast: AST,
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt<T>>)>,
         runnable_queue: &mut TaskQueue<T>,
         address_book: &mut AddressBook<T>,
         contended_count: &mut usize,
@@ -1347,7 +1347,7 @@ impl ScheduleStage {
             (&ee_sender, Some(h))
         };
         let (task_sender, task_receiver) =
-            crossbeam_channel::unbounded::<(TaskInQueue, Vec<LockAttempt>)>();
+            crossbeam_channel::unbounded::<(TaskInQueue, Vec<LockAttempt<T>>)>();
         let indexer_count = std::env::var("INDEXER_COUNT")
             .unwrap_or(format!("{}", 4))
             .parse::<usize>()
