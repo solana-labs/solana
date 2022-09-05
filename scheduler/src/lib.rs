@@ -499,7 +499,7 @@ struct Bundle {
 }
 
 #[derive(Debug)]
-pub struct Task {
+pub struct Task<T> {
     unique_weight: UniqueWeight,
     pub tx: (SanitizedTransaction, LockAttemptsInCell), // actually should be Bundle
     pub contention_count: std::sync::atomic::AtomicUsize,
@@ -512,6 +512,7 @@ pub struct Task {
     pub execute_time: std::sync::atomic::AtomicUsize,
     pub commit_time: std::sync::atomic::AtomicUsize,
     pub for_indexer: LockAttemptsInCell,
+    pub extra: T,
 }
 
 #[derive(Debug)]
@@ -730,7 +731,7 @@ pub struct TaskQueue {
     //tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
 }
 
-pub type TaskInQueue = triomphe::Arc<Task>;
+pub type TaskInQueue = triomphe::Arc<Task<T>>;
 
 //type TaskQueueEntry<'a> = im::ordmap::Entry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueOccupiedEntry<'a> = im::ordmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
@@ -1522,7 +1523,7 @@ impl ScheduleStage {
     }
 }
 
-pub struct SchedulablePayload(pub TaskInQueue);
+pub struct SchedulablePayload(pub TaskInQueue<T>);
 pub struct ExecutablePayload<T>(pub Box<ExecutionEnvironment<T>>);
 pub struct UnlockablePayload<T>(pub Box<ExecutionEnvironment<T>>);
 pub struct DroppablePayload<T>(pub Box<ExecutionEnvironment<T>>);
