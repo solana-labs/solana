@@ -470,6 +470,7 @@ async fn setup_connection(
                     .connection_add_failed_unstaked_node
                     .fetch_add(1, Ordering::Relaxed);
             }
+            stats.total_connections.fetch_sub(1, Ordering::Relaxed);
         } else {
             stats.connection_setup_error.fetch_add(1, Ordering::Relaxed);
         }
@@ -568,7 +569,6 @@ async fn handle_connection(
             .connection_remove_failed
             .fetch_add(1, Ordering::Relaxed);
     }
-    stats.total_connections.fetch_sub(1, Ordering::Relaxed);
 }
 
 // Return true if the server should drop the stream
