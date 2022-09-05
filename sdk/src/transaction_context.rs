@@ -296,7 +296,7 @@ impl TransactionContext {
             instruction_context.instruction_accounts_lamport_sum =
                 callee_instruction_accounts_lamport_sum;
         }
-        let index_in_trace = self.instruction_trace.len().saturating_sub(1);
+        let index_in_trace = self.get_instruction_trace_length();
         self.instruction_trace.push(InstructionContext::default());
         if nesting_level >= self.instruction_context_capacity {
             return Err(InstructionError::CallDepth);
@@ -547,7 +547,7 @@ impl InstructionContext {
         transaction_context: &'b TransactionContext,
     ) -> Result<&'b Pubkey, InstructionError> {
         self.get_index_of_program_account_in_transaction(
-            self.program_accounts.len().saturating_sub(1),
+            self.get_number_of_program_accounts().saturating_sub(1),
         )
         .and_then(|index_in_transaction| {
             transaction_context.get_key_of_account_at_index(index_in_transaction)
@@ -582,7 +582,7 @@ impl InstructionContext {
     ) -> Result<BorrowedAccount<'a>, InstructionError> {
         let result = self.try_borrow_program_account(
             transaction_context,
-            self.program_accounts.len().saturating_sub(1),
+            self.get_number_of_program_accounts().saturating_sub(1),
         );
         debug_assert!(result.is_ok());
         result
@@ -614,8 +614,7 @@ impl InstructionContext {
         self.try_borrow_account(
             transaction_context,
             index_in_transaction,
-            self.program_accounts
-                .len()
+            self.get_number_of_program_accounts()
                 .saturating_add(instruction_account_index),
         )
     }
@@ -932,26 +931,26 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns whether this account is a signer (instruction wide)
     pub fn is_signer(&self) -> bool {
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+        if self.index_in_instruction < self.instruction_context.get_number_of_program_accounts() {
             return false;
         }
         self.instruction_context
             .is_instruction_account_signer(
                 self.index_in_instruction
-                    .saturating_sub(self.instruction_context.program_accounts.len()),
+                    .saturating_sub(self.instruction_context.get_number_of_program_accounts()),
             )
             .unwrap_or_default()
     }
 
     /// Returns whether this account is writable (instruction wide)
     pub fn is_writable(&self) -> bool {
-        if self.index_in_instruction < self.instruction_context.program_accounts.len() {
+        if self.index_in_instruction < self.instruction_context.get_number_of_program_accounts() {
             return false;
         }
         self.instruction_context
             .is_instruction_account_writable(
                 self.index_in_instruction
-                    .saturating_sub(self.instruction_context.program_accounts.len()),
+                    .saturating_sub(self.instruction_context.get_number_of_program_accounts()),
             )
             .unwrap_or_default()
     }
