@@ -20,6 +20,7 @@ function CardLayout({
       if (sidebarItems[key]?.type?.toLowerCase() === "category") {
         for (let i = 0; i < sidebarItems[key]?.items?.length; i++)
           sidebarItems[key].items[i] = formatter(sidebarItems[key].items[i]);
+        sidebarItems[key].collapsed = true;
       } else sidebarItems[key] = formatter(sidebarItems[key]);
     });
   }

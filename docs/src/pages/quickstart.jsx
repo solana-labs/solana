@@ -1,7 +1,8 @@
 import React from "react";
-import styles from "./../styles.module.css";
-import Card from "../../../components/Card";
-import CardLayout from "../../../layouts/CardLayout";
+import Link from "@docusaurus/Link";
+import styles from "./styles.module.css";
+import Card from "../../components/Card";
+import CardLayout from "../../layouts/CardLayout";
 
 function DevelopersQuickstart() {
   return (
@@ -9,50 +10,63 @@ function DevelopersQuickstart() {
       sidebarKey="developerSidebar"
       title="Developer Quick Start Guides"
       description="Solana Documentation"
-      path="/developing/quickstart"
+      path="/quickstart"
     >
       <section className={styles.features}>
         <div className="container">
-          <section className="">
-            <h1>Solana Developer Quick Start Guides</h1>
+          <section>
+            <h1>Solana Quickstart Guides</h1>
 
+            <div className="container__spacer">
+              <p>
+                Build and deploy your first on chain Solana program directly in
+                your browser.
+              </p>
+
+              <Link to="/quickstart/hello-world">
+                <a className="button">Get Started</a>
+              </Link>
+            </div>
+          </section>
+
+          <section className="">
             <div className="row cards__container">
               <Card
-                to="/developing/quickstart/rust"
+                to="/quickstart/hello-world"
                 header={{
-                  label: "Rust",
-                  translateId: "quickstart-rust",
+                  label: "Hello World in your Browser",
+                  translateId: "quickstart-hello",
                 }}
                 body={{
                   label:
-                    "Setup, build, and deploy a Rust based on chain program.",
-                  translateId: "quickstart-rust-body",
+                    "Write and deploy your first Solana program directly in your browser.",
+                  translateId: "quickstart-hello-body",
                 }}
               />
 
               <Card
-                to="/developing/quickstart/c"
+                to="/quickstart/local"
                 header={{
-                  label: "C / C++",
-                  translateId: "quickstart-c",
+                  label: "Local development",
+                  translateId: "quickstart-local",
                 }}
                 body={{
                   label:
-                    "Setup, build, and deploy a C/C++ based on chain program.",
+                    "Setup your local development environment for writing programs.",
                   translateId: "quickstart-c-body",
                 }}
               />
 
               <Card
-                to="/developing/quickstart/web3js"
+                to="/quickstart/rust"
                 header={{
-                  label: "Web3.js",
-                  translateId: "quickstart-web3js",
+                  label: "Native Rust Program",
+                  translateId: "quickstart-rust",
                 }}
                 body={{
                   label:
-                    "Quickly get up and running with the Solana web3.js library.",
-                  translateId: "quickstart-web3js-body",
+                    "Build and deploy a native Rust based on chain program.",
+                  translateId: "quickstart-rust-body",
                 }}
               />
             </div>

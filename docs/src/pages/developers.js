@@ -1,4 +1,5 @@
 import React from "react";
+import Link from "@docusaurus/Link";
 import styles from "./styles.module.css";
 import Card from "../../components/Card";
 import CardLayout from "../../layouts/CardLayout";
@@ -13,14 +14,29 @@ function Developers() {
     >
       <section className={styles.features}>
         <div className="container">
+          <section>
+            <h1>Explore Solana Development</h1>
+
+            <div className="container__spacer">
+              <p>
+                Build and deploy your first on chain Solana program directly in
+                your browser.
+              </p>
+
+              <Link to="/quickstart/hello-world">
+                <a className="button">Get Started</a>
+              </Link>
+            </div>
+          </section>
+
           <section className="">
-            <h2>Learn Solana development</h2>
+            <h2>Learn core concepts</h2>
 
             <div className="row cards__container">
               <Card
                 to="developing/intro/programs"
                 header={{
-                  label: "Getting Started",
+                  label: "Programs",
                   translateId: "developer-programs",
                 }}
                 body={{

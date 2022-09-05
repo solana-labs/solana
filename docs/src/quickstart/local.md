@@ -1,18 +1,17 @@
 ---
-title: "C/C++ Quickstart Guide"
-description: "This quickstart guide will demonstrate how to quickly setup, build, and deploy your first C/C++ based Solana program to the blockchain."
-keywords: "c lang, cpp, c plus plus, program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
+title: "Local Development Quickstart"
+description: "This quickstart guide will demonstrate how to quickly install and setup your local development environment."
+keywords: "rust, cargo, toml, program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
 ---
 
-This quickstart guide will demonstrate how to quickly setup, build, and deploy your first C based Solana program to the blockchain.
+This quickstart guide will demonstrate how to quickly install and setup your local development environment, getting you ready to start developing and deploying Solana programs to the blockchain.
 
 ## What you will learn
 
-- How to install the Solana CLI
+- How to install the Solana CLI locally
 - How to setup a localhost Solana cluster/validator
 - How to create a Solana wallet for developing
-- How to program a basic Solana program in C
-- How to build and deploy a Solana Rust program
+- How to airdrop SOL tokens for your wallet
 
 ## Install the Solana CLI
 
@@ -24,7 +23,7 @@ sh -c "$(curl -sSfL https://release.solana.com/stable/install)"
 
 ## Setup a localhost blockchain cluster
 
-The Solana CLI comes with the [test validator](#) built in. This command line tool will allow you to run a full blockchain cluster on your machine.
+The Solana CLI comes with the [test validator](./../developing/test-validator.md) built in. This command line tool will allow you to run a full blockchain cluster on your machine.
 
 ```bash
 solana-test-validator
@@ -68,7 +67,7 @@ With your new file system wallet created, you must tell the Solana CLI to use th
 solana config set -k ~/.config/solana/id.json
 ```
 
-#### Airdrop SOL tokens to your wallet
+## Airdrop SOL tokens to your wallet
 
 Once your new wallet is set as the default, you can request a free airdrop of SOL tokens to it:
 
@@ -85,52 +84,9 @@ You can check your current wallet's SOL balance any time:
 solana balance
 ```
 
-## Create a new C project
-
-## Create your first Solana program
-
-```c
-
-```
-
-This program will simply [log a message](../on-chain-programs/debugging#logging) of "_Hello, world!_" to the blockchain cluster.
-
-## Build your C program
-
-```bash
-
-```
-
-> **NOTE:**
-> After each time you build your Solana program, the above command will output the build path of your compiled program's `.so` file and the default keyfile that will be used for the program's address.
-
-## Deploy your Solana program
-
-Using the Solana CLI, you can deploy your program to your currently selected cluster:
-
-```bash
-solana program deploy ./target/deploy/hello_world.so
-```
-
-Once your Solana program has been deployed (and the transaction [finalized](../../cluster/commitments.md)), the above command will output your program's public address (aka its "program id").
-
-```bash
-# example output
-Program Id: EFH95fWg49vkFNbAdw9vy75tM7sWZ2hQbTTUmuACGip3
-```
-
-#### Congratulations!
-
-You have successfully setup, built, and deployed a Solana program using the Rust language.
-
-PS: Check your Solana wallet's balance again after you deployed. See how much SOL it cost to deploy your simple program?
-
 ## Next steps
 
 See the links below to learn more about writing Rust based Solana programs:
 
-See the links below to learn more about writing Rust based Solana programs:
-
-- [Overview of writing Solana programs](../on-chain-programs/overview)
-- [Learn more about developing Solana programs with C/C++](../on-chain-programs/developing-c)
-- [Debugging on chain programs](../on-chain-programs/debugging)
+- [Create and deploy a Solana Rust program](./rust.md)
+- [Overview of writing Solana programs](../developing/on-chain-programs/overview)

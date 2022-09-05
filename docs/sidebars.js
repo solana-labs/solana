@@ -89,6 +89,52 @@ module.exports = {
     // },
     {
       type: "category",
+      label: "Quickstart Guides",
+      items: [
+        {
+          type: "link",
+          href: "/quickstart",
+          label: "All guides",
+        },
+        {
+          type: "doc",
+          id: "quickstart/hello-world",
+          label: "Hello world",
+        },
+        {
+          type: "doc",
+          id: "quickstart/local",
+          label: "Local development",
+        },
+        {
+          type: "doc",
+          id: "quickstart/rust",
+          label: "Rust program",
+        },
+        // {
+        //   type: "doc",
+        //   id: "quickstart/token",
+        //   label: "Create a token",
+        // },
+        // {
+        //   type: "doc",
+        //   id: "quickstart/nft",
+        //   label: "Create a NFT",
+        // },
+        // {
+        //   type: "doc",
+        //   id: "quickstart/c",
+        //   label: "C / C++",
+        // },
+        // {
+        //   type: "doc",
+        //   id: "quickstart/web3js",
+        //   label: "Web3.js",
+        // },
+      ],
+    },
+    {
+      type: "category",
       label: "Core Concepts",
       // collapsed: false,
       items: [
@@ -121,32 +167,6 @@ module.exports = {
           type: "doc",
           id: "developing/programming-model/runtime",
           label: "Runtime",
-        },
-      ],
-    },
-    {
-      type: "category",
-      label: "Quick Start Guides",
-      items: [
-        {
-          type: "link",
-          href: "/developing/quickstart",
-          label: "All guides",
-        },
-        {
-          type: "doc",
-          id: "developing/quickstart/rust",
-          label: "Rust",
-        },
-        {
-          type: "doc",
-          id: "developing/quickstart/c",
-          label: "C / C++",
-        },
-        {
-          type: "doc",
-          id: "developing/quickstart/web3js",
-          label: "Web3.js",
         },
       ],
     },
