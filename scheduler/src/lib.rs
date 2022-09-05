@@ -808,6 +808,13 @@ pub fn get_transaction_priority_details(tx: &SanitizedTransaction) -> u64 {
 
 pub struct ScheduleStage {}
 
+#[derive(PartialEq, Eq)]
+enum TaskSource {
+    Runnable,
+    Contended,
+    Stuck,
+}
+
 impl ScheduleStage {
     fn push_to_runnable_queue(task: TaskInQueue, runnable_queue: &mut TaskQueue) {
         runnable_queue.add_to_schedule(task.unique_weight, task);
@@ -825,7 +832,7 @@ impl ScheduleStage {
         runnable_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &usize,
-    ) -> Option<(bool, TaskInQueue)> {
+    ) -> Option<(TaskSource, TaskInQueue)> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
             Self::get_heaviest_from_contended(address_book),
@@ -833,12 +840,12 @@ impl ScheduleStage {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
                 let t = heaviest_runnable_entry.remove();
-                Some((true, t))
+                Some((TaskSource::Runnable, t))
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
                 let t = weight_from_contended.remove();
-                Some((false, t))
+                Some((TaskSource::Contended, t))
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
@@ -847,11 +854,11 @@ impl ScheduleStage {
                 if weight_from_runnable > uw {
                     trace!("select: runnable > contended");
                     let t = heaviest_runnable_entry.remove();
-                    Some((true, t))
+                    Some((TaskSource::Runnable, t))
                 } else if uw > weight_from_runnable {
                     trace!("select: contended > runnnable");
                     let t = weight_from_contended.remove();
-                    Some((false, t))
+                    Some((TaskSource::Contended, t))
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
@@ -868,9 +875,10 @@ impl ScheduleStage {
                     assert_eq!(task.stuck_task_id(), stuck_task_id);
 
                     if task.currently_contended() {
-                        Some((false, task))
+                        Some((TaskSource::Stuck, task))
                     } else {
-                        // is it expected for uncontended taks is in the stuck queue?
+                        // is it expected for uncontended tasks is in the stuck queue, to begin
+                        // with??
                         None
                     }
                 } else {
@@ -905,10 +913,11 @@ impl ScheduleStage {
 
         trace!("pop begin");
         loop {
-            if let Some((from_runnable, mut next_task)) =
+            if let Some((task_source, mut next_task)) =
                 Self::select_next_task(runnable_queue, address_book, contended_count)
             {
                 trace!("pop loop iteration");
+                let from_runnable = task_source == TaskSource::Runnable;
                 if from_runnable {
                     next_task.record_queue_time(*sequence_clock, *queue_clock);
                     *queue_clock = queue_clock.checked_add(1).unwrap();
@@ -937,7 +946,6 @@ impl ScheduleStage {
                         address_book,
                         &unique_weight,
                         &mut next_task.lock_attempts_mut(ast),
-                        from_runnable,
                     );
                     let lock_count = next_task.lock_attempts_mut(ast).len();
                     next_task
@@ -971,13 +979,17 @@ impl ScheduleStage {
                         //address_book.uncontended_task_ids.clear();
                     }
 
-                    if from_runnable {
+                    if from_runnable || task_source == TaskSource::Stuck {
                         next_task.update_busiest_page_cu(busiest_page_cu);
                         let a = address_book
                             .stuck_tasks
                             .insert(next_task.stuck_task_id(), Task::clone_in_queue(&next_task));
                         assert!(a.is_none());
-                        continue;
+                        if from_runnable {
+                            continue; // continue to prefer depleting the possibly-non-empty runnable queue
+                        } else {
+                            break; // 
+                        }
                     } else {
                         // todo: remove this task from stuck_tasks before update_busiest_page_cu
                         let removed = address_book
@@ -989,7 +1001,7 @@ impl ScheduleStage {
                             .stuck_tasks
                             .insert(next_task.stuck_task_id(), removed);
                         assert!(a.is_none());
-                        return None;
+                        break;
                     }
                 } else if provisional_count > 0 {
                     assert!(!from_runnable);
@@ -1014,7 +1026,7 @@ impl ScheduleStage {
                         tracker,
                     );
 
-                    return None;
+                    break;
                     continue;
                 }
 
@@ -1076,7 +1088,6 @@ impl ScheduleStage {
         address_book: &mut AddressBook,
         unique_weight: &UniqueWeight,
         lock_attempts: &mut [LockAttempt],
-        from_runnable: bool,
     ) {
         for l in lock_attempts {
             address_book.reset_lock(ast, l, false);
