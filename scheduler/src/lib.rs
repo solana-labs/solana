@@ -1079,7 +1079,7 @@ impl ScheduleStage {
     #[inline(never)]
     fn finalize_lock_for_provisional_execution<AST: AtScheduleThread, T>(
         ast: AST,
-        address_book: &mut AddressBook,
+        address_book: &mut AddressBook<T>,
         next_task: &Task<T>,
         tracker: triomphe::Arc<ProvisioningTracker<T>>,
     ) {
