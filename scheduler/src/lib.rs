@@ -711,13 +711,13 @@ impl Task {
         this: &TaskInQueue,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
     ) {
-        //for lock_attempt in self.lock_attempts_mut(ast).iter() {
-        //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&self));
-        //}
-        let a = Task::clone_in_queue(this);
-        task_sender
-            .send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut())))
-            .unwrap();
+        for lock_attempt in self.lock_attempts_mut(ast).iter() {
+            lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&self));
+        }
+        //let a = Task::clone_in_queue(this);
+        //task_sender
+        //    .send((a, std::mem::take(&mut *this.for_indexer.0.borrow_mut())))
+        //    .unwrap();
     }
 
     fn stuck_task_id(&self) -> StuckTaskId {
@@ -1236,7 +1236,7 @@ impl ScheduleStage {
     ) {
         // do par()-ly?
 
-        //ee.reindex_with_address_book();
+        ee.reindex_with_address_book();
         assert!(ee.is_reindexed());
 
         ee.task.record_commit_time(*commit_time);

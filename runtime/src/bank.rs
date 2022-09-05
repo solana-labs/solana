@@ -1279,7 +1279,7 @@ impl Default for Scheduler {
                 ee.execution_result = Some(fee_collection_results.into_iter().collect::<Result<_>>());
 
 
-                ee.reindex_with_address_book();
+                //ee.reindex_with_address_book();
                 completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
             Ok(())
