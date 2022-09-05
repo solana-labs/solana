@@ -1241,7 +1241,7 @@ impl Default for Scheduler {
         let (completed_ee_sender, completed_ee_receiver) = crossbeam_channel::unbounded();
         let (droppable_ee_sender, droppable_ee_receiver) = crossbeam_channel::unbounded();
 
-        let bank = Arc::new(std::sync::RwLock::new(None::<Option<Arc<Bank>>>));
+        let bank = Arc::new(std::sync::RwLock::new(None::<Arc<Bank>>));
 
         let executing_thread_handles = (0..8).map(|thx| {
             let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
