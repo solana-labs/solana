@@ -6377,7 +6377,7 @@ impl Bank {
     pub fn schedule_and_commit_transactions(
         &self,
         batch: &TransactionBatch,
-        bank, &Arc<Bank>,
+        bank: &Arc<Bank>,
         transaction_indexes: &Vec<usize>,
     ) {
         let scheduler = {
