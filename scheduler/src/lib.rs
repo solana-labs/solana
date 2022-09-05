@@ -1287,8 +1287,8 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn register_runnable_task(
-        weighted_tx: TaskInQueue,
+    fn register_runnable_task<T>(
+        weighted_tx: TaskInQueue<T>,
         runnable_queue: &mut TaskQueue,
         sequence_time: &mut usize,
     ) {
