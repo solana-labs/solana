@@ -234,7 +234,7 @@ pub struct Page<T> {
     //producing as soon as any one of cu from the executing thread reaches to the limit
 }
 
-impl Page {
+impl<T> Page<T> {
     fn new(current_usage: Usage) -> Self {
         Self {
             current_usage,
