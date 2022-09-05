@@ -22,7 +22,7 @@ unsafe impl Send for PageRc {}
 type PageRcInner<T> = triomphe::Arc<(std::cell::RefCell<Page<T>>, TaskIds<T>)>;
 
 #[derive(Debug, Clone)]
-pub struct PageRc(PageRcInner);
+pub struct PageRc<T>(PageRcInner<T>);
 unsafe impl Send for PageRc {}
 unsafe impl Sync for PageRc {}
 
