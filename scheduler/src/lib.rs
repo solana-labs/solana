@@ -701,8 +701,8 @@ impl Task {
 
     #[inline(never)]
     fn index_with_address_book(
-        this: &TaskInQueue,
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
+        this: &TaskInQueue<T>,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
     ) {
         //for lock_attempt in self.lock_attempts_mut(ast).iter() {
         //    lock_attempt.contended_unique_weights().insert_task(unique_weight, Task::clone_in_queue(&self));
