@@ -6379,8 +6379,15 @@ impl Bank {
         batch: &TransactionBatch,
         transaction_indexes: &Vec<usize>,
     ) {
-        let scheduler = self.scheduler.read().unwrap();
-        if scheduler.bank.read().unwrap().is_none() {
+        let scheduler = {
+            let r = self.scheduler.read().unwrap();
+
+            if scheduler.bank.read().unwrap().is_none() {
+                drop(r);
+                panic!();
+            } else {
+                r
+            }
         }
         for (st, &i) in batch.sanitized_transactions().iter().zip(transaction_indexes.iter()) {
             scheduler.schedule(st, i);
