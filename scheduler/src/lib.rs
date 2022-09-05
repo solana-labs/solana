@@ -1499,7 +1499,7 @@ impl ScheduleStage {
 
     pub fn run<T>(
         max_executing_queue_count: usize,
-        runnable_queue: &mut TaskQueue,
+        runnable_queue: &mut TaskQueue<T>,
         address_book: &mut AddressBook,
         from: &crossbeam_channel::Receiver<SchedulablePayload<T>>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload<T>>,
