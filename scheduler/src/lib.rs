@@ -33,7 +33,7 @@ pub struct ExecutionEnvironment<T> {
     //accounts: Vec<i8>,
     pub cu: CU,
     pub unique_weight: UniqueWeight,
-    pub task: TaskInQueue,
+    pub task: TaskInQueue<T>,
     pub finalized_lock_attempts: Vec<LockAttempt>,
     pub is_reindexed: bool,
     pub extra: T,
@@ -195,7 +195,7 @@ pub enum RequestedUsage {
 
 #[derive(Debug, Default)]
 pub struct TaskIds {
-    task_ids: crossbeam_skiplist::SkipMap<UniqueWeight, TaskInQueue>,
+    task_ids: crossbeam_skiplist::SkipMap<UniqueWeight, TaskInQueue<T>>,
 }
 
 impl TaskIds {
@@ -1103,7 +1103,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn reset_lock_for_failed_execution<AST: AtScheduleThread>(
+    fn reset_lock_for_failed_execution<AST: AtScheduleThread, T>(
         ast: AST,
         address_book: &mut AddressBook<T>,
         unique_weight: &UniqueWeight,
@@ -1115,7 +1115,7 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn unlock_after_execution<AST: AtScheduleThread>(
+    fn unlock_after_execution<AST: AtScheduleThread, T>(
         ast: AST,
         address_book: &mut AddressBook<T>,
         lock_attempts: &mut [LockAttempt],
