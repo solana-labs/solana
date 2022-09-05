@@ -2020,13 +2020,7 @@ impl ReplayStage {
             .is_active(&feature_set::compact_vote_state_updates::id());
         let vote = match (should_compact, vote) {
             (true, VoteTransaction::VoteStateUpdate(vote_state_update)) => {
-                if let Some(compact_vote_state_update) = vote_state_update.compact() {
-                    VoteTransaction::from(compact_vote_state_update)
-                } else {
-                    // Compaction failed
-                    warn!("Compaction failed when generating vote tx for vote account {}. Unable to vote", vote_account_pubkey);
-                    return None;
-                }
+                VoteTransaction::CompactVoteStateUpdate(vote_state_update)
             }
             (_, vote) => vote,
         };
