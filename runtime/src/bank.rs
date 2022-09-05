@@ -1308,6 +1308,10 @@ impl Scheduler {
 
         Ok(())
     }
+
+    fn handle_aborted_executions(&self) -> Vec<Result<()>> {
+        self.lock().unwrap().take()
+    }
 }
 
 impl Drop for Scheduler {
