@@ -216,9 +216,9 @@ impl TaskIds {
     }
 
     #[inline(never)]
-    pub fn heaviest_task_cursor(
+    pub fn heaviest_task_cursor<T>(
         &self,
-    ) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue>> {
+    ) -> Option<crossbeam_skiplist::map::Entry<'_, UniqueWeight, TaskInQueue<T>>> {
         self.task_ids.back()
     }
 }
