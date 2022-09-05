@@ -1291,6 +1291,10 @@ impl Default for Scheduler {
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solErrorCol{:02}", 0)).spawn(move || {
             while let Ok(solana_scheduler::DroppablePayload(mut ee)) = droppable_ee_receiver.recv() {
                 if ee.is_aborted() {
+                    warn!(
+                        "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
+                        ee.execution_result, ee.task.tx.0
+                    );
                     errors_in_collector_thread.lock().unwrap().push(ee.execution_result.take().unwrap());
                 }
             }
