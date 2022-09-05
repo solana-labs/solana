@@ -1279,6 +1279,7 @@ impl ScheduleStage {
         let mut sequence_time = 0;
         let mut queue_clock = 0;
         let mut execute_clock = 0;
+        let mut completed_count = 0_usize;
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<PersistablePlayload>();
 
         let (to_next_stage, maybe_reaper_thread_handle) = if let Some(to_next_stage) = maybe_to_next_stage {
@@ -1349,6 +1350,7 @@ impl ScheduleStage {
                    }
                    let mut processed_execution_environment = maybe_from_exec.unwrap().0;
                     executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                    completed_count = completed_count.checked_add(1).unwrap();
                     Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
                     to_next_stage.send(PersistablePlayload(processed_execution_environment)).unwrap();
                }
@@ -1376,10 +1378,10 @@ impl ScheduleStage {
                 while (executing_queue_count + provisioning_tracker_count)
                     < max_executing_queue_count
                 {
-                    trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
+                    trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     if start.elapsed() > std::time::Duration::from_millis(1000) {
                         start = std::time::Instant::now();
-                        info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
+                        info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     }
                     let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
                     if let Some(ee) = Self::schedule_next_execution(
@@ -1422,6 +1424,7 @@ impl ScheduleStage {
                         from_exec_len = from_exec_len.checked_sub(1).unwrap();
                         empty_from_exec = from_exec_len == 0;
                         executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                        completed_count = completed_count.checked_add(1).unwrap();
                         Self::commit_completed_execution(
                             ast,
                             &mut processed_execution_environment,
@@ -1452,7 +1455,7 @@ impl ScheduleStage {
             indexer_handle.join().unwrap().unwrap();
         }
 
-        info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len());
+        info!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
     }
 
     pub fn run(
