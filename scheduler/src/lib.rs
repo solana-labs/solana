@@ -1196,10 +1196,10 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn prepare_scheduled_execution(
+    fn prepare_scheduled_execution<T>(
         address_book: &mut AddressBook,
         unique_weight: UniqueWeight,
-        task: TaskInQueue,
+        task: TaskInQueue<T>,
         finalized_lock_attempts: Vec<LockAttempt>,
         queue_clock: &usize,
         execute_clock: &mut usize,
