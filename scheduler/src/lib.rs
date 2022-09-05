@@ -707,7 +707,8 @@ impl Task {
     }
 
     #[inline(never)]
-    fn index_with_address_book(
+    fn index_with_address_book<AST: AtScheduleThread>(
+        ast: AST,
         this: &TaskInQueue,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
     ) {
