@@ -1203,7 +1203,7 @@ impl ScheduleStage {
         finalized_lock_attempts: Vec<LockAttempt>,
         queue_clock: &usize,
         execute_clock: &mut usize,
-    ) -> Box<ExecutionEnvironment> {
+    ) -> Box<ExecutionEnvironment<T>> {
         let mut rng = rand::thread_rng();
         // load account now from AccountsDb
         task.record_execute_time(*queue_clock, *execute_clock);
