@@ -1362,7 +1362,7 @@ impl ScheduleStage {
                recv(from_exec) -> maybe_from_exec => {
                    if maybe_from_exec.is_err() {
                        assert_eq!(from_exec.len(), 0);
-                       from_exec_disconnected ||= true;
+                       from_exec_disconnected |= true;
                        if from_disconnected {
                            break;
                        } else {
@@ -1378,8 +1378,8 @@ impl ScheduleStage {
                recv(from_prev) -> maybe_from => {
                    if maybe_from.is_err() {
                        assert_eq!(from_prev.len(), 0);
-                       from_disconnected ||= true;
-                       no_more_work ||= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
+                       from_disconnected |= true;
+                       no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
                        if from_exec_disconnected || no_more_work {
                            break;
                        } else {
