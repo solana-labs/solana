@@ -724,8 +724,8 @@ impl<T> Task<T> {
 
 // RunnableQueue, ContendedQueue?
 #[derive(Default, Debug, Clone)]
-pub struct TaskQueue {
-    tasks: std::collections::BTreeMap<UniqueWeight, TaskInQueue>,
+pub struct TaskQueue<T> {
+    tasks: std::collections::BTreeMap<UniqueWeight, TaskInQueue<T>>,
     //tasks: im::OrdMap<UniqueWeight, TaskInQueue>,
     //tasks: im::HashMap<UniqueWeight, TaskInQueue>,
     //tasks: std::sync::Arc<dashmap::DashMap<UniqueWeight, TaskInQueue>>,
