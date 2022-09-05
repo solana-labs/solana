@@ -979,7 +979,7 @@ impl ScheduleStage {
                         next_task.mark_as_contended();
                         *contended_count = contended_count.checked_add(1).unwrap();
 
-                        Task::index_with_address_book(&next_task, task_sender);
+                        Task::index_with_address_book(ast, &next_task, task_sender);
 
                         // maybe run lightweight prune logic on contended_queue here.
                     } else {
