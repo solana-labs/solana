@@ -262,7 +262,7 @@ type StuckTaskId = (CU, TaskId);
 // needs ttl mechanism and prune
 #[derive(Default)]
 pub struct AddressBook<T> {
-    book: AddressMap,
+    book: AddressMap<T>,
     uncontended_task_ids: WeightedTaskIds<T>,
     fulfilled_provisional_task_ids: WeightedTaskIds<T>,
     stuck_tasks: std::collections::BTreeMap<StuckTaskId, TaskInQueue<T>>,
