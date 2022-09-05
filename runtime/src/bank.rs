@@ -1200,6 +1200,7 @@ impl AbiExample for BuiltinPrograms {
 struct Scheduler {
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
     executing_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
+    error_collector_thread_handle: Option<std::thread::JoinHandle<Result<()>>>,
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
@@ -1236,9 +1237,21 @@ impl Default for Scheduler {
         let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
         let (scheduled_ee_sender, scheduled_ee_receiver) = crossbeam_channel::unbounded();
         let (completed_ee_sender, completed_ee_receiver) = crossbeam_channel::unbounded();
+        let (droppable_ee_sender, droppable_ee_receiver) = crossbeam_channel::unbounded();
+
         let executing_thread_handle = std::thread::Builder::new().name(format!("solExec{:02}", 0)).spawn(move || {
             while let Ok(solana_scheduler::ExecutablePayload(ee)) = scheduled_ee_receiver.recv() {
+                ee.reindex_to_address_book();
                 completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
+            }
+            Ok(())
+        }).unwrap();
+
+        let error_collector_thread_handle = std::thread::Builder::new().name(format!("solErrorCol{:02}"r 0)).spawn(move || {
+            while let Ok(solana_scheduler::DroppablePayload(ee)) = droppable_ee_receiver.recv() {
+                if false /* ee.is_aborted() */ {
+                    errors.push(ee)
+                }
             }
             Ok(())
         }).unwrap();
@@ -1253,7 +1266,7 @@ impl Default for Scheduler {
                 &transaction_receiver,
                 &scheduled_ee_sender,
                 &completed_ee_receiver,
-                None,
+                Some(&droppable_ee_sender),
             );
             drop(transaction_receiver);
             drop(scheduled_ee_sender);
@@ -1265,6 +1278,7 @@ impl Default for Scheduler {
         Self {
             scheduler_thread_handle: Some(scheduler_thread_handle),
             executing_thread_handle: Some(executing_thread_handle),
+            error_collector_thread_handle: Some(error_collector_thread_handle),
             transaction_sender: Some(transaction_sender),
             preloader,
             graceful_stop_initiated: Default::default(),
@@ -6319,6 +6333,13 @@ impl Bank {
         for (st, &i) in batch.sanitized_transactions().iter().zip(transaction_indexes.iter()) {
             scheduler.schedule(st, i);
         }
+    }
+
+    pub fn handle_aborted_transactions(
+        &self,
+    ) -> Vec<Result<()> {
+        let scheduler = self.scheduler.read().unwrap();
+        scheduler.handle_aborted_executions()
     }
 
     /// Process a batch of transactions.
