@@ -1294,6 +1294,8 @@ impl ScheduleStage {
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<PersistablePlayload>>, // assume nonblocking
     ) {
+        info!("schedule_once:initial");
+
         let mut executing_queue_count = 0_usize;
         let mut contended_count = 0;
         let mut provisioning_tracker_count = 0;
