@@ -1496,14 +1496,14 @@ impl ScheduleStage {
         info!("schedule_once:final id_{:016x} (from_disconnected: {}, from_exec_disconnected: {}, no_more_work: {}) (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_disconnected, from_exec_disconnected, no_more_work, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
     }
 
-    pub fn run(
+    pub fn run<T>(
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from: &crossbeam_channel::Receiver<SchedulablePayload>,
-        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
-        from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload>,
-        maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload>>, // assume nonblocking
+        from: &crossbeam_channel::Receiver<SchedulablePayload<T>>,
+        to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload<T>>,
+        from_execute_substage: &crossbeam_channel::Receiver<UnlockablePayload<T>>,
+        maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload<T>>>, // assume nonblocking
     ) {
         #[derive(Clone, Copy, Debug)]
         struct AtTopOfScheduleThread;
