@@ -6377,6 +6377,7 @@ impl Bank {
     pub fn schedule_and_commit_transactions(
         &self,
         batch: &TransactionBatch,
+        bank, &Arc<Bank>,
         transaction_indexes: &Vec<usize>,
     ) {
         let scheduler = {
@@ -6385,7 +6386,7 @@ impl Bank {
             if r.bank.read().unwrap().is_none() {
                 drop(r);
                 let w = self.scheduler.write().unwrap();
-                w.bank.write().unwrap() = Some(Arc::clone(batch.bank()));
+                w.bank.write().unwrap() = Some(Arc::clone(bank));
                 panic!();
             } else {
                 r
