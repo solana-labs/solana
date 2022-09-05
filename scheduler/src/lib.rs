@@ -448,7 +448,7 @@ impl<T> AddressBook<T> {
         }
     }
 
-    pub fn preloader(&self) -> Preloader {
+    pub fn preloader(&self) -> Preloader<T> {
         Preloader {
             book: std::sync::Arc::clone(&self.book),
         }
