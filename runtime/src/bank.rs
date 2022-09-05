@@ -1204,7 +1204,7 @@ struct Scheduler {
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
-    errors: Mutex<Vec<Result<()>>>,
+    errors: std::sync::Mutex<Vec<Result<()>>>,
 }
 
 impl Scheduler {
