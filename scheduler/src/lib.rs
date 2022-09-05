@@ -265,7 +265,7 @@ pub struct AddressBook {
     book: AddressMap,
     uncontended_task_ids: WeightedTaskIds,
     fulfilled_provisional_task_ids: WeightedTaskIds,
-    stuck_tasks: std::collections::BTreeMap<StuckTaskId, TaskInQueue>,
+    stuck_tasks: std::collections::BTreeMap<StuckTaskId, TaskInQueue<T>>,
 }
 
 #[derive(Debug)]
