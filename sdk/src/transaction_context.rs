@@ -23,8 +23,6 @@ use {
     },
 };
 
-pub type TransactionAccount = (Pubkey, AccountSharedData);
-
 /// For addressing (nested) properties of the TransactionContext
 #[repr(u16)]
 pub enum TransactionContextAttribute {
@@ -98,6 +96,9 @@ pub struct InstructionAccount {
     /// Is this account allowed to become writable
     pub is_writable: bool,
 }
+
+/// An account key and the matching account
+pub type TransactionAccount = (Pubkey, AccountSharedData);
 
 /// Loaded transaction shared between runtime and programs.
 ///
