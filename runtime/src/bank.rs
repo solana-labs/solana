@@ -1254,7 +1254,7 @@ impl Default for Scheduler {
                     .get_account_locks(tx_account_lock_limit)
                     .map(|_| ());
                 let mut batch =
-                    TransactionBatch::new(vec![lock_result], bank, Cow::Owned(vec![ee.transaction]));
+                    TransactionBatch::new(vec![lock_result], bank, Cow::Owned(vec![ee.task.tx.0]));
                 batch.set_needs_unlock(false);
 
 
