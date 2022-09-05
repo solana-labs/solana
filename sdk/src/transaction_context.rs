@@ -647,19 +647,20 @@ impl InstructionContext {
     }
 
     /// Calculates the set of all keys of signer instruction accounts in this Instruction
-    pub fn get_signers(&self, transaction_context: &TransactionContext) -> HashSet<Pubkey> {
+    pub fn get_signers(
+        &self,
+        transaction_context: &TransactionContext,
+    ) -> Result<HashSet<Pubkey>, InstructionError> {
         let mut result = HashSet::new();
         for instruction_account in self.instruction_accounts.iter() {
             if instruction_account.is_signer {
                 result.insert(
                     *transaction_context
-                        .account_keys
-                        .get(instruction_account.index_in_transaction)
-                        .unwrap(),
+                        .get_key_of_account_at_index(instruction_account.index_in_transaction)?,
                 );
             }
         }
-        result
+        Ok(result)
     }
 }
 
