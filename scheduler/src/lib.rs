@@ -269,13 +269,13 @@ pub struct AddressBook {
 }
 
 #[derive(Debug)]
-struct ProvisioningTracker {
+struct ProvisioningTracker<T> {
     remaining_count: std::sync::atomic::AtomicUsize,
-    task: TaskInQueue,
+    task: TaskInQueue<T>,
 }
 
-impl ProvisioningTracker {
-    fn new(remaining_count: usize, task: TaskInQueue) -> Self {
+impl<T> ProvisioningTracker {
+    fn new(remaining_count: usize, task: TaskInQueue<T>) -> Self {
         Self {
             remaining_count: std::sync::atomic::AtomicUsize::new(remaining_count),
             task,
