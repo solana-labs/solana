@@ -1204,6 +1204,7 @@ struct Scheduler {
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
+    errors: Vec<Result<()>>,
 }
 
 impl Scheduler {
@@ -1250,7 +1251,7 @@ impl Default for Scheduler {
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solErrorCol{:02}", 0)).spawn(move || {
             while let Ok(solana_scheduler::DroppablePayload(ee)) = droppable_ee_receiver.recv() {
                 if false /* ee.is_aborted() */ {
-                    errors.push(ee)
+                    errors.push(Ok(()))
                 }
             }
             Ok(())
