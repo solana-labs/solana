@@ -8055,7 +8055,7 @@ impl Bank {
     pub fn wait_for_scheduler(&self) -> Result<()> {
         let mut scheduler = self.scheduler.write().unwrap();
         scheduler.gracefully_stop()?;
-        scheduler.handle_aborted_executions().get(0).unwrap_or(&Ok(()))
+        scheduler.handle_aborted_executions().get(0).cloned().unwrap_or(Ok(()))
     }
 }
 
