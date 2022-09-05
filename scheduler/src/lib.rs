@@ -1257,9 +1257,9 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn schedule_next_execution<AST: AtScheduleThread>(
+    fn schedule_next_execution<AST: AtScheduleThread, T>(
         ast: AST,
-        task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
+        task_sender: &crossbeam_channel::Sender<(TaskInQueue<T>, Vec<LockAttempt>)>,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &mut usize,
@@ -1268,7 +1268,7 @@ impl ScheduleStage {
         queue_clock: &mut usize,
         execute_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
-    ) -> Option<Box<ExecutionEnvironment>> {
+    ) -> Option<Box<ExecutionEnvironment<T>>> {
         let maybe_ee = Self::pop_from_queue_then_lock(
             ast,
             task_sender,
