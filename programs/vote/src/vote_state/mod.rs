@@ -8,6 +8,10 @@ use {
     log::*,
     serde_derive::{Deserialize, Serialize},
     solana_metrics::datapoint_debug,
+<<<<<<< HEAD
+=======
+    solana_program::vote::{error::VoteError, program::id, state::serde_compact_vote_state_update},
+>>>>>>> 4f22ee8f9 (uses varint encoding for vote-state lockout offsets)
     solana_sdk::{
         account::{AccountSharedData, ReadableAccount, WritableAccount},
         clock::{Epoch, Slot, UnixTimestamp},
@@ -28,6 +32,7 @@ use {
     },
 };
 
+<<<<<<< HEAD
 mod vote_state_0_23_5;
 pub mod vote_state_versions;
 pub use vote_state_versions::*;
@@ -43,11 +48,15 @@ pub const MAX_EPOCH_CREDITS_HISTORY: usize = 64;
 const DEFAULT_PRIOR_VOTERS_OFFSET: usize = 82;
 
 #[frozen_abi(digest = "EYPXjH9Zn2vLzxyjHejkRkoTh4Tg4sirvb4FX9ye25qF")]
+=======
+#[frozen_abi(digest = "2AuJFjx7SYrJ2ugCfH1jFh3Lr9UHMEPfKwwk1NcjqND1")]
+>>>>>>> 4f22ee8f9 (uses varint encoding for vote-state lockout offsets)
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, AbiEnumVisitor, AbiExample)]
 pub enum VoteTransaction {
     Vote(Vote),
     VoteStateUpdate(VoteStateUpdate),
-    CompactVoteStateUpdate(CompactVoteStateUpdate),
+    #[serde(with = "serde_compact_vote_state_update")]
+    CompactVoteStateUpdate(VoteStateUpdate),
 }
 
 impl VoteTransaction {
@@ -55,20 +64,16 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.slots.clone(),
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.slots(),
-            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
-                compact_state_update.slots()
-            }
+            VoteTransaction::CompactVoteStateUpdate(vote_state_update) => vote_state_update.slots(),
         }
     }
 
     pub fn slot(&self, i: usize) -> Slot {
         match self {
             VoteTransaction::Vote(vote) => vote.slots[i],
-            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+            VoteTransaction::VoteStateUpdate(vote_state_update)
+            | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.lockouts[i].slot
-            }
-            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
-                compact_state_update.slots()[i]
             }
         }
     }
@@ -76,11 +81,9 @@ impl VoteTransaction {
     pub fn len(&self) -> usize {
         match self {
             VoteTransaction::Vote(vote) => vote.slots.len(),
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.lockouts.len(),
-            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
-                1 + compact_state_update.lockouts_32.len()
-                    + compact_state_update.lockouts_16.len()
-                    + compact_state_update.lockouts_8.len()
+            VoteTransaction::VoteStateUpdate(vote_state_update)
+            | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
+                vote_state_update.lockouts.len()
             }
         }
     }
@@ -88,10 +91,10 @@ impl VoteTransaction {
     pub fn is_empty(&self) -> bool {
         match self {
             VoteTransaction::Vote(vote) => vote.slots.is_empty(),
-            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+            VoteTransaction::VoteStateUpdate(vote_state_update)
+            | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 vote_state_update.lockouts.is_empty()
             }
-            VoteTransaction::CompactVoteStateUpdate(_) => false,
         }
     }
 
@@ -99,18 +102,16 @@ impl VoteTransaction {
         match self {
             VoteTransaction::Vote(vote) => vote.hash,
             VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.hash,
-            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
-                compact_state_update.hash
-            }
+            VoteTransaction::CompactVoteStateUpdate(vote_state_update) => vote_state_update.hash,
         }
     }
 
     pub fn timestamp(&self) -> Option<UnixTimestamp> {
         match self {
             VoteTransaction::Vote(vote) => vote.timestamp,
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp,
-            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
-                compact_state_update.timestamp
+            VoteTransaction::VoteStateUpdate(vote_state_update)
+            | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
+                vote_state_update.timestamp
             }
         }
     }
@@ -118,9 +119,9 @@ impl VoteTransaction {
     pub fn set_timestamp(&mut self, ts: Option<UnixTimestamp>) {
         match self {
             VoteTransaction::Vote(vote) => vote.timestamp = ts,
-            VoteTransaction::VoteStateUpdate(vote_state_update) => vote_state_update.timestamp = ts,
-            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
-                compact_state_update.timestamp = ts
+            VoteTransaction::VoteStateUpdate(vote_state_update)
+            | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
+                vote_state_update.timestamp = ts
             }
         }
     }
@@ -128,11 +129,9 @@ impl VoteTransaction {
     pub fn last_voted_slot(&self) -> Option<Slot> {
         match self {
             VoteTransaction::Vote(vote) => vote.slots.last().copied(),
-            VoteTransaction::VoteStateUpdate(vote_state_update) => {
+            VoteTransaction::VoteStateUpdate(vote_state_update)
+            | VoteTransaction::CompactVoteStateUpdate(vote_state_update) => {
                 Some(vote_state_update.lockouts.back()?.slot)
-            }
-            VoteTransaction::CompactVoteStateUpdate(compact_state_update) => {
-                compact_state_update.slots().last().copied()
             }
         }
     }
@@ -154,6 +153,7 @@ impl From<VoteStateUpdate> for VoteTransaction {
     }
 }
 
+<<<<<<< HEAD
 impl From<CompactVoteStateUpdate> for VoteTransaction {
     fn from(compact_state_update: CompactVoteStateUpdate) -> Self {
         VoteTransaction::CompactVoteStateUpdate(compact_state_update)
@@ -179,6 +179,11 @@ impl Vote {
             timestamp: None,
         }
     }
+=======
+// utility function, used by Stakes, tests
+pub fn from<T: ReadableAccount>(account: &T) -> Option<VoteState> {
+    VoteState::deserialize(account.data()).ok()
+>>>>>>> 4f22ee8f9 (uses varint encoding for vote-state lockout offsets)
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Copy, Clone, AbiExample)]
@@ -4164,105 +4169,6 @@ mod tests {
                 Some(&FeatureSet::all_enabled())
             ),
             Err(VoteError::SlotHashMismatch),
-        );
-    }
-
-    #[test]
-    fn test_compact_vote_state_update_parity() {
-        let mut vote_state_update = VoteStateUpdate::from(vec![(2, 4), (4, 3), (6, 2), (7, 1)]);
-        vote_state_update.hash = Hash::new_unique();
-        vote_state_update.root = Some(1);
-
-        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
-
-        assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
-        assert_eq!(vote_state_update.hash, compact_vote_state_update.hash);
-        assert_eq!(vote_state_update.root, compact_vote_state_update.root());
-
-        let vote_state_update_new = compact_vote_state_update.uncompact().unwrap();
-        assert_eq!(vote_state_update, vote_state_update_new);
-    }
-
-    #[test]
-    fn test_compact_vote_state_update_large_offsets() {
-        let vote_state_update = VoteStateUpdate::from(vec![
-            (0, 31),
-            (1, 30),
-            (2, 29),
-            (3, 28),
-            (u64::pow(2, 28), 17),
-            (u64::pow(2, 28) + u64::pow(2, 16), 1),
-        ]);
-        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
-
-        assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
-
-        let vote_state_update_new = compact_vote_state_update.uncompact().unwrap();
-        assert_eq!(vote_state_update, vote_state_update_new);
-    }
-
-    #[test]
-    fn test_compact_vote_state_update_border_conditions() {
-        let two_31 = u64::pow(2, 31);
-        let two_15 = u64::pow(2, 15);
-        let vote_state_update = VoteStateUpdate::from(vec![
-            (0, 31),
-            (two_31, 16),
-            (two_31 + 1, 15),
-            (two_31 + two_15, 7),
-            (two_31 + two_15 + 1, 6),
-            (two_31 + two_15 + 1 + 64, 1),
-        ]);
-        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
-
-        assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
-
-        let vote_state_update_new = compact_vote_state_update.uncompact().unwrap();
-        assert_eq!(vote_state_update, vote_state_update_new);
-    }
-
-    #[test]
-    fn test_compact_vote_state_update_large_root() {
-        let two_58 = u64::pow(2, 58);
-        let two_31 = u64::pow(2, 31);
-        let mut vote_state_update = VoteStateUpdate::from(vec![(two_58, 31), (two_58 + two_31, 1)]);
-        vote_state_update.root = Some(two_31);
-        let compact_vote_state_update = vote_state_update.clone().compact().unwrap();
-
-        assert_eq!(vote_state_update.slots(), compact_vote_state_update.slots());
-
-        let vote_state_update_new = compact_vote_state_update.uncompact().unwrap();
-        assert_eq!(vote_state_update, vote_state_update_new);
-    }
-
-    #[test]
-    fn test_compact_vote_state_update_overflow() {
-        let compact_vote_state_update = CompactVoteStateUpdate {
-            root: u64::MAX - 1,
-            root_to_first_vote_offset: 10,
-            lockouts_32: vec![],
-            lockouts_16: vec![],
-            lockouts_8: vec![CompactLockout::new(10)],
-            hash: Hash::new_unique(),
-            timestamp: None,
-        };
-        assert_eq!(
-            Err(InstructionError::ArithmeticOverflow),
-            compact_vote_state_update.uncompact()
-        );
-
-        let compact_vote_state_update = CompactVoteStateUpdate {
-            root: u64::MAX - u32::MAX as u64,
-            root_to_first_vote_offset: 10,
-            lockouts_32: vec![CompactLockout::new(u32::MAX)],
-            lockouts_16: vec![],
-            lockouts_8: vec![CompactLockout::new(10)],
-            hash: Hash::new_unique(),
-            timestamp: None,
-        };
-        assert_eq!(
-            Err(InstructionError::ArithmeticOverflow),
-            compact_vote_state_update.uncompact()
         );
     }
 }

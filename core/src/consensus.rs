@@ -169,7 +169,11 @@ impl TowerVersions {
     }
 }
 
+<<<<<<< HEAD
 #[frozen_abi(digest = "8Y9r3XAwXwmrVGMCyTuy4Kbdotnt1V6N8J6NEniBFD9x")]
+=======
+#[frozen_abi(digest = "HQoLKAJEQTuVy8nMSkVWbrH3M5xKksxdMEZHGLWbnX6w")]
+>>>>>>> 4f22ee8f9 (uses varint encoding for vote-state lockout offsets)
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, AbiExample)]
 pub struct Tower {
     pub node_pubkey: Pubkey,

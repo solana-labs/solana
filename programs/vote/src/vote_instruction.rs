@@ -14,6 +14,17 @@ use {
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_instruction, sysvar,
+<<<<<<< HEAD:programs/vote/src/vote_instruction.rs
+=======
+        vote::{
+            program::id,
+            state::{
+                serde_compact_vote_state_update, Vote, VoteAuthorize,
+                VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs, VoteInit, VoteState,
+                VoteStateUpdate,
+            },
+        },
+>>>>>>> 4f22ee8f9 (uses varint encoding for vote-state lockout offsets):sdk/program/src/vote/instruction.rs
     },
 };
 
@@ -132,14 +143,18 @@ pub enum VoteInstruction {
     /// # Account references
     ///   0. `[Write]` Vote account to vote with
     ///   1. `[SIGNER]` Vote authority
-    CompactUpdateVoteState(CompactVoteStateUpdate),
+    #[serde(with = "serde_compact_vote_state_update")]
+    CompactUpdateVoteState(VoteStateUpdate),
 
     /// Update the onchain vote state for the signer along with a switching proof.
     ///
     /// # Account references
     ///   0. `[Write]` Vote account to vote with
     ///   1. `[SIGNER]` Vote authority
-    CompactUpdateVoteStateSwitch(CompactVoteStateUpdate, Hash),
+    CompactUpdateVoteStateSwitch(
+        #[serde(with = "serde_compact_vote_state_update")] VoteStateUpdate,
+        Hash,
+    ),
 }
 
 fn initialize_account(vote_pubkey: &Pubkey, vote_init: &VoteInit) -> Instruction {
@@ -387,7 +402,7 @@ pub fn update_vote_state_switch(
 pub fn compact_update_vote_state(
     vote_pubkey: &Pubkey,
     authorized_voter_pubkey: &Pubkey,
-    compact_vote_state_update: CompactVoteStateUpdate,
+    vote_state_update: VoteStateUpdate,
 ) -> Instruction {
     let account_metas = vec![
         AccountMeta::new(*vote_pubkey, false),
@@ -396,7 +411,7 @@ pub fn compact_update_vote_state(
 
     Instruction::new_with_bincode(
         id(),
-        &VoteInstruction::CompactUpdateVoteState(compact_vote_state_update),
+        &VoteInstruction::CompactUpdateVoteState(vote_state_update),
         account_metas,
     )
 }
@@ -404,7 +419,7 @@ pub fn compact_update_vote_state(
 pub fn compact_update_vote_state_switch(
     vote_pubkey: &Pubkey,
     authorized_voter_pubkey: &Pubkey,
-    vote_state_update: CompactVoteStateUpdate,
+    vote_state_update: VoteStateUpdate,
     proof_hash: Hash,
 ) -> Instruction {
     let account_metas = vec![
