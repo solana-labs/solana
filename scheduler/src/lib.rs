@@ -1219,9 +1219,9 @@ impl ScheduleStage {
     }
 
     #[inline(never)]
-    fn commit_completed_execution<AST: AtScheduleThread>(
+    fn commit_completed_execution<AST: AtScheduleThread, T>(
         ast: AST,
-        ee: &mut ExecutionEnvironment,
+        ee: &mut ExecutionEnvironment<T>,
         address_book: &mut AddressBook,
         commit_time: &mut usize,
         provisioning_tracker_count: &mut usize,
