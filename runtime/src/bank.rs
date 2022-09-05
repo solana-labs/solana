@@ -6393,7 +6393,8 @@ impl Bank {
                 drop(r);
                 let w = self.scheduler.write().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::clone(bank));
-                panic!();
+                drop(w);
+                self.scheduler.read().unwrap()
             } else {
                 r
             }
