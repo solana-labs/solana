@@ -739,9 +739,9 @@ pub type TaskInQueue<T> = triomphe::Arc<Task<T>>;
 //type TaskQueueOccupiedEntry<'a> = im::hashmap::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
 //type TaskQueueEntry<'a> = dashmap::mapref::entry::Entry<'a, UniqueWeight, TaskInQueue>;
 //type TaskQueueOccupiedEntry<'a> = dashmap::mapref::entry::OccupiedEntry<'a, UniqueWeight, TaskInQueue, std::collections::hash_map::RandomState>;
-type TaskQueueEntry<'a> = std::collections::btree_map::Entry<'a, UniqueWeight, TaskInQueue>;
-type TaskQueueOccupiedEntry<'a> =
-    std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue>;
+type TaskQueueEntry<'a, T> = std::collections::btree_map::Entry<'a, UniqueWeight, TaskInQueue<T>>;
+type TaskQueueOccupiedEntry<'a, T> =
+    std::collections::btree_map::OccupiedEntry<'a, UniqueWeight, TaskInQueue<T>>;
 
 impl TaskQueue {
     #[inline(never)]
