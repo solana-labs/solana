@@ -46,7 +46,11 @@ impl Default for Config<'_> {
                 .expect("Unable to get current executable")
                 .parent()
                 .expect("Unable to get parent directory")
+                .parent()
+                .expect("Unable to get parent directory")
                 .to_path_buf()
+                .join("lib")
+                .join("solana")
                 .join("sdk")
                 .join("bpf"),
             sbf_out_dir: None,
