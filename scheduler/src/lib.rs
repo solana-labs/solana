@@ -108,6 +108,10 @@ impl ExecutionEnvironment {
     fn is_reindexed(&self) -> bool {
         self.is_reindexed
     }
+
+    fn is_aborted(&self) -> bool {
+        self.execution_result.is_err()
+    }
 }
 
 unsafe trait AtScheduleThread: Copy {}
