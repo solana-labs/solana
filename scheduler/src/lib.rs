@@ -35,6 +35,7 @@ pub struct ExecutionEnvironment {
     pub unique_weight: UniqueWeight,
     pub task: TaskInQueue,
     pub finalized_lock_attempts: Vec<LockAttempt>,
+    pub is_reindexed: bool,
 }
 
 impl ExecutionEnvironment {
@@ -50,7 +51,10 @@ impl ExecutionEnvironment {
     //}
     //
     #[inline(never)]
-    pub fn reindex_to_address_book(&mut self) {
+    pub fn reindex_with_address_book(&mut self) {
+        assert!(!self.is_reindexed);
+        self.is_reindexed = true;
+
         let uq = self.unique_weight;
         //self.task.trace_timestamps("in_exec(self)");
         let should_remove = self
@@ -98,6 +102,10 @@ impl ExecutionEnvironment {
                     ()
                 });
         }
+    }
+
+    fn is_reindexed(&self) -> bool {
+        self.is_reindexed
     }
 }
 
@@ -690,7 +698,7 @@ impl Task {
     }
 
     #[inline(never)]
-    fn index_to_address_book(
+    fn index_with_address_book(
         this: &TaskInQueue,
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
     ) {
@@ -962,7 +970,7 @@ impl ScheduleStage {
                         next_task.mark_as_contended();
                         *contended_count = contended_count.checked_add(1).unwrap();
 
-                        Task::index_to_address_book(&next_task, task_sender);
+                        Task::index_with_address_book(&next_task, task_sender);
 
                         // maybe run lightweight prune logic on contended_queue here.
                     } else {
@@ -1217,7 +1225,9 @@ impl ScheduleStage {
     ) {
         // do par()-ly?
 
-        //ee.reindex();
+        //ee.reindex_with_address_book();
+        assert!(ee.is_reindexed());
+
         ee.task.record_commit_time(*commit_time);
         //ee.task.trace_timestamps("commit");
         //*commit_time = commit_time.checked_add(1).unwrap();
