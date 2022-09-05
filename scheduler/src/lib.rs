@@ -23,8 +23,8 @@ type PageRcInner<T> = triomphe::Arc<(std::cell::RefCell<Page<T>>, TaskIds<T>)>;
 
 #[derive(Debug, Clone)]
 pub struct PageRc<T>(PageRcInner<T>);
-unsafe impl Send for PageRc {}
-unsafe impl Sync for PageRc {}
+unsafe impl<T> Send for PageRc<T> {}
+unsafe impl<T> Sync for PageRc<T> {}
 
 type CU = u64;
 
@@ -113,8 +113,8 @@ impl<T> ExecutionEnvironment<T> {
 unsafe trait AtScheduleThread: Copy {}
 pub unsafe trait NotAtScheduleThread: Copy {}
 
-impl PageRc {
-    fn page_mut<AST: AtScheduleThread, T>(&self, _ast: AST) -> std::cell::RefMut<'_, Page<T>> {
+impl<T> PageRc<T> {
+    fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page<T>> {
         self.0 .0.borrow_mut()
     }
 }
@@ -128,7 +128,7 @@ enum LockStatus {
 
 #[derive(Debug)]
 pub struct LockAttempt<T> {
-    target: PageRc,
+    target: PageRc<T>,
     status: LockStatus,
     requested_usage: RequestedUsage,
     //pub heaviest_uncontended: arc_swap::ArcSwapOption<Task>,
@@ -137,7 +137,7 @@ pub struct LockAttempt<T> {
 }
 
 impl<T> LockAttempt<T> {
-    pub fn new(target: PageRc, requested_usage: RequestedUsage) -> Self {
+    pub fn new(target: PageRc<T>, requested_usage: RequestedUsage) -> Self {
         Self {
             target,
             status: LockStatus::Succeded,
@@ -250,12 +250,12 @@ impl<T> Page<T> {
     }
 }
 
-//type AddressMap = std::collections::HashMap<Pubkey, PageRc>;
-type AddressMap = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc>>;
+//type AddressMap = std::collections::HashMap<Pubkey, PageRc<T>>;
+type AddressMap<T> = std::sync::Arc<dashmap::DashMap<Pubkey, PageRc<T>>>;
 type TaskId = UniqueWeight;
 type WeightedTaskIds<T> = std::collections::BTreeMap<TaskId, TaskInQueue<T>>;
 //type AddressMapEntry<'a, K, V> = std::collections::hash_map::Entry<'a, K, V>;
-type AddressMapEntry<'a> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc>;
+type AddressMapEntry<'a, T> = dashmap::mapref::entry::Entry<'a, Pubkey, PageRc<T>>;
 
 type StuckTaskId = (CU, TaskId);
 
