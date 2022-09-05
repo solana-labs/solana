@@ -194,7 +194,10 @@ fn execute_batch(
         batch,
         transaction_indexes,
     );
-    // bank().handle_any_unexpected_errors() -> Option<Vec<_>>
+    if let Some(first_error_from_scheduler) = batch.bank().handle_aborted_transactions().iter().first() {
+        first_error_from_scheduler?
+    }
+
     let (tx_results, balances) = batch.bank().load_execute_and_commit_transactions(
         batch,
         MAX_PROCESSING_AGE,
