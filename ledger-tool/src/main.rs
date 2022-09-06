@@ -455,6 +455,11 @@ fn output_slot(
                 let t1 = std::thread::Builder::new()
                     .name(format!("sol-producer{}", thx))
                     .spawn(move || {
+                        #[derive(Clone, Copy, Debug)]
+                        struct NotAtTopOfScheduleThread;
+                        unsafe impl solana_scheduler::NotAtScheduleThread for NotAtTopOfScheduleThread {}
+                        let nast = NotAtTopOfScheduleThread;
+
                         for i in 0..loop_count {
                             error!("started!: {} {}", i, txes.len());
                             for tx in txes.iter().map(|t| (t.0.clone(), t.1.iter().map(|l| l.clone_for_test()).collect::<Vec<_>>())) {
@@ -462,7 +467,7 @@ fn output_slot(
                                     std::thread::sleep(std::time::Duration::from_micros(10));
                                 }
 
-                                let t = solana_scheduler::Task::new_for_queue(weight, tx);
+                                let t = solana_scheduler::Task::new_for_queue(nast, weight, tx);
                                 //for lock_attempt in t.tx.1.iter() {
                                 //    lock_attempt.contended_unique_weights().insert_task(weight, solana_scheduler::TaskInQueue::clone(&t));
                                 //}
