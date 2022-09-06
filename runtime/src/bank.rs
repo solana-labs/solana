@@ -1257,8 +1257,10 @@ impl Default for Scheduler {
 
             std::thread::Builder::new().name(format!("solExec{:02}", thx)).spawn(move || {
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
-                assert_eq!(ee.task.execute_time(), execute_time);
+                let current_execute_clock = ee.task.execute_time();
+                assert_eq!(current_execute_clock, execute_time);
                 execute_time += 1;
+                trace!("executing thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
 
                 let bank_r = bank.read().unwrap();
                 let bank_o = (&bank_r).as_ref().unwrap();
