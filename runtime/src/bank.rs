@@ -1206,6 +1206,7 @@ struct Scheduler {
     graceful_stop_initiated: bool,
     errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Arc<Bank>>>>,
+    transaction_index: AtomicUsize,
 }
 
 impl Scheduler {
@@ -1226,6 +1227,7 @@ impl Scheduler {
             .map(|address| solana_scheduler::LockAttempt::new(self.preloader.load(**address), solana_scheduler::RequestedUsage::Readonly));
         let locks = writable_lock_iter.chain(readonly_lock_iter).collect::<Vec<_>>();
 
+        assert_eq!(index, self.transaction_index.fetch_add(1, std::sync::atomic::Ordering::SeqCst));
         let uw = usize::max_value() - index;
         let t = solana_scheduler::Task::new_for_queue(nast, uw as u64, (sanitized_tx.clone(), locks));
         self.transaction_sender.as_ref().unwrap().send(solana_scheduler::SchedulablePayload(t)).unwrap();
@@ -1312,9 +1314,13 @@ impl Default for Scheduler {
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
+            let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
+                .unwrap_or(format!("{}", 1))
+                .parse::<usize>()
+                .unwrap();
 
             solana_scheduler::ScheduleStage::run(
-                1,
+                max_executing_queue_count,
                 &mut runnable_queue,
                 &mut address_book,
                 &transaction_receiver,
