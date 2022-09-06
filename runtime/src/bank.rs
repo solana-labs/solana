@@ -4053,6 +4053,7 @@ impl Bank {
 
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
+            self.wait_for_scheduler().unwrap();
             self.register_recent_blockhash(hash);
         }
 
