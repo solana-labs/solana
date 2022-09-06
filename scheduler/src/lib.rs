@@ -728,6 +728,11 @@ impl Task {
         assert_ne!(cu, 0);
         (cu, TaskId::max_value() - self.unique_weight)
     }
+
+    fn contention_count(&self) -> usize {
+        self.contention_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 // RunnableQueue, ContendedQueue?
