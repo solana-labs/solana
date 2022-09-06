@@ -8066,6 +8066,7 @@ impl Bank {
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         w_blockhash_queue.register_hash(scheduler.blockhash, self.fee_rate_governor.lamports_per_signature);
         self.update_recent_blockhashes_locked(&w_blockhash_queue);
+        Ok(())
     }
 }
 
