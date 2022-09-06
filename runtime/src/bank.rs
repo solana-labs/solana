@@ -4033,7 +4033,7 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
-        let scheduler = self.scheduler.write().unwrap();
+        let mut scheduler = self.scheduler.write().unwrap();
         scheduler.blockhash = Some(blockhash.clone());
     }
 
