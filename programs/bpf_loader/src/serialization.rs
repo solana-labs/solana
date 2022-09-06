@@ -9,7 +9,7 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
-        transaction_context::{InstructionContext, TransactionContext},
+        transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
     std::{io::prelude::*, mem::size_of},
 };
@@ -24,7 +24,7 @@ pub fn serialize_parameters(
     should_cap_ix_accounts: bool,
 ) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<usize>), InstructionError> {
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
-    if should_cap_ix_accounts && num_ix_accounts > usize::from(MAX_INSTRUCTION_ACCOUNTS) {
+    if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
     }
 
@@ -722,7 +722,7 @@ mod tests {
         {
             let account = invoke_context
                 .transaction_context
-                .get_account_at_index(index_in_transaction)
+                .get_account_at_index(index_in_transaction as IndexOfAccount)
                 .unwrap()
                 .borrow();
             assert_eq!(&*account, original_account);
@@ -781,7 +781,7 @@ mod tests {
         {
             let account = invoke_context
                 .transaction_context
-                .get_account_at_index(index_in_transaction)
+                .get_account_at_index(index_in_transaction as IndexOfAccount)
                 .unwrap()
                 .borrow();
             assert_eq!(&*account, original_account);

@@ -16,7 +16,7 @@ struct CallerAccount<'a> {
     executable: bool,
     rent_epoch: u64,
 }
-type TranslatedAccounts<'a> = Vec<(usize, Option<CallerAccount<'a>>)>;
+type TranslatedAccounts<'a> = Vec<(IndexOfAccount, Option<CallerAccount<'a>>)>;
 
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a, 'b> {
@@ -30,7 +30,7 @@ trait SyscallInvokeSigned<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         instruction_accounts: &[InstructionAccount],
-        program_indices: &[usize],
+        program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
@@ -130,7 +130,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         instruction_accounts: &[InstructionAccount],
-        program_indices: &[usize],
+        program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
@@ -447,7 +447,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         instruction_accounts: &[InstructionAccount],
-        program_indices: &[usize],
+        program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
@@ -605,7 +605,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
 
 fn get_translated_accounts<'a, T, F>(
     instruction_accounts: &[InstructionAccount],
-    program_indices: &[usize],
+    program_indices: &[IndexOfAccount],
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
     invoke_context: &mut InvokeContext,
@@ -632,7 +632,7 @@ where
 
     for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
     {
-        if instruction_account_index != instruction_account.index_in_callee {
+        if instruction_account_index as IndexOfAccount != instruction_account.index_in_callee {
             continue; // Skip duplicate account
         }
         let mut callee_account = instruction_context
@@ -724,7 +724,7 @@ where
                     .get_orig_account_lengths()
                     .map_err(SyscallError::InstructionError)?;
                 caller_account.original_data_len = *orig_data_lens
-                    .get(instruction_account.index_in_caller)
+                    .get(instruction_account.index_in_caller as usize)
                     .ok_or_else(|| {
                         ic_msg!(
                             invoke_context,

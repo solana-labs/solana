@@ -14,12 +14,13 @@ use {
         program_utils::limited_deserialize,
         pubkey::{Pubkey, PUBKEY_BYTES},
         system_instruction,
+        transaction_context::IndexOfAccount,
     },
     std::convert::TryFrom,
 };
 
 pub fn process_instruction(
-    _first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;

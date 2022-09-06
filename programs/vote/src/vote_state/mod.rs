@@ -16,7 +16,9 @@ use {
         rent::Rent,
         slot_hashes::SlotHash,
         sysvar::clock::Clock,
-        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
+        transaction_context::{
+            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
+        },
     },
     std::{
         cmp::Ordering,
@@ -825,9 +827,9 @@ fn verify_authorized_signer<S: std::hash::BuildHasher>(
 pub fn withdraw<S: std::hash::BuildHasher>(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-    vote_account_index: usize,
+    vote_account_index: IndexOfAccount,
     lamports: u64,
-    to_account_index: usize,
+    to_account_index: IndexOfAccount,
     signers: &HashSet<Pubkey, S>,
     rent_sysvar: &Rent,
     clock: Option<&Clock>,

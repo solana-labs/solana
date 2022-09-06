@@ -10,7 +10,7 @@ use {
         account::{Account, AccountSharedData},
         bpf_loader,
         sysvar::rent::Rent,
-        transaction_context::{InstructionAccount, TransactionContext},
+        transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
     test::Bencher,
 };
@@ -94,9 +94,9 @@ fn create_inputs() -> TransactionContext {
         .enumerate()
         .map(
             |(instruction_account_index, index_in_transaction)| InstructionAccount {
-                index_in_caller: instruction_account_index,
+                index_in_caller: instruction_account_index as IndexOfAccount,
                 index_in_transaction,
-                index_in_callee: instruction_account_index,
+                index_in_callee: instruction_account_index as IndexOfAccount,
                 is_signer: false,
                 is_writable: instruction_account_index >= 4,
             },

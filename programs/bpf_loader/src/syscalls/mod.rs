@@ -53,7 +53,7 @@ use {
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
         sysvar::{Sysvar, SysvarId},
-        transaction_context::{InstructionAccount, TransactionContextAttribute},
+        transaction_context::{IndexOfAccount, InstructionAccount, TransactionContextAttribute},
     },
     std::{
         alloc::Layout,
@@ -1925,7 +1925,7 @@ declare_syscall!(
                 instruction_context
                     .try_borrow_instruction_account(
                         transaction_context,
-                        update.instruction_account_index as usize,
+                        update.instruction_account_index,
                     )
                     .map_err(SyscallError::InstructionError),
                 result
@@ -3253,7 +3253,7 @@ mod tests {
             }
             if stack_height > transaction_context.get_instruction_context_stack_height() {
                 let instruction_accounts = [InstructionAccount {
-                    index_in_transaction: index_in_trace.saturating_add(1),
+                    index_in_transaction: index_in_trace.saturating_add(1) as IndexOfAccount,
                     index_in_caller: 0, // This is incorrect / inconsistent but not required
                     index_in_callee: 0,
                     is_signer: false,
