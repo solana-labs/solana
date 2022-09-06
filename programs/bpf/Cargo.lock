@@ -24,7 +24,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b613b8e1e3cf911a086f53f03bf286f52fd7a7258e4fa606f0ef220d39d8877"
 dependencies = [
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
 ]
 
 [[package]]
@@ -420,7 +420,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4152116fd6e9dadb291ae18fc1ec3575ed6d84c29642d97890f4b4a3417297e4"
 dependencies = [
  "block-padding 0.2.1",
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
 ]
 
 [[package]]
@@ -429,7 +429,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1d36a02058e76b040de25a4464ba1c80935655595b661505c8b39b664828b95"
 dependencies = [
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
 ]
 
 [[package]]
@@ -680,7 +680,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ee52072ec15386f770805afd189a01c8841be8696bed250fa2f13c4c0d6dfb7"
 dependencies = [
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
 ]
 
 [[package]]
@@ -903,7 +903,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57952ca27b5e3606ff4dd79b0020231aaf9d6aa76dc05fd30137538c50bd3ce8"
 dependencies = [
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
  "typenum",
 ]
 
@@ -913,7 +913,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b584a330336237c1eecd3e94266efb216c56ed91225d634cb2991c5f3fd1aeab"
 dependencies = [
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
  "subtle",
 ]
 
@@ -1025,7 +1025,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3dd60d1080a57a05ab032377049e0591415d2b31afd7028356dbf3cc6dcb066"
 dependencies = [
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
 ]
 
 [[package]]
@@ -1141,7 +1141,7 @@ dependencies = [
  "derivation-path",
  "ed25519-dalek",
  "hmac 0.12.1",
- "sha2 0.10.2",
+ "sha2 0.10.5",
 ]
 
 [[package]]
@@ -1509,9 +1509,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-version = "0.14.5"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd48d33ec7f05fbfa152300fdad764757cbded343c1aa1cff2fbaf4134851803"
+checksum = "bff49e947297f3312447abdca79f45f4738097cc82b06e72054d2223f601f1b9"
 dependencies = [
  "serde",
  "typenum",
@@ -1729,7 +1729,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17ea0a1394df5b6574da6e0c1ade9e78868c9fb0a4e5ef4428e32da4676b85b1"
 dependencies = [
  "digest 0.9.0",
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
  "hmac 0.8.1",
 ]
 
@@ -1950,7 +1950,7 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1f03d4ab4d5dc9ec2d219f86c15d2a15fc08239d1cd3b2d6a19717c0a2f443"
 dependencies = [
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
 ]
 
 [[package]]
@@ -3932,9 +3932,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.2"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55deaec60f81eefe3cce0dc50bda92d6d8e88f2a27df7c5033b42afeb1ed2676"
+checksum = "cf9db03534dff993187064c4e0c05a5708d2a9728ace9a8959b77bedf415dac5"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
@@ -4808,7 +4808,7 @@ dependencies = [
  "byteorder 1.4.3",
  "cc",
  "either",
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
  "getrandom 0.1.14",
  "hashbrown 0.12.3",
  "im",
@@ -4822,7 +4822,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.10.5",
  "solana-frozen-abi-macro 1.11.5",
  "subtle",
  "thiserror",
@@ -4840,7 +4840,7 @@ dependencies = [
  "byteorder 1.4.3",
  "cc",
  "either",
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
  "getrandom 0.1.14",
  "hashbrown 0.12.3",
  "im",
@@ -4854,7 +4854,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.10.5",
  "solana-frozen-abi-macro 1.12.0",
  "subtle",
  "thiserror",
@@ -4994,7 +4994,7 @@ dependencies = [
  "rustc_version",
  "serde",
  "serde_bytes",
- "sha2 0.10.2",
+ "sha2 0.10.5",
  "solana-account-decoder",
  "solana-bpf-loader-program",
  "solana-entry",
@@ -5171,7 +5171,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.10.5",
  "sha3 0.10.2",
  "solana-frozen-abi 1.11.5",
  "solana-frozen-abi-macro 1.11.5",
@@ -5218,7 +5218,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.10.5",
  "sha3 0.10.2",
  "solana-frozen-abi 1.12.0",
  "solana-frozen-abi-macro 1.12.0",
@@ -5509,7 +5509,7 @@ dependencies = [
  "digest 0.10.3",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
  "hmac 0.12.1",
  "itertools",
  "js-sys",
@@ -5529,7 +5529,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.10.5",
  "sha3 0.10.2",
  "solana-frozen-abi 1.11.5",
  "solana-frozen-abi-macro 1.11.5",
@@ -5558,7 +5558,7 @@ dependencies = [
  "digest 0.10.3",
  "ed25519-dalek",
  "ed25519-dalek-bip32",
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
  "hmac 0.12.1",
  "itertools",
  "js-sys",
@@ -5578,7 +5578,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "serde_json",
- "sha2 0.10.2",
+ "sha2 0.10.5",
  "sha3 0.10.2",
  "solana-frozen-abi 1.12.0",
  "solana-frozen-abi-macro 1.12.0",
@@ -6907,7 +6907,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f214e8f697e925001e66ec2c6e37a4ef93f0f78c2eed7814394e10c62025b05"
 dependencies = [
- "generic-array 0.14.5",
+ "generic-array 0.14.6",
  "subtle",
 ]
 
