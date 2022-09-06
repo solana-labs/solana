@@ -1594,7 +1594,7 @@ fn test_optimistic_confirmation_violation_detection() {
     solana_logger::setup_with_default(RUST_LOG_FILTER);
     // First set up the cluster with 2 nodes
     let slots_per_epoch = 2048;
-    let node_stakes = vec![51 * DEFAULT_NODE_STAKE, 50 * DEFAULT_NODE_STAKE];
+    let node_stakes = vec![50 * DEFAULT_NODE_STAKE, 51 * DEFAULT_NODE_STAKE];
     let validator_keys: Vec<_> = vec![
         "4qhhXNTbKD1a5vxDDLZcHKj7ELNeiivtUBxn3wUK1F5VRsQVP89VUhfXqSfgiFB14GfuBgtrQ96n9NvWQADVkcCg",
         "3kHBzVwie5vTEaY6nFCPeFT8qDpoXzn7dCEioGRNBTnUDpvwnG85w8Wq63gVWpVTP8k2a8cgcWRjSXyUkEygpXWS",
@@ -1603,6 +1603,12 @@ fn test_optimistic_confirmation_violation_detection() {
     .map(|s| (Arc::new(Keypair::from_base58_string(s)), true))
     .take(node_stakes.len())
     .collect();
+
+    // Do not restart the validator which is the cluster entrypoint because its gossip port
+    // might be changed after restart resulting in the two nodes not being able to
+    // to form a cluster. The heavier validator is the second node.
+    let node_to_restart = validator_keys[1].0.pubkey();
+
     let mut config = ClusterConfig {
         cluster_lamports: DEFAULT_CLUSTER_LAMPORTS + node_stakes.iter().sum::<u64>(),
         node_stakes: node_stakes.clone(),
@@ -1617,12 +1623,11 @@ fn test_optimistic_confirmation_violation_detection() {
         ..ClusterConfig::default()
     };
     let mut cluster = LocalCluster::new(&mut config, SocketAddrSpace::Unspecified);
-    let entry_point_id = cluster.entry_point_info.id;
     // Let the nodes run for a while. Wait for validators to vote on slot `S`
     // so that the vote on `S-1` is definitely in gossip and optimistic confirmation is
     // detected on slot `S-1` for sure, then stop the heavier of the two
     // validators
-    let client = cluster.get_validator_client(&entry_point_id).unwrap();
+    let client = cluster.get_validator_client(&node_to_restart).unwrap();
     let mut prev_voted_slot = 0;
     loop {
         let last_voted_slot = client
@@ -1638,7 +1643,7 @@ fn test_optimistic_confirmation_violation_detection() {
         sleep(Duration::from_millis(100));
     }
 
-    let exited_validator_info = cluster.exit_node(&entry_point_id);
+    let exited_validator_info = cluster.exit_node(&node_to_restart);
 
     // Mark fork as dead on the heavier validator, this should make the fork effectively
     // dead, even though it was optimistically confirmed. The smaller validator should
@@ -1658,7 +1663,7 @@ fn test_optimistic_confirmation_violation_detection() {
         // on ancestors of last vote)
         // 2) Won't reset to this earlier ancestor becasue reset can only happen on same voted fork if
         // it's for the last vote slot or later
-        remove_tower(&exited_validator_info.info.ledger_path, &entry_point_id);
+        remove_tower(&exited_validator_info.info.ledger_path, &node_to_restart);
         blockstore.set_dead_slot(prev_voted_slot).unwrap();
     }
 
@@ -1668,7 +1673,7 @@ fn test_optimistic_confirmation_violation_detection() {
             .err()
             .map(|_| BufferRedirect::stderr().unwrap());
         cluster.restart_node(
-            &entry_point_id,
+            &node_to_restart,
             exited_validator_info,
             SocketAddrSpace::Unspecified,
         );
@@ -1676,7 +1681,7 @@ fn test_optimistic_confirmation_violation_detection() {
         // Wait for a root > prev_voted_slot to be set. Because the root is on a
         // different fork than `prev_voted_slot`, then optimistic confirmation is
         // violated
-        let client = cluster.get_validator_client(&entry_point_id).unwrap();
+        let client = cluster.get_validator_client(&node_to_restart).unwrap();
         loop {
             let last_root = client
                 .get_slot_with_commitment(CommitmentConfig::finalized())
@@ -1716,7 +1721,7 @@ fn test_optimistic_confirmation_violation_detection() {
     // Make sure validator still makes progress
     cluster_tests::check_for_new_roots(
         16,
-        &[cluster.get_contact_info(&entry_point_id).unwrap().clone()],
+        &[cluster.get_contact_info(&node_to_restart).unwrap().clone()],
         &cluster.connection_cache,
         "test_optimistic_confirmation_violation",
     );
