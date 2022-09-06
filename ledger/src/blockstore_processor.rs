@@ -178,15 +178,17 @@ fn execute_batch(
         batch,
         transaction_indexes,
     } = batch;
-    let record_token_balances = transaction_status_sender.is_some();
+    //let record_token_balances = transaction_status_sender.is_some();
 
     let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
 
+    /*
     let pre_token_balances = if record_token_balances {
         collect_token_balances(bank, batch, &mut mint_decimals)
     } else {
         vec![]
     };
+    */
 
     let pre_process_units: u64 = aggregate_total_execution_units(timings);
 
@@ -329,6 +331,28 @@ fn execute_batches_internal(
                     "execute_batch",
                 );
 
+                let thread_index = 0;// PAR_THREAD_POOL.current_thread_index().unwrap();
+                execution_timings_per_thread
+                    .lock()
+                    .unwrap()
+                    .entry(thread_index)
+                    .and_modify(|thread_execution_time| {
+                        let ThreadExecuteTimings {
+                            total_thread_us,
+                            total_transactions_executed,
+                            execute_timings: total_thread_execute_timings,
+                        } = thread_execution_time;
+                        *total_thread_us += execute_batches_time.as_us();
+                        *total_transactions_executed += transaction_count;
+                        total_thread_execute_timings
+                            .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
+                        total_thread_execute_timings.accumulate(&timings);
+                    })
+                    .or_insert(ThreadExecuteTimings {
+                        total_thread_us: execute_batches_time.as_us(),
+                        total_transactions_executed: transaction_count,
+                        execute_timings: timings,
+                    });
                 result
             })
             .collect()

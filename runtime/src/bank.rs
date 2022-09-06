@@ -1260,6 +1260,7 @@ impl Default for Scheduler {
 
             std::thread::Builder::new().name(format!("solExec{:02}", thx)).spawn(move || {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
+
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
                 let mut process_message_time = Measure::start("process_message_time");
 
@@ -1268,7 +1269,7 @@ impl Default for Scheduler {
                     assert_eq!(current_execute_clock, execute_time);
                 }
                 execute_time += 1;
-                trace!("executing thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
+                trace!("execute_substage: thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
 
                 let bank_r = bank.read().unwrap();
                 let bank_o = (&bank_r).as_ref().unwrap();
@@ -1281,7 +1282,6 @@ impl Default for Scheduler {
                 let mut batch =
                     TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
-
 
                 let (tx_results, _balances) = bank.load_execute_and_commit_transactions(
                     &batch,
