@@ -8058,7 +8058,7 @@ impl Bank {
     pub fn wait_for_scheduler(&self) -> Result<()> {
         let mut scheduler = self.scheduler.write().unwrap();
         scheduler.gracefully_stop()?;
-        scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()))?
+        scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()))?;
 
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
