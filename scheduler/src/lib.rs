@@ -616,7 +616,7 @@ impl Task {
 
     pub fn record_execute_time(&self, queue_clock: usize, execute_clock: usize) {
         //self.queue_end_time.store(queue_clock, std::sync::atomic::Ordering::SeqCst);
-        //self.execute_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
+        self.execute_time.store(execute_clock, std::sync::atomic::Ordering::SeqCst);
     }
 
     pub fn execute_time(&self) -> usize {
@@ -1242,7 +1242,7 @@ impl ScheduleStage {
         ast: AST,
         ee: &mut ExecutionEnvironment,
         address_book: &mut AddressBook,
-        commit_time: &mut usize,
+        commit_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
     ) {
         // do par()-ly?
@@ -1250,9 +1250,10 @@ impl ScheduleStage {
         ee.reindex_with_address_book();
         assert!(ee.is_reindexed());
 
-        ee.task.record_commit_time(*commit_time);
+        ee.task.record_commit_time(*commit_clock);
         //ee.task.trace_timestamps("commit");
-        //*commit_time = commit_time.checked_add(1).unwrap();
+        assert_eq!(ee.task.execute_time(), commit_clock);
+        *commit_clock = commit_clock.checked_add(1).unwrap();
 
         // which order for data race free?: unlocking / marking
         Self::unlock_after_execution(
@@ -1335,6 +1336,7 @@ impl ScheduleStage {
         let mut sequence_time = 0;
         let mut queue_clock = 0;
         let mut execute_clock = 0;
+        let mut commit_clock = 0;
         let mut completed_count = 0_usize;
         assert!(max_executing_queue_count > 0);
 
@@ -1409,7 +1411,7 @@ impl ScheduleStage {
                    let mut processed_execution_environment = maybe_from_exec.unwrap().0;
                     executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
                     completed_count = completed_count.checked_add(1).unwrap();
-                    Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut execute_clock, &mut provisioning_tracker_count);
+                    Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
                     to_next_stage.send(DroppablePayload(processed_execution_environment)).unwrap();
                }
                recv(from_prev) -> maybe_from => {
@@ -1487,7 +1489,7 @@ impl ScheduleStage {
                             ast,
                             &mut processed_execution_environment,
                             address_book,
-                            &mut execute_clock,
+                            &mut commit_clock,
                             &mut provisioning_tracker_count,
                         );
                         to_next_stage.send(DroppablePayload(processed_execution_environment)).unwrap();

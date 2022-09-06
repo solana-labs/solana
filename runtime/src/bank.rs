@@ -1246,9 +1246,13 @@ impl Default for Scheduler {
         let executing_thread_handles = (0..1).map(|thx| {
             let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
             let bank = bank.clone();
+            let mut execute_time = 0;
 
             std::thread::Builder::new().name(format!("solExec{:02}", thx)).spawn(move || {
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
+                assert_eq!(ee.task.execute_time(), execute_time);
+                execute_time += 1;
+
                 let bank_r = bank.read().unwrap();
                 let bank_o = (&bank_r).as_ref().unwrap();
                 let bank = bank_o.as_ref();
@@ -1272,10 +1276,13 @@ impl Default for Scheduler {
                     &mut Default::default(),
                     None
                 );
+                drop(bank);
+
                 let TransactionResults {
                     fee_collection_results,
                     ..
                 } = tx_results;
+
                 ee.execution_result = Some(fee_collection_results.into_iter().collect::<Result<_>>());
 
 
