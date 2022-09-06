@@ -123,7 +123,7 @@ pub unsafe trait NotAtScheduleThread: Copy {}
 
 impl PageRc {
     fn page_mut<AST: AtScheduleThread>(&self, _ast: AST) -> std::cell::RefMut<'_, Page> {
-        self.0 .0.borrow_mut()
+        self.0.0.borrow_mut()
     }
 }
 
@@ -325,14 +325,14 @@ impl AddressBook {
             ..
         } = attempt;
 
-        let mut page = target.page_mut(ast);
-
-        let strictly_lockable = page.contended_unique_weights.is_empty() ||
+        let strictly_lockable = target.0.1.contended_unique_weights.is_empty() ||
             page.contended_unique_weights.task_ids.back().key() == unique_weight;
         if !strictly_lockable {
             *status = LockStatus::Failed;
             return;
         }
+
+        let mut page = target.page_mut(ast);
 
         let next_usage = page.next_usage;
         match page.current_usage {
