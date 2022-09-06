@@ -1332,7 +1332,7 @@ impl Default for Scheduler {
             graceful_stop_initiated: Default::default(),
             errors,
             bank,
-            blockhash: Default::default(),
+            registered_blockhash: Default::default(),
         }
     }
 }
@@ -4038,8 +4038,8 @@ impl Bank {
             "register_tick() working on a bank that is already frozen or is undergoing freezing!"
         );
         let mut scheduler = self.scheduler.write().unwrap();
-        assert!(scheduler.blockhash.is_none());
-        scheduler.blockhash = Some(blockhash.clone());
+        assert!(scheduler.registered_blockhash.is_none());
+        scheduler.registered_blockhash = Some(blockhash.clone());
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function assumes subsequent calls
