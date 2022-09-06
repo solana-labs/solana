@@ -340,44 +340,6 @@ fn output_slot(
                             .send(solana_scheduler::Multiplexed::FromExecute(ee))
                             .unwrap();
                         */
-                        let uq = ee.unique_weight;
-                        let should_remove = ee.task.contention_count() > 0;
-                        for mut lock_attempt in ee.finalized_lock_attempts.iter_mut() {
-                            let contended_unique_weights = lock_attempt.contended_unique_weights();
-                            contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
-                                let mut found = true;
-                                let mut removed = false;
-                                let mut task = task_cursor.value();
-                                //task.trace_timestamps("in_exec(initial list)");
-                                while !task.currently_contended() {
-                                    if task_cursor.key() == &uq {
-                                        assert!(should_remove);
-                                        removed = task_cursor.remove();
-                                        assert!(removed);
-                                    }
-                                    if task.already_finished() {
-                                        task_cursor.remove();
-                                    }
-                                    if let Some(new_cursor) = task_cursor.prev() {
-                                        assert!(new_cursor.key() < task_cursor.key());
-                                        task_cursor = new_cursor;
-                                        task = task_cursor.value();
-                                        //task.trace_timestamps("in_exec(subsequent list)");
-                                    } else {
-                                        found = false;
-                                        break;
-                                    }
-                                }
-                                if should_remove && !removed {
-                                    contended_unique_weights.remove_task(&uq);
-                                }
-                                found.then(|| solana_scheduler::TaskInQueue::clone(task))
-                            }).flatten().map(|task| {
-                                //task.trace_timestamps(&format!("in_exec(heaviest:{})", transaction_batch.task.queue_time_label()));
-                                lock_attempt.heaviest_uncontended = Some(task);
-                                ()
-                            });
-                        }
                         ee.reindex_with_address_book();
                         post_execute_env_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
                     }
