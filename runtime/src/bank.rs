@@ -1250,15 +1250,23 @@ impl Default for Scheduler {
             .parse::<usize>()
             .unwrap();
 
+        let send_metrics = std::env::var("SEND_METRICS").is_ok();
+        let disable_clock_asserts = std::env::var("DISABLE_CLOCK_ASSERTS").is_ok();
+
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
             let bank = bank.clone();
             let mut execute_time = 0;
 
             std::thread::Builder::new().name(format!("solExec{:02}", thx)).spawn(move || {
+            let current_thread_name = std::thread::current().name().unwrap().to_string();
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
+                let mut process_message_time = Measure::start("process_message_time");
+
                 let current_execute_clock = ee.task.execute_time();
-                assert_eq!(current_execute_clock, execute_time);
+                if !disable_clock_asserts {
+                    assert_eq!(current_execute_clock, execute_time);
+                }
                 execute_time += 1;
                 trace!("executing thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
 
@@ -1296,6 +1304,23 @@ impl Default for Scheduler {
 
 
                 //ee.reindex_with_address_book();
+                if send_metrics {
+                    let sig = ee.task.tx.0.signature().to_string();
+
+                    process_message_time.stop();
+                    let duration_with_overhead = process_message_time.as_us();
+
+                    datapoint_info!(
+                        "individual_tx_stats",
+                        ("slot", bank.slot(), i64),
+                        ("thread", current_thread_name, String),
+                        ("signature", &sig, String),
+                        ("account_locks_in_json", "{}", String),
+                        ("status", "Ok", String),
+                        ("duration", duration_with_overhead, i64),
+                        ("compute_units", ee.cu, i64),
+                    );
+                }
                 completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
             Ok(())
