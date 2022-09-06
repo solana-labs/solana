@@ -8627,7 +8627,7 @@ impl AccountsDb {
                             let mut lookup_time = Measure::start("lookup_time");
                             for account in accounts_map.into_iter() {
                                 let (key, account_info) = account;
-                                let lock = self.accounts_index.get_account_maps_read_lock(&key);
+                                let lock = self.accounts_index.get_bin(&key);
                                 let x = lock.get(&key).unwrap();
                                 let sl = x.slot_list.read().unwrap();
                                 let mut count = 0;
