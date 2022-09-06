@@ -4039,7 +4039,7 @@ impl Bank {
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        self.scheduler.write().unwrap() = Default::default();
+        *self.scheduler.write().unwrap() = Default::default();
 
         info!("register_recent_blockhash: slot: {} reinitializaing the scheduler: end", self.slot());
 
