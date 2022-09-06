@@ -627,16 +627,12 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
 
                     if matched_slot {
                         found_slot = true;
-                        if !is_cur_account_cached {
-                            // current info at 'slot' is NOT cached, so we should NOT addref. This slot already has a ref count for this pubkey.
-                            addref = false;
-                        }
                     } else {
                         found_other_slot = true;
-                        if !is_cur_account_cached {
-                            // current info at 'other_slot' is NOT cached, so we should NOT addref. This slot already has a ref count for this pubkey.
-                            addref = false;
-                        }
+                    }
+                    if !is_cur_account_cached {
+                        // current info at 'slot' is NOT cached, so we should NOT addref. This slot already has a ref count for this pubkey.
+                        addref = false;
                     }
                 }
             });
@@ -1829,7 +1825,9 @@ mod tests {
                     // calculate expected results
                     let mut expected_reclaims = Vec::default();
                     // addref iff the slot_list did NOT previously contain an entry at 'new_slot' and it also did not contain an entry at 'other_slot'
-                    let expected_result = !expected.iter().any(|(slot, _info)| slot == &new_slot || Some(*slot) == other_slot);
+                    let expected_result = !expected
+                        .iter()
+                        .any(|(slot, _info)| slot == &new_slot || Some(*slot) == other_slot);
                     {
                         // this is the logical equivalent of 'InMemAccountsIndex::update_slot_list', but slower (and ignoring addref)
                         expected.retain(|(slot, info)| {
