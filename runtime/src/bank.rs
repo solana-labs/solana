@@ -1244,7 +1244,7 @@ impl Default for Scheduler {
 
         let bank = Arc::new(std::sync::RwLock::new(None::<Arc<Bank>>));
 
-        let executing_thread_handles = (0..8).map(|thx| {
+        let executing_thread_handles = (0..1).map(|thx| {
             let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
             let bank = bank.clone();
 
@@ -4033,7 +4033,12 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
+        assert!(
+            !self.freeze_started(),
+            "register_tick() working on a bank that is already frozen or is undergoing freezing!"
+        );
         let mut scheduler = self.scheduler.write().unwrap();
+        assert!(scheduler.blockhash.is_none());
         scheduler.blockhash = Some(blockhash.clone());
     }
 
