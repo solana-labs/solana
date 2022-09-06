@@ -280,23 +280,6 @@ impl UnprocessedPacketBatches {
             })
     }
 
-    /// Pop up to the next `n` highest priority transactions from the queue.
-    /// Returns `None` if the queue is empty
-    #[cfg(test)]
-    fn pop_max_n(&mut self, n: usize) -> Option<Vec<DeserializedPacket>> {
-        let current_len = self.len();
-        if self.is_empty() {
-            None
-        } else {
-            let num_to_pop = std::cmp::min(current_len, n);
-            Some(
-                std::iter::from_fn(|| Some(self.pop_max().unwrap()))
-                    .take(num_to_pop)
-                    .collect::<Vec<DeserializedPacket>>(),
-            )
-        }
-    }
-
     pub fn capacity(&self) -> usize {
         self.packet_priority_queue.capacity()
     }
@@ -399,10 +382,8 @@ mod tests {
 
         // There was only one unique packet, so that one should be the
         // only packet returned
-        assert_eq!(
-            unprocessed_packet_batches.pop_max_n(2).unwrap(),
-            vec![packet]
-        );
+        assert_eq!(unprocessed_packet_batches.pop_max().unwrap(), packet);
+        assert_eq!(unprocessed_packet_batches.pop_max(), None);
     }
 
     #[test]
@@ -433,58 +414,6 @@ mod tests {
                 .unwrap(),
             lesser_packet
         );
-    }
-
-    #[test]
-    fn test_unprocessed_packet_batches_pop_max_n() {
-        let num_packets = 10;
-        let packets_iter = std::iter::repeat_with(simple_deserialized_packet).take(num_packets);
-        let mut unprocessed_packet_batches =
-            UnprocessedPacketBatches::from_iter(packets_iter.clone(), num_packets);
-
-        // Test with small step size
-        let step_size = 1;
-        for _ in 0..num_packets {
-            assert_eq!(
-                unprocessed_packet_batches
-                    .pop_max_n(step_size)
-                    .unwrap()
-                    .len(),
-                step_size
-            );
-        }
-
-        assert!(unprocessed_packet_batches.is_empty());
-        assert!(unprocessed_packet_batches.pop_max_n(0).is_none());
-        assert!(unprocessed_packet_batches.pop_max_n(1).is_none());
-
-        // Test with step size larger than `num_packets`
-        let step_size = num_packets + 1;
-        let mut unprocessed_packet_batches =
-            UnprocessedPacketBatches::from_iter(packets_iter.clone(), num_packets);
-        assert_eq!(
-            unprocessed_packet_batches
-                .pop_max_n(step_size)
-                .unwrap()
-                .len(),
-            num_packets
-        );
-        assert!(unprocessed_packet_batches.is_empty());
-        assert!(unprocessed_packet_batches.pop_max_n(0).is_none());
-
-        // Test with step size equal to `num_packets`
-        let step_size = num_packets;
-        let mut unprocessed_packet_batches =
-            UnprocessedPacketBatches::from_iter(packets_iter, num_packets);
-        assert_eq!(
-            unprocessed_packet_batches
-                .pop_max_n(step_size)
-                .unwrap()
-                .len(),
-            step_size
-        );
-        assert!(unprocessed_packet_batches.is_empty());
-        assert!(unprocessed_packet_batches.pop_max_n(0).is_none());
     }
 
     #[cfg(test)]
