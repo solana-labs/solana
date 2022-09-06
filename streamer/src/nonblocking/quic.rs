@@ -390,7 +390,6 @@ async fn setup_connection(
     .await
     {
         if let Ok(new_connection) = connecting_result {
-            stats.total_connections.fetch_add(1, Ordering::Relaxed);
             stats.total_new_connections.fetch_add(1, Ordering::Relaxed);
 
             let params = get_connection_stake(&new_connection.connection, staked_nodes.clone())
@@ -499,6 +498,7 @@ async fn handle_connection(
         stats.total_streams.load(Ordering::Relaxed),
         stats.total_connections.load(Ordering::Relaxed),
     );
+    stats.total_connections.fetch_add(1, Ordering::Relaxed);
     while !stream_exit.load(Ordering::Relaxed) {
         if let Ok(stream) = tokio::time::timeout(
             Duration::from_millis(WAIT_FOR_STREAM_TIMEOUT_MS),
