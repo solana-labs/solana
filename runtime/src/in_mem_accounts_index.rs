@@ -453,8 +453,11 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         reclaim: UpsertReclaim,
     ) {
         let new_value: (Slot, T) = new_value.into();
-        let upsert_cached = new_value.1.is_cached();
-        Self::lock_and_update_slot_list(entry, new_value, other_slot, reclaims, reclaim);
+        let mut upsert_cached = new_value.1.is_cached();
+        if Self::lock_and_update_slot_list(entry, new_value, other_slot, reclaims, reclaim) > 1 {
+            // if slot list > 1, then we are going to hold this entry in memory until it gets set back to 1
+            upsert_cached = true;
+        }
         self.set_age_to_future(entry, upsert_cached);
     }
 
@@ -535,13 +538,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     /// already exists in the list, remove the older item, add it to `reclaims`, and insert
     /// the new item.
     /// if 'other_slot' is some, then also remove any entries in the slot list that are at 'other_slot'
-    pub fn lock_and_update_slot_list(
+    /// return resulting len of slot list
+    pub(crate) fn lock_and_update_slot_list(
         current: &AccountMapEntryInner<T>,
         new_value: (Slot, T),
         other_slot: Option<Slot>,
         reclaims: &mut SlotList<T>,
         reclaim: UpsertReclaim,
-    ) {
+    ) -> usize {
         let mut slot_list = current.slot_list.write().unwrap();
         let (slot, new_entry) = new_value;
         let addref = Self::update_slot_list(
@@ -556,6 +560,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             current.add_un_ref(true);
         }
         current.set_dirty(true);
+        slot_list.len()
     }
 
     /// modifies slot_list
@@ -1884,5 +1889,42 @@ mod tests {
 
         // After the FlushGuard is dropped, the flag will be cleared.
         assert!(!flushing_active.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn test_lock_and_update_slot_list() {
+        let test = AccountMapEntryInner::<u64>::default();
+        let info = 65;
+        let mut reclaims = Vec::default();
+        // first upsert, should increase
+        let len = InMemAccountsIndex::lock_and_update_slot_list(
+            &test,
+            (1, info),
+            None,
+            &mut reclaims,
+            UpsertReclaim::IgnoreReclaims,
+        );
+        assert_eq!(test.slot_list.read().unwrap().len(), len);
+        assert_eq!(len, 1);
+        // update to different slot, should increase
+        let len = InMemAccountsIndex::lock_and_update_slot_list(
+            &test,
+            (2, info),
+            None,
+            &mut reclaims,
+            UpsertReclaim::IgnoreReclaims,
+        );
+        assert_eq!(test.slot_list.read().unwrap().len(), len);
+        assert_eq!(len, 2);
+        // update to same slot, should not increase
+        let len = InMemAccountsIndex::lock_and_update_slot_list(
+            &test,
+            (2, info),
+            None,
+            &mut reclaims,
+            UpsertReclaim::IgnoreReclaims,
+        );
+        assert_eq!(test.slot_list.read().unwrap().len(), len);
+        assert_eq!(len, 2);
     }
 }
