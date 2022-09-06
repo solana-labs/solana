@@ -4031,10 +4031,18 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
+        info!("register_recent_blockhash: slot: {} reinitializaing the scheduler: start", self.slot());
+
+        self.wait_for_scheduler().unwrap();
+
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
+        self.scheduler.write().unwrap() = Default::default();
+
+        info!("register_recent_blockhash: slot: {} reinitializaing the scheduler: end", self.slot());
+
         w_blockhash_queue.register_hash(blockhash, self.fee_rate_governor.lamports_per_signature);
         self.update_recent_blockhashes_locked(&w_blockhash_queue);
     }
