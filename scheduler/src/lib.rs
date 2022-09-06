@@ -962,7 +962,7 @@ impl ScheduleStage {
                         &mut next_task.lock_attempts_mut(ast),
                     );
 
-                if unlockable_count > 0 {
+                if unlockable_count > 0 || from_runnable {
                     //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                     Self::reset_lock_for_failed_execution(
                         ast,
