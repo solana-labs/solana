@@ -1206,6 +1206,7 @@ struct Scheduler {
     graceful_stop_initiated: bool,
     errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Arc<Bank>>>>,
+    blockhash: Option<Hash>,
 }
 
 impl Scheduler {
