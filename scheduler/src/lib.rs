@@ -324,7 +324,7 @@ impl AddressBook {
             attempt.status = LockStatus::Failed;
             let page = attempt.target.page_mut(ast);
             return page.cu;
-        } else {
+        }
 
 
         let LockAttempt {
@@ -391,7 +391,6 @@ impl AddressBook {
             }
         }
         page.cu
-        }
     }
 
     fn reset_lock<AST: AtScheduleThread>(
