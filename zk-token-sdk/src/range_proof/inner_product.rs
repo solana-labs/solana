@@ -34,7 +34,7 @@ impl InnerProductProof {
     /// protocols).
     ///
     /// The lengths of the vectors must all be the same, and must all be
-    /// either 0 or a power of 2.
+    /// a power of 2.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         Q: &RistrettoPoint,

@@ -42,10 +42,10 @@ lazy_static::lazy_static! {
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
 pub struct TransferData {
-    /// Group encryption of the low 32 bits of the transfer amount
+    /// Group encryption of the low 16 bits of the transfer amount
     pub ciphertext_lo: pod::TransferAmountEncryption,
 
-    /// Group encryption of the high 32 bits of the transfer amount
+    /// Group encryption of the high 48 bits of the transfer amount
     pub ciphertext_hi: pod::TransferAmountEncryption,
 
     /// The public encryption keys associated with the transfer: source, dest, and auditor

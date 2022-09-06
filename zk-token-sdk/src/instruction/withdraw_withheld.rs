@@ -21,9 +21,9 @@ use {
 /// This struct includes the cryptographic proof *and* the account data information needed to verify
 /// the proof
 ///
-/// - The pre-instruction should call WithdrawData::verify_proof(&self)
-/// - The actual program should check that `current_ct` is consistent with what is
-///   currently stored in the confidential token account TODO: update this statement
+/// - The pre-instruction should call WithdrawWithheldTokensData::verify_proof(&self)
+/// - The actual program should check that the ciphertext in this struct is consistent with what is
+/// currently stored in the confidential token account
 ///
 #[derive(Clone, Copy, Pod, Zeroable)]
 #[repr(C)]
