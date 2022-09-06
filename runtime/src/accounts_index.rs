@@ -495,7 +495,7 @@ pub struct AccountsIndexIterator<'a, T: IndexValue> {
 
 impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
     fn range<R>(
-        map: &AccountMapsReadLock<T>,
+        map: &AccountMaps<T>,
         range: R,
         collect_all_unsorted: bool,
     ) -> Vec<(Pubkey, AccountMapEntry<T>)>
@@ -634,7 +634,7 @@ pub trait ZeroLamport {
 type MapType<T> = AccountMap<T>;
 type LockMapType<T> = Vec<MapType<T>>;
 type LockMapTypeSlice<T> = [MapType<T>];
-type AccountMapsReadLock<'a, T> = &'a MapType<T>;
+type AccountMaps<'a, T> = &'a MapType<T>;
 
 #[derive(Debug, Default)]
 pub struct ScanSlotTracker {
@@ -1118,7 +1118,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     pub fn get_account_read_entry_with_lock(
         &self,
         pubkey: &Pubkey,
-        lock: &AccountMapsReadLock<'_, T>,
+        lock: &AccountMaps<'_, T>,
     ) -> Option<ReadAccountMapEntry<T>> {
         lock.get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry)
@@ -1536,7 +1536,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         );
     }
 
-    pub(crate) fn get_bin(&self, pubkey: &Pubkey) -> AccountMapsReadLock<T> {
+    pub(crate) fn get_bin(&self, pubkey: &Pubkey) -> AccountMaps<T> {
         &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
     }
 
