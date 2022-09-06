@@ -20,6 +20,7 @@ use {
         },
     },
     solana_core::system_monitor_service::SystemMonitorService,
+    solana_core::validator::move_and_async_delete_path,
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
@@ -984,13 +985,10 @@ fn load_bank_forks(
 
         if non_primary_accounts_path.exists() {
             info!("Clearing {:?}", non_primary_accounts_path);
-            if let Err(err) = std::fs::remove_dir_all(&non_primary_accounts_path) {
-                eprintln!(
-                    "error deleting accounts path {:?}: {}",
-                    non_primary_accounts_path, err
-                );
-                exit(1);
-            }
+            let mut measure_time = Measure::start("clean_non_primary_accounts_paths");
+            move_and_async_delete_path(&non_primary_accounts_path);
+            measure_time.stop();
+            info!("done. {}", measure_time);
         }
 
         vec![non_primary_accounts_path]

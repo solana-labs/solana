@@ -2067,7 +2067,7 @@ fn get_stake_percent_in_gossip(bank: &Bank, cluster_info: &ClusterInfo, log: boo
 /// If the process is killed and the deleting process is not done,
 /// the leftover path will be deleted in the next process life, so
 /// there is no file space leaking.
-fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
+pub fn move_and_async_delete_path(path: impl AsRef<Path> + Copy) {
     let mut path_delete = PathBuf::new();
     path_delete.push(path);
     path_delete.set_file_name(format!(
