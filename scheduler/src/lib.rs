@@ -320,6 +320,7 @@ impl AddressBook {
     ) -> CU {
         let strictly_lockable_for_replay = attempt.target_contended_unique_weights().task_ids.is_empty() ||
             attempt.target_contended_unique_weights().task_ids.back().unwrap().key() == unique_weight;
+
         if !strictly_lockable_for_replay {
             attempt.status = LockStatus::Failed;
             let page = attempt.target.page_mut(ast);
@@ -1456,7 +1457,7 @@ impl ScheduleStage {
                         start = std::time::Instant::now();
                         info!("schedule_once:interval (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     }
-                    let prefer_immediate = true; // provisioning_tracker_count / 4 > executing_queue_count;
+                    let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
                     if let Some(ee) = Self::schedule_next_execution(
                         ast,
                         &task_sender,
