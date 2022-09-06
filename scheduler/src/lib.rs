@@ -325,14 +325,14 @@ impl AddressBook {
             ..
         } = attempt;
 
+        let mut page = target.page_mut(ast);
+
         let strictly_lockable = target.0.1.task_ids.is_empty() ||
             target.0.1.task_ids.back().unwrap().key() == unique_weight;
         if !strictly_lockable {
             *status = LockStatus::Failed;
-            return;
+            return page.cu;
         }
-
-        let mut page = target.page_mut(ast);
 
         let next_usage = page.next_usage;
         match page.current_usage {
