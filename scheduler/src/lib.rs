@@ -321,7 +321,7 @@ impl AddressBook {
         let strictly_lockable_for_replay = attempt.target_contended_unique_weights().task_ids.is_empty() ||
             attempt.target_contended_unique_weights().task_ids.back().unwrap().key() == unique_weight;
         if !strictly_lockable_for_replay {
-            *status = LockStatus::Failed;
+            attempt.status = LockStatus::Failed;
             let page = attempt.target.page_mut(ast);
             return page.cu;
         }
