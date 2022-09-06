@@ -189,7 +189,7 @@ impl ForwardPacketBatchesByAccounts {
 mod tests {
     use {
         super::*,
-        crate::unprocessed_packet_batches::DeserializedPacket,
+        crate::deserialized_packet::DeserializedPacket,
         solana_runtime::{
             bank::Bank,
             bank_forks::BankForks,

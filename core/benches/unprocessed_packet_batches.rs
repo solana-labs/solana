@@ -6,7 +6,8 @@ extern crate test;
 use {
     rand::distributions::{Distribution, Uniform},
     solana_core::{
-        banking_stage::*, forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
+        banking_stage::*, deserialized_packet::deserialize_packets,
+        forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         unprocessed_packet_batches::*,
     },
     solana_measure::measure::Measure,

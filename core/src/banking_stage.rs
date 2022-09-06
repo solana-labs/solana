@@ -4,6 +4,7 @@
 
 use {
     crate::{
+        deserialized_packet::DeserializedPacket,
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
@@ -2151,6 +2152,7 @@ where
 mod tests {
     use {
         super::*,
+        crate::{deserialized_packet, deserialized_packet::DeserializedPacket},
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},
@@ -2191,7 +2193,6 @@ mod tests {
             sync::atomic::{AtomicBool, Ordering},
             thread::sleep,
         },
-        unprocessed_packet_batches::DeserializedPacket,
     };
 
     fn new_test_cluster_info(contact_info: ContactInfo) -> ClusterInfo {
@@ -3912,8 +3913,7 @@ mod tests {
             let recorder = poh_recorder.read().unwrap().recorder();
             let num_conflicting_transactions = transactions.len();
             let deserialized_packets =
-                unprocessed_packet_batches::transactions_to_deserialized_packets(&transactions)
-                    .unwrap();
+                deserialized_packet::transactions_to_deserialized_packets(&transactions).unwrap();
             assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
             let mut buffered_packet_batches: UnprocessedPacketBatches =
                 UnprocessedPacketBatches::from_iter(
@@ -4006,10 +4006,8 @@ mod tests {
                 .spawn(move || {
                     let num_conflicting_transactions = transactions.len();
                     let deserialized_packets =
-                        unprocessed_packet_batches::transactions_to_deserialized_packets(
-                            &transactions,
-                        )
-                        .unwrap();
+                        deserialized_packet::transactions_to_deserialized_packets(&transactions)
+                            .unwrap();
                     assert_eq!(deserialized_packets.len(), num_conflicting_transactions);
                     let num_packets_to_process_per_iteration = 1;
                     let mut buffered_packet_batches: UnprocessedPacketBatches =

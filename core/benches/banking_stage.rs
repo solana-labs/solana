@@ -10,6 +10,7 @@ use {
     rayon::prelude::*,
     solana_core::{
         banking_stage::{BankingStage, BankingStageStats},
+        deserialized_packet::transactions_to_deserialized_packets,
         leader_slot_banking_stage_metrics::LeaderSlotMetricsTracker,
         qos_service::QosService,
         unprocessed_packet_batches::*,
