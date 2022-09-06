@@ -1245,7 +1245,12 @@ impl Default for Scheduler {
 
         let bank = Arc::new(std::sync::RwLock::new(None::<Arc<Bank>>));
 
-        let executing_thread_handles = (0..1).map(|thx| {
+        let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
+            .unwrap_or(format!("{}", 1))
+            .parse::<usize>()
+            .unwrap();
+
+        let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
             let bank = bank.clone();
             let mut execute_time = 0;
@@ -4045,7 +4050,7 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
-        info!("register_recent_blockhash: slot: {} reinitializaing the scheduler: start", self.slot());
+        info!("register_recent_blockhash: slot: {} reinitializing the scheduler: start", self.slot());
 
         self.wait_for_scheduler().unwrap();
 
@@ -4055,7 +4060,7 @@ impl Bank {
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         *self.scheduler.write().unwrap() = Default::default();
 
-        info!("register_recent_blockhash: slot: {} reinitializaing the scheduler: end", self.slot());
+        info!("register_recent_blockhash: slot: {} reinitializing the scheduler: end", self.slot());
 
         w_blockhash_queue.register_hash(blockhash, self.fee_rate_governor.lamports_per_signature);
         self.update_recent_blockhashes_locked(&w_blockhash_queue);
