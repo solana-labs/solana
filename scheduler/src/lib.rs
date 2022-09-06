@@ -563,6 +563,10 @@ impl Task {
         })
     }
 
+    pub fn transaction_index_in_entries_for_replay() -> u64 {
+        u64::max_value() - self.unique_weight
+    }
+
     #[inline(never)]
     pub fn clone_in_queue(this: &TaskInQueue) -> TaskInQueue {
         TaskInQueue::clone(this)
