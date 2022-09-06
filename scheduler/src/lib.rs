@@ -328,7 +328,7 @@ impl AddressBook {
         let mut page = target.page_mut(ast);
 
         let strictly_lockable = page.contended_unique_weights.is_empty() ||
-            page.contended_unique_weights.task_ids.back().key() == unique_weight
+            page.contended_unique_weights.task_ids.back().key() == unique_weight;
         if !strictly_lockable {
             *status = LockStatus::Failed;
             return;
