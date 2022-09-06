@@ -1675,6 +1675,12 @@ pub fn main() {
                 .help("Disables accounts caching"),
         )
         .arg(
+            Arg::with_name("accounts_db_verify_refcounts")
+                .long("accounts-db-verify-refcounts")
+                .help("Debug option to scan all append vecs and verify account index refcounts prior to clean")
+                .hidden(true)
+        )
+        .arg(
             Arg::with_name("accounts_db_skip_shrink")
                 .long("accounts-db-skip-shrink")
                 .help("Enables faster starting of validators by skipping shrink. \
@@ -2560,6 +2566,7 @@ pub fn main() {
             .map(|mb| mb * MB as u64),
         skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
         ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
+        exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
         ..AccountsDbConfig::default()
     };
 
