@@ -794,13 +794,11 @@ impl TransactionWithStatusMeta {
 }
 
 impl VersionedTransactionWithStatusMeta {
-    pub fn encode(
-        self,
-        encoding: UiTransactionEncoding,
+    fn validate_version(
+        &self,
         max_supported_transaction_version: Option<u8>,
-        show_rewards: bool,
-    ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
-        let version = match (
+    ) -> Result<Option<TransactionVersion>, EncodeError> {
+        match (
             max_supported_transaction_version,
             self.transaction.version(),
         ) {
@@ -817,7 +815,16 @@ impl VersionedTransactionWithStatusMeta {
                     Err(EncodeError::UnsupportedTransactionVersion(version))
                 }
             }
-        }?;
+        }
+    }
+
+    pub fn encode(
+        self,
+        encoding: UiTransactionEncoding,
+        max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
+    ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
+        let version = self.validate_version(max_supported_transaction_version)?;
 
         Ok(EncodedTransactionWithStatusMeta {
             transaction: self.transaction.encode_with_meta(encoding, &self.meta),
@@ -850,24 +857,7 @@ impl VersionedTransactionWithStatusMeta {
         self,
         max_supported_transaction_version: Option<u8>,
     ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
-        let version = match (
-            max_supported_transaction_version,
-            self.transaction.version(),
-        ) {
-            // Set to none because old clients can't handle this field
-            (None, TransactionVersion::LEGACY) => Ok(None),
-            (None, TransactionVersion::Number(version)) => {
-                Err(EncodeError::UnsupportedTransactionVersion(version))
-            }
-            (Some(_), TransactionVersion::LEGACY) => Ok(Some(TransactionVersion::LEGACY)),
-            (Some(max_version), TransactionVersion::Number(version)) => {
-                if version <= max_version {
-                    Ok(Some(TransactionVersion::Number(version)))
-                } else {
-                    Err(EncodeError::UnsupportedTransactionVersion(version))
-                }
-            }
-        }?;
+        let version = self.validate_version(max_supported_transaction_version)?;
 
         let account_keys = match &self.transaction.message {
             VersionedMessage::Legacy(message) => parse_legacy_message_accounts(message),
