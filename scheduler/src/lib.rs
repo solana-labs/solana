@@ -325,8 +325,8 @@ impl AddressBook {
             ..
         } = attempt;
 
-        let strictly_lockable = .is_empty() ||
-            target.0.1.back().key() == unique_weight;
+        let strictly_lockable = target.0.1.is_empty() ||
+            target.0.1.back().unwrap().key() == unique_weight;
         if !strictly_lockable {
             *status = LockStatus::Failed;
             return;
