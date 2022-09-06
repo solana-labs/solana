@@ -301,7 +301,7 @@ fn execute_batches_internal(
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
     let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
         batches
-            .into_par_iter()
+            .into_iter()
             .enumerate()
             .map(|(index, transaction_batch_with_indexes)| {
                 let transaction_count = transaction_batch_with_indexes
