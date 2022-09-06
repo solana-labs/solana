@@ -443,6 +443,21 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         })
     }
 
+    /// update 'entry' with 'new_value'
+    fn update_slot_list_entry(
+        &self,
+        entry: &AccountMapEntry<T>,
+        new_value: PreAllocatedAccountMapEntry<T>,
+        other_slot: Option<Slot>,
+        reclaims: &mut SlotList<T>,
+        reclaim: UpsertReclaim,
+    ) {
+        let new_value: (Slot, T) = new_value.into();
+        let upsert_cached = new_value.1.is_cached();
+        Self::lock_and_update_slot_list(entry, new_value, other_slot, reclaims, reclaim);
+        self.set_age_to_future(entry, upsert_cached);
+    }
+
     pub fn upsert(
         &self,
         pubkey: &Pubkey,
@@ -455,10 +470,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         // try to get it just from memory first using only a read lock
         self.get_only_in_mem(pubkey, false, |entry| {
             if let Some(entry) = entry {
-                let new_value: (Slot, T) = new_value.into();
-                let upsert_cached = new_value.1.is_cached();
-                Self::lock_and_update_slot_list(entry, new_value, other_slot, reclaims, reclaim);
-                self.set_age_to_future(entry, upsert_cached);
+                self.update_slot_list_entry(entry, new_value, other_slot, reclaims, reclaim);
             } else {
                 let mut m = Measure::start("entry");
                 let mut map = self.map_internal.write().unwrap();
@@ -467,13 +479,10 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                 let found = matches!(entry, Entry::Occupied(_));
                 match entry {
                     Entry::Occupied(mut occupied) => {
-                        let new_value: (Slot, T) = new_value.into();
-                        let upsert_cached = new_value.1.is_cached();
                         let current = occupied.get_mut();
-                        Self::lock_and_update_slot_list(
+                        self.update_slot_list_entry(
                             current, new_value, other_slot, reclaims, reclaim,
                         );
-                        self.set_age_to_future(current, upsert_cached);
                     }
                     Entry::Vacant(vacant) => {
                         // not in cache, look on disk
@@ -482,17 +491,14 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                         // go to in-mem cache first
                         let disk_entry = self.load_account_entry_from_disk(vacant.key());
                         let new_value = if let Some(disk_entry) = disk_entry {
-                            let new_value: (Slot, T) = new_value.into();
-                            let upsert_cached = new_value.1.is_cached();
                             // on disk, so merge new_value with what was on disk
-                            Self::lock_and_update_slot_list(
+                            self.update_slot_list_entry(
                                 &disk_entry,
                                 new_value,
                                 other_slot,
                                 reclaims,
                                 reclaim,
                             );
-                            self.set_age_to_future(&disk_entry, upsert_cached);
                             disk_entry
                         } else {
                             // not on disk, so insert new thing
