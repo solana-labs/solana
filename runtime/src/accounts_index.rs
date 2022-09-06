@@ -277,7 +277,10 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         if add {
             self.ref_count.fetch_add(1, Ordering::Release);
         } else {
-            self.ref_count.fetch_sub(1, Ordering::Release);
+            let previous = self.ref_count.fetch_sub(1, Ordering::Release);
+            if previous == 0 {
+                inc_new_counter_info!("accounts_index-deref_from_0", 1);
+            }
         }
         self.set_dirty(true);
     }
