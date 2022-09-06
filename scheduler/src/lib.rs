@@ -64,7 +64,7 @@ impl ExecutionEnvironment {
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
         for mut lock_attempt in self.finalized_lock_attempts.iter_mut() {
-            let contended_unique_weights = lock_attempt.contended_unique_weights();
+            let contended_unique_weights = lock_attempt.target_contended_unique_weights();
             contended_unique_weights
                 .heaviest_task_cursor()
                 .map(|mut task_cursor| {
@@ -165,8 +165,8 @@ impl LockAttempt {
         }
     }
 
-    pub fn contended_unique_weights(&self) -> &TaskIds {
-        &self.target.0 .1
+    pub fn target_contended_unique_weights(&self) -> &TaskIds {
+        &self.target.0.1
     }
 }
 
@@ -326,6 +326,13 @@ impl AddressBook {
         } = attempt;
 
         let mut page = target.page_mut(ast);
+
+        let strictly_lockable = page.contended_unique_weights.is_empty() ||
+            page.contended_unique_weights.task_ids.back().key() == unique_weight
+        if !strictly_lockable {
+            *status = LockStatus::Failed;
+            return;
+        }
 
         let next_usage = page.next_usage;
         match page.current_usage {
@@ -717,7 +724,7 @@ impl Task {
         task_sender: &crossbeam_channel::Sender<(TaskInQueue, Vec<LockAttempt>)>,
     ) {
         for lock_attempt in this.lock_attempts_mut(ast).iter() {
-            lock_attempt.contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
+            lock_attempt.target_contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
         }
         //let a = Task::clone_in_queue(this);
         //task_sender
@@ -966,7 +973,7 @@ impl ScheduleStage {
                         &mut next_task.lock_attempts_mut(ast),
                     );
 
-                if unlockable_count > 0 || from_runnable {
+                if unlockable_count > 0 {
                     //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                     Self::reset_lock_for_failed_execution(
                         ast,
@@ -1388,7 +1395,7 @@ impl ScheduleStage {
                                 break;
                             }
                             lock_attempt
-                                .contended_unique_weights()
+                                .target_contended_unique_weights()
                                 .insert_task(task.unique_weight, Task::clone_in_queue(&task));
                         }
                     }
