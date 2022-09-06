@@ -2128,21 +2128,24 @@ pub fn snapshot_bank(
     )
     .expect("failed to hard link bank snapshot into a tmpdir");
 
-    if can_submit_accounts_package(&accounts_package, pending_accounts_package) {
-        let old_accounts_package = pending_accounts_package
-            .lock()
-            .unwrap()
-            .replace(accounts_package);
-        if let Some(old_accounts_package) = old_accounts_package {
-            debug!(
-                "The pending AccountsPackage has been overwritten: \
+    // Submit the accounts package
+    // This extra scope is to be explicit about the lifetime of the pending accounts package lock
+    {
+        let mut pending_accounts_package = pending_accounts_package.lock().unwrap();
+        if can_submit_accounts_package(&accounts_package, pending_accounts_package.as_ref()) {
+            let old_accounts_package = pending_accounts_package.replace(accounts_package);
+            drop(pending_accounts_package);
+            if let Some(old_accounts_package) = old_accounts_package {
+                debug!(
+                    "The pending AccountsPackage has been overwritten: \
                 \nNew AccountsPackage slot: {}, snapshot type: {:?} \
                 \nOld AccountsPackage slot: {}, snapshot type: {:?}",
-                root_bank.slot(),
-                snapshot_type,
-                old_accounts_package.slot,
-                old_accounts_package.snapshot_type,
-            );
+                    root_bank.slot(),
+                    snapshot_type,
+                    old_accounts_package.slot,
+                    old_accounts_package.snapshot_type,
+                );
+            }
         }
     }
 
@@ -2382,32 +2385,38 @@ pub fn should_take_incremental_snapshot(
 
 /// Decide if an accounts package can be submitted to the PendingAccountsPackage
 ///
-/// This is based on the values for `snapshot_type` in both the `accounts_package` and the
-/// `pending_accounts_package`:
-/// - if the new AccountsPackage is for a full snapshot, always submit
-/// - if the new AccountsPackage is for an incremental snapshot, submit as long as there isn't a
-///   pending full snapshot
-/// - otherwise, only submit the new AccountsPackage as long as there's not a pending package
-///   destined for a snapshot archive
+/// If there's no pending accounts package, then submit
+/// Otherwise, check if the pending accounts package can be overwritten
 fn can_submit_accounts_package(
     accounts_package: &AccountsPackage,
-    pending_accounts_package: &PendingAccountsPackage,
+    pending_accounts_package: Option<&AccountsPackage>,
+) -> bool {
+    if let Some(pending_accounts_package) = pending_accounts_package {
+        can_overwrite_pending_accounts_package(accounts_package, pending_accounts_package)
+    } else {
+        true
+    }
+}
+
+/// Decide when it is appropriate to overwrite a pending accounts package
+///
+/// This is based on the values for `snapshot_type` in both the `accounts_package` and the
+/// `pending_accounts_package`:
+/// - if the new AccountsPackage is for a full snapshot, always overwrite
+/// - if the new AccountsPackage is for an incremental snapshot, overwrite as long as there isn't a
+///   pending full snapshot
+/// - otherwise, only overwrite if the pending package's snapshot type is None
+fn can_overwrite_pending_accounts_package(
+    accounts_package: &AccountsPackage,
+    pending_accounts_package: &AccountsPackage,
 ) -> bool {
     match accounts_package.snapshot_type {
         Some(SnapshotType::FullSnapshot) => true,
         Some(SnapshotType::IncrementalSnapshot(_)) => pending_accounts_package
-            .lock()
-            .unwrap()
-            .as_ref()
-            .and_then(|old_accounts_package| old_accounts_package.snapshot_type)
-            .map(|old_snapshot_type| !old_snapshot_type.is_full_snapshot())
+            .snapshot_type
+            .map(|snapshot_type| !snapshot_type.is_full_snapshot())
             .unwrap_or(true),
-        None => pending_accounts_package
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|old_accounts_package| old_accounts_package.snapshot_type.is_none())
-            .unwrap_or(true),
+        None => pending_accounts_package.snapshot_type.is_none(),
     }
 }
 
@@ -4040,7 +4049,6 @@ mod tests {
             }
         }
 
-        let pending_accounts_package = PendingAccountsPackage::default();
         for (new_snapshot_type, old_snapshot_type, expected_result) in [
             (
                 Some(SnapshotType::FullSnapshot),
@@ -4070,14 +4078,22 @@ mod tests {
         ] {
             let new_accounts_package = new_accounts_package_with(new_snapshot_type);
             let old_accounts_package = new_accounts_package_with(old_snapshot_type);
-            pending_accounts_package
-                .lock()
-                .unwrap()
-                .replace(old_accounts_package);
 
-            let actual_result =
-                can_submit_accounts_package(&new_accounts_package, &pending_accounts_package);
+            let actual_result = can_overwrite_pending_accounts_package(
+                &new_accounts_package,
+                &old_accounts_package,
+            );
             assert_eq!(expected_result, actual_result);
+        }
+
+        // Also test when the pending package is None
+        {
+            let accounts_package = new_accounts_package_with(None);
+            let pending_accounts_package = None;
+            assert!(can_submit_accounts_package(
+                &accounts_package,
+                pending_accounts_package
+            ));
         }
     }
 
