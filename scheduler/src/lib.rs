@@ -326,7 +326,6 @@ impl AddressBook {
             return page.cu;
         } else {
 
-        let mut page = attempt.target.page_mut(ast);
 
         let LockAttempt {
             target,
@@ -334,6 +333,7 @@ impl AddressBook {
             status, /*, remembered*/
             ..
         } = attempt;
+        let mut page = target.page_mut(ast);
 
 
         let next_usage = page.next_usage;
