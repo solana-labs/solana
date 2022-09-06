@@ -436,7 +436,7 @@ impl UiTransactionStatusMeta {
         }
     }
 
-    fn build_simple(meta: TransactionStatusMeta) -> Self {
+    fn build_simple(meta: TransactionStatusMeta, show_rewards: bool) -> Self {
         Self {
             err: meta.status.clone().err(),
             status: meta.status,
@@ -453,7 +453,11 @@ impl UiTransactionStatusMeta {
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(Into::into).collect())
                 .into(),
-            rewards: OptionSerializer::Skip,
+            rewards: if show_rewards {
+                meta.rewards.into()
+            } else {
+                OptionSerializer::Skip
+            },
             loaded_addresses: OptionSerializer::Skip,
             return_data: OptionSerializer::Skip,
             compute_units_consumed: OptionSerializer::Skip,
@@ -645,8 +649,10 @@ impl ConfirmedBlock {
                     self.transactions
                         .into_iter()
                         .map(|tx_with_meta| {
-                            tx_with_meta
-                                .build_json_accounts(options.max_supported_transaction_version)
+                            tx_with_meta.build_json_accounts(
+                                options.max_supported_transaction_version,
+                                options.show_rewards,
+                            )
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                 ),
@@ -779,6 +785,7 @@ impl TransactionWithStatusMeta {
     fn build_json_accounts(
         self,
         max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
     ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
         match self {
             Self::MissingMetadata(ref transaction) => Ok(EncodedTransactionWithStatusMeta {
@@ -787,7 +794,7 @@ impl TransactionWithStatusMeta {
                 meta: None,
             }),
             Self::Complete(tx_with_meta) => {
-                tx_with_meta.build_json_accounts(max_supported_transaction_version)
+                tx_with_meta.build_json_accounts(max_supported_transaction_version, show_rewards)
             }
         }
     }
@@ -856,6 +863,7 @@ impl VersionedTransactionWithStatusMeta {
     fn build_json_accounts(
         self,
         max_supported_transaction_version: Option<u8>,
+        show_rewards: bool,
     ) -> Result<EncodedTransactionWithStatusMeta, EncodeError> {
         let version = self.validate_version(max_supported_transaction_version)?;
 
@@ -878,7 +886,10 @@ impl VersionedTransactionWithStatusMeta {
                     .collect(),
                 account_keys,
             }),
-            meta: Some(UiTransactionStatusMeta::build_simple(self.meta)),
+            meta: Some(UiTransactionStatusMeta::build_simple(
+                self.meta,
+                show_rewards,
+            )),
             version,
         })
     }
