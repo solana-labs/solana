@@ -1206,7 +1206,6 @@ struct Scheduler {
     graceful_stop_initiated: bool,
     errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Arc<Bank>>>>,
-    registered_blockhash: Option<Hash>,
 }
 
 impl Scheduler {
@@ -1244,7 +1243,7 @@ impl Default for Scheduler {
 
         let bank = Arc::new(std::sync::RwLock::new(None::<Arc<Bank>>));
 
-        let executing_thread_handles = (0..1).map(|thx| {
+        let executing_thread_handles = (0..8).map(|thx| {
             let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
             let bank = bank.clone();
 
@@ -1332,7 +1331,6 @@ impl Default for Scheduler {
             graceful_stop_initiated: Default::default(),
             errors,
             bank,
-            registered_blockhash: Default::default(),
         }
     }
 }
@@ -4033,13 +4031,12 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
-        assert!(
-            !self.freeze_started(),
-            "register_tick() working on a bank that is already frozen or is undergoing freezing!"
-        );
-        let mut scheduler = self.scheduler.write().unwrap();
-        assert!(scheduler.registered_blockhash.is_none());
-        scheduler.registered_blockhash = Some(blockhash.clone());
+        // Only acquire the write lock for the blockhash queue on block boundaries because
+        // readers can starve this write lock acquisition and ticks would be slowed down too
+        // much if the write lock is acquired for each tick.
+        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
+        w_blockhash_queue.register_hash(blockhash, self.fee_rate_governor.lamports_per_signature);
+        self.update_recent_blockhashes_locked(&w_blockhash_queue);
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function assumes subsequent calls
@@ -6403,7 +6400,6 @@ impl Bank {
             }
         };
 
-        assert!(scheduler.registered_blockhash.is_none());
         for (st, &i) in batch.sanitized_transactions().iter().zip(transaction_indexes.iter()) {
             scheduler.schedule(st, i);
         }
@@ -8066,15 +8062,7 @@ impl Bank {
     pub fn wait_for_scheduler(&self) -> Result<()> {
         let mut scheduler = self.scheduler.write().unwrap();
         scheduler.gracefully_stop()?;
-        scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()))?;
-
-        // Only acquire the write lock for the blockhash queue on block boundaries because
-        // readers can starve this write lock acquisition and ticks would be slowed down too
-        // much if the write lock is acquired for each tick.
-        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        w_blockhash_queue.register_hash(&scheduler.registered_blockhash.unwrap(), self.fee_rate_governor.lamports_per_signature);
-        self.update_recent_blockhashes_locked(&w_blockhash_queue);
-        Ok(())
+        scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()))
     }
 }
 
