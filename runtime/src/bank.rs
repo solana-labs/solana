@@ -1332,6 +1332,7 @@ impl Default for Scheduler {
             graceful_stop_initiated: Default::default(),
             errors,
             bank,
+            blockhash: Default::default(),
         }
     }
 }
