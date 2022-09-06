@@ -6766,7 +6766,11 @@ impl AccountsDb {
                         bin_range.start.hash(&mut hasher);
                         bin_range.end.hash(&mut hasher);
                         if let Some(sub_storages) = sub_storages {
-                            if sub_storages.len() > 1 {
+                            if sub_storages.len() > 1
+                                && !config.store_detailed_debug_info_on_failure
+                            {
+                                // Having > 1 appendvecs per slot is not expected. If we have that, we just fail to cache this slot.
+                                // However, if we're just dumping detailed debug info, we don't care, so store anyway.
                                 load_from_cache = false;
                                 break;
                             }
