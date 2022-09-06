@@ -563,7 +563,7 @@ impl Task {
         })
     }
 
-    pub fn transaction_index_in_entries_for_replay() -> u64 {
+    pub fn transaction_index_in_entries_for_replay(&self) -> u64 {
         u64::max_value() - self.unique_weight
     }
 
