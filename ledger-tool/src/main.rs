@@ -378,7 +378,7 @@ fn output_slot(
                                 ()
                             });
                         }
-                        post_execute_env_sender.send(ee).unwrap();
+                        post_execute_env_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
                     }
                 })
                 .unwrap();
