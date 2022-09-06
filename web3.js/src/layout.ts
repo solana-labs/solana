@@ -152,6 +152,9 @@ export function getAlloc(type: any, fields: any): number {
       if (Array.isArray(field)) {
         return field.length * getItemAlloc(item.elementLayout);
       }
+    } else if ('fields' in item) {
+      // This is a `Structure` whose size needs to be recursively measured.
+      return getAlloc({layout: item}, fields[item.property]);
     }
     // Couldn't determine allocated size of layout
     return 0;
