@@ -729,7 +729,7 @@ impl Task {
         (cu, TaskId::max_value() - self.unique_weight)
     }
 
-    fn contention_count(&self) -> usize {
+    pub fn contention_count(&self) -> usize {
         self.contention_count
             .load(std::sync::atomic::Ordering::SeqCst)
     }
