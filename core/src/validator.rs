@@ -723,6 +723,7 @@ impl Validator {
             block_commitment_cache.clone(),
             optimistically_confirmed_bank.clone(),
             &config.pubsub_config,
+            None,
         ));
 
         let max_slots = Arc::new(MaxSlots::default());
@@ -823,6 +824,7 @@ impl Validator {
                 leader_schedule_cache.clone(),
                 connection_cache.clone(),
                 max_complete_transaction_status_slot,
+                prioritization_fee_cache.clone(),
             )?;
 
             (

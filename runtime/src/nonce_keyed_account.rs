@@ -288,8 +288,11 @@ mod test {
     macro_rules! push_instruction_context {
         ($invoke_context:expr, $transaction_context:ident, $instruction_context:ident, $instruction_accounts:ident) => {
             $invoke_context
-                .push(&$instruction_accounts, &[2], &[])
-                .unwrap();
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&[2], &$instruction_accounts, &[]);
+            $invoke_context.push().unwrap();
             let $transaction_context = &$invoke_context.transaction_context;
             let $instruction_context = $transaction_context
                 .get_current_instruction_context()

@@ -82,6 +82,8 @@ pub struct ComputeBudget {
     pub heap_cost: u64,
     /// Memory operation syscall base cost
     pub mem_op_base_cost: u64,
+    /// Number of compute units consumed per AccountPropertyUpdate
+    pub account_property_update_cost: u64,
 }
 
 impl Default for ComputeBudget {
@@ -120,6 +122,7 @@ impl ComputeBudget {
             heap_size: None,
             heap_cost: 8,
             mem_op_base_cost: 10,
+            account_property_update_cost: 10,
         }
     }
 

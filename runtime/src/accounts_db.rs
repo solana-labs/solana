@@ -45,6 +45,7 @@ use {
         bank::Rewrites,
         cache_hash_data::CacheHashData,
         contains::Contains,
+        epoch_accounts_hash::EpochAccountsHash,
         expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         pubkey_bins::PubkeyBinCalculator24,
         read_only_accounts_cache::ReadOnlyAccountsCache,
@@ -1182,6 +1183,10 @@ pub struct AccountsDb {
     /// Used to disable logging dead slots during removal.
     /// allow disabling noisy log
     pub(crate) log_dead_slots: AtomicBool,
+
+    /// A special accounts hash that occurs once per epoch
+    #[allow(dead_code)]
+    pub(crate) epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
 }
 
 #[derive(Debug, Default)]
@@ -1979,6 +1984,7 @@ impl AccountsDb {
             filler_account_suffix: None,
             num_hash_scan_passes,
             log_dead_slots: AtomicBool::new(true),
+            epoch_accounts_hash: Mutex::new(None),
         }
     }
 
@@ -2182,7 +2188,6 @@ impl AccountsDb {
             })
             .collect::<Vec<_>>();
         clean_rooted.stop();
-        inc_new_counter_info!("clean-old-root-par-clean-ms", clean_rooted.as_ms() as usize);
         self.clean_accounts_stats
             .clean_old_root_us
             .fetch_add(clean_rooted.as_us(), Ordering::Relaxed);
@@ -2202,7 +2207,6 @@ impl AccountsDb {
         );
         measure.stop();
         debug!("{} {}", clean_rooted, measure);
-        inc_new_counter_info!("clean-old-root-reclaim-ms", measure.as_ms() as usize);
         self.clean_accounts_stats
             .clean_old_root_reclaim_us
             .fetch_add(measure.as_us(), Ordering::Relaxed);
@@ -3724,23 +3728,30 @@ impl AccountsDb {
         })
     }
 
+    /// 'accounts' are about to be appended to an ancient append vec. That ancient append vec may already have some accounts.
     /// unref each account in 'accounts' that already exists in 'ancient_store'
+    /// as a side effect, on exit, 'existing_ancient_pubkeys' will contain all pubkeys in 'accounts'.
     fn unref_accounts_already_in_storage(
         &self,
         accounts: &[(&Pubkey, &StoredAccountMeta<'_>, u64)],
-        ancient_store: &Arc<AccountStorageEntry>,
+        existing_ancient_pubkeys: &mut HashSet<Pubkey>,
     ) {
-        // make a hashset of all keys we're about to add to this storage
-        let mut accounts_to_add = accounts.iter().map(|entry| entry.0).collect::<HashSet<_>>();
+        let mut unref = HashSet::<&Pubkey>::default();
         // for each key that we're about to add that already exists in this storage, we need to unref. The account was in a different storage.
-        // Now it is being put into an ancient storage, but it is already there, so maintain max of 1 ref per storage in the accounts index.
-        ancient_store.accounts.account_iter().for_each(|account| {
-            // remove here is so we don't unref the same key more than once in this loop if it is in the existing storage 2 times already
-            let key = &account.meta.pubkey;
-            if accounts_to_add.remove(key) {
-                self.accounts_index.unref_from_storage(key);
+        // Now it is being put into an ancient storage again, but it is already there, so maintain max of 1 ref per storage in the accounts index.
+        // The slot that currently references the account is going away, so unref to maintain # slots that reference the pubkey = refcount.
+        accounts.iter().for_each(|(key, _, _)| {
+            if !existing_ancient_pubkeys.insert(**key) {
+                // this key exists BOTH in 'accounts' and already in the ancient append vec, so we need to unref it
+                unref.insert(*key);
             }
-        })
+        });
+
+        self.thread_pool_clean.install(|| {
+            unref.into_par_iter().for_each(|key| {
+                self.accounts_index.unref_from_storage(key);
+            });
+        });
     }
 
     /// helper function to cleanup call to 'store_accounts_frozen'
@@ -3750,13 +3761,8 @@ impl AccountsDb {
         ancient_store: &Arc<AccountStorageEntry>,
         accounts: &AccountsToStore,
         storage_selector: StorageSelector,
-        unref_if_already_exists: bool,
     ) -> StoreAccountsTiming {
         let (accounts, hashes) = accounts.get(storage_selector);
-
-        if unref_if_already_exists {
-            self.unref_accounts_already_in_storage(accounts, ancient_store);
-        }
 
         self.store_accounts_frozen(
             (ancient_slot, accounts),
@@ -3798,8 +3804,13 @@ impl AccountsDb {
         }
         let storage = all_storages.first().unwrap();
         let accounts = &storage.accounts;
-        if is_full_ancient(accounts) {
-            if self.is_candidate_for_shrink(storage, true) {
+
+        // randomly shrink ancient slots
+        // this exercises the ancient shrink code more often
+        let random_shrink = thread_rng().gen_range(0, 100) == 0 && is_ancient(accounts);
+
+        if is_full_ancient(accounts) || random_shrink {
+            if self.is_candidate_for_shrink(storage, true) || random_shrink {
                 // we are full, but we are a candidate for shrink, so either append us to the previous append vec
                 // or recreate us as a new append vec and eliminate some contents
                 info!("ancient_append_vec: shrinking full ancient: {}", slot);
@@ -3831,6 +3842,10 @@ impl AccountsDb {
         // the ancient append vec currently being written to
         let mut current_ancient = None;
         let mut dropped_roots = vec![];
+
+        // we have to keep track of what pubkeys exist in the current ancient append vec so we can unref correctly
+        let mut ancient_pubkeys = HashSet::default();
+        let mut ancient_slot_with_pubkeys = None;
 
         let len = sorted_slots.len();
         for slot in sorted_slots {
@@ -3926,6 +3941,23 @@ impl AccountsDb {
             // if this slot is not the ancient slot we're writing to, then this root will be dropped
             let mut drop_root = slot != ancient_slot;
 
+            if slot != ancient_slot {
+                // we are taking accounts from 'slot' and putting them into 'ancient_slot'
+                let (accounts, _hashes) = to_store.get(StorageSelector::Primary);
+                if Some(ancient_slot) != ancient_slot_with_pubkeys {
+                    // 'ancient_slot_with_pubkeys' is a local, re-used only for the set of slots we're iterating right now.
+                    // the first time or when we change to a new ancient append vec, we need to recreate the set of ancient pubkeys here.
+                    ancient_slot_with_pubkeys = Some(ancient_slot);
+                    ancient_pubkeys = ancient_store
+                        .accounts
+                        .account_iter()
+                        .map(|account| account.meta.pubkey)
+                        .collect::<HashSet<_>>();
+                }
+                // accounts in 'slot' but ALSO already in the ancient append vec at a different slot need to be unref'd since 'slot' is going away
+                self.unref_accounts_already_in_storage(accounts, &mut ancient_pubkeys);
+            }
+
             let mut rewrite_elapsed = Measure::start("rewrite_elapsed");
             // write what we can to the current ancient storage
             let mut store_accounts_timing = self.store_ancient_accounts(
@@ -3934,7 +3966,6 @@ impl AccountsDb {
                 &to_store,
                 StorageSelector::Primary,
                 // we are adding accounts to an existing append vec from a different slot. We need to unref each account that exists already in 'ancient_store'.
-                slot != ancient_slot,
             );
 
             // handle accounts from 'slot' which did not fit into the current ancient append vec
@@ -3961,7 +3992,6 @@ impl AccountsDb {
                     ancient_store,
                     &to_store,
                     StorageSelector::Overflow,
-                    false, // we do not want to unref any accounts. these remaining accounts are going into a new append vec, so we need to keep the refs they already have
                 );
                 store_accounts_timing.store_accounts_elapsed = timing.store_accounts_elapsed;
                 store_accounts_timing.update_index_elapsed = timing.update_index_elapsed;
@@ -6762,7 +6792,14 @@ impl AccountsDb {
 
     /// storages are sorted by slot and have range info.
     /// add all stores older than slots_per_epoch to dirty_stores so clean visits these slots
-    fn mark_old_slots_as_dirty(&self, storages: &SortedStorages, slots_per_epoch: Slot) {
+    fn mark_old_slots_as_dirty(
+        &self,
+        storages: &SortedStorages,
+        slots_per_epoch: Slot,
+        mut stats: &mut crate::accounts_hash::HashStats,
+    ) {
+        let mut mark_time = Measure::start("mark_time");
+        let mut num_dirty_slots: usize = 0;
         let max = storages.max_slot_inclusive();
         let acceptable_straggler_slot_count = 100; // do nothing special for these old stores which will likely get cleaned up shortly
         let sub = slots_per_epoch + acceptable_straggler_slot_count;
@@ -6776,10 +6813,14 @@ impl AccountsDb {
                         // If we included them here then ALL accounts in ALL ancient append vecs will be visited by clean each time.
                         self.dirty_stores
                             .insert((slot, store.append_vec_id()), store.clone());
+                        num_dirty_slots += 1;
                     }
                 });
             }
         }
+        mark_time.stop();
+        stats.mark_time_us = mark_time.as_us();
+        stats.num_dirty_slots = num_dirty_slots;
     }
 
     pub(crate) fn calculate_accounts_hash_helper(
@@ -7008,7 +7049,6 @@ impl AccountsDb {
         mut stats: HashStats,
     ) -> Result<(Hash, u64), BankHashVerificationError> {
         let _guard = self.active_stats.activate(ActiveStatItem::Hash);
-
         stats.oldest_root = storages.range().start;
 
         assert!(
@@ -7016,11 +7056,11 @@ impl AccountsDb {
             "cannot accurately capture all data for debugging if accounts cache is being used"
         );
 
-        self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch);
+        self.mark_old_slots_as_dirty(storages, config.epoch_schedule.slots_per_epoch, &mut stats);
 
         let (num_hash_scan_passes, bins_per_pass) = Self::bins_per_pass(self.num_hash_scan_passes);
         let use_bg_thread_pool = config.use_bg_thread_pool;
-        let mut scan_and_hash = move || {
+        let mut scan_and_hash = || {
             let mut previous_pass = PreviousPass::default();
             let mut final_result = (Hash::default(), 0);
 
@@ -7068,6 +7108,7 @@ impl AccountsDb {
             );
             Ok(final_result)
         };
+
         let result = if use_bg_thread_pool {
             self.thread_pool_clean.install(scan_and_hash)
         } else {
@@ -7077,6 +7118,7 @@ impl AccountsDb {
             storages.max_slot_inclusive(),
             config.epoch_schedule,
         );
+        stats.log();
         result
     }
 

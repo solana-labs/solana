@@ -4460,6 +4460,8 @@ describe('Connection', function () {
           readonly: [],
           writable: [lookupTableAddresses[0]],
         });
+        expect(fetchedTransaction.meta?.computeUnitsConsumed).to.not.be
+          .undefined;
         expect(
           fetchedTransaction.transaction.message.addressTableLookups,
         ).to.eql(addressTableLookups);
@@ -4489,6 +4491,8 @@ describe('Connection', function () {
           readonly: [],
           writable: [lookupTableAddresses[0]],
         });
+        expect(parsedTransaction?.meta?.computeUnitsConsumed).to.not.be
+          .undefined;
         expect(
           parsedTransaction?.transaction.message.addressTableLookups,
         ).to.eql(addressTableLookups);

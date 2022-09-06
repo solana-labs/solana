@@ -745,7 +745,7 @@ impl LocalCluster {
             incremental_snapshot_archive_interval_slots: Slot::MAX,
             full_snapshot_archives_dir: DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into(),
             bank_snapshots_dir: DUMMY_SNAPSHOT_CONFIG_PATH_MARKER.into(),
-            ..SnapshotConfig::default()
+            ..SnapshotConfig::new_load_only()
         }
     }
 }

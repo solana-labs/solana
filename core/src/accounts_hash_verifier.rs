@@ -276,7 +276,9 @@ impl AccountsHashVerifier {
     ) {
         if accounts_package.snapshot_type.is_none()
             || pending_snapshot_package.is_none()
-            || snapshot_config.is_none()
+            || !snapshot_config
+                .map(|snapshot_config| snapshot_config.should_generate_snapshots())
+                .unwrap_or(false)
         {
             return;
         };

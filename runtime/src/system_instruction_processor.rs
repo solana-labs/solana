@@ -324,7 +324,7 @@ pub fn process_instruction(
 
     trace!("process_instruction: {:?}", instruction);
 
-    let signers = instruction_context.get_signers(transaction_context);
+    let signers = instruction_context.get_signers(transaction_context)?;
     match instruction {
         SystemInstruction::CreateAccount {
             lamports,

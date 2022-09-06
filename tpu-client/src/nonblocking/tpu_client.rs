@@ -231,6 +231,15 @@ async fn send_wire_transaction_to_addr(
     conn.send_wire_transaction(wire_transaction.clone()).await
 }
 
+async fn send_wire_transaction_batch_to_addr(
+    connection_cache: &ConnectionCache,
+    addr: &SocketAddr,
+    wire_transactions: &[Vec<u8>],
+) -> TransportResult<()> {
+    let conn = connection_cache.get_nonblocking_connection(addr);
+    conn.send_wire_transaction_batch(wire_transactions).await
+}
+
 impl TpuClient {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -270,6 +279,50 @@ impl TpuClient {
                     &self.connection_cache,
                     addr,
                     wire_transaction.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let results: Vec<TransportResult<()>> = join_all(futures).await;
+
+        let mut last_error: Option<TransportError> = None;
+        let mut some_success = false;
+        for result in results {
+            if let Err(e) = result {
+                if last_error.is_none() {
+                    last_error = Some(e);
+                }
+            } else {
+                some_success = true;
+            }
+        }
+        if !some_success {
+            Err(if let Some(err) = last_error {
+                err
+            } else {
+                std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Send a batch of wire transactions to the current and upcoming leader TPUs according to
+    /// fanout size
+    /// Returns the last error if all sends fail
+    pub async fn try_send_wire_transaction_batch(
+        &self,
+        wire_transactions: Vec<Vec<u8>>,
+    ) -> TransportResult<()> {
+        let leaders = self
+            .leader_tpu_service
+            .leader_tpu_sockets(self.fanout_slots);
+        let futures = leaders
+            .iter()
+            .map(|addr| {
+                send_wire_transaction_batch_to_addr(
+                    &self.connection_cache,
+                    addr,
+                    &wire_transactions,
                 )
             })
             .collect::<Vec<_>>();

@@ -888,6 +888,8 @@ export type ParsedTransactionMeta = {
   err: TransactionError | null;
   /** The collection of addresses loaded using address lookup tables */
   loadedAddresses?: LoadedAddresses;
+  /** The compute units consumed after processing the transaction */
+  computeUnitsConsumed?: number;
 };
 
 export type CompiledInnerInstruction = {
@@ -917,6 +919,8 @@ export type ConfirmedTransactionMeta = {
   err: TransactionError | null;
   /** The collection of addresses loaded using address lookup tables */
   loadedAddresses?: LoadedAddresses;
+  /** The compute units consumed after processing the transaction */
+  computeUnitsConsumed?: number;
 };
 
 /**
@@ -1993,6 +1997,7 @@ const ConfirmedTransactionMetaResult = pick({
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
   loadedAddresses: optional(LoadedAddressesResult),
+  computeUnitsConsumed: optional(number()),
 });
 
 /**
@@ -2017,6 +2022,7 @@ const ParsedConfirmedTransactionMetaResult = pick({
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
   loadedAddresses: optional(LoadedAddressesResult),
+  computeUnitsConsumed: optional(number()),
 });
 
 const TransactionVersionStruct = union([literal(0), literal('legacy')]);

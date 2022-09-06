@@ -1005,6 +1005,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
+    pub(crate) epoch_accounts_hash: Option<Hash>,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -18848,8 +18849,10 @@ pub(crate) mod tests {
             }
             if stack_height > transaction_context.get_instruction_context_stack_height() {
                 transaction_context
-                    .push(&[], &[], &[index_in_trace as u8])
-                    .unwrap();
+                    .get_next_instruction_context()
+                    .unwrap()
+                    .configure(&[], &[], &[index_in_trace as u8]);
+                transaction_context.push().unwrap();
             }
         }
         let inner_instructions =

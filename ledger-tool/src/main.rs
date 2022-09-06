@@ -946,12 +946,10 @@ fn load_bank_forks(
         }
 
         Some(SnapshotConfig {
-            full_snapshot_archive_interval_slots: Slot::MAX,
-            incremental_snapshot_archive_interval_slots: Slot::MAX,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             bank_snapshots_dir,
-            ..SnapshotConfig::default()
+            ..SnapshotConfig::new_load_only()
         })
     };
 
