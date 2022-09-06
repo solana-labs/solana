@@ -4031,12 +4031,8 @@ impl Bank {
     /// reaches its max tick height. Can be called by tests to get new blockhashes for transaction
     /// processing without advancing to a new bank slot.
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
-        // Only acquire the write lock for the blockhash queue on block boundaries because
-        // readers can starve this write lock acquisition and ticks would be slowed down too
-        // much if the write lock is acquired for each tick.
-        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        w_blockhash_queue.register_hash(blockhash, self.fee_rate_governor.lamports_per_signature);
-        self.update_recent_blockhashes_locked(&w_blockhash_queue);
+        let scheduler = self.scheduler.write().unwrap();
+        scheduler.blockhash = blockhash.clone();
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function assumes subsequent calls
@@ -4053,7 +4049,6 @@ impl Bank {
 
         inc_new_counter_debug!("bank-register_tick-registered", 1);
         if self.is_block_boundary(self.tick_height.load(Relaxed) + 1) {
-            self.wait_for_scheduler().unwrap();
             self.register_recent_blockhash(hash);
         }
 
@@ -8063,7 +8058,14 @@ impl Bank {
     pub fn wait_for_scheduler(&self) -> Result<()> {
         let mut scheduler = self.scheduler.write().unwrap();
         scheduler.gracefully_stop()?;
-        scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()))
+        scheduler.handle_aborted_executions().into_iter().next().unwrap_or(Ok(()))?
+
+        // Only acquire the write lock for the blockhash queue on block boundaries because
+        // readers can starve this write lock acquisition and ticks would be slowed down too
+        // much if the write lock is acquired for each tick.
+        let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
+        w_blockhash_queue.register_hash(scheduler.blockhash, self.fee_rate_governor.lamports_per_signature);
+        self.update_recent_blockhashes_locked(&w_blockhash_queue);
     }
 }
 
