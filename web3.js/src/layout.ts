@@ -1,6 +1,8 @@
 import {Buffer} from 'buffer';
 import * as BufferLayout from '@solana/buffer-layout';
 
+import {VoteAuthorizeWithSeedArgs} from './programs/vote';
+
 /**
  * Layout for a public key
  */
@@ -136,6 +138,23 @@ export const voteInit = (property: string = 'voteInit') => {
       publicKey('authorizedVoter'),
       publicKey('authorizedWithdrawer'),
       BufferLayout.u8('commission'),
+    ],
+    property,
+  );
+};
+
+/**
+ *  Layout for a VoteAuthorizeWithSeedArgs object
+ */
+export const voteAuthorizeWithSeedArgs = (
+  property: string = 'voteAuthorizeWithSeedArgs',
+) => {
+  return BufferLayout.struct<VoteAuthorizeWithSeedArgs>(
+    [
+      BufferLayout.u32('voteAuthorizationType'),
+      publicKey('currentAuthorityDerivedKeyOwnerPubkey'),
+      rustString('currentAuthorityDerivedKeySeed'),
+      publicKey('newAuthorized'),
     ],
     property,
   );
