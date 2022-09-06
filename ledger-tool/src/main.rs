@@ -342,7 +342,7 @@ fn output_slot(
                         */
                         let uq = ee.unique_weight;
                         let should_remove = ee.task.contention_count() > 0;
-                        for mut lock_attempt in ee.lock_attempts.iter_mut() {
+                        for mut lock_attempt in ee.finalized_lock_attempts.iter_mut() {
                             let contended_unique_weights = lock_attempt.contended_unique_weights();
                             contended_unique_weights.heaviest_task_cursor().map(|mut task_cursor| {
                                 let mut found = true;
