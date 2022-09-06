@@ -318,6 +318,16 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> CU {
+        let strictly_lockable_for_replay = attempt.target_contended_unique_weights().task_ids.is_empty() ||
+            attempt.target_contended_unique_weights().task_ids.back().unwrap().key() == unique_weight;
+        if !strictly_lockable_for_replay {
+            *status = LockStatus::Failed;
+            let page = attempt.target.page_mut(ast);
+            return page.cu;
+        }
+
+        let mut page = attempt.target.page_mut(ast);
+
         let LockAttempt {
             target,
             requested_usage,
@@ -325,14 +335,6 @@ impl AddressBook {
             ..
         } = attempt;
 
-        let mut page = target.page_mut(ast);
-
-        let strictly_lockable = target.0.1.task_ids.is_empty() ||
-            target.0.1.task_ids.back().unwrap().key() == unique_weight;
-        if !strictly_lockable {
-            *status = LockStatus::Failed;
-            return page.cu;
-        }
 
         let next_usage = page.next_usage;
         match page.current_usage {
