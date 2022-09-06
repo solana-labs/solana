@@ -403,7 +403,7 @@ fn output_slot(
             .name(format!("sol-consumer{}", thx))
             .spawn(move || {
                 loop {
-                    let ee = post_schedule_env_receiver.recv().unwrap();
+                    let ee = post_schedule_env_receiver.recv().unwrap().0;
                     d.fetch_sub(1, Ordering::Relaxed);
                     let step = step.fetch_add(1, Ordering::Relaxed);
                     trace!(
