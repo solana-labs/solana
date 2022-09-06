@@ -1344,6 +1344,7 @@ impl Default for Scheduler {
             graceful_stop_initiated: Default::default(),
             errors,
             bank,
+            transaction_index: Default::default(),
         }
     }
 }
