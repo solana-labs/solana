@@ -1413,36 +1413,30 @@ impl ScheduleStage {
         loop {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
-                   if maybe_from_exec.is_err() {
+                   if let Ok((mut processed_execution_environment)) = maybe_from_exec. {
+                       executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                       completed_count = completed_count.checked_add(1).unwrap();
+                       Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
+                       to_next_stage.send(DroppablePayload(processed_execution_environment)).unwrap();
+                   } else {
                        assert_eq!(from_exec.len(), 0);
                        from_exec_disconnected |= true;
                        if from_disconnected {
                            break;
-                       } else {
-                           info!("flushing1..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
-                           continue;
                        }
                    }
-                   let mut processed_execution_environment = maybe_from_exec.unwrap().0;
-                    executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                    completed_count = completed_count.checked_add(1).unwrap();
-                    Self::commit_completed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
-                    to_next_stage.send(DroppablePayload(processed_execution_environment)).unwrap();
                }
                recv(from_prev) -> maybe_from => {
-                   if maybe_from.is_err() {
+                   if let Ok((Task)) = maybe_from {
+                       Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                   } else {
                        assert_eq!(from_prev.len(), 0);
                        from_disconnected |= true;
                        no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
                        if from_exec_disconnected || no_more_work {
                            break;
-                       } else {
-                           info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
-                           continue;
                        }
                    }
-                   let task = maybe_from.unwrap().0;
-                   Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                }
             }
 
