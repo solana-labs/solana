@@ -1419,7 +1419,7 @@ impl ScheduleStage {
                        if from_disconnected {
                            break;
                        } else {
-                           info!("flushing1..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count)
+                           info!("flushing1..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
                            continue;
                        }
                    }
@@ -1437,7 +1437,7 @@ impl ScheduleStage {
                        if from_exec_disconnected || no_more_work {
                            break;
                        } else {
-                           info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count)
+                           info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
                            continue;
                        }
                    }
