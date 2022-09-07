@@ -1433,7 +1433,7 @@ impl ScheduleStage {
                        Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                    } else {
                        assert_eq!(from_prev.len(), 0);
-                       from_prev = never();
+                       from_prev = crossbeam_channel::never();
                        from_disconnected |= true;
                        no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
                        info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
