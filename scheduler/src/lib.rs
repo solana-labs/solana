@@ -1468,9 +1468,13 @@ impl ScheduleStage {
                         &mut execute_clock,
                         &mut provisioning_tracker_count,
                     );
-                    if let Some(ee) = maybe_ee {
+                    let should_break = if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
+
+                        false
+                    } else {
+                        true
                     }
 
                     if first_iteration {
@@ -1486,7 +1490,7 @@ impl ScheduleStage {
                     }
                     (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
 
-                    if maybe_ee.is_none() {
+                    if should_break {
                         break;
                     }
                 }
