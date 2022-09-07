@@ -6,6 +6,7 @@ use {
         connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
         nonblocking,
         rpc_client::RpcClient,
+        rpc_request::MAX_MULTIPLE_ACCOUNTS,
     },
     solana_core::{
         tower_storage::TowerStorage,
@@ -283,16 +284,24 @@ impl TestValidatorGenesis {
     where
         T: IntoIterator<Item = Pubkey>,
     {
-        for address in addresses {
-            info!("Fetching {} over RPC...", address);
-            let res = rpc_client.get_account(&address);
-            if let Ok(account) = res {
-                self.add_account(address, AccountSharedData::from(account));
-            } else if skip_missing {
-                warn!("Could not find {}, skipping.", address);
-            } else {
-                error!("Failed to fetch {}: {}", address, res.unwrap_err());
-                solana_core::validator::abort();
+        let addresses: Vec<Pubkey> = addresses.into_iter().collect();
+        for chunk in addresses.chunks(MAX_MULTIPLE_ACCOUNTS) {
+            info!("Fetching {:?} over RPC...", chunk);
+            let responses = rpc_client
+                .get_multiple_accounts(chunk)
+                .unwrap_or_else(|err| {
+                    error!("Failed to fetch: {}", err);
+                    solana_core::validator::abort();
+                });
+            for (address, res) in chunk.iter().zip(responses) {
+                if let Some(account) = res {
+                    self.add_account(*address, AccountSharedData::from(account));
+                } else if skip_missing {
+                    warn!("Could not find {}, skipping.", address);
+                } else {
+                    error!("Failed to fetch {}", address);
+                    solana_core::validator::abort();
+                }
             }
         }
         self
