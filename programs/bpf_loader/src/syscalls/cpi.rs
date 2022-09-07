@@ -1,6 +1,7 @@
 use {
     super::*,
     crate::declare_syscall,
+    solana_rbpf::memory_region::MemoryRegion,
     solana_sdk::{
         feature_set::enable_bpf_loader_set_authority_checked_ix,
         stable_layout::stable_instruction::StableInstruction,
@@ -20,7 +21,12 @@ struct CallerAccount<'a> {
     lamports: &'a mut u64,
     owner: &'a mut Pubkey,
     original_data_len: usize,
-    data: &'a mut [u8],
+    // After the activation of bpf_account_data_direct_mapping this
+    // no longer holds the account data followed by the reallocation padding,
+    // but only the reallocation padding. That is because after the activation
+    // we already share the account data between runtime and program and mapping it
+    // forward and backward would create aliasing mutable references.
+    account_data_or_only_realloc_padding: &'a mut [u8],
     // Given the corresponding input AccountInfo::data, vm_data_addr points to
     // the pointer field and ref_to_len_in_vm points to the length field.
     vm_data_addr: u64,
@@ -36,6 +42,7 @@ impl<'a> CallerAccount<'a> {
     fn from_account_info(
         invoke_context: &InvokeContext,
         memory_mapping: &MemoryMapping,
+        is_loader_deprecated: bool,
         _vm_addr: u64,
         account_info: &AccountInfo,
         original_data_len: usize,
@@ -58,7 +65,12 @@ impl<'a> CallerAccount<'a> {
             invoke_context.get_check_aligned(),
         )?;
 
-        let (data, vm_data_addr, ref_to_len_in_vm, serialized_len_ptr) = {
+        let (
+            account_data_or_only_realloc_padding,
+            vm_data_addr,
+            ref_to_len_in_vm,
+            serialized_len_ptr,
+        ) = {
             // Double translate data out of RefCell
             let data = *translate_type::<&[u8]>(
                 memory_mapping,
@@ -95,14 +107,32 @@ impl<'a> CallerAccount<'a> {
                 )?
             };
             let vm_data_addr = data.as_ptr() as u64;
+
+            let bpf_account_data_direct_mapping = invoke_context
+                .feature_set
+                .is_active(&feature_set::bpf_account_data_direct_mapping::id());
+            let account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
+                memory_mapping,
+                if bpf_account_data_direct_mapping {
+                    vm_data_addr + original_data_len as u64
+                } else {
+                    vm_data_addr
+                },
+                if bpf_account_data_direct_mapping {
+                    if is_loader_deprecated {
+                        0
+                    } else {
+                        MAX_PERMITTED_DATA_INCREASE
+                    }
+                } else {
+                    data.len()
+                } as u64,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            )?;
+
             (
-                translate_slice_mut::<u8>(
-                    memory_mapping,
-                    vm_data_addr,
-                    data.len() as u64,
-                    invoke_context.get_check_aligned(),
-                    invoke_context.get_check_size(),
-                )?,
+                account_data_or_only_realloc_padding,
                 vm_data_addr,
                 ref_to_len_in_vm,
                 serialized_len_ptr,
@@ -113,7 +143,7 @@ impl<'a> CallerAccount<'a> {
             lamports,
             owner,
             original_data_len,
-            data,
+            account_data_or_only_realloc_padding,
             vm_data_addr,
             ref_to_len_in_vm,
             serialized_len_ptr,
@@ -126,6 +156,7 @@ impl<'a> CallerAccount<'a> {
     fn from_sol_account_info(
         invoke_context: &InvokeContext,
         memory_mapping: &MemoryMapping,
+        is_loader_deprecated: bool,
         vm_addr: u64,
         account_info: &SolAccountInfo,
         original_data_len: usize,
@@ -152,10 +183,25 @@ impl<'a> CallerAccount<'a> {
                 .saturating_div(invoke_context.get_compute_budget().cpi_bytes_per_unit),
         )?;
 
-        let data = translate_slice_mut::<u8>(
+        let bpf_account_data_direct_mapping = invoke_context
+            .feature_set
+            .is_active(&feature_set::bpf_account_data_direct_mapping::id());
+        let account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
             memory_mapping,
-            vm_data_addr,
-            account_info.data_len,
+            if bpf_account_data_direct_mapping {
+                vm_data_addr + original_data_len as u64
+            } else {
+                vm_data_addr
+            },
+            if bpf_account_data_direct_mapping {
+                if is_loader_deprecated {
+                    0
+                } else {
+                    MAX_PERMITTED_DATA_INCREASE as u64
+                }
+            } else {
+                account_info.data_len
+            },
             invoke_context.get_check_aligned(),
             invoke_context.get_check_size(),
         )?;
@@ -194,7 +240,7 @@ impl<'a> CallerAccount<'a> {
             lamports,
             owner,
             original_data_len,
-            data,
+            account_data_or_only_realloc_padding,
             vm_data_addr,
             ref_to_len_in_vm,
             serialized_len_ptr,
@@ -218,6 +264,7 @@ trait SyscallInvokeSigned {
         program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
+        is_loader_deprecated: bool,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<TranslatedAccounts<'a>, Error>;
@@ -310,6 +357,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
         program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
+        is_loader_deprecated: bool,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<TranslatedAccounts<'a>, Error> {
@@ -327,6 +375,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedRust {
             &account_info_keys,
             account_infos,
             account_infos_addr,
+            is_loader_deprecated,
             invoke_context,
             memory_mapping,
             CallerAccount::from_account_info,
@@ -541,6 +590,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
         program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
+        is_loader_deprecated: bool,
         memory_mapping: &mut MemoryMapping,
         invoke_context: &mut InvokeContext,
     ) -> Result<TranslatedAccounts<'a>, Error> {
@@ -558,6 +608,7 @@ impl SyscallInvokeSigned for SyscallInvokeSignedC {
             &account_info_keys,
             account_infos,
             account_infos_addr,
+            is_loader_deprecated,
             invoke_context,
             memory_mapping,
             CallerAccount::from_sol_account_info,
@@ -657,12 +708,13 @@ fn translate_and_update_accounts<'a, T, F>(
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
     account_infos_addr: u64,
+    is_loader_deprecated: bool,
     invoke_context: &mut InvokeContext,
     memory_mapping: &MemoryMapping,
     do_translate: F,
 ) -> Result<TranslatedAccounts<'a>, Error>
 where
-    F: Fn(&InvokeContext, &MemoryMapping, u64, &T, usize) -> Result<CallerAccount<'a>, Error>,
+    F: Fn(&InvokeContext, &MemoryMapping, bool, u64, &T, usize) -> Result<CallerAccount<'a>, Error>,
 {
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context.get_current_instruction_context()?;
@@ -722,6 +774,7 @@ where
                 do_translate(
                     invoke_context,
                     memory_mapping,
+                    is_loader_deprecated,
                     account_infos_addr.saturating_add(
                         caller_account_index.saturating_mul(mem::size_of::<T>()) as u64,
                     ),
@@ -735,7 +788,12 @@ where
             // account (caller_account). We need to update the corresponding
             // BorrowedAccount (callee_account) so the callee can see the
             // changes.
-            update_callee_account(invoke_context, &caller_account, callee_account)?;
+            update_callee_account(
+                invoke_context,
+                is_loader_deprecated,
+                &caller_account,
+                callee_account,
+            )?;
 
             let caller_account = if instruction_account.is_writable {
                 Some(caller_account)
@@ -887,14 +945,20 @@ fn cpi_common<S: SyscallInvokeSigned>(
         memory_mapping,
         invoke_context,
     )?;
+    let is_loader_deprecated = *instruction_context
+        .try_borrow_last_program_account(transaction_context)?
+        .get_owner()
+        == bpf_loader_deprecated::id();
     let (instruction_accounts, program_indices) =
         invoke_context.prepare_instruction(&instruction, &signers)?;
     check_authorized_program(&instruction.program_id, &instruction.data, invoke_context)?;
+
     let mut accounts = S::translate_accounts(
         &instruction_accounts,
         &program_indices,
         account_infos_addr,
         account_infos_len,
+        is_loader_deprecated,
         memory_mapping,
         invoke_context,
     )?;
@@ -918,13 +982,14 @@ fn cpi_common<S: SyscallInvokeSigned>(
     // Synchronize the callee's account changes so the caller can see them.
     for (index_in_caller, caller_account) in accounts.iter_mut() {
         if let Some(caller_account) = caller_account {
-            let callee_account = instruction_context
+            let mut callee_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, *index_in_caller)?;
             update_caller_account(
                 invoke_context,
                 memory_mapping,
+                is_loader_deprecated,
                 caller_account,
-                &callee_account,
+                &mut callee_account,
             )?;
         }
     }
@@ -942,27 +1007,60 @@ fn cpi_common<S: SyscallInvokeSigned>(
 // changes.
 fn update_callee_account(
     invoke_context: &InvokeContext,
+    is_loader_deprecated: bool,
     caller_account: &CallerAccount,
     mut callee_account: BorrowedAccount<'_>,
 ) -> Result<(), Error> {
     let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
         .feature_set
         .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
+    let bpf_account_data_direct_mapping = invoke_context
+        .feature_set
+        .is_active(&feature_set::bpf_account_data_direct_mapping::id());
 
     if callee_account.get_lamports() != *caller_account.lamports {
         callee_account.set_lamports(*caller_account.lamports)?;
     }
 
-    // The redundant check helps to avoid the expensive data comparison if we can
-    match callee_account
-        .can_data_be_resized(caller_account.data.len())
-        .and_then(|_| callee_account.can_data_be_changed())
-    {
-        Ok(()) => callee_account.set_data_from_slice(caller_account.data)?,
-        Err(err) if callee_account.get_data() != caller_account.data => {
-            return Err(Box::new(err));
+    if bpf_account_data_direct_mapping {
+        let prev_len = callee_account.get_data().len();
+        let post_len = *caller_account.ref_to_len_in_vm as usize;
+        match callee_account
+            .can_data_be_resized(post_len)
+            .and_then(|_| callee_account.can_data_be_changed())
+        {
+            Ok(()) => {
+                callee_account.set_data_length(post_len)?;
+                let realloc_bytes_used = post_len.saturating_sub(caller_account.original_data_len);
+                if !is_loader_deprecated && realloc_bytes_used > 0 {
+                    callee_account.get_data_mut()?[caller_account.original_data_len..post_len]
+                        .copy_from_slice(
+                            &caller_account.account_data_or_only_realloc_padding
+                                [0..realloc_bytes_used],
+                        );
+                }
+            }
+            Err(err) if prev_len != post_len => {
+                return Err(Box::new(err));
+            }
+            _ => {}
         }
-        _ => {}
+    } else {
+        // The redundant check helps to avoid the expensive data comparison if we can
+        match callee_account
+            .can_data_be_resized(caller_account.account_data_or_only_realloc_padding.len())
+            .and_then(|_| callee_account.can_data_be_changed())
+        {
+            Ok(()) => callee_account
+                .set_data_from_slice(&caller_account.account_data_or_only_realloc_padding)?,
+            Err(err)
+                if callee_account.get_data()
+                    != caller_account.account_data_or_only_realloc_padding =>
+            {
+                return Err(Box::new(err));
+            }
+            _ => {}
+        }
     }
 
     if !is_disable_cpi_setting_executable_and_rent_epoch_active
@@ -1011,15 +1109,47 @@ fn update_callee_account(
 // changes.
 fn update_caller_account(
     invoke_context: &InvokeContext,
-    memory_mapping: &MemoryMapping,
+    memory_mapping: &mut MemoryMapping,
+    is_loader_deprecated: bool,
     caller_account: &mut CallerAccount,
-    callee_account: &BorrowedAccount<'_>,
+    callee_account: &mut BorrowedAccount<'_>,
 ) -> Result<(), Error> {
+    let bpf_account_data_direct_mapping = invoke_context
+        .feature_set
+        .is_active(&feature_set::bpf_account_data_direct_mapping::id());
+
     *caller_account.lamports = callee_account.get_lamports();
     *caller_account.owner = *callee_account.get_owner();
-    let new_len = callee_account.get_data().len();
-    if caller_account.data.len() != new_len {
-        let data_overflow = new_len
+
+    if bpf_account_data_direct_mapping && caller_account.original_data_len > 0 {
+        let regions = memory_mapping.get_regions();
+        let memory_region_index = regions
+            .iter()
+            .position(|memory_region| memory_region.vm_addr == caller_account.vm_data_addr)
+            .ok_or(Box::new(InstructionError::ProgramEnvironmentSetupFailure))?;
+        let account_region = if let Ok(data) = callee_account.get_data_mut() {
+            let data = unsafe {
+                std::slice::from_raw_parts_mut(
+                    data.as_mut_ptr(),
+                    regions[memory_region_index].len as usize,
+                )
+            };
+            MemoryRegion::new_writable(data, caller_account.vm_data_addr)
+        } else {
+            let data = unsafe {
+                std::slice::from_raw_parts(
+                    callee_account.get_data().as_ptr(),
+                    regions[memory_region_index].len as usize,
+                )
+            };
+            MemoryRegion::new_readonly(data, caller_account.vm_data_addr)
+        };
+        memory_mapping.replace_region(memory_region_index, account_region)?;
+    }
+    let prev_len = *caller_account.ref_to_len_in_vm as usize;
+    let post_len = callee_account.get_data().len();
+    if prev_len != post_len {
+        let data_overflow = post_len
             > caller_account
                 .original_data_len
                 .saturating_add(MAX_PERMITTED_DATA_INCREASE);
@@ -1031,22 +1161,44 @@ fn update_caller_account(
             );
             return Err(Box::new(InstructionError::InvalidRealloc));
         }
-        if new_len < caller_account.data.len() {
-            caller_account
-                .data
-                .get_mut(new_len..)
-                .ok_or_else(|| Box::new(InstructionError::AccountDataTooSmall))?
-                .fill(0);
+        if post_len < prev_len {
+            if bpf_account_data_direct_mapping {
+                unsafe {
+                    std::slice::from_raw_parts_mut(
+                        callee_account.get_data_mut()?.as_mut_ptr().add(post_len),
+                        prev_len.saturating_sub(post_len),
+                    )
+                    .fill(0);
+                }
+            } else {
+                caller_account
+                    .account_data_or_only_realloc_padding
+                    .get_mut(post_len..)
+                    .ok_or_else(|| Box::new(InstructionError::AccountDataTooSmall))?
+                    .fill(0);
+            }
         }
-        caller_account.data = translate_slice_mut::<u8>(
+        caller_account.account_data_or_only_realloc_padding = translate_slice_mut::<u8>(
             memory_mapping,
-            caller_account.vm_data_addr,
-            new_len as u64,
+            if bpf_account_data_direct_mapping {
+                caller_account.vm_data_addr + caller_account.original_data_len as u64
+            } else {
+                caller_account.vm_data_addr
+            },
+            if bpf_account_data_direct_mapping {
+                if is_loader_deprecated {
+                    0
+                } else {
+                    MAX_PERMITTED_DATA_INCREASE
+                }
+            } else {
+                post_len
+            } as u64,
             false, // Don't care since it is byte aligned
             invoke_context.get_check_size(),
         )?;
         // this is the len field in the AccountInfo::data slice
-        *caller_account.ref_to_len_in_vm = new_len as u64;
+        *caller_account.ref_to_len_in_vm = post_len as u64;
 
         // this is the len field in the serialized parameters
         if invoke_context
@@ -1060,22 +1212,33 @@ fn update_caller_account(
                     .saturating_sub(std::mem::size_of::<u64>() as u64),
                 invoke_context.get_check_aligned(),
             )?;
-            *serialized_len_ptr = new_len as u64;
+            *serialized_len_ptr = post_len as u64;
         } else {
             unsafe {
-                *caller_account.serialized_len_ptr = new_len as u64;
+                *caller_account.serialized_len_ptr = post_len as u64;
             }
         }
     }
-    let to_slice = &mut caller_account.data;
-    let from_slice = callee_account
-        .get_data()
-        .get(0..new_len)
-        .ok_or(SyscallError::InvalidLength)?;
-    if to_slice.len() != from_slice.len() {
-        return Err(Box::new(InstructionError::AccountDataTooSmall));
+    let realloc_bytes_used = post_len.saturating_sub(caller_account.original_data_len);
+    if !bpf_account_data_direct_mapping {
+        let to_slice = &mut caller_account.account_data_or_only_realloc_padding;
+        let from_slice = callee_account
+            .get_data()
+            .get(0..post_len)
+            .ok_or(SyscallError::InvalidLength)?;
+        if to_slice.len() != from_slice.len() {
+            return Err(Box::new(InstructionError::AccountDataTooSmall));
+        }
+        to_slice.copy_from_slice(from_slice);
+    } else if !is_loader_deprecated && realloc_bytes_used > 0 {
+        let to_slice =
+            &mut caller_account.account_data_or_only_realloc_padding[0..realloc_bytes_used];
+        let from_slice = callee_account
+            .get_data()
+            .get(caller_account.original_data_len..post_len)
+            .ok_or(SyscallError::InvalidLength)?;
+        to_slice.copy_from_slice(from_slice);
     }
-    to_slice.copy_from_slice(from_slice);
 
     Ok(())
 }
@@ -1092,6 +1255,7 @@ mod tests {
         solana_sdk::{
             account::{Account, AccountSharedData},
             clock::Epoch,
+            feature_set::bpf_account_data_direct_mapping,
             instruction::Instruction,
             transaction_context::TransactionAccount,
         },
@@ -1129,7 +1293,9 @@ mod tests {
                 .into_iter()
                 .map(|a| (a.0, a.1))
                 .collect::<Vec<TransactionAccount>>();
-            with_mock_invoke_context!($invoke_context, transaction_context, transaction_accounts);
+            with_mock_invoke_context!($invoke_context, $transaction_context, transaction_accounts);
+            let feature_set = Arc::make_mut(&mut $invoke_context.feature_set);
+            feature_set.deactivate(&bpf_account_data_direct_mapping::id());
             $invoke_context
                 .transaction_context
                 .get_next_instruction_context()
@@ -1246,6 +1412,7 @@ mod tests {
         let caller_account = CallerAccount::from_account_info(
             &invoke_context,
             &memory_mapping,
+            false,
             vm_addr,
             account_info,
             account.data().len(),
@@ -1258,7 +1425,10 @@ mod tests {
             *caller_account.ref_to_len_in_vm as usize,
             account.data().len()
         );
-        assert_eq!(caller_account.data, account.data());
+        assert_eq!(
+            caller_account.account_data_or_only_realloc_padding,
+            account.data()
+        );
         assert_eq!(caller_account.executable, account.executable());
         assert_eq!(caller_account.rent_epoch, account.rent_epoch());
     }
@@ -1288,7 +1458,7 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let memory_mapping =
+        let mut memory_mapping =
             MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
 
         let mut caller_account = mock_caller_account.caller_account();
@@ -1304,9 +1474,10 @@ mod tests {
 
         update_caller_account(
             &invoke_context,
-            &memory_mapping,
+            &mut memory_mapping,
+            false,
             &mut caller_account,
-            &callee_account,
+            &mut callee_account,
         )
         .unwrap();
 
@@ -1345,7 +1516,7 @@ mod tests {
             aligned_memory_mapping: false,
             ..Config::default()
         };
-        let memory_mapping =
+        let mut memory_mapping =
             MemoryMapping::new(mock_caller_account.regions.split_off(0), &config).unwrap();
 
         let data_slice = mock_caller_account.data_slice();
@@ -1366,22 +1537,32 @@ mod tests {
             (b"foobaz".to_vec(), MAX_PERMITTED_DATA_INCREASE),
             (b"foobazbad".to_vec(), MAX_PERMITTED_DATA_INCREASE - 3),
         ] {
-            assert_eq!(caller_account.data, callee_account.get_data());
+            assert_eq!(
+                caller_account.account_data_or_only_realloc_padding,
+                callee_account.get_data()
+            );
             callee_account.set_data_from_slice(&new_value).unwrap();
 
             update_caller_account(
                 &invoke_context,
-                &memory_mapping,
+                &mut memory_mapping,
+                false,
                 &mut caller_account,
-                &callee_account,
+                &mut callee_account,
             )
             .unwrap();
 
             let data_len = callee_account.get_data().len();
             assert_eq!(data_len, *caller_account.ref_to_len_in_vm as usize);
             assert_eq!(data_len, serialized_len());
-            assert_eq!(data_len, caller_account.data.len());
-            assert_eq!(callee_account.get_data(), &caller_account.data[..data_len]);
+            assert_eq!(
+                data_len,
+                caller_account.account_data_or_only_realloc_padding.len()
+            );
+            assert_eq!(
+                callee_account.get_data(),
+                &caller_account.account_data_or_only_realloc_padding[..data_len]
+            );
             assert_eq!(data_slice[data_len..].len(), expected_realloc_size);
             assert!(is_zeroed(&data_slice[data_len..]));
         }
@@ -1391,9 +1572,10 @@ mod tests {
             .unwrap();
         update_caller_account(
             &invoke_context,
-            &memory_mapping,
+            &mut memory_mapping,
+            false,
             &mut caller_account,
-            &callee_account,
+            &mut callee_account,
         )
         .unwrap();
         let data_len = callee_account.get_data().len();
@@ -1406,9 +1588,10 @@ mod tests {
         assert!(matches!(
             update_caller_account(
                 &invoke_context,
-                &memory_mapping,
+                &mut memory_mapping,
+                false,
                 &mut caller_account,
-                &callee_account,
+                &mut callee_account,
             ),
             Err(error) if error.downcast_ref::<InstructionError>().unwrap() == &InstructionError::InvalidRealloc,
         ));
@@ -1450,7 +1633,7 @@ mod tests {
         *caller_account.lamports = 42;
         *caller_account.owner = Pubkey::new_unique();
 
-        update_callee_account(&invoke_context, &caller_account, callee_account).unwrap();
+        update_callee_account(&invoke_context, false, &caller_account, callee_account).unwrap();
 
         let callee_account = borrow_instruction_account!(invoke_context, 0);
         assert_eq!(callee_account.get_lamports(), 42);
@@ -1479,12 +1662,15 @@ mod tests {
         let callee_account = borrow_instruction_account!(invoke_context, 0);
 
         let mut data = b"foo".to_vec();
-        caller_account.data = &mut data;
+        caller_account.account_data_or_only_realloc_padding = &mut data;
 
-        update_callee_account(&invoke_context, &caller_account, callee_account).unwrap();
+        update_callee_account(&invoke_context, false, &caller_account, callee_account).unwrap();
 
         let callee_account = borrow_instruction_account!(invoke_context, 0);
-        assert_eq!(callee_account.get_data(), caller_account.data);
+        assert_eq!(
+            callee_account.get_data(),
+            caller_account.account_data_or_only_realloc_padding
+        );
     }
 
     #[test]
@@ -1538,6 +1724,7 @@ mod tests {
             &[0],
             vm_addr,
             1,
+            false,
             &mut memory_mapping,
             &mut invoke_context,
         )
@@ -1545,12 +1732,14 @@ mod tests {
         assert_eq!(accounts.len(), 2);
         assert!(accounts[0].1.is_none());
         let caller_account = accounts[1].1.as_ref().unwrap();
-        assert_eq!(caller_account.data, account.data());
+        assert_eq!(
+            caller_account.account_data_or_only_realloc_padding,
+            account.data()
+        );
         assert_eq!(caller_account.original_data_len, original_data_len);
     }
 
     pub type TestTransactionAccount = (Pubkey, AccountSharedData, bool);
-
     struct MockCallerAccount {
         lamports: u64,
         owner: Pubkey,
@@ -1571,7 +1760,7 @@ mod tests {
             // the memory region must include the realloc data
             let regions = vec![MemoryRegion::new_writable(d.as_mut_slice(), vm_addr)];
 
-            // caller_account.data must have the actual data length
+            // caller_account.account_data_or_only_realloc_padding must have the actual data length
             d.truncate(mem::size_of::<u64>() + data.len());
 
             MockCallerAccount {
@@ -1600,7 +1789,7 @@ mod tests {
                 lamports: &mut self.lamports,
                 owner: &mut self.owner,
                 original_data_len: data.len(),
-                data,
+                account_data_or_only_realloc_padding: data,
                 vm_data_addr: self.vm_addr + mem::size_of::<u64>() as u64,
                 ref_to_len_in_vm: &mut self.len,
                 serialized_len_ptr: std::ptr::null_mut(),

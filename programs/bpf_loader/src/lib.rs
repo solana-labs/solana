@@ -31,11 +31,12 @@ use {
         clock::Slot,
         entrypoint::SUCCESS,
         feature_set::{
-            cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
-            delay_visibility_of_program_deployment, disable_deploy_of_alloc_free_syscall,
-            enable_bpf_loader_extend_program_ix, enable_bpf_loader_set_authority_checked_ix,
-            enable_program_redeployment_cooldown, limit_max_instruction_trace_length,
-            native_programs_consume_cu, remove_bpf_loader_incorrect_program_id, FeatureSet,
+            bpf_account_data_direct_mapping, cap_accounts_data_allocations_per_transaction,
+            cap_bpf_program_instruction_accounts, delay_visibility_of_program_deployment,
+            disable_deploy_of_alloc_free_syscall, enable_bpf_loader_extend_program_ix,
+            enable_bpf_loader_set_authority_checked_ix, enable_program_redeployment_cooldown,
+            limit_max_instruction_trace_length, native_programs_consume_cu,
+            remove_bpf_loader_incorrect_program_id, FeatureSet,
         },
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
@@ -1525,6 +1526,9 @@ fn execute<'a, 'b: 'a>(
     let use_jit = false;
     #[cfg(all(not(target_os = "windows"), target_arch = "x86_64"))]
     let use_jit = executable.get_executable().get_compiled_program().is_some();
+    let bpf_account_data_direct_mapping = invoke_context
+        .feature_set
+        .is_active(&bpf_account_data_direct_mapping::id());
 
     let mut serialize_time = Measure::start("serialize");
     let (parameter_bytes, regions, account_lengths) = serialization::serialize_parameters(
@@ -1533,6 +1537,7 @@ fn execute<'a, 'b: 'a>(
         invoke_context
             .feature_set
             .is_active(&cap_bpf_program_instruction_accounts::ID),
+        !bpf_account_data_direct_mapping,
     )?;
     serialize_time.stop();
 
@@ -1621,12 +1626,14 @@ fn execute<'a, 'b: 'a>(
     fn deserialize_parameters(
         invoke_context: &mut InvokeContext,
         parameter_bytes: &[u8],
+        copy_account_data: bool,
     ) -> Result<(), InstructionError> {
         serialization::deserialize_parameters(
             invoke_context.transaction_context,
             invoke_context
                 .transaction_context
                 .get_current_instruction_context()?,
+            copy_account_data,
             parameter_bytes,
             &invoke_context.get_syscall_context()?.orig_account_lengths,
         )
@@ -1634,8 +1641,12 @@ fn execute<'a, 'b: 'a>(
 
     let mut deserialize_time = Measure::start("deserialize");
     let execute_or_deserialize_result = execution_result.and_then(|_| {
-        deserialize_parameters(invoke_context, parameter_bytes.as_slice())
-            .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
+        deserialize_parameters(
+            invoke_context,
+            parameter_bytes.as_slice(),
+            !bpf_account_data_direct_mapping,
+        )
+        .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
     });
     deserialize_time.stop();
 

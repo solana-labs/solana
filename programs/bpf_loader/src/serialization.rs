@@ -123,6 +123,7 @@ pub fn serialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     should_cap_ix_accounts: bool,
+    copy_account_data: bool,
 ) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>, Vec<usize>), InstructionError> {
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
     if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
@@ -156,9 +157,19 @@ pub fn serialize_parameters(
     }
 
     if is_loader_deprecated {
-        serialize_parameters_unaligned(transaction_context, instruction_context, accounts)
+        serialize_parameters_unaligned(
+            transaction_context,
+            instruction_context,
+            accounts,
+            copy_account_data,
+        )
     } else {
-        serialize_parameters_aligned(transaction_context, instruction_context, accounts)
+        serialize_parameters_aligned(
+            transaction_context,
+            instruction_context,
+            accounts,
+            copy_account_data,
+        )
     }
     .map(|(buffer, regions)| (buffer, regions, account_lengths))
 }
@@ -166,6 +177,7 @@ pub fn serialize_parameters(
 pub fn deserialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
+    copy_account_data: bool,
     buffer: &[u8],
     account_lengths: &[usize],
 ) -> Result<(), InstructionError> {
@@ -177,6 +189,7 @@ pub fn deserialize_parameters(
         deserialize_parameters_unaligned(
             transaction_context,
             instruction_context,
+            copy_account_data,
             buffer,
             account_lengths,
         )
@@ -184,6 +197,7 @@ pub fn deserialize_parameters(
         deserialize_parameters_aligned(
             transaction_context,
             instruction_context,
+            copy_account_data,
             buffer,
             account_lengths,
         )
@@ -194,6 +208,7 @@ fn serialize_parameters_unaligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     accounts: Vec<SerializeAccount>,
+    copy_account_data: bool,
 ) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>), InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
@@ -207,10 +222,12 @@ fn serialize_parameters_unaligned(
                 + size_of::<Pubkey>() // key
                 + size_of::<u64>()  // lamports
                 + size_of::<u64>()  // data len
-                + account.get_data().len() // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
                 + size_of::<u64>(); // rent_epoch
+                if copy_account_data {
+                    size += account.get_data().len();
+                }
             }
         }
     }
@@ -254,6 +271,7 @@ fn serialize_parameters_unaligned(
 pub fn deserialize_parameters_unaligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
+    copy_account_data: bool,
     buffer: &[u8],
     account_lengths: &[usize],
 ) -> Result<(), InstructionError> {
@@ -280,20 +298,22 @@ pub fn deserialize_parameters_unaligned(
             }
             start += size_of::<u64>() // lamports
                 + size_of::<u64>(); // data length
-            let data = buffer
-                .get(start..start + pre_len)
-                .ok_or(InstructionError::InvalidArgument)?;
-            // The redundant check helps to avoid the expensive data comparison if we can
-            match borrowed_account
-                .can_data_be_resized(data.len())
-                .and_then(|_| borrowed_account.can_data_be_changed())
-            {
-                Ok(()) => borrowed_account.set_data_from_slice(data)?,
-                Err(err) if borrowed_account.get_data() != data => return Err(err),
-                _ => {}
+            if copy_account_data {
+                let data = buffer
+                    .get(start..start + pre_len)
+                    .ok_or(InstructionError::InvalidArgument)?;
+                // The redundant check helps to avoid the expensive data comparison if we can
+                match borrowed_account
+                    .can_data_be_resized(data.len())
+                    .and_then(|_| borrowed_account.can_data_be_changed())
+                {
+                    Ok(()) => borrowed_account.set_data_from_slice(data)?,
+                    Err(err) if borrowed_account.get_data() != data => return Err(err),
+                    _ => {}
+                }
+                start += pre_len; // data
             }
-            start += pre_len // data
-                + size_of::<Pubkey>() // owner
+            start += size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
                 + size_of::<u64>(); // rent_epoch
         }
@@ -305,6 +325,7 @@ fn serialize_parameters_aligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     accounts: Vec<SerializeAccount>,
+    copy_account_data: bool,
 ) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<MemoryRegion>), InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
@@ -322,10 +343,13 @@ fn serialize_parameters_aligned(
                 + size_of::<Pubkey>() // owner
                 + size_of::<u64>()  // lamports
                 + size_of::<u64>()  // data len
-                + data_len
                 + MAX_PERMITTED_DATA_INCREASE
-                + (data_len as *const u8).align_offset(BPF_ALIGN_OF_U128)
                 + size_of::<u64>(); // rent epoch
+                if copy_account_data {
+                    size += data_len + (data_len as *const u8).align_offset(BPF_ALIGN_OF_U128);
+                } else {
+                    size += BPF_ALIGN_OF_U128;
+                }
             }
         }
     }
@@ -374,6 +398,7 @@ fn serialize_parameters_aligned(
 pub fn deserialize_parameters_aligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
+    copy_account_data: bool,
     buffer: &[u8],
     account_lengths: &[usize],
 ) -> Result<(), InstructionError> {
@@ -418,21 +443,45 @@ pub fn deserialize_parameters_aligned(
             {
                 return Err(InstructionError::InvalidRealloc);
             }
-            let data_end = start + post_len;
-            let data = buffer
-                .get(start..data_end)
-                .ok_or(InstructionError::InvalidArgument)?;
             // The redundant check helps to avoid the expensive data comparison if we can
-            match borrowed_account
-                .can_data_be_resized(data.len())
-                .and_then(|_| borrowed_account.can_data_be_changed())
-            {
-                Ok(()) => borrowed_account.set_data_from_slice(data)?,
-                Err(err) if borrowed_account.get_data() != data => return Err(err),
-                _ => {}
+            let alignment_offset = (*pre_len as *const u8).align_offset(BPF_ALIGN_OF_U128);
+            if copy_account_data {
+                let data = buffer
+                    .get(start..start + post_len)
+                    .ok_or(InstructionError::InvalidArgument)?;
+                match borrowed_account
+                    .can_data_be_resized(post_len)
+                    .and_then(|_| borrowed_account.can_data_be_changed())
+                {
+                    Ok(()) => borrowed_account.set_data_from_slice(data)?,
+                    Err(err) if borrowed_account.get_data() != data => return Err(err),
+                    _ => {}
+                }
+                start += *pre_len; // data
+            } else {
+                start += BPF_ALIGN_OF_U128.saturating_sub(alignment_offset);
+                let data = buffer
+                    .get(start..start + MAX_PERMITTED_DATA_INCREASE)
+                    .ok_or(InstructionError::InvalidArgument)?;
+                match borrowed_account
+                    .can_data_be_resized(post_len)
+                    .and_then(|_| borrowed_account.can_data_be_changed())
+                {
+                    Ok(()) => {
+                        borrowed_account.set_data_length(post_len)?;
+                        let allocated_bytes = post_len.saturating_sub(*pre_len);
+                        if allocated_bytes > 0 {
+                            borrowed_account.get_data_mut()?
+                                [*pre_len..pre_len.saturating_add(allocated_bytes)]
+                                .copy_from_slice(&data[0..allocated_bytes]);
+                        }
+                    }
+                    Err(err) if borrowed_account.get_data().len() != post_len => return Err(err),
+                    _ => {}
+                }
             }
-            start += *pre_len + MAX_PERMITTED_DATA_INCREASE; // data
-            start += (start as *const u8).align_offset(BPF_ALIGN_OF_U128);
+            start += MAX_PERMITTED_DATA_INCREASE;
+            start += alignment_offset;
             start += size_of::<u64>(); // rent_epoch
             if borrowed_account.get_owner().to_bytes() != owner {
                 // Change the owner at the end so that we are allowed to change the lamports and data before
@@ -579,6 +628,7 @@ mod tests {
                 &transaction_context,
                 instruction_context,
                 should_cap_ix_accounts,
+                true,
             );
             assert_eq!(
                 serialization_result.as_ref().err(),
@@ -720,6 +770,7 @@ mod tests {
             invoke_context.transaction_context,
             instruction_context,
             true,
+            true,
         )
         .unwrap();
 
@@ -765,6 +816,7 @@ mod tests {
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
+            true,
             serialized.as_slice(),
             &account_lengths,
         )
@@ -796,6 +848,7 @@ mod tests {
             invoke_context.transaction_context,
             instruction_context,
             true,
+            true,
         )
         .unwrap();
 
@@ -824,6 +877,7 @@ mod tests {
         deserialize_parameters(
             invoke_context.transaction_context,
             instruction_context,
+            true,
             serialized.as_slice(),
             &account_lengths,
         )

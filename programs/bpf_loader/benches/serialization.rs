@@ -126,7 +126,8 @@ fn bench_serialize_unaligned(bencher: &mut Bencher) {
         .get_current_instruction_context()
         .unwrap();
     bencher.iter(|| {
-        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, false).unwrap();
     });
 }
 
@@ -138,7 +139,8 @@ fn bench_serialize_aligned(bencher: &mut Bencher) {
         .unwrap();
 
     bencher.iter(|| {
-        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, false).unwrap();
     });
 }
 
@@ -149,7 +151,8 @@ fn bench_serialize_unaligned_max_accounts(bencher: &mut Bencher) {
         .get_current_instruction_context()
         .unwrap();
     bencher.iter(|| {
-        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, false).unwrap();
     });
 }
 
@@ -161,6 +164,7 @@ fn bench_serialize_aligned_max_accounts(bencher: &mut Bencher) {
         .unwrap();
 
     bencher.iter(|| {
-        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+        let _ =
+            serialize_parameters(&transaction_context, instruction_context, true, false).unwrap();
     });
 }

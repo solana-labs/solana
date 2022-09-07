@@ -1110,7 +1110,7 @@ fn test_program_sbf_invoke_sanity() {
             .map(|ix| &message.account_keys[ix.instruction.program_id_index as usize])
             .cloned()
             .collect();
-        assert_eq!(invoked_programs, vec![system_program::id()]);
+        assert_eq!(invoked_programs, vec![]);
         assert_eq!(
             result.unwrap_err(),
             TransactionError::InstructionError(0, InstructionError::ProgramFailedToComplete)
