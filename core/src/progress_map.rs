@@ -255,6 +255,7 @@ impl ReplaySlotStats {
                     .verify_callee_us,
                 i64
             ),
+            ("planning_elapsed", self.planning_elapsed as i64, i64),
         );
 
         let mut per_pubkey_timings: Vec<_> = self

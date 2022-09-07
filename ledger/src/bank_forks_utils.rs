@@ -6,9 +6,11 @@ use {
             TransactionStatusSender,
         },
         leader_schedule_cache::LeaderScheduleCache,
+        replayer::Replayer,
     },
     crossbeam_channel::unbounded,
     log::*,
+    solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         accounts_background_service::DroppedSlotsReceiver,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
@@ -20,7 +22,12 @@ use {
         snapshot_utils,
     },
     solana_sdk::genesis_config::GenesisConfig,
-    std::{fs, path::PathBuf, process, result},
+    std::{
+        fs,
+        path::PathBuf,
+        process, result,
+        sync::{atomic::AtomicBool, Arc},
+    },
 };
 
 pub type LoadResult = result::Result<
@@ -115,6 +122,10 @@ pub fn load_bank_forks(
         false
     };
 
+    let exit = Arc::new(AtomicBool::new(false));
+    let replayer = Replayer::new(get_thread_count(), &exit);
+    let replayer_handle = replayer.handle();
+
     let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
         bank_forks_from_snapshot(
             genesis_config,
@@ -144,6 +155,7 @@ pub fn load_bank_forks(
                 process_options,
                 cache_block_meta_sender,
                 accounts_update_notifier,
+                &replayer_handle,
             ),
             None,
         )

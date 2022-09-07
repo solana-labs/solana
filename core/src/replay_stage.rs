@@ -37,11 +37,13 @@ use {
         blockstore_processor::{self, BlockstoreProcessorError, TransactionStatusSender},
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
+        replayer::{Replayer, ReplayerHandle},
     },
     solana_measure::measure::Measure,
     solana_metrics::inc_new_counter_info,
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     solana_program_runtime::timings::ExecuteTimings,
+    solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
         rpc_subscriptions::RpcSubscriptions,
@@ -437,6 +439,9 @@ impl ReplayStage {
                 };
                 let in_vote_only_mode = bank_forks.read().unwrap().get_vote_only_mode_signal();
 
+                let replayer = Replayer::new(get_thread_count(), &exit);
+                let replayer_handle = replayer.handle();
+
                 loop {
                     // Stop getting entries if we get exit signal
                     if exit.load(Ordering::Relaxed) {
@@ -486,6 +491,7 @@ impl ReplayStage {
                         block_metadata_notifier.clone(),
                         transaction_cost_metrics_sender.as_ref(),
                         &mut replay_timing,
+                        &replayer_handle
                     );
                     replay_active_banks_time.stop();
 
@@ -893,6 +899,7 @@ impl ReplayStage {
                         retransmit_not_propagated_time.as_us(),
                     );
                 }
+                let _ = replayer.join();
             })
             .unwrap();
 
@@ -1659,6 +1666,7 @@ impl ReplayStage {
         replay_vote_sender: &ReplayVoteSender,
         transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         verify_recyclers: &VerifyRecyclers,
+        replayer_handle: &ReplayerHandle,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let tx_count_before = bank_progress.replay_progress.num_txs;
         // All errors must lead to marking the slot as dead, otherwise,
@@ -1676,6 +1684,7 @@ impl ReplayStage {
             None,
             verify_recyclers,
             false,
+            replayer_handle,
         )?;
         let tx_count_after = bank_progress.replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
@@ -2174,6 +2183,7 @@ impl ReplayStage {
         block_metadata_notifier: Option<BlockMetadataNotifierLock>,
         transaction_cost_metrics_sender: Option<&TransactionCostMetricsSender>,
         replay_timing: &mut ReplayTiming,
+        replayer_handle: &ReplayerHandle,
     ) -> bool {
         let mut did_complete_bank = false;
         let mut tx_count = 0;
@@ -2226,6 +2236,7 @@ impl ReplayStage {
                     replay_vote_sender,
                     transaction_cost_metrics_sender,
                     verify_recyclers,
+                    replayer_handle,
                 );
                 replay_blockstore_time.stop();
                 replay_timing.replay_blockstore_us += replay_blockstore_time.as_us();
