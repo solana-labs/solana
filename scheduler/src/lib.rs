@@ -1413,6 +1413,7 @@ impl ScheduleStage {
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work) = Default::default();
         loop {
+            if !from_disconnected || executing_queue_count >= 1 {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    if let Ok(UnlockablePayload(mut processed_execution_environment)) = maybe_from_exec {
@@ -1439,6 +1440,7 @@ impl ScheduleStage {
                        info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
                    }
                }
+            }
             }
 
            no_more_work = from_disconnected && runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
