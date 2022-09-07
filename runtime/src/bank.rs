@@ -2285,6 +2285,19 @@ impl Bank {
         bank
     }
 
+    /// if we were to serialize THIS bank, what value should be saved for the prior accounts hash?
+    /// This depends on the proximity to the time to take the snapshot and the time to use the snapshot.
+    pub(crate) fn get_epoch_accounts_hash_to_serialize(&self) -> Option<Hash> {
+        self.rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|hash| *hash.as_ref())
+    }
+
     /// Return subset of bank fields representing serializable state
     pub(crate) fn get_fields_to_serialize<'a>(
         &'a self,

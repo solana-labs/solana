@@ -11,6 +11,7 @@ use {
         bank::{Bank, BankFieldsToDeserialize, BankIncrementalSnapshotPersistence, BankRc},
         blockhash_queue::BlockhashQueue,
         builtins::Builtins,
+        epoch_accounts_hash::EpochAccountsHash,
         epoch_stakes::EpochStakes,
         rent_collector::RentCollector,
         runtime_config::RuntimeConfig,
@@ -193,6 +194,7 @@ trait TypeContext<'a>: PartialEq {
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
         incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+        epoch_accounts_hash: Option<&Hash>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,
@@ -390,6 +392,7 @@ fn reserialize_bank_fields_with_new_hash<W, R>(
     stream_writer: &mut BufWriter<W>,
     accounts_hash: &Hash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+    epoch_accounts_hash: Option<&Hash>,
 ) -> Result<(), Error>
 where
     W: Write,
@@ -400,6 +403,7 @@ where
         stream_writer,
         accounts_hash,
         incremental_snapshot_persistence,
+        epoch_accounts_hash,
     )
 }
 
@@ -413,6 +417,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
     slot: Slot,
     accounts_hash: &Hash,
     incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+    epoch_accounts_hash: Option<&Hash>,
 ) -> bool {
     let bank_post = snapshot_utils::get_bank_snapshots_dir(bank_snapshots_dir, slot);
     let bank_post = bank_post.join(snapshot_utils::get_snapshot_file_name(slot));
@@ -431,6 +436,7 @@ pub fn reserialize_bank_with_new_accounts_hash(
                 &mut BufWriter::new(file_out),
                 accounts_hash,
                 incremental_snapshot_persistence,
+                epoch_accounts_hash,
             )
             .unwrap();
         }
@@ -541,6 +547,7 @@ where
         verify_index,
         accounts_db_config,
         accounts_update_notifier,
+        bank_fields.epoch_accounts_hash,
     )?;
 
     let bank_rc = BankRc::new(Accounts::new_empty(accounts_db), bank_fields.slot);
@@ -661,6 +668,7 @@ fn reconstruct_accountsdb_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    epoch_accounts_hash: Option<Hash>,
 ) -> Result<(AccountsDb, ReconstructedAccountsDbInfo), Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -674,6 +682,8 @@ where
         accounts_db_config,
         accounts_update_notifier,
     );
+    *accounts_db.epoch_accounts_hash.lock().unwrap() =
+        epoch_accounts_hash.map(EpochAccountsHash::new);
 
     let AccountsDbFields(
         _snapshot_storages,

@@ -1190,7 +1190,11 @@ pub struct AccountsDb {
     /// debug feature to scan every append vec and verify refcounts are equal
     exhaustively_verify_refcounts: bool,
 
-    /// A special accounts hash that occurs once per epoch
+    /// the full accounts hash calculation as of a predetermined block height 'N'
+    /// to be included in the bank hash at a predetermined block height 'M'
+    /// The cadence is once per epoch, all nodes calculate a full accounts hash as of a known slot calculated using 'N'
+    /// Some time later (to allow for slow calculation time), the bank hash at a slot calculated using 'M' includes the full accounts hash.
+    /// Thus, the state of all accounts on a validator is known to be correct at least once per epoch.
     pub(crate) epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
 }
 

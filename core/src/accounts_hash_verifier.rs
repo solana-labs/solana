@@ -214,6 +214,7 @@ impl AccountsHashVerifier {
             accounts_package.slot,
             &accounts_hash,
             None,
+            None,
         );
         datapoint_info!(
             "accounts_hash_verifier",

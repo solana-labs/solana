@@ -23,6 +23,14 @@ impl AsRef<Hash> for EpochAccountsHash {
     }
 }
 
+impl EpochAccountsHash {
+    /// Make an EpochAccountsHash from a regular accounts hash
+    #[must_use]
+    pub fn new(accounts_hash: Hash) -> Self {
+        Self(accounts_hash)
+    }
+}
+
 /// Calculation of the EAH occurs once per epoch.  All nodes in the cluster must agree on which
 /// slot the EAH is based on.  This slot will be at an offset into the epoch, and referred to as
 /// the "start" slot for the EAH calculation.
