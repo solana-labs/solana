@@ -1449,14 +1449,14 @@ impl ScheduleStage {
 
             loop {
                 let executing_like_count = executing_queue_count + provisioning_tracker_count;
-                while executing_like_count < max_executing_queue_count {
+                while executing_like_count < max_executing_queue_count && empty_from_exec {
                     trace!("schedule_once id_{:016x} (prev: {}, exec: ({}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     if start.elapsed() > std::time::Duration::from_millis(150) {
                         start = std::time::Instant::now();
                         info!("schedule_once:interval id_{:016x} (prev: {}, exec: ({}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     }
                     let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
-                    if let Some(ee) = Self::schedule_next_execution(
+                    let maybe_ee = Self::schedule_next_execution(
                         ast,
                         &task_sender,
                         runnable_queue,
@@ -1467,26 +1467,29 @@ impl ScheduleStage {
                         &mut queue_clock,
                         &mut execute_clock,
                         &mut provisioning_tracker_count,
-                    ) {
+                    );
+                    if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
+                    }
+
+                    if first_iteration {
+                        first_iteration = false;
+                        (from_len, from_exec_len) = (from_prev.len(), from_exec.len());
                     } else {
+                        if empty_from {
+                            from_len = from_prev.len();
+                        }
+                        if empty_from_exec {
+                            from_exec_len = from_exec.len();
+                        }
+                    }
+                    (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
+
+                    if maybe_ee.is_none() {
                         break;
                     }
                 }
-                //break;
-                if first_iteration {
-                    first_iteration = false;
-                    (from_len, from_exec_len) = (from_prev.len(), from_exec.len());
-                } else {
-                    if empty_from {
-                        from_len = from_prev.len();
-                    }
-                    if empty_from_exec {
-                        from_exec_len = from_exec.len();
-                    }
-                }
-                (empty_from, empty_from_exec) = (from_len == 0, from_exec_len == 0);
 
                 if empty_from && empty_from_exec {
                     break;
