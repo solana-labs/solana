@@ -378,7 +378,7 @@ impl UiTransactionStatusMeta {
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
-            loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
+            loaded_addresses: None,
             return_data: meta.return_data,
             compute_units_consumed: meta.compute_units_consumed,
         }
