@@ -17,7 +17,6 @@ use {
         transaction::{Result, Transaction, TransactionError, VersionedTransaction},
     },
     solana_program::message::SanitizedVersionedMessage,
-    std::sync::Arc,
 };
 
 /// Maximum number of accounts that a transaction may lock.
@@ -287,7 +286,7 @@ impl SanitizedTransaction {
     }
 
     /// Verify the precompiled programs in this transaction
-    pub fn verify_precompiles(&self, feature_set: &Arc<feature_set::FeatureSet>) -> Result<()> {
+    pub fn verify_precompiles(&self, feature_set: &feature_set::FeatureSet) -> Result<()> {
         for (program_id, instruction) in self.message.program_instructions_iter() {
             verify_if_precompile(
                 program_id,
