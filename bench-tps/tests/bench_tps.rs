@@ -23,7 +23,7 @@ use {
     solana_test_validator::TestValidator,
     solana_thin_client::thin_client::ThinClient,
     solana_tpu_client::{
-        connection_cache::{ConnectionCache, DEFAULT_TPU_ENABLE_UDP},
+        connection_cache::ConnectionCache,
         tpu_client::{TpuClient, TpuClientConfig},
     },
     std::{sync::Arc, time::Duration},
@@ -92,12 +92,8 @@ fn test_bench_tps_test_validator(config: Config) {
 
     let faucet_addr = run_local_faucet(mint_keypair, None);
 
-    let test_validator = TestValidator::with_no_fees(
-        mint_pubkey,
-        Some(faucet_addr),
-        SocketAddrSpace::Unspecified,
-        DEFAULT_TPU_ENABLE_UDP,
-    );
+    let test_validator =
+        TestValidator::with_no_fees(mint_pubkey, Some(faucet_addr), SocketAddrSpace::Unspecified);
 
     let rpc_client = Arc::new(RpcClient::new_with_commitment(
         test_validator.rpc_url(),

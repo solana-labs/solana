@@ -546,7 +546,6 @@ impl TestValidator {
         mint_address: Pubkey,
         faucet_addr: Option<SocketAddr>,
         socket_addr_space: SocketAddrSpace,
-        tpu_enable_udp: bool,
     ) -> Self {
         TestValidatorGenesis::default()
             .fee_rate_governor(FeeRateGovernor::new(0, 0))
@@ -556,7 +555,25 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space, tpu_enable_udp)
+            .start_with_mint_address(mint_address, socket_addr_space, DEFAULT_TPU_ENABLE_UDP)
+            .expect("validator start failed")
+    }
+
+    /// Create a test validator using udp for TPU.
+    pub fn with_no_fees_udp(
+        mint_address: Pubkey,
+        faucet_addr: Option<SocketAddr>,
+        socket_addr_space: SocketAddrSpace,
+    ) -> Self {
+        TestValidatorGenesis::default()
+            .fee_rate_governor(FeeRateGovernor::new(0, 0))
+            .rent(Rent {
+                lamports_per_byte_year: 1,
+                exemption_threshold: 1.0,
+                ..Rent::default()
+            })
+            .faucet_addr(faucet_addr)
+            .start_with_mint_address(mint_address, socket_addr_space, true)
             .expect("validator start failed")
     }
 
@@ -569,7 +586,6 @@ impl TestValidator {
         target_lamports_per_signature: u64,
         faucet_addr: Option<SocketAddr>,
         socket_addr_space: SocketAddrSpace,
-        tpu_enable_udp: bool,
     ) -> Self {
         TestValidatorGenesis::default()
             .fee_rate_governor(FeeRateGovernor::new(target_lamports_per_signature, 0))
@@ -579,7 +595,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space, tpu_enable_udp)
+            .start_with_mint_address(mint_address, socket_addr_space, DEFAULT_TPU_ENABLE_UDP)
             .expect("validator start failed")
     }
 
