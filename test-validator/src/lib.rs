@@ -47,6 +47,12 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
+<<<<<<< HEAD
+=======
+    solana_tpu_client::connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+    },
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
     std::{
         collections::{HashMap, HashSet},
         ffi::OsStr,
@@ -123,6 +129,11 @@ pub struct TestValidatorGenesis {
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
+<<<<<<< HEAD
+=======
+    pub transaction_account_lock_limit: Option<usize>,
+    pub tpu_enable_udp: bool,
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
 }
 
 impl Default for TestValidatorGenesis {
@@ -152,6 +163,11 @@ impl Default for TestValidatorGenesis {
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
+<<<<<<< HEAD
+=======
+            transaction_account_lock_limit: Option::<usize>::default(),
+            tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
         }
     }
 }
@@ -177,6 +193,11 @@ impl TestValidatorGenesis {
     /// Check if a given TestValidator ledger has already been initialized
     pub fn ledger_exists(ledger_path: &Path) -> bool {
         ledger_path.join("vote-account-keypair.json").exists()
+    }
+
+    pub fn tpu_enable_udp(&mut self, tpu_enable_udp: bool) -> &mut Self {
+        self.tpu_enable_udp = tpu_enable_udp;
+        self
     }
 
     pub fn fee_rate_governor(&mut self, fee_rate_governor: FeeRateGovernor) -> &mut Self {
@@ -551,6 +572,25 @@ impl TestValidator {
             .expect("validator start failed")
     }
 
+    /// Create a test validator using udp for TPU.
+    pub fn with_no_fees_udp(
+        mint_address: Pubkey,
+        faucet_addr: Option<SocketAddr>,
+        socket_addr_space: SocketAddrSpace,
+    ) -> Self {
+        TestValidatorGenesis::default()
+            .tpu_enable_udp(true)
+            .fee_rate_governor(FeeRateGovernor::new(0, 0))
+            .rent(Rent {
+                lamports_per_byte_year: 1,
+                exemption_threshold: 1.0,
+                ..Rent::default()
+            })
+            .faucet_addr(faucet_addr)
+            .start_with_mint_address(mint_address, socket_addr_space)
+            .expect("validator start failed")
+    }
+
     /// Create and start a `TestValidator` with custom transaction fees and minimal rent.
     /// Faucet optional.
     ///
@@ -815,7 +855,12 @@ impl TestValidator {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
+<<<<<<< HEAD
         ));
+=======
+            config.tpu_enable_udp,
+        )?);
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...

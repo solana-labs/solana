@@ -390,7 +390,12 @@ impl Validator {
         socket_addr_space: SocketAddrSpace,
         use_quic: bool,
         tpu_connection_pool_size: usize,
+<<<<<<< HEAD
     ) -> Self {
+=======
+        tpu_enable_udp: bool,
+    ) -> Result<Self, String> {
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
         let id = identity_keypair.pubkey();
         assert_eq!(id, node.info.id);
 
@@ -1044,6 +1049,11 @@ impl Validator {
             &identity_keypair,
             config.runtime_config.log_messages_bytes_limit,
             &staked_nodes,
+<<<<<<< HEAD
+=======
+            config.staked_nodes_overrides.clone(),
+            tpu_enable_udp,
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
         );
 
         datapoint_info!(
@@ -2097,6 +2107,12 @@ mod tests {
         solana_client::connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
         solana_ledger::{create_new_tmp_ledger, genesis_utils::create_genesis_config_with_leader},
         solana_sdk::{genesis_config::create_genesis_config, poh_config::PohConfig},
+<<<<<<< HEAD
+=======
+        solana_tpu_client::connection_cache::{
+            DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+        },
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
         std::{fs::remove_dir_all, thread, time::Duration},
     };
 
@@ -2132,7 +2148,13 @@ mod tests {
             SocketAddrSpace::Unspecified,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
+<<<<<<< HEAD
         );
+=======
+            DEFAULT_TPU_ENABLE_UDP,
+        )
+        .expect("assume successful validator start");
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
         assert_eq!(
             *start_progress.read().unwrap(),
             ValidatorStartProgress::Running
@@ -2215,6 +2237,7 @@ mod tests {
                     SocketAddrSpace::Unspecified,
                     DEFAULT_TPU_USE_QUIC,
                     DEFAULT_TPU_CONNECTION_POOL_SIZE,
+                    DEFAULT_TPU_ENABLE_UDP,
                 )
             })
             .collect();

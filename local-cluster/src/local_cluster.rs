@@ -47,6 +47,14 @@ use {
     },
     solana_stake_program::{config::create_account as create_stake_config_account, stake_state},
     solana_streamer::socket::SocketAddrSpace,
+<<<<<<< HEAD
+=======
+    solana_thin_client::thin_client::ThinClient,
+    solana_tpu_client::connection_cache::{
+        ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
+        DEFAULT_TPU_USE_QUIC,
+    },
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
     solana_vote_program::{
         vote_instruction,
         vote_state::{VoteInit, VoteState},
@@ -282,7 +290,13 @@ impl LocalCluster {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
+<<<<<<< HEAD
         );
+=======
+            DEFAULT_TPU_ENABLE_UDP,
+        )
+        .expect("assume successful validator start");
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
 
         let mut validators = HashMap::new();
         let leader_info = ValidatorInfo {
@@ -480,7 +494,13 @@ impl LocalCluster {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
+<<<<<<< HEAD
         );
+=======
+            DEFAULT_TPU_ENABLE_UDP,
+        )
+        .expect("assume successful validator start");
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
 
         let validator_pubkey = validator_keypair.pubkey();
         let validator_info = ClusterValidatorInfo::new(
@@ -841,7 +861,13 @@ impl Cluster for LocalCluster {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
+<<<<<<< HEAD
         );
+=======
+            DEFAULT_TPU_ENABLE_UDP,
+        )
+        .expect("assume successful validator start");
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
         cluster_validator_info.validator = Some(restarted_node);
         cluster_validator_info
     }

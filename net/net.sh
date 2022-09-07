@@ -107,6 +107,16 @@ Operate a configured testnet
                                       - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
    --full-rpc
                                       - Support full RPC services on all nodes
+<<<<<<< HEAD
+=======
+
+   --tpu-disable-quic
+                                      - Disable quic for tpu packet forwarding
+
+   --tpu-enable-udp
+                                      - Enable UDP for tpu transactions
+
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -320,6 +330,11 @@ startBootstrapLeader() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+<<<<<<< HEAD
+=======
+         \"$disableQuic\" \
+         \"$enableUdp\" \
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -392,6 +407,11 @@ startNode() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+<<<<<<< HEAD
+=======
+         \"$disableQuic\" \
+         \"$enableUdp\" \
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -800,6 +820,11 @@ maybeWarpSlot=
 maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
+<<<<<<< HEAD
+=======
+disableQuic=false
+enableUdp=false
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
 
 command=$1
 [[ -n $command ]] || usage
@@ -912,6 +937,15 @@ while [[ -n $1 ]]; do
     elif [[ $1 == --full-rpc ]]; then
       maybeFullRpc=true
       shift 1
+<<<<<<< HEAD
+=======
+    elif [[ $1 == --tpu-disable-quic ]]; then
+      disableQuic=true
+      shift 1
+    elif [[ $1 == --tpu-enable-udp ]]; then
+      enableUdp=true
+      shift 1
+>>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
       shift 1
