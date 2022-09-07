@@ -9,7 +9,7 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
-        transaction_context::{InstructionContext, TransactionContext},
+        transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
     std::{io::prelude::*, mem::size_of},
 };
@@ -22,9 +22,9 @@ pub fn serialize_parameters(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
     should_cap_ix_accounts: bool,
-) -> Result<(AlignedMemory, Vec<usize>), InstructionError> {
+) -> Result<(AlignedMemory<HOST_ALIGN>, Vec<usize>), InstructionError> {
     let num_ix_accounts = instruction_context.get_number_of_instruction_accounts();
-    if should_cap_ix_accounts && num_ix_accounts > usize::from(MAX_INSTRUCTION_ACCOUNTS) {
+    if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
     }
 
@@ -80,7 +80,7 @@ pub fn deserialize_parameters(
 pub fn serialize_parameters_unaligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-) -> Result<AlignedMemory, InstructionError> {
+) -> Result<AlignedMemory<HOST_ALIGN>, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
@@ -106,7 +106,7 @@ pub fn serialize_parameters_unaligned(
     size += size_of::<u64>() // instruction data len
          + instruction_context.get_instruction_data().len() // instruction data
          + size_of::<Pubkey>(); // program id
-    let mut v = AlignedMemory::new(size, HOST_ALIGN);
+    let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
     v.write_u64::<LittleEndian>(instruction_context.get_number_of_instruction_accounts() as u64)
         .map_err(|_| InstructionError::InvalidArgument)?;
@@ -208,7 +208,7 @@ pub fn deserialize_parameters_unaligned(
 pub fn serialize_parameters_aligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
-) -> Result<AlignedMemory, InstructionError> {
+) -> Result<AlignedMemory<HOST_ALIGN>, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
     for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
@@ -239,7 +239,7 @@ pub fn serialize_parameters_aligned(
     size += size_of::<u64>() // data len
     + instruction_context.get_instruction_data().len()
     + size_of::<Pubkey>(); // program id;
-    let mut v = AlignedMemory::new(size, HOST_ALIGN);
+    let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
     // Serialize into the buffer
     v.write_u64::<LittleEndian>(instruction_context.get_number_of_instruction_accounts() as u64)
@@ -275,7 +275,7 @@ pub fn serialize_parameters_aligned(
                 .map_err(|_| InstructionError::InvalidArgument)?;
             v.write_all(borrowed_account.get_data())
                 .map_err(|_| InstructionError::InvalidArgument)?;
-            v.resize(
+            v.fill_write(
                 MAX_PERMITTED_DATA_INCREASE
                     + (v.write_index() as *const u8).align_offset(BPF_ALIGN_OF_U128),
                 0,
@@ -497,21 +497,22 @@ mod tests {
                 &program_indices,
             )
             .instruction_accounts;
-
-            let transaction_context =
-                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             let instruction_data = vec![];
-            let instruction_context = InstructionContext::new(
-                0,
-                0,
-                &program_indices,
-                &instruction_accounts,
-                &instruction_data,
-            );
+
+            let mut transaction_context =
+                TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
+            transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&program_indices, &instruction_accounts, &instruction_data);
+            transaction_context.push().unwrap();
+            let instruction_context = transaction_context
+                .get_instruction_context_at_index_in_trace(0)
+                .unwrap();
 
             let serialization_result = serialize_parameters(
                 &transaction_context,
-                &instruction_context,
+                instruction_context,
                 should_cap_ix_accounts,
             );
             assert_eq!(
@@ -648,12 +649,15 @@ mod tests {
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
-            .push(
-                &preparation.instruction_accounts,
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(
                 &program_indices,
+                &preparation.instruction_accounts,
                 &instruction_data,
-            )
-            .unwrap();
+            );
+        invoke_context.push().unwrap();
         let instruction_context = invoke_context
             .transaction_context
             .get_current_instruction_context()
@@ -718,7 +722,7 @@ mod tests {
         {
             let account = invoke_context
                 .transaction_context
-                .get_account_at_index(index_in_transaction)
+                .get_account_at_index(index_in_transaction as IndexOfAccount)
                 .unwrap()
                 .borrow();
             assert_eq!(&*account, original_account);
@@ -777,7 +781,7 @@ mod tests {
         {
             let account = invoke_context
                 .transaction_context
-                .get_account_at_index(index_in_transaction)
+                .get_account_at_index(index_in_transaction as IndexOfAccount)
                 .unwrap()
                 .borrow();
             assert_eq!(&*account, original_account);

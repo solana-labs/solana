@@ -97,6 +97,26 @@ where
     }
 }
 
+/// Allows Keypair cloning
+///
+/// Note that the `Clone` trait is intentionally unimplemented because making a
+/// second copy of sensitive secret keys in memory is usually a bad idea.
+///
+/// Only use this in tests or when strictly required.
+pub trait KeypairInsecureClone {
+    fn clone(&self) -> Self;
+}
+
+impl KeypairInsecureClone for Keypair {
+    fn clone(&self) -> Self {
+        Self(ed25519_dalek::Keypair {
+            // This will never error since self is a valid keypair
+            secret: ed25519_dalek::SecretKey::from_bytes(self.0.secret.as_bytes()).unwrap(),
+            public: self.0.public,
+        })
+    }
+}
+
 /// Reads a JSON-encoded `Keypair` from a `Reader` implementor
 pub fn read_keypair<R: Read>(reader: &mut R) -> Result<Keypair, Box<dyn error::Error>> {
     let bytes: Vec<u8> = serde_json::from_reader(reader)?;

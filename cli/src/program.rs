@@ -17,14 +17,6 @@ use {
         CliUpgradeableBuffer, CliUpgradeableBuffers, CliUpgradeableProgram,
         CliUpgradeableProgramClosed, CliUpgradeablePrograms,
     },
-    solana_client::{
-        client_error::ClientErrorKind,
-        connection_cache::ConnectionCache,
-        rpc_client::RpcClient,
-        rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
-        rpc_filter::{Memcmp, RpcFilterType},
-        tpu_client::{TpuClient, TpuClientConfig},
-    },
     solana_program_runtime::invoke_context::InvokeContext,
     solana_rbpf::{
         elf::Executable,
@@ -32,6 +24,12 @@ use {
         vm::{Config, VerifiedExecutable},
     },
     solana_remote_wallet::remote_wallet::RemoteWalletManager,
+    solana_rpc_client::rpc_client::RpcClient,
+    solana_rpc_client_api::{
+        client_error::ErrorKind as ClientErrorKind,
+        config::{RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcSendTransactionConfig},
+        filter::{Memcmp, RpcFilterType},
+    },
     solana_sdk::{
         account::Account,
         account_utils::StateMut,
@@ -50,6 +48,10 @@ use {
         transaction::{Transaction, TransactionError},
         transaction_context::TransactionContext,
     },
+    solana_tpu_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     std::{
         fs::File,
         io::{Read, Write},
@@ -59,6 +61,11 @@ use {
         sync::Arc,
     },
 };
+
+pub const CLOSE_PROGRAM_WARNING: &str = "WARNING! \
+Closed programs cannot be recreated at the same program id. \
+Once a program is closed, it can never be invoked again. \
+To proceed with closing, rerun the `close` command with the `--bypass-warning` flag";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProgramCliCommand {
@@ -109,6 +116,7 @@ pub enum ProgramCliCommand {
         recipient_pubkey: Pubkey,
         authority_index: SignerIndex,
         use_lamports_unit: bool,
+        bypass_warning: bool,
     },
 }
 
@@ -131,7 +139,7 @@ impl ProgramSubCommands for App<'_, '_> {
                 )
                 .subcommand(
                     SubCommand::with_name("deploy")
-                        .about("Deploy a program")
+                        .about("Deploy an upgradeable program")
                         .arg(
                             Arg::with_name("program_location")
                                 .index(1)
@@ -386,12 +394,18 @@ impl ProgramSubCommands for App<'_, '_> {
                                 .long("lamports")
                                 .takes_value(false)
                                 .help("Display balance in lamports instead of SOL"),
+                        )
+                        .arg(
+                            Arg::with_name("bypass_warning")
+                                .long("bypass-warning")
+                                .takes_value(false)
+                                .help("Bypass the permanent program closure warning"),
                         ),
                 )
         )
         .subcommand(
             SubCommand::with_name("deploy")
-                .about("Deploy a program")
+                .about("Deploy a non-upgradeable program. Use `solana program deploy` instead to deploy upgradeable programs")
                 .setting(AppSettings::Hidden)
                 .arg(
                     Arg::with_name("program_location")
@@ -674,6 +688,7 @@ pub fn parse_program_subcommand(
                     recipient_pubkey,
                     authority_index: signer_info.index_of(authority_pubkey).unwrap(),
                     use_lamports_unit: matches.is_present("lamports"),
+                    bypass_warning: matches.is_present("bypass_warning"),
                 }),
                 signers: signer_info.signers,
             }
@@ -781,6 +796,7 @@ pub fn process_program_subcommand(
             recipient_pubkey,
             authority_index,
             use_lamports_unit,
+            bypass_warning,
         } => process_close(
             &rpc_client,
             config,
@@ -788,6 +804,7 @@ pub fn process_program_subcommand(
             *recipient_pubkey,
             *authority_index,
             *use_lamports_unit,
+            *bypass_warning,
         ),
     }
 }
@@ -1553,6 +1570,7 @@ fn process_close(
     recipient_pubkey: Pubkey,
     authority_index: SignerIndex,
     use_lamports_unit: bool,
+    bypass_warning: bool,
 ) -> ProcessResult {
     let authority_signer = config.signers[authority_index];
 
@@ -1615,6 +1633,9 @@ fn process_close(
                                 )
                                 .into())
                             } else {
+                                if !bypass_warning {
+                                    return Err(String::from(CLOSE_PROGRAM_WARNING).into());
+                                }
                                 close(
                                     rpc_client,
                                     config,
@@ -2205,7 +2226,11 @@ fn send_deploy_messages(
     if let Some(write_messages) = write_messages {
         if let Some(write_signer) = write_signer {
             trace!("Writing program data");
-            let connection_cache = Arc::new(ConnectionCache::default());
+            let connection_cache = if config.use_quic {
+                Arc::new(ConnectionCache::new(1))
+            } else {
+                Arc::new(ConnectionCache::with_udp(1))
+            };
             let tpu_client = TpuClient::new_with_connection_cache(
                 rpc_client.clone(),
                 &config.websocket_url,
@@ -3010,6 +3035,30 @@ mod tests {
                     recipient_pubkey: default_keypair.pubkey(),
                     authority_index: 0,
                     use_lamports_unit: false,
+                    bypass_warning: false,
+                }),
+                signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
+            }
+        );
+
+        // with bypass-warning
+        write_keypair_file(&authority_keypair, &authority_keypair_file).unwrap();
+        let test_command = test_commands.clone().get_matches_from(vec![
+            "test",
+            "program",
+            "close",
+            &buffer_pubkey.to_string(),
+            "--bypass-warning",
+        ]);
+        assert_eq!(
+            parse_command(&test_command, &default_signer, &mut None).unwrap(),
+            CliCommandInfo {
+                command: CliCommand::Program(ProgramCliCommand::Close {
+                    account_pubkey: Some(buffer_pubkey),
+                    recipient_pubkey: default_keypair.pubkey(),
+                    authority_index: 0,
+                    use_lamports_unit: false,
+                    bypass_warning: true,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into()],
             }
@@ -3033,6 +3082,7 @@ mod tests {
                     recipient_pubkey: default_keypair.pubkey(),
                     authority_index: 1,
                     use_lamports_unit: false,
+                    bypass_warning: false,
                 }),
                 signers: vec![
                     read_keypair_file(&keypair_file).unwrap().into(),
@@ -3058,6 +3108,7 @@ mod tests {
                     recipient_pubkey,
                     authority_index: 0,
                     use_lamports_unit: false,
+                    bypass_warning: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into(),],
             }
@@ -3079,6 +3130,7 @@ mod tests {
                     recipient_pubkey: default_keypair.pubkey(),
                     authority_index: 0,
                     use_lamports_unit: true,
+                    bypass_warning: false,
                 }),
                 signers: vec![read_keypair_file(&keypair_file).unwrap().into(),],
             }

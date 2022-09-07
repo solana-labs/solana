@@ -684,7 +684,7 @@ pub mod tests {
             );
             assert_eq!(
                 result,
-                (!leave_alone).then(|| ExpectedRentCollection {
+                (!leave_alone).then_some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch,
                     partition_index_from_max_slot: partition_index_max_inclusive,
@@ -712,7 +712,7 @@ pub mod tests {
             );
             assert_eq!(
                 result,
-                (!greater).then(|| ExpectedRentCollection {
+                (!greater).then_some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch,
                     partition_index_from_max_slot: partition_index_max_inclusive,
@@ -909,7 +909,7 @@ pub mod tests {
             );
             assert_eq!(
                 result,
-                (account_rent_epoch != 0).then(|| ExpectedRentCollection {
+                (account_rent_epoch != 0).then_some(ExpectedRentCollection {
                     partition_from_pubkey,
                     epoch_of_max_storage_slot: rent_collector.epoch + 1,
                     partition_index_from_max_slot: partition_index_max_inclusive,
@@ -1084,7 +1084,7 @@ pub mod tests {
                     };
                     assert_eq!(
                         result,
-                        some_expected.then(|| ExpectedRentCollection {
+                        some_expected.then_some(ExpectedRentCollection {
                             partition_from_pubkey,
                             epoch_of_max_storage_slot: rent_collector.epoch,
                             partition_index_from_max_slot,

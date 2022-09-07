@@ -1,15 +1,13 @@
 import {Buffer} from 'buffer';
 import {expect} from 'chai';
-import nacl from 'tweetnacl';
 
+import {Keypair} from '../src/keypair';
 import {PublicKey} from '../src/publickey';
 import {ValidatorInfo} from '../src/validator-info';
 
 describe('ValidatorInfo', () => {
   it('from config account data', () => {
-    const keypair = nacl.sign.keyPair.fromSeed(
-      Uint8Array.from(Array(32).fill(8)),
-    );
+    const keypair = Keypair.fromSeed(Uint8Array.from(Array(32).fill(8)));
 
     const expectedValidatorInfo = new ValidatorInfo(
       new PublicKey(keypair.publicKey),

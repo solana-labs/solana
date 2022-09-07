@@ -24,7 +24,6 @@ import type {Struct} from 'superstruct';
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 import RpcClient from 'jayson/lib/client/browser';
 
-import {URL} from './util/url-impl';
 import {AgentManager} from './agent-manager';
 import {EpochSchedule} from './epoch-schedule';
 import {SendTransactionError, SolanaJSONRPCError} from './errors';
@@ -33,16 +32,22 @@ import {NonceAccount} from './nonce-account';
 import {PublicKey} from './publickey';
 import {Signer} from './keypair';
 import {MS_PER_SLOT} from './timing';
-import {Transaction, TransactionStatus} from './transaction';
-import {Message} from './message';
-import assert from './util/assert';
-import {sleep} from './util/sleep';
-import {toBuffer} from './util/to-buffer';
+import {
+  Transaction,
+  TransactionStatus,
+  TransactionVersion,
+  VersionedTransaction,
+} from './transaction';
+import {Message, MessageHeader, MessageV0, VersionedMessage} from './message';
+import {AddressLookupTableAccount} from './programs/address-lookup-table/state';
+import assert from './utils/assert';
+import {sleep} from './utils/sleep';
+import {toBuffer} from './utils/to-buffer';
 import {
   TransactionExpiredBlockheightExceededError,
   TransactionExpiredTimeoutError,
-} from './util/tx-expiry-custom-errors';
-import {makeWebsocketUrl} from './util/makeWebsocketUrl';
+} from './transaction/expiry-custom-errors';
+import {makeWebsocketUrl} from './utils/makeWebsocketUrl';
 import type {Blockhash} from './blockhash';
 import type {FeeCalculator} from './fee-calculator';
 import type {TransactionSignature} from './transaction';
@@ -304,6 +309,14 @@ export type BlockheightBasedTransactionConfirmationStrategy = {
   signature: TransactionSignature;
 } & BlockhashWithExpiryBlockHeight;
 
+/* @internal */
+function assertEndpointUrl(putativeUrl: string) {
+  if (/^https?:/.test(putativeUrl) === false) {
+    throw new TypeError('Endpoint URL must start with `http:` or `https:`.');
+  }
+  return putativeUrl;
+}
+
 /** @internal */
 function extractCommitmentFromConfig<TConfig>(
   commitmentOrConfig?: Commitment | ({commitment?: Commitment} & TConfig),
@@ -388,6 +401,32 @@ function notificationResultAndContext<T, U>(value: Struct<T, U>) {
 }
 
 /**
+ * @internal
+ */
+function versionedMessageFromResponse(
+  version: TransactionVersion | undefined,
+  response: MessageResponse,
+): VersionedMessage {
+  if (version === 0) {
+    return new MessageV0({
+      header: response.header,
+      staticAccountKeys: response.accountKeys.map(
+        accountKey => new PublicKey(accountKey),
+      ),
+      recentBlockhash: response.recentBlockhash,
+      compiledInstructions: response.instructions.map(ix => ({
+        programIdIndex: ix.programIdIndex,
+        accountKeyIndexes: ix.accounts,
+        data: bs58.decode(ix.data),
+      })),
+      addressTableLookups: response.addressTableLookups!,
+    });
+  } else {
+    return new Message(response);
+  }
+}
+
+/**
  * The level of commitment desired when querying state
  * <pre>
  *   'processed': Query the most recent block which has reached 1 confirmation by the connected node
@@ -447,6 +486,14 @@ export type GetBalanceConfig = {
  * Configuration object for changing `getBlock` query behavior
  */
 export type GetBlockConfig = {
+  /** The level of finality desired */
+  commitment?: Finality;
+};
+
+/**
+ * Configuration object for changing `getBlock` query behavior
+ */
+export type GetVersionedBlockConfig = {
   /** The level of finality desired */
   commitment?: Finality;
   /** The max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned */
@@ -527,6 +574,14 @@ export type GetSlotLeaderConfig = {
  * Configuration object for changing `getTransaction` query behavior
  */
 export type GetTransactionConfig = {
+  /** The level of finality desired */
+  commitment?: Finality;
+};
+
+/**
+ * Configuration object for changing `getTransaction` query behavior
+ */
+export type GetVersionedTransactionConfig = {
   /** The level of finality desired */
   commitment?: Finality;
   /** The max transaction version to return in responses. If the requested transaction is a higher version, an error will be returned */
@@ -747,6 +802,22 @@ export type TransactionReturnData = {
   data: [string, TransactionReturnDataEncoding];
 };
 
+export type SimulateTransactionConfig = {
+  /** Optional parameter used to enable signature verification before simulation */
+  sigVerify?: boolean;
+  /** Optional parameter used to replace the simulated transaction's recent blockhash with the latest blockhash */
+  replaceRecentBlockhash?: boolean;
+  /** Optional parameter used to set the commitment level when selecting the latest block */
+  commitment?: Commitment;
+  /** Optional parameter used to specify a list of account addresses to return post simulation state for */
+  accounts?: {
+    encoding: 'base64';
+    addresses: string[];
+  };
+  /** Optional parameter used to specify the minimum block slot that can be used for simulation */
+  minContextSlot?: number;
+};
+
 export type SimulatedTransactionResponse = {
   err: TransactionError | string | null;
   logs: Array<string> | null;
@@ -805,6 +876,14 @@ export type TokenBalance = {
 export type ParsedConfirmedTransactionMeta = ParsedTransactionMeta;
 
 /**
+ * Collection of addresses loaded by a transaction using address table lookups
+ */
+export type LoadedAddresses = {
+  writable: Array<PublicKey>;
+  readonly: Array<PublicKey>;
+};
+
+/**
  * Metadata for a parsed transaction on the ledger
  */
 export type ParsedTransactionMeta = {
@@ -824,6 +903,10 @@ export type ParsedTransactionMeta = {
   postTokenBalances?: Array<TokenBalance> | null;
   /** The error result of transaction processing */
   err: TransactionError | null;
+  /** The collection of addresses loaded using address lookup tables */
+  loadedAddresses?: LoadedAddresses;
+  /** The compute units consumed after processing the transaction */
+  computeUnitsConsumed?: number;
 };
 
 export type CompiledInnerInstruction = {
@@ -851,6 +934,10 @@ export type ConfirmedTransactionMeta = {
   postTokenBalances?: Array<TokenBalance> | null;
   /** The error result of transaction processing */
   err: TransactionError | null;
+  /** The collection of addresses loaded using address lookup tables */
+  loadedAddresses?: LoadedAddresses;
+  /** The compute units consumed after processing the transaction */
+  computeUnitsConsumed?: number;
 };
 
 /**
@@ -873,7 +960,41 @@ export type TransactionResponse = {
 };
 
 /**
+ * A processed transaction from the RPC API
+ */
+export type VersionedTransactionResponse = {
+  /** The slot during which the transaction was processed */
+  slot: number;
+  /** The transaction */
+  transaction: {
+    /** The transaction message */
+    message: VersionedMessage;
+    /** The transaction signatures */
+    signatures: string[];
+  };
+  /** Metadata produced from the transaction */
+  meta: ConfirmedTransactionMeta | null;
+  /** The unix timestamp of when the transaction was processed */
+  blockTime?: number | null;
+  /** The transaction version */
+  version?: TransactionVersion;
+};
+
+/**
+ * A processed transaction message from the RPC API
+ */
+type MessageResponse = {
+  accountKeys: string[];
+  header: MessageHeader;
+  instructions: CompiledInstruction[];
+  recentBlockhash: string;
+  addressTableLookups?: ParsedAddressTableLookup[];
+};
+
+/**
  * A confirmed transaction on the ledger
+ *
+ * @deprecated Deprecated since Solana v1.8.0.
  */
 export type ConfirmedTransaction = {
   /** The slot during which the transaction was processed */
@@ -923,6 +1044,18 @@ export type ParsedInstruction = {
 };
 
 /**
+ * A parsed address table lookup
+ */
+export type ParsedAddressTableLookup = {
+  /** Address lookup table account key */
+  accountKey: PublicKey;
+  /** Parsed instruction info */
+  writableIndexes: number[];
+  /** Parsed instruction info */
+  readonlyIndexes: number[];
+};
+
+/**
  * A parsed transaction message
  */
 export type ParsedMessage = {
@@ -932,6 +1065,8 @@ export type ParsedMessage = {
   instructions: (ParsedInstruction | PartiallyDecodedInstruction)[];
   /** Recent blockhash */
   recentBlockhash: string;
+  /** Address table lookups used to load additional accounts */
+  addressTableLookups?: ParsedAddressTableLookup[] | null;
 };
 
 /**
@@ -963,6 +1098,8 @@ export type ParsedTransactionWithMeta = {
   meta: ParsedTransactionMeta | null;
   /** The unix timestamp of when the transaction was processed */
   blockTime?: number | null;
+  /** The version of the transaction message */
+  version?: TransactionVersion;
 };
 
 /**
@@ -986,6 +1123,8 @@ export type BlockResponse = {
     };
     /** Metadata produced from the transaction */
     meta: ConfirmedTransactionMeta | null;
+    /** The transaction version */
+    version?: TransactionVersion;
   }>;
   /** Vector of block rewards */
   rewards?: Array<{
@@ -1003,7 +1142,48 @@ export type BlockResponse = {
 };
 
 /**
- * A ConfirmedBlock on the ledger
+ * A processed block fetched from the RPC API
+ */
+export type VersionedBlockResponse = {
+  /** Blockhash of this block */
+  blockhash: Blockhash;
+  /** Blockhash of this block's parent */
+  previousBlockhash: Blockhash;
+  /** Slot index of this block's parent */
+  parentSlot: number;
+  /** Vector of transactions with status meta and original message */
+  transactions: Array<{
+    /** The transaction */
+    transaction: {
+      /** The transaction message */
+      message: VersionedMessage;
+      /** The transaction signatures */
+      signatures: string[];
+    };
+    /** Metadata produced from the transaction */
+    meta: ConfirmedTransactionMeta | null;
+    /** The transaction version */
+    version?: TransactionVersion;
+  }>;
+  /** Vector of block rewards */
+  rewards?: Array<{
+    /** Public key of reward recipient */
+    pubkey: string;
+    /** Reward value in lamports */
+    lamports: number;
+    /** Account balance after reward is applied */
+    postBalance: number | null;
+    /** Type of reward received */
+    rewardType: string | null;
+  }>;
+  /** The unix timestamp of when the block was processed */
+  blockTime: number | null;
+};
+
+/**
+ * A confirmed block on the ledger
+ *
+ * @deprecated Deprecated since Solana v1.8.0.
  */
 export type ConfirmedBlock = {
   /** Blockhash of this block */
@@ -1102,7 +1282,6 @@ export type PerfSample = {
 
 function createRpcClient(
   url: string,
-  useHttps: boolean,
   httpHeaders?: HttpHeaders,
   customFetch?: FetchFn,
   fetchMiddleware?: FetchMiddleware,
@@ -1111,7 +1290,7 @@ function createRpcClient(
   const fetch = customFetch ? customFetch : fetchImpl;
   let agentManager: AgentManager | undefined;
   if (!process.env.BROWSER) {
-    agentManager = new AgentManager(useHttps);
+    agentManager = new AgentManager(url.startsWith('https:') /* useHttps */);
   }
 
   let fetchWithMiddleware: FetchFn | undefined;
@@ -1707,6 +1886,12 @@ const GetSignatureStatusesRpcResult = jsonRpcResultAndContext(
  */
 const GetMinimumBalanceForRentExemptionRpcResult = jsonRpcResult(number());
 
+const AddressTableLookupStruct = pick({
+  accountKey: PublicKeyFromString,
+  writableIndexes: array(number()),
+  readonlyIndexes: array(number()),
+});
+
 const ConfirmedTransactionResult = pick({
   signatures: array(string()),
   message: pick({
@@ -1724,6 +1909,7 @@ const ConfirmedTransactionResult = pick({
       }),
     ),
     recentBlockhash: string(),
+    addressTableLookups: optional(array(AddressTableLookupStruct)),
   }),
 });
 
@@ -1784,6 +1970,7 @@ const ParsedConfirmedTransactionResult = pick({
     ),
     instructions: array(ParsedOrRawInstruction),
     recentBlockhash: string(),
+    addressTableLookups: optional(nullable(array(AddressTableLookupStruct))),
   }),
 });
 
@@ -1792,6 +1979,11 @@ const TokenBalanceResult = pick({
   mint: string(),
   owner: optional(string()),
   uiTokenAmount: TokenAmountResult,
+});
+
+const LoadedAddressesResult = pick({
+  writable: array(PublicKeyFromString),
+  readonly: array(PublicKeyFromString),
 });
 
 /**
@@ -1821,6 +2013,8 @@ const ConfirmedTransactionMetaResult = pick({
   logMessages: optional(nullable(array(string()))),
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
+  loadedAddresses: optional(LoadedAddressesResult),
+  computeUnitsConsumed: optional(number()),
 });
 
 /**
@@ -1844,7 +2038,11 @@ const ParsedConfirmedTransactionMetaResult = pick({
   logMessages: optional(nullable(array(string()))),
   preTokenBalances: optional(nullable(array(TokenBalanceResult))),
   postTokenBalances: optional(nullable(array(TokenBalanceResult))),
+  loadedAddresses: optional(LoadedAddressesResult),
+  computeUnitsConsumed: optional(number()),
 });
+
+const TransactionVersionStruct = union([literal(0), literal('legacy')]);
 
 /**
  * Expected JSON RPC response for the "getBlock" message
@@ -1859,6 +2057,7 @@ const GetBlockRpcResult = jsonRpcResult(
         pick({
           transaction: ConfirmedTransactionResult,
           meta: nullable(ConfirmedTransactionMetaResult),
+          version: optional(TransactionVersionStruct),
         }),
       ),
       rewards: optional(
@@ -1934,6 +2133,7 @@ const GetTransactionRpcResult = jsonRpcResult(
       meta: ConfirmedTransactionMetaResult,
       blockTime: optional(nullable(number())),
       transaction: ConfirmedTransactionResult,
+      version: optional(TransactionVersionStruct),
     }),
   ),
 );
@@ -1948,6 +2148,7 @@ const GetParsedTransactionRpcResult = jsonRpcResult(
       transaction: ParsedConfirmedTransactionResult,
       meta: nullable(ParsedConfirmedTransactionMetaResult),
       blockTime: optional(nullable(number())),
+      version: optional(TransactionVersionStruct),
     }),
   ),
 );
@@ -2471,9 +2672,6 @@ export class Connection {
     endpoint: string,
     commitmentOrConfig?: Commitment | ConnectionConfig,
   ) {
-    let url = new URL(endpoint);
-    const useHttps = url.protocol === 'https:';
-
     let wsEndpoint;
     let httpHeaders;
     let fetch;
@@ -2492,12 +2690,11 @@ export class Connection {
       disableRetryOnRateLimit = commitmentOrConfig.disableRetryOnRateLimit;
     }
 
-    this._rpcEndpoint = endpoint;
+    this._rpcEndpoint = assertEndpointUrl(endpoint);
     this._rpcWsEndpoint = wsEndpoint || makeWebsocketUrl(endpoint);
 
     this._rpcClient = createRpcClient(
-      url.toString(),
-      useHttps,
+      endpoint,
       httpHeaders,
       fetch,
       fetchMiddleware,
@@ -2850,14 +3047,17 @@ export class Connection {
    */
   async getParsedAccountInfo(
     publicKey: PublicKey,
-    commitment?: Commitment,
+    commitmentOrConfig?: Commitment | GetAccountInfoConfig,
   ): Promise<
     RpcResponseAndContext<AccountInfo<Buffer | ParsedAccountData> | null>
   > {
+    const {commitment, config} =
+      extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgs(
       [publicKey.toBase58()],
       commitment,
       'jsonParsed',
+      config,
     );
     const unsafeRes = await this._rpcRequest('getAccountInfo', args);
     const res = create(
@@ -3617,11 +3817,32 @@ export class Connection {
 
   /**
    * Fetch a processed block from the cluster.
+   *
+   * @deprecated Instead, call `getBlock` using a `GetVersionedBlockConfig` by
+   * setting the `maxSupportedTransactionVersion` property.
    */
   async getBlock(
     slot: number,
     rawConfig?: GetBlockConfig,
-  ): Promise<BlockResponse | null> {
+  ): Promise<BlockResponse | null>;
+
+  /**
+   * Fetch a processed block from the cluster.
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async getBlock(
+    slot: number,
+    rawConfig?: GetVersionedBlockConfig,
+  ): Promise<VersionedBlockResponse | null>;
+
+  /**
+   * Fetch a processed block from the cluster.
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async getBlock(
+    slot: number,
+    rawConfig?: GetVersionedBlockConfig,
+  ): Promise<VersionedBlockResponse | null> {
     const {commitment, config} = extractCommitmentFromConfig(rawConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [slot],
@@ -3641,16 +3862,14 @@ export class Connection {
 
     return {
       ...result,
-      transactions: result.transactions.map(({transaction, meta}) => {
-        const message = new Message(transaction.message);
-        return {
-          meta,
-          transaction: {
-            ...transaction,
-            message,
-          },
-        };
-      }),
+      transactions: result.transactions.map(({transaction, meta, version}) => ({
+        meta,
+        transaction: {
+          ...transaction,
+          message: versionedMessageFromResponse(version, transaction.message),
+        },
+        version,
+      })),
     };
   }
 
@@ -3712,11 +3931,33 @@ export class Connection {
 
   /**
    * Fetch a confirmed or finalized transaction from the cluster.
+   *
+   * @deprecated Instead, call `getTransaction` using a
+   * `GetVersionedTransactionConfig` by setting the
+   * `maxSupportedTransactionVersion` property.
    */
   async getTransaction(
     signature: string,
     rawConfig?: GetTransactionConfig,
-  ): Promise<TransactionResponse | null> {
+  ): Promise<TransactionResponse | null>;
+
+  /**
+   * Fetch a confirmed or finalized transaction from the cluster.
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async getTransaction(
+    signature: string,
+    rawConfig: GetVersionedTransactionConfig,
+  ): Promise<VersionedTransactionResponse | null>;
+
+  /**
+   * Fetch a confirmed or finalized transaction from the cluster.
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async getTransaction(
+    signature: string,
+    rawConfig?: GetVersionedTransactionConfig,
+  ): Promise<VersionedTransactionResponse | null> {
     const {commitment, config} = extractCommitmentFromConfig(rawConfig);
     const args = this._buildArgsAtLeastConfirmed(
       [signature],
@@ -3737,7 +3978,10 @@ export class Connection {
       ...result,
       transaction: {
         ...result.transaction,
-        message: new Message(result.transaction.message),
+        message: versionedMessageFromResponse(
+          result.version,
+          result.transaction.message,
+        ),
       },
     };
   }
@@ -3747,8 +3991,8 @@ export class Connection {
    */
   async getParsedTransaction(
     signature: TransactionSignature,
-    commitmentOrConfig?: GetTransactionConfig | Finality,
-  ): Promise<ParsedConfirmedTransaction | null> {
+    commitmentOrConfig?: GetVersionedTransactionConfig | Finality,
+  ): Promise<ParsedTransactionWithMeta | null> {
     const {commitment, config} =
       extractCommitmentFromConfig(commitmentOrConfig);
     const args = this._buildArgsAtLeastConfirmed(
@@ -3770,8 +4014,8 @@ export class Connection {
    */
   async getParsedTransactions(
     signatures: TransactionSignature[],
-    commitmentOrConfig?: GetTransactionConfig | Finality,
-  ): Promise<(ParsedConfirmedTransaction | null)[]> {
+    commitmentOrConfig?: GetVersionedTransactionConfig | Finality,
+  ): Promise<(ParsedTransactionWithMeta | null)[]> {
     const {commitment, config} =
       extractCommitmentFromConfig(commitmentOrConfig);
     const batch = signatures.map(signature => {
@@ -3802,11 +4046,37 @@ export class Connection {
   /**
    * Fetch transaction details for a batch of confirmed transactions.
    * Similar to {@link getParsedTransactions} but returns a {@link TransactionResponse}.
+   *
+   * @deprecated Instead, call `getTransactions` using a
+   * `GetVersionedTransactionConfig` by setting the
+   * `maxSupportedTransactionVersion` property.
    */
   async getTransactions(
     signatures: TransactionSignature[],
     commitmentOrConfig?: GetTransactionConfig | Finality,
-  ): Promise<(TransactionResponse | null)[]> {
+  ): Promise<(TransactionResponse | null)[]>;
+
+  /**
+   * Fetch transaction details for a batch of confirmed transactions.
+   * Similar to {@link getParsedTransactions} but returns a {@link
+   * VersionedTransactionResponse}.
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async getTransactions(
+    signatures: TransactionSignature[],
+    commitmentOrConfig: GetVersionedTransactionConfig | Finality,
+  ): Promise<(VersionedTransactionResponse | null)[]>;
+
+  /**
+   * Fetch transaction details for a batch of confirmed transactions.
+   * Similar to {@link getParsedTransactions} but returns a {@link
+   * VersionedTransactionResponse}.
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async getTransactions(
+    signatures: TransactionSignature[],
+    commitmentOrConfig: GetVersionedTransactionConfig | Finality,
+  ): Promise<(VersionedTransactionResponse | null)[]> {
     const {commitment, config} =
       extractCommitmentFromConfig(commitmentOrConfig);
     const batch = signatures.map(signature => {
@@ -3835,7 +4105,10 @@ export class Connection {
         ...result,
         transaction: {
           ...result.transaction,
-          message: new Message(result.transaction.message),
+          message: versionedMessageFromResponse(
+            result.version,
+            result.transaction.message,
+          ),
         },
       };
     });
@@ -4194,6 +4467,29 @@ export class Connection {
     return res.result;
   }
 
+  async getAddressLookupTable(
+    accountKey: PublicKey,
+    config?: GetAccountInfoConfig,
+  ): Promise<RpcResponseAndContext<AddressLookupTableAccount | null>> {
+    const {context, value: accountInfo} = await this.getAccountInfoAndContext(
+      accountKey,
+      config,
+    );
+
+    let value = null;
+    if (accountInfo !== null) {
+      value = new AddressLookupTableAccount({
+        key: accountKey,
+        state: AddressLookupTableAccount.deserialize(accountInfo.data),
+      });
+    }
+
+    return {
+      context,
+      value,
+    };
+  }
+
   /**
    * Fetch the contents of a Nonce account from the cluster, return with context
    */
@@ -4346,12 +4642,58 @@ export class Connection {
 
   /**
    * Simulate a transaction
+   *
+   * @deprecated Instead, call {@link simulateTransaction} with {@link
+   * VersionedTransaction} and {@link SimulateTransactionConfig} parameters
    */
-  async simulateTransaction(
+  simulateTransaction(
     transactionOrMessage: Transaction | Message,
     signers?: Array<Signer>,
     includeAccounts?: boolean | Array<PublicKey>,
+  ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>>;
+
+  /**
+   * Simulate a transaction
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  simulateTransaction(
+    transaction: VersionedTransaction,
+    config?: SimulateTransactionConfig,
+  ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>>;
+
+  /**
+   * Simulate a transaction
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async simulateTransaction(
+    transactionOrMessage: VersionedTransaction | Transaction | Message,
+    configOrSigners?: SimulateTransactionConfig | Array<Signer>,
+    includeAccounts?: boolean | Array<PublicKey>,
   ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
+    if ('message' in transactionOrMessage) {
+      const versionedTx = transactionOrMessage;
+      const wireTransaction = versionedTx.serialize();
+      const encodedTransaction =
+        Buffer.from(wireTransaction).toString('base64');
+      if (Array.isArray(configOrSigners) || includeAccounts !== undefined) {
+        throw new Error('Invalid arguments');
+      }
+
+      const config: any = configOrSigners || {};
+      config.encoding = 'base64';
+      if (!('commitment' in config)) {
+        config.commitment = this.commitment;
+      }
+
+      const args = [encodedTransaction, config];
+      const unsafeRes = await this._rpcRequest('simulateTransaction', args);
+      const res = create(unsafeRes, SimulatedTransactionResponseStruct);
+      if ('error' in res) {
+        throw new Error('failed to simulate transaction: ' + res.error.message);
+      }
+      return res.result;
+    }
+
     let transaction;
     if (transactionOrMessage instanceof Transaction) {
       let originalTx: Transaction = transactionOrMessage;
@@ -4366,6 +4708,11 @@ export class Connection {
       transaction._message = transaction._json = undefined;
     }
 
+    if (configOrSigners !== undefined && !Array.isArray(configOrSigners)) {
+      throw new Error('Invalid arguments');
+    }
+
+    const signers = configOrSigners;
     if (transaction.nonceInfo && signers) {
       transaction.sign(...signers);
     } else {
@@ -4452,12 +4799,48 @@ export class Connection {
 
   /**
    * Sign and send a transaction
+   *
+   * @deprecated Instead, call {@link sendTransaction} with a {@link
+   * VersionedTransaction}
    */
-  async sendTransaction(
+  sendTransaction(
     transaction: Transaction,
     signers: Array<Signer>,
     options?: SendOptions,
+  ): Promise<TransactionSignature>;
+
+  /**
+   * Send a signed transaction
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  sendTransaction(
+    transaction: VersionedTransaction,
+    options?: SendOptions,
+  ): Promise<TransactionSignature>;
+
+  /**
+   * Sign and send a transaction
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async sendTransaction(
+    transaction: VersionedTransaction | Transaction,
+    signersOrOptions?: Array<Signer> | SendOptions,
+    options?: SendOptions,
   ): Promise<TransactionSignature> {
+    if ('message' in transaction) {
+      if (signersOrOptions && Array.isArray(signersOrOptions)) {
+        throw new Error('Invalid arguments');
+      }
+
+      const wireTransaction = transaction.serialize();
+      return await this.sendRawTransaction(wireTransaction, options);
+    }
+
+    if (signersOrOptions === undefined || !Array.isArray(signersOrOptions)) {
+      throw new Error('Invalid arguments');
+    }
+
+    const signers = signersOrOptions;
     if (transaction.nonceInfo) {
       transaction.sign(...signers);
     } else {

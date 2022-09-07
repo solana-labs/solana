@@ -194,7 +194,7 @@ const VOTE_PROCESSING_REPORT_INTERVAL_MS: u64 = 1_000;
 
 impl VoteProcessingTiming {
     fn reset(&mut self) {
-        self.gossip_slot_confirming_time_us = 0;
+        self.gossip_txn_processing_time_us = 0;
         self.gossip_slot_confirming_time_us = 0;
     }
 
@@ -252,7 +252,7 @@ impl ClusterInfoVoteListener {
             let exit = exit.clone();
             let bank_forks = bank_forks.clone();
             Builder::new()
-                .name("solana-cluster_info_vote_listener".to_string())
+                .name("solCiVoteLstnr".to_string())
                 .spawn(move || {
                     let _ = Self::recv_loop(
                         exit,
@@ -266,7 +266,7 @@ impl ClusterInfoVoteListener {
         };
         let exit_ = exit.clone();
         let bank_send_thread = Builder::new()
-            .name("solana-cluster_info_bank_send".to_string())
+            .name("solCiBankSend".to_string())
             .spawn(move || {
                 let _ = Self::bank_send_loop(
                     exit_,
@@ -278,7 +278,7 @@ impl ClusterInfoVoteListener {
             .unwrap();
 
         let send_thread = Builder::new()
-            .name("solana-cluster_info_process_votes".to_string())
+            .name("solCiProcVotes".to_string())
             .spawn(move || {
                 let _ = Self::process_votes_loop(
                     exit,
@@ -391,10 +391,16 @@ impl ClusterInfoVoteListener {
                 .read()
                 .unwrap()
                 .would_be_leader(3 * slot_hashes::MAX_ENTRIES as u64 * DEFAULT_TICKS_PER_SLOT);
+            let feature_set = poh_recorder
+                .read()
+                .unwrap()
+                .bank()
+                .map(|bank| bank.feature_set.clone());
 
             if let Err(e) = verified_vote_packets.receive_and_process_vote_packets(
                 &verified_vote_label_packets_receiver,
                 would_be_leader,
+                feature_set,
             ) {
                 match e {
                     Error::RecvTimeout(RecvTimeoutError::Disconnected)

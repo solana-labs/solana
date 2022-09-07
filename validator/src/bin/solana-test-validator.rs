@@ -9,13 +9,13 @@ use {
             normalize_to_url_if_moniker,
         },
     },
-    solana_client::rpc_client::RpcClient,
     solana_core::tower_storage::FileTowerStorage,
     solana_faucet::faucet::{run_local_faucet_with_port, FAUCET_PORT},
     solana_rpc::{
         rpc::{JsonRpcConfig, RpcBigtableConfig},
         rpc_pubsub_service::PubSubConfig,
     },
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         account::AccountSharedData,
         clock::Slot,
@@ -193,20 +193,20 @@ fn main() {
         .arg(
             Arg::with_name("bpf_program")
                 .long("bpf-program")
-                .value_name("ADDRESS_OR_PATH BPF_PROGRAM.SO")
+                .value_names(&["ADDRESS_OR_KEYPAIR", "BPF_PROGRAM.SO"])
                 .takes_value(true)
                 .number_of_values(2)
                 .multiple(true)
                 .help(
                     "Add a BPF program to the genesis configuration. \
                        If the ledger already exists then this parameter is silently ignored. \
-                       First argument can be a public key or path to file that can be parsed as a keypair",
+                       First argument can be a pubkey string or path to a keypair",
                 ),
         )
         .arg(
             Arg::with_name("account")
                 .long("account")
-                .value_name("ADDRESS FILENAME.JSON")
+                .value_names(&["ADDRESS", "DUMP.JSON"])
                 .takes_value(true)
                 .number_of_values(2)
                 .allow_hyphen_values(true)
@@ -419,6 +419,14 @@ fn main() {
                 .validator(is_parsable::<usize>)
                 .takes_value(true)
                 .help("Maximum number of bytes written to the program log before truncation")
+        )
+        .arg(
+            Arg::with_name("transaction_account_lock_limit")
+                .long("transaction-account-lock-limit")
+                .value_name("NUM_ACCOUNTS")
+                .validator(is_parsable::<u64>)
+                .takes_value(true)
+                .help("Override the runtime's account lock limit per transaction")
         )
         .get_matches();
 
@@ -687,6 +695,8 @@ fn main() {
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
     genesis.accounts_db_caching_enabled = !matches.is_present("no_accounts_db_caching");
     genesis.log_messages_bytes_limit = value_t!(matches, "log_messages_bytes_limit", usize).ok();
+    genesis.transaction_account_lock_limit =
+        value_t!(matches, "transaction_account_lock_limit", usize).ok();
 
     let tower_storage = Arc::new(FileTowerStorage::new(ledger_path.clone()));
 
@@ -702,6 +712,7 @@ fn main() {
             start_time: std::time::SystemTime::now(),
             validator_exit: genesis.validator_exit.clone(),
             authorized_voter_keypairs: genesis.authorized_voter_keypairs.clone(),
+            staked_nodes_overrides: genesis.staked_nodes_overrides.clone(),
             post_init: admin_service_post_init.clone(),
             tower_storage: tower_storage.clone(),
         },
@@ -756,27 +767,41 @@ fn main() {
         .rpc_port(rpc_port)
         .add_programs_with_path(&programs_to_load)
         .add_accounts_from_json_files(&accounts_to_load)
+        .unwrap_or_else(|e| {
+            println!("Error: add_accounts_from_json_files failed: {}", e);
+            exit(1);
+        })
         .add_accounts_from_directories(&accounts_from_dirs)
+        .unwrap_or_else(|e| {
+            println!("Error: add_accounts_from_directories failed: {}", e);
+            exit(1);
+        })
         .deactivate_features(&features_to_deactivate);
 
     if !accounts_to_clone.is_empty() {
-        genesis.clone_accounts(
+        if let Err(e) = genesis.clone_accounts(
             accounts_to_clone,
             cluster_rpc_client
                 .as_ref()
                 .expect("bug: --url argument missing?"),
             false,
-        );
+        ) {
+            println!("Error: clone_accounts failed: {}", e);
+            exit(1);
+        }
     }
 
     if !accounts_to_maybe_clone.is_empty() {
-        genesis.clone_accounts(
+        if let Err(e) = genesis.clone_accounts(
             accounts_to_maybe_clone,
             cluster_rpc_client
                 .as_ref()
                 .expect("bug: --url argument missing?"),
             true,
-        );
+        ) {
+            println!("Error: clone_accounts failed: {}", e);
+            exit(1);
+        }
     }
 
     if let Some(warp_slot) = warp_slot {

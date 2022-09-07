@@ -20,6 +20,7 @@ use {
         pubkey::Pubkey,
         signature::{Keypair, Signer},
         transaction::Transaction,
+        transaction_context::IndexOfAccount,
     },
     std::{sync::Arc, thread::sleep, time::Duration},
     test::Bencher,
@@ -37,7 +38,7 @@ const NOOP_PROGRAM_ID: [u8; 32] = [
 
 #[allow(clippy::unnecessary_wraps)]
 fn process_instruction(
-    _first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     _invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     Ok(())

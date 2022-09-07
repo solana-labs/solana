@@ -1,8 +1,8 @@
 #![allow(clippy::integer_arithmetic)]
 use {
-    crate::rpc_client::RpcClient,
     log::*,
     solana_measure::measure::Measure,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig, signature::Signature, timing::timestamp,
         transaction::Transaction,
@@ -91,7 +91,7 @@ impl TransactionExecutor {
         let exit = exit.clone();
         let cleared = cleared.clone();
         Builder::new()
-            .name("sig_clear".to_string())
+            .name("solSigClear".to_string())
             .spawn(move || {
                 let client = RpcClient::new_socket_with_commitment(
                     entrypoint_addr,

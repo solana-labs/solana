@@ -16,7 +16,7 @@ struct CallerAccount<'a> {
     executable: bool,
     rent_epoch: u64,
 }
-type TranslatedAccounts<'a> = Vec<(usize, Option<CallerAccount<'a>>)>;
+type TranslatedAccounts<'a> = Vec<(IndexOfAccount, Option<CallerAccount<'a>>)>;
 
 /// Implemented by language specific data structure translators
 trait SyscallInvokeSigned<'a, 'b> {
@@ -30,7 +30,7 @@ trait SyscallInvokeSigned<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         instruction_accounts: &[InstructionAccount],
-        program_indices: &[usize],
+        program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
@@ -130,7 +130,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedRust<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         instruction_accounts: &[InstructionAccount],
-        program_indices: &[usize],
+        program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
@@ -447,7 +447,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
     fn translate_accounts<'c>(
         &'c self,
         instruction_accounts: &[InstructionAccount],
-        program_indices: &[usize],
+        program_indices: &[IndexOfAccount],
         account_infos_addr: u64,
         account_infos_len: u64,
         memory_mapping: &mut MemoryMapping,
@@ -605,7 +605,7 @@ impl<'a, 'b> SyscallInvokeSigned<'a, 'b> for SyscallInvokeSignedC<'a, 'b> {
 
 fn get_translated_accounts<'a, T, F>(
     instruction_accounts: &[InstructionAccount],
-    program_indices: &[usize],
+    program_indices: &[IndexOfAccount],
     account_info_keys: &[&Pubkey],
     account_infos: &[T],
     invoke_context: &mut InvokeContext,
@@ -619,6 +619,9 @@ where
         .get_current_instruction_context()
         .map_err(SyscallError::InstructionError)?;
     let mut accounts = Vec::with_capacity(instruction_accounts.len().saturating_add(1));
+    let is_disable_cpi_setting_executable_and_rent_epoch_active = invoke_context
+        .feature_set
+        .is_active(&disable_cpi_setting_executable_and_rent_epoch::id());
 
     let program_account_index = program_indices
         .last()
@@ -629,7 +632,7 @@ where
 
     for (instruction_account_index, instruction_account) in instruction_accounts.iter().enumerate()
     {
-        if instruction_account_index != instruction_account.index_in_callee {
+        if instruction_account_index as IndexOfAccount != instruction_account.index_in_callee {
             continue; // Skip duplicate account
         }
         let mut callee_account = instruction_context
@@ -680,7 +683,9 @@ where
                     }
                     _ => {}
                 }
-                if callee_account.is_executable() != caller_account.executable {
+                if !is_disable_cpi_setting_executable_and_rent_epoch_active
+                    && callee_account.is_executable() != caller_account.executable
+                {
                     callee_account
                         .set_executable(caller_account.executable)
                         .map_err(SyscallError::InstructionError)?;
@@ -696,7 +701,9 @@ where
                     .transaction_context
                     .get_account_at_index(instruction_account.index_in_transaction)
                     .map_err(SyscallError::InstructionError)?;
-                if callee_account.borrow().rent_epoch() != caller_account.rent_epoch {
+                if !is_disable_cpi_setting_executable_and_rent_epoch_active
+                    && callee_account.borrow().rent_epoch() != caller_account.rent_epoch
+                {
                     if invoke_context
                         .feature_set
                         .is_active(&enable_early_verification_of_account_modifications::id())
@@ -717,7 +724,7 @@ where
                     .get_orig_account_lengths()
                     .map_err(SyscallError::InstructionError)?;
                 caller_account.original_data_len = *orig_data_lens
-                    .get(instruction_account.index_in_caller)
+                    .get(instruction_account.index_in_caller as usize)
                     .ok_or_else(|| {
                         ic_msg!(
                             invoke_context,
@@ -827,7 +834,6 @@ fn check_authorized_program(
     instruction_data: &[u8],
     invoke_context: &InvokeContext,
 ) -> Result<(), EbpfError<BpfError>> {
-    #[allow(clippy::blocks_in_if_conditions)]
     if native_loader::check_id(program_id)
         || bpf_loader::check_id(program_id)
         || bpf_loader_deprecated::check_id(program_id)
@@ -835,12 +841,9 @@ fn check_authorized_program(
             && !(bpf_loader_upgradeable::is_upgrade_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_set_authority_instruction(instruction_data)
                 || bpf_loader_upgradeable::is_close_instruction(instruction_data)))
-        || (invoke_context
-            .feature_set
-            .is_active(&prevent_calling_precompiles_as_programs::id())
-            && is_precompile(program_id, |feature_id: &Pubkey| {
-                invoke_context.feature_set.is_active(feature_id)
-            }))
+        || is_precompile(program_id, |feature_id: &Pubkey| {
+            invoke_context.feature_set.is_active(feature_id)
+        })
     {
         return Err(SyscallError::ProgramNotSupported(*program_id).into());
     }

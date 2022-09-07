@@ -6,6 +6,7 @@ use {
     solana_sdk::{
         hash::{Hash, Hasher},
         pubkey::Pubkey,
+        slot_history::Slot,
         sysvar::epoch_schedule::EpochSchedule,
     },
     std::{
@@ -17,7 +18,6 @@ use {
         },
     },
 };
-pub const ZERO_RAW_LAMPORTS_SENTINEL: u64 = std::u64::MAX;
 pub const MERKLE_FANOUT: usize = 16;
 
 #[derive(Default, Debug)]
@@ -25,6 +25,15 @@ pub struct PreviousPass {
     pub reduced_hashes: Vec<Vec<Hash>>,
     pub remaining_unhashed: Vec<Hash>,
     pub lamports: u64,
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct FullSnapshotAccountsHashInfo {
+    /// accounts hash over all accounts when the full snapshot was taken
+    hash: Hash,
+    /// slot where full snapshot was taken
+    slot: Slot,
 }
 
 /// parameters to calculate accounts hash
@@ -45,6 +54,10 @@ pub struct CalcAccountsHashConfig<'a> {
     pub rent_collector: &'a RentCollector,
     /// used for tracking down hash mismatches after the fact
     pub store_detailed_debug_info_on_failure: bool,
+    /// true if hash calculation can rehash based on skipped rewrites
+    pub enable_rehashing: bool,
+    /// `Some` if this is an incremental snapshot which only hashes slots since the base full snapshot
+    pub full_snapshot: Option<FullSnapshotAccountsHashInfo>,
 }
 
 impl<'a> CalcAccountsHashConfig<'a> {
@@ -60,6 +73,7 @@ pub type StorageSizeQuartileStats = [usize; 6];
 
 #[derive(Debug, Default)]
 pub struct HashStats {
+    pub mark_time_us: u64,
     pub scan_time_total_us: u64,
     pub zeros_time_total_us: u64,
     pub hash_time_total_us: u64,
@@ -69,6 +83,7 @@ pub struct HashStats {
     pub unreduced_entries: usize,
     pub num_snapshot_storage: usize,
     pub num_slots: usize,
+    pub num_dirty_slots: usize,
     pub collect_snapshots_us: u64,
     pub storage_sort_us: u64,
     pub min_bin_size: usize,
@@ -82,6 +97,7 @@ pub struct HashStats {
     pub rehash_required: AtomicUsize,
     /// # rehashes that took place and were UNnecessary
     pub rehash_unnecessary: AtomicUsize,
+    pub oldest_root: Slot,
     pub roots_older_than_epoch: AtomicUsize,
     pub accounts_in_roots_older_than_epoch: AtomicUsize,
     pub append_vec_sizes_older_than_epoch: AtomicUsize,
@@ -121,7 +137,7 @@ impl HashStats {
         };
     }
 
-    fn log(&mut self) {
+    pub fn log(&mut self) {
         let total_time_us = self.scan_time_total_us
             + self.zeros_time_total_us
             + self.hash_time_total_us
@@ -129,9 +145,10 @@ impl HashStats {
             + self.storage_sort_us;
         datapoint_info!(
             "calculate_accounts_hash_without_index",
-            ("accounts_scan", self.scan_time_total_us, i64),
-            ("eliminate_zeros", self.zeros_time_total_us, i64),
-            ("hash", self.hash_time_total_us, i64),
+            ("mark_time_us", self.mark_time_us, i64),
+            ("accounts_scan_us", self.scan_time_total_us, i64),
+            ("eliminate_zeros_us", self.zeros_time_total_us, i64),
+            ("hash_us", self.hash_time_total_us, i64),
             ("hash_time_pre_us", self.hash_time_pre_us, i64),
             ("sort", self.sort_time_total_us, i64),
             ("hash_total", self.hash_total, i64),
@@ -148,6 +165,7 @@ impl HashStats {
                 i64
             ),
             ("num_slots", self.num_slots as i64, i64),
+            ("num_dirty_slots", self.num_dirty_slots as i64, i64),
             ("min_bin_size", self.min_bin_size as i64, i64),
             ("max_bin_size", self.max_bin_size as i64, i64),
             (
@@ -180,7 +198,7 @@ impl HashStats {
                 self.storage_size_quartiles[5] as i64,
                 i64
             ),
-            ("total", total_time_us as i64, i64),
+            ("total_us", total_time_us as i64, i64),
             (
                 "rehashed_rewrites",
                 self.rehash_required.load(Ordering::Relaxed) as i64,
@@ -206,6 +224,7 @@ impl HashStats {
                 self.roots_older_than_epoch.load(Ordering::Relaxed) as i64,
                 i64
             ),
+            ("oldest_root", self.oldest_root as i64, i64),
             (
                 "ancient_append_vecs",
                 self.ancient_append_vecs.load(Ordering::Relaxed) as i64,
@@ -830,7 +849,7 @@ impl AccountsHash {
             );
 
             // add lamports, get hash as long as the lamports are > 0
-            if item.lamports != ZERO_RAW_LAMPORTS_SENTINEL
+            if item.lamports != 0
                 && (!filler_accounts_enabled || !self.is_filler_account(&item.pubkey))
             {
                 overall_sum = Self::checked_cast_for_capitalization(
@@ -981,10 +1000,6 @@ impl AccountsHash {
         } else {
             Hash::default()
         };
-
-        if is_last_pass {
-            stats.log();
-        }
         (hash, total_lamports, next_pass)
     }
 }
@@ -1028,7 +1043,7 @@ pub mod tests {
         // 2nd key - zero lamports, so will be removed
         let key = Pubkey::new(&[12u8; 32]);
         let hash = Hash::new(&[2u8; 32]);
-        let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
+        let val = CalculateHashIntermediate::new(hash, 0, key);
         account_maps.push(val);
 
         let accounts_hash = AccountsHash::default();
@@ -1102,7 +1117,7 @@ pub mod tests {
             // 2nd key - zero lamports, so will be removed
             let key = Pubkey::new(&[12u8; 32]);
             let hash = Hash::new(&[2u8; 32]);
-            let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
+            let val = CalculateHashIntermediate::new(hash, 0, key);
             account_maps.push(val);
 
             let mut previous_pass = PreviousPass::default();
@@ -1381,10 +1396,13 @@ pub mod tests {
 
     #[test]
     fn test_accountsdb_de_dup_accounts_zero_chunks() {
-        let vec = [vec![vec![CalculateHashIntermediate::default()]]];
+        let vec = [vec![vec![CalculateHashIntermediate {
+            lamports: 1,
+            ..CalculateHashIntermediate::default()
+        }]]];
         let (hashes, lamports, _) = AccountsHash::default().de_dup_accounts_in_parallel(&vec, 0);
         assert_eq!(vec![&Hash::default()], hashes);
-        assert_eq!(lamports, 0);
+        assert_eq!(lamports, 1);
     }
 
     #[test]
@@ -1639,7 +1657,7 @@ pub mod tests {
         assert_eq!(result, (vec![&val.hash], val.lamports as u64, 1));
 
         // zero original lamports, higher version
-        let val = CalculateHashIntermediate::new(hash, ZERO_RAW_LAMPORTS_SENTINEL, key);
+        let val = CalculateHashIntermediate::new(hash, 0, key);
         account_maps.push(val); // has to be after previous entry since account_maps are in slot order
 
         let vecs = vec![vec![account_maps.to_vec()]];

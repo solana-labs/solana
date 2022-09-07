@@ -3,8 +3,8 @@ use {
         check_num_accounts, ParsableProgram, ParseInstructionError, ParsedInstructionEnum,
     },
     extension::{
-        default_account_state::*, memo_transfer::*, mint_close_authority::*, reallocate::*,
-        transfer_fee::*,
+        confidential_transfer::*, default_account_state::*, interest_bearing_mint::*,
+        memo_transfer::*, mint_close_authority::*, reallocate::*, transfer_fee::*,
     },
     serde_json::{json, Map, Value},
     solana_account_decoder::parse_token::{
@@ -227,7 +227,8 @@ pub fn parse_token(
                 | AuthorityType::FreezeAccount
                 | AuthorityType::TransferFeeConfig
                 | AuthorityType::WithheldWithdraw
-                | AuthorityType::CloseMint => "mint",
+                | AuthorityType::CloseMint
+                | AuthorityType::InterestRate => "mint",
                 AuthorityType::AccountOwner | AuthorityType::CloseAccount => "account",
             };
             let mut value = json!({
@@ -509,8 +510,10 @@ pub fn parse_token(
                 account_keys,
             )
         }
-        TokenInstruction::ConfidentialTransferExtension => Err(
-            ParseInstructionError::InstructionNotParsable(ParsableProgram::SplToken),
+        TokenInstruction::ConfidentialTransferExtension => parse_confidential_transfer_instruction(
+            &instruction.data[1..],
+            &instruction.accounts,
+            account_keys,
         ),
         TokenInstruction::DefaultAccountStateExtension => {
             if instruction.data.len() <= 2 {
@@ -550,6 +553,27 @@ pub fn parse_token(
                 }),
             })
         }
+        TokenInstruction::InitializeNonTransferableMint => {
+            check_num_token_accounts(&instruction.accounts, 1)?;
+            Ok(ParsedInstructionEnum {
+                instruction_type: "initializeNonTransferableMint".to_string(),
+                info: json!({
+                    "mint": account_keys[instruction.accounts[0] as usize].to_string(),
+                }),
+            })
+        }
+        TokenInstruction::InterestBearingMintExtension => {
+            if instruction.data.len() < 2 {
+                return Err(ParseInstructionError::InstructionNotParsable(
+                    ParsableProgram::SplToken,
+                ));
+            }
+            parse_interest_bearing_mint_instruction(
+                &instruction.data[1..],
+                &instruction.accounts,
+                account_keys,
+            )
+        }
     }
 }
 
@@ -563,6 +587,7 @@ pub enum UiAuthorityType {
     TransferFeeConfig,
     WithheldWithdraw,
     CloseMint,
+    InterestRate,
 }
 
 impl From<AuthorityType> for UiAuthorityType {
@@ -575,6 +600,7 @@ impl From<AuthorityType> for UiAuthorityType {
             AuthorityType::TransferFeeConfig => UiAuthorityType::TransferFeeConfig,
             AuthorityType::WithheldWithdraw => UiAuthorityType::WithheldWithdraw,
             AuthorityType::CloseMint => UiAuthorityType::CloseMint,
+            AuthorityType::InterestRate => UiAuthorityType::InterestRate,
         }
     }
 }
@@ -591,6 +617,8 @@ pub enum UiExtensionType {
     DefaultAccountState,
     ImmutableOwner,
     MemoTransfer,
+    NonTransferable,
+    InterestBearingConfig,
 }
 
 impl From<ExtensionType> for UiExtensionType {
@@ -607,6 +635,8 @@ impl From<ExtensionType> for UiExtensionType {
             ExtensionType::DefaultAccountState => UiExtensionType::DefaultAccountState,
             ExtensionType::ImmutableOwner => UiExtensionType::ImmutableOwner,
             ExtensionType::MemoTransfer => UiExtensionType::MemoTransfer,
+            ExtensionType::NonTransferable => UiExtensionType::NonTransferable,
+            ExtensionType::InterestBearingConfig => UiExtensionType::InterestBearingConfig,
         }
     }
 }

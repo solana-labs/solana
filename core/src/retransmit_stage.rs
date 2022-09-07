@@ -10,7 +10,6 @@ use {
     itertools::{izip, Itertools},
     lru::LruCache,
     rayon::{prelude::*, ThreadPool, ThreadPoolBuilder},
-    solana_client::rpc_response::SlotUpdate,
     solana_gossip::{
         cluster_info::{ClusterInfo, DATA_PLANE_FANOUT},
         contact_info::ContactInfo,
@@ -22,6 +21,7 @@ use {
     solana_measure::measure::Measure,
     solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{max_slots::MaxSlots, rpc_subscriptions::RpcSubscriptions},
+    solana_rpc_client_api::response::SlotUpdate,
     solana_runtime::{bank::Bank, bank_forks::BankForks},
     solana_sdk::{clock::Slot, pubkey::Pubkey, timing::timestamp},
     solana_streamer::{
@@ -364,11 +364,11 @@ pub fn retransmitter(
     let num_threads = get_thread_count().min(8).max(sockets.len());
     let thread_pool = ThreadPoolBuilder::new()
         .num_threads(num_threads)
-        .thread_name(|i| format!("retransmit-{}", i))
+        .thread_name(|i| format!("solRetransmit{:02}", i))
         .build()
         .unwrap();
     Builder::new()
-        .name("solana-retransmitter".to_string())
+        .name("solRetransmittr".to_string())
         .spawn(move || loop {
             match retransmit(
                 &thread_pool,

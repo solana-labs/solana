@@ -1,15 +1,11 @@
 #![allow(clippy::integer_arithmetic)]
+
 use {
     serial_test::serial,
     solana_bench_tps::{
         bench::{do_bench_tps, generate_and_fund_keypairs},
         cli::Config,
-    },
-    solana_client::{
-        connection_cache::ConnectionCache,
-        rpc_client::RpcClient,
-        thin_client::ThinClient,
-        tpu_client::{TpuClient, TpuClientConfig},
+        send_batch::generate_durable_nonce_accounts,
     },
     solana_core::validator::ValidatorConfig,
     solana_faucet::faucet::run_local_faucet,
@@ -18,12 +14,18 @@ use {
         validator_configs::make_identical_validator_configs,
     },
     solana_rpc::rpc::JsonRpcConfig,
+    solana_rpc_client::rpc_client::RpcClient,
     solana_sdk::{
         commitment_config::CommitmentConfig,
         signature::{Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::TestValidator,
+    solana_thin_client::thin_client::ThinClient,
+    solana_tpu_client::{
+        connection_cache::ConnectionCache,
+        tpu_client::{TpuClient, TpuClientConfig},
+    },
     std::{sync::Arc, time::Duration},
 };
 
@@ -76,7 +78,7 @@ fn test_bench_tps_local_cluster(config: Config) {
     )
     .unwrap();
 
-    let _total = do_bench_tps(client, config, keypairs);
+    let _total = do_bench_tps(client, config, keypairs, None);
 
     #[cfg(not(debug_assertions))]
     assert!(_total > 100);
@@ -110,7 +112,7 @@ fn test_bench_tps_test_validator(config: Config) {
         .unwrap(),
     );
 
-    let lamports_per_account = 100;
+    let lamports_per_account = 1000;
 
     let keypair_count = config.tx_count * config.keypair_multiplier;
     let keypairs = generate_and_fund_keypairs(
@@ -120,8 +122,13 @@ fn test_bench_tps_test_validator(config: Config) {
         lamports_per_account,
     )
     .unwrap();
+    let nonce_keypairs = if config.use_durable_nonce {
+        Some(generate_durable_nonce_accounts(client.clone(), &keypairs))
+    } else {
+        None
+    };
 
-    let _total = do_bench_tps(client, config, keypairs);
+    let _total = do_bench_tps(client, config, keypairs, nonce_keypairs);
 
     #[cfg(not(debug_assertions))]
     assert!(_total > 100);
@@ -143,6 +150,17 @@ fn test_bench_tps_tpu_client() {
     test_bench_tps_test_validator(Config {
         tx_count: 100,
         duration: Duration::from_secs(10),
+        ..Config::default()
+    });
+}
+
+#[test]
+#[serial]
+fn test_bench_tps_tpu_client_nonce() {
+    test_bench_tps_test_validator(Config {
+        tx_count: 100,
+        duration: Duration::from_secs(10),
+        use_durable_nonce: true,
         ..Config::default()
     });
 }

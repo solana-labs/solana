@@ -19,7 +19,9 @@ use {
             NonceError, SystemError, SystemInstruction, MAX_PERMITTED_DATA_LENGTH,
         },
         system_program,
-        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
+        transaction_context::{
+            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
+        },
     },
     std::collections::HashSet,
 };
@@ -145,8 +147,8 @@ fn allocate_and_assign(
 
 #[allow(clippy::too_many_arguments)]
 fn create_account(
-    from_account_index: usize,
-    to_account_index: usize,
+    from_account_index: IndexOfAccount,
+    to_account_index: IndexOfAccount,
     to_address: &Address,
     lamports: u64,
     space: u64,
@@ -182,8 +184,8 @@ fn create_account(
 }
 
 fn transfer_verified(
-    from_account_index: usize,
-    to_account_index: usize,
+    from_account_index: IndexOfAccount,
+    to_account_index: IndexOfAccount,
     lamports: u64,
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
@@ -214,8 +216,8 @@ fn transfer_verified(
 }
 
 fn transfer(
-    from_account_index: usize,
-    to_account_index: usize,
+    from_account_index: IndexOfAccount,
+    to_account_index: IndexOfAccount,
     lamports: u64,
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
@@ -252,11 +254,11 @@ fn transfer(
 }
 
 fn transfer_with_seed(
-    from_account_index: usize,
-    from_base_account_index: usize,
+    from_account_index: IndexOfAccount,
+    from_base_account_index: IndexOfAccount,
     from_seed: &str,
     from_owner: &Pubkey,
-    to_account_index: usize,
+    to_account_index: IndexOfAccount,
     lamports: u64,
     invoke_context: &InvokeContext,
     transaction_context: &TransactionContext,
@@ -314,7 +316,7 @@ fn transfer_with_seed(
 }
 
 pub fn process_instruction(
-    _first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     let transaction_context = &invoke_context.transaction_context;
@@ -324,7 +326,7 @@ pub fn process_instruction(
 
     trace!("process_instruction: {:?}", instruction);
 
-    let signers = instruction_context.get_signers(transaction_context);
+    let signers = instruction_context.get_signers(transaction_context)?;
     match instruction {
         SystemInstruction::CreateAccount {
             lamports,
@@ -1626,7 +1628,8 @@ mod tests {
             .unwrap();
 
         // super fun time; callback chooses to .clean_accounts(None) or not
-        callback(&*bank);
+        let bank = Arc::new(Bank::new_from_parent(&bank, &collector, bank.slot() + 1));
+        callback(&bank);
 
         // create a normal account at the same pubkey as the zero-lamports account
         let lamports = genesis_config.rent.minimum_balance(len2);
@@ -1651,9 +1654,9 @@ mod tests {
             bank.squash();
             bank.force_flush_accounts_cache();
             // do clean and assert that it actually did its job
+            assert_eq!(4, bank.get_snapshot_storages(None).len());
+            bank.clean_accounts(None);
             assert_eq!(3, bank.get_snapshot_storages(None).len());
-            bank.clean_accounts(false, false, None);
-            assert_eq!(2, bank.get_snapshot_storages(None).len());
         });
     }
 
@@ -1864,7 +1867,7 @@ mod tests {
                 },
             ],
             Ok(()),
-            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
+            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
                 super::process_instruction(first_instruction_account, invoke_context)
             },
@@ -2222,7 +2225,7 @@ mod tests {
                 },
             ],
             Err(NonceError::NoRecentBlockhashes.into()),
-            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
+            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
                 invoke_context.blockhash = hash(&serialize(&0).unwrap());
                 super::process_instruction(first_instruction_account, invoke_context)
             },

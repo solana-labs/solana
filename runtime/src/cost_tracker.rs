@@ -218,7 +218,7 @@ impl CostTracker {
             }
         }
 
-        if account_data_size > MAX_ACCOUNT_DATA_BLOCK_LEN {
+        if account_data_size > MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA {
             return Err(CostTrackerError::WouldExceedAccountDataBlockLimit);
         }
 
@@ -618,8 +618,8 @@ mod tests {
         let second_account = Keypair::new();
         let (_tx1, mut tx_cost1) = build_simple_transaction(&mint_keypair, &start_hash);
         let (_tx2, mut tx_cost2) = build_simple_transaction(&second_account, &start_hash);
-        tx_cost1.account_data_size = MAX_ACCOUNT_DATA_BLOCK_LEN;
-        tx_cost2.account_data_size = MAX_ACCOUNT_DATA_BLOCK_LEN + 1;
+        tx_cost1.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA;
+        tx_cost2.account_data_size = MAX_BLOCK_ACCOUNTS_DATA_SIZE_DELTA + 1;
         let cost1 = tx_cost1.sum();
         let cost2 = tx_cost2.sum();
 

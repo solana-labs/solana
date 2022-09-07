@@ -1,9 +1,9 @@
 #![allow(clippy::integer_arithmetic)]
 
-pub use {crate::extract_memos::extract_and_fmt_memos, solana_runtime::bank::RewardType};
+pub use {crate::extract_memos::extract_and_fmt_memos, solana_sdk::reward_type::RewardType};
 use {
     crate::{
-        parse_accounts::{parse_accounts, parse_static_accounts, ParsedAccount},
+        parse_accounts::{parse_legacy_message_accounts, parse_v0_message_accounts, ParsedAccount},
         parse_instruction::{parse, ParsedInstruction},
     },
     solana_account_decoder::parse_token::UiTokenAmount,
@@ -34,6 +34,7 @@ extern crate serde_derive;
 
 pub mod extract_memos;
 pub mod parse_accounts;
+pub mod parse_address_lookup_table;
 pub mod parse_associated_token;
 pub mod parse_bpf_loader;
 pub mod parse_instruction;
@@ -288,6 +289,7 @@ pub struct TransactionStatusMeta {
     pub rewards: Option<Rewards>,
     pub loaded_addresses: LoadedAddresses,
     pub return_data: Option<TransactionReturnData>,
+    pub compute_units_consumed: Option<u64>,
 }
 
 impl Default for TransactionStatusMeta {
@@ -304,6 +306,7 @@ impl Default for TransactionStatusMeta {
             rewards: None,
             loaded_addresses: LoadedAddresses::default(),
             return_data: None,
+            compute_units_consumed: None,
         }
     }
 }
@@ -325,6 +328,8 @@ pub struct UiTransactionStatusMeta {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loaded_addresses: Option<UiLoadedAddresses>,
     pub return_data: Option<TransactionReturnData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compute_units_consumed: Option<u64>,
 }
 
 /// A duplicate representation of LoadedAddresses
@@ -374,8 +379,9 @@ impl UiTransactionStatusMeta {
                 .post_token_balances
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
-            loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
+            loaded_addresses: None,
             return_data: meta.return_data,
+            compute_units_consumed: meta.compute_units_consumed,
         }
     }
 }
@@ -401,6 +407,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
             return_data: meta.return_data,
+            compute_units_consumed: meta.compute_units_consumed,
         }
     }
 }
@@ -593,7 +600,7 @@ impl From<UiConfirmedBlock> for EncodedConfirmedBlock {
     }
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UiConfirmedBlock {
     pub previous_blockhash: String,
@@ -897,7 +904,7 @@ impl Encodable for Message {
         if encoding == UiTransactionEncoding::JsonParsed {
             let account_keys = AccountKeys::new(&self.account_keys, None);
             UiMessage::Parsed(UiParsedMessage {
-                account_keys: parse_accounts(self),
+                account_keys: parse_legacy_message_accounts(self),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions
@@ -929,7 +936,7 @@ impl EncodableWithMeta for v0::Message {
             let account_keys = AccountKeys::new(&self.account_keys, Some(&meta.loaded_addresses));
             let loaded_message = LoadedMessage::new_borrowed(self, &meta.loaded_addresses);
             UiMessage::Parsed(UiParsedMessage {
-                account_keys: parse_static_accounts(&loaded_message),
+                account_keys: parse_v0_message_accounts(&loaded_message),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions

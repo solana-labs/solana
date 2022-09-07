@@ -7,7 +7,7 @@ use {
         genesis_config::{ClusterType, GenesisConfig},
         pubkey::Pubkey,
         rent::Rent,
-        signature::{Keypair, Signer},
+        signature::{Keypair, KeypairInsecureClone, Signer},
         stake::state::StakeState,
         system_program,
     },
@@ -27,6 +27,7 @@ pub fn bootstrap_validator_stake_lamports() -> u64 {
 // Number of lamports automatically used for genesis accounts
 pub const fn genesis_sysvar_and_builtin_program_lamports() -> u64 {
     const NUM_BUILTIN_PROGRAMS: u64 = 4;
+    const NUM_PRECOMPILES: u64 = 2;
     const FEES_SYSVAR_MIN_BALANCE: u64 = 946_560;
     const STAKE_HISTORY_MIN_BALANCE: u64 = 114_979_200;
     const CLOCK_SYSVAR_MIN_BALANCE: u64 = 1_169_280;
@@ -41,6 +42,7 @@ pub const fn genesis_sysvar_and_builtin_program_lamports() -> u64 {
         + EPOCH_SCHEDULE_SYSVAR_MIN_BALANCE
         + RECENT_BLOCKHASHES_SYSVAR_MIN_BALANCE
         + NUM_BUILTIN_PROGRAMS
+        + NUM_PRECOMPILES
 }
 
 pub struct ValidatorVoteKeypairs {
@@ -109,8 +111,7 @@ pub fn create_genesis_config_with_vote_accounts_and_cluster_type(
     assert_eq!(voting_keypairs.len(), stakes.len());
 
     let mint_keypair = Keypair::new();
-    let voting_keypair =
-        Keypair::from_bytes(&voting_keypairs[0].borrow().vote_keypair.to_bytes()).unwrap();
+    let voting_keypair = voting_keypairs[0].borrow().vote_keypair.clone();
 
     let validator_pubkey = voting_keypairs[0].borrow().node_keypair.pubkey();
     let genesis_config = create_genesis_config_with_leader_ex(

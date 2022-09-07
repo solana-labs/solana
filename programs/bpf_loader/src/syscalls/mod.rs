@@ -1,16 +1,16 @@
+pub use self::{
+    cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
+    logging::{
+        SyscallLog, SyscallLogBpfComputeUnits, SyscallLogData, SyscallLogPubkey, SyscallLogU64,
+    },
+    mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
+    sysvar::{
+        SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
+        SyscallGetRentSysvar,
+    },
+};
 #[allow(deprecated)]
 use {
-    self::{
-        cpi::{SyscallInvokeSignedC, SyscallInvokeSignedRust},
-        logging::{
-            SyscallLog, SyscallLogBpfComputeUnits, SyscallLogData, SyscallLogPubkey, SyscallLogU64,
-        },
-        mem_ops::{SyscallMemcmp, SyscallMemcpy, SyscallMemmove, SyscallMemset},
-        sysvar::{
-            SyscallGetClockSysvar, SyscallGetEpochScheduleSysvar, SyscallGetFeesSysvar,
-            SyscallGetRentSysvar,
-        },
-    },
     crate::{allocator_bump::BpfAllocator, BpfError},
     solana_program_runtime::{
         ic_logger_msg, ic_msg,
@@ -20,7 +20,7 @@ use {
     },
     solana_rbpf::{
         aligned_memory::AlignedMemory,
-        ebpf,
+        ebpf::{self, HOST_ALIGN},
         error::EbpfError,
         memory_region::{AccessType, MemoryMapping},
         question_mark,
@@ -34,15 +34,15 @@ use {
         entrypoint::{BPF_ALIGN_OF_U128, MAX_PERMITTED_DATA_INCREASE, SUCCESS},
         feature_set::{
             self, blake3_syscall_enabled, check_physical_overlapping, check_slice_translation_size,
-            curve25519_syscall_enabled, disable_fees_sysvar,
-            enable_early_verification_of_account_modifications, libsecp256k1_0_5_upgrade_enabled,
-            limit_secp256k1_recovery_id, prevent_calling_precompiles_as_programs,
-            syscall_saturated_math,
+            curve25519_syscall_enabled, disable_cpi_setting_executable_and_rent_epoch,
+            disable_fees_sysvar, enable_early_verification_of_account_modifications,
+            libsecp256k1_0_5_upgrade_enabled, limit_secp256k1_recovery_id,
+            stop_sibling_instruction_search_at_parent, syscall_saturated_math,
         },
         hash::{Hasher, HASH_BYTES},
         instruction::{
-            AccountMeta, Instruction, InstructionError, ProcessedSiblingInstruction,
-            TRANSACTION_LEVEL_STACK_HEIGHT,
+            AccountMeta, AccountPropertyUpdate, Instruction, InstructionError,
+            ProcessedSiblingInstruction, TRANSACTION_LEVEL_STACK_HEIGHT,
         },
         keccak, native_loader,
         precompiles::is_precompile,
@@ -53,7 +53,7 @@ use {
             Secp256k1RecoverError, SECP256K1_PUBLIC_KEY_LENGTH, SECP256K1_SIGNATURE_LENGTH,
         },
         sysvar::{Sysvar, SysvarId},
-        transaction_context::InstructionAccount,
+        transaction_context::{IndexOfAccount, InstructionAccount, TransactionContextAttribute},
     },
     std::{
         alloc::Layout,
@@ -122,6 +122,8 @@ pub enum SyscallError {
         num_account_infos: u64,
         max_account_infos: u64,
     },
+    #[error("InvalidAttribute")]
+    InvalidAttribute,
 }
 impl From<SyscallError> for EbpfError<BpfError> {
     fn from(error: SyscallError) -> Self {
@@ -165,6 +167,7 @@ pub fn register_syscalls(
     let disable_fees_sysvar = invoke_context
         .feature_set
         .is_active(&disable_fees_sysvar::id());
+    let is_abi_v2 = false;
 
     let mut syscall_registry = SyscallRegistry::default();
 
@@ -302,38 +305,61 @@ pub fn register_syscalls(
         SyscallMemset::call,
     )?;
 
-    // Cross-program invocation
-    syscall_registry.register_syscall_by_name(
-        b"sol_invoke_signed_c",
-        SyscallInvokeSignedC::init,
-        SyscallInvokeSignedC::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_invoke_signed_rust",
-        SyscallInvokeSignedRust::init,
-        SyscallInvokeSignedRust::call,
-    )?;
+    if is_abi_v2 {
+        // Set account attributes
+        syscall_registry.register_syscall_by_name(
+            b"sol_set_account_attributes",
+            SyscallSetAccountProperties::init,
+            SyscallSetAccountProperties::call,
+        )?;
+    } else {
+        // Processed sibling instructions
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_processed_sibling_instruction",
+            SyscallGetProcessedSiblingInstruction::init,
+            SyscallGetProcessedSiblingInstruction::call,
+        )?;
 
-    // Memory allocator
-    register_feature_gated_syscall!(
-        syscall_registry,
-        !disable_deploy_of_alloc_free_syscall,
-        b"sol_alloc_free_",
-        SyscallAllocFree::init,
-        SyscallAllocFree::call,
-    )?;
+        // Stack height
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_stack_height",
+            SyscallGetStackHeight::init,
+            SyscallGetStackHeight::call,
+        )?;
 
-    // Return data
-    syscall_registry.register_syscall_by_name(
-        b"sol_set_return_data",
-        SyscallSetReturnData::init,
-        SyscallSetReturnData::call,
-    )?;
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_return_data",
-        SyscallGetReturnData::init,
-        SyscallGetReturnData::call,
-    )?;
+        // Return data
+        syscall_registry.register_syscall_by_name(
+            b"sol_set_return_data",
+            SyscallSetReturnData::init,
+            SyscallSetReturnData::call,
+        )?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_get_return_data",
+            SyscallGetReturnData::init,
+            SyscallGetReturnData::call,
+        )?;
+
+        // Cross-program invocation
+        syscall_registry.register_syscall_by_name(
+            b"sol_invoke_signed_c",
+            SyscallInvokeSignedC::init,
+            SyscallInvokeSignedC::call,
+        )?;
+        syscall_registry.register_syscall_by_name(
+            b"sol_invoke_signed_rust",
+            SyscallInvokeSignedRust::init,
+            SyscallInvokeSignedRust::call,
+        )?;
+
+        // Memory allocator
+        register_feature_gated_syscall!(
+            syscall_registry,
+            !disable_deploy_of_alloc_free_syscall,
+            b"sol_alloc_free_",
+            SyscallAllocFree::init,
+            SyscallAllocFree::call,
+        )?;
+    }
 
     // Log data
     syscall_registry.register_syscall_by_name(
@@ -342,27 +368,13 @@ pub fn register_syscalls(
         SyscallLogData::call,
     )?;
 
-    // Processed sibling instructions
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_processed_sibling_instruction",
-        SyscallGetProcessedSiblingInstruction::init,
-        SyscallGetProcessedSiblingInstruction::call,
-    )?;
-
-    // Stack height
-    syscall_registry.register_syscall_by_name(
-        b"sol_get_stack_height",
-        SyscallGetStackHeight::init,
-        SyscallGetStackHeight::call,
-    )?;
-
     Ok(syscall_registry)
 }
 
 pub fn bind_syscall_context_objects<'a, 'b>(
     vm: &mut EbpfVm<'a, RequisiteVerifier, BpfError, crate::ThisInstructionMeter>,
     invoke_context: &'a mut InvokeContext<'b>,
-    heap: AlignedMemory,
+    heap: AlignedMemory<HOST_ALIGN>,
     orig_account_lengths: Vec<usize>,
 ) -> Result<(), EbpfError<BpfError>> {
     let check_aligned = bpf_loader_deprecated::id()
@@ -1709,35 +1721,42 @@ declare_syscall!(
                 .consume(budget.syscall_base_cost),
             result
         );
+        let stop_sibling_instruction_search_at_parent = invoke_context
+            .feature_set
+            .is_active(&stop_sibling_instruction_search_at_parent::id());
 
+        // Reverse iterate through the instruction trace,
+        // ignoring anything except instructions on the same level
         let stack_height = invoke_context.get_stack_height();
-        let instruction_trace = invoke_context.transaction_context.get_instruction_trace();
-        let instruction_context = if stack_height == TRANSACTION_LEVEL_STACK_HEIGHT {
-            // pick one of the top-level instructions
-            instruction_trace
-                .len()
-                .checked_sub(2)
-                .and_then(|result| result.checked_sub(index as usize))
-                .and_then(|index| instruction_trace.get(index))
-                .and_then(|instruction_list| instruction_list.first())
-        } else {
-            // Walk the last list of inner instructions
-            instruction_trace.last().and_then(|inners| {
-                let mut current_index = 0;
-                inners.iter().rev().skip(1).find(|instruction_context| {
-                    if stack_height == instruction_context.get_stack_height() {
-                        if index == current_index {
-                            return true;
-                        } else {
-                            current_index = current_index.saturating_add(1);
-                        }
-                    }
-                    false
-                })
-            })
-        };
+        let instruction_trace_length = invoke_context
+            .transaction_context
+            .get_instruction_trace_length();
+        let mut reverse_index_at_stack_height = 0;
+        let mut found_instruction_context = None;
+        for index_in_trace in (0..instruction_trace_length).rev() {
+            let instruction_context = question_mark!(
+                invoke_context
+                    .transaction_context
+                    .get_instruction_context_at_index_in_trace(index_in_trace)
+                    .map_err(SyscallError::InstructionError),
+                result
+            );
+            if (stop_sibling_instruction_search_at_parent
+                || instruction_context.get_stack_height() == TRANSACTION_LEVEL_STACK_HEIGHT)
+                && instruction_context.get_stack_height() < stack_height
+            {
+                break;
+            }
+            if instruction_context.get_stack_height() == stack_height {
+                if index.saturating_add(1) == reverse_index_at_stack_height {
+                    found_instruction_context = Some(instruction_context);
+                    break;
+                }
+                reverse_index_at_stack_height = reverse_index_at_stack_height.saturating_add(1);
+            }
+        }
 
-        if let Some(instruction_context) = instruction_context {
+        if let Some(instruction_context) = found_instruction_context {
             let ProcessedSiblingInstruction {
                 data_len,
                 accounts_len,
@@ -1750,8 +1769,9 @@ declare_syscall!(
                 result
             );
 
-            if *data_len == instruction_context.get_instruction_data().len()
-                && *accounts_len == instruction_context.get_number_of_instruction_accounts()
+            if *data_len == (instruction_context.get_instruction_data().len() as u64)
+                && *accounts_len
+                    == (instruction_context.get_number_of_instruction_accounts() as u64)
             {
                 let program_id = question_mark!(
                     translate_type_mut::<Pubkey>(
@@ -1792,12 +1812,14 @@ declare_syscall!(
                 let account_metas = question_mark!(
                     (0..instruction_context.get_number_of_instruction_accounts())
                         .map(|instruction_account_index| Ok(AccountMeta {
-                            pubkey: *invoke_context.get_key_of_account_at_index(
-                                instruction_context
-                                    .get_index_of_instruction_account_in_transaction(
-                                        instruction_account_index
-                                    )?
-                            )?,
+                            pubkey: *invoke_context
+                                .transaction_context
+                                .get_key_of_account_at_index(
+                                    instruction_context
+                                        .get_index_of_instruction_account_in_transaction(
+                                            instruction_account_index
+                                        )?
+                                )?,
                             is_signer: instruction_context
                                 .is_instruction_account_signer(instruction_account_index)?,
                             is_writable: instruction_context
@@ -1809,8 +1831,8 @@ declare_syscall!(
                 );
                 accounts.clone_from_slice(account_metas.as_slice());
             }
-            *data_len = instruction_context.get_instruction_data().len();
-            *accounts_len = instruction_context.get_number_of_instruction_accounts();
+            *data_len = instruction_context.get_instruction_data().len() as u64;
+            *accounts_len = instruction_context.get_number_of_instruction_accounts() as u64;
             *result = Ok(true as u64);
             return;
         }
@@ -1847,6 +1869,110 @@ declare_syscall!(
         );
 
         *result = Ok(invoke_context.get_stack_height() as u64);
+    }
+);
+
+declare_syscall!(
+    /// Update the properties of accounts
+    SyscallSetAccountProperties,
+    fn call(
+        &mut self,
+        updates_addr: u64,
+        updates_count: u64,
+        _arg3: u64,
+        _arg4: u64,
+        _arg5: u64,
+        memory_mapping: &mut MemoryMapping,
+        result: &mut Result<u64, EbpfError<BpfError>>,
+    ) {
+        let invoke_context = question_mark!(
+            self.invoke_context
+                .try_borrow()
+                .map_err(|_| SyscallError::InvokeContextBorrowFailed),
+            result
+        );
+        let budget = invoke_context.get_compute_budget();
+        question_mark!(
+            invoke_context.get_compute_meter().consume(
+                budget.syscall_base_cost.saturating_add(
+                    budget
+                        .account_property_update_cost
+                        .saturating_mul(updates_count)
+                )
+            ),
+            result
+        );
+        let transaction_context = &invoke_context.transaction_context;
+        let instruction_context = question_mark!(
+            transaction_context
+                .get_current_instruction_context()
+                .map_err(SyscallError::InstructionError),
+            result
+        );
+        let updates = question_mark!(
+            translate_slice_mut::<AccountPropertyUpdate>(
+                memory_mapping,
+                updates_addr,
+                updates_count,
+                invoke_context.get_check_aligned(),
+                invoke_context.get_check_size(),
+            ),
+            result
+        );
+        *result = Ok(0);
+        for update in updates.iter() {
+            let mut borrowed_account = question_mark!(
+                instruction_context
+                    .try_borrow_instruction_account(
+                        transaction_context,
+                        update.instruction_account_index,
+                    )
+                    .map_err(SyscallError::InstructionError),
+                result
+            );
+            let attribute =
+                unsafe { std::mem::transmute::<_, TransactionContextAttribute>(update.attribute) };
+            match attribute {
+                TransactionContextAttribute::TransactionAccountOwner => {
+                    let owner_pubkey = question_mark!(
+                        translate_type_mut::<Pubkey>(
+                            memory_mapping,
+                            update.value,
+                            invoke_context.get_check_aligned()
+                        ),
+                        result
+                    );
+                    question_mark!(
+                        borrowed_account
+                            .set_owner(&owner_pubkey.to_bytes())
+                            .map_err(SyscallError::InstructionError),
+                        result
+                    );
+                }
+                TransactionContextAttribute::TransactionAccountLamports => question_mark!(
+                    borrowed_account
+                        .set_lamports(update.value)
+                        .map_err(SyscallError::InstructionError),
+                    result
+                ),
+                TransactionContextAttribute::TransactionAccountData => question_mark!(
+                    borrowed_account
+                        .set_data_length(update.value as usize)
+                        .map_err(SyscallError::InstructionError),
+                    result
+                ),
+                TransactionContextAttribute::TransactionAccountIsExecutable => question_mark!(
+                    borrowed_account
+                        .set_executable(update.value != 0)
+                        .map_err(SyscallError::InstructionError),
+                    result
+                ),
+                _ => {
+                    *result = Err(SyscallError::InvalidAttribute.into());
+                    return;
+                }
+            }
+        }
     }
 );
 
@@ -1899,7 +2025,12 @@ mod tests {
             let mut $transaction_context =
                 TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
             let mut $invoke_context = InvokeContext::new_mock(&mut $transaction_context, &[]);
-            $invoke_context.push(&[], &[0, 1], &[]).unwrap();
+            $invoke_context
+                .transaction_context
+                .get_next_instruction_context()
+                .unwrap()
+                .configure(&[0, 1], &[], &[]);
+            $invoke_context.push().unwrap();
         };
     }
 
@@ -2487,7 +2618,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
@@ -2529,7 +2660,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
@@ -2570,7 +2701,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
                     MemoryRegion::default(),
@@ -2612,7 +2743,7 @@ mod tests {
                 program_id,
                 bpf_loader::id(),
             );
-            let mut heap = AlignedMemory::new_with_size(100, HOST_ALIGN);
+            let mut heap = AlignedMemory::<HOST_ALIGN>::zero_filled(100);
             let config = Config::default();
             let mut memory_mapping = MemoryMapping::new::<UserError>(
                 vec![
@@ -3103,6 +3234,302 @@ mod tests {
             invoke_context: Rc::new(RefCell::new(invoke_context)),
         };
         call_program_address_common(seeds, address, &mut syscall)
+    }
+
+    #[test]
+    fn test_syscall_sol_get_processed_sibling_instruction() {
+        let transaction_accounts = (0..9)
+            .map(|_| {
+                (
+                    Pubkey::new_unique(),
+                    AccountSharedData::new(0, 0, &bpf_loader::id()),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut transaction_context = TransactionContext::new(transaction_accounts, None, 4, 1);
+        for (index_in_trace, stack_height) in [1, 2, 3, 2, 2, 3, 4, 3].into_iter().enumerate() {
+            while stack_height <= transaction_context.get_instruction_context_stack_height() {
+                transaction_context.pop().unwrap();
+            }
+            if stack_height > transaction_context.get_instruction_context_stack_height() {
+                let instruction_accounts = [InstructionAccount {
+                    index_in_transaction: index_in_trace.saturating_add(1) as IndexOfAccount,
+                    index_in_caller: 0, // This is incorrect / inconsistent but not required
+                    index_in_callee: 0,
+                    is_signer: false,
+                    is_writable: false,
+                }];
+                transaction_context
+                    .get_next_instruction_context()
+                    .unwrap()
+                    .configure(&[0], &instruction_accounts, &[index_in_trace as u8]);
+                transaction_context.push().unwrap();
+            }
+        }
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+
+        let syscall_base_cost = invoke_context.get_compute_budget().syscall_base_cost;
+        let mut syscall_get_processed_sibling_instruction = SyscallGetProcessedSiblingInstruction {
+            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+        };
+        const VM_BASE_ADDRESS: u64 = 0x100000000;
+        const META_OFFSET: usize = 0;
+        const PROGRAM_ID_OFFSET: usize =
+            META_OFFSET + std::mem::size_of::<ProcessedSiblingInstruction>();
+        const DATA_OFFSET: usize = PROGRAM_ID_OFFSET + std::mem::size_of::<Pubkey>();
+        const ACCOUNTS_OFFSET: usize = DATA_OFFSET + 0x100;
+        const END_OFFSET: usize = ACCOUNTS_OFFSET + std::mem::size_of::<AccountInfo>() * 4;
+        let mut memory = [0u8; END_OFFSET];
+        let config = Config::default();
+        let mut memory_mapping = MemoryMapping::new::<UserError>(
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: memory.as_mut_ptr() as u64,
+                    vm_addr: VM_BASE_ADDRESS,
+                    len: END_OFFSET as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+            ],
+            &config,
+        )
+        .unwrap();
+        let processed_sibling_instruction = translate_type_mut::<ProcessedSiblingInstruction>(
+            &memory_mapping,
+            VM_BASE_ADDRESS,
+            true,
+        )
+        .unwrap();
+        processed_sibling_instruction.data_len = 1;
+        processed_sibling_instruction.accounts_len = 1;
+        let program_id = translate_type_mut::<Pubkey>(
+            &memory_mapping,
+            VM_BASE_ADDRESS.saturating_add(PROGRAM_ID_OFFSET as u64),
+            true,
+        )
+        .unwrap();
+        let data = translate_slice_mut::<u8>(
+            &memory_mapping,
+            VM_BASE_ADDRESS.saturating_add(DATA_OFFSET as u64),
+            processed_sibling_instruction.data_len as u64,
+            true,
+            true,
+        )
+        .unwrap();
+        let accounts = translate_slice_mut::<AccountMeta>(
+            &memory_mapping,
+            VM_BASE_ADDRESS.saturating_add(ACCOUNTS_OFFSET as u64),
+            processed_sibling_instruction.accounts_len as u64,
+            true,
+            true,
+        )
+        .unwrap();
+
+        syscall_get_processed_sibling_instruction
+            .invoke_context
+            .borrow_mut()
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(syscall_base_cost);
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall_get_processed_sibling_instruction.call(
+            0,
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(PROGRAM_ID_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(DATA_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(ACCOUNTS_OFFSET as u64),
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result, Ok(1));
+        {
+            let transaction_context = &syscall_get_processed_sibling_instruction
+                .invoke_context
+                .borrow()
+                .transaction_context;
+            assert_eq!(processed_sibling_instruction.data_len, 1);
+            assert_eq!(processed_sibling_instruction.accounts_len, 1);
+            assert_eq!(
+                program_id,
+                transaction_context.get_key_of_account_at_index(0).unwrap(),
+            );
+            assert_eq!(data, &[5]);
+            assert_eq!(
+                accounts,
+                &[AccountMeta {
+                    pubkey: *transaction_context.get_key_of_account_at_index(6).unwrap(),
+                    is_signer: false,
+                    is_writable: false
+                }]
+            );
+        }
+
+        syscall_get_processed_sibling_instruction
+            .invoke_context
+            .borrow_mut()
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(syscall_base_cost);
+        syscall_get_processed_sibling_instruction.call(
+            1,
+            VM_BASE_ADDRESS.saturating_add(META_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(PROGRAM_ID_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(DATA_OFFSET as u64),
+            VM_BASE_ADDRESS.saturating_add(ACCOUNTS_OFFSET as u64),
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result, Ok(0));
+    }
+
+    #[test]
+    fn test_syscall_sol_set_account_properties() {
+        let program_key = Pubkey::new_unique();
+        let loader_key = bpf_loader::id();
+        let transaction_accounts = vec![
+            (
+                loader_key,
+                AccountSharedData::new(0, 0, &native_loader::id()),
+            ),
+            (program_key, AccountSharedData::new(0, 0, &loader_key)),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &program_key),
+            ),
+            (
+                Pubkey::new_unique(),
+                AccountSharedData::new(0, 0, &program_key),
+            ),
+        ];
+        let mut transaction_context =
+            TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
+        transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(
+                &[0, 1],
+                &[
+                    InstructionAccount {
+                        index_in_transaction: 2,
+                        index_in_caller: 2,
+                        index_in_callee: 0,
+                        is_signer: false,
+                        is_writable: true,
+                    },
+                    InstructionAccount {
+                        index_in_transaction: 3,
+                        index_in_caller: 3,
+                        index_in_callee: 0,
+                        is_signer: false,
+                        is_writable: true,
+                    },
+                ],
+                &[],
+            );
+        let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
+        invoke_context.push().unwrap();
+
+        let keys = [loader_key];
+        let updates_list = [
+            AccountPropertyUpdate {
+                instruction_account_index: 0,
+                attribute: TransactionContextAttribute::TransactionAccountLamports as u16,
+                value: 10000000,
+                _marker: std::marker::PhantomData::default(),
+            },
+            AccountPropertyUpdate {
+                instruction_account_index: 0,
+                attribute: TransactionContextAttribute::TransactionAccountData as u16,
+                value: 512,
+                _marker: std::marker::PhantomData::default(),
+            },
+            AccountPropertyUpdate {
+                instruction_account_index: 0,
+                attribute: TransactionContextAttribute::TransactionAccountIsExecutable as u16,
+                value: true as u64,
+                _marker: std::marker::PhantomData::default(),
+            },
+            AccountPropertyUpdate {
+                instruction_account_index: 1,
+                attribute: TransactionContextAttribute::TransactionAccountOwner as u16,
+                value: VM_ADDRESS_KEYS as u64,
+                _marker: std::marker::PhantomData::default(),
+            },
+        ];
+
+        let cost = invoke_context
+            .get_compute_budget()
+            .syscall_base_cost
+            .saturating_add(
+                invoke_context
+                    .get_compute_budget()
+                    .account_property_update_cost
+                    .saturating_mul(updates_list.len() as u64),
+            );
+        let mut syscall_set_account_properties = SyscallSetAccountProperties {
+            invoke_context: Rc::new(RefCell::new(&mut invoke_context)),
+        };
+        const VM_ADDRESS_KEYS: u64 = 0x100000000;
+        const VM_ADDRESS_UPDATES_LIST: u64 = 0x200000000;
+        let config = Config::default();
+        let mut memory_mapping = MemoryMapping::new::<UserError>(
+            vec![
+                MemoryRegion::default(),
+                MemoryRegion {
+                    host_addr: keys.as_ptr() as u64,
+                    vm_addr: VM_ADDRESS_KEYS,
+                    len: (keys.len() * std::mem::size_of::<Pubkey>()) as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+                MemoryRegion {
+                    host_addr: updates_list.as_ptr() as u64,
+                    vm_addr: VM_ADDRESS_UPDATES_LIST,
+                    len: (updates_list.len() * std::mem::size_of::<AccountPropertyUpdate>()) as u64,
+                    vm_gap_shift: 63,
+                    is_writable: true,
+                },
+            ],
+            &config,
+        )
+        .unwrap();
+
+        syscall_set_account_properties
+            .invoke_context
+            .borrow_mut()
+            .get_compute_meter()
+            .borrow_mut()
+            .mock_set_remaining(cost);
+        let mut result: Result<u64, EbpfError<BpfError>> = Ok(0);
+        syscall_set_account_properties.call(
+            VM_ADDRESS_UPDATES_LIST,
+            updates_list.len() as u64,
+            0,
+            0,
+            0,
+            &mut memory_mapping,
+            &mut result,
+        );
+        assert_eq!(result, Ok(0));
+        {
+            let transaction_context = &syscall_set_account_properties
+                .invoke_context
+                .borrow()
+                .transaction_context;
+            let account = transaction_context
+                .get_account_at_index(2)
+                .unwrap()
+                .borrow();
+            assert_eq!(account.lamports(), 10000000);
+            assert_eq!(account.data().len(), 512);
+            assert!(account.executable());
+            let account = transaction_context
+                .get_account_at_index(3)
+                .unwrap()
+                .borrow();
+            assert_eq!(account.owner(), &loader_key);
+        }
     }
 
     #[test]
