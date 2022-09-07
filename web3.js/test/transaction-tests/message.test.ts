@@ -76,7 +76,7 @@ describe('TransactionMessage', () => {
       addressLookupTableAccounts,
     });
 
-    expect(decompiledMessage.accountKeys).to.eql(accountKeys);
+    expect(decompiledMessage.payerKey).to.eql(payerKey);
     expect(decompiledMessage.recentBlockhash).to.eq(recentBlockhash);
     expect(decompiledMessage.instructions).to.eql(instructions);
 
