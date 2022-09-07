@@ -40,6 +40,14 @@ export type CompileV0Args = {
   addressLookupTableAccounts?: Array<AddressLookupTableAccount>;
 };
 
+export type GetAccountKeysArgs =
+  | {
+      accountKeysFromLookups: AccountKeysFromLookups;
+    }
+  | {
+      addressLookupTableAccounts: AddressLookupTableAccount[];
+    };
+
 export class MessageV0 {
   header: MessageHeader;
   staticAccountKeys: Array<PublicKey>;
@@ -57,6 +65,88 @@ export class MessageV0 {
 
   get version(): 0 {
     return 0;
+  }
+
+  get numAccountKeysFromLookups(): number {
+    let count = 0;
+    for (const lookup of this.addressTableLookups) {
+      count += lookup.readonlyIndexes.length + lookup.writableIndexes.length;
+    }
+    return count;
+  }
+
+  getAccountKeys(args?: GetAccountKeysArgs): MessageAccountKeys {
+    let accountKeysFromLookups: AccountKeysFromLookups | undefined;
+    if (args && 'accountKeysFromLookups' in args) {
+      if (
+        this.numAccountKeysFromLookups !=
+        args.accountKeysFromLookups.writable.length +
+          args.accountKeysFromLookups.readonly.length
+      ) {
+        throw new Error(
+          'Failed to get account keys because of a mismatch in the number of account keys from lookups',
+        );
+      }
+      accountKeysFromLookups = args.accountKeysFromLookups;
+    } else if (args && 'addressLookupTableAccounts' in args) {
+      accountKeysFromLookups = this.resolveAddressTableLookups(
+        args.addressLookupTableAccounts,
+      );
+    } else if (this.addressTableLookups.length > 0) {
+      throw new Error(
+        'Failed to get account keys because address table lookups were not resolved',
+      );
+    }
+    return new MessageAccountKeys(
+      this.staticAccountKeys,
+      accountKeysFromLookups,
+    );
+  }
+
+  resolveAddressTableLookups(
+    addressLookupTableAccounts: AddressLookupTableAccount[],
+  ): AccountKeysFromLookups {
+    const accountKeysFromLookups: AccountKeysFromLookups = {
+      writable: [],
+      readonly: [],
+    };
+
+    for (const tableLookup of this.addressTableLookups) {
+      const tableAccount = addressLookupTableAccounts.find(account =>
+        account.key.equals(tableLookup.accountKey),
+      );
+      if (!tableAccount) {
+        throw new Error(
+          `Failed to find address lookup table account for table key ${tableLookup.accountKey.toBase58()}`,
+        );
+      }
+
+      for (const index of tableLookup.writableIndexes) {
+        if (index < tableAccount.state.addresses.length) {
+          accountKeysFromLookups.writable.push(
+            tableAccount.state.addresses[index],
+          );
+        } else {
+          throw new Error(
+            `Failed to find address for index ${index} in address lookup table ${tableLookup.accountKey.toBase58()}`,
+          );
+        }
+      }
+
+      for (const index of tableLookup.readonlyIndexes) {
+        if (index < tableAccount.state.addresses.length) {
+          accountKeysFromLookups.readonly.push(
+            tableAccount.state.addresses[index],
+          );
+        } else {
+          throw new Error(
+            `Failed to find address for index ${index} in address lookup table ${tableLookup.accountKey.toBase58()}`,
+          );
+        }
+      }
+    }
+
+    return accountKeysFromLookups;
   }
 
   static compile(args: CompileV0Args): MessageV0 {

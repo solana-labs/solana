@@ -2,7 +2,11 @@ import bs58 from 'bs58';
 import {expect} from 'chai';
 import {sha256} from '@noble/hashes/sha256';
 
-import {MessageV0} from '../../src/message';
+import {
+  MessageAccountKeys,
+  MessageAddressTableLookup,
+  MessageV0,
+} from '../../src/message';
 import {TransactionInstruction} from '../../src/transaction';
 import {PublicKey} from '../../src/publickey';
 import {AddressLookupTableAccount} from '../../src/programs';
@@ -28,6 +32,142 @@ function createTestLookupTable(
 }
 
 describe('MessageV0', () => {
+  it('numAccountKeysFromLookups', () => {
+    const message = MessageV0.compile({
+      payerKey: PublicKey.unique(),
+      recentBlockhash: '',
+      instructions: [],
+    });
+    expect(message.numAccountKeysFromLookups).to.eq(0);
+
+    message.addressTableLookups = [
+      {
+        accountKey: PublicKey.unique(),
+        writableIndexes: [0],
+        readonlyIndexes: [1],
+      },
+      {
+        accountKey: PublicKey.unique(),
+        writableIndexes: [0, 2],
+        readonlyIndexes: [],
+      },
+    ];
+    expect(message.numAccountKeysFromLookups).to.eq(4);
+  });
+
+  it('getAccountKeys', () => {
+    const staticAccountKeys = createTestKeys(3);
+    const lookupTable = createTestLookupTable(createTestKeys(2));
+    const message = new MessageV0({
+      header: {
+        numRequiredSignatures: 1,
+        numReadonlySignedAccounts: 0,
+        numReadonlyUnsignedAccounts: 0,
+      },
+      recentBlockhash: 'test',
+      staticAccountKeys,
+      compiledInstructions: [],
+      addressTableLookups: [
+        {
+          accountKey: lookupTable.key,
+          writableIndexes: [0],
+          readonlyIndexes: [1],
+        },
+      ],
+    });
+
+    expect(() => message.getAccountKeys()).to.throw(
+      'Failed to get account keys because address table lookups were not resolved',
+    );
+    expect(() =>
+      message.getAccountKeys({
+        accountKeysFromLookups: {writable: [PublicKey.unique()], readonly: []},
+      }),
+    ).to.throw(
+      'Failed to get account keys because of a mismatch in the number of account keys from lookups',
+    );
+
+    const accountKeysFromLookups = message.resolveAddressTableLookups([
+      lookupTable,
+    ]);
+    const expectedAccountKeys = new MessageAccountKeys(
+      staticAccountKeys,
+      accountKeysFromLookups,
+    );
+
+    expect(
+      message.getAccountKeys({
+        accountKeysFromLookups,
+      }),
+    ).to.eql(expectedAccountKeys);
+
+    expect(
+      message.getAccountKeys({
+        addressLookupTableAccounts: [lookupTable],
+      }),
+    ).to.eql(expectedAccountKeys);
+  });
+
+  it('resolveAddressTableLookups', () => {
+    const keys = createTestKeys(7);
+    const lookupTable = createTestLookupTable(keys);
+    const createTestMessage = (
+      addressTableLookups: MessageAddressTableLookup[],
+    ): MessageV0 => {
+      return new MessageV0({
+        header: {
+          numRequiredSignatures: 1,
+          numReadonlySignedAccounts: 0,
+          numReadonlyUnsignedAccounts: 0,
+        },
+        recentBlockhash: 'test',
+        staticAccountKeys: [],
+        compiledInstructions: [],
+        addressTableLookups,
+      });
+    };
+
+    expect(
+      createTestMessage([]).resolveAddressTableLookups([lookupTable]),
+    ).to.eql({
+      writable: [],
+      readonly: [],
+    });
+
+    expect(() =>
+      createTestMessage([
+        {
+          accountKey: PublicKey.unique(),
+          writableIndexes: [1, 3, 5],
+          readonlyIndexes: [0, 2, 4],
+        },
+      ]).resolveAddressTableLookups([lookupTable]),
+    ).to.throw('Failed to find address lookup table account for table key');
+
+    expect(() =>
+      createTestMessage([
+        {
+          accountKey: lookupTable.key,
+          writableIndexes: [10],
+          readonlyIndexes: [],
+        },
+      ]).resolveAddressTableLookups([lookupTable]),
+    ).to.throw('Failed to find address for index');
+
+    expect(
+      createTestMessage([
+        {
+          accountKey: lookupTable.key,
+          writableIndexes: [1, 3, 5],
+          readonlyIndexes: [0, 2, 4],
+        },
+      ]).resolveAddressTableLookups([lookupTable]),
+    ).to.eql({
+      writable: [keys[1], keys[3], keys[5]],
+      readonly: [keys[0], keys[2], keys[4]],
+    });
+  });
+
   it('compile', () => {
     const keys = createTestKeys(7);
     const recentBlockhash = bs58.encode(sha256('test'));
