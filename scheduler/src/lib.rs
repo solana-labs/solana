@@ -1029,7 +1029,8 @@ impl ScheduleStage {
                         */
 
                         if from_runnable {
-                            continue; // continue to prefer depleting the possibly-non-empty runnable queue
+                            // continue; // continue to prefer depleting the possibly-non-empty runnable queue
+                            break;
                         } else if task_source == TaskSource::Stuck {
                             // need to bail out immediately to avoid going to infinite loop of re-processing
                             // the struck task again.
@@ -1447,9 +1448,8 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                while (executing_queue_count + provisioning_tracker_count)
-                    < max_executing_queue_count
-                {
+                let executing_like_count = executing_queue_count + provisioning_tracker_count;
+                if executing_like_count < max_executing_queue_count {
                     trace!("schedule_once id_{:016x} (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     if start.elapsed() > std::time::Duration::from_millis(150) {
                         start = std::time::Instant::now();
@@ -1470,8 +1470,6 @@ impl ScheduleStage {
                     ) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
-                    } else {
-                        break;
                     }
                 }
                 //break;
