@@ -1341,6 +1341,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload>>, // assume nonblocking
+        never: usize,
     ) {
         let random_id = rand::thread_rng().gen::<u64>();
         info!("schedule_once:initial id_{:016x}", random_id);
@@ -1409,7 +1410,6 @@ impl ScheduleStage {
                 .unwrap()
         }).collect::<Vec<_>>();
         let mut start = std::time::Instant::now();
-        let never = crossbeam_channel::never();
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work) = Default::default();
         loop {
@@ -1544,6 +1544,8 @@ impl ScheduleStage {
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
 
+        let never = crossbeam_channel::never();
+
         Self::_run::<AtTopOfScheduleThread>(
             AtTopOfScheduleThread,
             max_executing_queue_count,
@@ -1553,6 +1555,7 @@ impl ScheduleStage {
             to_execute_substage,
             from_execute_substage,
             maybe_to_next_stage,
+            never,
         )
     }
 }
