@@ -19,8 +19,9 @@ use {
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
-    solana_core::system_monitor_service::SystemMonitorService,
-    solana_core::validator::move_and_async_delete_path,
+    solana_core::{
+        system_monitor_service::SystemMonitorService, validator::move_and_async_delete_path,
+    },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
