@@ -1555,7 +1555,7 @@ impl ScheduleStage {
             to_execute_substage,
             from_execute_substage,
             maybe_to_next_stage,
-            never,
+            &never,
         )
     }
 }
