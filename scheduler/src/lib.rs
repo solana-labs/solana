@@ -1341,7 +1341,7 @@ impl ScheduleStage {
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload>>, // assume nonblocking
-        never: crossbeam_channel::Receiver,
+        never: &crossbeam_channel::Receiver<SchedulablePayload>,
     ) {
         let random_id = rand::thread_rng().gen::<u64>();
         info!("schedule_once:initial id_{:016x}", random_id);
