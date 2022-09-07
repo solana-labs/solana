@@ -66,6 +66,18 @@ export type AuthorizeVoteParams = {
 };
 
 /**
+ * AuthorizeWithSeed instruction params
+ */
+export type AuthorizeVoteWithSeedParams = {
+  currentAuthorityDerivedKeyBasePubkey: PublicKey;
+  currentAuthorityDerivedKeyOwnerPubkey: PublicKey;
+  currentAuthorityDerivedKeySeed: string;
+  newAuthorizedPubkey: PublicKey;
+  voteAuthorizationType: VoteAuthorizationType;
+  votePubkey: PublicKey;
+};
+
+/**
  * Withdraw from vote account transaction params
  */
 export type WithdrawFromVoteAccountParams = {
@@ -161,6 +173,41 @@ export class VoteInstruction {
   }
 
   /**
+   * Decode an authorize instruction and retrieve the instruction params.
+   */
+  static decodeAuthorizeWithSeed(
+    instruction: TransactionInstruction,
+  ): AuthorizeVoteWithSeedParams {
+    this.checkProgramId(instruction.programId);
+    this.checkKeyLength(instruction.keys, 3);
+
+    const {
+      voteAuthorizeWithSeedArgs: {
+        currentAuthorityDerivedKeyOwnerPubkey,
+        currentAuthorityDerivedKeySeed,
+        newAuthorized,
+        voteAuthorizationType,
+      },
+    } = decodeData(
+      VOTE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed,
+      instruction.data,
+    );
+
+    return {
+      currentAuthorityDerivedKeyBasePubkey: instruction.keys[2].pubkey,
+      currentAuthorityDerivedKeyOwnerPubkey: new PublicKey(
+        currentAuthorityDerivedKeyOwnerPubkey,
+      ),
+      currentAuthorityDerivedKeySeed: currentAuthorityDerivedKeySeed,
+      newAuthorizedPubkey: new PublicKey(newAuthorized),
+      voteAuthorizationType: {
+        index: voteAuthorizationType,
+      },
+      votePubkey: instruction.keys[0].pubkey,
+    };
+  }
+
+  /**
    * Decode a withdraw instruction and retrieve the instruction params.
    */
   static decodeWithdraw(
@@ -211,12 +258,22 @@ export type VoteInstructionType =
   // It would be preferable for this type to be `keyof VoteInstructionInputData`
   // but Typedoc does not transpile `keyof` expressions.
   // See https://github.com/TypeStrong/typedoc/issues/1894
-  'Authorize' | 'InitializeAccount' | 'Withdraw';
+  'Authorize' | 'AuthorizeWithSeed' | 'InitializeAccount' | 'Withdraw';
 
+/** @internal */
+export type VoteAuthorizeWithSeedArgs = Readonly<{
+  currentAuthorityDerivedKeyOwnerPubkey: Uint8Array;
+  currentAuthorityDerivedKeySeed: string;
+  newAuthorized: Uint8Array;
+  voteAuthorizationType: number;
+}>;
 type VoteInstructionInputData = {
   Authorize: IInstructionInputData & {
     newAuthorized: Uint8Array;
     voteAuthorizationType: number;
+  };
+  AuthorizeWithSeed: IInstructionInputData & {
+    voteAuthorizeWithSeedArgs: VoteAuthorizeWithSeedArgs;
   };
   InitializeAccount: IInstructionInputData & {
     voteInit: Readonly<{
@@ -256,6 +313,13 @@ const VOTE_INSTRUCTION_LAYOUTS = Object.freeze<{
     layout: BufferLayout.struct<VoteInstructionInputData['Withdraw']>([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('lamports'),
+    ]),
+  },
+  AuthorizeWithSeed: {
+    index: 10,
+    layout: BufferLayout.struct<VoteInstructionInputData['AuthorizeWithSeed']>([
+      BufferLayout.u32('instruction'),
+      Layout.voteAuthorizeWithSeedArgs(),
     ]),
   },
 });
@@ -381,6 +445,49 @@ export class VoteProgram {
       {pubkey: votePubkey, isSigner: false, isWritable: true},
       {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
       {pubkey: authorizedPubkey, isSigner: true, isWritable: false},
+    ];
+
+    return new Transaction().add({
+      keys,
+      programId: this.programId,
+      data,
+    });
+  }
+
+  /**
+   * Generate a transaction that authorizes a new Voter or Withdrawer on the Vote account
+   * where the current Voter or Withdrawer authority is a derived key.
+   */
+  static authorizeWithSeed(params: AuthorizeVoteWithSeedParams): Transaction {
+    const {
+      currentAuthorityDerivedKeyBasePubkey,
+      currentAuthorityDerivedKeyOwnerPubkey,
+      currentAuthorityDerivedKeySeed,
+      newAuthorizedPubkey,
+      voteAuthorizationType,
+      votePubkey,
+    } = params;
+
+    const type = VOTE_INSTRUCTION_LAYOUTS.AuthorizeWithSeed;
+    const data = encodeData(type, {
+      voteAuthorizeWithSeedArgs: {
+        currentAuthorityDerivedKeyOwnerPubkey: toBuffer(
+          currentAuthorityDerivedKeyOwnerPubkey.toBuffer(),
+        ),
+        currentAuthorityDerivedKeySeed: currentAuthorityDerivedKeySeed,
+        newAuthorized: toBuffer(newAuthorizedPubkey.toBuffer()),
+        voteAuthorizationType: voteAuthorizationType.index,
+      },
+    });
+
+    const keys = [
+      {pubkey: votePubkey, isSigner: false, isWritable: true},
+      {pubkey: SYSVAR_CLOCK_PUBKEY, isSigner: false, isWritable: false},
+      {
+        pubkey: currentAuthorityDerivedKeyBasePubkey,
+        isSigner: true,
+        isWritable: false,
+      },
     ];
 
     return new Transaction().add({
