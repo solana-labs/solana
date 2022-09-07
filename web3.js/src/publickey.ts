@@ -40,6 +40,9 @@ function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
 }
 
+// local counter used by PublicKey.unique()
+let uniquePublicKeyCounter = 1;
+
 /**
  * A public key
  */
@@ -71,6 +74,15 @@ export class PublicKey extends Struct {
         throw new Error(`Invalid public key input`);
       }
     }
+  }
+
+  /**
+   * Returns a unique PublicKey for tests and benchmarks using acounter
+   */
+  static unique(): PublicKey {
+    const key = new PublicKey(uniquePublicKeyCounter);
+    uniquePublicKeyCounter += 1;
+    return new PublicKey(key.toBuffer());
   }
 
   /**
