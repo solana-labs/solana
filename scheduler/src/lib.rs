@@ -1413,7 +1413,6 @@ impl ScheduleStage {
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work) = Default::default();
         loop {
-            if !from_disconnected  {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    if let Ok(UnlockablePayload(mut processed_execution_environment)) = maybe_from_exec {
