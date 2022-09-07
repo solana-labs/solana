@@ -1258,7 +1258,7 @@ impl Default for Scheduler {
             let bank = bank.clone();
             let mut execute_time = 0;
 
-            std::thread::Builder::new().name(format!("solExec{:02}", thx)).spawn(move || {
+            std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
 
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
@@ -1329,7 +1329,7 @@ impl Default for Scheduler {
         let errors = Arc::new(std::sync::Mutex::new(Vec::new()));
         let errors_in_collector_thread = Arc::clone(&errors);
 
-        let error_collector_thread_handle = std::thread::Builder::new().name(format!("solErrorCol{:02}", 0)).spawn(move || {
+        let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
             while let Ok(solana_scheduler::DroppablePayload(mut ee)) = droppable_ee_receiver.recv() {
                 if ee.is_aborted() {
                     warn!(
