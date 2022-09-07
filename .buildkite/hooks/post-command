@@ -20,8 +20,6 @@ else
     SUCCESS=false
   fi
 
-<<<<<<< HEAD
-=======
   if [[ -n $BUILDKITE && -f "results.json" ]]; then
     # prepare result file
     awk '/{ "type": .* }/' results.json > sanitized-results.json
@@ -34,7 +32,6 @@ else
     datadog-ci junit upload --service solana results.xml
   fi
 
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
   point_tags="pipeline=$BUILDKITE_PIPELINE_SLUG,job=$CI_LABEL,pr=$PR,success=$SUCCESS"
   point_tags="${point_tags// /\\ }"  # Escape spaces
 

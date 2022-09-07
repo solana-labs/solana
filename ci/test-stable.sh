@@ -12,15 +12,12 @@ annotate() {
   }
 }
 
-<<<<<<< HEAD
-=======
 exit_if_error() {
   if [[ "$1" -ne 0 ]]; then
     exit "$1"
   fi
 }
 
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
 # Run the appropriate test based on entrypoint
 testName=$(basename "$0" .sh)
 
@@ -64,16 +61,12 @@ need_to_generate_test_result() {
 echo "Executing $testName"
 case $testName in
 test-stable)
-<<<<<<< HEAD
-  _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
     _ "$cargo" stable test --jobs "$JOBS" --all --tests --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
   fi
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
   ;;
 test-stable-bpf)
   # Clear the C dependency files, if dependency moves these files are not regenerated
@@ -95,11 +88,6 @@ test-stable-bpf)
 
   # BPF C program system tests
   _ make -C programs/bpf/c tests
-<<<<<<< HEAD
-  _ "$cargo" stable test \
-    --manifest-path programs/bpf/Cargo.toml \
-    --no-default-features --features=bpf_c,bpf_rust -- --nocapture
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test \
       --manifest-path programs/bpf/Cargo.toml \
@@ -110,7 +98,6 @@ test-stable-bpf)
       --manifest-path programs/bpf/Cargo.toml \
       --no-default-features --features=bpf_c,bpf_rust -- --nocapture
   fi
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
 
   # BPF Rust program unit tests
   for bpf_test in programs/bpf/rust/*; do
@@ -143,12 +130,6 @@ test-stable-bpf)
 
   # BPF program instruction count assertion
   bpf_target_path=programs/bpf/target
-<<<<<<< HEAD
-  _ "$cargo" stable test \
-    --manifest-path programs/bpf/Cargo.toml \
-    --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
-    -- --nocapture &> "${bpf_target_path}"/deploy/instuction_counts.txt
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test \
       --manifest-path programs/bpf/Cargo.toml \
@@ -161,7 +142,6 @@ test-stable-bpf)
       --no-default-features --features=bpf_c,bpf_rust assert_instruction_count \
       -- --nocapture &> "${bpf_target_path}"/deploy/instuction_counts.txt
   fi
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
 
   bpf_dump_archive="bpf-dumps.tar.bz2"
   rm -f "$bpf_dump_archive"
@@ -186,72 +166,52 @@ test-stable-perf)
   fi
 
   _ "$cargo" stable build --bins ${V:+--verbose}
-<<<<<<< HEAD
-  _ "$cargo" stable test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
     _ "$cargo" stable test --package solana-perf --package solana-ledger --package solana-core --lib ${V:+--verbose} -- --nocapture
   fi
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
   _ "$cargo" stable run --manifest-path poh-bench/Cargo.toml ${V:+--verbose} -- --hashes-per-tick 10
   ;;
 test-local-cluster)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
-<<<<<<< HEAD
-  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
     _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster ${V:+--verbose} -- --nocapture --test-threads=1
   fi
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
   exit 0
   ;;
 test-local-cluster-flakey)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
-<<<<<<< HEAD
-  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
     _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_flakey ${V:+--verbose} -- --nocapture --test-threads=1
   fi
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
   exit 0
   ;;
 test-local-cluster-slow-1)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
-<<<<<<< HEAD
-  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
     _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_1 ${V:+--verbose} -- --nocapture --test-threads=1
   fi
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
   exit 0
   ;;
 test-local-cluster-slow-2)
   _ "$cargo" stable build --release --bins ${V:+--verbose}
-<<<<<<< HEAD
-  _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --test-threads=1 -Z unstable-options --format json --report-time | tee results.json
     exit_if_error "${PIPESTATUS[0]}"
   else
     _ "$cargo" stable test --release --package solana-local-cluster --test local_cluster_slow_2 ${V:+--verbose} -- --nocapture --test-threads=1
   fi
->>>>>>> 8c1093534 (chore: only generate test result on specific branches (#27591))
   exit 0
   ;;
 test-wasm)
