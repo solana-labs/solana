@@ -30,7 +30,7 @@ use {
         iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator},
         ThreadPool,
     },
-    rocksdb::DBRawIterator,
+    rocksdb::{DBRawIterator, LiveFile},
     solana_entry::entry::{create_ticks, Entry},
     solana_measure::measure::Measure,
     solana_metrics::{
@@ -498,6 +498,10 @@ impl Blockstore {
 
         let orphans_iter = self.orphans_iterator(root + 1).unwrap();
         root_forks.chain(orphans_iter.flat_map(move |orphan| NextSlotsIterator::new(orphan, self)))
+    }
+
+    pub fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        self.db.live_files_metadata()
     }
 
     pub fn slot_data_iterator(
