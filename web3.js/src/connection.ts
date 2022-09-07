@@ -36,6 +36,7 @@ import {
   Transaction,
   TransactionStatus,
   TransactionVersion,
+  VersionedTransaction,
 } from './transaction';
 import {Message, MessageHeader, MessageV0, VersionedMessage} from './message';
 import {AddressLookupTableAccount} from './programs/address-lookup-table/state';
@@ -799,6 +800,22 @@ export type TransactionReturnDataEncoding = 'base64';
 export type TransactionReturnData = {
   programId: string;
   data: [string, TransactionReturnDataEncoding];
+};
+
+export type SimulateTransactionConfig = {
+  /** Optional parameter used to enable signature verification before simulation */
+  sigVerify?: boolean;
+  /** Optional parameter used to replace the simulated transaction's recent blockhash with the latest blockhash */
+  replaceRecentBlockhash?: boolean;
+  /** Optional parameter used to set the commitment level when selecting the latest block */
+  commitment?: Commitment;
+  /** Optional parameter used to specify a list of account addresses to return post simulation state for */
+  accounts?: {
+    encoding: 'base64';
+    addresses: string[];
+  };
+  /** Optional parameter used to specify the minimum block slot that can be used for simulation */
+  minContextSlot?: number;
 };
 
 export type SimulatedTransactionResponse = {
@@ -4625,12 +4642,58 @@ export class Connection {
 
   /**
    * Simulate a transaction
+   *
+   * @deprecated Instead, call {@link simulateTransaction} with {@link
+   * VersionedTransaction} and {@link SimulateTransactionConfig} parameters
    */
-  async simulateTransaction(
+  simulateTransaction(
     transactionOrMessage: Transaction | Message,
     signers?: Array<Signer>,
     includeAccounts?: boolean | Array<PublicKey>,
+  ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>>;
+
+  /**
+   * Simulate a transaction
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  simulateTransaction(
+    transaction: VersionedTransaction,
+    config?: SimulateTransactionConfig,
+  ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>>;
+
+  /**
+   * Simulate a transaction
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async simulateTransaction(
+    transactionOrMessage: VersionedTransaction | Transaction | Message,
+    configOrSigners?: SimulateTransactionConfig | Array<Signer>,
+    includeAccounts?: boolean | Array<PublicKey>,
   ): Promise<RpcResponseAndContext<SimulatedTransactionResponse>> {
+    if ('message' in transactionOrMessage) {
+      const versionedTx = transactionOrMessage;
+      const wireTransaction = versionedTx.serialize();
+      const encodedTransaction =
+        Buffer.from(wireTransaction).toString('base64');
+      if (Array.isArray(configOrSigners) || includeAccounts !== undefined) {
+        throw new Error('Invalid arguments');
+      }
+
+      const config: any = configOrSigners || {};
+      config.encoding = 'base64';
+      if (!('commitment' in config)) {
+        config.commitment = this.commitment;
+      }
+
+      const args = [encodedTransaction, config];
+      const unsafeRes = await this._rpcRequest('simulateTransaction', args);
+      const res = create(unsafeRes, SimulatedTransactionResponseStruct);
+      if ('error' in res) {
+        throw new Error('failed to simulate transaction: ' + res.error.message);
+      }
+      return res.result;
+    }
+
     let transaction;
     if (transactionOrMessage instanceof Transaction) {
       let originalTx: Transaction = transactionOrMessage;
@@ -4645,6 +4708,11 @@ export class Connection {
       transaction._message = transaction._json = undefined;
     }
 
+    if (configOrSigners !== undefined && !Array.isArray(configOrSigners)) {
+      throw new Error('Invalid arguments');
+    }
+
+    const signers = configOrSigners;
     if (transaction.nonceInfo && signers) {
       transaction.sign(...signers);
     } else {
@@ -4731,12 +4799,48 @@ export class Connection {
 
   /**
    * Sign and send a transaction
+   *
+   * @deprecated Instead, call {@link sendTransaction} with a {@link
+   * VersionedTransaction}
    */
-  async sendTransaction(
+  sendTransaction(
     transaction: Transaction,
     signers: Array<Signer>,
     options?: SendOptions,
+  ): Promise<TransactionSignature>;
+
+  /**
+   * Send a signed transaction
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  sendTransaction(
+    transaction: VersionedTransaction,
+    options?: SendOptions,
+  ): Promise<TransactionSignature>;
+
+  /**
+   * Sign and send a transaction
+   */
+  // eslint-disable-next-line no-dupe-class-members
+  async sendTransaction(
+    transaction: VersionedTransaction | Transaction,
+    signersOrOptions?: Array<Signer> | SendOptions,
+    options?: SendOptions,
   ): Promise<TransactionSignature> {
+    if ('message' in transaction) {
+      if (signersOrOptions && Array.isArray(signersOrOptions)) {
+        throw new Error('Invalid arguments');
+      }
+
+      const wireTransaction = transaction.serialize();
+      return await this.sendRawTransaction(wireTransaction, options);
+    }
+
+    if (signersOrOptions === undefined || !Array.isArray(signersOrOptions)) {
+      throw new Error('Invalid arguments');
+    }
+
+    const signers = signersOrOptions;
     if (transaction.nonceInfo) {
       transaction.sign(...signers);
     } else {
