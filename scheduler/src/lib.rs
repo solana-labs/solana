@@ -1409,7 +1409,7 @@ impl ScheduleStage {
         }).collect::<Vec<_>>();
         let mut start = std::time::Instant::now();
 
-        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work, mut no_more_work2) = Default::default();
+        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work) = Default::default();
         loop {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
