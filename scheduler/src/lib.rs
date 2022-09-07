@@ -1450,10 +1450,10 @@ impl ScheduleStage {
                 while (executing_queue_count + provisioning_tracker_count)
                     < max_executing_queue_count
                 {
-                    trace!("schedule_once (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+                    trace!("schedule_once id_{:016x} (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     if start.elapsed() > std::time::Duration::from_millis(150) {
                         start = std::time::Instant::now();
-                        info!("schedule_once:interval (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+                        info!("schedule_once:interval id_{:016x} (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     }
                     let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
                     if let Some(ee) = Self::schedule_next_execution(
