@@ -1337,7 +1337,7 @@ impl ScheduleStage {
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload>,
+        mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload>>, // assume nonblocking
