@@ -219,7 +219,6 @@ fn execute_batches(
             })
             .collect();
 
-        // TODO (LB): wait for all the txs to return
         let mut results = vec![];
         let mut new_timings = vec![];
         for r in responses {
