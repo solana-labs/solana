@@ -136,3 +136,55 @@ impl PacketDeserializer {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        solana_perf::packet::to_packet_batches,
+        solana_sdk::{
+            hash::Hash, pubkey::Pubkey, signature::Keypair, system_transaction,
+            transaction::Transaction,
+        },
+    };
+
+    fn random_transfer() -> Transaction {
+        system_transaction::transfer(&Keypair::new(), &Pubkey::new_unique(), 1, Hash::default())
+    }
+
+    #[test]
+    fn test_deserialize_and_collect_packets_empty() {
+        let results = PacketDeserializer::deserialize_and_collect_packets(&[], None);
+        assert_eq!(results.deserialized_packets.len(), 0);
+        assert!(results.new_tracer_stats_option.is_none());
+        assert_eq!(results.passed_sigverify_count, 0);
+        assert_eq!(results.failed_sigverify_count, 0);
+    }
+
+    #[test]
+    fn test_deserialize_and_collect_packets_simple_batches() {
+        let transactions = vec![random_transfer(), random_transfer()];
+        let packet_batches = to_packet_batches(&transactions, 1);
+        assert_eq!(packet_batches.len(), 2);
+
+        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        assert_eq!(results.deserialized_packets.len(), 2);
+        assert!(results.new_tracer_stats_option.is_none());
+        assert_eq!(results.passed_sigverify_count, 2);
+        assert_eq!(results.failed_sigverify_count, 0);
+    }
+
+    #[test]
+    fn test_deserialize_and_collect_packets_simple_batches_with_failure() {
+        let transactions = vec![random_transfer(), random_transfer()];
+        let mut packet_batches = to_packet_batches(&transactions, 1);
+        assert_eq!(packet_batches.len(), 2);
+        packet_batches[0][0].meta.set_discard(true);
+
+        let results = PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+        assert_eq!(results.deserialized_packets.len(), 1);
+        assert!(results.new_tracer_stats_option.is_none());
+        assert_eq!(results.passed_sigverify_count, 1);
+        assert_eq!(results.failed_sigverify_count, 1);
+    }
+}
