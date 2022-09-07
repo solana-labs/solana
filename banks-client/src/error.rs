@@ -1,12 +1,6 @@
-use {
-    solana_sdk::{
-        transaction::TransactionError, transaction_context::TransactionReturnData,
-        transport::TransportError,
-    },
-    std::io,
-    tarpc::client::RpcError,
-    thiserror::Error,
-};
+use solana_sdk::transaction::TransactionError;
+use solana_sdk::transaction_context::TransactionReturnData;
+use {solana_sdk::transport::TransportError, std::io, tarpc::client::RpcError, thiserror::Error};
 
 /// Errors from BanksClient
 #[derive(Error, Debug)]
