@@ -1,16 +1,14 @@
-import {
-  AccountKeysFromLookups,
-  MessageAccountKeys,
-} from '../message/account-keys';
+import {AccountKeysFromLookups} from '../message/account-keys';
 import assert from '../utils/assert';
 import {toBuffer} from '../utils/to-buffer';
 import {Blockhash} from '../blockhash';
 import {Message, MessageV0, VersionedMessage} from '../message';
+import {PublicKey} from '../publickey';
 import {AddressLookupTableAccount} from '../programs';
 import {AccountMeta, TransactionInstruction} from './legacy';
 
 export type TransactionMessageArgs = {
-  accountKeys: MessageAccountKeys;
+  payerKey: PublicKey;
   instructions: Array<TransactionInstruction>;
   recentBlockhash: Blockhash;
 };
@@ -24,12 +22,12 @@ export type DecompileArgs =
     };
 
 export class TransactionMessage {
-  accountKeys: MessageAccountKeys;
+  payerKey: PublicKey;
   instructions: Array<TransactionInstruction>;
   recentBlockhash: Blockhash;
 
   constructor(args: TransactionMessageArgs) {
-    this.accountKeys = args.accountKeys;
+    this.payerKey = args.payerKey;
     this.instructions = args.instructions;
     this.recentBlockhash = args.recentBlockhash;
   }
@@ -55,6 +53,13 @@ export class TransactionMessage {
     assert(numWritableUnsignedAccounts >= 0, 'Message header is invalid');
 
     const accountKeys = message.getAccountKeys(args);
+    const payerKey = accountKeys.get(0);
+    if (payerKey === undefined) {
+      throw new Error(
+        'Failed to decompile message because no account keys were found',
+      );
+    }
+
     const instructions: TransactionInstruction[] = [];
     for (const compiledIx of compiledInstructions) {
       const keys: AccountMeta[] = [];
@@ -106,22 +111,15 @@ export class TransactionMessage {
     }
 
     return new TransactionMessage({
-      accountKeys,
+      payerKey,
       instructions,
       recentBlockhash,
     });
   }
 
   compileToLegacyMessage(): Message {
-    const payerKey = this.accountKeys.get(0);
-    if (payerKey === undefined) {
-      throw new Error(
-        'Failed to compile message because no account keys were found',
-      );
-    }
-
     return Message.compile({
-      payerKey,
+      payerKey: this.payerKey,
       recentBlockhash: this.recentBlockhash,
       instructions: this.instructions,
     });
@@ -130,15 +128,8 @@ export class TransactionMessage {
   compileToV0Message(
     addressLookupTableAccounts?: AddressLookupTableAccount[],
   ): MessageV0 {
-    const payerKey = this.accountKeys.get(0);
-    if (payerKey === undefined) {
-      throw new Error(
-        'Failed to compile message because no account keys were found',
-      );
-    }
-
     return MessageV0.compile({
-      payerKey,
+      payerKey: this.payerKey,
       recentBlockhash: this.recentBlockhash,
       instructions: this.instructions,
       addressLookupTableAccounts,
