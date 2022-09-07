@@ -31,7 +31,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::{TestValidator, TestValidatorGenesis},
-    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
 };
 
 #[test]
@@ -55,11 +54,7 @@ fn test_stake_redelegation() {
             /* enable_warmup_epochs = */ false,
         ))
         .faucet_addr(Some(faucet_addr))
-        .start_with_mint_address(
-            mint_pubkey,
-            SocketAddrSpace::Unspecified,
-            DEFAULT_TPU_ENABLE_UDP,
-        )
+        .start_with_mint_address(mint_pubkey, SocketAddrSpace::Unspecified)
         .expect("validator start failed");
 
     let rpc_client =

@@ -124,6 +124,7 @@ pub struct TestValidatorGenesis {
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
     pub transaction_account_lock_limit: Option<usize>,
+    pub tpu_enable_udp: bool,
 }
 
 impl Default for TestValidatorGenesis {
@@ -155,6 +156,7 @@ impl Default for TestValidatorGenesis {
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
             transaction_account_lock_limit: Option::<usize>::default(),
+            tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
         }
     }
 }
@@ -180,6 +182,11 @@ impl TestValidatorGenesis {
     /// Check if a given TestValidator ledger has already been initialized
     pub fn ledger_exists(ledger_path: &Path) -> bool {
         ledger_path.join("vote-account-keypair.json").exists()
+    }
+
+    pub fn tpu_enable_udp(&mut self, tpu_enable_udp: bool) -> &mut Self {
+        self.tpu_enable_udp = tpu_enable_udp;
+        self
     }
 
     pub fn fee_rate_governor(&mut self, fee_rate_governor: FeeRateGovernor) -> &mut Self {
@@ -452,19 +459,16 @@ impl TestValidatorGenesis {
         &self,
         mint_address: Pubkey,
         socket_addr_space: SocketAddrSpace,
-        tpu_enable_udp: bool,
     ) -> Result<TestValidator, Box<dyn std::error::Error>> {
-        TestValidator::start(mint_address, self, socket_addr_space, tpu_enable_udp).map(
-            |test_validator| {
-                let runtime = tokio::runtime::Builder::new_current_thread()
-                    .enable_io()
-                    .enable_time()
-                    .build()
-                    .unwrap();
-                runtime.block_on(test_validator.wait_for_nonzero_fees());
-                test_validator
-            },
-        )
+        TestValidator::start(mint_address, self, socket_addr_space).map(|test_validator| {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_io()
+                .enable_time()
+                .build()
+                .unwrap();
+            runtime.block_on(test_validator.wait_for_nonzero_fees());
+            test_validator
+        })
     }
 
     /// Start a test validator
@@ -473,11 +477,8 @@ impl TestValidatorGenesis {
     /// created at genesis.
     ///
     /// This function panics on initialization failure.
-    pub fn start(&self, tpu_enable_udp: bool) -> (TestValidator, Keypair) {
-        self.start_with_socket_addr_space(
-            SocketAddrSpace::new(/*allow_private_addr=*/ true),
-            tpu_enable_udp,
-        )
+    pub fn start(&self) -> (TestValidator, Keypair) {
+        self.start_with_socket_addr_space(SocketAddrSpace::new(/*allow_private_addr=*/ true))
     }
 
     /// Start a test validator with the given `SocketAddrSpace`
@@ -489,34 +490,26 @@ impl TestValidatorGenesis {
     pub fn start_with_socket_addr_space(
         &self,
         socket_addr_space: SocketAddrSpace,
-        tpu_enable_udp: bool,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space, tpu_enable_udp)
+        self.start_with_mint_address(mint_keypair.pubkey(), socket_addr_space)
             .map(|test_validator| (test_validator, mint_keypair))
             .unwrap_or_else(|err| panic!("Test validator failed to start: {}", err))
     }
 
     pub async fn start_async(&self) -> (TestValidator, Keypair) {
-        self.start_async_with_socket_addr_space(
-            SocketAddrSpace::new(/*allow_private_addr=*/ true),
-            DEFAULT_TPU_ENABLE_UDP,
-        )
+        self.start_async_with_socket_addr_space(SocketAddrSpace::new(
+            /*allow_private_addr=*/ true,
+        ))
         .await
     }
 
     pub async fn start_async_with_socket_addr_space(
         &self,
         socket_addr_space: SocketAddrSpace,
-        tpu_enable_udp: bool,
     ) -> (TestValidator, Keypair) {
         let mint_keypair = Keypair::new();
-        match TestValidator::start(
-            mint_keypair.pubkey(),
-            self,
-            socket_addr_space,
-            tpu_enable_udp,
-        ) {
+        match TestValidator::start(mint_keypair.pubkey(), self, socket_addr_space) {
             Ok(test_validator) => {
                 test_validator.wait_for_nonzero_fees().await;
                 (test_validator, mint_keypair)
@@ -555,7 +548,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space, DEFAULT_TPU_ENABLE_UDP)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -566,6 +559,7 @@ impl TestValidator {
         socket_addr_space: SocketAddrSpace,
     ) -> Self {
         TestValidatorGenesis::default()
+            .tpu_enable_udp(true)
             .fee_rate_governor(FeeRateGovernor::new(0, 0))
             .rent(Rent {
                 lamports_per_byte_year: 1,
@@ -573,7 +567,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space, true)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -595,7 +589,7 @@ impl TestValidator {
                 ..Rent::default()
             })
             .faucet_addr(faucet_addr)
-            .start_with_mint_address(mint_address, socket_addr_space, DEFAULT_TPU_ENABLE_UDP)
+            .start_with_mint_address(mint_address, socket_addr_space)
             .expect("validator start failed")
     }
 
@@ -732,7 +726,6 @@ impl TestValidator {
         mint_address: Pubkey,
         config: &TestValidatorGenesis,
         socket_addr_space: SocketAddrSpace,
-        tpu_enable_udp: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let preserve_ledger = config.ledger_path.is_some();
         let ledger_path = TestValidator::initialize_ledger(mint_address, config)?;
@@ -844,7 +837,7 @@ impl TestValidator {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-            tpu_enable_udp,
+            config.tpu_enable_udp,
         )?);
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
@@ -1003,7 +996,7 @@ mod test {
 
     #[test]
     fn get_health() {
-        let (test_validator, _payer) = TestValidatorGenesis::default().start(DEFAULT_TPU_USE_QUIC);
+        let (test_validator, _payer) = TestValidatorGenesis::default().start();
         test_validator.set_startup_verification_complete();
         let rpc_client = test_validator.get_rpc_client();
         rpc_client.get_health().expect("health");
@@ -1021,6 +1014,6 @@ mod test {
     #[should_panic]
     async fn document_tokio_panic() {
         // `start()` blows up when run within tokio
-        let (_test_validator, _payer) = TestValidatorGenesis::default().start(DEFAULT_TPU_USE_QUIC);
+        let (_test_validator, _payer) = TestValidatorGenesis::default().start();
     }
 }

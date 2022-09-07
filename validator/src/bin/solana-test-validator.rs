@@ -29,7 +29,6 @@ use {
     },
     solana_streamer::socket::SocketAddrSpace,
     solana_test_validator::*,
-    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     solana_validator::{
         admin_rpc_service, dashboard::Dashboard, ledger_lockfile, lock_ledger, println_name_value,
         redirect_stderr_to_file,
@@ -852,7 +851,7 @@ fn main() {
         genesis.compute_unit_limit(compute_unit_limit);
     }
 
-    match genesis.start_with_mint_address(mint_address, socket_addr_space, DEFAULT_TPU_ENABLE_UDP) {
+    match genesis.start_with_mint_address(mint_address, socket_addr_space) {
         Ok(test_validator) => {
             *admin_service_post_init.write().unwrap() =
                 Some(admin_rpc_service::AdminRpcRequestMetadataPostInit {
