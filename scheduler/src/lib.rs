@@ -1332,16 +1332,15 @@ impl ScheduleStage {
         Self::push_to_runnable_queue(weighted_tx, runnable_queue)
     }
 
-    fn _run<'a, AST: AtScheduleThread>(
+    fn _run<AST: AtScheduleThread>(
         ast: AST,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
-        mut from_prev: &'a crossbeam_channel::Receiver<SchedulablePayload>,
+        from_prev: &crossbeam_channel::Receiver<SchedulablePayload>,
         to_execute_substage: &crossbeam_channel::Sender<ExecutablePayload>,
         from_exec: &crossbeam_channel::Receiver<UnlockablePayload>,
         maybe_to_next_stage: Option<&crossbeam_channel::Sender<DroppablePayload>>, // assume nonblocking
-        never: &'a crossbeam_channel::Receiver<SchedulablePayload>,
     ) {
         let random_id = rand::thread_rng().gen::<u64>();
         info!("schedule_once:initial id_{:016x}", random_id);
@@ -1411,10 +1410,8 @@ impl ScheduleStage {
         }).collect::<Vec<_>>();
         let mut start = std::time::Instant::now();
 
-        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (bool, bool, bool) = Default::default();
-
+        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work) = Default::default();
         loop {
-            if !from_disconnected || executing_queue_count > 0 {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    if let Ok(UnlockablePayload(mut processed_execution_environment)) = maybe_from_exec {
@@ -1436,18 +1433,15 @@ impl ScheduleStage {
                        Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                    } else {
                        assert_eq!(from_prev.len(), 0);
-                       from_prev = &never;
-                       assert_eq!(from_prev.len(), 0);
                        from_disconnected |= true;
+                       no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
                        info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
+                       if from_exec_disconnected || no_more_work {
+                           break;
+                       }
                    }
                }
             }
-            }
-           no_more_work = from_disconnected && runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
-           if from_disconnected && (from_exec_disconnected || no_more_work) {
-               break;
-           }
 
             let mut first_iteration = true;
             let (mut empty_from, mut empty_from_exec) = (false, false);
@@ -1519,7 +1513,6 @@ impl ScheduleStage {
                 }
             }
         }
-        drop(from_prev);
         drop(to_next_stage);
         drop(ee_sender);
         drop(task_sender);
@@ -1548,8 +1541,6 @@ impl ScheduleStage {
         struct AtTopOfScheduleThread;
         unsafe impl AtScheduleThread for AtTopOfScheduleThread {}
 
-        let never = crossbeam_channel::never();
-
         Self::_run::<AtTopOfScheduleThread>(
             AtTopOfScheduleThread,
             max_executing_queue_count,
@@ -1559,7 +1550,6 @@ impl ScheduleStage {
             to_execute_substage,
             from_execute_substage,
             maybe_to_next_stage,
-            &never,
         )
     }
 }
