@@ -3,6 +3,7 @@
 use {
     log::*,
     solana_cli_output::CliAccount,
+    solana_client::rpc_request::MAX_MULTIPLE_ACCOUNTS,
     solana_core::{
         tower_storage::TowerStorage,
         validator::{Validator, ValidatorConfig, ValidatorStartProgress},
@@ -285,15 +286,20 @@ impl TestValidatorGenesis {
     where
         T: IntoIterator<Item = Pubkey>,
     {
-        for address in addresses {
-            info!("Fetching {} over RPC...", address);
-            let res = rpc_client.get_account(&address);
-            if let Ok(account) = res {
-                self.add_account(address, AccountSharedData::from(account));
-            } else if skip_missing {
-                warn!("Could not find {}, skipping.", address);
-            } else {
-                return Err(format!("Failed to fetch {}: {}", address, res.unwrap_err()));
+        let addresses: Vec<Pubkey> = addresses.into_iter().collect();
+        for chunk in addresses.chunks(MAX_MULTIPLE_ACCOUNTS) {
+            info!("Fetching {:?} over RPC...", chunk);
+            let responses = rpc_client
+                .get_multiple_accounts(chunk)
+                .map_err(|err| format!("Failed to fetch: {}", err))?;
+            for (address, res) in chunk.iter().zip(responses) {
+                if let Some(account) = res {
+                    self.add_account(*address, AccountSharedData::from(account));
+                } else if skip_missing {
+                    warn!("Could not find {}, skipping.", address);
+                } else {
+                    return Err(format!("Failed to fetch {}", address));
+                }
             }
         }
         Ok(self)
