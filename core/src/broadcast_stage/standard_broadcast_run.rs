@@ -177,6 +177,7 @@ impl StandardBroadcastRun {
         receive_results: ReceiveResults,
     ) -> Result<()> {
         let mut receive_elapsed = receive_results.time_elapsed;
+        let mut coalesce_elapsed = receive_results.time_coalesced;
         let num_entries = receive_results.entries.len();
         let bank = receive_results.bank.clone();
         let last_tick_height = receive_results.last_tick_height;
@@ -193,6 +194,7 @@ impl StandardBroadcastRun {
 
             self.current_slot_and_parent = Some((slot, parent_slot));
             receive_elapsed = Duration::new(0, 0);
+            coalesce_elapsed = Duration::new(0, 0);
         }
 
         let mut process_stats = ProcessShredsStats::default();
@@ -291,6 +293,7 @@ impl StandardBroadcastRun {
         process_stats.shredding_elapsed = to_shreds_time.as_us();
         process_stats.get_leader_schedule_elapsed = get_leader_schedule_time.as_us();
         process_stats.receive_elapsed = duration_as_us(&receive_elapsed);
+        process_stats.coalesce_elapsed = duration_as_us(&coalesce_elapsed);
         process_stats.coding_send_elapsed = coding_send_time.as_us();
 
         self.process_shreds_stats += process_stats;
@@ -552,6 +555,7 @@ mod test {
         let receive_results = ReceiveResults {
             entries: ticks0.clone(),
             time_elapsed: Duration::new(3, 0),
+            time_coalesced: Duration::new(2, 0),
             bank: bank0.clone(),
             last_tick_height: (ticks0.len() - 1) as u64,
         };
@@ -620,6 +624,7 @@ mod test {
         let receive_results = ReceiveResults {
             entries: ticks1.clone(),
             time_elapsed: Duration::new(2, 0),
+            time_coalesced: Duration::new(1, 0),
             bank: bank2,
             last_tick_height: (ticks1.len() - 1) as u64,
         };
@@ -684,6 +689,7 @@ mod test {
             let receive_results = ReceiveResults {
                 entries: ticks,
                 time_elapsed: Duration::new(1, 0),
+                time_coalesced: Duration::new(0, 0),
                 bank: bank.clone(),
                 last_tick_height,
             };
@@ -727,6 +733,7 @@ mod test {
         let receive_results = ReceiveResults {
             entries: ticks.clone(),
             time_elapsed: Duration::new(3, 0),
+            time_coalesced: Duration::new(2, 0),
             bank: bank0,
             last_tick_height: ticks.len() as u64,
         };
