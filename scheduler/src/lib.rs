@@ -1421,6 +1421,7 @@ impl ScheduleStage {
                    } else {
                        assert_eq!(from_exec.len(), 0);
                        from_exec_disconnected |= true;
+                       info!("flushing1..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
                        if from_disconnected {
                            break;
                        }
@@ -1433,6 +1434,7 @@ impl ScheduleStage {
                        assert_eq!(from_prev.len(), 0);
                        from_disconnected |= true;
                        no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
+                       info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
                        if from_exec_disconnected || no_more_work {
                            break;
                        }
