@@ -12,7 +12,7 @@ use {
 };
 
 #[tokio::test]
-async fn no_panic() {
+async fn success_with_padded_transfer_data() {
     let program_id = Pubkey::new_unique();
     let program_test = ProgramTest::new(
         "solana_bpf_rust_instruction_padding",

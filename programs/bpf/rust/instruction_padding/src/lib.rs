@@ -10,7 +10,7 @@ use solana_program::{
 
 pub mod instructions;
 
-declare_id!("padVgCLbVUvyfwBwjG2d1Pgy1fkWkpiV5oeHV7dxL52.json");
+declare_id!("iXpADd6AW1k5FaaXum5qHbSqyd7TtoN6AD7suVa83MF");
 
 solana_program::entrypoint!(process_instruction);
 
