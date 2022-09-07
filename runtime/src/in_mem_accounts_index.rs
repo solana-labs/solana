@@ -437,7 +437,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
     pub fn unref(&self, pubkey: &Pubkey) {
         self.get_internal(pubkey, |entry| {
             if let Some(entry) = entry {
-                entry.add_un_ref(false)
+                entry.unref();
             }
             (true, ())
         })
@@ -557,7 +557,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
             reclaim,
         );
         if addref {
-            current.add_un_ref(true);
+            current.addref();
         }
         current.set_dirty(true);
         slot_list.len()

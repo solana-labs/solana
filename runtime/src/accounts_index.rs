@@ -273,14 +273,15 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         self.ref_count.load(Ordering::Acquire)
     }
 
-    pub fn add_un_ref(&self, add: bool) {
-        if add {
-            self.ref_count.fetch_add(1, Ordering::Release);
-        } else {
-            let previous = self.ref_count.fetch_sub(1, Ordering::Release);
-            if previous == 0 {
-                inc_new_counter_info!("accounts_index-deref_from_0", 1);
-            }
+    pub fn addref(&self) {
+        self.ref_count.fetch_add(1, Ordering::Release);
+        self.set_dirty(true);
+    }
+
+    pub fn unref(&self) {
+        let previous = self.ref_count.fetch_sub(1, Ordering::Release);
+        if previous == 0 {
+            inc_new_counter_info!("accounts_index-deref_from_0", 1);
         }
         self.set_dirty(true);
     }
@@ -358,11 +359,11 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
     }
 
     pub fn unref(&self) {
-        self.borrow_owned_entry().add_un_ref(false);
+        self.borrow_owned_entry().unref();
     }
 
     pub fn addref(&self) {
-        self.borrow_owned_entry().add_un_ref(true);
+        self.borrow_owned_entry().addref();
     }
 }
 
@@ -1386,7 +1387,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                         };
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
-                                locked_entry.add_un_ref(false);
+                                locked_entry.unref();
                                 true
                             }
                             AccountsIndexScanResult::KeepInMemory => true,
