@@ -3,7 +3,7 @@
 
 use {
     crate::{
-        banking_stage::BankingStage,
+        banking_stage::{self, BankingStage},
         broadcast_stage::{BroadcastStage, BroadcastStageType, RetransmitSlotsReceiver},
         cluster_info_vote_listener::{
             ClusterInfoVoteListener, GossipDuplicateConfirmedSlotsSender,
@@ -234,7 +234,9 @@ impl Tpu {
                 group_name: "solPktDesNV",
                 receiver: verified_receiver,
                 sender: non_vote_deserialized_packet_sender,
-                thread_count: 1,
+                thread_count: (BankingStage::num_threads()
+                    - banking_stage::NUM_VOTE_PROCESSING_THREADS)
+                    as usize,
             },
             // TPU Vote
             PacketDeserializationGroup {
