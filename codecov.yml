@@ -10,3 +10,6 @@ comment:
   layout: "diff"
   behavior: default
   require_changes: no
+
+fixes:
+  - "src/::web3.js/src/"
