@@ -1439,15 +1439,15 @@ impl ScheduleStage {
                        from_prev = &never;
                        assert_eq!(from_prev.len(), 0);
                        from_disconnected |= true;
-                       no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
                        info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
-                       if from_exec_disconnected || no_more_work {
-                           break;
-                       }
                    }
                }
             }
             }
+           no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
+           if from_disconnected && (from_exec_disconnected || no_more_work) {
+               break;
+           }
 
             let mut first_iteration = true;
             let (mut empty_from, mut empty_from_exec) = (false, false);
