@@ -1444,7 +1444,7 @@ impl ScheduleStage {
                }
             }
             }
-           no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
+           no_more_work = from_disconnected && runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
            if from_disconnected && (from_exec_disconnected || no_more_work) {
                break;
            }
