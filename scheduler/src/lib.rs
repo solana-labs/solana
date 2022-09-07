@@ -1449,11 +1449,11 @@ impl ScheduleStage {
 
             loop {
                 let executing_like_count = executing_queue_count + provisioning_tracker_count;
-                if executing_like_count < max_executing_queue_count {
-                    trace!("schedule_once id_{:016x} (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+                while executing_like_count < max_executing_queue_count {
+                    trace!("schedule_once id_{:016x} (prev: {}, exec: ({}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     if start.elapsed() > std::time::Duration::from_millis(150) {
                         start = std::time::Instant::now();
-                        info!("schedule_once:interval id_{:016x} (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+                        info!("schedule_once:interval id_{:016x} (prev: {}, exec: ({}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     }
                     let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
                     if let Some(ee) = Self::schedule_next_execution(
@@ -1470,6 +1470,8 @@ impl ScheduleStage {
                     ) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
+                    } else {
+                        break;
                     }
                 }
                 //break;
@@ -1525,7 +1527,7 @@ impl ScheduleStage {
             indexer_handle.join().unwrap().unwrap();
         }
 
-        info!("schedule_once:final id_{:016x} (from_disconnected: {}, from_exec_disconnected: {}, no_more_work: {}) (from: {}, to: {}, runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_disconnected, from_exec_disconnected, no_more_work, from_prev.len(), to_execute_substage.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+        info!("schedule_once:final id_{:016x} (from_disconnected: {}, from_exec_disconnected: {}, no_more_work: {}) (prev: {}, exec: ({}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_disconnected, from_exec_disconnected, no_more_work, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
     }
 
     pub fn run(
