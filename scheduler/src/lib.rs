@@ -1427,7 +1427,7 @@ impl ScheduleStage {
                    }
                }
                recv(from_prev) -> maybe_from => {
-                   if let Ok((Task)) = maybe_from {
+                   if let Ok(SchedulablePayload(task)) = maybe_from {
                        Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                    } else {
                        assert_eq!(from_prev.len(), 0);
