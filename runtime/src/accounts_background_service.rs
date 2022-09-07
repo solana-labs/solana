@@ -195,6 +195,7 @@ impl SnapshotRequestHandler {
                             rent_collector: snapshot_root_bank.rent_collector(),
                             store_detailed_debug_info_on_failure: false,
                             full_snapshot: None,
+                            enable_rehashing: true,
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);

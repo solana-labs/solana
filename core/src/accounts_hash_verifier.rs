@@ -130,6 +130,8 @@ impl AccountsHashVerifier {
         };
         timings.calc_storage_size_quartiles(&accounts_package.snapshot_storages);
 
+        let enable_rehashing = true;
+
         let (accounts_hash, lamports) = accounts_package
             .accounts
             .accounts_db
@@ -143,6 +145,7 @@ impl AccountsHashVerifier {
                     rent_collector: &accounts_package.rent_collector,
                     store_detailed_debug_info_on_failure: false,
                     full_snapshot: None,
+                    enable_rehashing,
                 },
                 &sorted_storages,
                 timings,
@@ -166,6 +169,7 @@ impl AccountsHashVerifier {
                         rent_collector: &accounts_package.rent_collector,
                         store_detailed_debug_info_on_failure: false,
                         full_snapshot: None,
+                        enable_rehashing,
                     },
                 );
             info!(
@@ -186,6 +190,7 @@ impl AccountsHashVerifier {
                         // now that we've failed, store off the failing contents that produced a bad capitalization
                         store_detailed_debug_info_on_failure: true,
                         full_snapshot: None,
+                        enable_rehashing,
                     },
                     &sorted_storages,
                     HashStats::default(),

@@ -54,6 +54,8 @@ pub struct CalcAccountsHashConfig<'a> {
     pub rent_collector: &'a RentCollector,
     /// used for tracking down hash mismatches after the fact
     pub store_detailed_debug_info_on_failure: bool,
+    /// true if hash calculation can rehash based on skipped rewrites
+    pub enable_rehashing: bool,
     /// `Some` if this is an incremental snapshot which only hashes slots since the base full snapshot
     pub full_snapshot: Option<FullSnapshotAccountsHashInfo>,
 }

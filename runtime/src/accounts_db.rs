@@ -1837,18 +1837,24 @@ impl<'a, T: Fn(Slot) -> Option<Slot> + Sync + Send + Clone> AppendVecScan for Sc
 
         let balance = loaded_account.lamports();
         let loaded_hash = loaded_account.loaded_hash();
-        let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
-            loaded_account,
-            &loaded_hash,
-            pubkey,
-            self.current_slot,
-            self.config.epoch_schedule,
-            self.config.rent_collector,
-            self.stats,
-            &self.max_slot_info,
-            self.find_unskipped_slot,
-            self.filler_account_suffix,
-        );
+        let new_hash = self
+            .config
+            .enable_rehashing
+            .then(|| {
+                ExpectedRentCollection::maybe_rehash_skipped_rewrite(
+                    loaded_account,
+                    &loaded_hash,
+                    pubkey,
+                    self.current_slot,
+                    self.config.epoch_schedule,
+                    self.config.rent_collector,
+                    self.stats,
+                    &self.max_slot_info,
+                    self.find_unskipped_slot,
+                    self.filler_account_suffix,
+                )
+            })
+            .flatten();
         let loaded_hash = new_hash.unwrap_or(loaded_hash);
 
         let source_item = CalculateHashIntermediate::new(loaded_hash, balance, *pubkey);
@@ -6430,18 +6436,19 @@ impl AccountsDb {
                                                 self.find_unskipped_slot(slot, config.ancestors)
                                             };
                                             let loaded_hash = loaded_account.loaded_hash();
-                                            let new_hash = ExpectedRentCollection::maybe_rehash_skipped_rewrite(
-                                                &loaded_account,
-                                                &loaded_hash,
-                                                pubkey,
-                                                *slot,
-                                                config.epoch_schedule,
-                                                config.rent_collector,
-                                                &stats,
-                                                &max_slot_info,
-                                                find_unskipped_slot,
-                                                self.filler_account_suffix.as_ref(),
-                                            );
+                                            let new_hash = config.enable_rehashing
+                                                .then(|| ExpectedRentCollection::maybe_rehash_skipped_rewrite(
+                                                    &loaded_account,
+                                                    &loaded_hash,
+                                                    pubkey,
+                                                    *slot,
+                                                    config.epoch_schedule,
+                                                    config.rent_collector,
+                                                    &stats,
+                                                    &max_slot_info,
+                                                    find_unskipped_slot,
+                                                    self.filler_account_suffix.as_ref(),
+                                                )).flatten();
                                             let loaded_hash = new_hash.unwrap_or(loaded_hash);
                                             let balance = loaded_account.lamports();
                                             if config.check_hash && !self.is_filler_account(pubkey) {  // this will not be supported anymore
@@ -6994,6 +7001,7 @@ impl AccountsDb {
                     rent_collector,
                     store_detailed_debug_info_on_failure: false,
                     full_snapshot: None,
+                    enable_rehashing: true,
                 },
                 expected_capitalization,
             )
@@ -7292,6 +7300,7 @@ impl AccountsDb {
                     rent_collector,
                     store_detailed_debug_info_on_failure: store_hash_raw_data_for_debug,
                     full_snapshot: None,
+                    enable_rehashing: true,
                 },
                 None,
             )?;
@@ -11908,6 +11917,7 @@ pub mod tests {
                 rent_collector: &RENT_COLLECTOR,
                 store_detailed_debug_info_on_failure: false,
                 full_snapshot: None,
+                enable_rehashing: true,
             }
         }
     }
