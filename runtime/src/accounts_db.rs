@@ -1191,7 +1191,6 @@ pub struct AccountsDb {
     exhaustively_verify_refcounts: bool,
 
     /// A special accounts hash that occurs once per epoch
-    #[allow(dead_code)]
     pub(crate) epoch_accounts_hash: Mutex<Option<EpochAccountsHash>>,
 }
 

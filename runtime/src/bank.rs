@@ -53,6 +53,7 @@ use {
         blockhash_queue::BlockhashQueue,
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
+        epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         inline_spl_associated_token_account, inline_spl_token,
@@ -6835,6 +6836,21 @@ impl Bank {
             self.last_blockhash().as_ref(),
         ]);
 
+        let epoch_accounts_hash = self.epoch_accounts_hash();
+        if self.should_include_epoch_accounts_hash() {
+            // Nothing is writing a value into the epoch accounts hash yet—this is not a problem
+            // for normal clusters, as the feature gating this `if` block is always false.
+            // However, some tests enable all features, so this `if` block can be true.
+            //
+            // For now, check to see if the epoch accounts hash is `Some` before hashing.  Once the
+            // writer-side is implemented, change this to be an `.expect()` or `.unwrap()`, as it
+            // will be required for the epoch accounts hash calculation to have compleleted and
+            // for this value to be `Some`.
+            if let Some(epoch_accounts_hash) = epoch_accounts_hash {
+                hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
+            }
+        }
+
         let buf = self
             .hard_forks
             .read()
@@ -6853,13 +6869,17 @@ impl Bank {
         }
 
         info!(
-            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}",
+            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}",
             self.slot(),
             hash,
             accounts_delta_hash.hash,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
+            match epoch_accounts_hash {
+                None => "".to_string(),
+                Some(epoch_accounts_hash) => format!(", epoch_accounts_hash: {}", epoch_accounts_hash.as_ref()),
+            },
         );
 
         info!(
@@ -6868,6 +6888,22 @@ impl Bank {
             accounts_delta_hash.stats,
         );
         hash
+    }
+
+    /// The epoch accounts hash is hashed into the bank's hash once per epoch at a predefined slot.
+    /// Should it be included in *this* bank?
+    fn should_include_epoch_accounts_hash(&self) -> bool {
+        if !self
+            .feature_set
+            .is_active(&feature_set::epoch_accounts_hash::id())
+        {
+            return false;
+        }
+
+        let first_slot_in_epoch = self.epoch_schedule().get_first_slot_in_epoch(self.epoch);
+        let stop_offset = epoch_accounts_hash::calculation_offset_stop(self);
+        let stop_slot = first_slot_in_epoch + stop_offset;
+        self.parent_slot() < stop_slot && self.slot() >= stop_slot
     }
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
@@ -7842,6 +7878,17 @@ impl Bank {
         });
 
         total_accounts_stats
+    }
+
+    /// Convenience fn to get the Epoch Accounts Hash
+    fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
+        *self
+            .rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash
+            .lock()
+            .unwrap()
     }
 }
 
