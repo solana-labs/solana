@@ -5,7 +5,7 @@
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
-        immutable_deserialized_packet::ImmutableDeserializedPacket,
+        immutable_deserialized_packet::{self, ImmutableDeserializedPacket},
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
@@ -14,7 +14,7 @@ use {
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
-        unprocessed_packet_batches::{self, *},
+        unprocessed_packet_batches::{DeserializedPacket, UnprocessedPacketBatches},
     },
     core::iter::repeat,
     crossbeam_channel::{
@@ -1902,7 +1902,7 @@ impl BankingStage {
             deserialized_packets
                 .enumerate()
                 .filter_map(|(i, deserialized_packet)| {
-                    unprocessed_packet_batches::transaction_from_deserialized_packet(
+                    immutable_deserialized_packet::transaction_from_deserialized_packet(
                         deserialized_packet,
                         &bank.feature_set,
                         bank.vote_only_bank(),
@@ -2151,6 +2151,7 @@ where
 mod tests {
     use {
         super::*,
+        crate::unprocessed_packet_batches,
         crossbeam_channel::{unbounded, Receiver},
         solana_address_lookup_table_program::state::{AddressLookupTable, LookupTableMeta},
         solana_entry::entry::{next_entry, next_versioned_entry, Entry, EntrySlice},

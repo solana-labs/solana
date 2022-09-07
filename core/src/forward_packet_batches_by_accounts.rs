@@ -1,6 +1,6 @@
 use {
     crate::{
-        immutable_deserialized_packet::ImmutableDeserializedPacket, unprocessed_packet_batches,
+        immutable_deserialized_packet, immutable_deserialized_packet::ImmutableDeserializedPacket,
     },
     solana_perf::packet::Packet,
     solana_runtime::{
@@ -128,7 +128,7 @@ impl ForwardPacketBatchesByAccounts {
     pub fn add_packet(&mut self, packet: Rc<ImmutableDeserializedPacket>) -> bool {
         // do not forward packet that cannot be sanitized
         if let Some(sanitized_transaction) =
-            unprocessed_packet_batches::transaction_from_deserialized_packet(
+            immutable_deserialized_packet::transaction_from_deserialized_packet(
                 &packet,
                 &self.current_bank.feature_set,
                 self.current_bank.vote_only_bank(),
