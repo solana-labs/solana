@@ -925,11 +925,11 @@ fn test_snapshots_with_background_services(
     }
 
     let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
-    let snapshot_request_handler = Some(SnapshotRequestHandler {
+    let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
         pending_accounts_package: Arc::clone(&pending_accounts_package),
-    });
+    };
     let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
     };

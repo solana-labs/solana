@@ -394,7 +394,7 @@ impl PrunedBanksRequestHandler {
 }
 
 pub struct AbsRequestHandlers {
-    pub snapshot_request_handler: Option<SnapshotRequestHandler>,
+    pub snapshot_request_handler: SnapshotRequestHandler,
     pub pruned_banks_request_handler: PrunedBanksRequestHandler,
 }
 
@@ -407,16 +407,12 @@ impl AbsRequestHandlers {
         non_snapshot_time_us: u128,
         last_full_snapshot_slot: &mut Option<Slot>,
     ) -> Option<Result<u64, SnapshotError>> {
-        self.snapshot_request_handler
-            .as_ref()
-            .and_then(|snapshot_request_handler| {
-                snapshot_request_handler.handle_snapshot_requests(
-                    accounts_db_caching_enabled,
-                    test_hash_calculation,
-                    non_snapshot_time_us,
-                    last_full_snapshot_slot,
-                )
-            })
+        self.snapshot_request_handler.handle_snapshot_requests(
+            accounts_db_caching_enabled,
+            test_hash_calculation,
+            non_snapshot_time_us,
+            last_full_snapshot_slot,
+        )
     }
 }
 

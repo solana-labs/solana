@@ -2957,8 +2957,9 @@ pub fn main() {
     validator_config.accounts_hash_interval_slots =
         value_t_or_exit!(matches, "accounts-hash-interval-slots", u64);
     if !is_snapshot_config_valid(
-        full_snapshot_archive_interval_slots,
-        incremental_snapshot_archive_interval_slots,
+        // SAFETY: Calling `.unwrap()` is safe here because `validator_config.snapshot_config` must
+        // be `Some`. The Option<> wrapper will be removed later to solidify this requirement.
+        validator_config.snapshot_config.as_ref().unwrap(),
         validator_config.accounts_hash_interval_slots,
     ) {
         eprintln!("Invalid snapshot configuration provided: snapshot intervals are incompatible. \

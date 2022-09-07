@@ -194,7 +194,7 @@ impl Default for ValidatorConfig {
             geyser_plugin_config_files: None,
             rpc_addrs: None,
             pubsub_config: PubSubConfig::default(),
-            snapshot_config: None,
+            snapshot_config: Some(SnapshotConfig::new_load_only()),
             broadcast_stage_type: BroadcastStageType::Standard,
             turbine_disabled: Arc::<AtomicBool>::default(),
             enforce_ulimit_nofile: true,
@@ -575,29 +575,17 @@ impl Validator {
         cluster_info.restore_contact_info(ledger_path, config.contact_save_interval);
         let cluster_info = Arc::new(cluster_info);
 
-        let (
-            accounts_background_service,
-            accounts_hash_verifier,
-            snapshot_packager_service,
-            accounts_background_request_sender,
-        ) = {
-            let pending_accounts_package = PendingAccountsPackage::default();
-            let (
-                accounts_background_request_sender,
-                snapshot_request_handler,
-                pending_snapshot_package,
-                snapshot_packager_service,
-            ) = if let Some(snapshot_config) = config.snapshot_config.clone() {
-                if !is_snapshot_config_valid(
-                    snapshot_config.full_snapshot_archive_interval_slots,
-                    snapshot_config.incremental_snapshot_archive_interval_slots,
-                    config.accounts_hash_interval_slots,
-                ) {
-                    error!("Snapshot config is invalid");
-                }
+        // A snapshot config is required.  Remove the Option<> wrapper in the future.
+        assert!(config.snapshot_config.is_some());
+        let snapshot_config = config.snapshot_config.clone().unwrap();
 
-                let pending_snapshot_package = PendingSnapshotPackage::default();
+        assert!(is_snapshot_config_valid(
+            &snapshot_config,
+            config.accounts_hash_interval_slots,
+        ));
 
+        let (pending_snapshot_package, snapshot_packager_service) =
+            if snapshot_config.should_generate_snapshots() {
                 // filler accounts make snapshots invalid for use
                 // so, do not publish that we have snapshots
                 let enable_gossip_push = config
@@ -605,7 +593,7 @@ impl Validator {
                     .as_ref()
                     .map(|config| config.filler_accounts_config.count == 0)
                     .unwrap_or(true);
-
+                let pending_snapshot_package = PendingSnapshotPackage::default();
                 let snapshot_packager_service = SnapshotPackagerService::new(
                     pending_snapshot_package.clone(),
                     starting_snapshot_hashes,
@@ -614,56 +602,48 @@ impl Validator {
                     snapshot_config.clone(),
                     enable_gossip_push,
                 );
-
-                let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
                 (
-                    AbsRequestSender::new(snapshot_request_sender),
-                    Some(SnapshotRequestHandler {
-                        snapshot_config,
-                        snapshot_request_receiver,
-                        pending_accounts_package: pending_accounts_package.clone(),
-                    }),
                     Some(pending_snapshot_package),
                     Some(snapshot_packager_service),
                 )
             } else {
-                (AbsRequestSender::default(), None, None, None)
+                (None, None)
             };
 
-            let accounts_hash_verifier = AccountsHashVerifier::new(
-                Arc::clone(&pending_accounts_package),
-                pending_snapshot_package,
-                &exit,
-                &cluster_info,
-                config.known_validators.clone(),
-                config.halt_on_known_validators_accounts_hash_mismatch,
-                config.accounts_hash_fault_injection_slots,
-                config.snapshot_config.clone(),
-            );
+        let pending_accounts_package = PendingAccountsPackage::default();
+        let accounts_hash_verifier = AccountsHashVerifier::new(
+            Arc::clone(&pending_accounts_package),
+            pending_snapshot_package,
+            &exit,
+            &cluster_info,
+            config.known_validators.clone(),
+            config.halt_on_known_validators_accounts_hash_mismatch,
+            config.accounts_hash_fault_injection_slots,
+            config.snapshot_config.clone(),
+        );
 
-            let pruned_banks_request_handler = PrunedBanksRequestHandler {
-                pruned_banks_receiver,
-            };
-            let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.hash.0);
-            let accounts_background_service = AccountsBackgroundService::new(
-                bank_forks.clone(),
-                &exit,
-                AbsRequestHandlers {
-                    snapshot_request_handler,
-                    pruned_banks_request_handler,
-                },
-                config.accounts_db_caching_enabled,
-                config.accounts_db_test_hash_calculation,
-                last_full_snapshot_slot,
-            );
-
-            (
-                accounts_background_service,
-                accounts_hash_verifier,
-                snapshot_packager_service,
-                accounts_background_request_sender,
-            )
+        let (snapshot_request_sender, snapshot_request_receiver) = unbounded();
+        let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+        let snapshot_request_handler = SnapshotRequestHandler {
+            snapshot_config,
+            snapshot_request_receiver,
+            pending_accounts_package,
         };
+        let pruned_banks_request_handler = PrunedBanksRequestHandler {
+            pruned_banks_receiver,
+        };
+        let last_full_snapshot_slot = starting_snapshot_hashes.map(|x| x.full.hash.0);
+        let accounts_background_service = AccountsBackgroundService::new(
+            bank_forks.clone(),
+            &exit,
+            AbsRequestHandlers {
+                snapshot_request_handler,
+                pruned_banks_request_handler,
+            },
+            config.accounts_db_caching_enabled,
+            config.accounts_db_test_hash_calculation,
+            last_full_snapshot_slot,
+        );
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let mut process_blockstore = ProcessBlockStore::new(
@@ -2158,14 +2138,17 @@ fn cleanup_accounts_paths(config: &ValidatorConfig) {
 }
 
 pub fn is_snapshot_config_valid(
-    full_snapshot_interval_slots: Slot,
-    incremental_snapshot_interval_slots: Slot,
+    snapshot_config: &SnapshotConfig,
     accounts_hash_interval_slots: Slot,
 ) -> bool {
-    // if full snapshot interval is MAX, that means snapshots are turned off, so yes, valid
-    if full_snapshot_interval_slots == Slot::MAX {
+    // if the snapshot config is configured to *not* take snapshots, then it is valid
+    if !snapshot_config.should_generate_snapshots() {
         return true;
     }
+
+    let full_snapshot_interval_slots = snapshot_config.full_snapshot_archive_interval_slots;
+    let incremental_snapshot_interval_slots =
+        snapshot_config.incremental_snapshot_archive_interval_slots;
 
     let is_incremental_config_valid = if incremental_snapshot_interval_slots == Slot::MAX {
         true
@@ -2413,40 +2396,97 @@ mod tests {
 
     #[test]
     fn test_interval_check() {
-        assert!(is_snapshot_config_valid(300, 200, 100));
+        fn new_snapshot_config(
+            full_snapshot_archive_interval_slots: Slot,
+            incremental_snapshot_archive_interval_slots: Slot,
+        ) -> SnapshotConfig {
+            SnapshotConfig {
+                full_snapshot_archive_interval_slots,
+                incremental_snapshot_archive_interval_slots,
+                ..SnapshotConfig::default()
+            }
+        }
+
+        assert!(is_snapshot_config_valid(
+            &new_snapshot_config(300, 200),
+            100
+        ));
 
         let default_accounts_hash_interval =
             snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS;
         assert!(is_snapshot_config_valid(
-            snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+            &new_snapshot_config(
+                snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS
+            ),
             default_accounts_hash_interval,
         ));
+        assert!(is_snapshot_config_valid(
+            &new_snapshot_config(
+                snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                Slot::MAX
+            ),
+            default_accounts_hash_interval
+        ));
+        assert!(is_snapshot_config_valid(
+            &new_snapshot_config(
+                snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
+                Slot::MAX
+            ),
+            default_accounts_hash_interval
+        ));
+        assert!(is_snapshot_config_valid(
+            &new_snapshot_config(Slot::MAX, Slot::MAX),
+            Slot::MAX
+        ));
+
+        assert!(!is_snapshot_config_valid(&new_snapshot_config(0, 100), 100));
+        assert!(!is_snapshot_config_valid(&new_snapshot_config(100, 0), 100));
+        assert!(!is_snapshot_config_valid(
+            &new_snapshot_config(42, 100),
+            100
+        ));
+        assert!(!is_snapshot_config_valid(
+            &new_snapshot_config(100, 42),
+            100
+        ));
+        assert!(!is_snapshot_config_valid(
+            &new_snapshot_config(100, 100),
+            100
+        ));
+        assert!(!is_snapshot_config_valid(
+            &new_snapshot_config(100, 200),
+            100
+        ));
+        assert!(!is_snapshot_config_valid(
+            &new_snapshot_config(444, 200),
+            100
+        ));
+        assert!(!is_snapshot_config_valid(
+            &new_snapshot_config(400, 222),
+            100
+        ));
 
         assert!(is_snapshot_config_valid(
-            Slot::MAX,
-            snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            default_accounts_hash_interval
+            &SnapshotConfig::new_load_only(),
+            100
         ));
         assert!(is_snapshot_config_valid(
-            snapshot_utils::DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            Slot::MAX,
-            default_accounts_hash_interval
+            &SnapshotConfig {
+                full_snapshot_archive_interval_slots: 41,
+                incremental_snapshot_archive_interval_slots: 37,
+                ..SnapshotConfig::new_load_only()
+            },
+            100
         ));
         assert!(is_snapshot_config_valid(
-            snapshot_utils::DEFAULT_INCREMENTAL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
-            Slot::MAX,
-            default_accounts_hash_interval
+            &SnapshotConfig {
+                full_snapshot_archive_interval_slots: Slot::MAX,
+                incremental_snapshot_archive_interval_slots: Slot::MAX,
+                ..SnapshotConfig::new_load_only()
+            },
+            100
         ));
-
-        assert!(!is_snapshot_config_valid(0, 100, 100));
-        assert!(!is_snapshot_config_valid(100, 0, 100));
-        assert!(!is_snapshot_config_valid(42, 100, 100));
-        assert!(!is_snapshot_config_valid(100, 42, 100));
-        assert!(!is_snapshot_config_valid(100, 100, 100));
-        assert!(!is_snapshot_config_valid(100, 200, 100));
-        assert!(!is_snapshot_config_valid(444, 200, 100));
-        assert!(!is_snapshot_config_valid(400, 222, 100));
     }
 
     #[test]
