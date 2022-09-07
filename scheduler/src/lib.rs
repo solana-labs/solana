@@ -1409,7 +1409,7 @@ impl ScheduleStage {
         }).collect::<Vec<_>>();
         let mut start = std::time::Instant::now();
 
-        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work) = Default::default();
+        let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work, mut no_more_work2) = Default::default();
         loop {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
@@ -1419,6 +1419,7 @@ impl ScheduleStage {
                        if from_disconnected {
                            break;
                        } else {
+                           info!("flushing1..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count)
                            continue;
                        }
                    }
@@ -1436,6 +1437,7 @@ impl ScheduleStage {
                        if from_exec_disconnected || no_more_work {
                            break;
                        } else {
+                           info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count)
                            continue;
                        }
                    }
