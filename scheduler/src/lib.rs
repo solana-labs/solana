@@ -1515,6 +1515,7 @@ impl ScheduleStage {
                 }
             }
         }
+        drop(from_prev);
         drop(to_next_stage);
         drop(ee_sender);
         drop(task_sender);
