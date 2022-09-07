@@ -48,6 +48,7 @@ pub struct AccountsPackage {
     pub accounts: Arc<Accounts>,
     pub epoch_schedule: EpochSchedule,
     pub rent_collector: RentCollector,
+    pub enable_rehashing: bool,
 }
 
 impl AccountsPackage {
@@ -118,6 +119,7 @@ impl AccountsPackage {
             accounts: bank.accounts(),
             epoch_schedule: *bank.epoch_schedule(),
             rent_collector: bank.rent_collector().clone(),
+            enable_rehashing: true, // this will be feature driven using bank
         })
     }
 }
