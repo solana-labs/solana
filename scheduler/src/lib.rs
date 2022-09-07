@@ -1413,6 +1413,7 @@ impl ScheduleStage {
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work) = Default::default();
         loop {
+            if !from_disconnected || executing_queue_count > 0 {
             crossbeam_channel::select! {
                recv(from_exec) -> maybe_from_exec => {
                    if let Ok(UnlockablePayload(mut processed_execution_environment)) = maybe_from_exec {
@@ -1423,7 +1424,7 @@ impl ScheduleStage {
                    } else {
                        assert_eq!(from_exec.len(), 0);
                        from_exec_disconnected |= true;
-                       //info!("flushing1..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
+                       info!("flushing1..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
                        if from_disconnected {
                            break;
                        }
@@ -1434,16 +1435,17 @@ impl ScheduleStage {
                        Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
                    } else {
                        assert_eq!(from_prev.len(), 0);
-                       //from_prev = &never;
-                       //assert_eq!(from_prev.len(), 0);
+                       from_prev = &never;
+                       assert_eq!(from_prev.len(), 0);
                        from_disconnected |= true;
                        no_more_work |= runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
-                       //info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
+                       info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
                        if from_exec_disconnected || no_more_work {
                            break;
                        }
                    }
                }
+            }
             }
 
             let mut first_iteration = true;
