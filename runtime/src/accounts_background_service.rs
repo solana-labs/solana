@@ -9,7 +9,7 @@ use {
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{PendingAccountsPackage, SnapshotType},
+        snapshot_package::{AccountsPackageType, PendingAccountsPackage, SnapshotType},
         snapshot_utils::{self, SnapshotError},
     },
     crossbeam_channel::{Receiver, SendError, Sender},
@@ -112,6 +112,18 @@ impl SendDroppedBankCallback {
 pub struct SnapshotRequest {
     pub snapshot_root_bank: Arc<Bank>,
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
+    pub request_type: SnapshotRequestType,
+}
+
+/// What type of request is this?
+///
+/// The snapshot request has been expanded to support more than just snapshots.  This is
+/// confusing, but can be resolved by renaming this type; or better, by creating an enum with
+/// variants that wrap the fields-of-interest for each request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SnapshotRequestType {
+    Snapshot,
+    EpochAccountsHash,
 }
 
 pub struct SnapshotRequestHandler {
@@ -137,6 +149,7 @@ impl SnapshotRequestHandler {
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
+                    request_type,
                 } = snapshot_request;
 
                 // we should not rely on the state of this validator until startup verification is complete
@@ -216,23 +229,19 @@ impl SnapshotRequestHandler {
                 }
 
                 let block_height = snapshot_root_bank.block_height();
-                let snapshot_type = if snapshot_utils::should_take_full_snapshot(
-                    block_height,
-                    self.snapshot_config.full_snapshot_archive_interval_slots,
-                ) {
-                    *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
-                    Some(SnapshotType::FullSnapshot)
-                } else if snapshot_utils::should_take_incremental_snapshot(
-                    block_height,
-                    self.snapshot_config
-                        .incremental_snapshot_archive_interval_slots,
-                    *last_full_snapshot_slot,
-                ) {
-                    Some(SnapshotType::IncrementalSnapshot(
-                        last_full_snapshot_slot.unwrap(),
-                    ))
-                } else {
-                    None
+                let accounts_package_type = match request_type {
+                    SnapshotRequestType::EpochAccountsHash => AccountsPackageType::EpochAccountsHash,
+                    _ => {
+                        if snapshot_utils::should_take_full_snapshot(block_height, self.snapshot_config.full_snapshot_archive_interval_slots) {
+                            *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
+                            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+                        } else if snapshot_utils::should_take_incremental_snapshot(block_height, self.snapshot_config .incremental_snapshot_archive_interval_slots, *last_full_snapshot_slot) {
+                            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot( last_full_snapshot_slot.unwrap()))
+                        } else {
+                            AccountsPackageType::AccountsHashVerifier
+                        }
+                    },
+
                 };
 
                 // Snapshot the bank and send over an accounts package
@@ -247,13 +256,13 @@ impl SnapshotRequestHandler {
                     self.snapshot_config.snapshot_version,
                     self.snapshot_config.archive_format,
                     hash_for_testing,
-                    snapshot_type,
+                    accounts_package_type,
                 );
                 if let Err(e) = result {
                     warn!(
-                        "Error taking bank snapshot. slot: {}, snapshot type: {:?}, err: {:?}",
+                        "Error taking bank snapshot. slot: {}, accounts package type: {:?}, err: {:?}",
                         snapshot_root_bank.slot(),
-                        snapshot_type,
+                        accounts_package_type,
                         e,
                     );
 
@@ -262,8 +271,8 @@ impl SnapshotRequestHandler {
                     }
                 }
                 snapshot_time.stop();
-                info!("Took bank snapshot. snapshot type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
-                      snapshot_type,
+                info!("Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+                      accounts_package_type,
                       snapshot_root_bank.slot(),
                       snapshot_root_bank.get_accounts_hash(),
                       snapshot_root_bank.hash(),

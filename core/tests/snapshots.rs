@@ -25,8 +25,8 @@ use {
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
-            SnapshotType,
+            AccountsPackage, AccountsPackageType, PendingAccountsPackage, PendingSnapshotPackage,
+            SnapshotPackage, SnapshotType,
         },
         snapshot_utils::{
             self, ArchiveFormat,
@@ -240,6 +240,7 @@ fn run_bank_forks_snapshot_n<F>(
         .expect("no bank snapshots found in path");
     let slot_deltas = last_bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
+        AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
         bank_snapshots_dir,
@@ -250,7 +251,6 @@ fn run_bank_forks_snapshot_n<F>(
         ArchiveFormat::TarBzip2,
         snapshot_version,
         None,
-        Some(SnapshotType::FullSnapshot),
     )
     .unwrap();
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
@@ -391,7 +391,7 @@ fn test_concurrent_snapshot_packaging(
             snapshot_config.snapshot_version,
             snapshot_config.archive_format,
             None,
-            Some(SnapshotType::FullSnapshot),
+            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         )
         .unwrap();
 

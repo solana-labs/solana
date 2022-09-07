@@ -17,7 +17,8 @@ use {
             FullSnapshotArchiveInfo, IncrementalSnapshotArchiveInfo, SnapshotArchiveInfoGetter,
         },
         snapshot_package::{
-            AccountsPackage, PendingAccountsPackage, SnapshotPackage, SnapshotType,
+            AccountsPackage, AccountsPackageType, PendingAccountsPackage, SnapshotPackage,
+            SnapshotType,
         },
         snapshot_utils::snapshot_storage_rebuilder::SnapshotStorageRebuilder,
         status_cache,
@@ -2099,7 +2100,7 @@ pub fn snapshot_bank(
     snapshot_version: SnapshotVersion,
     archive_format: ArchiveFormat,
     hash_for_testing: Option<Hash>,
-    snapshot_type: Option<SnapshotType>,
+    accounts_package_type: AccountsPackageType,
 ) -> Result<()> {
     let snapshot_storages = get_snapshot_storages(root_bank);
 
@@ -2114,6 +2115,7 @@ pub fn snapshot_bank(
     inc_new_counter_info!("add-snapshot-ms", add_snapshot_time.as_ms() as usize);
 
     let accounts_package = AccountsPackage::new(
+        accounts_package_type,
         root_bank,
         &bank_snapshot_info,
         bank_snapshots_dir,
@@ -2124,7 +2126,6 @@ pub fn snapshot_bank(
         archive_format,
         snapshot_version,
         hash_for_testing,
-        snapshot_type,
     )
     .expect("failed to hard link bank snapshot into a tmpdir");
 
@@ -2133,17 +2134,18 @@ pub fn snapshot_bank(
     {
         let mut pending_accounts_package = pending_accounts_package.lock().unwrap();
         if can_submit_accounts_package(&accounts_package, pending_accounts_package.as_ref()) {
+            let package_type = accounts_package.package_type;
             let old_accounts_package = pending_accounts_package.replace(accounts_package);
             drop(pending_accounts_package);
             if let Some(old_accounts_package) = old_accounts_package {
-                debug!(
+                info!(
                     "The pending AccountsPackage has been overwritten: \
-                \nNew AccountsPackage slot: {}, snapshot type: {:?} \
-                \nOld AccountsPackage slot: {}, snapshot type: {:?}",
+                    \nNew AccountsPackage slot: {}, package type: {:?} \
+                    \nOld AccountsPackage slot: {}, package type: {:?}",
                     root_bank.slot(),
-                    snapshot_type,
+                    package_type,
                     old_accounts_package.slot,
-                    old_accounts_package.snapshot_type,
+                    old_accounts_package.package_type,
                 );
             }
         }
@@ -2279,6 +2281,7 @@ pub fn package_and_archive_full_snapshot(
 ) -> Result<FullSnapshotArchiveInfo> {
     let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
+        AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
@@ -2289,7 +2292,6 @@ pub fn package_and_archive_full_snapshot(
         archive_format,
         snapshot_version,
         None,
-        Some(SnapshotType::FullSnapshot),
     )?;
 
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
@@ -2331,6 +2333,9 @@ pub fn package_and_archive_incremental_snapshot(
 ) -> Result<IncrementalSnapshotArchiveInfo> {
     let slot_deltas = bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
+        AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(
+            incremental_snapshot_base_slot,
+        )),
         bank,
         bank_snapshot_info,
         bank_snapshots_dir,
@@ -2341,9 +2346,6 @@ pub fn package_and_archive_incremental_snapshot(
         archive_format,
         snapshot_version,
         None,
-        Some(SnapshotType::IncrementalSnapshot(
-            incremental_snapshot_base_slot,
-        )),
     )?;
 
     crate::serde_snapshot::reserialize_bank_with_new_accounts_hash(
@@ -2389,6 +2391,7 @@ pub fn should_take_incremental_snapshot(
 ///
 /// If there's no pending accounts package, then submit
 /// Otherwise, check if the pending accounts package can be overwritten
+#[must_use]
 fn can_submit_accounts_package(
     accounts_package: &AccountsPackage,
     pending_accounts_package: Option<&AccountsPackage>,
@@ -2402,23 +2405,39 @@ fn can_submit_accounts_package(
 
 /// Decide when it is appropriate to overwrite a pending accounts package
 ///
-/// This is based on the values for `snapshot_type` in both the `accounts_package` and the
-/// `pending_accounts_package`:
-/// - if the new AccountsPackage is for a full snapshot, always overwrite
-/// - if the new AccountsPackage is for an incremental snapshot, overwrite as long as there isn't a
-///   pending full snapshot
-/// - otherwise, only overwrite if the pending package's snapshot type is None
+/// The priority of the package types is (from highest to lowest):
+/// 1. Epoch Account Hash
+/// 2. Full Snapshot
+/// 3. Incremental Snapshot
+/// 4. Accounts Hash Verifier
+///
+/// New packages of higher priority types can overwrite pending packages of *equivalent or lower*
+/// priority types.
+#[must_use]
 fn can_overwrite_pending_accounts_package(
     accounts_package: &AccountsPackage,
     pending_accounts_package: &AccountsPackage,
 ) -> bool {
-    match accounts_package.snapshot_type {
-        Some(SnapshotType::FullSnapshot) => true,
-        Some(SnapshotType::IncrementalSnapshot(_)) => pending_accounts_package
-            .snapshot_type
-            .map(|snapshot_type| !snapshot_type.is_full_snapshot())
-            .unwrap_or(true),
-        None => pending_accounts_package.snapshot_type.is_none(),
+    match (
+        &pending_accounts_package.package_type,
+        &accounts_package.package_type,
+    ) {
+        (AccountsPackageType::EpochAccountsHash, AccountsPackageType::EpochAccountsHash) => {
+            panic!(
+                "Both pending and new accounts packages are of type EpochAccountsHash! \
+                EAH calculations must complete before new ones are enqueued. \
+                \npending accounts package slot: {} \
+                \n    new accounts package slot: {}",
+                pending_accounts_package.slot, accounts_package.slot,
+            );
+        }
+        (_, AccountsPackageType::EpochAccountsHash) => true,
+        (AccountsPackageType::EpochAccountsHash, _) => false,
+        (_, AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)) => true,
+        (AccountsPackageType::Snapshot(SnapshotType::FullSnapshot), _) => false,
+        (_, AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(_))) => true,
+        (AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(_)), _) => false,
+        _ => true,
     }
 }
 
@@ -2426,7 +2445,10 @@ fn can_overwrite_pending_accounts_package(
 mod tests {
     use {
         super::*,
-        crate::{accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, status_cache::Status},
+        crate::{
+            accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING, snapshot_package::AccountsPackageType,
+            status_cache::Status,
+        },
         assert_matches::assert_matches,
         bincode::{deserialize_from, serialize_into},
         solana_sdk::{
@@ -4012,90 +4034,161 @@ mod tests {
         assert_eq!(bank_fields.parent_slot, bank2.parent_slot());
     }
 
-    /// All the permutations of `snapshot_type` for the new-and-old accounts packages:
+    /// Test `can_submit_accounts_packages()` with all permutations of `package_type`
+    /// for both the pending accounts package and the new accounts package.
     ///
-    ///  new      | old      |
-    ///  snapshot | snapshot |
-    ///  type     | type     | result
-    /// ----------+----------+--------
-    ///   FSS     |  FSS     |  true
-    ///   FSS     |  ISS     |  true
-    ///   FSS     |  None    |  true
-    ///   ISS     |  FSS     |  false
-    ///   ISS     |  ISS     |  true
-    ///   ISS     |  None    |  true
-    ///   None    |  FSS     |  false
-    ///   None    |  ISS     |  false
-    ///   None    |  None    |  true
+    ///     pending | new     |
+    ///     package | package | result
+    ///    ---------+---------+--------
+    ///  1. None    | X       | true
+    ///  2. AHV     | AHV     | true
+    ///  3. AHV     | ISS     | true
+    ///  4. AHV     | FSS     | true
+    ///  5. AHV     | EAH     | true
+    ///  6. ISS     | AHV     | false
+    ///  7. ISS     | ISS     | true
+    ///  8. ISS     | FSS     | true
+    ///  9. ISS     | EAH     | true
+    /// 10. FSS     | AHV     | false
+    /// 11. FSS     | ISS     | false
+    /// 12. FSS     | FSS     | true
+    /// 13. FSS     | EAH     | true
+    /// 14. EAH     | AHV     | false
+    /// 15. EAH     | ISS     | false
+    /// 16. EAH     | FSS     | false
+    /// 17. EAH     | EAH     | assert unreachable, so test separately
     #[test]
     fn test_can_submit_accounts_package() {
-        /// helper function to create an AccountsPackage that's good enough for this test
-        fn new_accounts_package_with(snapshot_type: Option<SnapshotType>) -> AccountsPackage {
-            AccountsPackage {
-                slot: Slot::default(),
-                block_height: Slot::default(),
-                slot_deltas: Vec::default(),
-                snapshot_links: TempDir::new().unwrap(),
-                snapshot_storages: SnapshotStorages::default(),
-                archive_format: ArchiveFormat::Tar,
-                snapshot_version: SnapshotVersion::default(),
-                full_snapshot_archives_dir: PathBuf::default(),
-                incremental_snapshot_archives_dir: PathBuf::default(),
-                expected_capitalization: u64::default(),
-                accounts_hash_for_testing: None,
-                cluster_type: solana_sdk::genesis_config::ClusterType::Development,
-                snapshot_type,
-                accounts: Arc::new(crate::accounts::Accounts::default_for_tests()),
-                epoch_schedule: solana_sdk::epoch_schedule::EpochSchedule::default(),
-                rent_collector: crate::rent_collector::RentCollector::default(),
-            }
-        }
-
-        for (new_snapshot_type, old_snapshot_type, expected_result) in [
-            (
-                Some(SnapshotType::FullSnapshot),
-                Some(SnapshotType::FullSnapshot),
-                true,
-            ),
-            (
-                Some(SnapshotType::FullSnapshot),
-                Some(SnapshotType::IncrementalSnapshot(0)),
-                true,
-            ),
-            (Some(SnapshotType::FullSnapshot), None, true),
-            (
-                Some(SnapshotType::IncrementalSnapshot(0)),
-                Some(SnapshotType::FullSnapshot),
-                false,
-            ),
-            (
-                Some(SnapshotType::IncrementalSnapshot(0)),
-                Some(SnapshotType::IncrementalSnapshot(0)),
-                true,
-            ),
-            (Some(SnapshotType::IncrementalSnapshot(0)), None, true),
-            (None, Some(SnapshotType::FullSnapshot), false),
-            (None, Some(SnapshotType::IncrementalSnapshot(0)), false),
-            (None, None, true),
-        ] {
-            let new_accounts_package = new_accounts_package_with(new_snapshot_type);
-            let old_accounts_package = new_accounts_package_with(old_snapshot_type);
-
-            let actual_result = can_overwrite_pending_accounts_package(
-                &new_accounts_package,
-                &old_accounts_package,
-            );
-            assert_eq!(expected_result, actual_result);
-        }
-
-        // Also test when the pending package is None
+        // Test 1
         {
-            let accounts_package = new_accounts_package_with(None);
             let pending_accounts_package = None;
+            let accounts_package = new_accounts_package(AccountsPackageType::AccountsHashVerifier);
             assert!(can_submit_accounts_package(
                 &accounts_package,
                 pending_accounts_package
             ));
+        }
+
+        for (pending_package_type, new_package_type, expected_result) in [
+            // Tests 2-5, pending package is AHV
+            (
+                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageType::AccountsHashVerifier,
+                true,
+            ),
+            (
+                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(0)),
+                true,
+            ),
+            (
+                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                true,
+            ),
+            (
+                AccountsPackageType::AccountsHashVerifier,
+                AccountsPackageType::EpochAccountsHash,
+                true,
+            ),
+            // Tests 6-9, pending package is ISS
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(0)),
+                AccountsPackageType::AccountsHashVerifier,
+                false,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(0)),
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(0)),
+                true,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(0)),
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                true,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(0)),
+                AccountsPackageType::EpochAccountsHash,
+                true,
+            ),
+            // Tests 10-13, pending package is FSS
+            (
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                AccountsPackageType::AccountsHashVerifier,
+                false,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(0)),
+                false,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                true,
+            ),
+            (
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                AccountsPackageType::EpochAccountsHash,
+                true,
+            ),
+            // Tests 14-16, pending package is EAH
+            (
+                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageType::AccountsHashVerifier,
+                false,
+            ),
+            (
+                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot(0)),
+                false,
+            ),
+            (
+                AccountsPackageType::EpochAccountsHash,
+                AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
+                false,
+            ),
+            // tested separately: (AccountsPackageType::EpochAccountsHash, None, AccountsPackageType::EpochAccountsHash, None, X),
+        ] {
+            let pending_accounts_package = new_accounts_package(pending_package_type);
+            let accounts_package = new_accounts_package(new_package_type);
+
+            let actual_result =
+                can_submit_accounts_package(&accounts_package, Some(&pending_accounts_package));
+            assert_eq!(expected_result, actual_result);
+        }
+    }
+
+    /// It should not be allowed to have a new accounts package intended for EAH when there is
+    /// already a pending EAH accounts package.
+    #[test]
+    #[should_panic]
+    fn test_can_submit_accounts_package_both_are_eah() {
+        let pending_accounts_package = new_accounts_package(AccountsPackageType::EpochAccountsHash);
+        let accounts_package = new_accounts_package(AccountsPackageType::EpochAccountsHash);
+        _ = can_submit_accounts_package(&accounts_package, Some(&pending_accounts_package));
+    }
+
+    /// helper function to create an AccountsPackage that's good enough for tests
+    fn new_accounts_package(package_type: AccountsPackageType) -> AccountsPackage {
+        AccountsPackage {
+            package_type,
+            slot: Slot::default(),
+            block_height: Slot::default(),
+            slot_deltas: Vec::default(),
+            snapshot_links: TempDir::new().unwrap(),
+            snapshot_storages: SnapshotStorages::default(),
+            archive_format: ArchiveFormat::Tar,
+            snapshot_version: SnapshotVersion::default(),
+            full_snapshot_archives_dir: PathBuf::default(),
+            incremental_snapshot_archives_dir: PathBuf::default(),
+            expected_capitalization: u64::default(),
+            accounts_hash_for_testing: None,
+            cluster_type: solana_sdk::genesis_config::ClusterType::Development,
+            accounts: Arc::new(crate::accounts::Accounts::default_for_tests()),
+            epoch_schedule: solana_sdk::epoch_schedule::EpochSchedule::default(),
+            rent_collector: crate::rent_collector::RentCollector::default(),
         }
     }
 
