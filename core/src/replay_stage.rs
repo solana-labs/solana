@@ -3102,7 +3102,7 @@ impl ReplayStage {
         loop {
             // These cases mean confirmation of propagation on any earlier
             // leader blocks must have been reached
-            if current_leader_slot == None || current_leader_slot.unwrap() < root {
+            if current_leader_slot.is_none() || current_leader_slot.unwrap() < root {
                 break;
             }
 
