@@ -6219,12 +6219,8 @@ impl AccountsDb {
         let mut accounts_index_root_stats = AccountsIndexRootsStats::default();
         let mut measure = Measure::start("unref_from_storage");
         if let Some(purged_stored_account_slots) = purged_stored_account_slots {
-<<<<<<< HEAD
-            let len = purged_stored_account_slots.len();
-            // we could build a higher level function in accounts_index to group by bin
-=======
             let len = purged_slot_pubkeys.len();
->>>>>>> 7650bd2ad (clean_dead_slots_from_accounts_index unrefs correctly (backport #27461) (#27467))
+            // we could build a higher level function in accounts_index to group by bin
             const BATCH_SIZE: usize = 10_000;
             let batches = 1 + (len / BATCH_SIZE);
             self.thread_pool_clean.install(|| {
