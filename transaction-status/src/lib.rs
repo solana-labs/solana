@@ -3,7 +3,7 @@
 pub use {crate::extract_memos::extract_and_fmt_memos, solana_sdk::reward_type::RewardType};
 use {
     crate::{
-        parse_accounts::{parse_accounts, parse_static_accounts, ParsedAccount},
+        parse_accounts::{parse_legacy_message_accounts, parse_v0_message_accounts, ParsedAccount},
         parse_instruction::{parse, ParsedInstruction},
     },
     solana_account_decoder::parse_token::UiTokenAmount,
@@ -903,7 +903,7 @@ impl Encodable for Message {
         if encoding == UiTransactionEncoding::JsonParsed {
             let account_keys = AccountKeys::new(&self.account_keys, None);
             UiMessage::Parsed(UiParsedMessage {
-                account_keys: parse_accounts(self),
+                account_keys: parse_legacy_message_accounts(self),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions
@@ -935,7 +935,7 @@ impl EncodableWithMeta for v0::Message {
             let account_keys = AccountKeys::new(&self.account_keys, Some(&meta.loaded_addresses));
             let loaded_message = LoadedMessage::new_borrowed(self, &meta.loaded_addresses);
             UiMessage::Parsed(UiParsedMessage {
-                account_keys: parse_static_accounts(&loaded_message),
+                account_keys: parse_v0_message_accounts(&loaded_message),
                 recent_blockhash: self.recent_blockhash.to_string(),
                 instructions: self
                     .instructions
