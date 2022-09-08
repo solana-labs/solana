@@ -287,6 +287,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .long("use-rpc-client")
                 .conflicts_with("tpu_client")
                 .takes_value(false)
+                .requires("json_rpc_url")
                 .help("Submit transactions with a RpcClient")
         )
         .arg(
@@ -294,6 +295,7 @@ pub fn build_args<'a, 'b>(version: &'b str) -> App<'a, 'b> {
                 .long("use-tpu-client")
                 .conflicts_with("rpc_client")
                 .takes_value(false)
+                .requires("json_rpc_url")
                 .help("Submit transactions with a TpuClient")
         )
         .arg(
