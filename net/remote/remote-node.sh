@@ -28,6 +28,8 @@ maybeFullRpc="${19}"
 waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
+enableUdp="${23}"
+
 set +x
 
 missing() {
@@ -283,6 +285,10 @@ EOF
       args+=(--enable-extended-tx-metadata-storage)
     fi
 
+    if $enableUdp; then
+      args+=(--tpu-enable-udp)
+    fi
+
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
@@ -409,6 +415,10 @@ EOF
     if $maybeFullRpc; then
       args+=(--enable-rpc-transaction-history)
       args+=(--enable-extended-tx-metadata-storage)
+    fi
+
+    if $enableUdp; then
+      args+=(--tpu-enable-udp)
     fi
 
 cat >> ~/solana/on-reboot <<EOF
