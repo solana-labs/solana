@@ -234,7 +234,7 @@ impl Blockstore {
     }
 
     fn do_open(ledger_path: &Path, options: BlockstoreOptions) -> Result<Blockstore> {
-        fs::create_dir_all(&ledger_path)?;
+        fs::create_dir_all(ledger_path)?;
         let blockstore_path = ledger_path.join(
             options
                 .column_options

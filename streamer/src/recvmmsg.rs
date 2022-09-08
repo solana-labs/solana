@@ -141,7 +141,7 @@ mod tests {
             let sent = TEST_NUM_MSGS - 1;
             for _ in 0..sent {
                 let data = [0; PACKET_DATA_SIZE];
-                sender.send_to(&data[..], &addr).unwrap();
+                sender.send_to(&data[..], addr).unwrap();
             }
 
             let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
@@ -167,7 +167,7 @@ mod tests {
             let sent = TEST_NUM_MSGS + 10;
             for _ in 0..sent {
                 let data = [0; PACKET_DATA_SIZE];
-                sender.send_to(&data[..], &addr).unwrap();
+                sender.send_to(&data[..], addr).unwrap();
             }
 
             let mut packets = vec![Packet::default(); TEST_NUM_MSGS];
@@ -208,7 +208,7 @@ mod tests {
         let sent = TEST_NUM_MSGS;
         for _ in 0..sent {
             let data = [0; PACKET_DATA_SIZE];
-            sender.send_to(&data[..], &addr).unwrap();
+            sender.send_to(&data[..], addr).unwrap();
         }
 
         let start = Instant::now();
@@ -243,12 +243,12 @@ mod tests {
 
         for _ in 0..sent1 {
             let data = [0; PACKET_DATA_SIZE];
-            sender1.send_to(&data[..], &addr).unwrap();
+            sender1.send_to(&data[..], addr).unwrap();
         }
 
         for _ in 0..sent2 {
             let data = [0; PACKET_DATA_SIZE];
-            sender2.send_to(&data[..], &addr).unwrap();
+            sender2.send_to(&data[..], addr).unwrap();
         }
 
         let mut packets = vec![Packet::default(); TEST_NUM_MSGS];

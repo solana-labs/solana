@@ -659,7 +659,7 @@ pub mod tests {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path)
+            .open(path)
             .expect("create a test file for mmap");
 
         let result = AppendVec::new_from_file(path, 0);
