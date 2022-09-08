@@ -8,10 +8,10 @@ use {
         hash::Hash,
         inflation::Inflation,
         transaction::{Result, TransactionError},
-        transaction_context::TransactionReturnData,
     },
     solana_transaction_status::{
         ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus, UiConfirmedBlock,
+        UiTransactionReturnData,
     },
     std::{collections::HashMap, fmt, net::SocketAddr, str::FromStr},
     thiserror::Error,
@@ -399,6 +399,7 @@ pub struct RpcSimulateTransactionResult {
     pub logs: Option<Vec<String>>,
     pub accounts: Option<Vec<Option<UiAccount>>>,
     pub units_consumed: Option<u64>,
+<<<<<<< HEAD:client/src/rpc_response.rs
     pub return_data: Option<RpcTransactionReturnData>,
 }
 
@@ -422,6 +423,9 @@ impl From<TransactionReturnData> for RpcTransactionReturnData {
 #[serde(rename_all = "camelCase")]
 pub enum ReturnDataEncoding {
     Base64,
+=======
+    pub return_data: Option<UiTransactionReturnData>,
+>>>>>>> 0bfc18837 (Update getBlock/getTransaction rpc handling of return_data (#27672)):rpc-client-api/src/response.rs
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
