@@ -228,10 +228,6 @@ test-wasm)
   exit 0
   ;;
 test-docs)
-<<<<<<< HEAD
-  _ "$cargo" stable test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
-  exit 0
-=======
   if need_to_generate_test_result; then
     _ "$cargo" stable test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- -Z unstable-options --format json --report-time | tee results.json
     exit "${PIPESTATUS[0]}"
@@ -239,7 +235,6 @@ test-docs)
     _ "$cargo" stable test --jobs "$JOBS" --all --doc --exclude solana-local-cluster ${V:+--verbose} -- --nocapture
     exit 0
   fi
->>>>>>> 54129c4f1 (chore: make docs test upload test result when needed (#27660))
   ;;
 *)
   echo "Error: Unknown test: $testName"
