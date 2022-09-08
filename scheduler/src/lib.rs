@@ -104,7 +104,7 @@ impl ExecutionEnvironment {
                 });
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                let page = lock_attempt.target.page_mut(ast);
+                let mut page = lock_attempt.target.page_mut(ast);
                 page.contended_write_task_count = page.contended_write_task_count.checked_sub(1).unwrap();
             }
         }
