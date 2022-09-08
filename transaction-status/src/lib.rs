@@ -326,7 +326,8 @@ pub struct UiTransactionStatusMeta {
     pub rewards: Option<Rewards>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loaded_addresses: Option<UiLoadedAddresses>,
-    pub return_data: Option<TransactionReturnData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_data: Option<UiTransactionReturnData>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compute_units_consumed: Option<u64>,
 }
@@ -379,7 +380,7 @@ impl UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: if show_rewards { meta.rewards } else { None },
             loaded_addresses: None,
-            return_data: meta.return_data,
+            return_data: meta.return_data.map(|return_data| return_data.into()),
             compute_units_consumed: meta.compute_units_consumed,
         }
     }
@@ -405,7 +406,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
-            return_data: meta.return_data,
+            return_data: meta.return_data.map(|return_data| return_data.into()),
             compute_units_consumed: meta.compute_units_consumed,
         }
     }
@@ -1028,6 +1029,31 @@ pub struct TransactionByAddrInfo {
     pub index: u32,                    // Where the transaction is located in the block
     pub memo: Option<String>,          // Transaction memo
     pub block_time: Option<UnixTimestamp>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UiTransactionReturnData {
+    pub program_id: String,
+    pub data: (String, UiReturnDataEncoding),
+}
+
+impl From<TransactionReturnData> for UiTransactionReturnData {
+    fn from(return_data: TransactionReturnData) -> Self {
+        Self {
+            program_id: return_data.program_id.to_string(),
+            data: (
+                base64::encode(return_data.data),
+                UiReturnDataEncoding::Base64,
+            ),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub enum UiReturnDataEncoding {
+    Base64,
 }
 
 #[cfg(test)]
