@@ -237,18 +237,20 @@ pub struct Page {
     next_usage: Usage,
     provisional_task_ids: Vec<triomphe::Arc<ProvisioningTracker>>,
     cu: CU,
+    address_str: String,
     //loaded account from Accounts db
     //comulative_cu for qos; i.e. track serialized cumulative keyed by addresses and bail out block
     //producing as soon as any one of cu from the executing thread reaches to the limit
 }
 
 impl Page {
-    fn new(current_usage: Usage) -> Self {
+    fn new(address: &Pubkey, current_usage: Usage) -> Self {
         Self {
             current_usage,
             next_usage: Usage::Unused,
             provisional_task_ids: Default::default(),
             cu: Default::default(),
+            address: format!("{}", address),
         }
     }
 
