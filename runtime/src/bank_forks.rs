@@ -276,30 +276,25 @@ impl BankForks {
                 if self.snapshot_config.is_some()
                     && accounts_background_request_sender.is_snapshot_creation_enabled()
                 {
-                    let snapshot_root_bank = self.root_bank();
-                    let root_slot = snapshot_root_bank.slot();
-                    if snapshot_root_bank.is_startup_verification_complete() {
+                    if bank.is_startup_verification_complete() {
                         // Save off the status cache because these may get pruned if another
                         // `set_root()` is called before the snapshots package can be generated
-                        let status_cache_slot_deltas = snapshot_root_bank
-                            .status_cache
-                            .read()
-                            .unwrap()
-                            .root_slot_deltas();
+                        let status_cache_slot_deltas =
+                            bank.status_cache.read().unwrap().root_slot_deltas();
                         if let Err(e) = accounts_background_request_sender.send_snapshot_request(
                             SnapshotRequest {
-                                snapshot_root_bank,
+                                snapshot_root_bank: Arc::clone(bank),
                                 status_cache_slot_deltas,
                                 request_type: SnapshotRequestType::Snapshot,
                             },
                         ) {
                             warn!(
                                 "Error sending snapshot request for bank: {}, err: {:?}",
-                                root_slot, e
+                                bank_slot, e
                             );
                         }
                     } else {
-                        info!("Not sending snapshot request for bank: {}, startup verification is incomplete", root_slot);
+                        info!("Not sending snapshot request for bank: {}, startup verification is incomplete", bank_slot);
                     }
                 }
                 snapshot_time.stop();
