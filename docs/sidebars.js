@@ -81,54 +81,48 @@ module.exports = {
       href: "/developers",
       label: "Overview",
     },
-    // future home to this page?
-    // {
-    //   type: "link",
-    //   label: "Getting Started",
-    //   href: "/developing/get-started",
-    // },
     {
       type: "category",
-      label: "Quickstart Guides",
+      label: "Get Started",
       items: [
         {
           type: "link",
-          href: "/quickstart",
+          href: "/getstarted",
           label: "All guides",
         },
         {
           type: "doc",
-          id: "quickstart/hello-world",
+          id: "getstarted/hello-world",
           label: "Hello world",
         },
         {
           type: "doc",
-          id: "quickstart/local",
+          id: "getstarted/local",
           label: "Local development",
         },
         {
           type: "doc",
-          id: "quickstart/rust",
+          id: "getstarted/rust",
           label: "Rust program",
         },
         // {
         //   type: "doc",
-        //   id: "quickstart/token",
+        //   id: "getstarted/token",
         //   label: "Create a token",
         // },
         // {
         //   type: "doc",
-        //   id: "quickstart/nft",
+        //   id: "getstarted/nft",
         //   label: "Create a NFT",
         // },
         // {
         //   type: "doc",
-        //   id: "quickstart/c",
+        //   id: "getstarted/c",
         //   label: "C / C++",
         // },
         // {
         //   type: "doc",
-        //   id: "quickstart/web3js",
+        //   id: "getstarted/web3js",
         //   label: "Web3.js",
         // },
       ],

@@ -4,18 +4,18 @@ import styles from "./styles.module.css";
 import Card from "../../components/Card";
 import CardLayout from "../../layouts/CardLayout";
 
-function DevelopersQuickstart() {
+function GetStartedPage() {
   return (
     <CardLayout
       sidebarKey="developerSidebar"
       title="Developer Quick Start Guides"
       description="Solana Documentation"
-      path="/quickstart"
+      path="/getstarted"
     >
       <section className={styles.features}>
         <div className="container">
           <section>
-            <h1>Solana Quickstart Guides</h1>
+            <h1>Get started with Solana development</h1>
 
             <div className="container__spacer">
               <p>
@@ -23,7 +23,7 @@ function DevelopersQuickstart() {
                 your browser.
               </p>
 
-              <Link to="/quickstart/hello-world">
+              <Link to="/getstarted/hello-world">
                 <a className="button">Get Started</a>
               </Link>
             </div>
@@ -32,41 +32,41 @@ function DevelopersQuickstart() {
           <section className="">
             <div className="row cards__container">
               <Card
-                to="/quickstart/hello-world"
+                to="/getstarted/hello-world"
                 header={{
                   label: "Hello World in your Browser",
-                  translateId: "quickstart-hello",
+                  translateId: "getstarted-hello",
                 }}
                 body={{
                   label:
-                    "Write and deploy your first Solana program directly in your browser.",
-                  translateId: "quickstart-hello-body",
+                    "Write and deploy your first Solana program directly in your browser. No install needed.",
+                  translateId: "getstarted-hello-body",
                 }}
               />
 
               <Card
-                to="/quickstart/local"
+                to="/getstarted/local"
                 header={{
                   label: "Local development",
-                  translateId: "quickstart-local",
+                  translateId: "getstarted-local",
                 }}
                 body={{
                   label:
-                    "Setup your local development environment for writing programs.",
-                  translateId: "quickstart-c-body",
+                    "Setup your local development environment for writing on chain programs.",
+                  translateId: "getstarted-c-body",
                 }}
               />
 
               <Card
-                to="/quickstart/rust"
+                to="/getstarted/rust"
                 header={{
                   label: "Native Rust Program",
-                  translateId: "quickstart-rust",
+                  translateId: "getstarted-rust",
                 }}
                 body={{
                   label:
-                    "Build and deploy a native Rust based on chain program.",
-                  translateId: "quickstart-rust-body",
+                    "Build and deploy an on chain Solana program with the Rust language.",
+                  translateId: "getstarted-rust-body",
                 }}
               />
             </div>
@@ -81,7 +81,7 @@ function DevelopersQuickstart() {
                 to="https://www.anchor-lang.com/"
                 header={{
                   label: "Anchor Framework",
-                  translateId: "quickstart-anchor",
+                  translateId: "getstarted-anchor",
                 }}
                 body={{
                   label: "Rust based framework for writing Solana programs.",
@@ -94,7 +94,7 @@ function DevelopersQuickstart() {
                 to="https://seahorse-lang.org/"
                 header={{
                   label: "Seahorse Lang",
-                  translateId: "quickstart-seahorse",
+                  translateId: "getstarted-seahorse",
                 }}
                 body={{
                   label: "Write Anchor-compatible Solana programs in Python.",
@@ -123,4 +123,4 @@ function DevelopersQuickstart() {
   );
 }
 
-export default DevelopersQuickstart;
+export default GetStartedPage;

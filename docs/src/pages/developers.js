@@ -15,7 +15,7 @@ function Developers() {
       <section className={styles.features}>
         <div className="container">
           <section>
-            <h1>Explore Solana Development</h1>
+            <h1>Learn Solana Development</h1>
 
             <div className="container__spacer">
               <p>
@@ -23,7 +23,7 @@ function Developers() {
                 your browser.
               </p>
 
-              <Link to="/quickstart/hello-world">
+              <Link to="/getstarted/hello-world">
                 <a className="button">Get Started</a>
               </Link>
             </div>

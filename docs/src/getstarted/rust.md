@@ -26,7 +26,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ## Run your localhost validator
 
-The Solana CLI comes with the [test validator](../test-validator.md) built in. This command line tool will allow you to run a full blockchain cluster on your machine.
+The Solana CLI comes with the [test validator](../developing/test-validator.md) built in. This command line tool will allow you to run a full blockchain cluster on your machine.
 
 ```bash
 solana-test-validator
