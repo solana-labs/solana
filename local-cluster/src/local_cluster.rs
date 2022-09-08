@@ -6,10 +6,10 @@ use {
     },
     itertools::izip,
     log::*,
-    solana_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     solana_client::{
         connection_cache::{
-            ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC,
+            ConnectionCache, DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
+            DEFAULT_TPU_USE_QUIC,
         },
         thin_client::ThinClient,
     },
