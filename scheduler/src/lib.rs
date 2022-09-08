@@ -102,6 +102,11 @@ impl ExecutionEnvironment {
                     lock_attempt.heaviest_uncontended = Some(task);
                     ()
                 });
+
+            if lock_attempt.requested_usage == RequestedUsage::Writable {
+                let page = lock_attampt.target.page_mut();
+                page.contended_write_task_count = page.contended_write_task_count.checked_sub(1).unwrap();
+            }
         }
     }
 
@@ -220,7 +225,7 @@ impl TaskIds {
     #[inline(never)]
     pub fn remove_task(&self, u: &TaskId) {
         let removed_entry = self.task_ids.remove(u);
-        //assert!(removed_entry.is_some());
+        assert!(removed_entry.is_some());
     }
 
     #[inline(never)]
@@ -732,6 +737,7 @@ impl Task {
     ) {
         for lock_attempt in this.lock_attempts_mut(ast).iter() {
             lock_attempt.target_contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
+
             if lock_attempt.requested_usage == RequestedUsage::Writable {
                 let mut page = lock_attempt.target.page_mut(ast);
                 page.contended_write_task_count = page.contended_write_task_count.checked_add(1).unwrap();
@@ -1439,6 +1445,7 @@ impl ScheduleStage {
                             lock_attempt
                                 .target_contended_unique_weights()
                                 .insert_task(task.unique_weight, Task::clone_in_queue(&task));
+                            todo!("contended_write_task_count!");
                         }
                     }
                     assert_eq!(task_receiver.len(), 0);
