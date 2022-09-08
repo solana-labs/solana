@@ -590,14 +590,14 @@ impl Task {
         &self,
         _ast: AST,
     ) -> std::cell::RefMut<'_, Vec<LockAttempt>> {
-        self.tx.1 .0.borrow_mut()
+        self.tx.1.0.borrow_mut()
     }
 
     fn lock_attempts_not_mut<NAST: NotAtScheduleThread>(
         &self,
         _nast: NAST,
     ) -> std::cell::Ref<'_, Vec<LockAttempt>> {
-        self.tx.1 .0.borrow()
+        self.tx.1.0.borrow()
     }
 
     fn update_busiest_page_cu(&self, cu: CU) {
@@ -732,6 +732,10 @@ impl Task {
     ) {
         for lock_attempt in this.lock_attempts_mut(ast).iter() {
             lock_attempt.target_contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
+            if lock_attempt.requested_usage == RequestedUsage::Writable {
+                lock_attempt.target.page_mut().contended_write_task_count = 
+                    lock_attempt.target.page_mut().contended_write_task_count.checked_add(1).unwrap();
+            }
         }
         //let a = Task::clone_in_queue(this);
         //task_sender
