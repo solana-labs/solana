@@ -1018,7 +1018,6 @@ impl ScheduleStage {
                                 .load(std::sync::atomic::Ordering::SeqCst)
                         );
                         //address_book.uncontended_task_ids.clear();
-                        address_book.uncontended_task_ids.insert(next_task.unique_weight, next_task);
                     }
 
                     if from_runnable || task_source == TaskSource::Stuck {
@@ -1059,6 +1058,7 @@ impl ScheduleStage {
                             .insert(next_task.stuck_task_id(), removed);
                         assert!(a.is_none());
                         */
+                        address_book.uncontended_task_ids.insert(next_task.unique_weight, next_task);
                         
                         break;
                     }
