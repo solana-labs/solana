@@ -212,7 +212,7 @@ async fn confirm(
                 let decoded_tx = confirmed_tx.get_transaction();
                 let encoded_tx_with_meta = confirmed_tx
                     .tx_with_meta
-                    .encode(UiTransactionEncoding::Json, Some(0))
+                    .encode(UiTransactionEncoding::Json, Some(0), true)
                     .map_err(|_| "Failed to encode transaction in block".to_string())?;
                 transaction = Some(CliTransaction {
                     transaction: encoded_tx_with_meta.transaction,
