@@ -485,7 +485,7 @@ impl Preloader {
     pub fn load(&self, address: Pubkey) -> PageRc {
         PageRc::clone(&self.book.entry(address).or_insert_with(|| {
             PageRc(PageRcInner::new((
-                core::cell::RefCell::new(Page::new(Usage::unused())),
+                core::cell::RefCell::new(Page::new(&address, Usage::unused())),
                 Default::default(),
             )))
         }))
