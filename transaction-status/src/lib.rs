@@ -327,7 +327,8 @@ pub struct UiTransactionStatusMeta {
     pub rewards: Option<Rewards>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loaded_addresses: Option<UiLoadedAddresses>,
-    pub return_data: Option<TransactionReturnData>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub return_data: Option<UiTransactionReturnData>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compute_units_consumed: Option<u64>,
 }
@@ -380,7 +381,7 @@ impl UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
             loaded_addresses: None,
-            return_data: meta.return_data,
+            return_data: meta.return_data.map(|return_data| return_data.into()),
             compute_units_consumed: meta.compute_units_consumed,
         }
     }
@@ -406,7 +407,7 @@ impl From<TransactionStatusMeta> for UiTransactionStatusMeta {
                 .map(|balance| balance.into_iter().map(Into::into).collect()),
             rewards: meta.rewards,
             loaded_addresses: Some(UiLoadedAddresses::from(&meta.loaded_addresses)),
-            return_data: meta.return_data,
+            return_data: meta.return_data.map(|return_data| return_data.into()),
             compute_units_consumed: meta.compute_units_consumed,
         }
     }
