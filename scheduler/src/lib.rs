@@ -869,6 +869,7 @@ impl ScheduleStage {
         runnable_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &usize,
+        runnable_exclusive: bool,
     ) -> Option<(TaskSource, TaskInQueue)> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
@@ -877,12 +878,20 @@ impl ScheduleStage {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
                 let t = heaviest_runnable_entry.remove();
-                Some((TaskSource::Runnable, t))
+                if runnable_exclusive {
+                    Some((TaskSource::Runnable, t))
+                } else {
+                    None
+                }
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
                 let t = weight_from_contended.remove();
-                Some((TaskSource::Contended, t))
+                if runnable_exclusive {
+                    None
+                } else {
+                    Some((TaskSource::Contended, t))
+                }
             }
             (Some(heaviest_runnable_entry), Some(weight_from_contended)) => {
                 let weight_from_runnable = heaviest_runnable_entry.key();
@@ -899,7 +908,11 @@ impl ScheduleStage {
                 } else if uw > weight_from_runnable {
                     trace!("select: contended > runnnable");
                     let t = weight_from_contended.remove();
-                    Some((TaskSource::Contended, t))
+                    if runnable_exclusive {
+                        None
+                    } else {
+                        Some((TaskSource::Contended, t))
+                    }
                 } else {
                     unreachable!(
                         "identical unique weights shouldn't exist in both runnable and contended"
@@ -908,6 +921,7 @@ impl ScheduleStage {
             }
             (None, None) => {
                 trace!("select: none");
+
                 if false && runnable_queue.task_count() == 0 && /* *contended_count > 0 &&*/ address_book.stuck_tasks.len() > 0
                 {
                     trace!("handling stuck...");
@@ -940,6 +954,7 @@ impl ScheduleStage {
         sequence_clock: &usize,
         queue_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
+        runnable_exclusive: bool,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!(
@@ -955,7 +970,7 @@ impl ScheduleStage {
         trace!("pop begin");
         loop {
             if let Some((task_source, mut next_task)) =
-                Self::select_next_task(runnable_queue, address_book, contended_count)
+                Self::select_next_task(runnable_queue, address_book, contended_count, runnable_exclusive)
             {
                 trace!("pop loop iteration");
                 let from_runnable = task_source == TaskSource::Runnable;
@@ -1311,6 +1326,7 @@ impl ScheduleStage {
         queue_clock: &mut usize,
         execute_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
+        runnable_exclusive: bool,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee = Self::pop_from_queue_then_lock(
             ast,
@@ -1322,6 +1338,7 @@ impl ScheduleStage {
             sequence_time,
             queue_clock,
             provisioning_tracker_count,
+            runnable_exclusive,
         )
         .map(|(uw, t, ll)| {
             Self::prepare_scheduled_execution(address_book, uw, t, ll, queue_clock, execute_clock)
@@ -1477,11 +1494,38 @@ impl ScheduleStage {
                         &mut queue_clock,
                         &mut execute_clock,
                         &mut provisioning_tracker_count,
+                        true
                     ) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
                     }
-                    trace!("schedule_once id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+                    trace!("schedule_once runnable id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+                    if start.elapsed() > std::time::Duration::from_millis(150) {
+                        start = std::time::Instant::now();
+                        info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+                    }
+                }
+                let executing_like_count = executing_queue_count + provisioning_tracker_count;
+                if executing_like_count < max_executing_queue_count {
+                    let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
+
+                    if let Some(ee) = Self::schedule_next_execution(
+                        ast,
+                        &task_sender,
+                        runnable_queue,
+                        address_book,
+                        &mut contended_count,
+                        prefer_immediate,
+                        &sequence_time,
+                        &mut queue_clock,
+                        &mut execute_clock,
+                        &mut provisioning_tracker_count,
+                        false,
+                    ) {
+                        executing_queue_count = executing_queue_count.checked_add(1).unwrap();
+                        to_execute_substage.send(ExecutablePayload(ee)).unwrap();
+                    }
+                    trace!("schedule_once contended id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     if start.elapsed() > std::time::Duration::from_millis(150) {
                         start = std::time::Instant::now();
                         info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
