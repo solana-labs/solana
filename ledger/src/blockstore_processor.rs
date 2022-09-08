@@ -1235,6 +1235,7 @@ fn confirm_slot_entries(
         Arc::new(verify_transaction),
     );
     let transaction_cpu_duration_us = timing::duration_as_us(&check_start.elapsed());
+    let disable_randomize = std::env::var("DISABLE_RANDOMIZE").is_ok();
 
     match check_result {
         Ok(mut check_result) => {
@@ -1256,7 +1257,7 @@ fn confirm_slot_entries(
             let process_result = process_entries_with_callback(
                 bank,
                 &mut replay_entries,
-                true, // shuffle transactions.
+                !disable_randomize, // shuffle transactions.
                 entry_callback,
                 transaction_status_sender,
                 replay_vote_sender,
