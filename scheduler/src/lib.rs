@@ -906,10 +906,12 @@ impl ScheduleStage {
                     Some((TaskSource::Runnable, t))
                     */
                 } else if uw > weight_from_runnable {
-                    trace!("select: contended > runnnable");
                     if runnable_exclusive {
-                        None
+                        trace!("select: contended > runnnable, runnable_exclusive");
+                        let t = heaviest_runnable_entry.remove();
+                        Some((TaskSource::Runnable, t))
                     } else {
+                        trace!("select: contended > runnnable, !runnable_exclusive)");
                         let t = weight_from_contended.remove();
                         Some((TaskSource::Contended, t))
                     }
