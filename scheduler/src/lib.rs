@@ -889,9 +889,13 @@ impl ScheduleStage {
                 let uw = weight_from_contended.key();
 
                 if weight_from_runnable > uw {
+                    panic!("replay shouldn't see this branch");
+
+                    /*
                     trace!("select: runnable > contended");
                     let t = heaviest_runnable_entry.remove();
                     Some((TaskSource::Runnable, t))
+                    */
                 } else if uw > weight_from_runnable {
                     trace!("select: contended > runnnable");
                     let t = weight_from_contended.remove();
@@ -1014,6 +1018,7 @@ impl ScheduleStage {
                                 .load(std::sync::atomic::Ordering::SeqCst)
                         );
                         //address_book.uncontended_task_ids.clear();
+                        address_book.uncontended_task_ids.insert(next_task.unique_weight, next_task);
                     }
 
                     if from_runnable || task_source == TaskSource::Stuck {
@@ -1054,6 +1059,7 @@ impl ScheduleStage {
                             .insert(next_task.stuck_task_id(), removed);
                         assert!(a.is_none());
                         */
+                        
                         break;
                     }
                 } else if provisional_count > 0 {
@@ -1424,7 +1430,7 @@ impl ScheduleStage {
                    } else {
                        assert_eq!(from_exec.len(), 0);
                        from_exec_disconnected |= true;
-                       info!("flushing1..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
+                       info!("flushing1..: {} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
                        if from_disconnected {
                            break;
                        }
@@ -1437,7 +1443,7 @@ impl ScheduleStage {
                        assert_eq!(from_prev.len(), 0);
                        from_disconnected |= true;
                        from_prev = never;
-                       info!("flushing2..: {} {} {} {} {} {}", from_disconnected, from_exec_disconnected, runnable_queue.task_count(), contended_count,  executing_queue_count, provisioning_tracker_count);
+                       info!("flushing2..: {} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
                    }
                }
             }
@@ -1454,13 +1460,14 @@ impl ScheduleStage {
 
             loop {
                 let executing_like_count = executing_queue_count + provisioning_tracker_count;
-                while executing_like_count < max_executing_queue_count || !address_book.uncontended_task_ids.is_empty() {
+                if executing_like_count < max_executing_queue_count {
                     trace!("schedule_once id_{:016x} (prev: {}, exec: ({}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     if start.elapsed() > std::time::Duration::from_millis(150) {
                         start = std::time::Instant::now();
                         info!("schedule_once:interval id_{:016x} (prev: {}, exec: ({}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{}) active from contended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     }
                     let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
+
                     if let Some(ee) = Self::schedule_next_execution(
                         ast,
                         &task_sender,
@@ -1475,8 +1482,6 @@ impl ScheduleStage {
                     ) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
-                    } else {
-                        break;
                     }
                 }
 
