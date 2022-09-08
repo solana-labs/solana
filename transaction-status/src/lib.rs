@@ -33,6 +33,7 @@ extern crate lazy_static;
 extern crate serde_derive;
 
 pub mod extract_memos;
+pub mod option_serializer;
 pub mod parse_accounts;
 pub mod parse_address_lookup_table;
 pub mod parse_associated_token;
