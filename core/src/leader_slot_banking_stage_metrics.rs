@@ -104,6 +104,11 @@ struct LeaderSlotPacketCountMetrics {
     // then hit the age limit after failing to be comitted.
     executed_transactions_failed_commit_count: u64,
 
+    // total number of transactions that were excluded from the block because there were concurrent write locks active.
+    // These transactions are added back to the buffered queue and are already counted in
+    // `self.retrayble_errored_transaction_count`.
+    account_lock_throttled_transactions_count: u64,
+
     // total number of transactions that were excluded from the block because they were too expensive
     // according to the cost model. These transactions are added back to the buffered queue and are
     // already counted in `self.retrayble_errored_transaction_count`.
@@ -195,6 +200,11 @@ impl LeaderSlotPacketCountMetrics {
             (
                 "executed_transactions_failed_commit_count",
                 self.executed_transactions_failed_commit_count as i64,
+                i64
+            ),
+            (
+                "account_lock_throttled_transactions_count",
+                self.account_lock_throttled_transactions_count as i64,
                 i64
             ),
             (
@@ -362,6 +372,7 @@ impl LeaderSlotMetricsTracker {
                 cost_model_throttled_transactions_count,
                 cost_model_us,
                 ref execute_and_commit_timings,
+                error_counters,
                 ..
             } = process_transactions_summary;
 
@@ -407,6 +418,13 @@ impl LeaderSlotMetricsTracker {
                 transactions_attempted_execution_count
                     .saturating_sub(*committed_transactions_count)
                     .saturating_sub(retryable_transaction_indexes.len()) as u64
+            );
+
+            saturating_add_assign!(
+                leader_slot_metrics
+                    .packet_count_metrics
+                    .account_lock_throttled_transactions_count,
+                error_counters.account_in_use as u64
             );
 
             saturating_add_assign!(
