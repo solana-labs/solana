@@ -1045,7 +1045,7 @@ impl ScheduleStage {
                         } else {
                             unreachable!();
                         }
-                    } else {
+                    } else if task_source == TaskSource::Contended {
                         // todo: remove this task from stuck_tasks before update_busiest_page_cu
                         /*
                         let removed = address_book
@@ -1061,6 +1061,8 @@ impl ScheduleStage {
                         address_book.uncontended_task_ids.insert(next_task.unique_weight, next_task);
                         
                         break;
+                    } else {
+                        unreachable!();
                     }
                 } else if provisional_count > 0 {
                     assert!(!from_runnable);
