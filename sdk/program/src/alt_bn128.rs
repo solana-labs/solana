@@ -193,7 +193,7 @@ pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         if input.len() > ALT_BN128_ADDITION_INPUT_LEN {
             return Err(AltBn128Error::InvalidInputData);
         }
-        
+
         let mut input = input.to_vec();
         input.resize(ALT_BN128_ADDITION_INPUT_LEN, 0);
 
@@ -250,11 +250,10 @@ pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> 
 
     #[cfg(not(target_arch = "bpf"))]
     {
-        /*
         if input.len() > ALT_BN128_MULTIPLICATION_INPUT_LEN {
             return Err(AltBn128Error::InvalidInputData);
         }
-        */
+
         let mut input = input.to_vec();
         input.resize(ALT_BN128_MULTIPLICATION_INPUT_LEN, 0);
 
