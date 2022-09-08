@@ -28,12 +28,8 @@ maybeFullRpc="${19}"
 waitForNodeInit="${20}"
 extraPrimordialStakes="${21:=0}"
 tmpfsAccounts="${22:false}"
-<<<<<<< HEAD
-=======
-disableQuic="${23}"
-enableUdp="${24}"
+enableUdp="${23}"
 
->>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
 set +x
 
 missing() {
@@ -289,18 +285,10 @@ EOF
       args+=(--enable-extended-tx-metadata-storage)
     fi
 
-<<<<<<< HEAD
-=======
-
-    if $disableQuic; then
-      args+=(--tpu-disable-quic)
-    fi
-
     if $enableUdp; then
       args+=(--tpu-enable-udp)
     fi
 
->>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
     if [[ $airdropsEnabled = true ]]; then
 cat >> ~/solana/on-reboot <<EOF
       ./multinode-demo/faucet.sh > faucet.log 2>&1 &
@@ -429,18 +417,10 @@ EOF
       args+=(--enable-extended-tx-metadata-storage)
     fi
 
-<<<<<<< HEAD
-=======
-    if $disableQuic; then
-      args+=(--tpu-disable-quic)
-    fi
-
     if $enableUdp; then
       args+=(--tpu-enable-udp)
     fi
 
->>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
-cat >> ~/solana/on-reboot <<EOF
     $maybeSkipAccountsCreation
     nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!

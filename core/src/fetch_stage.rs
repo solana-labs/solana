@@ -6,6 +6,7 @@ use {
         result::{Error, Result},
     },
     crossbeam_channel::{unbounded, RecvTimeoutError},
+    solana_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     solana_metrics::{inc_new_counter_debug, inc_new_counter_info},
     solana_perf::{packet::PacketBatchRecycler, recycler::Recycler},
     solana_poh::poh_recorder::PohRecorder,
@@ -16,7 +17,6 @@ use {
     solana_streamer::streamer::{
         self, PacketBatchReceiver, PacketBatchSender, StreamerReceiveStats,
     },
-    solana_tpu_client::connection_cache::DEFAULT_TPU_ENABLE_UDP,
     std::{
         net::UdpSocket,
         sync::{

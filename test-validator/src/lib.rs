@@ -3,7 +3,9 @@ use {
     log::*,
     solana_cli_output::CliAccount,
     solana_client::{
-        connection_cache::{DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_USE_QUIC},
+        connection_cache::{
+            DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
+        },
         nonblocking,
         rpc_client::RpcClient,
         rpc_request::MAX_MULTIPLE_ACCOUNTS,
@@ -47,12 +49,6 @@ use {
         signature::{read_keypair_file, write_keypair_file, Keypair, Signer},
     },
     solana_streamer::socket::SocketAddrSpace,
-<<<<<<< HEAD
-=======
-    solana_tpu_client::connection_cache::{
-        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP, DEFAULT_TPU_USE_QUIC,
-    },
->>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
     std::{
         collections::{HashMap, HashSet},
         ffi::OsStr,
@@ -129,11 +125,7 @@ pub struct TestValidatorGenesis {
     deactivate_feature_set: HashSet<Pubkey>,
     compute_unit_limit: Option<u64>,
     pub log_messages_bytes_limit: Option<usize>,
-<<<<<<< HEAD
-=======
-    pub transaction_account_lock_limit: Option<usize>,
     pub tpu_enable_udp: bool,
->>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
 }
 
 impl Default for TestValidatorGenesis {
@@ -163,11 +155,7 @@ impl Default for TestValidatorGenesis {
             deactivate_feature_set: HashSet::<Pubkey>::default(),
             compute_unit_limit: Option::<u64>::default(),
             log_messages_bytes_limit: Option::<usize>::default(),
-<<<<<<< HEAD
-=======
-            transaction_account_lock_limit: Option::<usize>::default(),
             tpu_enable_udp: DEFAULT_TPU_ENABLE_UDP,
->>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
         }
     }
 }
@@ -855,12 +843,8 @@ impl TestValidator {
             socket_addr_space,
             DEFAULT_TPU_USE_QUIC,
             DEFAULT_TPU_CONNECTION_POOL_SIZE,
-<<<<<<< HEAD
-        ));
-=======
             config.tpu_enable_udp,
-        )?);
->>>>>>> 7f223dc58 (Added option to turn on UDP for TPU transaction and make UDP based TPU off by default (#27462))
+        ));
 
         // Needed to avoid panics in `solana-responder-gossip` in tests that create a number of
         // test validators concurrently...
