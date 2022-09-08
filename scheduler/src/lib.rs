@@ -52,7 +52,7 @@ impl ExecutionEnvironment {
     //}
     //
     #[inline(never)]
-    pub fn reindex_with_address_book(&mut self) {
+    pub fn reindex_with_address_book<AST: AtScheduleThread>(&mut self, ast: AST) {
         assert!(!self.is_reindexed());
         self.is_reindexed = true;
 
@@ -104,7 +104,7 @@ impl ExecutionEnvironment {
                 });
 
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                let page = lock_attempt.target.page_mut();
+                let page = lock_attempt.target.page_mut(ast);
                 page.contended_write_task_count = page.contended_write_task_count.checked_sub(1).unwrap();
             }
         }
