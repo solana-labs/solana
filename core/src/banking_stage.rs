@@ -4,6 +4,7 @@
 
 use {
     crate::{
+        banking_tracer_packet_stats::IntervalBankingStageTracerPacketStats,
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         leader_slot_banking_stage_metrics::{LeaderSlotMetricsTracker, ProcessTransactionsSummary},
@@ -12,8 +13,7 @@ use {
         },
         packet_deserializer_stage::ReceivePacketResults,
         qos_service::QosService,
-        sigverify::SigverifyTracerPacketStats,
-        tracer_packet_stats::TracerPacketStats,
+        sigverify::{IntervalSigverifyTracerPacketStats, SigverifyTracerPacketStats},
         unprocessed_packet_batches::{self, *},
     },
     core::iter::repeat,
@@ -331,6 +331,24 @@ impl BankingStageStats {
                 )
             );
             self.batch_packet_indexes_len.clear();
+        }
+    }
+}
+
+/// Wrapper type for separated banking & sigverify tracer packet stats.
+///     - Convinient to re-use old name to avoid changing too many places.
+///     - This is intended to live only temporarily until the sigverify stats
+///       reporting moves to the deserialization stage.
+struct TracerPacketStats {
+    banking_tracer_stats: IntervalBankingStageTracerPacketStats,
+    sigverify_tracer_stats: IntervalSigverifyTracerPacketStats,
+}
+
+impl TracerPacketStats {
+    fn new(id: u32) -> Self {
+        Self {
+            banking_tracer_stats: IntervalBankingStageTracerPacketStats::new(id),
+            sigverify_tracer_stats: IntervalSigverifyTracerPacketStats::new(id),
         }
     }
 }
@@ -1041,10 +1059,12 @@ impl BankingStage {
                     );
 
                 if let Some(leader_pubkey) = leader_pubkey {
-                    tracer_packet_stats.increment_total_forwardable_tracer_packets(
-                        filter_forwarding_result.total_forwardable_tracer_packets,
-                        leader_pubkey,
-                    );
+                    tracer_packet_stats
+                        .banking_tracer_stats
+                        .increment_total_forwardable_tracer_packets(
+                            filter_forwarding_result.total_forwardable_tracer_packets,
+                            leader_pubkey,
+                        );
                 }
                 let failed_forwarded_packets_count = batched_forwardable_packets_count
                     .saturating_sub(sucessful_forwarded_packets_count);
@@ -1071,9 +1091,11 @@ impl BankingStage {
             slot_metrics_tracker.increment_cleared_from_buffer_after_forward_count(
                 filter_forwarding_result.total_forwardable_packets as u64,
             );
-            tracer_packet_stats.increment_total_cleared_from_buffer_after_forward(
-                filter_forwarding_result.total_tracer_packets_in_buffer,
-            );
+            tracer_packet_stats
+                .banking_tracer_stats
+                .increment_total_cleared_from_buffer_after_forward(
+                    filter_forwarding_result.total_tracer_packets_in_buffer,
+                );
             buffered_packet_batches.clear();
         }
     }
@@ -1137,7 +1159,8 @@ impl BankingStage {
                 last_metrics_update = Instant::now();
             }
 
-            tracer_packet_stats.report(1000);
+            tracer_packet_stats.banking_tracer_stats.report(1000);
+            tracer_packet_stats.sigverify_tracer_stats.report(1000);
 
             let recv_timeout = if !buffered_packet_batches.is_empty() {
                 // If there are buffered packets, run the equivalent of try_recv to try reading more
@@ -2027,7 +2050,9 @@ impl BankingStage {
         } in deserialized_packet_batches
         {
             if let Some(new_sigverify_stats) = &new_tracer_stats_option {
-                tracer_packet_stats.aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
+                tracer_packet_stats
+                    .sigverify_tracer_stats
+                    .aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
             }
 
             // Track all the packets incoming from sigverify, both valid and invalid
@@ -2124,6 +2149,7 @@ impl BankingStage {
             );
 
             tracer_packet_stats
+                .banking_tracer_stats
                 .increment_total_exceeded_banking_stage_buffer(number_of_dropped_tracer_packets);
         }
     }

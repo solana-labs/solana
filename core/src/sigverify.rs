@@ -14,7 +14,7 @@ use {
     },
     crossbeam_channel::Sender,
     solana_perf::{cuda_runtime::PinnedVec, packet::PacketBatch, recycler::Recycler, sigverify},
-    solana_sdk::{packet::Packet, saturating_add_assign},
+    solana_sdk::{packet::Packet, saturating_add_assign, timing::AtomicInterval},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -52,6 +52,67 @@ impl SigverifyTracerPacketStats {
             self.total_tracker_packets_passed_sigverify,
             other.total_tracker_packets_passed_sigverify
         );
+    }
+}
+
+#[derive(Debug)]
+pub struct IntervalSigverifyTracerPacketStats {
+    id: u32,
+    last_report: AtomicInterval,
+    stats: SigverifyTracerPacketStats,
+}
+
+impl IntervalSigverifyTracerPacketStats {
+    pub fn new(id: u32) -> Self {
+        Self {
+            id,
+            last_report: AtomicInterval::default(),
+            stats: SigverifyTracerPacketStats::default(),
+        }
+    }
+
+    pub fn aggregate_sigverify_tracer_packet_stats(
+        &mut self,
+        new_stats: &SigverifyTracerPacketStats,
+    ) {
+        if !new_stats.is_default() {
+            self.stats.aggregate(new_stats);
+        }
+    }
+
+    pub fn report(&mut self, report_interval_ms: u64) {
+        if !self.stats.is_default() && self.last_report.should_update(report_interval_ms) {
+            datapoint_info!(
+                "sigverify_tracer_packet_stats",
+                ("id", self.id as i64, i64),
+                (
+                    "total_removed_before_sigverify_stage",
+                    self.stats.total_removed_before_sigverify_stage as i64,
+                    i64
+                ),
+                (
+                    "total_tracer_packets_received_in_sigverify_stage",
+                    self.stats.total_tracer_packets_received_in_sigverify_stage as i64,
+                    i64
+                ),
+                (
+                    "total_tracer_packets_deduped",
+                    self.stats.total_tracer_packets_deduped as i64,
+                    i64
+                ),
+                (
+                    "total_excess_tracer_packets",
+                    self.stats.total_excess_tracer_packets as i64,
+                    i64
+                ),
+                (
+                    "total_tracker_packets_passed_sigverify",
+                    self.stats.total_tracker_packets_passed_sigverify as i64,
+                    i64
+                ),
+            );
+            self.stats = SigverifyTracerPacketStats::default();
+        }
     }
 }
 

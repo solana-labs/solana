@@ -11,6 +11,7 @@
 pub mod accounts_hash_verifier;
 pub mod ancestor_hashes_service;
 pub mod banking_stage;
+pub mod banking_tracer_packet_stats;
 pub mod broadcast_stage;
 pub mod cache_block_meta_service;
 pub mod cluster_info_vote_listener;
@@ -70,7 +71,6 @@ pub mod system_monitor_service;
 mod tower1_7_14;
 pub mod tower_storage;
 pub mod tpu;
-pub mod tracer_packet_stats;
 pub mod tree_diff;
 pub mod tvu;
 pub mod unfrozen_gossip_verified_vote_hashes;
