@@ -89,7 +89,7 @@ _ scripts/cargo-for-all-lock-files.sh -- nightly sort --workspace --check
 _ scripts/cargo-for-all-lock-files.sh -- nightly fmt --all -- --check | tee nightly_fmt_check_result
 exit_code=${PIPESTATUS[0]}
 if [[ "$exit_code" != 0 ]]; then
-  printf "\ncargo fmt check failed. you could use \`./cargo nightly fmt --all -- --check\` to reproduce this error\n"
+  printf "\ncargo fmt check failed. you could use \`./cargo nightly fmt --all -- --check\` to reproduce this error\n\n"
   exit "$exit_code"
 fi
 
