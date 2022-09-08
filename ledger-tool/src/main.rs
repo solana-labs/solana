@@ -2696,6 +2696,8 @@ fn main() {
                     filler_accounts_config,
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
                     ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    exhaustively_verify_refcounts: arg_matches
+                        .is_present("accounts_db_verify_refcounts"),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
@@ -2954,8 +2956,6 @@ fn main() {
                     ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
-                    exhaustively_verify_refcounts: arg_matches
-                        .is_present("accounts_db_verify_refcounts"),
                     ..AccountsDbConfig::default()
                 });
 
