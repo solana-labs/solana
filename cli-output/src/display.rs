@@ -15,9 +15,10 @@ use {
         signature::Signature,
         stake,
         transaction::{TransactionError, TransactionVersion, VersionedTransaction},
-        transaction_context::TransactionReturnData,
     },
-    solana_transaction_status::{Rewards, UiTransactionStatusMeta},
+    solana_transaction_status::{
+        Rewards, UiReturnDataEncoding, UiTransactionReturnData, UiTransactionStatusMeta,
+    },
     spl_memo::{id as spl_memo_id, v1::id as spl_memo_v1_id},
     std::{collections::HashMap, fmt, io, time::Duration},
 };
@@ -597,18 +598,27 @@ fn write_balances<W: io::Write>(
 
 fn write_return_data<W: io::Write>(
     w: &mut W,
-    return_data: Option<&TransactionReturnData>,
+    return_data: Option<&UiTransactionReturnData>,
     prefix: &str,
 ) -> io::Result<()> {
     if let Some(return_data) = return_data {
-        if !return_data.data.is_empty() {
+        let (data, encoding) = &return_data.data;
+        let raw_return_data = match encoding {
+            UiReturnDataEncoding::Base64 => base64::decode(data).map_err(|err| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("could not parse data as {:?}: {:?}", encoding, err),
+                )
+            })?,
+        };
+        if !raw_return_data.is_empty() {
             use pretty_hex::*;
             writeln!(
                 w,
                 "{}Return Data from Program {}:",
                 prefix, return_data.program_id
             )?;
-            writeln!(w, "{}  {:?}", prefix, return_data.data.hex_dump())?;
+            writeln!(w, "{}  {:?}", prefix, raw_return_data.hex_dump())?;
         }
     }
     Ok(())
@@ -724,6 +734,7 @@ mod test {
             pubkey::Pubkey,
             signature::{Keypair, Signer},
             transaction::Transaction,
+            transaction_context::TransactionReturnData,
         },
         solana_transaction_status::{Reward, RewardType, TransactionStatusMeta},
         std::io::BufWriter,
