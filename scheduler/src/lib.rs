@@ -333,6 +333,8 @@ impl AddressBook {
             true
         } else if attempt.requested_usage == RequestedUsage::Readonly && attempt.target.page_mut(ast).contended_write_task_count == 0 {
             true
+        } else {
+            false
         }
 
         if !strictly_lockable_for_replay {
