@@ -733,8 +733,8 @@ impl Task {
         for lock_attempt in this.lock_attempts_mut(ast).iter() {
             lock_attempt.target_contended_unique_weights().insert_task(this.unique_weight, Task::clone_in_queue(this));
             if lock_attempt.requested_usage == RequestedUsage::Writable {
-                lock_attempt.target.page_mut().contended_write_task_count = 
-                    lock_attempt.target.page_mut().contended_write_task_count.checked_add(1).unwrap();
+                let mut page = lock_attempt.target.page_mut(ast);
+                page.contended_write_task_count = page.contended_write_task_count.checked_add(1).unwrap();
             }
         }
         //let a = Task::clone_in_queue(this);
