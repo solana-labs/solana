@@ -8,10 +8,10 @@ use {
         hash::Hash,
         inflation::Inflation,
         transaction::{Result, TransactionError},
-        transaction_context::TransactionReturnData,
     },
     solana_transaction_status::{
         ConfirmedTransactionStatusWithSignature, TransactionConfirmationStatus, UiConfirmedBlock,
+        UiTransactionReturnData,
     },
     std::{collections::HashMap, fmt, net::SocketAddr, str::FromStr},
     thiserror::Error,
@@ -399,29 +399,7 @@ pub struct RpcSimulateTransactionResult {
     pub logs: Option<Vec<String>>,
     pub accounts: Option<Vec<Option<UiAccount>>>,
     pub units_consumed: Option<u64>,
-    pub return_data: Option<RpcTransactionReturnData>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcTransactionReturnData {
-    pub program_id: String,
-    pub data: (String, ReturnDataEncoding),
-}
-
-impl From<TransactionReturnData> for RpcTransactionReturnData {
-    fn from(return_data: TransactionReturnData) -> Self {
-        Self {
-            program_id: return_data.program_id.to_string(),
-            data: (base64::encode(return_data.data), ReturnDataEncoding::Base64),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum ReturnDataEncoding {
-    Base64,
+    pub return_data: Option<UiTransactionReturnData>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
