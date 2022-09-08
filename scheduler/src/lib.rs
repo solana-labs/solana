@@ -818,6 +818,7 @@ fn attempt_lock_for_execution<'a, AST: AtScheduleThread>(
         match attempt.status {
             LockStatus::Succeded => {}
             LockStatus::Failed => {
+                trace!("lock failed: {}/{:?}", attempt.target.address_str, attempt.requested_usage);
                 unlockable_count += 1;
             }
             LockStatus::Provisional => {
