@@ -421,6 +421,7 @@ EOF
       args+=(--tpu-enable-udp)
     fi
 
+cat >> ~/solana/on-reboot <<EOF
     $maybeSkipAccountsCreation
     nohup multinode-demo/validator.sh ${args[@]} > validator.log.\$now 2>&1 &
     pid=\$!
