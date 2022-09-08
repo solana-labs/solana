@@ -9,7 +9,7 @@ pub fn write_snapshot_metrics<W: io::Write>(
     out: &mut W,
 ) -> io::Result<()> {
     let full_snapshot_info = match snapshot_utils::get_highest_full_snapshot_archive_info(
-        &snapshot_config.snapshot_archives_dir,
+        &snapshot_config.full_snapshot_archives_dir,
     ) {
         Some(info) => info,
         None => return Ok(()),
@@ -28,7 +28,7 @@ pub fn write_snapshot_metrics<W: io::Write>(
     // metric before and just return early if that is the case.
     let incremental_snapshot_info =
         match snapshot_utils::get_highest_incremental_snapshot_archive_info(
-            &snapshot_config.snapshot_archives_dir,
+            &snapshot_config.incremental_snapshot_archives_dir,
             full_snapshot_info.slot(),
         ) {
             None => return Ok(()),
