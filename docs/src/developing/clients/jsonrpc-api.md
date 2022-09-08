@@ -436,6 +436,12 @@ The result field will be an object with the following fields:
       - `preTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from before the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `postTokenBalances: <array|undefined>` - List of [token balances](#token-balances-structure) from after the transaction was processed or omitted if token balance recording was not yet enabled during this transaction
       - `logMessages: <array|null>` - array of string log messages or `null` if log message recording was not enabled during this transaction
+      - `rewards: <array|null>` - transaction-level rewards, populated if rewards are requested; an array of JSON objects containing:
+        - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
+        - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
+        - `postBalance: <u64>` - account balance in lamports after the reward was applied
+        - `rewardType: <string|undefined>` - type of reward: "fee", "rent", "voting", "staking"
+        - `commission: <u8|undefined>` - vote account commission when the reward was credited, only present for voting and staking rewards
       - DEPRECATED: `status: <object>` - Transaction status
         - `"Ok": <null>` - Transaction was successful
         - `"Err": <ERR>` - Transaction failed with TransactionError
@@ -444,7 +450,7 @@ The result field will be an object with the following fields:
         - `readonly: <array[string]>` - Ordered list of base-58 encoded addresses for readonly loaded accounts
     - `version: <"legacy"|number|undefined>` - Transaction version. Undefined if `maxSupportedTransactionVersion` is not set in request params.
   - `signatures: <array>` - present if "signatures" are requested for transaction details; an array of signatures strings, corresponding to the transaction order in the block
-  - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+  - `rewards: <array|undefined>` - block-level rewards, present if rewards are requested; an array of JSON objects containing:
     - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
     - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
     - `postBalance: <u64>` - account balance in lamports after the reward was applied
@@ -485,6 +491,7 @@ Result:
           "postTokenBalances": [],
           "preBalances": [499998937500, 26858640, 1, 1, 1],
           "preTokenBalances": [],
+          "rewards": null,
           "status": {
             "Ok": null
           }
@@ -556,6 +563,7 @@ Result:
           "postTokenBalances": [],
           "preBalances": [499998937500, 26858640, 1, 1, 1],
           "preTokenBalances": [],
+          "rewards": [],
           "status": {
             "Ok": null
           }
@@ -2976,7 +2984,7 @@ Returns transaction details for a confirmed transaction
     - DEPRECATED: `status: <object>` - Transaction status
       - `"Ok": <null>` - Transaction was successful
       - `"Err": <ERR>` - Transaction failed with TransactionError
-    - `rewards: <array>` - present if rewards are requested; an array of JSON objects containing:
+    - `rewards: <array|null>` - transaction-level rewards, populated if rewards are requested; an array of JSON objects containing:
       - `pubkey: <string>` - The public key, as base-58 encoded string, of the account that received the reward
       - `lamports: <i64>`- number of reward lamports credited or debited by the account, as a i64
       - `postBalance: <u64>` - account balance in lamports after the reward was applied
@@ -3019,6 +3027,7 @@ Result:
       "postTokenBalances": [],
       "preBalances": [499998937500, 26858640, 1, 1, 1],
       "preTokenBalances": [],
+      "rewards": [],
       "status": {
         "Ok": null
       }
@@ -3089,6 +3098,7 @@ Result:
       "postTokenBalances": [],
       "preBalances": [499998937500, 26858640, 1, 1, 1],
       "preTokenBalances": [],
+      "rewards": null,
       "status": {
         "Ok": null
       }
