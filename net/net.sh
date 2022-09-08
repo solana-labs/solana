@@ -107,6 +107,10 @@ Operate a configured testnet
                                       - Boot from a snapshot that has warped ahead to WARP_SLOT rather than a slot 0 genesis.
    --full-rpc
                                       - Support full RPC services on all nodes
+
+   --tpu-enable-udp
+                                      - Enable UDP for tpu transactions
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -316,6 +320,7 @@ startBootstrapLeader() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$enableUdp\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -388,6 +393,7 @@ startNode() {
          \"$waitForNodeInit\" \
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
+         \"$enableUdp\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -795,6 +801,7 @@ maybeWarpSlot=
 maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
+enableUdp=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -903,6 +910,9 @@ while [[ -n $1 ]]; do
       shift 2
     elif [[ $1 == --full-rpc ]]; then
       maybeFullRpc=true
+      shift 1
+    elif [[ $1 == --tpu-enable-udp ]]; then
+      enableUdp=true
       shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
