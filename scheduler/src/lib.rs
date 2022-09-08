@@ -331,7 +331,7 @@ impl AddressBook {
             true
         } else if attempt.target_contended_unique_weights().task_ids.back().unwrap().key() == unique_weight {
             true
-        } else if attempt.requested_usage == Readonly && attempt.target.page_mut(ast).contended_write_task_count == 0 {
+        } else if attempt.requested_usage == RequestedUsage::Readonly && attempt.target.page_mut(ast).contended_write_task_count == 0 {
             true
         }
 
