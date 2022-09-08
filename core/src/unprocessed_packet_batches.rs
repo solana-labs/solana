@@ -269,7 +269,8 @@ impl UnprocessedPacketBatches {
         }
     }
 
-    pub fn pop_max(&mut self) -> Option<DeserializedPacket> {
+    #[cfg(test)]
+    fn pop_max(&mut self) -> Option<DeserializedPacket> {
         self.packet_priority_queue
             .pop_max()
             .map(|immutable_packet| {
@@ -281,7 +282,8 @@ impl UnprocessedPacketBatches {
 
     /// Pop up to the next `n` highest priority transactions from the queue.
     /// Returns `None` if the queue is empty
-    pub fn pop_max_n(&mut self, n: usize) -> Option<Vec<DeserializedPacket>> {
+    #[cfg(test)]
+    fn pop_max_n(&mut self, n: usize) -> Option<Vec<DeserializedPacket>> {
         let current_len = self.len();
         if self.is_empty() {
             None
