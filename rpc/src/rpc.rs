@@ -4495,9 +4495,7 @@ pub fn populate_blockstore_for_tests(
     blockstore.insert_shreds(shreds, None, false).unwrap();
     blockstore.set_roots(std::iter::once(&slot)).unwrap();
 
-    let exit = Arc::new(AtomicBool::new(false));
-    let replayer = Replayer::new(get_thread_count(), &exit);
-    let replayer_handle = replayer.handle();
+    let (_replayer, replayer_handle) = Replayer::new(get_thread_count());
 
     let (transaction_status_sender, transaction_status_receiver) = unbounded();
     let (replay_vote_sender, _replay_vote_receiver) = unbounded();

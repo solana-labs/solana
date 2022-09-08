@@ -22,12 +22,7 @@ use {
         snapshot_utils,
     },
     solana_sdk::genesis_config::GenesisConfig,
-    std::{
-        fs,
-        path::PathBuf,
-        process, result,
-        sync::{atomic::AtomicBool, Arc},
-    },
+    std::{fs, path::PathBuf, process, result},
 };
 
 pub type LoadResult = result::Result<
@@ -122,9 +117,7 @@ pub fn load_bank_forks(
         false
     };
 
-    let exit = Arc::new(AtomicBool::new(false));
-    let replayer = Replayer::new(get_thread_count(), &exit);
-    let replayer_handle = replayer.handle();
+    let (_relayer, replayer_handle) = Replayer::new(get_thread_count());
 
     let (bank_forks, starting_snapshot_hashes) = if snapshot_present {
         bank_forks_from_snapshot(

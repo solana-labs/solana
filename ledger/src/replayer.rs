@@ -1,9 +1,9 @@
 use {
     crate::{
-        blockstore_processor::{BlockCostCapacityMeter, ProcessCallback, TransactionStatusSender},
+        blockstore_processor::{BlockCostCapacityMeter, TransactionStatusSender},
         token_balances::collect_token_balances,
     },
-    crossbeam_channel::{unbounded, Receiver, Sender},
+    crossbeam_channel::{unbounded, Receiver, RecvError, SendError, Sender},
     solana_program_runtime::timings::ExecuteTimings,
     solana_runtime::{
         bank::{Bank, TransactionExecutionResult, TransactionResults},
@@ -24,26 +24,18 @@ use {
     std::{
         borrow::Cow,
         collections::HashMap,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, RwLock,
-        },
+        sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
     },
 };
 
-#[derive(Debug)]
-pub enum ReplayerHandleError {
-    Disconnected,
-}
-
-pub type ReplayerHandleResult<T> = Result<T, ReplayerHandleError>;
-type RequestSender = Sender<(Sender<ReplayResponse>, ReplayRequest)>;
-type RequestReceiver = Receiver<(Sender<ReplayResponse>, ReplayRequest)>;
+/// Callback for accessing bank state while processing the blockstore
+pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 pub struct ReplayResponse {
     pub result: transaction::Result<()>,
-    pub timings: ExecuteTimings,
+    pub timing: ExecuteTimings,
+    pub idx: Option<usize>,
 }
 
 /// Request for replay, sends responses back on this channel
@@ -54,87 +46,93 @@ pub struct ReplayRequest {
     pub replay_vote_sender: Option<ReplayVoteSender>,
     pub cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     pub entry_callback: Option<ProcessCallback>,
-}
-
-pub struct ReplayerHandle {
-    request_sender: RequestSender,
-}
-
-impl ReplayerHandle {
-    pub fn new(request_sender: RequestSender) -> ReplayerHandle {
-        ReplayerHandle { request_sender }
-    }
-
-    pub fn send(&self, request: ReplayRequest) -> ReplayerHandleResult<Receiver<ReplayResponse>> {
-        let (request_sender, request_receiver) = unbounded();
-        self.request_sender
-            .send((request_sender, request))
-            .map_err(|_| ReplayerHandleError::Disconnected)?;
-        Ok(request_receiver)
-    }
+    pub idx: Option<usize>,
 }
 
 pub struct Replayer {
-    request_sender: RequestSender,
     threads: Vec<JoinHandle<()>>,
 }
 
-impl Replayer {
-    pub fn new(num_threads: usize, exit: &Arc<AtomicBool>) -> Replayer {
-        let (request_sender, request_receiver) = unbounded();
-        let threads = Self::start_replay_threads(num_threads, request_receiver, exit);
-        Replayer {
+pub struct ReplayerHandle {
+    request_sender: Sender<ReplayRequest>,
+    response_receiver: Receiver<ReplayResponse>,
+}
+
+impl ReplayerHandle {
+    pub fn new(
+        request_sender: Sender<ReplayRequest>,
+        response_receiver: Receiver<ReplayResponse>,
+    ) -> ReplayerHandle {
+        ReplayerHandle {
             request_sender,
-            threads,
+            response_receiver,
         }
     }
 
-    pub fn handle(&self) -> ReplayerHandle {
-        ReplayerHandle {
-            request_sender: self.request_sender.clone(),
-        }
+    pub fn send(&self, request: ReplayRequest) -> Result<(), SendError<ReplayRequest>> {
+        self.request_sender.send(request)
+    }
+
+    pub fn recv_and_drain(&self) -> Result<Vec<ReplayResponse>, RecvError> {
+        let mut results = vec![self.response_receiver.recv()?];
+        results.extend(self.response_receiver.try_iter());
+        Ok(results)
+    }
+}
+
+impl Replayer {
+    pub fn new(num_threads: usize) -> (Replayer, ReplayerHandle) {
+        let (request_sender, request_receiver) = unbounded();
+        let (response_sender, response_receiver) = unbounded();
+        let threads = Self::start_replay_threads(num_threads, request_receiver, response_sender);
+        (
+            Replayer { threads },
+            ReplayerHandle {
+                request_sender,
+                response_receiver,
+            },
+        )
     }
 
     pub fn start_replay_threads(
         num_threads: usize,
-        request_receiver: RequestReceiver,
-        exit: &Arc<AtomicBool>,
+        request_receiver: Receiver<ReplayRequest>,
+        response_sender: Sender<ReplayResponse>,
     ) -> Vec<JoinHandle<()>> {
         (0..num_threads)
             .map(|i| {
                 let request_receiver = request_receiver.clone();
-                let exit = exit.clone();
+                let response_sender = response_sender.clone();
                 Builder::new()
                     .name(format!("solReplayer-{}", i))
+                    .stack_size(64 * 1024)
                     .spawn(move || {
                         info!("started replayer");
-                        while !exit.load(Ordering::Relaxed) {
+                        loop {
                             match request_receiver.recv() {
-                                Ok((
-                                    response_sender,
-                                    ReplayRequest {
-                                        bank,
-                                        tx,
-                                        transaction_status_sender,
-                                        replay_vote_sender,
-                                        cost_capacity_meter,
-                                        entry_callback,
-                                    },
-                                )) => {
-                                    // info!("got replay request");
-                                    let mut timings = ExecuteTimings::default();
+                                Ok(ReplayRequest {
+                                    bank,
+                                    tx,
+                                    transaction_status_sender,
+                                    replay_vote_sender,
+                                    cost_capacity_meter,
+                                    entry_callback,
+                                    idx,
+                                }) => {
+                                    let mut timing = ExecuteTimings::default();
 
+                                    let txs = vec![tx];
                                     let batch = TransactionBatch::new(
                                         vec![Ok(())],
                                         &bank,
-                                        Cow::Owned(vec![tx]),
+                                        Cow::Borrowed(&txs),
                                     );
                                     let result = execute_batch(
                                         &batch,
                                         &bank,
                                         transaction_status_sender.as_ref(),
                                         replay_vote_sender.as_ref(),
-                                        &mut timings,
+                                        &mut timing,
                                         cost_capacity_meter.clone(),
                                     );
 
@@ -142,34 +140,34 @@ impl Replayer {
                                         entry_callback(&bank);
                                     }
 
-                                    // info!("sending response");
                                     if response_sender
-                                        .send(ReplayResponse { result, timings })
+                                        .send(ReplayResponse {
+                                            result,
+                                            timing,
+                                            idx,
+                                        })
                                         .is_err()
                                     {
                                         warn!("response_sender disconnected");
+                                        break;
                                     }
                                 }
                                 Err(_) => {
+                                    info!("stopped replayer");
                                     return;
                                 }
                             }
                         }
-                        info!("stopped replayer");
                     })
                     .unwrap()
             })
             .collect()
     }
 
-    pub fn join(mut self) -> thread::Result<()> {
-        info!("joining relayer");
-        drop(self.request_sender);
-        info!("dropped sender");
+    pub fn join(self) -> thread::Result<()> {
         for t in self.threads {
             t.join()?;
         }
-        info!("joined threads");
         Ok(())
     }
 }
