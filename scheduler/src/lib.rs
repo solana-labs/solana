@@ -327,8 +327,13 @@ impl AddressBook {
         unique_weight: &UniqueWeight,
         attempt: &mut LockAttempt,
     ) -> CU {
-        let strictly_lockable_for_replay = attempt.target_contended_unique_weights().task_ids.is_empty() ||
-            attempt.target_contended_unique_weights().task_ids.back().unwrap().key() == unique_weight;
+        let strictly_lockable_for_replay = if attempt.target_contended_unique_weights().task_ids.is_empty() {
+            true
+        } else if attempt.target_contended_unique_weights().task_ids.back().unwrap().key() == unique_weight {
+            true
+        } else if attempt.requested_usage == Readonly && attempt.target.page_mut(ast).contended_write_task_count == 0 {
+            true
+        }
 
         if !strictly_lockable_for_replay {
             attempt.status = LockStatus::Failed;
