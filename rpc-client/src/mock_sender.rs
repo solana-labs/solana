@@ -229,7 +229,7 @@ impl RpcSender for MockSender {
                             pre_token_balances: None,
                             post_token_balances: None,
                             rewards: None,
-                            loaded_addresses: None,
+                            loaded_addresses: OptionSerializer::or_skip(None),
                             return_data: None,
                             compute_units_consumed: None,
                         }),
