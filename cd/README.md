@@ -1,7 +1,7 @@
 ## Canaries
 In order to reduce the risk associated with deploying updates Solana Labs operates the validator software on canary nodes on mainnet-beta
 and testnet. The mainnet-beta nodes are non-voting. These nodes update themselves on a regular schedule.
-# TODO verify all the links
+
 |Canary|Host|Dashboards|Identity|Cluster|Channel|Days between updates|
 |------|----|----------|--------|-------|-------|-------------------:|
 |mce1|edge-validator-us-sv15|[Cluster](https://metrics.solana.com:3000/d/monitor-beta/cluster-telemetry-beta?orgId=1&var-datasource=InfluxDB_main-beta&var-testnet=mainnet-beta&var-hostid=edge8WksfN71qYDJ1e4fCy2WfKg19fXU5zuztDi9uTM) [System](https://metrics.solana.com:3000/d/rYdddlPWkk/system-metrics-full?orgId=1&var-DS_PROMETHEUS=Metrics-Prometheus&var-job=All&var-node=edge-validator-us-sv15:9100&var-diskdevices=%5Ba-z%5D%2B%7Cnvme%5B0-9%5D%2Bn%5B0-9%5D%2B&refresh=5m&from=now-15m&to=now)|edge8WksfN71qYDJ1e4fCy2WfKg19fXU5zuztDi9uTM|mainnet-beta|edge|2|
