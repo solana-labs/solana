@@ -335,7 +335,7 @@ impl AddressBook {
             true
         } else {
             false
-        }
+        };
 
         if !strictly_lockable_for_replay {
             attempt.status = LockStatus::Failed;
