@@ -1302,7 +1302,7 @@ impl ScheduleStage {
     ) {
         // do par()-ly?
 
-        ee.reindex_with_address_book();
+        ee.reindex_with_address_book(ast);
         assert!(ee.is_reindexed());
 
         ee.task.record_commit_time(*commit_clock);
