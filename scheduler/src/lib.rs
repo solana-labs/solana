@@ -889,7 +889,7 @@ impl ScheduleStage {
                 let uw = weight_from_contended.key();
 
                 if weight_from_runnable > uw {
-                    panic!("replay shouldn't see this branch");
+                    panic!("replay shouldn't see this branch: {} > {}", weight_from_runnable, uw);
 
                     /*
                     trace!("select: runnable > contended");
