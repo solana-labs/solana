@@ -52,7 +52,7 @@ impl ExecutionEnvironment {
     //}
     //
     #[inline(never)]
-    pub fn reindex_with_address_book<AST: AtScheduleThread>(&mut self, ast: AST) {
+    fn reindex_with_address_book<AST: AtScheduleThread>(&mut self, ast: AST) {
         assert!(!self.is_reindexed());
         self.is_reindexed = true;
 
