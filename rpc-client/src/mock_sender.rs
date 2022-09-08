@@ -31,7 +31,8 @@ use {
         transaction::{self, Transaction, TransactionError, TransactionVersion},
     },
     solana_transaction_status::{
-        EncodedConfirmedBlock, EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
+        option_serializer::OptionSerializer, EncodedConfirmedBlock,
+        EncodedConfirmedTransactionWithStatusMeta, EncodedTransaction,
         EncodedTransactionWithStatusMeta, Rewards, TransactionBinaryEncoding,
         TransactionConfirmationStatus, TransactionStatus, UiCompiledInstruction, UiMessage,
         UiRawMessage, UiTransaction, UiTransactionStatusMeta,
@@ -223,7 +224,7 @@ impl RpcSender for MockSender {
                             fee: 0,
                             pre_balances: vec![499999999999999950, 50, 1],
                             post_balances: vec![499999999999999950, 50, 1],
-                            inner_instructions: None,
+                            inner_instructions: OptionSerializer::or_default(None),
                             log_messages: None,
                             pre_token_balances: None,
                             post_token_balances: None,
