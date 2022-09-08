@@ -1297,10 +1297,12 @@ impl Default for Scheduler {
 
                 let TransactionResults {
                     fee_collection_results,
+                    execution_results,
                     ..
                 } = tx_results;
 
                 ee.execution_result = Some(fee_collection_results.into_iter().collect::<Result<_>>());
+                ee.cu = execution_results[0].details().unwrap().executed_units;
 
 
                 //ee.reindex_with_address_book();
