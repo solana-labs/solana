@@ -1336,7 +1336,7 @@ impl ScheduleStage {
         sequence_time: &mut usize,
     ) {
         weighted_tx.record_sequence_time(*sequence_time);
-        assert_eq!(*sequence_time, weighted_tx.transaction_index_in_entries_for_replay())
+        assert_eq!(*sequence_time, weighted_tx.transaction_index_in_entries_for_replay() as usize)
         *sequence_time = sequence_time.checked_add(1).unwrap();
         Self::push_to_runnable_queue(weighted_tx, runnable_queue)
     }
