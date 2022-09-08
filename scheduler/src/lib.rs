@@ -1507,8 +1507,7 @@ impl ScheduleStage {
                         info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
                     }
                 }
-                let executing_like_count = executing_queue_count + provisioning_tracker_count;
-                if executing_like_count < max_executing_queue_count {
+                while executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = provisioning_tracker_count / 4 > executing_queue_count;
 
                     if let Some(ee) = Self::schedule_next_execution(
@@ -1531,6 +1530,12 @@ impl ScheduleStage {
                     if start.elapsed() > std::time::Duration::from_millis(150) {
                         start = std::time::Instant::now();
                         info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} completed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), completed_count);
+                    } else {
+                        break;
+                    }
+                    if !from_exec.is_empty() {
+                        trace!("abort aggressive readalbe queue processing due to non-empty from_exec");
+                        break;
                     }
                 }
 
