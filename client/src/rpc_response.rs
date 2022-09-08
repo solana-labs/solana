@@ -399,33 +399,7 @@ pub struct RpcSimulateTransactionResult {
     pub logs: Option<Vec<String>>,
     pub accounts: Option<Vec<Option<UiAccount>>>,
     pub units_consumed: Option<u64>,
-<<<<<<< HEAD:client/src/rpc_response.rs
-    pub return_data: Option<RpcTransactionReturnData>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct RpcTransactionReturnData {
-    pub program_id: String,
-    pub data: (String, ReturnDataEncoding),
-}
-
-impl From<TransactionReturnData> for RpcTransactionReturnData {
-    fn from(return_data: TransactionReturnData) -> Self {
-        Self {
-            program_id: return_data.program_id.to_string(),
-            data: (base64::encode(return_data.data), ReturnDataEncoding::Base64),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub enum ReturnDataEncoding {
-    Base64,
-=======
     pub return_data: Option<UiTransactionReturnData>,
->>>>>>> 0bfc18837 (Update getBlock/getTransaction rpc handling of return_data (#27672)):rpc-client-api/src/response.rs
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
