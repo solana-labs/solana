@@ -1323,7 +1323,7 @@ impl Default for Scheduler {
                         ("compute_units", ee.cu, i64),
                     );
                 }
-                completed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
+                processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
             Ok(())
         }).unwrap()}).collect();
