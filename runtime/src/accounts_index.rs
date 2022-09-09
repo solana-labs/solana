@@ -4068,7 +4068,7 @@ pub mod tests {
             self.upsert(
                 slot,
                 slot,
-                &key,
+                key,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 value,
