@@ -10,7 +10,6 @@ use {
     solana_sdk::{clock::Slot, program_utils::limited_deserialize, pubkey::Pubkey},
     solana_vote_program::vote_instruction::VoteInstruction,
     std::{
-        cell::RefCell,
         collections::HashMap,
         ops::DerefMut,
         rc::Rc,
@@ -26,7 +25,7 @@ pub enum VoteSource {
 
 /// Holds deserialized vote messages as well as their source, foward status and slot
 #[derive(Debug, Clone)]
-pub struct DeserializedVotePacket {
+pub struct LatestValidatorVotePacket {
     vote_source: VoteSource,
     pubkey: Pubkey,
     vote: Option<Rc<ImmutableDeserializedPacket>>,
@@ -34,7 +33,10 @@ pub struct DeserializedVotePacket {
     forwarded: bool,
 }
 
-impl DeserializedVotePacket {
+unsafe impl Send for LatestValidatorVotePacket {}
+unsafe impl Sync for LatestValidatorVotePacket {}
+
+impl LatestValidatorVotePacket {
     pub fn new(packet: Packet, vote_source: VoteSource) -> Result<Self, DeserializedPacketError> {
         if !packet.meta.is_simple_vote_tx() {
             return Err(DeserializedPacketError::VoteTransactionError);
@@ -93,12 +95,12 @@ impl DeserializedVotePacket {
         self.forwarded || matches!(self.vote_source, VoteSource::Gossip)
     }
 
-    pub fn is_processed(&self) -> bool {
+    pub fn is_vote_taken(&self) -> bool {
         self.vote.is_none()
     }
 
-    pub fn clear(&mut self) {
-        self.vote = None;
+    pub fn take_vote(&mut self) -> Option<Rc<ImmutableDeserializedPacket>> {
+        self.vote.take()
     }
 }
 
@@ -106,12 +108,15 @@ pub fn deserialize_packets<'a>(
     packet_batch: &'a PacketBatch,
     packet_indexes: &'a [usize],
     vote_source: VoteSource,
-) -> impl Iterator<Item = DeserializedVotePacket> + 'a {
+) -> impl Iterator<Item = LatestValidatorVotePacket> + 'a {
     packet_indexes.iter().filter_map(move |packet_index| {
-        DeserializedVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
+        LatestValidatorVotePacket::new(packet_batch[*packet_index].clone(), vote_source).ok()
     })
 }
 
+// TODO: replace this with rand::seq::index::sample_weighted once we can update rand to 0.8+
+// This requires updating dependencies of ed25519-dalek as rand_core is not compatible cross
+// version https://github.com/dalek-cryptography/ed25519-dalek/pull/214
 pub(crate) fn weighted_random_order_by_stake<'a>(
     bank: &Arc<Bank>,
     pubkeys: impl Iterator<Item = &'a Pubkey>,
@@ -139,29 +144,21 @@ pub struct VoteBatchInsertionMetrics {
 
 #[derive(Debug, Default)]
 pub struct LatestUnprocessedVotes {
-    latest_votes_per_pubkey: RwLock<HashMap<Pubkey, RwLock<RefCell<DeserializedVotePacket>>>>,
+    latest_votes_per_pubkey: RwLock<HashMap<Pubkey, RwLock<LatestValidatorVotePacket>>>,
 }
-
-unsafe impl Send for LatestUnprocessedVotes {}
-unsafe impl Sync for LatestUnprocessedVotes {}
 
 impl LatestUnprocessedVotes {
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Expensive
+    /// Expensive because this involves iterating through and locking every unprocessed vote
     pub fn len(&self) -> usize {
         self.latest_votes_per_pubkey
             .read()
             .unwrap()
             .values()
-            .filter(|lock| {
-                lock.read()
-                    .ok()
-                    .map(|vp| !vp.borrow().is_processed())
-                    .unwrap_or(false)
-            })
+            .filter(|lock| !lock.read().unwrap().is_vote_taken())
             .count()
     }
 
@@ -171,7 +168,7 @@ impl LatestUnprocessedVotes {
 
     pub fn insert_batch(
         &self,
-        votes: impl Iterator<Item = DeserializedVotePacket>,
+        votes: impl Iterator<Item = LatestValidatorVotePacket>,
     ) -> VoteBatchInsertionMetrics {
         let mut num_dropped_gossip = 0;
         let mut num_dropped_tpu = 0;
@@ -196,35 +193,23 @@ impl LatestUnprocessedVotes {
     /// Otherwise returns None
     pub fn update_latest_vote(
         &self,
-        vote: DeserializedVotePacket,
-    ) -> Option<DeserializedVotePacket> {
+        vote: LatestValidatorVotePacket,
+    ) -> Option<LatestValidatorVotePacket> {
         let pubkey = vote.pubkey();
         let slot = vote.slot();
         if let Some(latest_vote) = self.latest_votes_per_pubkey.read().unwrap().get(&pubkey) {
-            let latest_slot = latest_vote
-                .read()
-                .unwrap()
-                .try_borrow()
-                .ok()
-                .map(|vote| vote.slot())
-                .unwrap_or(0);
+            let latest_slot = latest_vote.read().unwrap().slot();
             if slot > latest_slot {
-                let latest_vote = latest_vote.write().unwrap();
-                // At this point no one should have a borrow to this refcell as all borrows are
-                // hidden behind read()
-                if let Ok(mut latest_vote) = latest_vote.try_borrow_mut() {
-                    let latest_slot = latest_vote.slot();
-                    if slot > latest_slot {
-                        let old_vote = std::mem::replace(latest_vote.deref_mut(), vote);
-                        if old_vote.is_processed() {
-                            return None;
-                        } else {
-                            return Some(old_vote);
-                        }
+                let mut latest_vote = latest_vote.write().unwrap();
+                let latest_slot = latest_vote.slot();
+                if slot > latest_slot {
+                    let old_vote = std::mem::replace(latest_vote.deref_mut(), vote);
+                    if old_vote.is_vote_taken() {
+                        return None;
+                    } else {
+                        return Some(old_vote);
                     }
-                } else {
-                    error!("Implementation error {} {} {:?}", slot, latest_slot, self);
-                };
+                }
             }
             return Some(vote);
         }
@@ -232,20 +217,16 @@ impl LatestUnprocessedVotes {
         // Should have low lock contention because this is only hit on the first few blocks of startup
         // and when a new vote account starts voting.
         let mut latest_votes_per_pubkey = self.latest_votes_per_pubkey.write().unwrap();
-        latest_votes_per_pubkey.insert(pubkey, RwLock::new(RefCell::new(vote)));
+        latest_votes_per_pubkey.insert(pubkey, RwLock::new(vote));
         None
     }
 
     pub fn get_latest_vote_slot(&self, pubkey: Pubkey) -> Option<Slot> {
         self.latest_votes_per_pubkey
             .read()
-            .ok()
-            .and_then(|latest_votes_per_pubkey| {
-                latest_votes_per_pubkey
-                    .get(&pubkey)
-                    .and_then(|l| l.read().ok())
-                    .and_then(|c| c.try_borrow().ok().map(|v| (*v).slot()))
-            })
+            .unwrap()
+            .get(&pubkey)
+            .map(|l| l.read().unwrap().slot())
     }
 
     /// Returns how many packets were forwardable
@@ -262,22 +243,22 @@ impl LatestUnprocessedVotes {
             latest_votes_per_pubkey.keys(),
         )
         .filter(|pubkey| {
+            if !continue_forwarding {
+                return false;
+            }
             if let Some(lock) = latest_votes_per_pubkey.get(pubkey) {
-                if let Ok(mut vote) = lock.write().unwrap().try_borrow_mut() {
-                    if !vote.is_processed() && !vote.is_forwarded() {
-                        if continue_forwarding {
-                            if forward_packet_batches_by_accounts
-                                .add_packet(vote.vote.as_ref().unwrap().clone())
-                            {
-                                vote.forwarded = true;
-                            } else {
-                                // To match behavior of regular transactions we stop
-                                // forwarding votes as soon as one fails
-                                continue_forwarding = false;
-                            }
-                        }
-                        return true;
+                let mut vote = lock.write().unwrap();
+                if !vote.is_vote_taken() && !vote.is_forwarded() {
+                    if forward_packet_batches_by_accounts
+                        .add_packet(vote.vote.as_ref().unwrap().clone())
+                    {
+                        vote.forwarded = true;
+                    } else {
+                        // To match behavior of regular transactions we stop
+                        // forwarding votes as soon as one fails
+                        continue_forwarding = false;
                     }
+                    return true;
                 }
             }
             false
@@ -292,17 +273,11 @@ impl LatestUnprocessedVotes {
             .read()
             .unwrap()
             .values()
-            .filter(|lock| {
-                if let Ok(vote) = lock.read().unwrap().try_borrow() {
-                    return vote.is_forwarded();
-                }
-                false
-            })
+            .filter(|lock| lock.read().unwrap().is_forwarded())
             .for_each(|lock| {
-                if let Ok(mut vote) = lock.write().unwrap().try_borrow_mut() {
-                    if vote.is_forwarded() {
-                        vote.clear();
-                    }
+                let mut vote = lock.write().unwrap();
+                if vote.is_forwarded() {
+                    vote.take_vote();
                 }
             });
     }
@@ -331,7 +306,7 @@ mod tests {
         slots: Vec<(u64, u32)>,
         vote_source: VoteSource,
         keypairs: &ValidatorVoteKeypairs,
-    ) -> DeserializedVotePacket {
+    ) -> LatestValidatorVotePacket {
         let vote = VoteStateUpdate::from(slots);
         let vote_tx = new_vote_state_update_transaction(
             vote,
@@ -343,7 +318,7 @@ mod tests {
         );
         let mut packet = Packet::from_data(None, vote_tx).unwrap();
         packet.meta.flags.set(PacketFlags::SIMPLE_VOTE_TX, true);
-        DeserializedVotePacket::new(packet, vote_source).unwrap()
+        LatestValidatorVotePacket::new(packet, vote_source).unwrap()
     }
 
     #[test]
@@ -553,10 +528,9 @@ mod tests {
                             .read()
                             .unwrap();
                         latest_votes_per_pubkey.iter().for_each(|(_pubkey, lock)| {
-                            let latest_vote = lock.write().unwrap();
-                            let mut latest_vote = latest_vote.try_borrow_mut().unwrap();
-                            if !latest_vote.is_processed() {
-                                latest_vote.clear();
+                            let mut latest_vote = lock.write().unwrap();
+                            if !latest_vote.is_vote_taken() {
+                                latest_vote.take_vote();
                             }
                         });
                     }
