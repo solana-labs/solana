@@ -1404,6 +1404,8 @@ impl ScheduleStage {
         let mut execute_clock = 0;
         let mut commit_clock = 0;
         let mut processed_count = 0_usize;
+        let mut interval_count = 0;
+
         assert!(max_executing_queue_count > 0);
 
         let (ee_sender, ee_receiver) = crossbeam_channel::unbounded::<ExaminablePayload>();
@@ -1460,7 +1462,7 @@ impl ScheduleStage {
                 })
                 .unwrap()
         }).collect::<Vec<_>>();
-        let mut start = std::time::Instant::now();
+        let mut (start, last_processed_count) = (std::time::Instant::now(), 0);
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (bool, bool, bool) = Default::default();
         loop {
@@ -1524,10 +1526,15 @@ impl ScheduleStage {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
                     }
-                    trace!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} processed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), processed_count);
-                    if start.elapsed() > std::time::Duration::from_millis(150) {
-                        start = std::time::Instant::now();
-                        info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} processed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), processed_count);
+                    debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} done: {}", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count);
+                    interval_count += 1;
+                    if interval_count % 100 {
+                        let elapsed = start.elapsed();
+                        if elapsed > std::time::Duration::from_millis(150) {
+                            let delta = processed_count - last_processed_count;
+                            info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} done: {} ({}txs/{}us={}tps)", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, delta, elapsed.as_micros(), );
+                            (start, last_processed_count) = (std::time::Instant::now(), processed_count);
+                        }
                     }
                 }
                 while executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
@@ -1549,15 +1556,18 @@ impl ScheduleStage {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
                     }
-                    trace!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} processed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), processed_count);
-                    if start.elapsed() > std::time::Duration::from_millis(150) {
-                        start = std::time::Instant::now();
-                        info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}|{}), runnnable: {}, contended: {}, (immediate+provisional)/max: ({}+{})/{} uncontended: {} stuck: {} processed: {}!", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.uncontended_task_ids.len(), address_book.stuck_tasks.len(), processed_count);
-                    } else {
-                        break;
+                    debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} done: {}", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count);
+                    interval_count += 1;
+                    if interval_count % 100 {
+                        let elapsed = start.elapsed();
+                        if elapsed > std::time::Duration::from_millis(150) {
+                            let delta = processed_count - last_processed_count;
+                            info!("schedule_once:interval id_{:016x} ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} done: {} ({}txs/{}us={}tps)", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, delta, elapsed.as_micros(), );
+                            (start, last_processed_count) = (std::time::Instant::now(), processed_count);
+                        }
                     }
                     if !from_exec.is_empty() {
-                        trace!("abort aggressive readalbe queue processing due to non-empty from_exec");
+                        trace!("abort aggressive readable queue processing due to non-empty from_exec");
                         break;
                     }
                 }
