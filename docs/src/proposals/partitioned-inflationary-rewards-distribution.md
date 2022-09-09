@@ -30,10 +30,10 @@ N-1 -- N -- N+1
 In the above example, N is the start of the new epoch. Two rewards calculation
 requests will be sent out at slot N and slot N+2. To avoid repeated computation
 with the same input, the signature of the computation requests,
-hash(epoch_number, hash(stake_accounts_data)), are calculated. Duplicated
-computation requests will be discard. For the above example, if there are no
-stake account changes between slot N-1 and slot N, the 2nd computation request
-will be discarded.
+hash(epoch_number, hash(stake_accounts_data), hash(vote_accounts),
+hash(delegation_map)), are calculated. Duplicated computation requests will be
+discard. For the above example, if there are no stake account changes between
+slot N-1 and slot N, the 2nd computation request will be discarded.
 
 When reaching block height `N` after the start of the `reward computation
 phase`, the bank starts the second phase - reward credit, in which, the bank
