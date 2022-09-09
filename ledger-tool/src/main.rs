@@ -13,9 +13,7 @@ use {
     regex::Regex,
     serde::Serialize,
     serde_json::json,
-    solana_account_decoder::{
-        UiAccount, UiAccountEncoding
-    },
+    solana_account_decoder::{UiAccount, UiAccountEncoding},
     solana_clap_utils::{
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
@@ -373,7 +371,7 @@ fn output_account(
     account: &AccountSharedData,
     modified_slot: Option<Slot>,
     print_account_data: bool,
-    print_json_parsed_data: bool
+    print_json_parsed_data: bool,
 ) {
     println!("{}:", pubkey);
     println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
@@ -2317,7 +2315,7 @@ fn main() {
                             &AccountSharedData::from(account),
                             None,
                             print_account_data,
-                            print_json_parsed_data
+                            print_json_parsed_data,
                         );
                     }
                 } else {
