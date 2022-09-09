@@ -1,7 +1,7 @@
 //! Provides interfaces for rebuilding snapshot storages
 
 use {
-    super::{snapshot_version_from_file, SnapshotVersion},
+    super::{get_io_error, snapshot_version_from_file, SnapshotError, SnapshotVersion},
     crate::{
         accounts_db::{AccountStorageEntry, AccountStorageMap, AppendVecId, AtomicAppendVecId},
         serde_snapshot::{
@@ -64,15 +64,18 @@ impl SnapshotStorageRebuilder {
         file_receiver: Receiver<PathBuf>,
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
-    ) -> RebuiltSnapshotStorage {
+    ) -> Result<RebuiltSnapshotStorage, SnapshotError> {
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
-        let snapshot_version: SnapshotVersion = snapshot_version_from_file(&snapshot_version_path)
-            .unwrap()
-            .parse()
-            .unwrap();
+        let snapshot_version_str = snapshot_version_from_file(&snapshot_version_path)?;
+        let snapshot_version = snapshot_version_str.parse().map_err(|_| {
+            get_io_error(&format!(
+                "unsupported snapshot version: {}",
+                snapshot_version_str,
+            ))
+        })?;
         let snapshot_storage_lengths =
-            Self::process_snapshot_file(snapshot_version, snapshot_file_path).unwrap();
+            Self::process_snapshot_file(snapshot_version, snapshot_file_path)?;
 
         let account_storage_map = Self::spawn_rebuilder_threads(
             file_receiver,
@@ -82,10 +85,10 @@ impl SnapshotStorageRebuilder {
             append_vec_files,
         );
 
-        RebuiltSnapshotStorage {
+        Ok(RebuiltSnapshotStorage {
             snapshot_version,
             storage: account_storage_map,
-        }
+        })
     }
 
     /// Create the SnapshotStorageRebuilder for storing state during rebuilding

@@ -1261,7 +1261,7 @@ where
             file_receiver,
             num_rebuilder_threads,
             next_append_vec_id
-        ),
+        )?,
         measure_name
     );
     info!("{}", measure_untar);
