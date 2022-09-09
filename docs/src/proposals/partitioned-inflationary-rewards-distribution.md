@@ -14,11 +14,33 @@ worse.
 ## Proposed Solutions
 
 Instead of computing and reward stake accounts at epoch boundary, we will
-decouple reward computation and reward credit into two phases. At the start of
-the new epoch, a background thread is forked to compute the rewards. This is the
-first phase - reward computation. When reaching block height `N` after the
-epoch, the bank starts the second phase - reward credit, in which the rewards
-are credited to the stake accounts, which will last for `M` blocks.
+decouple reward computation and reward credit into two phases.
+
+A separate service, "epoch calc service" will be created. The service will
+listen to a channel for any incoming rewards calculation requests, and perform
+the calculation for the rewards. For each block that cross the epoch boundary,
+the bank will send a request to the `epoch calc service`. This marks the start
+of the reward computation phase.
+
+N-1 -- N -- N+1
+     \
+      \
+        N+2
+
+In the above example, N is the start of the new epoch. Two rewards calculation
+requests will be sent out at slot N and slot N+2. To avoid repeated computation
+with the same input, the signature of the computation requests,
+hash(epoch_number, hash(stake_accounts_data)), are calculated. Duplicated
+computation requests will be discard. For the above example, if there are no
+stake account changes between slot N-1 and slot N, the 2nd computation request
+will be discarded.
+
+When reaching block height `N` after the start of the `reward computation
+phase`, the bank starts the second phase - reward credit, in which, the bank
+first query the `epoch calc service` with the request signature to get the
+rewards result, then credit the rewards to the stake accounts for the next `M`
+blocks. If the rewards result is not available, the bank will wait until the
+results are available.
 
 We call them:
 (a) `calculating interval` `[epoch_start, epoch_start+N]`
