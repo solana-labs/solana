@@ -2004,7 +2004,6 @@ pub mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             pubkey::PUBKEY_BYTES,
-            signature::{Keypair, Signer},
         },
         std::ops::RangeInclusive,
     };
@@ -2277,10 +2276,10 @@ pub mod tests {
 
     #[test]
     fn test_get_empty() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = Ancestors::default();
-        let key = &key.pubkey();
+        let key = &key;
         assert!(index.get_for_tests(key, Some(&ancestors), None).is_none());
         assert!(index.get_for_tests(key, None, None).is_none());
 
@@ -2344,13 +2343,13 @@ pub mod tests {
 
     #[test]
     fn test_insert_no_ancestors() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
             0,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -2360,10 +2359,8 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = Ancestors::default();
-        assert!(index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .is_none());
-        assert!(index.get_for_tests(&key.pubkey(), None, None).is_none());
+        assert!(index.get_for_tests(&key, Some(&ancestors), None).is_none());
+        assert!(index.get_for_tests(&key, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -2391,8 +2388,8 @@ pub mod tests {
     }
     #[test]
     fn test_insert_new_with_lock_no_ancestors() {
-        let key = Keypair::new();
-        let pubkey = &key.pubkey();
+        let key = solana_sdk::pubkey::new_rand();
+        let pubkey = &key;
         let slot = 0;
 
         let index = AccountsIndex::<bool>::default_for_tests();
@@ -2533,8 +2530,8 @@ pub mod tests {
     #[test]
     fn test_batch_insert() {
         let slot0 = 0;
-        let key0 = Keypair::new().pubkey();
-        let key1 = Keypair::new().pubkey();
+        let key0 = solana_sdk::pubkey::new_rand();
+        let key1 = solana_sdk::pubkey::new_rand();
 
         let index = AccountsIndex::<bool>::default_for_tests();
         let account_infos = [true, false];
@@ -2566,7 +2563,7 @@ pub mod tests {
 
         let slot0 = 0;
         let slot1 = 1;
-        let key = Keypair::new().pubkey();
+        let key = solana_sdk::pubkey::new_rand();
 
         let mut config = ACCOUNTS_INDEX_CONFIG_FOR_TESTING;
         config.index_limit_mb = if use_disk {
@@ -2688,7 +2685,7 @@ pub mod tests {
 
     #[test]
     fn test_insert_with_lock_no_ancestors() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let slot = 0;
         let account_info = true;
@@ -2699,9 +2696,9 @@ pub mod tests {
         assert_eq!((slot, account_info), new_entry.clone().into());
 
         assert_eq!(0, account_maps_stats_len(&index));
-        let r_account_maps = index.get_bin(&key.pubkey());
+        let r_account_maps = index.get_bin(&key);
         r_account_maps.upsert(
-            &key.pubkey(),
+            &key,
             new_entry,
             None,
             &mut SlotList::default(),
@@ -2710,10 +2707,8 @@ pub mod tests {
         assert_eq!(1, account_maps_stats_len(&index));
 
         let mut ancestors = Ancestors::default();
-        assert!(index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .is_none());
-        assert!(index.get_for_tests(&key.pubkey(), None, None).is_none());
+        assert!(index.get_for_tests(&key, Some(&ancestors), None).is_none());
+        assert!(index.get_for_tests(&key, None, None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -2724,9 +2719,7 @@ pub mod tests {
         );
         assert_eq!(num, 0);
         ancestors.insert(slot, 0);
-        assert!(index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .is_some());
+        assert!(index.get_for_tests(&key, Some(&ancestors), None).is_some());
         index.unchecked_scan_accounts(
             "",
             &ancestors,
@@ -2738,13 +2731,13 @@ pub mod tests {
 
     #[test]
     fn test_insert_wrong_ancestors() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
             0,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -2754,9 +2747,7 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(1, 1)].into_iter().collect();
-        assert!(index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .is_none());
+        assert!(index.get_for_tests(&key, Some(&ancestors), None).is_none());
 
         let mut num = 0;
         index.unchecked_scan_accounts(
@@ -2771,7 +2762,7 @@ pub mod tests {
     fn test_insert_ignore_reclaims() {
         {
             // non-cached
-            let key = Keypair::new();
+            let key = solana_sdk::pubkey::new_rand();
             let index = AccountsIndex::<u64>::default_for_tests();
             let mut reclaims = Vec::new();
             let slot = 0;
@@ -2780,7 +2771,7 @@ pub mod tests {
             index.upsert(
                 slot,
                 slot,
-                &key.pubkey(),
+                &key,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 value,
@@ -2791,7 +2782,7 @@ pub mod tests {
             index.upsert(
                 slot,
                 slot,
-                &key.pubkey(),
+                &key,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 value,
@@ -2804,7 +2795,7 @@ pub mod tests {
             index.upsert(
                 slot,
                 slot,
-                &key.pubkey(),
+                &key,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 value,
@@ -2817,7 +2808,7 @@ pub mod tests {
         }
         {
             // cached
-            let key = Keypair::new();
+            let key = solana_sdk::pubkey::new_rand();
             let index = AccountsIndex::<AccountInfoTest>::default_for_tests();
             let mut reclaims = Vec::new();
             let slot = 0;
@@ -2826,7 +2817,7 @@ pub mod tests {
             index.upsert(
                 slot,
                 slot,
-                &key.pubkey(),
+                &key,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 value,
@@ -2837,7 +2828,7 @@ pub mod tests {
             index.upsert(
                 slot,
                 slot,
-                &key.pubkey(),
+                &key,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 value,
@@ -2850,7 +2841,7 @@ pub mod tests {
             index.upsert(
                 slot,
                 slot,
-                &key.pubkey(),
+                &key,
                 &AccountSharedData::default(),
                 &AccountSecondaryIndexes::default(),
                 value,
@@ -2865,13 +2856,13 @@ pub mod tests {
 
     #[test]
     fn test_insert_with_ancestors() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
             0,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -2881,9 +2872,7 @@ pub mod tests {
         assert!(gc.is_empty());
 
         let ancestors = vec![(0, 0)].into_iter().collect();
-        let (list, idx) = index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .unwrap();
+        let (list, idx) = index.get_for_tests(&key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
 
         let mut num = 0;
@@ -2892,7 +2881,7 @@ pub mod tests {
             "",
             &ancestors,
             |pubkey, _index| {
-                if pubkey == &key.pubkey() {
+                if pubkey == &key {
                     found_key = true
                 };
                 num += 1
@@ -3092,13 +3081,13 @@ pub mod tests {
 
     #[test]
     fn test_insert_with_root() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
             0,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -3108,7 +3097,7 @@ pub mod tests {
         assert!(gc.is_empty());
 
         index.add_root(0, false);
-        let (list, idx) = index.get_for_tests(&key.pubkey(), None, None).unwrap();
+        let (list, idx) = index.get_for_tests(&key, None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
     }
 
@@ -3206,14 +3195,14 @@ pub mod tests {
 
     #[test]
     fn test_update_last_wins() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
         index.upsert(
             0,
             0,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -3221,9 +3210,7 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert!(gc.is_empty());
-        let (list, idx) = index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .unwrap();
+        let (list, idx) = index.get_for_tests(&key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         drop(list);
 
@@ -3231,7 +3218,7 @@ pub mod tests {
         index.upsert(
             0,
             0,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
@@ -3239,23 +3226,21 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert_eq!(gc, vec![(0, true)]);
-        let (list, idx) = index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .unwrap();
+        let (list, idx) = index.get_for_tests(&key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, false));
     }
 
     #[test]
     fn test_update_new_slot() {
         solana_logger::setup();
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let ancestors = vec![(0, 0)].into_iter().collect();
         let mut gc = Vec::new();
         index.upsert(
             0,
             0,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -3266,7 +3251,7 @@ pub mod tests {
         index.upsert(
             1,
             1,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
@@ -3274,26 +3259,22 @@ pub mod tests {
             UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
         );
         assert!(gc.is_empty());
-        let (list, idx) = index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .unwrap();
+        let (list, idx) = index.get_for_tests(&key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (0, true));
         let ancestors = vec![(1, 0)].into_iter().collect();
-        let (list, idx) = index
-            .get_for_tests(&key.pubkey(), Some(&ancestors), None)
-            .unwrap();
+        let (list, idx) = index.get_for_tests(&key, Some(&ancestors), None).unwrap();
         assert_eq!(list.slot_list()[idx], (1, false));
     }
 
     #[test]
     fn test_update_gc_purged_slot() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<bool>::default_for_tests();
         let mut gc = Vec::new();
         index.upsert(
             0,
             0,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -3304,7 +3285,7 @@ pub mod tests {
         index.upsert(
             1,
             1,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             false,
@@ -3314,7 +3295,7 @@ pub mod tests {
         index.upsert(
             2,
             2,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -3324,7 +3305,7 @@ pub mod tests {
         index.upsert(
             3,
             3,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -3337,7 +3318,7 @@ pub mod tests {
         index.upsert(
             4,
             4,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             true,
@@ -3348,7 +3329,7 @@ pub mod tests {
         // Updating index should not purge older roots, only purges
         // previous updates within the same slot
         assert_eq!(gc, vec![]);
-        let (list, idx) = index.get_for_tests(&key.pubkey(), None, None).unwrap();
+        let (list, idx) = index.get_for_tests(&key, None, None).unwrap();
         assert_eq!(list.slot_list()[idx], (3, true));
 
         let mut num = 0;
@@ -3357,7 +3338,7 @@ pub mod tests {
             "",
             &Ancestors::default(),
             |pubkey, _index| {
-                if pubkey == &key.pubkey() {
+                if pubkey == &key {
                     found_key = true;
                     assert_eq!(_index, (&true, 3));
                 };
@@ -3375,14 +3356,14 @@ pub mod tests {
 
     #[test]
     fn test_purge() {
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let index = AccountsIndex::<u64>::default_for_tests();
         let mut gc = Vec::new();
         assert_eq!(0, account_maps_stats_len(&index));
         index.upsert(
             1,
             1,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             12,
@@ -3394,7 +3375,7 @@ pub mod tests {
         index.upsert(
             1,
             1,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             10,
@@ -3403,18 +3384,18 @@ pub mod tests {
         );
         assert_eq!(1, account_maps_stats_len(&index));
 
-        let purges = index.purge_roots(&key.pubkey());
+        let purges = index.purge_roots(&key);
         assert_eq!(purges, (vec![], false));
         index.add_root(1, false);
 
-        let purges = index.purge_roots(&key.pubkey());
+        let purges = index.purge_roots(&key);
         assert_eq!(purges, (vec![(1, 10)], true));
 
         assert_eq!(1, account_maps_stats_len(&index));
         index.upsert(
             1,
             1,
-            &key.pubkey(),
+            &key,
             &AccountSharedData::default(),
             &AccountSecondaryIndexes::default(),
             9,
