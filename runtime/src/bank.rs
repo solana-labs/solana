@@ -1302,7 +1302,8 @@ impl Default for Scheduler {
                 } = tx_results;
 
                 ee.execution_result = Some(fee_collection_results.into_iter().collect::<Result<_>>());
-                ee.cu = execution_results[0].details().unwrap().executed_units;
+                let details = execution_results[0].details().unwrap();
+                ee.cu = details.executed_units;
 
 
                 //ee.reindex_with_address_book();
@@ -1318,7 +1319,7 @@ impl Default for Scheduler {
                         ("thread", current_thread_name, String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
-                        ("status", format!("{:?}", ee.execution_result.as_ref().unwrap()), String),
+                        ("status", format!("{:?}", details.status), String),
                         ("duration", duration_with_overhead, i64),
                         ("compute_units", ee.cu, i64),
                     );
