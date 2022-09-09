@@ -2339,8 +2339,7 @@ pub mod tests {
         assert!(index.include_key(&pk2));
     }
 
-    const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: UpsertReclaim =
-        UpsertReclaim::PopulateReclaims;
+    const UPSERT_POPULATE_RECLAIMS: UpsertReclaim = UpsertReclaim::PopulateReclaims;
 
     #[test]
     fn test_insert_no_ancestors() {
@@ -2355,7 +2354,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(gc.is_empty());
 
@@ -2587,7 +2586,7 @@ pub mod tests {
                 &AccountSecondaryIndexes::default(),
                 account_infos[0],
                 &mut gc,
-                UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+                UPSERT_POPULATE_RECLAIMS,
             );
         } else {
             let items = vec![(key, account_infos[0])];
@@ -2626,7 +2625,7 @@ pub mod tests {
                 &AccountSecondaryIndexes::default(),
                 account_infos[1],
                 &mut gc,
-                UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+                UPSERT_POPULATE_RECLAIMS,
             );
         } else {
             // this has the effect of aging out everything in the in-mem cache
@@ -2705,7 +2704,7 @@ pub mod tests {
             new_entry,
             None,
             &mut SlotList::default(),
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert_eq!(1, account_maps_stats_len(&index));
 
@@ -2749,7 +2748,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(gc.is_empty());
 
@@ -2876,7 +2875,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(gc.is_empty());
 
@@ -2917,7 +2916,7 @@ pub mod tests {
                 &AccountSecondaryIndexes::default(),
                 true,
                 &mut vec![],
-                UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+                UPSERT_POPULATE_RECLAIMS,
             );
             new_pubkey
         })
@@ -2934,7 +2933,7 @@ pub mod tests {
                 &AccountSecondaryIndexes::default(),
                 true,
                 &mut vec![],
-                UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+                UPSERT_POPULATE_RECLAIMS,
             );
         }
 
@@ -3077,7 +3076,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(iter.next().is_none());
     }
@@ -3103,7 +3102,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(gc.is_empty());
 
@@ -3218,7 +3217,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(gc.is_empty());
         let (list, idx) = index
@@ -3236,7 +3235,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert_eq!(gc, vec![(0, true)]);
         let (list, idx) = index
@@ -3260,7 +3259,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(gc.is_empty());
         index.upsert(
@@ -3271,7 +3270,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(gc.is_empty());
         let (list, idx) = index
@@ -3298,7 +3297,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(gc.is_empty());
         index.upsert(
@@ -3309,7 +3308,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             false,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         index.upsert(
             2,
@@ -3319,7 +3318,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         index.upsert(
             3,
@@ -3329,7 +3328,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         index.add_root(0, false);
         index.add_root(1, false);
@@ -3342,7 +3341,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             true,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
 
         // Updating index should not purge older roots, only purges
@@ -3387,7 +3386,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             12,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert_eq!(1, account_maps_stats_len(&index));
 
@@ -3399,7 +3398,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             10,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert_eq!(1, account_maps_stats_len(&index));
 
@@ -3419,7 +3418,7 @@ pub mod tests {
             &AccountSecondaryIndexes::default(),
             9,
             &mut gc,
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert_eq!(1, account_maps_stats_len(&index));
     }
@@ -3501,7 +3500,7 @@ pub mod tests {
                 secondary_indexes,
                 true,
                 &mut vec![],
-                UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+                UPSERT_POPULATE_RECLAIMS,
             );
         }
 
@@ -3675,7 +3674,7 @@ pub mod tests {
             &secondary_indexes,
             true,
             &mut vec![],
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
@@ -3689,7 +3688,7 @@ pub mod tests {
             &secondary_indexes,
             true,
             &mut vec![],
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
@@ -3813,7 +3812,7 @@ pub mod tests {
             secondary_indexes,
             true,
             &mut vec![],
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
 
         // Now write a different mint index for the same account
@@ -3825,7 +3824,7 @@ pub mod tests {
             secondary_indexes,
             true,
             &mut vec![],
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
 
         // Both pubkeys will now be present in the index
@@ -3845,7 +3844,7 @@ pub mod tests {
             secondary_indexes,
             true,
             &mut vec![],
-            UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            UPSERT_POPULATE_RECLAIMS,
         );
         assert_eq!(secondary_index.get(&secondary_key1), vec![account_key]);
 
