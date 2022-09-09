@@ -50,6 +50,7 @@ use {
         bank_forks::BankForks,
         cost_model::CostModel,
         cost_tracker::CostTracker,
+        epoch_reward_calc_service::{EpochRewardCalcRequestHandler, EpochRewardCalcService},
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         runtime_config::RuntimeConfig,
         snapshot_archive_info::SnapshotArchiveInfoGetter,
@@ -1162,6 +1163,16 @@ fn load_bank_forks(
         None,
     );
 
+    // (receiver channel, and map of epoch results)
+    let (epoch_reward_calc_receiver, epoch_rewards_results) =
+        EpochRewardCalcService::setup_bank_epoch_reward_calculator(bank_forks.clone());
+
+    let epoch_reward_calc_request_handler =
+        EpochRewardCalcRequestHandler::new(epoch_reward_calc_receiver, epoch_rewards_results);
+
+    let epoch_reward_cacl_service =
+        EpochRewardCalcService::new(epoch_reward_calc_request_handler, &exit);
+
     let result = blockstore_processor::process_blockstore_from_root(
         blockstore,
         &bank_forks,
@@ -1175,6 +1186,7 @@ fn load_bank_forks(
 
     exit.store(true, Ordering::Relaxed);
     accounts_background_service.join().unwrap();
+    epoch_reward_cacl_service.join().unwrap();
 
     result
 }

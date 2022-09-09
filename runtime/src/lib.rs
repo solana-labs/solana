@@ -35,6 +35,7 @@ pub mod contains;
 pub mod cost_model;
 pub mod cost_tracker;
 pub mod epoch_accounts_hash;
+pub mod epoch_reward_calc_service;
 pub mod epoch_stakes;
 pub mod execute_cost_table;
 mod expected_rent_collection;

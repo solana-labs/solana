@@ -73,10 +73,14 @@ use {
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
         accounts_index::AccountSecondaryIndexes,
         accounts_update_notifier_interface::AccountsUpdateNotifier,
-        bank::Bank,
+        bank::{Bank, StakeVoteAccountRewardResult},
         bank_forks::BankForks,
         commitment::BlockCommitmentCache,
         cost_model::CostModel,
+        epoch_reward_calc_service::{
+            EpochRewardCalcRequestHandler, EpochRewardCalcRequestReceiver, EpochRewardCalcService,
+            EpochRewardResult,
+        },
         hardened_unpack::{open_genesis_config, MAX_GENESIS_ARCHIVE_UNPACKED_SIZE},
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
@@ -366,6 +370,7 @@ pub struct Validator {
     ledger_metric_report_service: LedgerMetricReportService,
     accounts_background_service: AccountsBackgroundService,
     accounts_hash_verifier: AccountsHashVerifier,
+    epoch_reward_calc_service: EpochRewardCalcService,
 }
 
 impl Validator {
@@ -533,6 +538,8 @@ impl Validator {
             blockstore_process_options,
             blockstore_root_scan,
             pruned_banks_receiver,
+            epoch_reward_calc_receiver,
+            epoch_reward_calc_results,
         ) = load_blockstore(
             config,
             ledger_path,
@@ -647,6 +654,14 @@ impl Validator {
             config.accounts_db_test_hash_calculation,
             last_full_snapshot_slot,
         );
+
+        let epoch_reward_calc_request_handler = EpochRewardCalcRequestHandler::new(
+            epoch_reward_calc_receiver,
+            epoch_reward_calc_results,
+        );
+
+        let epoch_reward_calc_service =
+            EpochRewardCalcService::new(epoch_reward_calc_request_handler, &exit);
 
         let leader_schedule_cache = Arc::new(leader_schedule_cache);
         let mut process_blockstore = ProcessBlockStore::new(
@@ -1065,6 +1080,7 @@ impl Validator {
             ledger_metric_report_service,
             accounts_background_service,
             accounts_hash_verifier,
+            epoch_reward_calc_service,
         })
     }
 
@@ -1180,6 +1196,9 @@ impl Validator {
         self.accounts_background_service
             .join()
             .expect("accounts_background_service");
+        self.epoch_reward_calc_service
+            .join()
+            .expect("epoch_reward_calc_service");
         self.accounts_hash_verifier
             .join()
             .expect("accounts_hash_verifier");
@@ -1363,6 +1382,8 @@ fn load_blockstore(
         blockstore_processor::ProcessOptions,
         BlockstoreRootScan,
         DroppedSlotsReceiver,
+        EpochRewardCalcRequestReceiver,
+        Arc<RwLock<EpochRewardResult<StakeVoteAccountRewardResult>>>,
     ),
     String,
 > {
@@ -1503,6 +1524,10 @@ fn load_blockstore(
         }
     }
 
+    // (receiver channel, and map of epoch results)
+    let (epoch_reward_calc_receiver, epoch_rewards_results) =
+        EpochRewardCalcService::setup_bank_epoch_reward_calculator(bank_forks.clone());
+
     Ok((
         genesis_config,
         bank_forks,
@@ -1516,6 +1541,8 @@ fn load_blockstore(
         process_options,
         blockstore_root_scan,
         pruned_banks_receiver,
+        epoch_reward_calc_receiver,
+        epoch_rewards_results,
     ))
 }
 

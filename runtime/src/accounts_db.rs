@@ -5827,6 +5827,61 @@ impl AccountsDb {
         hasher.update(owner.as_ref());
         hasher.update(pubkey.as_ref());
 
+        Self::to_hash(hasher)
+    }
+
+    pub fn hash_account_state<T: ReadableAccount>(
+        state: &[u8],
+        account: &T,
+        pubkey: &Pubkey,
+    ) -> Hash {
+        Self::hash_account_data_state(
+            state,
+            account.lamports(),
+            account.owner(),
+            account.executable(),
+            account.rent_epoch(),
+            account.data(),
+            pubkey,
+        )
+    }
+
+    fn hash_account_data_state(
+        state: &[u8],
+        lamports: u64,
+        owner: &Pubkey,
+        executable: bool,
+        rent_epoch: Epoch,
+        data: &[u8],
+        pubkey: &Pubkey,
+    ) -> Hash {
+        if lamports == 0 {
+            return Hash::default();
+        }
+
+        let mut hasher = blake3::Hasher::new();
+
+        hasher.update(&lamports.to_le_bytes());
+
+        hasher.update(state);
+
+        hasher.update(&rent_epoch.to_le_bytes());
+
+        hasher.update(data);
+
+        if executable {
+            hasher.update(&[1u8; 1]);
+        } else {
+            hasher.update(&[0u8; 1]);
+        }
+
+        hasher.update(owner.as_ref());
+        hasher.update(pubkey.as_ref());
+
+        Self::to_hash(hasher)
+    }
+
+    pub fn to_hash(hasher: blake3::Hasher) -> Hash {
         Hash::new_from_array(
             <[u8; solana_sdk::hash::HASH_BYTES]>::try_from(hasher.finalize().as_slice()).unwrap(),
         )
