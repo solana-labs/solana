@@ -1,7 +1,11 @@
 use {
     crate::{
-        block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
-        blockstore_meta::SlotMeta, leader_schedule_cache::LeaderScheduleCache,
+        block_error::BlockError,
+        blockstore::Blockstore,
+        blockstore_db::BlockstoreError,
+        blockstore_meta::SlotMeta,
+        executor::{Replayer, ReplayerHandle, TransactionBatchWithIndexes},
+        leader_schedule_cache::LeaderScheduleCache,
         token_balances::collect_token_balances,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
@@ -89,11 +93,6 @@ impl BlockCostCapacityMeter {
         self.accumulated_cost += cost;
         self.capacity.saturating_sub(self.accumulated_cost)
     }
-}
-
-struct TransactionBatchWithIndexes<'a, 'b> {
-    pub batch: TransactionBatch<'a, 'b>,
-    pub transaction_indexes: Vec<usize>,
 }
 
 struct ReplayEntry {
@@ -266,90 +265,61 @@ fn execute_batch(
 
 #[derive(Default)]
 struct ExecuteBatchesInternalMetrics {
-    execution_timings_per_thread: HashMap<usize, ThreadExecuteTimings>,
-    total_batches_len: u64,
     execute_batches_us: u64,
 }
 
 fn execute_batches_internal(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatchWithIndexes],
+    transactions_indices_to_schedule: &[(SanitizedTransaction, usize)],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
+    confirmation_timing: &mut ConfirmationTiming,
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_costs: &[u64],
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<ExecuteBatchesInternalMetrics> {
-    assert!(!batches.is_empty());
-    inc_new_counter_debug!("bank-par_execute_entries-count", batches.len());
-    let execution_timings_per_thread: Mutex<HashMap<usize, ThreadExecuteTimings>> =
-        Mutex::new(HashMap::new());
+    assert!(!transactions_indices_to_schedule.is_empty());
 
     let mut execute_batches_elapsed = Measure::start("execute_batches_elapsed");
-    let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
-        batches
-            .into_par_iter()
-            .enumerate()
-            .map(|(index, transaction_batch_with_indexes)| {
-                let transaction_count = transaction_batch_with_indexes
-                    .batch
-                    .sanitized_transactions()
-                    .len() as u64;
-                let mut timings = ExecuteTimings::default();
-                let (result, execute_batches_time): (Result<()>, Measure) = measure!(
-                    {
-                        let result = execute_batch(
-                            transaction_batch_with_indexes,
-                            bank,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            &mut timings,
-                            cost_capacity_meter.clone(),
-                            tx_costs[index],
-                            log_messages_bytes_limit,
-                        );
-                        if let Some(entry_callback) = entry_callback {
-                            entry_callback(bank);
-                        }
-                        result
-                    },
-                    "execute_batch",
-                );
-
-                let thread_index = PAR_THREAD_POOL.current_thread_index().unwrap();
-                execution_timings_per_thread
-                    .lock()
-                    .unwrap()
-                    .entry(thread_index)
-                    .and_modify(|thread_execution_time| {
-                        let ThreadExecuteTimings {
-                            total_thread_us,
-                            total_transactions_executed,
-                            execute_timings: total_thread_execute_timings,
-                        } = thread_execution_time;
-                        *total_thread_us += execute_batches_time.as_us();
-                        *total_transactions_executed += transaction_count;
-                        total_thread_execute_timings
-                            .saturating_add_in_place(ExecuteTimingType::TotalBatchesLen, 1);
-                        total_thread_execute_timings.accumulate(&timings);
-                    })
-                    .or_insert(ThreadExecuteTimings {
-                        total_thread_us: execute_batches_time.as_us(),
-                        total_transactions_executed: transaction_count,
-                        execute_timings: timings,
-                    });
-                result
-            })
-            .collect()
-    });
+    // let results: Vec<Result<()>> = PAR_THREAD_POOL.install(|| {
+    //     batches
+    //         .into_par_iter()
+    //         .enumerate()
+    //         .map(|(index, transaction_batch_with_indexes)| {
+    //             let transaction_count = transaction_batch_with_indexes
+    //                 .batch
+    //                 .sanitized_transactions()
+    //                 .len() as u64;
+    //             let mut timings = ExecuteTimings::default();
+    //             let (result, execute_batches_time): (Result<()>, Measure) = measure!(
+    //                 {
+    //                     let result = execute_batch(
+    //                         transaction_batch_with_indexes,
+    //                         bank,
+    //                         transaction_status_sender,
+    //                         replay_vote_sender,
+    //                         &mut timings,
+    //                         cost_capacity_meter.clone(),
+    //                         tx_costs[index],
+    //                         log_messages_bytes_limit,
+    //                     );
+    //                     if let Some(entry_callback) = entry_callback {
+    //                         entry_callback(bank);
+    //                     }
+    //                     result
+    //                 },
+    //                 "execute_batch",
+    //             );
+    //             result
+    //         })
+    //         .collect()
+    // });
     execute_batches_elapsed.stop();
 
-    first_err(&results)?;
+    // first_err(&results)?;
 
     Ok(ExecuteBatchesInternalMetrics {
-        execution_timings_per_thread: execution_timings_per_thread.into_inner().unwrap(),
-        total_batches_len: batches.len() as u64,
         execute_batches_us: execute_batches_elapsed.as_us(),
     })
 }
@@ -376,7 +346,7 @@ fn rebatch_transactions<'a>(
 
 fn execute_batches(
     bank: &Arc<Bank>,
-    batches: &[TransactionBatchWithIndexes],
+    transactions_indices_to_schedule: &[(SanitizedTransaction, usize)],
     entry_callback: Option<&ProcessCallback>,
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
@@ -385,92 +355,24 @@ fn execute_batches(
     cost_model: &CostModel,
     log_messages_bytes_limit: Option<usize>,
 ) -> Result<()> {
-    if batches.is_empty() {
+    if transactions_indices_to_schedule.is_empty() {
         return Ok(());
     }
 
-    let ((lock_results, sanitized_txs), transaction_indexes): ((Vec<_>, Vec<_>), Vec<_>) = batches
+    let tx_costs_without_bpf = transactions_indices_to_schedule
         .iter()
-        .flat_map(|batch| {
-            batch
-                .batch
-                .lock_results()
-                .iter()
-                .cloned()
-                .zip(batch.batch.sanitized_transactions().to_vec())
-                .zip(batch.transaction_indexes.to_vec())
-        })
-        .unzip();
-
-    let mut minimal_tx_cost = u64::MAX;
-    let mut total_cost: u64 = 0;
-    let mut total_cost_without_bpf: u64 = 0;
-    // Allowing collect here, since it also computes the minimal tx cost, and aggregate cost.
-    // These two values are later used for checking if the tx_costs vector needs to be iterated over.
-    // The collection is a pair of (full cost, cost without estimated-bpf-code-costs).
-    #[allow(clippy::needless_collect)]
-    let tx_costs = sanitized_txs
-        .iter()
-        .map(|tx| {
-            let tx_cost = cost_model.calculate_cost(tx);
-            let cost = tx_cost.sum();
-            let cost_without_bpf = tx_cost.sum_without_bpf();
-            minimal_tx_cost = std::cmp::min(minimal_tx_cost, cost);
-            total_cost = total_cost.saturating_add(cost);
-            total_cost_without_bpf = total_cost_without_bpf.saturating_add(cost_without_bpf);
-            (cost, cost_without_bpf)
-        })
+        .map(|(tx, _)| cost_model.calculate_cost(tx).sum_without_bpf())
         .collect::<Vec<_>>();
-
-    let target_batch_count = get_thread_count() as u64;
-
-    let mut tx_batches: Vec<TransactionBatchWithIndexes> = vec![];
-    let mut tx_batch_costs: Vec<u64> = vec![];
-    let rebatched_txs = if total_cost > target_batch_count.saturating_mul(minimal_tx_cost) {
-        let target_batch_cost = total_cost / target_batch_count;
-        let mut batch_cost: u64 = 0;
-        let mut batch_cost_without_bpf: u64 = 0;
-        let mut slice_start = 0;
-        tx_costs
-            .into_iter()
-            .enumerate()
-            .for_each(|(index, cost_pair)| {
-                let next_index = index + 1;
-                batch_cost = batch_cost.saturating_add(cost_pair.0);
-                batch_cost_without_bpf = batch_cost_without_bpf.saturating_add(cost_pair.1);
-                if batch_cost >= target_batch_cost || next_index == sanitized_txs.len() {
-                    let tx_batch = rebatch_transactions(
-                        &lock_results,
-                        bank,
-                        &sanitized_txs,
-                        slice_start,
-                        index,
-                        &transaction_indexes,
-                    );
-                    slice_start = next_index;
-                    tx_batches.push(tx_batch);
-                    tx_batch_costs.push(batch_cost_without_bpf);
-                    batch_cost = 0;
-                    batch_cost_without_bpf = 0;
-                }
-            });
-        &tx_batches[..]
-    } else {
-        // Ensure that the total cost attributed to this batch is essentially correct
-        // batches.is_empty() check at top of function ensures that n > 0 for following divide
-        let n = batches.len();
-        tx_batch_costs = vec![total_cost_without_bpf / (n as u64); n];
-        batches
-    };
 
     let execute_batches_internal_metrics = execute_batches_internal(
         bank,
-        rebatched_txs,
+        transactions_indices_to_schedule,
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
+        confirmation_timing,
         cost_capacity_meter,
-        &tx_batch_costs,
+        &tx_costs_without_bpf,
         log_messages_bytes_limit,
     )?;
 
@@ -549,8 +451,7 @@ fn process_entries_with_callback(
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
 ) -> Result<()> {
-    // accumulator for entries that can be processed in parallel
-    let mut batches = vec![];
+    let mut transactions_indices_to_schedule: Vec<(SanitizedTransaction, usize)> = vec![];
     let mut tick_hashes = vec![];
     let mut rng = thread_rng();
     let cost_model = CostModel::new();
@@ -569,7 +470,7 @@ fn process_entries_with_callback(
                     // execute the group and register the tick
                     execute_batches(
                         bank,
-                        &batches,
+                        &transactions_indices_to_schedule,
                         entry_callback,
                         transaction_status_sender,
                         replay_vote_sender,
@@ -578,7 +479,7 @@ fn process_entries_with_callback(
                         &cost_model,
                         log_messages_bytes_limit,
                     )?;
-                    batches.clear();
+                    transactions_indices_to_schedule.clear();
                     for hash in &tick_hashes {
                         bank.register_tick(hash);
                     }
@@ -587,75 +488,29 @@ fn process_entries_with_callback(
             }
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
-                let transaction_indexes = if randomize {
+                if randomize {
                     let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
                         transactions.drain(..).zip(starting_index..).collect();
                     transactions_and_indexes.shuffle(&mut rng);
-                    let (txs, indexes): (Vec<_>, Vec<_>) =
-                        transactions_and_indexes.into_iter().unzip();
-                    *transactions = txs;
-                    indexes
+                    transactions_indices_to_schedule.extend(transactions_and_indexes.into_iter());
                 } else {
-                    (starting_index..starting_index.saturating_add(transactions.len())).collect()
+                    let indices = starting_index..starting_index.saturating_add(transactions.len());
+                    transactions_indices_to_schedule.extend(
+                        transactions
+                            .iter()
+                            .map(|tx| tx.clone())
+                            .zip(indices.into_iter())
+                            .into_iter(),
+                    );
                 };
 
-                loop {
-                    // try to lock the accounts
-                    let batch = bank.prepare_sanitized_batch(transactions);
-                    let first_lock_err = first_err(batch.lock_results());
-
-                    // if locking worked
-                    if first_lock_err.is_ok() {
-                        batches.push(TransactionBatchWithIndexes {
-                            batch,
-                            transaction_indexes,
-                        });
-                        // entry is scheduled to be processed, transactions in it can be used to
-                        // update prioritization fee cache asynchronously.
-                        prioritization_fee_cache.update(bank.clone(), transactions.iter());
-                        // done with this entry
-                        break;
-                    }
-                    // else we failed to lock, 2 possible reasons
-                    if batches.is_empty() {
-                        // An entry has account lock conflicts with *itself*, which should not happen
-                        // if generated by a properly functioning leader
-                        datapoint_error!(
-                            "validator_process_entry_error",
-                            (
-                                "error",
-                                format!(
-                                    "Lock accounts error, entry conflicts with itself, txs: {:?}",
-                                    transactions
-                                ),
-                                String
-                            )
-                        );
-                        // bail
-                        first_lock_err?;
-                    } else {
-                        // else we have an entry that conflicts with a prior entry
-                        // execute the current queue and try to process this entry again
-                        execute_batches(
-                            bank,
-                            &batches,
-                            entry_callback,
-                            transaction_status_sender,
-                            replay_vote_sender,
-                            confirmation_timing,
-                            cost_capacity_meter.clone(),
-                            &cost_model,
-                            log_messages_bytes_limit,
-                        )?;
-                        batches.clear();
-                    }
-                }
+                prioritization_fee_cache.update(bank.clone(), transactions.iter());
             }
         }
     }
     execute_batches(
         bank,
-        &batches,
+        &transactions_indices_to_schedule,
         entry_callback,
         transaction_status_sender,
         replay_vote_sender,
@@ -958,6 +813,7 @@ fn confirm_full_slot(
     transaction_status_sender: Option<&TransactionStatusSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut ExecuteTimings,
+    replayer_handle: &ReplayerHandle,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let mut confirmation_timing = ConfirmationTiming::default();
     let skip_verification = !opts.poh_verify;
@@ -976,6 +832,7 @@ fn confirm_full_slot(
         opts.allow_dead_slots,
         opts.runtime_config.log_messages_bytes_limit,
         &_ignored_prioritization_fee_cache,
+        replayer_handle,
     )?;
 
     timing.accumulate(&confirmation_timing.execute_timings);
@@ -993,6 +850,7 @@ fn confirm_full_slot(
 pub struct ConfirmationTiming {
     pub started: Instant,
     pub replay_elapsed: u64,
+    pub planning_elapsed: u64,
     pub execute_batches_us: u64,
     pub poh_verify_elapsed: u64,
     pub transaction_verify_elapsed: u64,
@@ -1019,39 +877,7 @@ impl ConfirmationTiming {
             execute_batches_internal_metrics.execute_batches_us
         );
 
-        cumulative_execute_timings.saturating_add_in_place(
-            ExecuteTimingType::TotalBatchesLen,
-            execute_batches_internal_metrics.total_batches_len,
-        );
         cumulative_execute_timings.saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
-
-        let mut current_max_thread_execution_time: Option<ThreadExecuteTimings> = None;
-        for (_, thread_execution_time) in execute_batches_internal_metrics
-            .execution_timings_per_thread
-            .into_iter()
-        {
-            let ThreadExecuteTimings {
-                total_thread_us,
-                execute_timings,
-                ..
-            } = &thread_execution_time;
-            cumulative_execute_timings.accumulate(execute_timings);
-            if *total_thread_us
-                > current_max_thread_execution_time
-                    .as_ref()
-                    .map(|thread_execution_time| thread_execution_time.total_thread_us)
-                    .unwrap_or(0)
-            {
-                current_max_thread_execution_time = Some(thread_execution_time);
-            }
-        }
-
-        if let Some(current_max_thread_execution_time) = current_max_thread_execution_time {
-            end_to_end_execute_timings.accumulate(&current_max_thread_execution_time);
-            end_to_end_execute_timings
-                .execute_timings
-                .saturating_add_in_place(ExecuteTimingType::NumExecuteBatches, 1);
-        };
     }
 }
 
@@ -1060,6 +886,7 @@ impl Default for ConfirmationTiming {
         Self {
             started: Instant::now(),
             replay_elapsed: 0,
+            planning_elapsed: 0,
             execute_batches_us: 0,
             poh_verify_elapsed: 0,
             transaction_verify_elapsed: 0,
@@ -1103,6 +930,7 @@ pub fn confirm_slot(
     allow_dead_slots: bool,
     log_messages_bytes_limit: Option<usize>,
     prioritization_fee_cache: &PrioritizationFeeCache,
+    replayer_handle: &ReplayerHandle,
 ) -> result::Result<(), BlockstoreProcessorError> {
     let slot = bank.slot();
 
@@ -1306,6 +1134,9 @@ fn process_bank_0(
 ) {
     assert_eq!(bank0.slot(), 0);
     let mut progress = ConfirmationProgress::new(bank0.last_blockhash());
+
+    let (_replayer, replayer_handle) = Replayer::new(get_thread_count());
+
     confirm_full_slot(
         blockstore,
         bank0,
@@ -1315,6 +1146,7 @@ fn process_bank_0(
         None,
         None,
         &mut ExecuteTimings::default(),
+        &replayer_handle,
     )
     .expect("Failed to process bank 0 from ledger. Did you forget to provide a snapshot?");
     bank0.freeze();
@@ -1396,6 +1228,8 @@ fn load_frozen_forks(
     let mut root = bank_forks.read().unwrap().root();
     let max_root = std::cmp::max(root, blockstore_max_root);
 
+    let (replayer, replayer_handle) = Replayer::new(get_thread_count());
+
     info!(
         "load_frozen_forks() latest root from blockstore: {}, max_root: {}",
         blockstore_max_root, max_root,
@@ -1444,6 +1278,7 @@ fn load_frozen_forks(
                 cache_block_meta_sender,
                 None,
                 timing,
+                &replayer_handle,
             )
             .is_err()
             {
@@ -1636,6 +1471,7 @@ fn process_single_slot(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     replay_vote_sender: Option<&ReplayVoteSender>,
     timing: &mut ExecuteTimings,
+    replayer_handle: &ReplayerHandle,
 ) -> result::Result<(), BlockstoreProcessorError> {
     // Mark corrupt slots as dead so validators don't replay this slot and
     // see AlreadyProcessed errors later in ReplayStage
@@ -1648,6 +1484,7 @@ fn process_single_slot(
         transaction_status_sender,
         replay_vote_sender,
         timing,
+        replayer_handle,
     )
     .map_err(|err| {
         let slot = bank.slot();

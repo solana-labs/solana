@@ -40,6 +40,7 @@ use {
         blockstore_processor::{
             self, BlockstoreProcessorError, ConfirmationProgress, TransactionStatusSender,
         },
+        executor::{Replayer, ReplayerHandle},
         leader_schedule_cache::LeaderScheduleCache,
         leader_schedule_utils::first_of_consecutive_leader_slots,
     },
@@ -47,6 +48,7 @@ use {
     solana_metrics::inc_new_counter_info,
     solana_poh::poh_recorder::{PohLeaderStatus, PohRecorder, GRACE_TICKS_FACTOR, MAX_GRACE_SLOTS},
     solana_program_runtime::timings::ExecuteTimings,
+    solana_rayon_threadlimit::get_thread_count,
     solana_rpc::{
         optimistically_confirmed_bank_tracker::{BankNotification, BankNotificationSender},
         rpc_subscriptions::RpcSubscriptions,
@@ -439,7 +441,7 @@ impl ReplayStage {
         );
 
         #[allow(clippy::cognitive_complexity)]
-        let t_replay = Builder::new()
+            let t_replay = Builder::new()
             .name("solReplayStage".to_string())
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
@@ -467,6 +469,9 @@ impl ReplayStage {
                 let mut latest_validator_votes_for_frozen_banks: LatestValidatorVotesForFrozenBanks = LatestValidatorVotesForFrozenBanks::default();
                 let mut voted_signatures = Vec::new();
                 let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
+
+                let (replayer, replayer_handle) = Replayer::new(get_thread_count());
+
                 let mut last_vote_refresh_time = LastVoteRefreshTime {
                     last_refresh_time: Instant::now(),
                     last_print_time: Instant::now(),
@@ -535,6 +540,7 @@ impl ReplayStage {
                         log_messages_bytes_limit,
                         replay_slots_concurrently,
                         &prioritization_fee_cache,
+                        &replayer_handle,
                     );
                     replay_active_banks_time.stop();
 
@@ -665,10 +671,10 @@ impl ReplayStage {
                                                     &authorized_voter_keypairs.read().unwrap(),
                                                     &mut voted_signatures,
                                                     has_new_vote_been_rooted, &mut
-                                                    last_vote_refresh_time,
+                                                        last_vote_refresh_time,
                                                     &voting_sender,
                                                     wait_to_vote_slot,
-                                                    );
+                            );
                         }
                     }
 
@@ -701,7 +707,7 @@ impl ReplayStage {
                         for r in heaviest_fork_failures {
                             if let HeaviestForkFailures::NoPropagatedConfirmation(slot) = r {
                                 if let Some(latest_leader_slot) =
-                                    progress.get_latest_leader_slot_must_exist(slot)
+                                progress.get_latest_leader_slot_must_exist(slot)
                                 {
                                     progress.log_propagated_stats(latest_leader_slot, &bank_forks);
                                 }
@@ -714,7 +720,7 @@ impl ReplayStage {
                     // Vote on a fork
                     if let Some((ref vote_bank, ref switch_fork_decision)) = vote_bank {
                         if let Some(votable_leader) =
-                            leader_schedule_cache.slot_leader_at(vote_bank.slot(), Some(vote_bank))
+                        leader_schedule_cache.slot_leader_at(vote_bank.slot(), Some(vote_bank))
                         {
                             Self::log_leader_change(
                                 &my_pubkey,
@@ -943,6 +949,8 @@ impl ReplayStage {
                         retransmit_not_propagated_time.as_us(),
                     );
                 }
+                drop(replayer_handle);
+                replayer.join();
             })
             .unwrap();
 
@@ -1186,8 +1194,8 @@ impl ReplayStage {
                         *duplicate_slot,
                     );
                     true
-                // TODO: Send signal to repair to repair the correct version of
-                // `duplicate_slot` with hash == `correct_hash`
+                    // TODO: Send signal to repair to repair the correct version of
+                    // `duplicate_slot` with hash == `correct_hash`
                 } else {
                     warn!(
                         "PoH bank for slot {} is building on duplicate slot {}",
@@ -1720,6 +1728,7 @@ impl ReplayStage {
         verify_recyclers: &VerifyRecyclers,
         log_messages_bytes_limit: Option<usize>,
         prioritization_fee_cache: &PrioritizationFeeCache,
+        replayer_handle: &ReplayerHandle,
     ) -> result::Result<usize, BlockstoreProcessorError> {
         let mut w_replay_stats = replay_stats.write().unwrap();
         let mut w_replay_progress = replay_progress.write().unwrap();
@@ -1740,6 +1749,7 @@ impl ReplayStage {
             false,
             log_messages_bytes_limit,
             prioritization_fee_cache,
+            replayer_handle,
         )?;
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
@@ -2091,7 +2101,7 @@ impl ReplayStage {
         }
         if my_latest_landed_vote >= last_voted_slot
             || heaviest_bank_on_same_fork
-                .is_hash_valid_for_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
+            .is_hash_valid_for_age(&tower.last_vote_tx_blockhash(), MAX_PROCESSING_AGE)
             // In order to avoid voting on multiple forks all past MAX_PROCESSING_AGE that don't
             // include the last voted blockhash
             || last_vote_refresh_time.last_refresh_time.elapsed().as_millis() < MAX_VOTE_REFRESH_INTERVAL_MILLIS as u128
@@ -2309,6 +2319,7 @@ impl ReplayStage {
                     if bank.collector_id() != my_pubkey {
                         let mut replay_blockstore_time =
                             Measure::start("replay_blockstore_into_bank");
+                        let (replayer, replayer_handle) = Replayer::new(get_thread_count());
                         let blockstore_result = Self::replay_blockstore_into_bank(
                             bank,
                             blockstore,
@@ -2319,11 +2330,15 @@ impl ReplayStage {
                             &verify_recyclers.clone(),
                             log_messages_bytes_limit,
                             prioritization_fee_cache,
+                            &replayer_handle,
                         );
                         replay_blockstore_time.stop();
                         replay_result.replay_result = Some(blockstore_result);
                         longest_replay_time_us
                             .fetch_max(replay_blockstore_time.as_us(), Ordering::Relaxed);
+
+                        drop(replayer_handle);
+                        let _ = replayer.join();
                     }
                     replay_result
                 })
@@ -2350,6 +2365,7 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         bank_slot: Slot,
         prioritization_fee_cache: &PrioritizationFeeCache,
+        replayer_handle: &ReplayerHandle,
     ) -> ReplaySlotFromBlockstore {
         let mut replay_result = ReplaySlotFromBlockstore {
             is_slot_dead: false,
@@ -2400,6 +2416,7 @@ impl ReplayStage {
                     &verify_recyclers.clone(),
                     log_messages_bytes_limit,
                     prioritization_fee_cache,
+                    replayer_handle,
                 );
                 replay_blockstore_time.stop();
                 replay_result.replay_result = Some(blockstore_result);
@@ -2621,6 +2638,7 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         replay_slots_concurrently: bool,
         prioritization_fee_cache: &PrioritizationFeeCache,
+        replayer_handle: &ReplayerHandle,
     ) -> bool /* completed a bank */ {
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
         let num_active_banks = active_bank_slots.len();
@@ -2662,6 +2680,7 @@ impl ReplayStage {
                             log_messages_bytes_limit,
                             *bank_slot,
                             prioritization_fee_cache,
+                            replayer_handle,
                         )
                     })
                     .collect()
@@ -3119,7 +3138,7 @@ impl ReplayStage {
                 // newly achieved threshold, then there's no further
                 // information to propagate backwards to past leader blocks
                 (newly_voted_pubkeys.is_empty() && cluster_slot_pubkeys.is_empty() &&
-                !did_newly_reach_threshold)
+                    !did_newly_reach_threshold)
             {
                 break;
             }

@@ -17,6 +17,7 @@ pub mod blockstore_metrics;
 pub mod blockstore_options;
 pub mod blockstore_processor;
 pub mod builtins;
+pub mod executor;
 pub mod genesis_utils;
 pub mod leader_schedule;
 pub mod leader_schedule_cache;
