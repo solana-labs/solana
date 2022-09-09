@@ -7489,8 +7489,6 @@ impl AccountsDb {
         hashes.extend(skipped_rewrites.into_iter());
     }
 
-    // previous_slot_entry_was_cached = true means we just need to assert that after this update is complete
-    //  that there are no items we would have put in reclaims that are not cached
     fn update_index<'a, T: ReadableAccount + Sync>(
         &self,
         infos: Vec<AccountInfo>,
