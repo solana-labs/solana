@@ -702,18 +702,7 @@ impl BankingStage {
                     // Remove the non-retryable packets, packets that were either:
                     // 1) Successfully processed
                     // 2) Failed but not retryable
-                    Self::filter_processed_packets(
-                        retryable_transaction_indexes
-                            .iter()
-                            .chain(std::iter::once(&packets_to_process.len())),
-                        |start, end| {
-                            for processed_packet in &packets_to_process[start..end] {
-                                buffered_packet_batches
-                                    .message_hash_to_transaction
-                                    .remove(processed_packet.message_hash());
-                            }
-                        },
-                    );
+                    Self::remove_non_retained_packets(buffered_packet_batches, &packets_to_process, &retryable_transaction_indexes);
 
                     result
                 } else if reached_end_of_slot {
@@ -1256,7 +1245,24 @@ impl BankingStage {
         packets_to_process: &[Rc<ImmutableDeserializedPacket>],
         retained_packet_indexes: &[usize],
     ) -> Vec<Rc<ImmutableDeserializedPacket>> {
-        // Remove the non-retainable packets
+        Self::remove_non_retained_packets(
+            buffered_packet_batches,
+            packets_to_process,
+            retained_packet_indexes,
+        );
+        retained_packet_indexes
+            .iter()
+            .map(|i| packets_to_process[*i].clone())
+            .collect_vec()
+    }
+
+    /// remove packets from UnprocessedPacketBatches.message_hash_to_transaction after they have
+    /// been removed from UnprocessedPacketBatches.packet_priority_queue
+    fn remove_non_retained_packets(
+        buffered_packet_batches: &mut UnprocessedPacketBatches,
+        packets_to_process: &[Rc<ImmutableDeserializedPacket>],
+        retained_packet_indexes: &[usize],
+    ) {
         Self::filter_processed_packets(
             retained_packet_indexes
                 .iter()
@@ -1268,11 +1274,7 @@ impl BankingStage {
                         .remove(processed_packet.message_hash());
                 }
             },
-        );
-        retained_packet_indexes
-            .iter()
-            .map(|i| packets_to_process[*i].clone())
-            .collect_vec()
+        )
     }
 
     /// try to add filtered forwardable and valid packets to forward buffer;
