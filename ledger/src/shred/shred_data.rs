@@ -28,7 +28,6 @@ impl ShredData {
     dispatch!(pub(super) fn parent(&self) -> Result<Slot, Error>);
     dispatch!(pub(super) fn payload(&self) -> &Vec<u8>);
     dispatch!(pub(super) fn sanitize(&self) -> Result<(), Error>);
-    dispatch!(pub(super) fn set_last_in_slot(&mut self));
     dispatch!(pub(super) fn set_signature(&mut self, signature: Signature));
     dispatch!(pub(super) fn signed_message(&self) -> &[u8]);
 
@@ -103,6 +102,14 @@ impl ShredData {
         match merkle_proof_size {
             None => Ok(legacy::ShredData::CAPACITY),
             Some(proof_size) => merkle::ShredData::capacity(proof_size),
+        }
+    }
+
+    // Only for tests.
+    pub(super) fn set_last_in_slot(&mut self) {
+        match self {
+            Self::Legacy(shred) => shred.set_last_in_slot(),
+            Self::Merkle(_) => panic!("Not Implemented!"),
         }
     }
 }
