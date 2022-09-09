@@ -1560,7 +1560,7 @@ impl ScheduleStage {
                     //debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} done: {}", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count);
                     interval_count += 1;
                     if interval_count % 100 == 0 {
-                        let elapsed = start.elapsed();
+                        let elapsed = start.since();
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = processed_count - last_processed_count;
                             let elapsed = elapsed.as_micros();
