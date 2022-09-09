@@ -15823,7 +15823,7 @@ pub mod tests {
     }
 
     #[test]
-    /// test unref.pubkeys_removed_from_accounts_index
+    /// test 'unref' parameter 'pubkeys_removed_from_accounts_index'
     fn test_unref_pubkeys_removed_from_accounts_index() {
         let slot1 = 1;
         let pk1 = Pubkey::new(&[1; 32]);
