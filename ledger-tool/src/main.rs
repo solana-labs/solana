@@ -384,11 +384,11 @@ fn output_account(
     println!("  data_len: {}", account.data().len());
     if print_account_data {
         if print_json_parsed_data {
-            let parsed_json_account = 
+            let parsed_json_account =
                 UiAccount::encode(pubkey, account, UiAccountEncoding::JsonParsed, None, None);
             println!(
                 "  data: '{}'",
-                 serde_json::to_string(&parsed_json_account.data).unwrap()
+                serde_json::to_string(&parsed_json_account.data).unwrap()
             );
         } else {
             println!("  data: '{}'", bs58::encode(account.data()).into_string());
