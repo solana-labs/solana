@@ -13,6 +13,9 @@ use {
     regex::Regex,
     serde::Serialize,
     serde_json::json,
+    solana_account_decoder::{
+        UiAccount, UiAccountEncoding
+    },
     solana_clap_utils::{
         input_parsers::{cluster_type_of, pubkey_of, pubkeys_of},
         input_validators::{
@@ -370,8 +373,9 @@ fn output_account(
     account: &AccountSharedData,
     modified_slot: Option<Slot>,
     print_account_data: bool,
+    print_json_parsed_data: bool
 ) {
-    println!("{}", pubkey);
+    println!("{}:", pubkey);
     println!("  balance: {} SOL", lamports_to_sol(account.lamports()));
     println!("  owner: '{}'", account.owner());
     println!("  executable: {}", account.executable());
@@ -381,7 +385,12 @@ fn output_account(
     println!("  rent_epoch: {}", account.rent_epoch());
     println!("  data_len: {}", account.data().len());
     if print_account_data {
-        println!("  data: '{}'", bs58::encode(account.data()).into_string());
+        if print_json_parsed_data {
+            let parsed_json_account = UiAccount::encode(pubkey, account, UiAccountEncoding::JsonParsed, None, None);
+            println!("  data: '{}'", serde_json::to_string(&parsed_json_account.data).unwrap());
+        } else {
+            println!("  data: '{}'", bs58::encode(account.data()).into_string());
+        }
     }
 }
 
@@ -2291,15 +2300,17 @@ fn main() {
             }
             ("genesis", Some(arg_matches)) => {
                 let genesis_config = open_genesis_config_by(&ledger_path, arg_matches);
-                let print_accouunts = arg_matches.is_present("accounts");
-                if print_accouunts {
+                let print_accounts = arg_matches.is_present("accounts");
+                if print_accounts {
                     let print_account_data = !arg_matches.is_present("no_account_data");
+                    let print_json_parsed_data = arg_matches.is_present("json_parsed");
                     for (pubkey, account) in genesis_config.accounts {
                         output_account(
                             &pubkey,
                             &AccountSharedData::from(account),
                             None,
                             print_account_data,
+                            print_json_parsed_data
                         );
                     }
                 } else {
@@ -3338,9 +3349,10 @@ fn main() {
                 let print_account_contents = !arg_matches.is_present("no_account_contents");
                 if print_account_contents {
                     let print_account_data = !arg_matches.is_present("no_account_data");
+                    let print_json_parsed_data = arg_matches.is_present("json_parsed");
                     let mut measure = Measure::start("printing account contents");
                     for (pubkey, (account, slot)) in accounts.into_iter() {
-                        output_account(&pubkey, &account, Some(slot), print_account_data);
+                        output_account(&pubkey, &account, Some(slot), print_account_data, print_json_parsed_data);
                     }
                     measure.stop();
                     info!("{}", measure);
