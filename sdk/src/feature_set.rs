@@ -518,6 +518,10 @@ pub mod epoch_accounts_hash {
     solana_sdk::declare_id!("5GpmAKxaGsWWbPp4bNXFLJxZVvG92ctxf7jQnzTQjF3n");
 }
 
+pub mod remove_deprecated_request_unit_ix {
+    solana_sdk::declare_id!("EfhYd3SafzGT472tYQDUc4dPd2xdEfKs5fwkowUgVt4W");
+}
+
 lazy_static! {
     /// Map of feature identifiers to user-visible description
     pub static ref FEATURE_NAMES: HashMap<Pubkey, &'static str> = [
@@ -642,6 +646,7 @@ lazy_static! {
         (vote_state_update_root_fix::id(), "fix root in vote state updates #27361"),
         (cap_accounts_data_allocations_per_transaction::id(), "cap accounts data allocations per transaction #27375"),
         (epoch_accounts_hash::id(), "enable epoch accounts hash calculation #27539"),
+        (remove_deprecated_request_unit_ix::id(), "remove support for RequestUnitsDeprecated instruction #27500"),
         /*************** ADD NEW FEATURES HERE ***************/
     ]
     .iter()

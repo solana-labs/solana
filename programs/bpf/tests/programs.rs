@@ -3798,6 +3798,7 @@ fn test_program_fees() {
         congestion_multiplier,
         &fee_structure,
         true,
+        false,
     );
     bank_client
         .send_and_confirm_message(&[&mint_keypair], message)
@@ -3819,6 +3820,7 @@ fn test_program_fees() {
         congestion_multiplier,
         &fee_structure,
         true,
+        false,
     );
     assert!(expected_normal_fee < expected_prioritized_fee);
 

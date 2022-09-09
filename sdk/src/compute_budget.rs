@@ -22,6 +22,7 @@ crate::declare_id!("ComputeBudget111111111111111111111111111111");
 )]
 pub enum ComputeBudgetInstruction {
     /// Deprecated
+    // TODO: after feature remove_deprecated_request_unit_ix::id() is activated, replace it with 'unused'
     RequestUnitsDeprecated {
         /// Units to request
         units: u32,
