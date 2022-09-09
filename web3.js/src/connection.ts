@@ -1029,6 +1029,8 @@ export type ParsedMessageAccount = {
   signer: boolean;
   /** Indicates if the account is writable for this transaction */
   writable: boolean;
+  /** Indicates if the account key came from the transaction or a lookup table */
+  source?: 'transaction' | 'lookupTable';
 };
 
 /**
@@ -1966,6 +1968,9 @@ const ParsedConfirmedTransactionResult = pick({
         pubkey: PublicKeyFromString,
         signer: boolean(),
         writable: boolean(),
+        source: optional(
+          union([literal('transaction'), literal('lookupTable')]),
+        ),
       }),
     ),
     instructions: array(ParsedOrRawInstruction),
