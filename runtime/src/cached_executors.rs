@@ -1,7 +1,7 @@
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 use {
-    indexmap::IndexMap,
+    indexmap::{map::Entry, IndexMap},
     log::*,
     rand::Rng,
     solana_program_runtime::invoke_context::Executor,
@@ -193,8 +193,20 @@ impl CachedExecutors {
 
     pub(crate) fn put(&mut self, executors: Vec<(Pubkey, Arc<dyn Executor>)>) {
         for (pubkey, executor) in executors {
-            self.executors.insert(pubkey, executor);
             self.entries.entry(pubkey).or_default();
+            self.entries.get(&pubkey).unwrap().hit_count.fetch_add(1, Relaxed);
+
+
+            match self.executors.entry(pubkey) {
+                Entry::Vacant(entry) => {
+                    self.stats.insertions.fetch_add(1, Relaxed);
+                    entry.insert(executor);
+                }
+                Entry::Occupied(mut entry) => {
+                    self.stats.replacements.fetch_add(1, Relaxed);
+                    *entry.get_mut() = executor;
+                }
+            }
         }
 
         let mut rng = rand::thread_rng();
@@ -364,7 +376,7 @@ pub(crate) mod tests {
             fn from(stats: &executor_cache::Stats) -> Self {
                 let executor_cache::Stats {
                     hits,
-                    misses,
+                    num_gets,
                     evictions,
                     insertions,
                     replacements,
@@ -372,7 +384,7 @@ pub(crate) mod tests {
                 } = stats;
                 ComparableStats {
                     hits: hits.load(Relaxed),
-                    misses: misses.load(Relaxed),
+                    misses: num_gets.load(Relaxed) - hits.load(Relaxed),
                     evictions: evictions.clone(),
                     insertions: insertions.load(Relaxed),
                     replacements: replacements.load(Relaxed),
@@ -462,21 +474,21 @@ pub(crate) mod tests {
 
         // add our one-hit-wonder
         cache.put(vec![(one_hit_wonder, executor.clone())]);
-        assert_eq!(cache.executors[&one_hit_wonder].hit_count.load(Relaxed), 1);
+        assert_eq!(cache.entries[&one_hit_wonder].hit_count.load(Relaxed), 1);
         // displace the one-hit-wonder with "popular program"
         cache.put(vec![(popular, executor.clone())]);
-        assert_eq!(cache.executors[&popular].hit_count.load(Relaxed), 1);
+        assert_eq!(cache.entries[&popular].hit_count.load(Relaxed), 1);
 
         // one-hit-wonder counter incremented
         assert_eq!(cache.stats.one_hit_wonders.load(Relaxed), 1);
 
         // make "popular program" popular
         cache.get(&popular).unwrap();
-        assert_eq!(cache.executors[&popular].hit_count.load(Relaxed), 2);
+        assert_eq!(cache.entries[&popular].hit_count.load(Relaxed), 2);
 
         // evict "popular program"
         cache.put(vec![(one_hit_wonder, executor.clone())]);
-        assert_eq!(cache.executors[&one_hit_wonder].hit_count.load(Relaxed), 1);
+        assert_eq!(cache.entries[&one_hit_wonder].hit_count.load(Relaxed), 1);
 
         // one-hit-wonder counter not incremented
         assert_eq!(cache.stats.one_hit_wonders.load(Relaxed), 1);
