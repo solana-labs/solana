@@ -46,7 +46,7 @@ use {
         streamer::{PacketBatchReceiver, PacketBatchSender},
     },
     std::{
-        collections::HashSet,
+        collections::{HashMap, HashSet},
         net::{SocketAddr, UdpSocket},
         sync::{
             atomic::{AtomicBool, Ordering},
@@ -168,6 +168,14 @@ struct ServeRepairStats {
     err_sig_verify: usize,
     err_unsigned: usize,
     err_id_mismatch: usize,
+    outgoing_bytes_requested: HashMap<Pubkey, /*bytes*/ u64>,
+}
+
+impl ServeRepairStats {
+    fn record_outgoing_bytes(&mut self, id: &Pubkey, bytes: u64) {
+        let requested = self.outgoing_bytes_requested.entry(*id).or_default();
+        *requested = requested.saturating_add(bytes);
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -516,6 +524,18 @@ impl ServeRepair {
             inc_new_counter_debug!("serve_repair-handle-repair--eq", stats.self_repair);
         }
 
+        let staked_nodes = self.bank_forks.read().unwrap().root_bank().staked_nodes();
+        let (staked, unstaked): (Vec<_>, Vec<_>) = stats
+            .outgoing_bytes_requested
+            .iter()
+            .partition(|(id, _)| staked_nodes.contains_key(id));
+        let staked_response_bytes: u64 = staked.iter().map(|(_, x)| *x).sum();
+        let unstaked_response_bytes: u64 = unstaked.iter().map(|(_, x)| *x).sum();
+        let max_staked_peer_response_bytes: u64 =
+            staked.iter().map(|(_, x)| **x).max().unwrap_or_default();
+        let max_unstaked_peer_response_bytes: u64 =
+            unstaked.iter().map(|(_, x)| **x).max().unwrap_or_default();
+
         datapoint_info!(
             "serve_repair-requests_received",
             ("total_requests", stats.total_requests, i64),
@@ -547,6 +567,20 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
+            ("staked_peer_count", staked.len(), i64),
+            ("unstaked_peer_count", unstaked.len(), i64),
+            ("staked_response_bytes", staked_response_bytes, i64),
+            ("unstaked_response_bytes", unstaked_response_bytes, i64),
+            (
+                "max_staked_peer_response_bytes",
+                max_staked_peer_response_bytes,
+                i64
+            ),
+            (
+                "max_unstaked_peer_response_bytes",
+                max_unstaked_peer_response_bytes,
+                i64
+            ),
         );
 
         *stats = ServeRepairStats::default();
@@ -805,6 +839,8 @@ impl ServeRepair {
                 }
             }
 
+            let request_sender = *request.sender();
+
             stats.processed += 1;
             let rsp = match Self::handle_repair(
                 recycler, &from_addr, blockstore, request, stats, ping_cache,
@@ -814,6 +850,8 @@ impl ServeRepair {
             };
             let num_response_packets = rsp.len();
             let num_response_bytes = rsp.iter().map(|p| p.meta.size).sum();
+
+            stats.record_outgoing_bytes(&request_sender, num_response_bytes as u64);
             if data_budget.take(num_response_bytes) && response_sender.send(rsp).is_ok() {
                 stats.total_response_bytes += num_response_bytes;
                 stats.total_response_packets += num_response_packets;
