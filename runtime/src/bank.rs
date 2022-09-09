@@ -1240,8 +1240,8 @@ impl Default for Scheduler {
         let preloader = Arc::new(address_book.preloader());
         let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
         let (scheduled_ee_sender, scheduled_ee_receiver) = crossbeam_channel::unbounded();
-        let (completed_ee_sender, completed_ee_receiver) = crossbeam_channel::unbounded();
-        let (droppable_ee_sender, droppable_ee_receiver) = crossbeam_channel::unbounded();
+        let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
+        let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
         let bank = Arc::new(std::sync::RwLock::new(None::<Arc<Bank>>));
 
@@ -1254,7 +1254,7 @@ impl Default for Scheduler {
         let disable_clock_asserts = std::env::var("DISABLE_CLOCK_ASSERTS").is_ok();
 
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
-            let (scheduled_ee_receiver, completed_ee_sender) = (scheduled_ee_receiver.clone(), completed_ee_sender.clone());
+            let (scheduled_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), processed_ee_sender.clone());
             let bank = bank.clone();
             let mut execute_time = 0;
 
@@ -1332,7 +1332,7 @@ impl Default for Scheduler {
         let errors_in_collector_thread = Arc::clone(&errors);
 
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
-            while let Ok(solana_scheduler::DroppablePayload(mut ee)) = droppable_ee_receiver.recv() {
+            while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
                 if ee.is_aborted() {
                     warn!(
                         "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
@@ -1359,12 +1359,12 @@ impl Default for Scheduler {
                 &mut address_book,
                 &transaction_receiver,
                 &scheduled_ee_sender,
-                &completed_ee_receiver,
-                Some(&droppable_ee_sender),
+                &processed_ee_receiver,
+                Some(&retired_ee_sender),
             );
             drop(transaction_receiver);
             drop(scheduled_ee_sender);
-            drop(completed_ee_receiver);
+            drop(processed_ee_receiver);
 
             Ok(())
         }).unwrap();
