@@ -384,8 +384,12 @@ fn output_account(
     println!("  data_len: {}", account.data().len());
     if print_account_data {
         if print_json_parsed_data {
-            let parsed_json_account = UiAccount::encode(pubkey, account, UiAccountEncoding::JsonParsed, None, None);
-            println!("  data: '{}'", serde_json::to_string(&parsed_json_account.data).unwrap());
+            let parsed_json_account = 
+                UiAccount::encode(pubkey, account, UiAccountEncoding::JsonParsed, None, None);
+            println!(
+                "  data: '{}'",
+                 serde_json::to_string(&parsed_json_account.data).unwrap()
+            );
         } else {
             println!("  data: '{}'", bs58::encode(account.data()).into_string());
         }
@@ -3357,7 +3361,13 @@ fn main() {
                     let print_json_parsed_data = arg_matches.is_present("json_parsed");
                     let mut measure = Measure::start("printing account contents");
                     for (pubkey, (account, slot)) in accounts.into_iter() {
-                        output_account(&pubkey, &account, Some(slot), print_account_data, print_json_parsed_data);
+                        output_account(
+                            &pubkey,
+                            &account,
+                            Some(slot),
+                            print_account_data,
+                            print_json_parsed_data,
+                        );
                     }
                     measure.stop();
                     info!("{}", measure);
