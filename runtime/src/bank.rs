@@ -1243,6 +1243,7 @@ impl Default for Scheduler {
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
+        // todo: drop this arc correctly at wait_for_scheduler()....
         let bank = Arc::new(std::sync::RwLock::new(None::<Arc<Bank>>));
 
         let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
