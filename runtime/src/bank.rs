@@ -1273,7 +1273,7 @@ impl Default for Scheduler {
                 trace!("execute_substage: thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
 
                 let bank_r = bank.read().unwrap();
-                let bank = bank_r.as_ref().unwrap().upgrade().unwrap();
+                let bank = bank_r.as_ref().unwrap().upgrade().as_ref().unwrap();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
                 let lock_result = ee.task.tx.0
