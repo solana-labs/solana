@@ -12,7 +12,7 @@ use {
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
         qos_service::QosService,
-        sigverify::{IntervalSigverifyTracerPacketStats, SigverifyTracerPacketStats},
+        sigverify::SigverifyTracerPacketStats,
         unprocessed_packet_batches::{self, *},
     },
     core::iter::repeat,
@@ -331,24 +331,6 @@ impl BankingStageStats {
                 )
             );
             self.batch_packet_indexes_len.clear();
-        }
-    }
-}
-
-/// Wrapper type for separated banking & sigverify tracer packet stats.
-///     - Convinient to re-use old name to avoid changing too many places.
-///     - This is intended to live only temporarily until the sigverify stats
-///       reporting moves to the deserialization stage.
-struct TracerPacketStats {
-    banking_tracer_stats: IntervalBankingStageTracerPacketStats,
-    sigverify_tracer_stats: IntervalSigverifyTracerPacketStats,
-}
-
-impl TracerPacketStats {
-    fn new(id: u32) -> Self {
-        Self {
-            banking_tracer_stats: IntervalBankingStageTracerPacketStats::new(id),
-            sigverify_tracer_stats: IntervalSigverifyTracerPacketStats::new(id),
         }
     }
 }
@@ -891,7 +873,7 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         log_messages_bytes_limit: Option<usize>,
         connection_cache: &ConnectionCache,
-        tracer_packet_stats: &mut TracerPacketStats,
+        banking_tracer_packet_stats: &mut IntervalBankingStageTracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         let ((metrics_action, decision), make_decision_time) = measure!(
@@ -972,7 +954,7 @@ impl BankingStage {
                         slot_metrics_tracker,
                         banking_stage_stats,
                         connection_cache,
-                        tracer_packet_stats,
+                        banking_tracer_packet_stats,
                         bank_forks,
                     ),
                     "forward",
@@ -995,7 +977,7 @@ impl BankingStage {
                         slot_metrics_tracker,
                         banking_stage_stats,
                         connection_cache,
-                        tracer_packet_stats,
+                        banking_tracer_packet_stats,
                         bank_forks,
                     ),
                     "forward_and_hold",
@@ -1020,7 +1002,7 @@ impl BankingStage {
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
         banking_stage_stats: &BankingStageStats,
         connection_cache: &ConnectionCache,
-        tracer_packet_stats: &mut TracerPacketStats,
+        banking_tracer_packet_stats: &mut IntervalBankingStageTracerPacketStats,
         bank_forks: &Arc<RwLock<BankForks>>,
     ) {
         if let ForwardOption::NotForward = forward_option {
@@ -1059,12 +1041,10 @@ impl BankingStage {
                     );
 
                 if let Some(leader_pubkey) = leader_pubkey {
-                    tracer_packet_stats
-                        .banking_tracer_stats
-                        .increment_total_forwardable_tracer_packets(
-                            filter_forwarding_result.total_forwardable_tracer_packets,
-                            leader_pubkey,
-                        );
+                    banking_tracer_packet_stats.increment_total_forwardable_tracer_packets(
+                        filter_forwarding_result.total_forwardable_tracer_packets,
+                        leader_pubkey,
+                    );
                 }
                 let failed_forwarded_packets_count = batched_forwardable_packets_count
                     .saturating_sub(sucessful_forwarded_packets_count);
@@ -1091,11 +1071,9 @@ impl BankingStage {
             slot_metrics_tracker.increment_cleared_from_buffer_after_forward_count(
                 filter_forwarding_result.total_forwardable_packets as u64,
             );
-            tracer_packet_stats
-                .banking_tracer_stats
-                .increment_total_cleared_from_buffer_after_forward(
-                    filter_forwarding_result.total_tracer_packets_in_buffer,
-                );
+            banking_tracer_packet_stats.increment_total_cleared_from_buffer_after_forward(
+                filter_forwarding_result.total_tracer_packets_in_buffer,
+            );
             buffered_packet_batches.clear();
         }
     }
@@ -1121,7 +1099,7 @@ impl BankingStage {
         let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut buffered_packet_batches = UnprocessedPacketBatches::with_capacity(batch_limit);
         let mut banking_stage_stats = BankingStageStats::new(id);
-        let mut tracer_packet_stats = TracerPacketStats::new(id);
+        let mut banking_tracer_packet_stats = IntervalBankingStageTracerPacketStats::new(id);
         let qos_service = QosService::new(cost_model, id);
 
         let mut slot_metrics_tracker = LeaderSlotMetricsTracker::new(id);
@@ -1149,7 +1127,7 @@ impl BankingStage {
                         &mut slot_metrics_tracker,
                         log_messages_bytes_limit,
                         &connection_cache,
-                        &mut tracer_packet_stats,
+                        &mut banking_tracer_packet_stats,
                         bank_forks,
                     ),
                     "process_buffered_packets",
@@ -1159,8 +1137,7 @@ impl BankingStage {
                 last_metrics_update = Instant::now();
             }
 
-            tracer_packet_stats.banking_tracer_stats.report(1000);
-            tracer_packet_stats.sigverify_tracer_stats.report(1000);
+            banking_tracer_packet_stats.report(1000);
 
             let recv_timeout = if !buffered_packet_batches.is_empty() {
                 // If there are buffered packets, run the equivalent of try_recv to try reading more
@@ -1181,7 +1158,7 @@ impl BankingStage {
                     id,
                     &mut buffered_packet_batches,
                     &mut banking_stage_stats,
-                    &mut tracer_packet_stats,
+                    &mut banking_tracer_packet_stats,
                     &mut slot_metrics_tracker,
                 ),
                 "receive_and_buffer_packets",
@@ -2019,7 +1996,7 @@ impl BankingStage {
         id: u32,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         banking_stage_stats: &mut BankingStageStats,
-        tracer_packet_stats: &mut TracerPacketStats,
+        banking_tracer_packet_stats: &mut IntervalBankingStageTracerPacketStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
     ) -> Result<(), RecvTimeoutError> {
         let mut recv_time = Measure::start("receive_and_buffer_packets_recv");
@@ -2050,7 +2027,7 @@ impl BankingStage {
                 &mut newly_buffered_packets_count,
                 banking_stage_stats,
                 slot_metrics_tracker,
-                tracer_packet_stats,
+                banking_tracer_packet_stats,
             );
         }
         recv_time.stop();
@@ -2109,7 +2086,7 @@ impl BankingStage {
         newly_buffered_packets_count: &mut usize,
         banking_stage_stats: &mut BankingStageStats,
         slot_metrics_tracker: &mut LeaderSlotMetricsTracker,
-        tracer_packet_stats: &mut TracerPacketStats,
+        banking_tracer_packet_stats: &mut IntervalBankingStageTracerPacketStats,
     ) {
         if !deserialized_packets.is_empty() {
             let _ = banking_stage_stats
@@ -2132,8 +2109,7 @@ impl BankingStage {
                 number_of_dropped_packets as u64,
             );
 
-            tracer_packet_stats
-                .banking_tracer_stats
+            banking_tracer_packet_stats
                 .increment_total_exceeded_banking_stage_buffer(number_of_dropped_tracer_packets);
         }
     }
@@ -4192,7 +4168,7 @@ mod tests {
                     &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
                     &connection_cache,
-                    &mut TracerPacketStats::new(0),
+                    &mut IntervalBankingStageTracerPacketStats::new(0),
                     &bank_forks,
                 );
 
@@ -4310,7 +4286,7 @@ mod tests {
                     &mut LeaderSlotMetricsTracker::new(0),
                     &stats,
                     &connection_cache,
-                    &mut TracerPacketStats::new(0),
+                    &mut IntervalBankingStageTracerPacketStats::new(0),
                     &bank_forks,
                 );
 
