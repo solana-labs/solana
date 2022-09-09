@@ -4092,7 +4092,7 @@ pub mod tests {
         // return true if we don't know anything about 'key_unknown'
         // the item did not exist in the accounts index at all, so index is up to date
         assert!(index.clean_rooted_entries(&key_unknown, &mut gc, None));
-        
+
         index.upsert_simple_test(&key, slot1, value);
 
         let slot2 = 2;

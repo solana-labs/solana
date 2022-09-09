@@ -1908,11 +1908,13 @@ mod tests {
 
         {
             // item is NOT in index at all, still return true from remove_if_slot_list_empty_entry
-            let entry = map.entry(key);
+            // make sure not initially in index
+            let entry = map.entry(unknown_key);
             assert!(matches!(entry, Entry::Vacant(_)));
             let entry = map.entry(unknown_key);
             assert!(test.remove_if_slot_list_empty_entry(entry));
-            let entry = map.entry(key);
+            // make sure still not in index
+            let entry = map.entry(unknown_key);
             assert!(matches!(entry, Entry::Vacant(_)));
         }
 
