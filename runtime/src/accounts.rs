@@ -808,6 +808,7 @@ impl Accounts {
                 epoch_schedule,
                 rent_collector,
                 is_startup,
+                true,
             )
             .1
     }
@@ -837,6 +838,7 @@ impl Accounts {
             can_cached_slot_be_unflushed,
             ignore_mismatch,
             store_detailed_debug_info,
+            true,
         ) {
             warn!("verify_bank_hash failed: {:?}, slot: {}", err, slot);
             false
