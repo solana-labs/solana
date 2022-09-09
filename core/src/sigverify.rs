@@ -60,6 +60,11 @@ pub struct IntervalSigverifyTracerPacketStats {
     id: u32,
     last_report: AtomicInterval,
     stats: SigverifyTracerPacketStats,
+
+    // total number of live packets TPU received from verified receiver for processing.
+    total_new_valid_packets: u64,
+    // total number of packets TPU received from sigverify that failed signature verification.
+    newly_failed_sigverify_count: u64,
 }
 
 impl IntervalSigverifyTracerPacketStats {
@@ -68,6 +73,8 @@ impl IntervalSigverifyTracerPacketStats {
             id,
             last_report: AtomicInterval::default(),
             stats: SigverifyTracerPacketStats::default(),
+            total_new_valid_packets: 0,
+            newly_failed_sigverify_count: 0,
         }
     }
 
@@ -80,39 +87,62 @@ impl IntervalSigverifyTracerPacketStats {
         }
     }
 
+    pub fn aggregate_new_valid_packets(&mut self, new_valid_packets: u64) {
+        saturating_add_assign!(self.total_new_valid_packets, new_valid_packets);
+    }
+
+    pub fn aggregate_newly_failed_sigverify_count(&mut self, newly_failed_sigverify_count: u64) {
+        saturating_add_assign!(
+            self.newly_failed_sigverify_count,
+            newly_failed_sigverify_count
+        );
+    }
+
     pub fn report(&mut self, report_interval_ms: u64) {
-        if !self.stats.is_default() && self.last_report.should_update(report_interval_ms) {
+        if self.received_data() && self.last_report.should_update(report_interval_ms) {
             datapoint_info!(
                 "sigverify_tracer_packet_stats",
-                ("id", self.id as i64, i64),
+                ("id", self.id, i64),
                 (
                     "total_removed_before_sigverify_stage",
-                    self.stats.total_removed_before_sigverify_stage as i64,
+                    self.stats.total_removed_before_sigverify_stage,
                     i64
                 ),
                 (
                     "total_tracer_packets_received_in_sigverify_stage",
-                    self.stats.total_tracer_packets_received_in_sigverify_stage as i64,
+                    self.stats.total_tracer_packets_received_in_sigverify_stage,
                     i64
                 ),
                 (
                     "total_tracer_packets_deduped",
-                    self.stats.total_tracer_packets_deduped as i64,
+                    self.stats.total_tracer_packets_deduped,
                     i64
                 ),
                 (
                     "total_excess_tracer_packets",
-                    self.stats.total_excess_tracer_packets as i64,
+                    self.stats.total_excess_tracer_packets,
                     i64
                 ),
                 (
                     "total_tracker_packets_passed_sigverify",
-                    self.stats.total_tracker_packets_passed_sigverify as i64,
+                    self.stats.total_tracker_packets_passed_sigverify,
+                    i64
+                ),
+                ("total_new_valid_packets", self.total_new_valid_packets, i64),
+                (
+                    "newly_failed_sigverify_count",
+                    self.newly_failed_sigverify_count,
                     i64
                 ),
             );
             self.stats = SigverifyTracerPacketStats::default();
         }
+    }
+
+    fn received_data(&self) -> bool {
+        self.total_new_valid_packets > 0
+            || self.newly_failed_sigverify_count > 0
+            || !self.stats.is_default()
     }
 }
 

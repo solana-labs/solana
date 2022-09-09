@@ -492,29 +492,6 @@ impl LeaderSlotMetricsTracker {
         }
     }
 
-    // Packet inflow/outflow/processing metrics
-    pub(crate) fn increment_total_new_valid_packets(&mut self, count: u64) {
-        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            saturating_add_assign!(
-                leader_slot_metrics
-                    .packet_count_metrics
-                    .total_new_valid_packets,
-                count
-            );
-        }
-    }
-
-    pub(crate) fn increment_newly_failed_sigverify_count(&mut self, count: u64) {
-        if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
-            saturating_add_assign!(
-                leader_slot_metrics
-                    .packet_count_metrics
-                    .newly_failed_sigverify_count,
-                count
-            );
-        }
-    }
-
     pub(crate) fn increment_exceeded_buffer_limit_dropped_packets_count(&mut self, count: u64) {
         if let Some(leader_slot_metrics) = &mut self.leader_slot_metrics {
             saturating_add_assign!(

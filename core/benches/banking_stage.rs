@@ -264,7 +264,8 @@ fn bench_banking(bencher: &mut Bencher, tx_type: TransactionType) {
                     sent += xv.len();
                 }
                 let deserialized_packets =
-                    PacketDeserializer::deserialize_and_collect_packets(v, None);
+                    PacketDeserializer::deserialize_and_collect_packets(v, None)
+                        .deserialized_packets;
                 verified_sender.send(deserialized_packets).unwrap();
             }
             check_txs(&signal_receiver2, txes / CHUNKS);

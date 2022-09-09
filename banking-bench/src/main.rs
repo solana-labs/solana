@@ -391,7 +391,8 @@ fn main() {
                 let deserialized_packets = PacketDeserializer::deserialize_and_collect_packets(
                     &[packet_batch.clone()],
                     None,
-                );
+                )
+                .deserialized_packets;
                 verified_sender.send(deserialized_packets).unwrap();
             }
 

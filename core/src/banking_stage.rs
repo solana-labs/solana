@@ -11,7 +11,6 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer_stage::ReceivePacketResults,
         qos_service::QosService,
         sigverify::{IntervalSigverifyTracerPacketStats, SigverifyTracerPacketStats},
         unprocessed_packet_batches::{self, *},
@@ -97,7 +96,8 @@ const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
 const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
 pub type BankingPacketSender = CrossbeamSender<BankingPacketBatch>;
-pub type BankingPacketReceiver = CrossbeamReceiver<ReceivePacketResults>;
+pub type DeserializedPacketBatch = Vec<ImmutableDeserializedPacket>;
+pub type BankingPacketReceiver = CrossbeamReceiver<DeserializedPacketBatch>;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -2030,7 +2030,7 @@ impl BankingStage {
         )?;
         let packet_count = deserialized_packet_batches
             .iter()
-            .map(|receive_result| receive_result.deserialized_packets.len())
+            .map(|deserialized_packet_batch| deserialized_packet_batch.len())
             .sum();
         debug!(
             "@{:?} process start stalled for: {:?}ms txs: {} id: {}",
@@ -2042,23 +2042,7 @@ impl BankingStage {
 
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
-        for ReceivePacketResults {
-            deserialized_packets,
-            new_tracer_stats_option,
-            passed_sigverify_count,
-            failed_sigverify_count,
-        } in deserialized_packet_batches
-        {
-            if let Some(new_sigverify_stats) = &new_tracer_stats_option {
-                tracer_packet_stats
-                    .sigverify_tracer_stats
-                    .aggregate_sigverify_tracer_packet_stats(new_sigverify_stats);
-            }
-
-            // Track all the packets incoming from sigverify, both valid and invalid
-            slot_metrics_tracker.increment_total_new_valid_packets(passed_sigverify_count);
-            slot_metrics_tracker.increment_newly_failed_sigverify_count(failed_sigverify_count);
-
+        for deserialized_packets in deserialized_packet_batches {
             Self::push_unprocessed(
                 buffered_packet_batches,
                 deserialized_packets,
@@ -2097,16 +2081,16 @@ impl BankingStage {
         deserialized_packet_receiver: &BankingPacketReceiver,
         recv_timeout: Duration,
         capacity: usize,
-    ) -> Result<Vec<ReceivePacketResults>, RecvTimeoutError> {
+    ) -> Result<Vec<DeserializedPacketBatch>, RecvTimeoutError> {
         let stop = Instant::now() + recv_timeout;
         let mut deserialized_packet_batches =
             vec![deserialized_packet_receiver.recv_timeout(recv_timeout)?];
 
-        let mut received_capacity = deserialized_packet_batches[0].deserialized_packets.len();
+        let mut received_capacity = deserialized_packet_batches[0].len();
 
         while let Ok(deserialized_packets) = deserialized_packet_receiver.try_recv() {
             let (new_received_capacity, overflowed) =
-                received_capacity.overflowing_add(deserialized_packets.deserialized_packets.len());
+                received_capacity.overflowing_add(deserialized_packets.len());
             received_capacity = new_received_capacity;
             deserialized_packet_batches.push(deserialized_packets);
 
@@ -2120,7 +2104,7 @@ impl BankingStage {
 
     fn push_unprocessed(
         unprocessed_packet_batches: &mut UnprocessedPacketBatches,
-        deserialized_packets: Vec<ImmutableDeserializedPacket>,
+        deserialized_packets: DeserializedPacketBatch,
         dropped_packets_count: &mut usize,
         newly_buffered_packets_count: &mut usize,
         banking_stage_stats: &mut BankingStageStats,
@@ -2459,7 +2443,8 @@ mod tests {
                 .collect();
             let packet_batches = convert_from_old_verified(packet_batches);
             let deserialized_packets =
-                PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+                PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None)
+                    .deserialized_packets;
             verified_sender // no_ver, anf, tx
                 .send(deserialized_packets)
                 .unwrap();
@@ -2534,7 +2519,8 @@ mod tests {
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
         let deserialized_packets =
-            PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+            PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None)
+                .deserialized_packets;
         verified_sender.send(deserialized_packets).unwrap();
 
         // Process a second batch that uses the same from account, so conflicts with above TX
@@ -2547,7 +2533,8 @@ mod tests {
             .collect();
         let packet_batches = convert_from_old_verified(packet_batches);
         let deserialized_packets =
-            PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None);
+            PacketDeserializer::deserialize_and_collect_packets(&packet_batches, None)
+                .deserialized_packets;
         verified_sender.send(deserialized_packets).unwrap();
 
         let (vote_sender, vote_receiver) = unbounded();

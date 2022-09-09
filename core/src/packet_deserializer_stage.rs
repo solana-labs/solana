@@ -3,12 +3,13 @@
 use {
     crate::{
         immutable_deserialized_packet::ImmutableDeserializedPacket,
-        sigverify::SigverifyTracerPacketStats,
+        sigverify::{IntervalSigverifyTracerPacketStats, SigverifyTracerPacketStats},
     },
     crossbeam_channel::{
         Receiver as CrossbeamReceiver, RecvTimeoutError, Sender as CrossbeamSender,
     },
     solana_perf::packet::PacketBatch,
+    solana_sdk::saturating_add_assign,
     std::{
         thread::Builder,
         time::{Duration, Instant},
@@ -30,7 +31,7 @@ pub struct ReceivePacketResults {
     pub failed_sigverify_count: u64,
 }
 
-pub type DeserializedPacketSender = CrossbeamSender<ReceivePacketResults>;
+pub type DeserializedPacketSender = CrossbeamSender<Vec<ImmutableDeserializedPacket>>;
 
 /// Wrapper for arguments to create a group of packet deserializer threads.
 pub struct PacketDeserializationGroup {
@@ -55,12 +56,18 @@ impl PacketDeserializerStage {
                 .sum(),
         );
 
+        let mut id: u32 = 0;
         for group in deserialization_groups {
             for thread_index in 0..group.thread_count {
                 let receiver = group.receiver.clone();
                 let sender = group.sender.clone();
                 let packet_deserializer = PacketDeserializer::new(receiver);
                 const RECV_TIMEOUT: Duration = Duration::from_millis(10);
+
+                // TODO: Fix this up, it's a bit of a mess. Just want these id's to be consistent with banking stage
+                let mut sigverify_tracer_stats = IntervalSigverifyTracerPacketStats::new(id);
+                saturating_add_assign!(id, 1);
+
                 thread_handles.push(
                     Builder::new()
                         .name(format!("{}{:02}", group.group_name, thread_index))
@@ -70,9 +77,33 @@ impl PacketDeserializerStage {
                                 match packet_deserializer.handle_received_packets(RECV_TIMEOUT) {
                                     Ok(deserialized_packet_results) => {
                                         // Send deserialized packets to banking stage, exit on error (if banking threads stopped)
-                                        if sender.send(deserialized_packet_results).is_err() {
+                                        if sender
+                                            .send(deserialized_packet_results.deserialized_packets)
+                                            .is_err()
+                                        {
                                             break;
                                         }
+
+                                        // Update sigverify stats
+                                        if let Some(new_tracer_stats) =
+                                            deserialized_packet_results.new_tracer_stats_option
+                                        {
+                                            sigverify_tracer_stats
+                                                .aggregate_sigverify_tracer_packet_stats(
+                                                    &new_tracer_stats,
+                                                );
+                                        }
+
+                                        sigverify_tracer_stats.aggregate_new_valid_packets(
+                                            deserialized_packet_results.passed_sigverify_count,
+                                        );
+                                        sigverify_tracer_stats
+                                            .aggregate_newly_failed_sigverify_count(
+                                                deserialized_packet_results.failed_sigverify_count,
+                                            );
+
+                                        // Potentially report sigverify stats
+                                        sigverify_tracer_stats.report(1000);
                                     }
                                     Err(err) => match err {
                                         RecvTimeoutError::Disconnected => break,
