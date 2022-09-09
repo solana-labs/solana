@@ -60,7 +60,7 @@ use {
     crate::{
         accounts_db::{AccountStorageMap, AtomicAppendVecId},
         hardened_unpack::streaming_unpack_snapshot,
-        snapshot_utils::snapshot_storage_rebuilder::SnapshotStorageRebuilderResult,
+        snapshot_utils::snapshot_storage_rebuilder::RebuiltSnapshotStorage,
     },
     crossbeam_channel::Sender,
     std::thread::{Builder, JoinHandle},
@@ -1266,7 +1266,7 @@ where
     );
     info!("{}", measure_untar);
 
-    let SnapshotStorageRebuilderResult {
+    let RebuiltSnapshotStorage {
         snapshot_version,
         storage,
     } = version_and_storages;

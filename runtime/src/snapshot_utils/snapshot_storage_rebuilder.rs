@@ -30,7 +30,7 @@ use {
     },
 };
 /// Convenient wrapper for snapshot version and rebuilt storages
-pub(crate) struct SnapshotStorageRebuilderResult {
+pub(crate) struct RebuiltSnapshotStorage {
     /// Snapshot version
     pub snapshot_version: SnapshotVersion,
     /// Rebuilt storages
@@ -64,7 +64,7 @@ impl SnapshotStorageRebuilder {
         file_receiver: Receiver<PathBuf>,
         num_threads: usize,
         next_append_vec_id: Arc<AtomicAppendVecId>,
-    ) -> SnapshotStorageRebuilderResult {
+    ) -> RebuiltSnapshotStorage {
         let (snapshot_version_path, snapshot_file_path, append_vec_files) =
             Self::get_version_and_snapshot_files(&file_receiver);
         let snapshot_version: SnapshotVersion = snapshot_version_from_file(&snapshot_version_path)
@@ -82,7 +82,7 @@ impl SnapshotStorageRebuilder {
             append_vec_files,
         );
 
-        SnapshotStorageRebuilderResult {
+        RebuiltSnapshotStorage {
             snapshot_version,
             storage: account_storage_map,
         }
