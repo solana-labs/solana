@@ -8,9 +8,8 @@ use {
             traits::{
                 Shred as ShredTrait, ShredCode as ShredCodeTrait, ShredData as ShredDataTrait,
             },
-            CodingShredHeader, DataShredHeader, Error, ShredCommonHeader, ShredFlags, ShredVariant,
-            SIZE_OF_CODING_SHRED_HEADERS, SIZE_OF_COMMON_SHRED_HEADER, SIZE_OF_DATA_SHRED_HEADERS,
-            SIZE_OF_SIGNATURE,
+            CodingShredHeader, DataShredHeader, Error, ShredCommonHeader, ShredVariant,
+            SIZE_OF_CODING_SHRED_HEADERS, SIZE_OF_DATA_SHRED_HEADERS, SIZE_OF_SIGNATURE,
         },
         shredder::ReedSolomon,
     },
@@ -511,13 +510,6 @@ impl ShredDataTrait for ShredData {
         }
         Ok(&self.payload[Self::SIZE_OF_HEADERS..size])
     }
-
-    // Only for tests.
-    fn set_last_in_slot(&mut self) {
-        self.data_header.flags |= ShredFlags::LAST_SHRED_IN_SLOT;
-        let buffer = &mut self.payload[SIZE_OF_COMMON_SHRED_HEADER..];
-        bincode::serialize_into(buffer, &self.data_header).unwrap();
-    }
 }
 
 impl ShredCodeTrait for ShredCode {
@@ -746,6 +738,7 @@ pub(super) fn recover(mut shreds: Vec<Shred>) -> Result<Vec<Shred>, Error> {
 mod test {
     use {
         super::*,
+        crate::shred::ShredFlags,
         itertools::Itertools,
         matches::assert_matches,
         rand::{seq::SliceRandom, CryptoRng, Rng},
