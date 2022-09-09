@@ -6837,7 +6837,8 @@ impl Bank {
         ]);
 
         let epoch_accounts_hash = self.epoch_accounts_hash();
-        if self.should_include_epoch_accounts_hash() {
+        let should_include_epoch_accounts_hash = self.should_include_epoch_accounts_hash();
+        if should_include_epoch_accounts_hash {
             // Nothing is writing a value into the epoch accounts hash yet—this is not a problem
             // for normal clusters, as the feature gating this `if` block is always false.
             // However, some tests enable all features, so this `if` block can be true.
@@ -6876,10 +6877,11 @@ impl Bank {
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
-            match epoch_accounts_hash {
-                None => "".to_string(),
-                Some(epoch_accounts_hash) => format!(", epoch_accounts_hash: {}", epoch_accounts_hash.as_ref()),
-            },
+            if should_include_epoch_accounts_hash {
+                format!(", epoch_accounts_hash: {:?}", epoch_accounts_hash)
+            } else {
+                "".to_string()
+            }
         );
 
         info!(
