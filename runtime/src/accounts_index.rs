@@ -4016,7 +4016,7 @@ pub mod tests {
                 AccountsIndex::get_newest_root_in_slot_list(
                     &roots_tracker.alive_roots,
                     &slot_list,
-                    Some(slot1),
+                    Some(slot2),
                 )
             );
             assert_eq!(
