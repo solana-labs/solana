@@ -1,6 +1,6 @@
 ---
 title: "Local Development Quickstart"
-description: "This quickstart guide will demonstrate how to quickly install and setup your local development environment."
+description: "This quickstart guide will demonstrate how to quickly install and setup your local Solana development environment."
 keywords: "rust, cargo, toml, program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
 ---
 

@@ -1,10 +1,10 @@
 ---
 title: "Hello World Quickstart Guide"
-description: "This quickstart guide will demonstrate how to setup, build, and deploy your first Solana program in your browser with Solana Playground."
+description: 'This "hello world" quickstart guide will demonstrate how to setup, build, and deploy your first Solana program in your browser with Solana Playground.'
 keywords: "playground, solana pg, on chain, rust, native program, tutorial, intro to solana development, blockchain developer, blockchain tutorial, web3 developer"
 ---
 
-For this quickstart guide, we will use [Solana Playground](https://beta.solpg.io), a browser the based IDE, to develop and deploy our Solana program. To use it, you do **NOT** have to install any software on your computer. Simply open Solana Playground in your browser of choice, and you are read to write and deploy Solana programs.
+For this "hello world" quickstart guide, we will use [Solana Playground](https://beta.solpg.io), a browser the based IDE, to develop and deploy our Solana program. To use it, you do **NOT** have to install any software on your computer. Simply open Solana Playground in your browser of choice, and you are ready to write and deploy Solana programs.
 
 ## What you will learn
 
@@ -30,7 +30,7 @@ Normally with [local development](./local.md), you will need to create a file sy
 
 Click on the red status indicator button at the bottom left of the screen, (optionally) save your wallet's keypair file to your computer for backup, then click "**Continue**".
 
-After your Playground Wallet is created, you will notice the bottom of the window now states your wallet's address, your SOL balance, and the Solana cluster you are connected to (usually Devnet by default, but Testnet is also acceptable).
+After your Playground Wallet is created, you will notice the bottom of the window now states your wallet's address, your SOL balance, and the Solana cluster you are connected to (Devnet is usually the default/recommended, but a "localhost" [test validator](./local.md) is also acceptable).
 
 ## Walkthrough of our Solana program
 
