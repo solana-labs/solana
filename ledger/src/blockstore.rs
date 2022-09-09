@@ -2972,12 +2972,10 @@ impl Blockstore {
 
     // Returns slots connecting to any element of the list `slots`.
     pub fn get_slots_since(&self, slots: &[u64]) -> Result<HashMap<u64, Vec<u64>>> {
-        // Return error if there was a database error during lookup of any of the
-        // slot indexes
         let slot_metas: Result<Vec<Option<SlotMeta>>> =
-            slots.iter().map(|slot| self.meta(*slot)).collect();
-
+            self.meta_cf.multi_get(slots.to_vec()).into_iter().collect();
         let slot_metas = slot_metas?;
+
         let result: HashMap<u64, Vec<u64>> = slots
             .iter()
             .zip(slot_metas)
