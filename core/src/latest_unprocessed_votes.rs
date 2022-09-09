@@ -4,6 +4,7 @@ use {
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     },
+    itertools::Itertools,
     rand::{thread_rng, Rng},
     solana_perf::packet::{Packet, PacketBatch},
     solana_runtime::bank::Bank,
@@ -144,7 +145,7 @@ pub struct VoteBatchInsertionMetrics {
 
 #[derive(Debug, Default)]
 pub struct LatestUnprocessedVotes {
-    latest_votes_per_pubkey: RwLock<HashMap<Pubkey, RwLock<LatestValidatorVotePacket>>>,
+    latest_votes_per_pubkey: RwLock<HashMap<Pubkey, Arc<RwLock<LatestValidatorVotePacket>>>>,
 }
 
 impl LatestUnprocessedVotes {
@@ -188,6 +189,14 @@ impl LatestUnprocessedVotes {
         }
     }
 
+    fn get_entry(&self, pubkey: Pubkey) -> Option<Arc<RwLock<LatestValidatorVotePacket>>> {
+        self.latest_votes_per_pubkey
+            .read()
+            .unwrap()
+            .get(&pubkey)
+            .cloned()
+    }
+
     /// If this vote causes an unprocessed vote to be removed, returns Some(old_vote)
     /// If there is a newer vote processed / waiting to be processed returns Some(vote)
     /// Otherwise returns None
@@ -197,7 +206,7 @@ impl LatestUnprocessedVotes {
     ) -> Option<LatestValidatorVotePacket> {
         let pubkey = vote.pubkey();
         let slot = vote.slot();
-        if let Some(latest_vote) = self.latest_votes_per_pubkey.read().unwrap().get(&pubkey) {
+        if let Some(latest_vote) = self.get_entry(pubkey) {
             let latest_slot = latest_vote.read().unwrap().slot();
             if slot > latest_slot {
                 let mut latest_vote = latest_vote.write().unwrap();
@@ -217,7 +226,7 @@ impl LatestUnprocessedVotes {
         // Should have low lock contention because this is only hit on the first few blocks of startup
         // and when a new vote account starts voting.
         let mut latest_votes_per_pubkey = self.latest_votes_per_pubkey.write().unwrap();
-        latest_votes_per_pubkey.insert(pubkey, RwLock::new(vote));
+        latest_votes_per_pubkey.insert(pubkey, Arc::new(RwLock::new(vote)));
         None
     }
 
@@ -237,33 +246,35 @@ impl LatestUnprocessedVotes {
         forward_packet_batches_by_accounts: &mut ForwardPacketBatchesByAccounts,
     ) -> usize {
         let mut continue_forwarding = true;
-        let latest_votes_per_pubkey = self.latest_votes_per_pubkey.read().unwrap();
-        return weighted_random_order_by_stake(
+        let pubkeys_by_stake = weighted_random_order_by_stake(
             &forward_packet_batches_by_accounts.current_bank,
-            latest_votes_per_pubkey.keys(),
+            self.latest_votes_per_pubkey.read().unwrap().keys(),
         )
-        .filter(|pubkey| {
-            if !continue_forwarding {
-                return false;
-            }
-            if let Some(lock) = latest_votes_per_pubkey.get(pubkey) {
-                let mut vote = lock.write().unwrap();
-                if !vote.is_vote_taken() && !vote.is_forwarded() {
-                    if forward_packet_batches_by_accounts
-                        .add_packet(vote.vote.as_ref().unwrap().clone())
-                    {
-                        vote.forwarded = true;
-                    } else {
-                        // To match behavior of regular transactions we stop
-                        // forwarding votes as soon as one fails
-                        continue_forwarding = false;
-                    }
-                    return true;
+        .collect_vec();
+        pubkeys_by_stake
+            .into_iter()
+            .filter(|&pubkey| {
+                if !continue_forwarding {
+                    return false;
                 }
-            }
-            false
-        })
-        .count();
+                if let Some(lock) = self.get_entry(pubkey) {
+                    let mut vote = lock.write().unwrap();
+                    if !vote.is_vote_taken() && !vote.is_forwarded() {
+                        if forward_packet_batches_by_accounts
+                            .add_packet(vote.vote.as_ref().unwrap().clone())
+                        {
+                            vote.forwarded = true;
+                        } else {
+                            // To match behavior of regular transactions we stop
+                            // forwarding votes as soon as one fails
+                            continue_forwarding = false;
+                        }
+                        return true;
+                    }
+                }
+                false
+            })
+            .count()
     }
 
     /// Sometimes we forward and hold the packets, sometimes we forward and clear.
