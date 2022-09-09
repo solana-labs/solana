@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        accounts_background_service::{AbsRequestSender, SnapshotRequest},
+        accounts_background_service::{AbsRequestSender, SnapshotRequest, SnapshotRequestType},
         bank::Bank,
         snapshot_config::SnapshotConfig,
     },
@@ -290,6 +290,7 @@ impl BankForks {
                             SnapshotRequest {
                                 snapshot_root_bank,
                                 status_cache_slot_deltas,
+                                request_type: SnapshotRequestType::Snapshot,
                             },
                         ) {
                             warn!(

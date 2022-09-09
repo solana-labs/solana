@@ -1,5 +1,5 @@
 import {Buffer} from 'buffer';
-import {keccak_256} from 'js-sha3';
+import {keccak_256} from '@noble/hashes/sha3';
 
 import {
   ecdsaSign,
@@ -43,7 +43,7 @@ if (process.env.TEST_LIVE) {
 
     it('create secp256k1 instruction with string address', async () => {
       const message = Buffer.from('string address');
-      const messageHash = Buffer.from(keccak_256.update(message).digest());
+      const messageHash = Buffer.from(keccak_256(message));
       const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
       const transaction = new Transaction().add(
         Secp256k1Program.createInstructionWithEthAddress({
@@ -59,7 +59,7 @@ if (process.env.TEST_LIVE) {
 
     it('create secp256k1 instruction with 0x prefix string address', async () => {
       const message = Buffer.from('0x string address');
-      const messageHash = Buffer.from(keccak_256.update(message).digest());
+      const messageHash = Buffer.from(keccak_256(message));
       const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
       const transaction = new Transaction().add(
         Secp256k1Program.createInstructionWithEthAddress({
@@ -75,7 +75,7 @@ if (process.env.TEST_LIVE) {
 
     it('create secp256k1 instruction with buffer address', async () => {
       const message = Buffer.from('buffer address');
-      const messageHash = Buffer.from(keccak_256.update(message).digest());
+      const messageHash = Buffer.from(keccak_256(message));
       const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
       const transaction = new Transaction().add(
         Secp256k1Program.createInstructionWithEthAddress({
@@ -91,7 +91,7 @@ if (process.env.TEST_LIVE) {
 
     it('create secp256k1 instruction with public key', async () => {
       const message = Buffer.from('public key');
-      const messageHash = Buffer.from(keccak_256.update(message).digest());
+      const messageHash = Buffer.from(keccak_256(message));
       const [signature, recoveryId] = ecdsaSign(messageHash, privateKey);
       const transaction = new Transaction().add(
         Secp256k1Program.createInstructionWithPublicKey({

@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-validator"
 default-run = "solana-validator"
 
 [dependencies]
-chrono = { version = "0.4.21", features = ["serde"] }
+chrono = { version = "0.4.22", features = ["serde"] }
 clap = "2.33.1"
 console = "0.15.0"
 core_affinity = "0.5.10"
@@ -27,7 +27,7 @@ log = "0.4.17"
 num_cpus = "1.13.1"
 rand = "0.7.0"
 rayon = "1.5.3"
-serde = "1.0.143"
+serde = "1.0.144"
 serde_json = "1.0.83"
 serde_yaml = "0.8.26"
 solana-clap-utils = { path = "../clap-utils", version = "=1.12.0" }
@@ -45,7 +45,7 @@ solana-net-utils = { path = "../net-utils", version = "=1.12.0" }
 solana-perf = { path = "../perf", version = "=1.12.0" }
 solana-poh = { path = "../poh", version = "=1.12.0" }
 solana-rpc = { path = "../rpc", version = "=1.12.0" }
-solana-rpc-client = { path = "../rpc-client", version = "=1.12.0" }
+solana-rpc-client = { path = "../rpc-client", version = "=1.12.0", default-features = false }
 solana-rpc-client-api = { path = "../rpc-client-api", version = "=1.12.0" }
 solana-runtime = { path = "../runtime", version = "=1.12.0" }
 solana-sdk = { path = "../sdk", version = "=1.12.0" }
@@ -53,7 +53,7 @@ solana-send-transaction-service = { path = "../send-transaction-service", versio
 solana-storage-bigtable = { path = "../storage-bigtable", version = "=1.12.0" }
 solana-streamer = { path = "../streamer", version = "=1.12.0" }
 solana-test-validator = { path = "../test-validator", version = "=1.12.0" }
-solana-tpu-client = { path = "../tpu-client", version = "=1.12.0" }
+solana-tpu-client = { path = "../tpu-client", version = "=1.12.0", default-features = false }
 solana-version = { path = "../version", version = "=1.12.0" }
 solana-vote-program = { path = "../programs/vote", version = "=1.12.0" }
 symlink = "0.1.0"

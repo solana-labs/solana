@@ -1,12 +1,13 @@
 #![cfg(test)]
+
 use {
     super::*,
     crate::{
         accounts::{test_utils::create_test_accounts, Accounts},
-        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold},
+        accounts_db::{get_temp_accounts_paths, AccountShrinkThreshold, AccountStorageMap},
+        append_vec::AppendVec,
         bank::{Bank, Rewrites},
         genesis_utils::{activate_all_features, activate_feature},
-        hardened_unpack::UnpackedAppendVecMap,
         snapshot_utils::ArchiveFormat,
         status_cache::StatusCache,
     },
@@ -28,23 +29,48 @@ use {
     tempfile::TempDir,
 };
 
+/// Simulates the unpacking & storage reconstruction done during snapshot unpacking
 fn copy_append_vecs<P: AsRef<Path>>(
     accounts_db: &AccountsDb,
     output_dir: P,
-) -> std::io::Result<UnpackedAppendVecMap> {
+) -> std::io::Result<StorageAndNextAppendVecId> {
     let storage_entries = accounts_db
         .get_snapshot_storages(Slot::max_value(), None, None)
         .0;
-    let mut unpacked_append_vec_map = UnpackedAppendVecMap::new();
-    for storage in storage_entries.iter().flatten() {
-        let storage_path = storage.get_path();
-        let file_name = AppendVec::file_name(storage.slot(), storage.append_vec_id());
+    let storage: AccountStorageMap = AccountStorageMap::with_capacity(storage_entries.len());
+    let mut next_append_vec_id = 0;
+    for storage_entry in storage_entries.into_iter().flatten() {
+        // Copy file to new directory
+        let storage_path = storage_entry.get_path();
+        let file_name = AppendVec::file_name(storage_entry.slot(), storage_entry.append_vec_id());
         let output_path = output_dir.as_ref().join(&file_name);
         std::fs::copy(&storage_path, &output_path)?;
-        unpacked_append_vec_map.insert(file_name, output_path);
+
+        // Read new file into append-vec and build new entry
+        let (append_vec, num_accounts) =
+            AppendVec::new_from_file(output_path, storage_entry.accounts.len())?;
+        let new_storage_entry = AccountStorageEntry::new_existing(
+            storage_entry.slot(),
+            storage_entry.append_vec_id(),
+            append_vec,
+            num_accounts,
+        );
+        next_append_vec_id = next_append_vec_id.max(new_storage_entry.append_vec_id());
+        storage
+            .entry(new_storage_entry.slot())
+            .or_default()
+            .write()
+            .unwrap()
+            .insert(
+                new_storage_entry.append_vec_id(),
+                Arc::new(new_storage_entry),
+            );
     }
 
-    Ok(unpacked_append_vec_map)
+    Ok(StorageAndNextAppendVecId {
+        storage,
+        next_append_vec_id: AtomicAppendVecId::new(next_append_vec_id + 1),
+    })
 }
 
 fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
@@ -63,7 +89,7 @@ fn check_accounts(accounts: &Accounts, pubkeys: &[Pubkey], num: usize) {
 fn context_accountsdb_from_stream<'a, C, R>(
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
-    unpacked_append_vec_map: UnpackedAppendVecMap,
+    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
 ) -> Result<AccountsDb, Error>
 where
     C: TypeContext<'a>,
@@ -78,7 +104,7 @@ where
     reconstruct_accountsdb_from_fields(
         snapshot_accounts_db_fields,
         account_paths,
-        unpacked_append_vec_map,
+        storage_and_next_append_vec_id,
         &GenesisConfig {
             cluster_type: ClusterType::Development,
             ..GenesisConfig::default()
@@ -90,6 +116,7 @@ where
         false,
         Some(crate::accounts_db::ACCOUNTS_DB_CONFIG_FOR_TESTING),
         None,
+        None,
     )
     .map(|(accounts_db, _)| accounts_db)
 }
@@ -98,7 +125,7 @@ fn accountsdb_from_stream<R>(
     serde_style: SerdeStyle,
     stream: &mut BufReader<R>,
     account_paths: &[PathBuf],
-    unpacked_append_vec_map: UnpackedAppendVecMap,
+    storage_and_next_append_vec_id: StorageAndNextAppendVecId,
 ) -> Result<AccountsDb, Error>
 where
     R: Read,
@@ -107,7 +134,7 @@ where
         SerdeStyle::Newer => context_accountsdb_from_stream::<newer::Context, R>(
             stream,
             account_paths,
-            unpacked_append_vec_map,
+            storage_and_next_append_vec_id,
         ),
     }
 }
@@ -164,7 +191,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
     let copied_accounts = TempDir::new().unwrap();
 
     // Simulate obtaining a copy of the AppendVecs from a tarball
-    let unpacked_append_vec_map =
+    let storage_and_next_append_vec_id =
         copy_append_vecs(&accounts.accounts_db, copied_accounts.path()).unwrap();
 
     let buf = writer.into_inner();
@@ -175,7 +202,7 @@ fn test_accounts_serialize_style(serde_style: SerdeStyle) {
             serde_style,
             &mut reader,
             &daccounts_paths,
-            unpacked_append_vec_map,
+            storage_and_next_append_vec_id,
         )
         .unwrap(),
     );
@@ -191,6 +218,8 @@ fn test_bank_serialize_style(
     reserialize_accounts_hash: bool,
     update_accounts_hash: bool,
     incremental_snapshot_persistence: bool,
+    epoch_accounts_hash: bool,
+    initial_epoch_accounts_hash: bool,
 ) {
     solana_logger::setup();
     let (genesis_config, _) = create_genesis_config(500);
@@ -219,6 +248,22 @@ fn test_bank_serialize_style(
     let snapshot_storages = bank2.get_snapshot_storages(None);
     let mut buf = vec![];
     let mut writer = Cursor::new(&mut buf);
+
+    let mut expected_epoch_accounts_hash = None;
+
+    if initial_epoch_accounts_hash {
+        expected_epoch_accounts_hash = Some(Hash::new(&[7; 32]));
+        *bank2
+            .rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash
+            .lock()
+            .unwrap() = Some(EpochAccountsHash::new(
+            expected_epoch_accounts_hash.unwrap(),
+        ));
+    }
+
     crate::serde_snapshot::bank_to_stream(
         serde_style,
         &mut std::io::BufWriter::new(&mut writer),
@@ -248,7 +293,7 @@ fn test_bank_serialize_style(
             incremental_capitalization: 32,
         });
 
-    if reserialize_accounts_hash || incremental_snapshot_persistence {
+    if reserialize_accounts_hash || incremental_snapshot_persistence || epoch_accounts_hash {
         let temp_dir = TempDir::new().unwrap();
         let slot_dir = temp_dir.path().join(slot.to_string());
         let post_path = slot_dir.join(slot.to_string());
@@ -260,36 +305,71 @@ fn test_bank_serialize_style(
             f.write_all(&buf).unwrap();
         }
 
+        let reserialized_epoch_accounts_hash = if epoch_accounts_hash {
+            expected_epoch_accounts_hash = Some(Hash::new(&[3; 32]));
+            expected_epoch_accounts_hash
+        } else {
+            None
+        };
+
         assert!(reserialize_bank_with_new_accounts_hash(
             temp_dir.path(),
             slot,
             &accounts_hash,
             incremental.as_ref(),
+            reserialized_epoch_accounts_hash.as_ref(),
         ));
-        let previous_len = buf.len();
-        // larger buffer than expected to make sure the file isn't larger than expected
-        let sizeof_none = std::mem::size_of::<u64>();
-        let sizeof_incremental_snapshot_persistence =
-            std::mem::size_of::<Option<BankIncrementalSnapshotPersistence>>();
-        let mut buf_reserialized =
-            vec![0; previous_len + sizeof_incremental_snapshot_persistence + 1];
+        let mut buf_reserialized;
         {
+            let previous_len = buf.len();
+            let expected = previous_len
+                + if incremental_snapshot_persistence {
+                    // previously saved a none (size = sizeof_None), now added a Some
+                    let sizeof_none = std::mem::size_of::<u64>();
+                    let sizeof_incremental_snapshot_persistence =
+                        std::mem::size_of::<Option<BankIncrementalSnapshotPersistence>>();
+                    sizeof_incremental_snapshot_persistence - sizeof_none
+                } else {
+                    // no change
+                    0
+                }
+                + if epoch_accounts_hash && !initial_epoch_accounts_hash {
+                    // previously saved a none (size 1), now added a Some
+                    let sizeof_epoch_accounts_hash_persistence =
+                        std::mem::size_of::<Option<Hash>>();
+                    sizeof_epoch_accounts_hash_persistence - 1
+                } else {
+                    // no change
+                    0
+                };
+
+            // +1: larger buffer than expected to make sure the file isn't larger than expected
+            buf_reserialized = vec![0; expected + 1];
             let mut f = std::fs::File::open(post_path).unwrap();
             let size = f.read(&mut buf_reserialized).unwrap();
-            let expected = if !incremental_snapshot_persistence {
-                previous_len
-            } else {
-                previous_len + sizeof_incremental_snapshot_persistence - sizeof_none
-            };
-            assert_eq!(size, expected);
+
+            assert_eq!(
+                size,
+                expected,
+                "(reserialize_accounts_hash, incremental_snapshot_persistence, epoch_accounts_hash, update_accounts_hash, initial_epoch_accounts_hash): {:?}, previous_len: {previous_len}",
+                (
+                    reserialize_accounts_hash,
+                    incremental_snapshot_persistence,
+                    epoch_accounts_hash,
+                    update_accounts_hash,
+                    initial_epoch_accounts_hash,
+                )
+            );
             buf_reserialized.truncate(size);
         }
-        if update_accounts_hash || incremental_snapshot_persistence {
+        if update_accounts_hash {
             // We cannot guarantee buffer contents are exactly the same if hash is the same.
             // Things like hashsets/maps have randomness in their in-mem representations.
-            // This make serialized bytes not deterministic.
+            // This makes serialized bytes not deterministic.
             // But, we can guarantee that the buffer is different if we change the hash!
             assert_ne!(buf, buf_reserialized);
+        }
+        if update_accounts_hash || incremental_snapshot_persistence || epoch_accounts_hash {
             buf = buf_reserialized;
         }
     }
@@ -303,7 +383,7 @@ fn test_bank_serialize_style(
     status_cache.add_root(2);
     // Create a directory to simulate AppendVecs unpackaged from a snapshot tar
     let copied_accounts = TempDir::new().unwrap();
-    let unpacked_append_vec_map =
+    let storage_and_next_append_vec_id =
         copy_append_vecs(&bank2.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
     let mut snapshot_streams = SnapshotStreams {
         full_snapshot_stream: &mut reader,
@@ -313,7 +393,7 @@ fn test_bank_serialize_style(
         serde_style,
         &mut snapshot_streams,
         &dbank_paths,
-        unpacked_append_vec_map,
+        storage_and_next_append_vec_id,
         &genesis_config,
         &RuntimeConfig::default(),
         None,
@@ -334,6 +414,16 @@ fn test_bank_serialize_style(
     assert_eq!(dbank.get_accounts_hash(), accounts_hash);
     assert!(bank2 == dbank);
     assert_eq!(dbank.incremental_snapshot_persistence, incremental);
+    assert_eq!(dbank.rc.accounts.accounts_db.epoch_accounts_hash.lock().unwrap().map(|hash| *hash.as_ref()), expected_epoch_accounts_hash,
+        "(reserialize_accounts_hash, incremental_snapshot_persistence, epoch_accounts_hash, update_accounts_hash, initial_epoch_accounts_hash): {:?}",
+        (
+            reserialize_accounts_hash,
+            incremental_snapshot_persistence,
+            epoch_accounts_hash,
+            update_accounts_hash,
+            initial_epoch_accounts_hash,
+        )
+    );
 }
 
 pub(crate) fn reconstruct_accounts_db_via_serialization(
@@ -356,10 +446,15 @@ pub(crate) fn reconstruct_accounts_db_via_serialization(
     let copied_accounts = TempDir::new().unwrap();
 
     // Simulate obtaining a copy of the AppendVecs from a tarball
-    let unpacked_append_vec_map = copy_append_vecs(accounts, copied_accounts.path()).unwrap();
-    let mut accounts_db =
-        accountsdb_from_stream(SerdeStyle::Newer, &mut reader, &[], unpacked_append_vec_map)
-            .unwrap();
+    let storage_and_next_append_vec_id =
+        copy_append_vecs(accounts, copied_accounts.path()).unwrap();
+    let mut accounts_db = accountsdb_from_stream(
+        SerdeStyle::Newer,
+        &mut reader,
+        &[],
+        storage_and_next_append_vec_id,
+    )
+    .unwrap();
 
     // The append vecs will be used from `copied_accounts` directly by the new AccountsDb so keep
     // its TempDir alive
@@ -382,17 +477,24 @@ fn test_bank_serialize_newer() {
     for (reserialize_accounts_hash, update_accounts_hash) in
         [(false, false), (true, false), (true, true)]
     {
-        for incremental_snapshot_persistence in if reserialize_accounts_hash {
+        let parameters = if reserialize_accounts_hash {
             [false, true].to_vec()
         } else {
             [false].to_vec()
-        } {
-            test_bank_serialize_style(
-                SerdeStyle::Newer,
-                reserialize_accounts_hash,
-                update_accounts_hash,
-                incremental_snapshot_persistence,
-            )
+        };
+        for incremental_snapshot_persistence in parameters.clone() {
+            for epoch_accounts_hash in parameters.clone() {
+                for initial_epoch_accounts_hash in parameters.clone() {
+                    test_bank_serialize_style(
+                        SerdeStyle::Newer,
+                        reserialize_accounts_hash,
+                        update_accounts_hash,
+                        incremental_snapshot_persistence,
+                        epoch_accounts_hash,
+                        initial_epoch_accounts_hash,
+                    )
+                }
+            }
         }
     }
 }
@@ -431,13 +533,13 @@ fn test_extra_fields_eof() {
     };
     let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
     let copied_accounts = TempDir::new().unwrap();
-    let unpacked_append_vec_map =
+    let storage_and_next_append_vec_id =
         copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
     let dbank = crate::serde_snapshot::bank_from_streams(
         SerdeStyle::Newer,
         &mut snapshot_streams,
         &dbank_paths,
-        unpacked_append_vec_map,
+        storage_and_next_append_vec_id,
         &genesis_config,
         &RuntimeConfig::default(),
         None,
@@ -554,13 +656,13 @@ fn test_blank_extra_fields() {
     };
     let (_accounts_dir, dbank_paths) = get_temp_accounts_paths(4).unwrap();
     let copied_accounts = TempDir::new().unwrap();
-    let unpacked_append_vec_map =
+    let storage_and_next_append_vec_id =
         copy_append_vecs(&bank.rc.accounts.accounts_db, copied_accounts.path()).unwrap();
     let dbank = crate::serde_snapshot::bank_from_streams(
         SerdeStyle::Newer,
         &mut snapshot_streams,
         &dbank_paths,
-        unpacked_append_vec_map,
+        storage_and_next_append_vec_id,
         &genesis_config,
         &RuntimeConfig::default(),
         None,
@@ -585,7 +687,7 @@ mod test_bank_serialize {
 
     // This some what long test harness is required to freeze the ABI of
     // Bank's serialization due to versioned nature
-    #[frozen_abi(digest = "5py4Wkuj5fV2sLyA1MrPg4pGNwMEaygQLnpLyY8MMLGC")]
+    #[frozen_abi(digest = "7SZNRErAktC7sRcpChrcHfsr9Uw7XXoSzNbYzoNtoQCr")]
     #[derive(Serialize, AbiExample)]
     pub struct BankAbiTestWrapperNewer {
         #[serde(serialize_with = "wrapper_newer")]

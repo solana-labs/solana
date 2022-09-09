@@ -5,7 +5,7 @@ use {
         pubkey::Pubkey,
         rent::Rent,
         transaction::{Result, TransactionError},
-        transaction_context::TransactionContext,
+        transaction_context::{IndexOfAccount, TransactionContext},
     },
 };
 
@@ -88,7 +88,7 @@ pub(crate) fn check_rent_state(
     pre_rent_state: Option<&RentState>,
     post_rent_state: Option<&RentState>,
     transaction_context: &TransactionContext,
-    index: usize,
+    index: IndexOfAccount,
     include_account_index_in_err: bool,
     prevent_crediting_accounts_that_end_rent_paying: bool,
 ) -> Result<()> {
@@ -116,7 +116,7 @@ pub(crate) fn check_rent_state_with_account(
     post_rent_state: &RentState,
     address: &Pubkey,
     account_state: &AccountSharedData,
-    account_index: Option<usize>,
+    account_index: Option<IndexOfAccount>,
     prevent_crediting_accounts_that_end_rent_paying: bool,
 ) -> Result<()> {
     submit_rent_state_metrics(pre_rent_state, post_rent_state);

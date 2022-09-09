@@ -1,4 +1,8 @@
-//! Spinner creator
+#![cfg(feature = "spinner")]
+//! Spinner creator.
+//! This module is wrapped by the `spinner` feature, which is on by default.
+//! It can be disabled and the dependency on `indicatif` avoided by running
+//! with `default-features = false`
 
 use {
     indicatif::{ProgressBar, ProgressStyle},

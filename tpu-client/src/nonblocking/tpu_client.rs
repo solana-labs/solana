@@ -1,32 +1,33 @@
+#[cfg(feature = "spinner")]
+use {
+    crate::tpu_client::{SEND_TRANSACTION_INTERVAL, TRANSACTION_RESEND_INTERVAL},
+    indicatif::ProgressBar,
+    solana_rpc_client::spinner,
+    solana_rpc_client_api::request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
+    solana_sdk::{message::Message, signers::Signers, transaction::TransactionError},
+};
 use {
     crate::{
         connection_cache::ConnectionCache,
         nonblocking::tpu_connection::TpuConnection,
-        tpu_client::{
-            RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS, SEND_TRANSACTION_INTERVAL,
-            TRANSACTION_RESEND_INTERVAL,
-        },
+        tpu_client::{RecentLeaderSlots, TpuClientConfig, MAX_FANOUT_SLOTS},
     },
     bincode::serialize,
     futures_util::{future::join_all, stream::StreamExt},
-    indicatif::ProgressBar,
     log::*,
     solana_pubsub_client::nonblocking::pubsub_client::{PubsubClient, PubsubClientError},
-    solana_rpc_client::{nonblocking::rpc_client::RpcClient, spinner},
+    solana_rpc_client::nonblocking::rpc_client::RpcClient,
     solana_rpc_client_api::{
         client_error::{Error as ClientError, Result as ClientResult},
-        request::MAX_GET_SIGNATURE_STATUSES_QUERY_ITEMS,
         response::{RpcContactInfo, SlotUpdate},
     },
     solana_sdk::{
         clock::Slot,
         commitment_config::CommitmentConfig,
         epoch_info::EpochInfo,
-        message::Message,
         pubkey::Pubkey,
         signature::SignerError,
-        signers::Signers,
-        transaction::{Transaction, TransactionError},
+        transaction::Transaction,
         transport::{Result as TransportResult, TransportError},
     },
     std::{
@@ -230,6 +231,15 @@ async fn send_wire_transaction_to_addr(
     conn.send_wire_transaction(wire_transaction.clone()).await
 }
 
+async fn send_wire_transaction_batch_to_addr(
+    connection_cache: &ConnectionCache,
+    addr: &SocketAddr,
+    wire_transactions: &[Vec<u8>],
+) -> TransportResult<()> {
+    let conn = connection_cache.get_nonblocking_connection(addr);
+    conn.send_wire_transaction_batch(wire_transactions).await
+}
+
 impl TpuClient {
     /// Serialize and send transaction to the current and upcoming leader TPUs according to fanout
     /// size
@@ -296,6 +306,50 @@ impl TpuClient {
         }
     }
 
+    /// Send a batch of wire transactions to the current and upcoming leader TPUs according to
+    /// fanout size
+    /// Returns the last error if all sends fail
+    pub async fn try_send_wire_transaction_batch(
+        &self,
+        wire_transactions: Vec<Vec<u8>>,
+    ) -> TransportResult<()> {
+        let leaders = self
+            .leader_tpu_service
+            .leader_tpu_sockets(self.fanout_slots);
+        let futures = leaders
+            .iter()
+            .map(|addr| {
+                send_wire_transaction_batch_to_addr(
+                    &self.connection_cache,
+                    addr,
+                    &wire_transactions,
+                )
+            })
+            .collect::<Vec<_>>();
+        let results: Vec<TransportResult<()>> = join_all(futures).await;
+
+        let mut last_error: Option<TransportError> = None;
+        let mut some_success = false;
+        for result in results {
+            if let Err(e) = result {
+                if last_error.is_none() {
+                    last_error = Some(e);
+                }
+            } else {
+                some_success = true;
+            }
+        }
+        if !some_success {
+            Err(if let Some(err) = last_error {
+                err
+            } else {
+                std::io::Error::new(std::io::ErrorKind::Other, "No sends attempted").into()
+            })
+        } else {
+            Ok(())
+        }
+    }
+
     /// Create a new client that disconnects when dropped
     pub async fn new(
         rpc_client: Arc<RpcClient>,
@@ -326,6 +380,7 @@ impl TpuClient {
         })
     }
 
+    #[cfg(feature = "spinner")]
     pub async fn send_and_confirm_messages_with_spinner<T: Signers>(
         &self,
         messages: &[Message],
@@ -667,6 +722,7 @@ async fn maybe_fetch_cache_info(
     }
 }
 
+#[cfg(feature = "spinner")]
 fn set_message_for_confirmed_transactions(
     progress_bar: &ProgressBar,
     confirmed_transactions: u32,

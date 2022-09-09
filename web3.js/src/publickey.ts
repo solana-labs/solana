@@ -1,9 +1,9 @@
 import BN from 'bn.js';
 import bs58 from 'bs58';
 import {Buffer} from 'buffer';
-import nacl from 'tweetnacl';
 import {sha256} from '@noble/hashes/sha256';
 
+import {isOnCurve} from './utils/ed25519';
 import {Struct, SOLANA_SCHEMA} from './utils/borsh-schema';
 import {toBuffer} from './utils/to-buffer';
 
@@ -40,6 +40,9 @@ function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
 }
 
+// local counter used by PublicKey.unique()
+let uniquePublicKeyCounter = 1;
+
 /**
  * A public key
  */
@@ -71,6 +74,15 @@ export class PublicKey extends Struct {
         throw new Error(`Invalid public key input`);
       }
     }
+  }
+
+  /**
+   * Returns a unique PublicKey for tests and benchmarks using acounter
+   */
+  static unique(): PublicKey {
+    const key = new PublicKey(uniquePublicKeyCounter);
+    uniquePublicKeyCounter += 1;
+    return new PublicKey(key.toBuffer());
   }
 
   /**
@@ -165,7 +177,7 @@ export class PublicKey extends Struct {
       Buffer.from('ProgramDerivedAddress'),
     ]);
     const publicKeyBytes = sha256(buffer);
-    if (is_on_curve(publicKeyBytes)) {
+    if (isOnCurve(publicKeyBytes)) {
       throw new Error(`Invalid seeds, address must fall off the curve`);
     }
     return new PublicKey(publicKeyBytes);
@@ -228,7 +240,7 @@ export class PublicKey extends Struct {
    */
   static isOnCurve(pubkeyData: PublicKeyInitData): boolean {
     const pubkey = new PublicKey(pubkeyData);
-    return is_on_curve(pubkey.toBytes()) == 1;
+    return isOnCurve(pubkey.toBytes());
   }
 }
 
@@ -236,66 +248,3 @@ SOLANA_SCHEMA.set(PublicKey, {
   kind: 'struct',
   fields: [['_bn', 'u256']],
 });
-
-// @ts-ignore
-let naclLowLevel = nacl.lowlevel;
-
-// Check that a pubkey is on the curve.
-// This function and its dependents were sourced from:
-// https://github.com/dchest/tweetnacl-js/blob/f1ec050ceae0861f34280e62498b1d3ed9c350c6/nacl.js#L792
-function is_on_curve(p: any) {
-  var r = [
-    naclLowLevel.gf(),
-    naclLowLevel.gf(),
-    naclLowLevel.gf(),
-    naclLowLevel.gf(),
-  ];
-
-  var t = naclLowLevel.gf(),
-    chk = naclLowLevel.gf(),
-    num = naclLowLevel.gf(),
-    den = naclLowLevel.gf(),
-    den2 = naclLowLevel.gf(),
-    den4 = naclLowLevel.gf(),
-    den6 = naclLowLevel.gf();
-
-  naclLowLevel.set25519(r[2], gf1);
-  naclLowLevel.unpack25519(r[1], p);
-  naclLowLevel.S(num, r[1]);
-  naclLowLevel.M(den, num, naclLowLevel.D);
-  naclLowLevel.Z(num, num, r[2]);
-  naclLowLevel.A(den, r[2], den);
-
-  naclLowLevel.S(den2, den);
-  naclLowLevel.S(den4, den2);
-  naclLowLevel.M(den6, den4, den2);
-  naclLowLevel.M(t, den6, num);
-  naclLowLevel.M(t, t, den);
-
-  naclLowLevel.pow2523(t, t);
-  naclLowLevel.M(t, t, num);
-  naclLowLevel.M(t, t, den);
-  naclLowLevel.M(t, t, den);
-  naclLowLevel.M(r[0], t, den);
-
-  naclLowLevel.S(chk, r[0]);
-  naclLowLevel.M(chk, chk, den);
-  if (neq25519(chk, num)) naclLowLevel.M(r[0], r[0], I);
-
-  naclLowLevel.S(chk, r[0]);
-  naclLowLevel.M(chk, chk, den);
-  if (neq25519(chk, num)) return 0;
-  return 1;
-}
-let gf1 = naclLowLevel.gf([1]);
-let I = naclLowLevel.gf([
-  0xa0b0, 0x4a0e, 0x1b27, 0xc4ee, 0xe478, 0xad2f, 0x1806, 0x2f43, 0xd7a7,
-  0x3dfb, 0x0099, 0x2b4d, 0xdf0b, 0x4fc1, 0x2480, 0x2b83,
-]);
-function neq25519(a: any, b: any) {
-  var c = new Uint8Array(32),
-    d = new Uint8Array(32);
-  naclLowLevel.pack25519(c, a);
-  naclLowLevel.pack25519(d, b);
-  return naclLowLevel.crypto_verify_32(c, 0, d, 0);
-}

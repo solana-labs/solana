@@ -111,6 +111,9 @@ Operate a configured testnet
    --tpu-disable-quic
                                       - Disable quic for tpu packet forwarding
 
+   --tpu-enable-udp
+                                      - Enable UDP for tpu transactions
+
  sanity/start-specific options:
    -F                   - Discard validator nodes that didn't bootup successfully
    -o noInstallCheck    - Skip solana-install sanity
@@ -325,6 +328,7 @@ startBootstrapLeader() {
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
+         \"$enableUdp\" \
       "
 
   ) >> "$logFile" 2>&1 || {
@@ -398,6 +402,7 @@ startNode() {
          \"$extraPrimordialStakes\" \
          \"$TMPFS_ACCOUNTS\" \
          \"$disableQuic\" \
+         \"$enableUdp\" \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -601,7 +606,7 @@ deploy() {
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
-      startBootstrapLeader "$nodeAddress" $nodeIndex "$netLogDir/bootstrap-validator-$ipAddress.log"
+      startBootstrapLeader "$nodeAddress" "$nodeIndex" "$netLogDir/bootstrap-validator-$ipAddress.log"
       bootstrapNodeDeployTime=$SECONDS
       $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
@@ -609,7 +614,7 @@ deploy() {
       SECONDS=0
       pids=()
     else
-      startNode "$ipAddress" $nodeType $nodeIndex
+      startNode "$ipAddress" "$nodeType" "$nodeIndex"
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
@@ -807,6 +812,7 @@ maybeFullRpc=false
 waitForNodeInit=true
 extraPrimordialStakes=0
 disableQuic=false
+enableUdp=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -921,6 +927,9 @@ while [[ -n $1 ]]; do
       shift 1
     elif [[ $1 == --tpu-disable-quic ]]; then
       disableQuic=true
+      shift 1
+    elif [[ $1 == --tpu-enable-udp ]]; then
+      enableUdp=true
       shift 1
     elif [[ $1 == --async-node-init ]]; then
       waitForNodeInit=false
@@ -1124,7 +1133,7 @@ startnode)
   nodeType=
   nodeIndex=
   getNodeType
-  startNode "$nodeAddress" $nodeType $nodeIndex
+  startNode "$nodeAddress" "$nodeType" "$nodeIndex"
   ;;
 startclients)
   startClients

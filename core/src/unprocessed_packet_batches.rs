@@ -1,10 +1,8 @@
 use {
-    crate::{
-        immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
-        transaction_priority_details::TransactionPriorityDetails,
-    },
+    crate::immutable_deserialized_packet::{DeserializedPacketError, ImmutableDeserializedPacket},
     min_max_heap::MinMaxHeap,
     solana_perf::packet::{Packet, PacketBatch},
+    solana_runtime::transaction_priority_details::TransactionPriorityDetails,
     solana_sdk::{
         feature_set,
         hash::Hash,
@@ -27,6 +25,13 @@ pub struct DeserializedPacket {
 }
 
 impl DeserializedPacket {
+    pub fn from_immutable_section(immutable_section: ImmutableDeserializedPacket) -> Self {
+        Self {
+            immutable_section: Rc::new(immutable_section),
+            forwarded: false,
+        }
+    }
+
     pub fn new(packet: Packet) -> Result<Self, DeserializedPacketError> {
         Self::new_internal(packet, None)
     }
@@ -264,7 +269,8 @@ impl UnprocessedPacketBatches {
         }
     }
 
-    pub fn pop_max(&mut self) -> Option<DeserializedPacket> {
+    #[cfg(test)]
+    fn pop_max(&mut self) -> Option<DeserializedPacket> {
         self.packet_priority_queue
             .pop_max()
             .map(|immutable_packet| {
@@ -276,7 +282,8 @@ impl UnprocessedPacketBatches {
 
     /// Pop up to the next `n` highest priority transactions from the queue.
     /// Returns `None` if the queue is empty
-    pub fn pop_max_n(&mut self, n: usize) -> Option<Vec<DeserializedPacket>> {
+    #[cfg(test)]
+    fn pop_max_n(&mut self, n: usize) -> Option<Vec<DeserializedPacket>> {
         let current_len = self.len();
         if self.is_empty() {
             None

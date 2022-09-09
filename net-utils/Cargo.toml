@@ -16,7 +16,7 @@ crossbeam-channel = "0.5"
 log = "0.4.17"
 nix = "0.25.0"
 rand = "0.7.0"
-serde = "1.0.143"
+serde = "1.0.144"
 serde_derive = "1.0.103"
 socket2 = "0.4.4"
 solana-logger = { path = "../logger", version = "=1.12.0" }

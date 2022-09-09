@@ -53,6 +53,7 @@ use {
         blockhash_queue::BlockhashQueue,
         builtins::{self, BuiltinAction, BuiltinFeatureTransition, Builtins},
         cost_tracker::CostTracker,
+        epoch_accounts_hash::{self, EpochAccountsHash},
         epoch_stakes::{EpochStakes, NodeVoteAccounts},
         expected_rent_collection::{ExpectedRentCollection, SlotInfoInEpoch},
         inline_spl_associated_token_account, inline_spl_token,
@@ -284,7 +285,7 @@ impl RentDebits {
 }
 
 pub type BankStatusCache = StatusCache<Result<()>>;
-#[frozen_abi(digest = "HEJXoycXvGT2pwMuKcUKzzbeemnqbfrUC4jHZx1ncaWv")]
+#[frozen_abi(digest = "7FSSacrCi7vf2QZFm3Ui9JqTii4U6h1XWYD3LKSuVwV8")]
 pub type BankSlotDelta = SlotDelta<Result<()>>;
 
 // Eager rent collection repeats in cyclic manner.
@@ -1005,6 +1006,7 @@ pub struct BankFieldsToDeserialize {
     pub(crate) is_delta: bool,
     pub(crate) accounts_data_len: u64,
     pub(crate) incremental_snapshot_persistence: Option<BankIncrementalSnapshotPersistence>,
+    pub(crate) epoch_accounts_hash: Option<Hash>,
 }
 
 // Bank's common fields shared by all supported snapshot versions for serialization.
@@ -4352,6 +4354,12 @@ impl Bank {
             compute_budget.max_invoke_depth.saturating_add(1),
             tx.message().instructions().len(),
         );
+        if self
+            .feature_set
+            .is_active(&feature_set::cap_accounts_data_allocations_per_transaction::id())
+        {
+            transaction_context.enable_cap_accounts_data_allocations_per_transaction();
+        }
 
         let pre_account_state_info =
             self.get_transaction_account_state_info(&transaction_context, tx.message());
@@ -6828,6 +6836,21 @@ impl Bank {
             self.last_blockhash().as_ref(),
         ]);
 
+        let epoch_accounts_hash = self.epoch_accounts_hash();
+        if self.should_include_epoch_accounts_hash() {
+            // Nothing is writing a value into the epoch accounts hash yet—this is not a problem
+            // for normal clusters, as the feature gating this `if` block is always false.
+            // However, some tests enable all features, so this `if` block can be true.
+            //
+            // For now, check to see if the epoch accounts hash is `Some` before hashing.  Once the
+            // writer-side is implemented, change this to be an `.expect()` or `.unwrap()`, as it
+            // will be required for the epoch accounts hash calculation to have compleleted and
+            // for this value to be `Some`.
+            if let Some(epoch_accounts_hash) = epoch_accounts_hash {
+                hash = hashv(&[hash.as_ref(), epoch_accounts_hash.as_ref().as_ref()]);
+            }
+        }
+
         let buf = self
             .hard_forks
             .read()
@@ -6846,13 +6869,17 @@ impl Bank {
         }
 
         info!(
-            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}",
+            "bank frozen: {} hash: {} accounts_delta: {} signature_count: {} last_blockhash: {} capitalization: {}{}",
             self.slot(),
             hash,
             accounts_delta_hash.hash,
             self.signature_count(),
             self.last_blockhash(),
             self.capitalization(),
+            match epoch_accounts_hash {
+                None => "".to_string(),
+                Some(epoch_accounts_hash) => format!(", epoch_accounts_hash: {}", epoch_accounts_hash.as_ref()),
+            },
         );
 
         info!(
@@ -6861,6 +6888,22 @@ impl Bank {
             accounts_delta_hash.stats,
         );
         hash
+    }
+
+    /// The epoch accounts hash is hashed into the bank's hash once per epoch at a predefined slot.
+    /// Should it be included in *this* bank?
+    fn should_include_epoch_accounts_hash(&self) -> bool {
+        if !self
+            .feature_set
+            .is_active(&feature_set::epoch_accounts_hash::id())
+        {
+            return false;
+        }
+
+        let first_slot_in_epoch = self.epoch_schedule().get_first_slot_in_epoch(self.epoch);
+        let stop_offset = epoch_accounts_hash::calculation_offset_stop(self);
+        let stop_slot = first_slot_in_epoch + stop_offset;
+        self.parent_slot() < stop_slot && self.slot() >= stop_slot
     }
 
     /// Recalculate the hash_internal_state from the account stores. Would be used to verify a
@@ -6905,7 +6948,7 @@ impl Bank {
             let accounts_ = Arc::clone(&accounts);
             accounts.accounts_db.verify_accounts_hash_in_bg.start(|| {
                 Builder::new()
-                    .name("solana-bg-hash-verifier".to_string())
+                    .name("solBgHashVerify".into())
                     .spawn(move || {
                         info!(
                             "running initial verification accounts hash calculation in background"
@@ -7523,11 +7566,6 @@ impl Bank {
             .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id())
     }
 
-    pub fn concurrent_replay_of_forks(&self) -> bool {
-        self.feature_set
-            .is_active(&feature_set::concurrent_replay_of_forks::id())
-    }
-
     pub fn read_cost_tracker(&self) -> LockResult<RwLockReadGuard<CostTracker>> {
         self.cost_tracker.read()
     }
@@ -7841,6 +7879,23 @@ impl Bank {
 
         total_accounts_stats
     }
+
+    /// if we were to serialize THIS bank, what value should be saved for the prior accounts hash?
+    /// This depends on the proximity to the time to take the snapshot and the time to use the snapshot.
+    pub(crate) fn get_epoch_accounts_hash_to_serialize(&self) -> Option<Hash> {
+        self.epoch_accounts_hash().map(|hash| *hash.as_ref())
+    }
+
+    /// Convenience fn to get the Epoch Accounts Hash
+    fn epoch_accounts_hash(&self) -> Option<EpochAccountsHash> {
+        *self
+            .rc
+            .accounts
+            .accounts_db
+            .epoch_accounts_hash
+            .lock()
+            .unwrap()
+    }
 }
 
 /// Compute how much an account has changed size.  This function is useful when the data size delta
@@ -8002,7 +8057,7 @@ pub(crate) mod tests {
     use {
         super::*,
         crate::{
-            accounts_background_service::{AbsRequestHandler, SendDroppedBankCallback},
+            accounts_background_service::{PrunedBanksRequestHandler, SendDroppedBankCallback},
             accounts_db::DEFAULT_ACCOUNTS_SHRINK_RATIO,
             accounts_index::{AccountIndex, AccountSecondaryIndexes, ScanError, ITER_BATCH_SIZE},
             ancestors::Ancestors,
@@ -8043,10 +8098,14 @@ pub(crate) mod tests {
                 instruction as stake_instruction,
                 state::{Authorized, Delegation, Lockup, Stake},
             },
-            system_instruction::{self, SystemError, MAX_PERMITTED_DATA_LENGTH},
+            system_instruction::{
+                self, SystemError, MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION,
+                MAX_PERMITTED_DATA_LENGTH,
+            },
             system_program,
             timing::duration_as_s,
             transaction::MAX_TX_ACCOUNT_LOCKS,
+            transaction_context::IndexOfAccount,
         },
         solana_vote_program::{
             vote_instruction,
@@ -9056,7 +9115,7 @@ pub(crate) mod tests {
         }
 
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -12665,7 +12724,7 @@ pub(crate) mod tests {
             Pubkey::new(&[42u8; 32])
         }
         fn mock_vote_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -12724,7 +12783,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_vote_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
@@ -12772,7 +12831,7 @@ pub(crate) mod tests {
         let mut bank = create_simple_test_bank(500);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Err(InstructionError::Custom(42))
@@ -14046,7 +14105,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -14106,7 +14165,7 @@ pub(crate) mod tests {
 
         #[allow(clippy::unnecessary_wraps)]
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             Ok(())
@@ -14328,7 +14387,7 @@ pub(crate) mod tests {
 
     #[allow(clippy::unnecessary_wraps)]
     fn mock_ok_vote_processor(
-        _first_instruction_account: usize,
+        _first_instruction_account: IndexOfAccount,
         _invoke_context: &mut InvokeContext,
     ) -> std::result::Result<(), InstructionError> {
         Ok(())
@@ -14576,7 +14635,7 @@ pub(crate) mod tests {
     #[test]
     fn test_same_program_id_uses_unqiue_executable_accounts() {
         fn nested_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -14846,7 +14905,7 @@ pub(crate) mod tests {
     fn test_add_builtin_no_overwrite() {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
@@ -14882,7 +14941,7 @@ pub(crate) mod tests {
     fn test_add_builtin_loader_no_overwrite() {
         #[allow(clippy::unnecessary_wraps)]
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
@@ -15202,7 +15261,7 @@ pub(crate) mod tests {
     impl Executor for TestExecutor {
         fn execute(
             &self,
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             _invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             Ok(())
@@ -16131,8 +16190,7 @@ pub(crate) mod tests {
     fn test_store_scan_consistency_unrooted() {
         for accounts_db_caching_enabled in &[false, true] {
             let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
-            let abs_request_handler = AbsRequestHandler {
-                snapshot_request_handler: None,
+            let pruned_banks_request_handler = PrunedBanksRequestHandler {
                 pruned_banks_receiver,
             };
             test_store_scan_consistency(
@@ -16216,7 +16274,7 @@ pub(crate) mod tests {
                         current_major_fork_bank.clean_accounts_for_tests();
                         // Move purge here so that Bank::drop()->purge_slots() doesn't race
                         // with clean. Simulates the call from AccountsBackgroundService
-                        abs_request_handler.handle_pruned_banks(&current_major_fork_bank, true);
+                        pruned_banks_request_handler.handle_request(&current_major_fork_bank, true);
                     }
                 },
                 Some(Box::new(SendDroppedBankCallback::new(
@@ -17012,7 +17070,7 @@ pub(crate) mod tests {
 
         let mock_program_id = Pubkey::new(&[2u8; 32]);
         fn mock_process_instruction(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> result::Result<(), InstructionError> {
             let mock_program_id = Pubkey::new(&[2u8; 32]);
@@ -17210,7 +17268,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let transaction_context = &invoke_context.transaction_context;
@@ -17420,7 +17478,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
@@ -17464,7 +17522,7 @@ pub(crate) mod tests {
         let mut bank = Bank::new_for_tests(&genesis_config);
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
@@ -17515,7 +17573,7 @@ pub(crate) mod tests {
             .unwrap();
 
         fn mock_ix_processor(
-            _first_instruction_account: usize,
+            _first_instruction_account: IndexOfAccount,
             invoke_context: &mut InvokeContext,
         ) -> std::result::Result<(), InstructionError> {
             let compute_budget = invoke_context.get_compute_budget();
@@ -18019,7 +18077,7 @@ pub(crate) mod tests {
     }
 
     fn mock_transfer_process_instruction(
-        _first_instruction_account: usize,
+        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -18845,8 +18903,10 @@ pub(crate) mod tests {
             }
             if stack_height > transaction_context.get_instruction_context_stack_height() {
                 transaction_context
-                    .push(&[], &[], &[index_in_trace as u8])
-                    .unwrap();
+                    .get_next_instruction_context()
+                    .unwrap()
+                    .configure(&[], &[], &[index_in_trace as u8]);
+                transaction_context.push().unwrap();
             }
         }
         let inner_instructions =
@@ -18872,7 +18932,7 @@ pub(crate) mod tests {
     }
 
     fn mock_realloc_process_instruction(
-        _first_instruction_account: usize,
+        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> result::Result<(), InstructionError> {
         let transaction_context = &invoke_context.transaction_context;
@@ -19487,5 +19547,56 @@ pub(crate) mod tests {
                 bank.get_total_accounts_stats().unwrap().data_len,
             );
         }
+    }
+
+    /// Ensures that if a transaction exceeds the maximum allowed accounts data allocation size:
+    /// 1. The transaction fails
+    /// 2. The bank's accounts_data_size is unmodified
+    #[test]
+    fn test_cap_accounts_data_allocations_per_transaction() {
+        use solana_sdk::signature::KeypairInsecureClone;
+        const NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION: usize =
+            MAX_PERMITTED_ACCOUNTS_DATA_ALLOCATIONS_PER_TRANSACTION as usize
+                / MAX_PERMITTED_DATA_LENGTH as usize;
+
+        let (genesis_config, mint_keypair) = create_genesis_config(1_000_000 * LAMPORTS_PER_SOL);
+        let mut bank = Bank::new_for_tests(&genesis_config);
+        bank.activate_feature(
+            &feature_set::enable_early_verification_of_account_modifications::id(),
+        );
+        bank.activate_feature(&feature_set::cap_accounts_data_allocations_per_transaction::id());
+
+        let mut instructions = Vec::new();
+        let mut keypairs = vec![mint_keypair.clone()];
+        for _ in 0..=NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION {
+            let keypair = Keypair::new();
+            let instruction = system_instruction::create_account(
+                &mint_keypair.pubkey(),
+                &keypair.pubkey(),
+                bank.rent_collector()
+                    .rent
+                    .minimum_balance(MAX_PERMITTED_DATA_LENGTH as usize),
+                MAX_PERMITTED_DATA_LENGTH,
+                &solana_sdk::system_program::id(),
+            );
+            keypairs.push(keypair);
+            instructions.push(instruction);
+        }
+        let message = Message::new(&instructions, Some(&mint_keypair.pubkey()));
+        let signers: Vec<_> = keypairs.iter().collect();
+        let transaction = Transaction::new(&signers, message, bank.last_blockhash());
+
+        let accounts_data_size_before = bank.load_accounts_data_size();
+        let result = bank.process_transaction(&transaction);
+        let accounts_data_size_after = bank.load_accounts_data_size();
+
+        assert_eq!(accounts_data_size_before, accounts_data_size_after);
+        assert_eq!(
+            result,
+            Err(TransactionError::InstructionError(
+                NUM_MAX_SIZE_ALLOCATIONS_PER_TRANSACTION as u8,
+                solana_sdk::instruction::InstructionError::MaxAccountsDataAllocationsExceeded,
+            )),
+        );
     }
 }

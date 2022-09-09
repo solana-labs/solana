@@ -225,11 +225,11 @@ The private key of a [keypair](#keypair).
 
 ## program
 
-The code that interprets [instructions](#instruction).
+The executable code that interprets the [instructions](#instruction) sent inside of each [transaction](#transaction) on the Solana. These programs are often referred to as "[_smart contracts_](./developing//intro/programs.md)" on other blockchains.
 
 ## program derived account (PDA)
 
-An account whose owner is a program and thus is not controlled by a private key like other accounts.
+An account whose signing authority is a program and thus is not controlled by a private key like other accounts.
 
 ## program id
 
@@ -250,6 +250,16 @@ Transactions should request the minimum amount of compute units required for exe
 ## public key (pubkey)
 
 The public key of a [keypair](#keypair).
+
+## rent
+
+Fee paid by [Accounts](#account) and [Programs](#program) to store data on the blockchain. When accounts do not have enough balance to pay rent, they may be Garbage Collected.
+
+See also [rent exempt](#rent-exempt) below. Learn more about rent here: [What is rent?](../src/developing/intro/rent.md).
+
+## rent exempt
+
+Accounts that maintain more than 2 years with of rent payments in their account are considered "*rent exempt*" and will not incur the [collection of rent](../src/developing/intro/rent.md#collecting-rent).
 
 ## root
 

@@ -97,6 +97,7 @@ impl From<DeserializableVersionedBank> for BankFieldsToDeserialize {
             epoch_stakes: dvb.epoch_stakes,
             is_delta: dvb.is_delta,
             incremental_snapshot_persistence: None,
+            epoch_accounts_hash: None,
         }
     }
 }
@@ -211,6 +212,9 @@ impl<'a> TypeContext<'a> for Context {
             // TODO: if we do a snapshot version bump, consider moving this out.
             lamports_per_signature,
             None::<BankIncrementalSnapshotPersistence>,
+            serializable_bank
+                .bank
+                .get_epoch_accounts_hash_to_serialize(),
         )
             .serialize(serializer)
     }
@@ -317,8 +321,11 @@ impl<'a> TypeContext<'a> for Context {
             .fee_rate_governor
             .clone_with_lamports_per_signature(lamports_per_signature);
 
-        let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(stream))?;
+        let incremental_snapshot_persistence = ignore_eof_error(deserialize_from(&mut stream))?;
         bank_fields.incremental_snapshot_persistence = incremental_snapshot_persistence;
+
+        let epoch_accounts_hash = ignore_eof_error(deserialize_from(stream))?;
+        bank_fields.epoch_accounts_hash = epoch_accounts_hash;
 
         Ok((bank_fields, accounts_db_fields))
     }
@@ -340,6 +347,7 @@ impl<'a> TypeContext<'a> for Context {
         stream_writer: &mut BufWriter<W>,
         accounts_hash: &Hash,
         incremental_snapshot_persistence: Option<&BankIncrementalSnapshotPersistence>,
+        epoch_accounts_hash: Option<&Hash>,
     ) -> std::result::Result<(), Box<bincode::ErrorKind>>
     where
         R: Read,
@@ -352,6 +360,7 @@ impl<'a> TypeContext<'a> for Context {
         let blockhash_queue = RwLock::new(rhs.blockhash_queue.clone());
         let hard_forks = RwLock::new(rhs.hard_forks.clone());
         let lamports_per_signature = rhs.fee_rate_governor.lamports_per_signature;
+        let epoch_accounts_hash = epoch_accounts_hash.or(rhs.epoch_accounts_hash.as_ref());
 
         let bank = SerializableVersionedBank {
             blockhash_queue: &blockhash_queue,
@@ -395,6 +404,7 @@ impl<'a> TypeContext<'a> for Context {
                 accounts_db_fields,
                 lamports_per_signature,
                 incremental_snapshot_persistence,
+                epoch_accounts_hash,
             ),
         )
     }

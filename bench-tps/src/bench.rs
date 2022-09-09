@@ -8,8 +8,10 @@ use {
     log::*,
     rand::distributions::{Distribution, Uniform},
     rayon::prelude::*,
+    solana_client::{nonce_utils, rpc_request::MAX_MULTIPLE_ACCOUNTS},
     solana_metrics::{self, datapoint_info},
     solana_sdk::{
+        account::Account,
         clock::{DEFAULT_MS_PER_SLOT, DEFAULT_S_PER_SLOT, MAX_PROCESSING_AGE},
         compute_budget::ComputeBudgetInstruction,
         hash::Hash,
@@ -23,7 +25,7 @@ use {
         transaction::Transaction,
     },
     std::{
-        collections::VecDeque,
+        collections::{HashSet, VecDeque},
         process::exit,
         sync::{
             atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering},
@@ -539,16 +541,64 @@ fn transfer_with_compute_unit_price(
     Transaction::new(&[from_keypair], message, recent_blockhash)
 }
 
-fn get_nonce_blockhash<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
-    client: Arc<T>,
-    nonce_account_pubkey: Pubkey,
-) -> Hash {
-    let nonce_account = client
-        .get_account(&nonce_account_pubkey)
-        .unwrap_or_else(|error| panic!("{:?}", error));
-    let nonce_data = solana_rpc_client_nonce_utils::data_from_account(&nonce_account)
-        .unwrap_or_else(|error| panic!("{:?}", error));
-    nonce_data.blockhash()
+fn get_nonce_accounts<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+    client: &Arc<T>,
+    nonce_pubkeys: &[Pubkey],
+) -> Vec<Option<Account>> {
+    // get_multiple_accounts supports maximum MAX_MULTIPLE_ACCOUNTS pubkeys in request
+    assert!(nonce_pubkeys.len() <= MAX_MULTIPLE_ACCOUNTS);
+    loop {
+        match client.get_multiple_accounts(nonce_pubkeys) {
+            Ok(nonce_accounts) => {
+                return nonce_accounts;
+            }
+            Err(err) => {
+                info!("Couldn't get durable nonce account: {:?}", err);
+                sleep(Duration::from_secs(1));
+            }
+        }
+    }
+}
+
+fn get_nonce_blockhashes<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
+    client: &Arc<T>,
+    nonce_pubkeys: &[Pubkey],
+) -> Vec<Hash> {
+    let num_accounts = nonce_pubkeys.len();
+    let mut blockhashes = vec![Hash::default(); num_accounts];
+    let mut unprocessed = (0..num_accounts).collect::<HashSet<_>>();
+
+    let mut request_pubkeys = Vec::<Pubkey>::with_capacity(num_accounts);
+    let mut request_indexes = Vec::<usize>::with_capacity(num_accounts);
+
+    while !unprocessed.is_empty() {
+        for i in &unprocessed {
+            request_pubkeys.push(nonce_pubkeys[*i]);
+            request_indexes.push(*i);
+        }
+
+        let num_unprocessed_before = unprocessed.len();
+        let accounts: Vec<Option<Account>> = nonce_pubkeys
+            .chunks(MAX_MULTIPLE_ACCOUNTS)
+            .flat_map(|pubkeys| get_nonce_accounts(client, pubkeys))
+            .collect();
+
+        for (account, index) in accounts.iter().zip(request_indexes.iter()) {
+            if let Some(nonce_account) = account {
+                let nonce_data = nonce_utils::data_from_account(nonce_account).unwrap();
+                blockhashes[*index] = nonce_data.blockhash();
+                unprocessed.remove(index);
+            }
+        }
+        let num_unprocessed_after = unprocessed.len();
+        debug!(
+            "Received {} durable nonce accounts",
+            num_unprocessed_before - num_unprocessed_after
+        );
+        request_pubkeys.clear();
+        request_indexes.clear();
+    }
+    blockhashes
 }
 
 fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized>(
@@ -561,34 +611,43 @@ fn generate_nonced_system_txs<T: 'static + BenchTpsClient + Send + Sync + ?Sized
 ) -> Vec<TimestampedTransaction> {
     let length = source.len();
     let mut transactions: Vec<TimestampedTransaction> = Vec::with_capacity(length);
-    for i in 0..length {
-        let (from, to, nonce, nonce_blockhash) = if !reclaim {
-            (
-                source[i],
-                dest[i],
-                source_nonce[i],
-                get_nonce_blockhash(client.clone(), source_nonce[i].pubkey()),
-            )
-        } else {
-            (
-                dest[i],
-                source[i],
-                dest_nonce[i],
-                get_nonce_blockhash(client.clone(), dest_nonce[i].pubkey()),
-            )
-        };
+    if !reclaim {
+        let pubkeys: Vec<Pubkey> = source_nonce
+            .iter()
+            .map(|keypair| keypair.pubkey())
+            .collect();
 
-        transactions.push((
-            system_transaction::nonced_transfer(
-                from,
-                &to.pubkey(),
-                1,
-                &nonce.pubkey(),
-                from,
-                nonce_blockhash,
-            ),
-            None,
-        ));
+        let blockhashes: Vec<Hash> = get_nonce_blockhashes(&client, &pubkeys);
+        for i in 0..length {
+            transactions.push((
+                system_transaction::nonced_transfer(
+                    source[i],
+                    &dest[i].pubkey(),
+                    1,
+                    &source_nonce[i].pubkey(),
+                    source[i],
+                    blockhashes[i],
+                ),
+                None,
+            ));
+        }
+    } else {
+        let pubkeys: Vec<Pubkey> = dest_nonce.iter().map(|keypair| keypair.pubkey()).collect();
+        let blockhashes: Vec<Hash> = get_nonce_blockhashes(&client, &pubkeys);
+
+        for i in 0..length {
+            transactions.push((
+                system_transaction::nonced_transfer(
+                    dest[i],
+                    &source[i].pubkey(),
+                    1,
+                    &dest_nonce[i].pubkey(),
+                    dest[i],
+                    blockhashes[i],
+                ),
+                None,
+            ));
+        }
     }
     transactions
 }

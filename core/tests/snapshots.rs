@@ -13,7 +13,8 @@ use {
     solana_gossip::{cluster_info::ClusterInfo, contact_info::ContactInfo},
     solana_runtime::{
         accounts_background_service::{
-            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService, SnapshotRequestHandler,
+            AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
+            PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         accounts_db::{self, ACCOUNTS_DB_CONFIG_FOR_TESTING},
         accounts_index::AccountSecondaryIndexes,
@@ -24,8 +25,8 @@ use {
         snapshot_archive_info::FullSnapshotArchiveInfo,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage, SnapshotPackage,
-            SnapshotType,
+            AccountsPackage, AccountsPackageType, PendingAccountsPackage, PendingSnapshotPackage,
+            SnapshotPackage, SnapshotType,
         },
         snapshot_utils::{
             self, ArchiveFormat,
@@ -239,6 +240,7 @@ fn run_bank_forks_snapshot_n<F>(
         .expect("no bank snapshots found in path");
     let slot_deltas = last_bank.status_cache.read().unwrap().root_slot_deltas();
     let accounts_package = AccountsPackage::new(
+        AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         &last_bank,
         &last_bank_snapshot_info,
         bank_snapshots_dir,
@@ -249,13 +251,13 @@ fn run_bank_forks_snapshot_n<F>(
         ArchiveFormat::TarBzip2,
         snapshot_version,
         None,
-        Some(SnapshotType::FullSnapshot),
     )
     .unwrap();
     solana_runtime::serde_snapshot::reserialize_bank_with_new_accounts_hash(
         accounts_package.snapshot_links.path(),
         accounts_package.slot,
         &last_bank.get_accounts_hash(),
+        None,
         None,
     );
     let snapshot_package = SnapshotPackage::new(accounts_package, last_bank.get_accounts_hash());
@@ -389,7 +391,7 @@ fn test_concurrent_snapshot_packaging(
             snapshot_config.snapshot_version,
             snapshot_config.archive_format,
             None,
-            Some(SnapshotType::FullSnapshot),
+            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot),
         )
         .unwrap();
 
@@ -493,6 +495,7 @@ fn test_concurrent_snapshot_packaging(
                 accounts_package.slot,
                 &Hash::default(),
                 None,
+                None,
             );
             let snapshot_package = SnapshotPackage::new(accounts_package, Hash::default());
             pending_snapshot_package
@@ -536,6 +539,7 @@ fn test_concurrent_snapshot_packaging(
         saved_snapshots_dir.path(),
         saved_slot,
         &Hash::default(),
+        None,
         None,
     );
 
@@ -924,14 +928,17 @@ fn test_snapshots_with_background_services(
     }
 
     let abs_request_sender = AbsRequestSender::new(snapshot_request_sender);
-    let snapshot_request_handler = Some(SnapshotRequestHandler {
+    let snapshot_request_handler = SnapshotRequestHandler {
         snapshot_config: snapshot_test_config.snapshot_config.clone(),
         snapshot_request_receiver,
         pending_accounts_package: Arc::clone(&pending_accounts_package),
-    });
-    let abs_request_handler = AbsRequestHandler {
-        snapshot_request_handler,
+    };
+    let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
+    };
+    let abs_request_handler = AbsRequestHandlers {
+        snapshot_request_handler,
+        pruned_banks_request_handler,
     };
 
     let exit = Arc::new(AtomicBool::new(false));

@@ -10,7 +10,7 @@ use {
         account::{Account, AccountSharedData},
         bpf_loader,
         sysvar::rent::Rent,
-        transaction_context::{InstructionAccount, TransactionContext},
+        transaction_context::{IndexOfAccount, InstructionAccount, TransactionContext},
     },
     test::Bencher,
 };
@@ -94,9 +94,9 @@ fn create_inputs() -> TransactionContext {
         .enumerate()
         .map(
             |(instruction_account_index, index_in_transaction)| InstructionAccount {
-                index_in_caller: instruction_account_index,
+                index_in_caller: instruction_account_index as IndexOfAccount,
                 index_in_transaction,
-                index_in_callee: instruction_account_index,
+                index_in_callee: instruction_account_index as IndexOfAccount,
                 is_signer: false,
                 is_writable: instruction_account_index >= 4,
             },
@@ -106,8 +106,10 @@ fn create_inputs() -> TransactionContext {
         TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
     let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
     transaction_context
-        .push(&[0], &instruction_accounts, &instruction_data)
-        .unwrap();
+        .get_next_instruction_context()
+        .unwrap()
+        .configure(&[0], &instruction_accounts, &instruction_data);
+    transaction_context.push().unwrap();
     transaction_context
 }
 

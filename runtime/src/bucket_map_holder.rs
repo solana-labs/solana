@@ -31,8 +31,18 @@ pub struct BucketMapHolder<T: IndexValue> {
     pub disk: Option<BucketMap<(Slot, T)>>,
 
     pub count_buckets_flushed: AtomicUsize,
+
+    /// These three ages are individual atomics because their values are read many times from code during runtime.
+    /// Instead of accessing the single age and doing math each time, each value is incremented each time the age occurs, which is ~400ms.
+    /// Callers can ask for the precomputed value they already want.
     /// rolling 'current' age
     pub age: AtomicU8,
+    /// rolling age that is 'ages_to_stay_in_cache' + 'age'
+    pub future_age_to_flush: AtomicU8,
+    /// rolling age that is effectively 'age' - 1
+    /// these items are expected to be flushed from the accounts write cache or otherwise modified before this age occurs
+    pub future_age_to_flush_cached: AtomicU8,
+
     pub stats: BucketMapHolderStats,
 
     age_timer: AtomicInterval,
@@ -79,6 +89,9 @@ impl<T: IndexValue> BucketMapHolder<T> {
         // fetch_add is defined to wrap.
         // That's what we want. 0..255, then back to 0.
         self.age.fetch_add(1, Ordering::Release);
+        self.future_age_to_flush.fetch_add(1, Ordering::Release);
+        self.future_age_to_flush_cached
+            .fetch_add(1, Ordering::Release);
         assert!(
             previous >= self.bins,
             "previous: {}, bins: {}",
@@ -88,8 +101,13 @@ impl<T: IndexValue> BucketMapHolder<T> {
         self.wait_dirty_or_aged.notify_all(); // notify all because we can age scan in parallel
     }
 
-    pub fn future_age_to_flush(&self) -> Age {
-        self.current_age().wrapping_add(self.ages_to_stay_in_cache)
+    pub fn future_age_to_flush(&self, is_cached: bool) -> Age {
+        if is_cached {
+            &self.future_age_to_flush_cached
+        } else {
+            &self.future_age_to_flush
+        }
+        .load(Ordering::Acquire)
     }
 
     fn has_age_interval_elapsed(&self) -> bool {
@@ -224,7 +242,12 @@ impl<T: IndexValue> BucketMapHolder<T> {
             disk,
             ages_to_stay_in_cache,
             count_buckets_flushed: AtomicUsize::default(),
+            // age = 0
             age: AtomicU8::default(),
+            // future age = age (=0) + ages_to_stay_in_cache
+            future_age_to_flush: AtomicU8::new(ages_to_stay_in_cache),
+            // effectively age (0) - 1. So, the oldest possible age from 'now'
+            future_age_to_flush_cached: AtomicU8::new(0_u8.wrapping_sub(1)),
             stats: BucketMapHolderStats::new(bins),
             wait_dirty_or_aged: Arc::default(),
             next_bucket_to_flush: AtomicUsize::new(0),
@@ -397,6 +420,26 @@ pub mod tests {
         visited.iter().enumerate().for_each(|(bin, visited)| {
             assert_eq!(visited.load(Ordering::Relaxed), expected, "bin: {}", bin)
         });
+    }
+
+    #[test]
+    fn test_ages() {
+        solana_logger::setup();
+        let bins = 4;
+        let test = BucketMapHolder::<u64>::new(bins, &Some(AccountsIndexConfig::default()), 1);
+        assert_eq!(0, test.current_age());
+        assert_eq!(test.ages_to_stay_in_cache, test.future_age_to_flush(false));
+        assert_eq!(u8::MAX, test.future_age_to_flush(true));
+        (0..bins).for_each(|_| {
+            test.bucket_flushed_at_current_age(false);
+        });
+        test.increment_age();
+        assert_eq!(1, test.current_age());
+        assert_eq!(
+            test.ages_to_stay_in_cache + 1,
+            test.future_age_to_flush(false)
+        );
+        assert_eq!(0, test.future_age_to_flush(true));
     }
 
     #[test]

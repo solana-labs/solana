@@ -1,7 +1,6 @@
-import nacl from 'tweetnacl';
-import type {SignKeyPair as KeyPair} from 'tweetnacl';
-import type {Buffer} from 'buffer';
+import {Buffer} from 'buffer';
 
+import {generatePrivateKey, getPublicKey} from './utils/ed25519';
 import {toBuffer} from './utils/to-buffer';
 import {PublicKey} from './publickey';
 
@@ -12,7 +11,9 @@ import {PublicKey} from './publickey';
  */
 export class Account {
   /** @internal */
-  _keypair: KeyPair;
+  private _publicKey: Buffer;
+  /** @internal */
+  private _secretKey: Buffer;
 
   /**
    * Create a new Account object
@@ -24,9 +25,15 @@ export class Account {
    */
   constructor(secretKey?: Buffer | Uint8Array | Array<number>) {
     if (secretKey) {
-      this._keypair = nacl.sign.keyPair.fromSecretKey(toBuffer(secretKey));
+      const secretKeyBuffer = toBuffer(secretKey);
+      if (secretKey.length !== 64) {
+        throw new Error('bad secret key size');
+      }
+      this._publicKey = secretKeyBuffer.slice(32, 64);
+      this._secretKey = secretKeyBuffer.slice(0, 32);
     } else {
-      this._keypair = nacl.sign.keyPair();
+      this._secretKey = toBuffer(generatePrivateKey());
+      this._publicKey = toBuffer(getPublicKey(this._secretKey));
     }
   }
 
@@ -34,13 +41,15 @@ export class Account {
    * The public key for this account
    */
   get publicKey(): PublicKey {
-    return new PublicKey(this._keypair.publicKey);
+    return new PublicKey(this._publicKey);
   }
 
   /**
-   * The **unencrypted** secret key for this account
+   * The **unencrypted** secret key for this account. The first 32 bytes
+   * is the private scalar and the last 32 bytes is the public key.
+   * Read more: https://blog.mozilla.org/warner/2011/11/29/ed25519-keys/
    */
   get secretKey(): Buffer {
-    return toBuffer(this._keypair.secretKey);
+    return Buffer.concat([this._secretKey, this._publicKey], 64);
   }
 }

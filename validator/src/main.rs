@@ -50,7 +50,7 @@ use {
         },
         hardened_unpack::MAX_GENESIS_ARCHIVE_UNPACKED_SIZE,
         runtime_config::RuntimeConfig,
-        snapshot_config::SnapshotConfig,
+        snapshot_config::{SnapshotConfig, SnapshotUsage},
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             DEFAULT_FULL_SNAPSHOT_ARCHIVE_INTERVAL_SLOTS,
@@ -70,7 +70,9 @@ use {
         self, MAX_BATCH_SEND_RATE_MS, MAX_TRANSACTION_BATCH_SIZE,
     },
     solana_streamer::socket::SocketAddrSpace,
-    solana_tpu_client::connection_cache::DEFAULT_TPU_CONNECTION_POOL_SIZE,
+    solana_tpu_client::connection_cache::{
+        DEFAULT_TPU_CONNECTION_POOL_SIZE, DEFAULT_TPU_ENABLE_UDP,
+    },
     solana_validator::{
         admin_rpc_service,
         admin_rpc_service::{load_staked_nodes_overrides, StakedNodesOverrides},
@@ -167,8 +169,16 @@ fn wait_for_restart_window(
 
     let progress_bar = new_spinner_progress_bar();
     let monitor_start_time = SystemTime::now();
+
+    let mut seen_incremential_snapshot = false;
     loop {
         let snapshot_slot_info = rpc_client.get_highest_snapshot_slot().ok();
+        let snapshot_slot_info_has_incremential = snapshot_slot_info
+            .as_ref()
+            .map(|snapshot_slot_info| snapshot_slot_info.incremental.is_some())
+            .unwrap_or_default();
+        seen_incremential_snapshot |= snapshot_slot_info_has_incremential;
+
         let epoch_info = rpc_client.get_epoch_info_with_commitment(CommitmentConfig::processed())?;
         let healthy = rpc_client.get_health().ok().is_some();
         let delinquent_stake_percentage = {
@@ -297,17 +307,17 @@ fn wait_for_restart_window(
                     }
                 };
 
-                let snapshot_slot = snapshot_slot_info.map(|snapshot_slot_info| {
-                    snapshot_slot_info
-                        .incremental
-                        .unwrap_or(snapshot_slot_info.full)
-                });
                 match in_leader_schedule_hole {
                     Ok(_) => {
                         if skip_new_snapshot_check {
                             break; // Restart!
                         }
-                        if restart_snapshot == None {
+                        let snapshot_slot = snapshot_slot_info.map(|snapshot_slot_info| {
+                            snapshot_slot_info
+                                .incremental
+                                .unwrap_or(snapshot_slot_info.full)
+                        });
+                        if restart_snapshot.is_none() {
                             restart_snapshot = snapshot_slot;
                         }
                         if restart_snapshot == snapshot_slot && !monitoring_another_validator {
@@ -316,6 +326,16 @@ fn wait_for_restart_window(
                             >= (max_delinquency_percentage as f64 / 100.)
                         {
                             style("Delinquency too high").red().to_string()
+                        } else if seen_incremential_snapshot && !snapshot_slot_info_has_incremential
+                        {
+                            // Restarts using just a full snapshot will put the node significantly
+                            // further behind than if an incremental snapshot is also used, as full
+                            // snapshots are larger and take much longer to create.
+                            //
+                            // Therefore if the node just created a new full snapshot, wait a
+                            // little longer until it creates the first incremental snapshot for
+                            // the full snapshot.
+                            "Waiting for incremental snapshot".to_string()
                         } else {
                             break; // Restart!
                         }
@@ -1228,6 +1248,12 @@ pub fn main() {
                 .help("Do not use QUIC to send transactions."),
         )
         .arg(
+            Arg::with_name("tpu_enable_udp")
+                .long("tpu-enable-udp")
+                .takes_value(false)
+                .help("Enable UDP for receiving/sending transactions."),
+        )
+        .arg(
             Arg::with_name("disable_quic_servers")
                 .long("disable-quic-servers")
                 .takes_value(false)
@@ -1657,6 +1683,12 @@ pub fn main() {
                 .help("Disables accounts caching"),
         )
         .arg(
+            Arg::with_name("accounts_db_verify_refcounts")
+                .long("accounts-db-verify-refcounts")
+                .help("Debug option to scan all append vecs and verify account index refcounts prior to clean")
+                .hidden(true)
+        )
+        .arg(
             Arg::with_name("accounts_db_skip_shrink")
                 .long("accounts-db-skip-shrink")
                 .help("Enables faster starting of validators by skipping shrink. \
@@ -1818,6 +1850,11 @@ pub fn main() {
                 .validator(is_parsable::<usize>)
                 .value_name("BYTES")
                 .help("Maximum number of bytes written to the program log before truncation")
+        )
+        .arg(
+            Arg::with_name("replay_slots_concurrently")
+                .long("replay-slots-concurrently")
+                .help("Allow concurrent replay of slots on different forks")
         )
         .after_help("The default subcommand is run")
         .subcommand(
@@ -2402,6 +2439,12 @@ pub fn main() {
     let accounts_shrink_optimize_total_space =
         value_t_or_exit!(matches, "accounts_shrink_optimize_total_space", bool);
     let tpu_use_quic = !matches.is_present("tpu_disable_quic");
+    let tpu_enable_udp = if matches.is_present("tpu_enable_udp") {
+        true
+    } else {
+        DEFAULT_TPU_ENABLE_UDP
+    };
+
     let tpu_connection_pool_size = value_t_or_exit!(matches, "tpu_connection_pool_size", usize);
 
     let shrink_ratio = value_t_or_exit!(matches, "accounts_shrink_ratio", f64);
@@ -2537,6 +2580,7 @@ pub fn main() {
             .map(|mb| mb * MB as u64),
         skip_rewrites: matches.is_present("accounts_db_skip_rewrites"),
         ancient_append_vecs: matches.is_present("accounts_db_ancient_append_vecs"),
+        exhaustively_verify_refcounts: matches.is_present("accounts_db_verify_refcounts"),
         ..AccountsDbConfig::default()
     };
 
@@ -2759,6 +2803,7 @@ pub fn main() {
             ..RuntimeConfig::default()
         },
         staked_nodes_overrides: staked_nodes_overrides.clone(),
+        replay_slots_concurrently: matches.is_present("replay_slots_concurrently"),
         ..ValidatorConfig::default()
     };
 
@@ -2905,6 +2950,11 @@ pub fn main() {
         };
 
     validator_config.snapshot_config = Some(SnapshotConfig {
+        usage: if full_snapshot_archive_interval_slots == Slot::MAX {
+            SnapshotUsage::LoadOnly
+        } else {
+            SnapshotUsage::LoadAndGenerate
+        },
         full_snapshot_archive_interval_slots,
         incremental_snapshot_archive_interval_slots,
         bank_snapshots_dir,
@@ -2921,8 +2971,9 @@ pub fn main() {
     validator_config.accounts_hash_interval_slots =
         value_t_or_exit!(matches, "accounts-hash-interval-slots", u64);
     if !is_snapshot_config_valid(
-        full_snapshot_archive_interval_slots,
-        incremental_snapshot_archive_interval_slots,
+        // SAFETY: Calling `.unwrap()` is safe here because `validator_config.snapshot_config` must
+        // be `Some`. The Option<> wrapper will be removed later to solidify this requirement.
+        validator_config.snapshot_config.as_ref().unwrap(),
         validator_config.accounts_hash_interval_slots,
     ) {
         eprintln!("Invalid snapshot configuration provided: snapshot intervals are incompatible. \
@@ -3184,6 +3235,7 @@ pub fn main() {
         socket_addr_space,
         tpu_use_quic,
         tpu_connection_pool_size,
+        tpu_enable_udp,
     )
     .unwrap_or_else(|e| {
         error!("Failed to start validator: {:?}", e);

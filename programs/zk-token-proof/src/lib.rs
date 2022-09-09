@@ -3,7 +3,10 @@
 use {
     bytemuck::Pod,
     solana_program_runtime::{ic_msg, invoke_context::InvokeContext},
-    solana_sdk::instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
+    solana_sdk::{
+        instruction::{InstructionError, TRANSACTION_LEVEL_STACK_HEIGHT},
+        transaction_context::IndexOfAccount,
+    },
     solana_zk_token_sdk::zk_token_proof_instruction::*,
     std::result::Result,
 };
@@ -26,7 +29,7 @@ fn verify<T: Pod + Verifiable>(invoke_context: &mut InvokeContext) -> Result<(),
 }
 
 pub fn process_instruction(
-    _first_instruction_account: usize,
+    _first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     if invoke_context.get_stack_height() != TRANSACTION_LEVEL_STACK_HEIGHT {

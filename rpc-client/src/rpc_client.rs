@@ -308,10 +308,10 @@ impl RpcClient {
     /// The URL is an HTTP URL, usually for port 8899, as in
     /// "http://localhost:8899".
     ///
-    /// The `confirm_transaction_initial_timeout` argument specifies, when
+    /// The `confirm_transaction_initial_timeout` argument specifies the amount of
+    /// time to allow for the server to initially process a transaction, when
     /// confirming a transaction via one of the `_with_spinner` methods, like
-    /// [`RpcClient::send_and_confirm_transaction_with_spinner`], the amount of
-    /// time to allow for the server to initially process a transaction. In
+    /// [`RpcClient::send_and_confirm_transaction_with_spinner`]. In
     /// other words, setting `confirm_transaction_initial_timeout` to > 0 allows
     /// `RpcClient` to wait for confirmation of a transaction that the server
     /// has not "seen" yet.
@@ -631,6 +631,7 @@ impl RpcClient {
         self.invoke((self.rpc_client.as_ref()).send_and_confirm_transaction(transaction))
     }
 
+    #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner(
         &self,
         transaction: &Transaction,
@@ -640,6 +641,7 @@ impl RpcClient {
         )
     }
 
+    #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner_and_commitment(
         &self,
         transaction: &Transaction,
@@ -651,6 +653,7 @@ impl RpcClient {
         )
     }
 
+    #[cfg(feature = "spinner")]
     pub fn send_and_confirm_transaction_with_spinner_and_config(
         &self,
         transaction: &Transaction,
@@ -949,6 +952,7 @@ impl RpcClient {
         )
     }
 
+    #[cfg(feature = "spinner")]
     pub fn confirm_transaction_with_spinner(
         &self,
         signature: &Signature,

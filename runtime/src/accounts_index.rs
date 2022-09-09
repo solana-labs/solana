@@ -232,16 +232,16 @@ pub struct AccountMapEntryMeta {
 }
 
 impl AccountMapEntryMeta {
-    pub fn new_dirty<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
+    pub fn new_dirty<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>, is_cached: bool) -> Self {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(true),
-            age: AtomicU8::new(storage.future_age_to_flush()),
+            age: AtomicU8::new(storage.future_age_to_flush(is_cached)),
         }
     }
     pub fn new_clean<T: IndexValue>(storage: &Arc<BucketMapHolder<T>>) -> Self {
         AccountMapEntryMeta {
             dirty: AtomicBool::new(false),
-            age: AtomicU8::new(storage.future_age_to_flush()),
+            age: AtomicU8::new(storage.future_age_to_flush(false)),
         }
     }
 }
@@ -277,7 +277,10 @@ impl<T: IndexValue> AccountMapEntryInner<T> {
         if add {
             self.ref_count.fetch_add(1, Ordering::Release);
         } else {
-            self.ref_count.fetch_sub(1, Ordering::Release);
+            let previous = self.ref_count.fetch_sub(1, Ordering::Release);
+            if previous == 0 {
+                inc_new_counter_info!("accounts_index-deref_from_0", 1);
+            }
         }
         self.set_dirty(true);
     }
@@ -414,7 +417,7 @@ impl<T: IndexValue> PreAllocatedAccountMapEntry<T> {
     ) -> AccountMapEntry<T> {
         let is_cached = account_info.is_cached();
         let ref_count = if is_cached { 0 } else { 1 };
-        let meta = AccountMapEntryMeta::new_dirty(storage);
+        let meta = AccountMapEntryMeta::new_dirty(storage, is_cached);
         Arc::new(AccountMapEntryInner::new(
             vec![(slot, account_info)],
             ref_count,
@@ -495,7 +498,7 @@ pub struct AccountsIndexIterator<'a, T: IndexValue> {
 
 impl<'a, T: IndexValue> AccountsIndexIterator<'a, T> {
     fn range<R>(
-        map: &AccountMapsReadLock<T>,
+        map: &AccountMaps<T>,
         range: R,
         collect_all_unsorted: bool,
     ) -> Vec<(Pubkey, AccountMapEntry<T>)>
@@ -634,7 +637,7 @@ pub trait ZeroLamport {
 type MapType<T> = AccountMap<T>;
 type LockMapType<T> = Vec<MapType<T>>;
 type LockMapTypeSlice<T> = [MapType<T>];
-type AccountMapsReadLock<'a, T> = &'a MapType<T>;
+type AccountMaps<'a, T> = &'a MapType<T>;
 
 #[derive(Debug, Default)]
 pub struct ScanSlotTracker {
@@ -651,6 +654,7 @@ impl ScanSlotTracker {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum AccountsIndexScanResult {
     /// if the entry is not in the in-memory index, do not add it, make no modifications to it
     None,
@@ -1110,14 +1114,14 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     pub fn get_account_read_entry(&self, pubkey: &Pubkey) -> Option<ReadAccountMapEntry<T>> {
-        let lock = self.get_account_maps_read_lock(pubkey);
+        let lock = self.get_bin(pubkey);
         self.get_account_read_entry_with_lock(pubkey, &lock)
     }
 
     pub fn get_account_read_entry_with_lock(
         &self,
         pubkey: &Pubkey,
-        lock: &AccountMapsReadLock<'_, T>,
+        lock: &AccountMaps<'_, T>,
     ) -> Option<ReadAccountMapEntry<T>> {
         lock.get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry)
@@ -1128,7 +1132,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         pubkey: &Pubkey,
         user: impl for<'a> FnOnce(&mut RwLockWriteGuard<'a, SlotList<T>>) -> RT,
     ) -> Option<RT> {
-        let read_lock = self.get_account_maps_read_lock(pubkey);
+        let read_lock = self.get_bin(pubkey);
         read_lock.slot_list_mut(pubkey, user)
     }
 
@@ -1139,7 +1143,7 @@ impl<T: IndexValue> AccountsIndex<T> {
     ) {
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
-                let w_index = self.get_account_maps_read_lock(key);
+                let w_index = self.get_bin(key);
                 if w_index.remove_if_slot_list_empty(**key) {
                     // Note it's only safe to remove all the entries for this key
                     // because we have the lock for this key's entry in the AccountsIndex,
@@ -1342,15 +1346,22 @@ impl<T: IndexValue> AccountsIndex<T> {
     }
 
     /// For each pubkey, find the slot list in the accounts index
-    ///   call `callback`
-    pub(crate) fn scan<'a, F, I>(&'a self, pubkeys: I, mut callback: F)
-    where
+    ///   apply 'avoid_callback_result' if specified.
+    ///   otherwise, call `callback`
+    pub(crate) fn scan<'a, F, I>(
+        &'a self,
+        pubkeys: I,
+        mut callback: F,
+        avoid_callback_result: Option<AccountsIndexScanResult>,
+    ) where
         // params:
         //  pubkey looked up
         //  slots_refs is Option<(slot_list, ref_count)>
         //    None if 'pubkey' is not in accounts index.
         //   slot_list: comes from accounts index for 'pubkey'
         //   ref_count: refcount of entry in index
+        // if 'avoid_callback_result' is Some(_), then callback is NOT called
+        //  and _ is returned as if callback were called.
         F: FnMut(&'a Pubkey, Option<(&SlotList<T>, RefCount)>) -> AccountsIndexScanResult,
         I: IntoIterator<Item = &'a Pubkey>,
     {
@@ -1367,8 +1378,12 @@ impl<T: IndexValue> AccountsIndex<T> {
                 let mut cache = false;
                 match entry {
                     Some(locked_entry) => {
-                        let slot_list = &locked_entry.slot_list.read().unwrap();
-                        let result = callback(pubkey, Some((slot_list, locked_entry.ref_count())));
+                        let result = if let Some(result) = avoid_callback_result.as_ref() {
+                            *result
+                        } else {
+                            let slot_list = &locked_entry.slot_list.read().unwrap();
+                            callback(pubkey, Some((slot_list, locked_entry.ref_count())))
+                        };
                         cache = match result {
                             AccountsIndexScanResult::Unref => {
                                 locked_entry.add_un_ref(false);
@@ -1379,7 +1394,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                         };
                     }
                     None => {
-                        callback(pubkey, None);
+                        avoid_callback_result.unwrap_or_else(|| callback(pubkey, None));
                     }
                 }
                 (cache, ())
@@ -1395,7 +1410,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         ancestors: Option<&Ancestors>,
         max_root: Option<Slot>,
     ) -> AccountIndexGetResult<T> {
-        let read_lock = self.get_account_maps_read_lock(pubkey);
+        let read_lock = self.get_bin(pubkey);
         let account = read_lock
             .get(pubkey)
             .map(ReadAccountMapEntry::from_account_map_entry);
@@ -1524,7 +1539,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         );
     }
 
-    pub(crate) fn get_account_maps_read_lock(&self, pubkey: &Pubkey) -> AccountMapsReadLock<T> {
+    pub(crate) fn get_bin(&self, pubkey: &Pubkey) -> AccountMaps<T> {
         &self.account_maps[self.bin_calculator.bin_from_pubkey(pubkey)]
     }
 
@@ -1650,19 +1665,19 @@ impl<T: IndexValue> AccountsIndex<T> {
             &self.storage.storage,
             store_raw,
         );
-        let map = self.get_account_maps_read_lock(pubkey);
+        let map = self.get_bin(pubkey);
 
         map.upsert(pubkey, new_item, Some(old_slot), reclaims, reclaim);
         self.update_secondary_indexes(pubkey, account, account_indexes);
     }
 
     pub fn unref_from_storage(&self, pubkey: &Pubkey) {
-        let map = self.get_account_maps_read_lock(pubkey);
+        let map = self.get_bin(pubkey);
         map.unref(pubkey)
     }
 
     pub fn ref_count_from_storage(&self, pubkey: &Pubkey) -> RefCount {
-        let map = self.get_account_maps_read_lock(pubkey);
+        let map = self.get_bin(pubkey);
         map.get_internal(pubkey, |entry| {
             (
                 false,
@@ -1739,7 +1754,7 @@ impl<T: IndexValue> AccountsIndex<T> {
         // locked and inserted the pubkey in-between when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
-            let w_maps = self.get_account_maps_read_lock(pubkey);
+            let w_maps = self.get_bin(pubkey);
             w_maps.remove_if_slot_list_empty(*pubkey);
         }
     }
@@ -2629,7 +2644,7 @@ pub mod tests {
 
         for lock in &[false, true] {
             let read_lock = if *lock {
-                Some(index.get_account_maps_read_lock(&key))
+                Some(index.get_bin(&key))
             } else {
                 None
             };
@@ -2684,7 +2699,7 @@ pub mod tests {
         assert_eq!((slot, account_info), new_entry.clone().into());
 
         assert_eq!(0, account_maps_stats_len(&index));
-        let r_account_maps = index.get_account_maps_read_lock(&key.pubkey());
+        let r_account_maps = index.get_bin(&key.pubkey());
         r_account_maps.upsert(
             &key.pubkey(),
             new_entry,

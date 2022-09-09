@@ -21,7 +21,7 @@ use {
         compaction_filter_factory::{CompactionFilterContext, CompactionFilterFactory},
         properties as RocksProperties, ColumnFamily, ColumnFamilyDescriptor, CompactionDecision,
         DBCompactionStyle, DBIterator, DBRawIterator, FifoCompactOptions,
-        IteratorMode as RocksIteratorMode, Options, WriteBatch as RWriteBatch, DB,
+        IteratorMode as RocksIteratorMode, LiveFile, Options, WriteBatch as RWriteBatch, DB,
     },
     serde::{de::DeserializeOwned, Serialize},
     solana_runtime::hardened_unpack::UnpackError,
@@ -455,6 +455,7 @@ impl Rocks {
         Ok(())
     }
 
+    /// Delete files whose slot range is within \[`from`, `to`\].
     fn delete_file_in_range_cf(
         &self,
         cf: &ColumnFamily,
@@ -523,6 +524,13 @@ impl Rocks {
         match self.db.property_int_value_cf(cf, name) {
             Ok(Some(value)) => Ok(value.try_into().unwrap()),
             Ok(None) => Ok(0),
+            Err(e) => Err(BlockstoreError::RocksDb(e)),
+        }
+    }
+
+    fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        match self.db.live_files() {
+            Ok(live_files) => Ok(live_files),
             Err(e) => Err(BlockstoreError::RocksDb(e)),
         }
     }
@@ -1119,17 +1127,23 @@ impl Database {
         Ok(fs_extra::dir::get_size(&self.path)?)
     }
 
-    // Adds a range to delete to the given write batch
+    /// Adds a \[`from`, `to`\] range to delete to the given write batch
     pub fn delete_range_cf<C>(&self, batch: &mut WriteBatch, from: Slot, to: Slot) -> Result<()>
     where
         C: Column + ColumnName,
     {
         let cf = self.cf_handle::<C>();
+        // Note that the default behavior of rocksdb's delete_range_cf deletes
+        // files within [from, to), while our purge logic applies to [from, to].
+        //
+        // For consistency, we make our delete_range_cf works for [from, to] by
+        // adjusting the `to` slot range by 1.
         let from_index = C::as_index(from);
-        let to_index = C::as_index(to);
+        let to_index = C::as_index(to.saturating_add(1));
         batch.delete_range_cf::<C>(cf, from_index, to_index)
     }
 
+    /// Delete files whose slot range is within \[`from`, `to`\].
     pub fn delete_file_in_range_cf<C>(&self, from: Slot, to: Slot) -> Result<()>
     where
         C: Column + ColumnName,
@@ -1147,6 +1161,10 @@ impl Database {
 
     pub fn set_oldest_slot(&self, oldest_slot: Slot) {
         self.backend.oldest_slot.set(oldest_slot);
+    }
+
+    pub fn live_files_metadata(&self) -> Result<Vec<LiveFile>> {
+        self.backend.live_files_metadata()
     }
 }
 
@@ -1439,11 +1457,17 @@ impl<'a> WriteBatch<'a> {
         self.map[C::NAME]
     }
 
-    pub fn delete_range_cf<C: Column>(
+    /// Adds a \[`from`, `to`) range deletion entry to the batch.
+    ///
+    /// Note that the \[`from`, `to`) deletion range of WriteBatch::delete_range_cf
+    /// is different from \[`from`, `to`\] of Database::delete_range_cf as we makes
+    /// the semantics of Database::delete_range_cf matches the blockstore purge
+    /// logic.
+    fn delete_range_cf<C: Column>(
         &mut self,
         cf: &ColumnFamily,
         from: C::Index,
-        to: C::Index,
+        to: C::Index, // exclusive
     ) -> Result<()> {
         self.write_batch
             .delete_range_cf(cf, C::key(from), C::key(to));

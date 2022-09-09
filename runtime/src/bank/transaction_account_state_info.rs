@@ -4,8 +4,12 @@ use {
         bank::Bank,
     },
     solana_sdk::{
-        account::ReadableAccount, feature_set, message::SanitizedMessage, native_loader,
-        transaction::Result, transaction_context::TransactionContext,
+        account::ReadableAccount,
+        feature_set,
+        message::SanitizedMessage,
+        native_loader,
+        transaction::Result,
+        transaction_context::{IndexOfAccount, TransactionContext},
     },
 };
 
@@ -22,7 +26,9 @@ impl Bank {
         (0..message.account_keys().len())
             .map(|i| {
                 let rent_state = if message.is_writable(i) {
-                    let state = if let Ok(account) = transaction_context.get_account_at_index(i) {
+                    let state = if let Ok(account) =
+                        transaction_context.get_account_at_index(i as IndexOfAccount)
+                    {
                         let account = account.borrow();
 
                         // Native programs appear to be RentPaying because they carry low lamport
@@ -68,7 +74,7 @@ impl Bank {
                 pre_state_info.rent_state.as_ref(),
                 post_state_info.rent_state.as_ref(),
                 transaction_context,
-                i,
+                i as IndexOfAccount,
                 include_account_index_in_err,
                 prevent_crediting_accounts_that_end_rent_paying,
             )?;

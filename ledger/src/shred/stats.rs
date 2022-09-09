@@ -17,6 +17,7 @@ pub struct ProcessShredsStats {
     pub sign_coding_elapsed: u64,
     pub coding_send_elapsed: u64,
     pub get_leader_schedule_elapsed: u64,
+    pub coalesce_elapsed: u64,
     // Histogram count of num_data_shreds obtained from serializing entries
     // counted in 5 buckets.
     num_data_shreds_hist: [usize; 5],
@@ -83,6 +84,7 @@ impl ProcessShredsStats {
             ("num_data_shreds_31", self.num_data_shreds_hist[2], i64),
             ("num_data_shreds_63", self.num_data_shreds_hist[3], i64),
             ("num_data_shreds_64", self.num_data_shreds_hist[4], i64),
+            ("coalesce_elapsed", self.coalesce_elapsed, i64),
         );
         *self = Self::default();
     }
@@ -134,6 +136,7 @@ impl AddAssign<ProcessShredsStats> for ProcessShredsStats {
             sign_coding_elapsed,
             coding_send_elapsed,
             get_leader_schedule_elapsed,
+            coalesce_elapsed,
             num_data_shreds_hist,
             num_extant_slots,
             data_buffer_residual,
@@ -146,6 +149,7 @@ impl AddAssign<ProcessShredsStats> for ProcessShredsStats {
         self.sign_coding_elapsed += sign_coding_elapsed;
         self.coding_send_elapsed += coding_send_elapsed;
         self.get_leader_schedule_elapsed += get_leader_schedule_elapsed;
+        self.coalesce_elapsed += coalesce_elapsed;
         self.num_extant_slots += num_extant_slots;
         self.data_buffer_residual += data_buffer_residual;
         for (i, bucket) in self.num_data_shreds_hist.iter_mut().enumerate() {

@@ -11,7 +11,9 @@ use {
         pubkey::Pubkey,
         slot_hashes::{SlotHashes, MAX_ENTRIES},
         sysvar,
-        transaction_context::{InstructionAccount, TransactionAccount, TransactionContext},
+        transaction_context::{
+            IndexOfAccount, InstructionAccount, TransactionAccount, TransactionContext,
+        },
     },
     solana_vote_program::{
         vote_instruction::VoteInstruction,
@@ -82,7 +84,7 @@ fn create_accounts() -> (
     ];
     let mut instruction_accounts = (0..4)
         .map(|index_in_callee| InstructionAccount {
-            index_in_transaction: 1usize.saturating_add(index_in_callee),
+            index_in_transaction: (1 as IndexOfAccount).saturating_add(index_in_callee),
             index_in_caller: index_in_callee,
             index_in_callee,
             is_signer: false,
@@ -115,8 +117,11 @@ fn bench_process_vote_instruction(
         );
         let mut invoke_context = InvokeContext::new_mock(&mut transaction_context, &[]);
         invoke_context
-            .push(&instruction_accounts, &[0], &instruction_data)
-            .unwrap();
+            .transaction_context
+            .get_next_instruction_context()
+            .unwrap()
+            .configure(&[0], &instruction_accounts, &instruction_data);
+        invoke_context.push().unwrap();
         assert!(
             solana_vote_program::vote_processor::process_instruction(1, &mut invoke_context)
                 .is_ok()

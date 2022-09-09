@@ -9,10 +9,10 @@ use {
         bank::{Bank, BankSlotDelta, DropCallback},
         bank_forks::BankForks,
         snapshot_config::SnapshotConfig,
-        snapshot_package::{PendingAccountsPackage, SnapshotType},
+        snapshot_package::{AccountsPackageType, PendingAccountsPackage, SnapshotType},
         snapshot_utils::{self, SnapshotError},
     },
-    crossbeam_channel::{Receiver, SendError, Sender, TrySendError},
+    crossbeam_channel::{Receiver, SendError, Sender},
     log::*,
     rand::{thread_rng, Rng},
     solana_measure::measure::Measure,
@@ -25,7 +25,7 @@ use {
         boxed::Box,
         fmt::{Debug, Formatter},
         sync::{
-            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+            atomic::{AtomicBool, AtomicU64, Ordering},
             Arc, RwLock,
         },
         thread::{self, sleep, Builder, JoinHandle},
@@ -56,64 +56,27 @@ const BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL: u64 = 60_000;
 /// maximum drop bank signal queue length
 const MAX_DROP_BANK_SIGNAL_QUEUE_SIZE: usize = 10_000;
 
-/// Bank drop signal queue events
-#[allow(dead_code)]
-enum BankDropQueueEvent {
-    Full,
-    Disconnected,
-}
-
-/// Bank drop signal queue event statistics
 #[derive(Debug, Default)]
-struct BankDropQueueStats {
-    report_time: AtomicU64,
-    queue_full: AtomicUsize,
-    queue_disconnected: AtomicUsize,
+struct PrunedBankQueueLenReporter {
+    last_report_time: AtomicU64,
 }
 
-impl BankDropQueueStats {
-    /// increase event counter
-    fn increase(&self, event: BankDropQueueEvent) {
-        let counter = match event {
-            BankDropQueueEvent::Full => &self.queue_full,
-            BankDropQueueEvent::Disconnected => &self.queue_disconnected,
-        };
-
-        counter.fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// submit bank drop signal queue event counters
-    fn report(&self, event: BankDropQueueEvent) {
-        let counter = match event {
-            BankDropQueueEvent::Full => &self.queue_full,
-            BankDropQueueEvent::Disconnected => &self.queue_disconnected,
-        };
-
-        let name = match event {
-            BankDropQueueEvent::Full => "full",
-            BankDropQueueEvent::Disconnected => "disconnected",
-        };
-
-        let ts = solana_sdk::timing::timestamp();
-        let last_report_time = self.report_time.load(Ordering::Acquire);
-        if ts.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL {
-            let val = counter.load(Ordering::Relaxed);
-
-            if counter
-                .compare_exchange_weak(val, 0, Ordering::AcqRel, Ordering::Acquire)
-                .is_ok()
-            {
-                if val > 0 {
-                    datapoint_info!("bank_drop_queue_event", (name, val, i64));
-                }
-                self.report_time.store(ts, Ordering::Release);
-            }
+impl PrunedBankQueueLenReporter {
+    fn report(&self, q_len: usize) {
+        let now = solana_sdk::timing::timestamp();
+        let last_report_time = self.last_report_time.load(Ordering::Acquire);
+        if q_len > MAX_DROP_BANK_SIGNAL_QUEUE_SIZE
+            && now.saturating_sub(last_report_time) > BANK_DROP_SIGNAL_CHANNEL_REPORT_INTERVAL
+        {
+            datapoint_warn!("excessive_pruned_bank_channel_len", ("len", q_len, i64));
+            self.last_report_time.store(now, Ordering::Release);
         }
     }
 }
 
 lazy_static! {
-    static ref BANK_DROP_QUEUE_STATS: BankDropQueueStats = BankDropQueueStats::default();
+    static ref BANK_DROP_QUEUE_REPORTER: PrunedBankQueueLenReporter =
+        PrunedBankQueueLenReporter::default();
 }
 
 #[derive(Clone)]
@@ -123,21 +86,9 @@ pub struct SendDroppedBankCallback {
 
 impl DropCallback for SendDroppedBankCallback {
     fn callback(&self, bank: &Bank) {
-        BANK_DROP_QUEUE_STATS.report(BankDropQueueEvent::Full);
-        match self.sender.try_send((bank.slot(), bank.bank_id())) {
-            Err(TrySendError::Full(_)) => {
-                BANK_DROP_QUEUE_STATS.increase(BankDropQueueEvent::Full);
-                BANK_DROP_QUEUE_STATS.report(BankDropQueueEvent::Full);
-
-                // send again and block until success
-                let _ = self.sender.send((bank.slot(), bank.bank_id()));
-            }
-
-            Err(TrySendError::Disconnected(_)) => {
-                info!("bank DropCallback signal queue disconnected.");
-            }
-            // success
-            Ok(_) => {}
+        BANK_DROP_QUEUE_REPORTER.report(self.sender.len());
+        if let Err(SendError(_)) = self.sender.send((bank.slot(), bank.bank_id())) {
+            info!("bank DropCallback signal queue disconnected.");
         }
     }
 
@@ -161,6 +112,18 @@ impl SendDroppedBankCallback {
 pub struct SnapshotRequest {
     pub snapshot_root_bank: Arc<Bank>,
     pub status_cache_slot_deltas: Vec<BankSlotDelta>,
+    pub request_type: SnapshotRequestType,
+}
+
+/// What type of request is this?
+///
+/// The snapshot request has been expanded to support more than just snapshots.  This is
+/// confusing, but can be resolved by renaming this type; or better, by creating an enum with
+/// variants that wrap the fields-of-interest for each request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum SnapshotRequestType {
+    Snapshot,
+    EpochAccountsHash,
 }
 
 pub struct SnapshotRequestHandler {
@@ -186,6 +149,7 @@ impl SnapshotRequestHandler {
                 let SnapshotRequest {
                     snapshot_root_bank,
                     status_cache_slot_deltas,
+                    request_type,
                 } = snapshot_request;
 
                 // we should not rely on the state of this validator until startup verification is complete
@@ -244,6 +208,7 @@ impl SnapshotRequestHandler {
                             rent_collector: snapshot_root_bank.rent_collector(),
                             store_detailed_debug_info_on_failure: false,
                             full_snapshot: None,
+                            enable_rehashing: true,
                         },
                     ).unwrap();
                     assert_eq!(previous_hash, this_hash);
@@ -264,23 +229,19 @@ impl SnapshotRequestHandler {
                 }
 
                 let block_height = snapshot_root_bank.block_height();
-                let snapshot_type = if snapshot_utils::should_take_full_snapshot(
-                    block_height,
-                    self.snapshot_config.full_snapshot_archive_interval_slots,
-                ) {
-                    *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
-                    Some(SnapshotType::FullSnapshot)
-                } else if snapshot_utils::should_take_incremental_snapshot(
-                    block_height,
-                    self.snapshot_config
-                        .incremental_snapshot_archive_interval_slots,
-                    *last_full_snapshot_slot,
-                ) {
-                    Some(SnapshotType::IncrementalSnapshot(
-                        last_full_snapshot_slot.unwrap(),
-                    ))
-                } else {
-                    None
+                let accounts_package_type = match request_type {
+                    SnapshotRequestType::EpochAccountsHash => AccountsPackageType::EpochAccountsHash,
+                    _ => {
+                        if snapshot_utils::should_take_full_snapshot(block_height, self.snapshot_config.full_snapshot_archive_interval_slots) {
+                            *last_full_snapshot_slot = Some(snapshot_root_bank.slot());
+                            AccountsPackageType::Snapshot(SnapshotType::FullSnapshot)
+                        } else if snapshot_utils::should_take_incremental_snapshot(block_height, self.snapshot_config .incremental_snapshot_archive_interval_slots, *last_full_snapshot_slot) {
+                            AccountsPackageType::Snapshot(SnapshotType::IncrementalSnapshot( last_full_snapshot_slot.unwrap()))
+                        } else {
+                            AccountsPackageType::AccountsHashVerifier
+                        }
+                    },
+
                 };
 
                 // Snapshot the bank and send over an accounts package
@@ -295,13 +256,13 @@ impl SnapshotRequestHandler {
                     self.snapshot_config.snapshot_version,
                     self.snapshot_config.archive_format,
                     hash_for_testing,
-                    snapshot_type,
+                    accounts_package_type,
                 );
                 if let Err(e) = result {
                     warn!(
-                        "Error taking bank snapshot. slot: {}, snapshot type: {:?}, err: {:?}",
+                        "Error taking bank snapshot. slot: {}, accounts package type: {:?}, err: {:?}",
                         snapshot_root_bank.slot(),
-                        snapshot_type,
+                        accounts_package_type,
                         e,
                     );
 
@@ -310,8 +271,8 @@ impl SnapshotRequestHandler {
                     }
                 }
                 snapshot_time.stop();
-                info!("Took bank snapshot. snapshot type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
-                      snapshot_type,
+                info!("Took bank snapshot. accounts package type: {:?}, slot: {}, accounts hash: {}, bank hash: {}",
+                      accounts_package_type,
                       snapshot_root_bank.slot(),
                       snapshot_root_bank.get_accounts_hash(),
                       snapshot_root_bank.hash(),
@@ -399,33 +360,13 @@ impl AbsRequestSender {
     }
 }
 
-pub struct AbsRequestHandler {
-    pub snapshot_request_handler: Option<SnapshotRequestHandler>,
+#[derive(Debug)]
+pub struct PrunedBanksRequestHandler {
     pub pruned_banks_receiver: DroppedSlotsReceiver,
 }
 
-impl AbsRequestHandler {
-    // Returns the latest requested snapshot block height, if one exists
-    pub fn handle_snapshot_requests(
-        &self,
-        accounts_db_caching_enabled: bool,
-        test_hash_calculation: bool,
-        non_snapshot_time_us: u128,
-        last_full_snapshot_slot: &mut Option<Slot>,
-    ) -> Option<Result<u64, SnapshotError>> {
-        self.snapshot_request_handler
-            .as_ref()
-            .and_then(|snapshot_request_handler| {
-                snapshot_request_handler.handle_snapshot_requests(
-                    accounts_db_caching_enabled,
-                    test_hash_calculation,
-                    non_snapshot_time_us,
-                    last_full_snapshot_slot,
-                )
-            })
-    }
-
-    pub fn handle_pruned_banks(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
+impl PrunedBanksRequestHandler {
+    pub fn handle_request(&self, bank: &Bank, is_serialized_with_abs: bool) -> usize {
         let mut count = 0;
         for (pruned_slot, pruned_bank_id) in self.pruned_banks_receiver.try_iter() {
             count += 1;
@@ -438,6 +379,51 @@ impl AbsRequestHandler {
 
         count
     }
+
+    fn remove_dead_slots(
+        &self,
+        bank: &Bank,
+        removed_slots_count: &mut usize,
+        total_remove_slots_time: &mut u64,
+    ) {
+        let mut remove_slots_time = Measure::start("remove_slots_time");
+        *removed_slots_count += self.handle_request(bank, true);
+        remove_slots_time.stop();
+        *total_remove_slots_time += remove_slots_time.as_us();
+
+        if *removed_slots_count >= 100 {
+            datapoint_info!(
+                "remove_slots_timing",
+                ("remove_slots_time", *total_remove_slots_time, i64),
+                ("removed_slots_count", *removed_slots_count, i64),
+            );
+            *total_remove_slots_time = 0;
+            *removed_slots_count = 0;
+        }
+    }
+}
+
+pub struct AbsRequestHandlers {
+    pub snapshot_request_handler: SnapshotRequestHandler,
+    pub pruned_banks_request_handler: PrunedBanksRequestHandler,
+}
+
+impl AbsRequestHandlers {
+    // Returns the latest requested snapshot block height, if one exists
+    pub fn handle_snapshot_requests(
+        &self,
+        accounts_db_caching_enabled: bool,
+        test_hash_calculation: bool,
+        non_snapshot_time_us: u128,
+        last_full_snapshot_slot: &mut Option<Slot>,
+    ) -> Option<Result<u64, SnapshotError>> {
+        self.snapshot_request_handler.handle_snapshot_requests(
+            accounts_db_caching_enabled,
+            test_hash_calculation,
+            non_snapshot_time_us,
+            last_full_snapshot_slot,
+        )
+    }
 }
 
 pub struct AccountsBackgroundService {
@@ -448,7 +434,7 @@ impl AccountsBackgroundService {
     pub fn new(
         bank_forks: Arc<RwLock<BankForks>>,
         exit: &Arc<AtomicBool>,
-        request_handler: AbsRequestHandler,
+        request_handlers: AbsRequestHandlers,
         accounts_db_caching_enabled: bool,
         test_hash_calculation: bool,
         mut last_full_snapshot_slot: Option<Slot>,
@@ -475,12 +461,13 @@ impl AccountsBackgroundService {
                     let bank = bank_forks.read().unwrap().root_bank().clone();
 
                     // Purge accounts of any dead slots
-                    Self::remove_dead_slots(
-                        &bank,
-                        &request_handler,
-                        &mut removed_slots_count,
-                        &mut total_remove_slots_time,
-                    );
+                    request_handlers
+                        .pruned_banks_request_handler
+                        .remove_dead_slots(
+                            &bank,
+                            &mut removed_slots_count,
+                            &mut total_remove_slots_time,
+                        );
 
                     Self::expire_old_recycle_stores(&bank, &mut last_expiration_check_time);
 
@@ -507,7 +494,7 @@ impl AccountsBackgroundService {
                     // request for `N` to the snapshot request channel before setting a root `R > N`, and
                     // snapshot_request_handler.handle_requests() will always look for the latest
                     // available snapshot in the channel.
-                    let snapshot_block_height_option_result = request_handler
+                    let snapshot_block_height_option_result = request_handlers
                         .handle_snapshot_requests(
                             accounts_db_caching_enabled,
                             test_hash_calculation,
@@ -579,8 +566,7 @@ impl AccountsBackgroundService {
     pub fn setup_bank_drop_callback(bank_forks: Arc<RwLock<BankForks>>) -> DroppedSlotsReceiver {
         assert_eq!(bank_forks.read().unwrap().banks().len(), 1);
 
-        let (pruned_banks_sender, pruned_banks_receiver) =
-            crossbeam_channel::bounded(MAX_DROP_BANK_SIGNAL_QUEUE_SIZE);
+        let (pruned_banks_sender, pruned_banks_receiver) = crossbeam_channel::unbounded();
         {
             let root_bank = bank_forks.read().unwrap().root_bank();
             root_bank.set_callback(Some(Box::new(
@@ -596,28 +582,6 @@ impl AccountsBackgroundService {
 
     pub fn join(self) -> thread::Result<()> {
         self.t_background.join()
-    }
-
-    fn remove_dead_slots(
-        bank: &Bank,
-        request_handler: &AbsRequestHandler,
-        removed_slots_count: &mut usize,
-        total_remove_slots_time: &mut u64,
-    ) {
-        let mut remove_slots_time = Measure::start("remove_slots_time");
-        *removed_slots_count += request_handler.handle_pruned_banks(bank, true);
-        remove_slots_time.stop();
-        *total_remove_slots_time += remove_slots_time.as_us();
-
-        if *removed_slots_count >= 100 {
-            datapoint_info!(
-                "remove_slots_timing",
-                ("remove_slots_time", *total_remove_slots_time, i64),
-                ("removed_slots_count", *removed_slots_count, i64),
-            );
-            *total_remove_slots_time = 0;
-            *removed_slots_count = 0;
-        }
     }
 
     fn expire_old_recycle_stores(bank: &Bank, last_expiration_check_time: &mut Instant) {
@@ -645,8 +609,7 @@ mod test {
         let genesis = create_genesis_config(10);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis.genesis_config));
         let (pruned_banks_sender, pruned_banks_receiver) = unbounded();
-        let request_handler = AbsRequestHandler {
-            snapshot_request_handler: None,
+        let pruned_banks_request_handler = PrunedBanksRequestHandler {
             pruned_banks_receiver,
         };
 
@@ -661,7 +624,7 @@ mod test {
 
         assert!(!bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
 
-        AccountsBackgroundService::remove_dead_slots(&bank0, &request_handler, &mut 0, &mut 0);
+        pruned_banks_request_handler.remove_dead_slots(&bank0, &mut 0, &mut 0);
 
         assert!(bank0.rc.accounts.scan_slot(0, |_| Some(())).is_empty());
     }

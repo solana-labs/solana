@@ -1,8 +1,8 @@
 use {
-    crate::transaction_priority_details::{
+    solana_perf::packet::Packet,
+    solana_runtime::transaction_priority_details::{
         GetTransactionPriorityDetails, TransactionPriorityDetails,
     },
-    solana_perf::packet::Packet,
     solana_sdk::{
         hash::Hash,
         message::Message,

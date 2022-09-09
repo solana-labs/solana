@@ -19,14 +19,16 @@ use {
             is_parsable, is_pow2, is_pubkey, is_pubkey_or_keypair, is_slot, is_valid_percentage,
         },
     },
-    solana_core::system_monitor_service::SystemMonitorService,
+    solana_core::{
+        system_monitor_service::SystemMonitorService, validator::move_and_async_delete_path,
+    },
     solana_entry::entry::Entry,
     solana_geyser_plugin_manager::geyser_plugin_service::GeyserPluginService,
     solana_ledger::{
         ancestor_iterator::AncestorIterator,
         bank_forks_utils,
         blockstore::{create_new_ledger, Blockstore, BlockstoreError, PurgeType},
-        blockstore_db::{self, Database},
+        blockstore_db::{self, columns as cf, Column, ColumnName, Database},
         blockstore_options::{
             AccessType, BlockstoreOptions, BlockstoreRecoveryMode, LedgerColumnOptions,
             ShredStorageType,
@@ -37,7 +39,8 @@ use {
     solana_measure::{measure, measure::Measure},
     solana_runtime::{
         accounts_background_service::{
-            AbsRequestHandler, AbsRequestSender, AccountsBackgroundService,
+            AbsRequestHandlers, AbsRequestSender, AccountsBackgroundService,
+            PrunedBanksRequestHandler, SnapshotRequestHandler,
         },
         accounts_db::{AccountsDbConfig, FillerAccountsConfig},
         accounts_index::{AccountsIndexConfig, IndexLimitMb, ScanConfig},
@@ -52,6 +55,7 @@ use {
         snapshot_config::SnapshotConfig,
         snapshot_hash::StartingSnapshotHashes,
         snapshot_minimizer::SnapshotMinimizer,
+        snapshot_package::PendingAccountsPackage,
         snapshot_utils::{
             self, ArchiveFormat, SnapshotVersion, DEFAULT_ARCHIVE_COMPRESSION,
             DEFAULT_MAX_FULL_SNAPSHOT_ARCHIVES_TO_RETAIN,
@@ -899,6 +903,74 @@ fn open_blockstore(
     }
 }
 
+fn raw_key_to_slot(key: &[u8], column_name: &str) -> Option<Slot> {
+    match column_name {
+        cf::SlotMeta::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::Orphans::NAME => Some(cf::Orphans::slot(cf::Orphans::index(key))),
+        cf::DeadSlots::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::DuplicateSlots::NAME => Some(cf::SlotMeta::slot(cf::SlotMeta::index(key))),
+        cf::ErasureMeta::NAME => Some(cf::ErasureMeta::slot(cf::ErasureMeta::index(key))),
+        cf::BankHash::NAME => Some(cf::BankHash::slot(cf::BankHash::index(key))),
+        cf::Root::NAME => Some(cf::Root::slot(cf::Root::index(key))),
+        cf::Index::NAME => Some(cf::Index::slot(cf::Index::index(key))),
+        cf::ShredData::NAME => Some(cf::ShredData::slot(cf::ShredData::index(key))),
+        cf::ShredCode::NAME => Some(cf::ShredCode::slot(cf::ShredCode::index(key))),
+        cf::TransactionStatus::NAME => Some(cf::TransactionStatus::slot(
+            cf::TransactionStatus::index(key),
+        )),
+        cf::AddressSignatures::NAME => Some(cf::AddressSignatures::slot(
+            cf::AddressSignatures::index(key),
+        )),
+        cf::TransactionMemos::NAME => None, // does not implement slot()
+        cf::TransactionStatusIndex::NAME => None, // does not implement slot()
+        cf::Rewards::NAME => Some(cf::Rewards::slot(cf::Rewards::index(key))),
+        cf::Blocktime::NAME => Some(cf::Blocktime::slot(cf::Blocktime::index(key))),
+        cf::PerfSamples::NAME => Some(cf::PerfSamples::slot(cf::PerfSamples::index(key))),
+        cf::BlockHeight::NAME => Some(cf::BlockHeight::slot(cf::BlockHeight::index(key))),
+        cf::ProgramCosts::NAME => None, // does not implement slot()
+        cf::OptimisticSlots::NAME => {
+            Some(cf::OptimisticSlots::slot(cf::OptimisticSlots::index(key)))
+        }
+        &_ => None,
+    }
+}
+
+fn print_blockstore_file_metadata(
+    blockstore: &Blockstore,
+    file_name: &Option<&str>,
+) -> Result<(), String> {
+    let live_files = blockstore
+        .live_files_metadata()
+        .map_err(|err| format!("{:?}", err))?;
+
+    // All files under live_files_metadata are prefixed with "/".
+    let sst_file_name = file_name.as_ref().map(|name| format!("/{}", name));
+    for file in live_files {
+        if sst_file_name.is_none() || file.name.eq(sst_file_name.as_ref().unwrap()) {
+            println!(
+                "[{}] cf_name: {}, level: {}, start_slot: {:?}, end_slot: {:?}, size: {}, num_entries: {}",
+                file.name,
+                file.column_family_name,
+                file.level,
+                raw_key_to_slot(&file.start_key.unwrap(), &file.column_family_name),
+                raw_key_to_slot(&file.end_key.unwrap(), &file.column_family_name),
+                file.size,
+                file.num_entries,
+            );
+            if sst_file_name.is_some() {
+                return Ok(());
+            }
+        }
+    }
+    if sst_file_name.is_some() {
+        return Err(format!(
+            "Failed to find or load the metadata of the specified file {:?}",
+            file_name
+        ));
+    }
+    Ok(())
+}
+
 // This function is duplicated in validator/src/main.rs...
 fn hardforks_of(matches: &ArgMatches<'_>, name: &str) -> Option<Vec<Slot>> {
     if matches.is_present(name) {
@@ -945,12 +1017,10 @@ fn load_bank_forks(
         }
 
         Some(SnapshotConfig {
-            full_snapshot_archive_interval_slots: Slot::MAX,
-            incremental_snapshot_archive_interval_slots: Slot::MAX,
             full_snapshot_archives_dir,
             incremental_snapshot_archives_dir,
             bank_snapshots_dir,
-            ..SnapshotConfig::default()
+            ..SnapshotConfig::new_load_only()
         })
     };
 
@@ -985,13 +1055,10 @@ fn load_bank_forks(
 
         if non_primary_accounts_path.exists() {
             info!("Clearing {:?}", non_primary_accounts_path);
-            if let Err(err) = std::fs::remove_dir_all(&non_primary_accounts_path) {
-                eprintln!(
-                    "error deleting accounts path {:?}: {}",
-                    non_primary_accounts_path, err
-                );
-                exit(1);
-            }
+            let mut measure_time = Measure::start("clean_non_primary_accounts_paths");
+            move_and_async_delete_path(&non_primary_accounts_path);
+            measure_time.stop();
+            info!("done. {}", measure_time);
         }
 
         vec![non_primary_accounts_path]
@@ -1028,11 +1095,21 @@ fn load_bank_forks(
             accounts_update_notifier,
         );
 
+    let (snapshot_request_sender, snapshot_request_receiver) = crossbeam_channel::unbounded();
+    let accounts_background_request_sender = AbsRequestSender::new(snapshot_request_sender);
+    let snapshot_request_handler = SnapshotRequestHandler {
+        snapshot_config: SnapshotConfig::new_load_only(),
+        snapshot_request_receiver,
+        pending_accounts_package: PendingAccountsPackage::default(),
+    };
     let pruned_banks_receiver =
         AccountsBackgroundService::setup_bank_drop_callback(bank_forks.clone());
-    let abs_request_handler = AbsRequestHandler {
-        snapshot_request_handler: None,
+    let pruned_banks_request_handler = PrunedBanksRequestHandler {
         pruned_banks_receiver,
+    };
+    let abs_request_handler = AbsRequestHandlers {
+        snapshot_request_handler,
+        pruned_banks_request_handler,
     };
     let exit = Arc::new(AtomicBool::new(false));
     let accounts_background_service = AccountsBackgroundService::new(
@@ -1051,7 +1128,7 @@ fn load_bank_forks(
         &process_options,
         None,
         None,
-        &AbsRequestSender::default(),
+        &accounts_background_request_sender,
     )
     .map(|_| (bank_forks, starting_snapshot_hashes));
 
@@ -1226,6 +1303,12 @@ fn main() {
             "Enables faster starting of ledger-tool by skipping shrink. \
                       This option is for use during testing.",
         );
+    let accountsdb_verify_refcounts = Arg::with_name("accounts_db_verify_refcounts")
+        .long("accounts-db-verify-refcounts")
+        .help(
+            "Debug option to scan all append vecs and verify account index refcounts prior to clean",
+        )
+        .hidden(true);
     let accounts_filler_count = Arg::with_name("accounts_filler_count")
         .long("accounts-filler-count")
         .value_name("COUNT")
@@ -1649,6 +1732,7 @@ fn main() {
             .arg(&accounts_index_limit)
             .arg(&disable_disk_index)
             .arg(&accountsdb_skip_shrink)
+            .arg(&accountsdb_verify_refcounts)
             .arg(&accounts_filler_count)
             .arg(&accounts_filler_size)
             .arg(&verify_index_arg)
@@ -2096,6 +2180,19 @@ fn main() {
                     .multiple(true)
                     .takes_value(true)
                     .help("Slots that their blocks are computed for cost, default to all slots in ledger"),
+            )
+        )
+        .subcommand(
+            SubCommand::with_name("print-file-metadata")
+            .about("Print the metadata of the specified ledger-store file. \
+                    If no file name is specified, it will print the metadata of all ledger files.")
+            .arg(
+                Arg::with_name("file_name")
+                    .long("file-name")
+                    .takes_value(true)
+                    .value_name("SST_FILE_NAME")
+                    .help("The ledger file name (e.g. 011080.sst.) \
+                           If no file name is specified, it will print the metadata of all ledger files.")
             )
         )
         .get_matches();
@@ -2599,6 +2696,8 @@ fn main() {
                     filler_accounts_config,
                     skip_rewrites: arg_matches.is_present("accounts_db_skip_rewrites"),
                     ancient_append_vecs: arg_matches.is_present("accounts_db_ancient_append_vecs"),
+                    exhaustively_verify_refcounts: arg_matches
+                        .is_present("accounts_db_verify_refcounts"),
                     skip_initial_hash_calc: arg_matches
                         .is_present("accounts_db_skip_initial_hash_calculation"),
                     ..AccountsDbConfig::default()
@@ -4118,6 +4217,19 @@ fn main() {
                     if let Err(err) = compute_slot_cost(&blockstore, slot) {
                         eprintln!("{}", err);
                     }
+                }
+            }
+            ("print-file-metadata", Some(arg_matches)) => {
+                let blockstore = open_blockstore(
+                    &ledger_path,
+                    AccessType::Secondary,
+                    wal_recovery_mode,
+                    &shred_storage_type,
+                    false,
+                );
+                let sst_file_name = arg_matches.value_of("file_name");
+                if let Err(err) = print_blockstore_file_metadata(&blockstore, &sst_file_name) {
+                    eprintln!("{}", err);
                 }
             }
             ("", _) => {

@@ -9,10 +9,11 @@ use {
     solana_measure::measure::Measure,
     solana_runtime::{
         accounts_hash::{CalcAccountsHashConfig, HashStats},
+        epoch_accounts_hash::EpochAccountsHash,
         snapshot_config::SnapshotConfig,
         snapshot_package::{
-            retain_max_n_elements, AccountsPackage, PendingAccountsPackage, PendingSnapshotPackage,
-            SnapshotPackage, SnapshotType,
+            retain_max_n_elements, AccountsPackage, AccountsPackageType, PendingAccountsPackage,
+            PendingSnapshotPackage, SnapshotPackage, SnapshotType,
         },
         sorted_storages::SortedStorages,
     },
@@ -98,6 +99,8 @@ impl AccountsHashVerifier {
     ) {
         let accounts_hash = Self::calculate_and_verify_accounts_hash(&accounts_package);
 
+        Self::save_epoch_accounts_hash(&accounts_package, accounts_hash);
+
         Self::push_accounts_hashes_to_cluster(
             &accounts_package,
             cluster_info,
@@ -143,6 +146,7 @@ impl AccountsHashVerifier {
                     rent_collector: &accounts_package.rent_collector,
                     store_detailed_debug_info_on_failure: false,
                     full_snapshot: None,
+                    enable_rehashing: accounts_package.enable_rehashing,
                 },
                 &sorted_storages,
                 timings,
@@ -166,6 +170,7 @@ impl AccountsHashVerifier {
                         rent_collector: &accounts_package.rent_collector,
                         store_detailed_debug_info_on_failure: false,
                         full_snapshot: None,
+                        enable_rehashing: accounts_package.enable_rehashing,
                     },
                 );
             info!(
@@ -186,6 +191,7 @@ impl AccountsHashVerifier {
                         // now that we've failed, store off the failing contents that produced a bad capitalization
                         store_detailed_debug_info_on_failure: true,
                         full_snapshot: None,
+                        enable_rehashing: accounts_package.enable_rehashing,
                     },
                     &sorted_storages,
                     HashStats::default(),
@@ -214,12 +220,28 @@ impl AccountsHashVerifier {
             accounts_package.slot,
             &accounts_hash,
             None,
+            None,
         );
         datapoint_info!(
             "accounts_hash_verifier",
             ("calculate_hash", measure_hash.as_us(), i64),
         );
         accounts_hash
+    }
+
+    fn save_epoch_accounts_hash(accounts_package: &AccountsPackage, accounts_hash: Hash) {
+        if accounts_package.package_type == AccountsPackageType::EpochAccountsHash {
+            let new_epoch_accounts_hash = EpochAccountsHash::new(accounts_hash);
+            let old_epoch_accounts_hash = accounts_package
+                .accounts
+                .accounts_db
+                .epoch_accounts_hash
+                .lock()
+                .unwrap()
+                .replace(new_epoch_accounts_hash);
+            // Old epoch accounts hash must be NONE, because a previous bank must have taken it to hash into itself
+            assert!(old_epoch_accounts_hash.is_none());
+        }
     }
 
     fn generate_fault_hash(original_hash: &Hash) -> Hash {
@@ -274,12 +296,17 @@ impl AccountsHashVerifier {
         snapshot_config: Option<&SnapshotConfig>,
         accounts_hash: Hash,
     ) {
-        if accounts_package.snapshot_type.is_none()
-            || pending_snapshot_package.is_none()
-            || snapshot_config.is_none()
+        if pending_snapshot_package.is_none()
+            || !snapshot_config
+                .map(|snapshot_config| snapshot_config.should_generate_snapshots())
+                .unwrap_or(false)
+            || !matches!(
+                accounts_package.package_type,
+                AccountsPackageType::Snapshot(_)
+            )
         {
             return;
-        };
+        }
 
         let snapshot_package = SnapshotPackage::new(accounts_package, accounts_hash);
         let pending_snapshot_package = pending_snapshot_package.unwrap();
@@ -436,6 +463,7 @@ mod tests {
         let expected_hash = Hash::from_str("GKot5hBsd81kMupNCXHaqbhv3huEbxAFMLnpcX2hniwn").unwrap();
         for i in 0..MAX_SNAPSHOT_HASHES + 1 {
             let accounts_package = AccountsPackage {
+                package_type: AccountsPackageType::AccountsHashVerifier,
                 slot: full_snapshot_archive_interval_slots + i as u64,
                 block_height: full_snapshot_archive_interval_slots + i as u64,
                 slot_deltas: vec![],
@@ -448,10 +476,10 @@ mod tests {
                 expected_capitalization: 0,
                 accounts_hash_for_testing: None,
                 cluster_type: ClusterType::MainnetBeta,
-                snapshot_type: None,
                 accounts: Arc::clone(&accounts),
                 epoch_schedule: EpochSchedule::default(),
                 rent_collector: RentCollector::default(),
+                enable_rehashing: true,
             };
 
             AccountsHashVerifier::process_accounts_package(

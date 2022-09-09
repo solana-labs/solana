@@ -1,13 +1,14 @@
 ---
-name: General Issue
+name: Community Issue
 about: Create a report describing a problem and a proposed solution
 title: ''
+labels: ["community"]
 assignees: ''
 ---
 
 #### Problem
 <!--
-  The GitHub issue tracker exists to track issues 
+  The GitHub issue tracker exists to track issues
   that affect the development of Solana itself.
 
   If you need technical support using Solana, building

@@ -679,14 +679,16 @@ pub mod tests {
                                 for slot in slot..=slot2 {
                                     let slot_use = maybe_reverse(slot);
                                     tester.insert(slot_use);
+                                    /*
+                                    this is noisy on build machine
                                     debug!(
-                                    "slot: {}, bitfield: {:?}, reverse: {}, len: {}, excess: {:?}",
-                                    slot_use,
-                                    tester.bitfield,
-                                    reverse_slots,
-                                    tester.bitfield.len(),
-                                    tester.bitfield.excess
-                                );
+                                        "slot: {}, bitfield: {:?}, reverse: {}, len: {}, excess: {:?}",
+                                        slot_use,
+                                        tester.bitfield,
+                                        reverse_slots,
+                                        tester.bitfield.len(),
+                                        tester.bitfield.excess
+                                    );*/
                                     assert!(
                                         (reverse_slots && tester.bitfield.len() > 1)
                                             ^ tester.bitfield.excess.is_empty()

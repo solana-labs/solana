@@ -27,7 +27,8 @@ index_list = "0.2.7"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 log = "0.4.17"
-lz4 = "1.23.3"
+lru = "0.7.7"
+lz4 = "1.24.0"
 memmap2 = "0.5.3"
 num-derive = { version = "0.3" }
 num-traits = { version = "0.2" }
@@ -37,7 +38,7 @@ ouroboros = "0.15.0"
 rand = "0.7.0"
 rayon = "1.5.3"
 regex = "1.5.6"
-serde = { version = "1.0.143", features = ["rc"] }
+serde = { version = "1.0.144", features = ["rc"] }
 serde_derive = "1.0.103"
 solana-address-lookup-table-program = { path = "../programs/address-lookup-table", version = "=1.12.0" }
 solana-bucket-map = { path = "../bucket_map", version = "=1.12.0" }
@@ -78,3 +79,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 [build-dependencies]
 rustc_version = "0.4"
+
+[[bench]]
+name = "prioritization_fee_cache"

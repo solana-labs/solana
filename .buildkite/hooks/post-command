@@ -20,7 +20,7 @@ else
     SUCCESS=false
   fi
 
-  if [[ "$BUILDKITE_BRANCH" == 'master' && -f "results.json" ]]; then
+  if [[ -n $BUILDKITE && -f "results.json" ]]; then
     # prepare result file
     awk '/{ "type": .* }/' results.json > sanitized-results.json
 

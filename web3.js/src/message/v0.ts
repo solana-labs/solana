@@ -12,6 +12,10 @@ import {PublicKey, PUBLIC_KEY_LENGTH} from '../publickey';
 import * as shortvec from '../utils/shortvec-encoding';
 import assert from '../utils/assert';
 import {PACKET_DATA_SIZE, VERSION_PREFIX_MASK} from '../transaction/constants';
+import {TransactionInstruction} from '../transaction';
+import {AddressLookupTableAccount} from '../programs';
+import {CompiledKeys} from './compiled-keys';
+import {AccountKeysFromLookups, MessageAccountKeys} from './account-keys';
 
 /**
  * Message constructor arguments
@@ -28,6 +32,21 @@ export type MessageV0Args = {
   /** Instructions that will be executed in sequence and committed in one atomic transaction if all succeed. */
   addressTableLookups: MessageAddressTableLookup[];
 };
+
+export type CompileV0Args = {
+  payerKey: PublicKey;
+  instructions: Array<TransactionInstruction>;
+  recentBlockhash: Blockhash;
+  addressLookupTableAccounts?: Array<AddressLookupTableAccount>;
+};
+
+export type GetAccountKeysArgs =
+  | {
+      accountKeysFromLookups: AccountKeysFromLookups;
+    }
+  | {
+      addressLookupTableAccounts: AddressLookupTableAccount[];
+    };
 
 export class MessageV0 {
   header: MessageHeader;
@@ -46,6 +65,124 @@ export class MessageV0 {
 
   get version(): 0 {
     return 0;
+  }
+
+  get numAccountKeysFromLookups(): number {
+    let count = 0;
+    for (const lookup of this.addressTableLookups) {
+      count += lookup.readonlyIndexes.length + lookup.writableIndexes.length;
+    }
+    return count;
+  }
+
+  getAccountKeys(args?: GetAccountKeysArgs): MessageAccountKeys {
+    let accountKeysFromLookups: AccountKeysFromLookups | undefined;
+    if (args && 'accountKeysFromLookups' in args) {
+      if (
+        this.numAccountKeysFromLookups !=
+        args.accountKeysFromLookups.writable.length +
+          args.accountKeysFromLookups.readonly.length
+      ) {
+        throw new Error(
+          'Failed to get account keys because of a mismatch in the number of account keys from lookups',
+        );
+      }
+      accountKeysFromLookups = args.accountKeysFromLookups;
+    } else if (args && 'addressLookupTableAccounts' in args) {
+      accountKeysFromLookups = this.resolveAddressTableLookups(
+        args.addressLookupTableAccounts,
+      );
+    } else if (this.addressTableLookups.length > 0) {
+      throw new Error(
+        'Failed to get account keys because address table lookups were not resolved',
+      );
+    }
+    return new MessageAccountKeys(
+      this.staticAccountKeys,
+      accountKeysFromLookups,
+    );
+  }
+
+  resolveAddressTableLookups(
+    addressLookupTableAccounts: AddressLookupTableAccount[],
+  ): AccountKeysFromLookups {
+    const accountKeysFromLookups: AccountKeysFromLookups = {
+      writable: [],
+      readonly: [],
+    };
+
+    for (const tableLookup of this.addressTableLookups) {
+      const tableAccount = addressLookupTableAccounts.find(account =>
+        account.key.equals(tableLookup.accountKey),
+      );
+      if (!tableAccount) {
+        throw new Error(
+          `Failed to find address lookup table account for table key ${tableLookup.accountKey.toBase58()}`,
+        );
+      }
+
+      for (const index of tableLookup.writableIndexes) {
+        if (index < tableAccount.state.addresses.length) {
+          accountKeysFromLookups.writable.push(
+            tableAccount.state.addresses[index],
+          );
+        } else {
+          throw new Error(
+            `Failed to find address for index ${index} in address lookup table ${tableLookup.accountKey.toBase58()}`,
+          );
+        }
+      }
+
+      for (const index of tableLookup.readonlyIndexes) {
+        if (index < tableAccount.state.addresses.length) {
+          accountKeysFromLookups.readonly.push(
+            tableAccount.state.addresses[index],
+          );
+        } else {
+          throw new Error(
+            `Failed to find address for index ${index} in address lookup table ${tableLookup.accountKey.toBase58()}`,
+          );
+        }
+      }
+    }
+
+    return accountKeysFromLookups;
+  }
+
+  static compile(args: CompileV0Args): MessageV0 {
+    const compiledKeys = CompiledKeys.compile(args.instructions, args.payerKey);
+
+    const addressTableLookups = new Array<MessageAddressTableLookup>();
+    const accountKeysFromLookups: AccountKeysFromLookups = {
+      writable: new Array(),
+      readonly: new Array(),
+    };
+    const lookupTableAccounts = args.addressLookupTableAccounts || [];
+    for (const lookupTable of lookupTableAccounts) {
+      const extractResult = compiledKeys.extractTableLookup(lookupTable);
+      if (extractResult !== undefined) {
+        const [addressTableLookup, {writable, readonly}] = extractResult;
+        addressTableLookups.push(addressTableLookup);
+        accountKeysFromLookups.writable.push(...writable);
+        accountKeysFromLookups.readonly.push(...readonly);
+      }
+    }
+
+    const [header, staticAccountKeys] = compiledKeys.getMessageComponents();
+    const accountKeys = new MessageAccountKeys(
+      staticAccountKeys,
+      accountKeysFromLookups,
+    );
+    const compiledInstructions = accountKeys.compileInstructions(
+      args.instructions,
+    );
+    return new MessageV0({
+      header,
+      staticAccountKeys,
+      recentBlockhash: args.recentBlockhash,
+      compiledInstructions,
+      addressTableLookups,
+    });
   }
 
   serialize(): Uint8Array {

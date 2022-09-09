@@ -41,7 +41,7 @@ use {
         bpf_loader_upgradeable::{self, UpgradeableLoaderState},
         entrypoint::{HEAP_LENGTH, SUCCESS},
         feature_set::{
-            cap_accounts_data_len, cap_bpf_program_instruction_accounts,
+            cap_accounts_data_allocations_per_transaction, cap_bpf_program_instruction_accounts,
             disable_deploy_of_alloc_free_syscall, disable_deprecated_loader,
             enable_bpf_loader_extend_program_data_ix,
             error_on_syscall_bpf_function_hash_collisions, reject_callx_r10,
@@ -49,12 +49,14 @@ use {
         instruction::{AccountMeta, InstructionError},
         loader_instruction::LoaderInstruction,
         loader_upgradeable_instruction::UpgradeableLoaderInstruction,
-        program_error::MAX_ACCOUNTS_DATA_SIZE_EXCEEDED,
+        program_error::MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED,
         program_utils::limited_deserialize,
         pubkey::Pubkey,
         saturating_add_assign,
         system_instruction::{self, MAX_PERMITTED_DATA_LENGTH},
-        transaction_context::{BorrowedAccount, InstructionContext, TransactionContext},
+        transaction_context::{
+            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
+        },
     },
     std::{cell::RefCell, fmt::Debug, rc::Rc, sync::Arc},
     thiserror::Error,
@@ -109,8 +111,8 @@ mod executor_metrics {
 
 fn get_index_in_transaction(
     instruction_context: &InstructionContext,
-    index_in_instruction: usize,
-) -> Result<usize, InstructionError> {
+    index_in_instruction: IndexOfAccount,
+) -> Result<IndexOfAccount, InstructionError> {
     if index_in_instruction < instruction_context.get_number_of_program_accounts() {
         instruction_context.get_index_of_program_account_in_transaction(index_in_instruction)
     } else {
@@ -124,7 +126,7 @@ fn get_index_in_transaction(
 fn try_borrow_account<'a>(
     transaction_context: &'a TransactionContext,
     instruction_context: &'a InstructionContext,
-    index_in_instruction: usize,
+    index_in_instruction: IndexOfAccount,
 ) -> Result<BorrowedAccount<'a>, InstructionError> {
     if index_in_instruction < instruction_context.get_number_of_program_accounts() {
         instruction_context.try_borrow_program_account(transaction_context, index_in_instruction)
@@ -138,7 +140,7 @@ fn try_borrow_account<'a>(
 }
 
 pub fn create_executor(
-    programdata_account_index: usize,
+    programdata_account_index: IndexOfAccount,
     programdata_offset: usize,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
@@ -247,7 +249,7 @@ pub fn create_executor(
 }
 
 fn write_program_data(
-    program_account_index: usize,
+    program_account_index: IndexOfAccount,
     program_data_offset: usize,
     bytes: &[u8],
     invoke_context: &mut InvokeContext,
@@ -305,21 +307,21 @@ pub fn create_vm<'a, 'b>(
 }
 
 pub fn process_instruction(
-    first_instruction_account: usize,
+    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(first_instruction_account, invoke_context, false)
 }
 
 pub fn process_instruction_jit(
-    first_instruction_account: usize,
+    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
 ) -> Result<(), InstructionError> {
     process_instruction_common(first_instruction_account, invoke_context, true)
 }
 
 fn process_instruction_common(
-    first_instruction_account: usize,
+    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -467,7 +469,7 @@ fn process_instruction_common(
 }
 
 fn process_loader_upgradeable_instruction(
-    first_instruction_account: usize,
+    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -1052,11 +1054,11 @@ fn process_loader_upgradeable_instruction(
                 return Err(InstructionError::InvalidInstructionData);
             }
 
-            const PROGRAM_DATA_ACCOUNT_INDEX: usize = 0;
+            const PROGRAM_DATA_ACCOUNT_INDEX: IndexOfAccount = 0;
             #[allow(dead_code)]
             // System program is only required when a CPI is performed
-            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: usize = 1;
-            const OPTIONAL_PAYER_ACCOUNT_INDEX: usize = 2;
+            const OPTIONAL_SYSTEM_PROGRAM_ACCOUNT_INDEX: IndexOfAccount = 1;
+            const OPTIONAL_PAYER_ACCOUNT_INDEX: IndexOfAccount = 2;
 
             let programdata_account = instruction_context
                 .try_borrow_instruction_account(transaction_context, PROGRAM_DATA_ACCOUNT_INDEX)?;
@@ -1174,7 +1176,7 @@ fn common_close_account(
 }
 
 fn process_loader_instruction(
-    first_instruction_account: usize,
+    first_instruction_account: IndexOfAccount,
     invoke_context: &mut InvokeContext,
     use_jit: bool,
 ) -> Result<(), InstructionError> {
@@ -1269,7 +1271,7 @@ impl Debug for BpfExecutor {
 impl Executor for BpfExecutor {
     fn execute(
         &self,
-        _first_instruction_account: usize,
+        _first_instruction_account: IndexOfAccount,
         invoke_context: &mut InvokeContext,
     ) -> Result<(), InstructionError> {
         let log_collector = invoke_context.get_log_collector();
@@ -1339,13 +1341,14 @@ impl Executor for BpfExecutor {
             }
             match result {
                 Ok(status) if status != SUCCESS => {
-                    let error: InstructionError = if status == MAX_ACCOUNTS_DATA_SIZE_EXCEEDED
+                    let error: InstructionError = if status
+                        == MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED
                         && !invoke_context
                             .feature_set
-                            .is_active(&cap_accounts_data_len::id())
+                            .is_active(&cap_accounts_data_allocations_per_transaction::id())
                     {
-                        // Until the cap_accounts_data_len feature is enabled, map the
-                        // MAX_ACCOUNTS_DATA_SIZE_EXCEEDED error to InvalidError
+                        // Until the cap_accounts_data_allocations_per_transaction feature is
+                        // enabled, map the MAX_ACCOUNTS_DATA_ALLOCATIONS_EXCEEDED error to InvalidError
                         InstructionError::InvalidError
                     } else {
                         status.into()
@@ -1444,7 +1447,7 @@ mod tests {
 
     fn process_instruction(
         loader_id: &Pubkey,
-        program_indices: &[usize],
+        program_indices: &[IndexOfAccount],
         instruction_data: &[u8],
         transaction_accounts: Vec<(Pubkey, AccountSharedData)>,
         instruction_accounts: Vec<AccountMeta>,
@@ -1733,7 +1736,7 @@ mod tests {
             None,
             None,
             Err(InstructionError::ProgramFailedToComplete),
-            |first_instruction_account: usize, invoke_context: &mut InvokeContext| {
+            |first_instruction_account: IndexOfAccount, invoke_context: &mut InvokeContext| {
                 invoke_context
                     .get_compute_meter()
                     .borrow_mut()
