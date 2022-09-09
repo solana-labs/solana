@@ -1653,6 +1653,13 @@ fn main() {
                     .requires("accounts")
                     .help("Do not print account data when printing account contents."),
             )
+            .arg(
+                Arg::with_name("json_parsed")
+                    .long("json-parsed")
+                    .takes_value(false)
+                    .requires("accounts")
+                    .help("Print account data in jsonParsed format when printing account contents."),
+            )
         )
         .subcommand(
             SubCommand::with_name("genesis-hash")
