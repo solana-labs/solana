@@ -1692,32 +1692,37 @@ fn maybe_warp_slot(
             None => return Err("warp slot requires a snapshot config".to_owned()),
         };
 
+        {
+            let mut bank_forks = bank_forks.write().unwrap();
+
+            let working_bank = bank_forks.working_bank();
+
+            if warp_slot <= working_bank.slot() {
+                return Err(format!(
+                    "warp slot ({}) cannot be less than the working bank slot ({})",
+                    warp_slot,
+                    working_bank.slot()
+                ));
+            }
+            info!("warping to slot {}", warp_slot);
+
+            let root_bank = bank_forks.root_bank();
+            bank_forks.insert(Bank::warp_from_parent(
+                &root_bank,
+                &Pubkey::default(),
+                warp_slot,
+            ));
+            bank_forks.set_root(
+                warp_slot,
+                &solana_runtime::accounts_background_service::AbsRequestSender::default(),
+                Some(warp_slot),
+            );
+        }
+
         process_blockstore.process()?;
 
-        let mut bank_forks = bank_forks.write().unwrap();
+        let bank_forks = bank_forks.read().unwrap();
 
-        let working_bank = bank_forks.working_bank();
-
-        if warp_slot <= working_bank.slot() {
-            return Err(format!(
-                "warp slot ({}) cannot be less than the working bank slot ({})",
-                warp_slot,
-                working_bank.slot()
-            ));
-        }
-        info!("warping to slot {}", warp_slot);
-
-        let root_bank = bank_forks.root_bank();
-        bank_forks.insert(Bank::warp_from_parent(
-            &root_bank,
-            &Pubkey::default(),
-            warp_slot,
-        ));
-        bank_forks.set_root(
-            warp_slot,
-            &solana_runtime::accounts_background_service::AbsRequestSender::default(),
-            Some(warp_slot),
-        );
         leader_schedule_cache.set_root(&bank_forks.root_bank());
 
         let full_snapshot_archive_info = match snapshot_utils::bank_to_full_snapshot_archive(
