@@ -335,7 +335,7 @@ impl SnapshotStorageRebuilder {
     }
 }
 
-/// Used to determine if a filename is structured like a version file, snapshot file, storage file, or neither
+/// Used to determine if a filename is structured like a version file, bank file, or storage file
 #[derive(PartialEq, Debug)]
 enum SnapshotFileKind {
     Version,
