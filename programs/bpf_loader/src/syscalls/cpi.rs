@@ -867,7 +867,7 @@ fn call<'a, 'b: 'a>(
 
     // Translate and verify caller's data
     let instruction =
-        syscall.translate_instruction(instruction_addr, memory_mapping, *invoke_context)?;
+        syscall.translate_instruction(instruction_addr, memory_mapping, invoke_context)?;
     let transaction_context = &invoke_context.transaction_context;
     let instruction_context = transaction_context
         .get_current_instruction_context()
@@ -880,19 +880,19 @@ fn call<'a, 'b: 'a>(
         signers_seeds_addr,
         signers_seeds_len,
         memory_mapping,
-        *invoke_context,
+        invoke_context,
     )?;
     let (instruction_accounts, program_indices) = invoke_context
         .prepare_instruction(&instruction, &signers)
         .map_err(SyscallError::InstructionError)?;
-    check_authorized_program(&instruction.program_id, &instruction.data, *invoke_context)?;
+    check_authorized_program(&instruction.program_id, &instruction.data, invoke_context)?;
     let mut accounts = syscall.translate_accounts(
         &instruction_accounts,
         &program_indices,
         account_infos_addr,
         account_infos_len,
         memory_mapping,
-        *invoke_context,
+        invoke_context,
     )?;
 
     // Process instruction
