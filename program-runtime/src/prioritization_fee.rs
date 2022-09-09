@@ -5,7 +5,7 @@ type MicroLamports = u128;
 
 pub enum PrioritizationFeeType {
     ComputeUnitPrice(u64),
-    /// TODO: remove 'Deprecated' after feature remove_deprecated_request_unit_ix::id() is activated
+    // TODO: remove 'Deprecated' after feature remove_deprecated_request_unit_ix::id() is activated
     Deprecated(u64),
 }
 
