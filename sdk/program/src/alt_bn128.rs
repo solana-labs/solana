@@ -3,7 +3,7 @@ pub mod prelude {
         alt_bn128_addition, alt_bn128_multiplication, alt_bn128_pairing, consts::*, AltBn128Error,
     };
 }
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 use {
     ark_bn254::{self, Parameters},
     ark_ec::{
@@ -113,12 +113,12 @@ pub struct PodG2(pub [u8; 128]);
 
 //---- Field & Point structs
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 type G1 = ark_ec::short_weierstrass_jacobian::GroupAffine<ark_bn254::g1::Parameters>;
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 type G2 = ark_ec::short_weierstrass_jacobian::GroupAffine<ark_bn254::g2::Parameters>;
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl TryFrom<PodG1> for G1 {
     type Error = AltBn128Error;
 
@@ -139,7 +139,7 @@ impl TryFrom<PodG1> for G1 {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 impl TryFrom<PodG2> for G2 {
     type Error = AltBn128Error;
 
@@ -163,7 +163,7 @@ impl TryFrom<PodG2> for G2 {
 //---- Precompiled contracts
 
 pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     {
         extern "C" {
             fn sol_alt_bn128_addition(input: *const u8, input_size: u64, result: *mut u8) -> u64;
@@ -187,7 +187,7 @@ pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     {
         if input.len() > ALT_BN128_ADDITION_INPUT_LEN {
             return Err(AltBn128Error::InvalidInputData);
@@ -219,7 +219,7 @@ pub fn alt_bn128_addition(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
 }
 
 pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     {
         extern "C" {
             fn sol_alt_bn128_multiplication(
@@ -247,7 +247,7 @@ pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> 
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     {
         if input.len() > ALT_BN128_MULTIPLICATION_INPUT_LEN {
             return Err(AltBn128Error::InvalidInputData);
@@ -276,7 +276,7 @@ pub fn alt_bn128_multiplication(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> 
 }
 
 pub fn alt_bn128_pairing(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
-    #[cfg(target_arch = "bpf")]
+    #[cfg(target_os = "solana")]
     {
         extern "C" {
             fn sol_alt_bn128_pairing(input: *const u8, input_size: u64, result: *mut u8) -> u64;
@@ -305,7 +305,7 @@ pub fn alt_bn128_pairing(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
         }
     }
 
-    #[cfg(not(target_arch = "bpf"))]
+    #[cfg(not(target_os = "solana"))]
     {
         if input
             .len()
@@ -359,7 +359,7 @@ pub fn alt_bn128_pairing(input: &[u8]) -> Result<Vec<u8>, AltBn128Error> {
     }
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn convert_edianness_64(bytes: &[u8]) -> Vec<u8> {
     let mut vec = Vec::new();
     for b in bytes.chunks(32) {
@@ -370,7 +370,7 @@ fn convert_edianness_64(bytes: &[u8]) -> Vec<u8> {
     vec
 }
 
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn convert_edianness_128(bytes: &[u8]) -> Vec<u8> {
     let mut vec = Vec::new();
     for b in bytes.chunks(64) {
@@ -382,7 +382,7 @@ fn convert_edianness_128(bytes: &[u8]) -> Vec<u8> {
 }
 
 #[test]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn alt_bn128_addition_test() {
     use serde::Deserialize;
 
@@ -477,7 +477,7 @@ fn alt_bn128_addition_test() {
 }
 
 #[test]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn alt_bn128_multiplication_test() {
     use serde::Deserialize;
 
@@ -614,7 +614,7 @@ fn alt_bn128_multiplication_test() {
 }
 
 #[test]
-#[cfg(not(target_arch = "bpf"))]
+#[cfg(not(target_os = "solana"))]
 fn alt_bn128_pairing_test() {
     use serde::Deserialize;
 

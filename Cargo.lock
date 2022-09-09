@@ -6215,9 +6215,6 @@ name = "solana-sdk"
 version = "1.11.11"
 dependencies = [
  "anyhow",
- "ark-bn254",
- "ark-ec",
- "ark-ff",
  "assert_matches",
  "base64 0.13.0",
  "bincode",
