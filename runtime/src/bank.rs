@@ -1307,7 +1307,7 @@ impl Default for Scheduler {
                     ee.cu = details.executed_units;
                     send_metrics.then(|| format!("{:?}", details.status))
                 } else {
-                    send_metrics.then(|| format!("{:?}", ts_result))
+                    send_metrics.then(|| format!("{:?}", tx_result))
                 };
 
                 if send_metrics {
