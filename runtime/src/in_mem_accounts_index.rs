@@ -358,6 +358,8 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
         }
     }
 
+    /// return false if the entry is in the index (disk or memory) and has a slot list len > 0
+    /// return true in all other cases, including if the entry is NOT in the index at all
     fn remove_if_slot_list_empty_entry(&self, entry: Entry<K, AccountMapEntry<T>>) -> bool {
         match entry {
             Entry::Occupied(occupied) => {
@@ -391,7 +393,7 @@ impl<T: IndexValue> InMemAccountsIndex<T> {
                             false
                         }
                     }
-                    None => false, // not in cache or on disk
+                    None => true, // not in cache or on disk, but slot list is 'empty' and entry is not in index, so return true
                 }
             }
         }
@@ -1950,4 +1952,92 @@ mod tests {
         // After the FlushGuard is dropped, the flag will be cleared.
         assert!(!flushing_active.load(Ordering::Acquire));
     }
+<<<<<<< HEAD
+=======
+
+    #[test]
+    fn test_remove_if_slot_list_empty_entry() {
+        let key = solana_sdk::pubkey::new_rand();
+        let unknown_key = solana_sdk::pubkey::new_rand();
+
+        let test = new_for_test::<u64>();
+
+        let mut map = test.map_internal.write().unwrap();
+
+        {
+            // item is NOT in index at all, still return true from remove_if_slot_list_empty_entry
+            // make sure not initially in index
+            let entry = map.entry(unknown_key);
+            assert!(matches!(entry, Entry::Vacant(_)));
+            let entry = map.entry(unknown_key);
+            assert!(test.remove_if_slot_list_empty_entry(entry));
+            // make sure still not in index
+            let entry = map.entry(unknown_key);
+            assert!(matches!(entry, Entry::Vacant(_)));
+        }
+
+        {
+            // add an entry with an empty slot list
+            let val = Arc::new(AccountMapEntryInner::<u64>::default());
+            map.insert(key, val);
+            let entry = map.entry(key);
+            assert!(matches!(entry, Entry::Occupied(_)));
+            // should have removed it since it had an empty slot list
+            assert!(test.remove_if_slot_list_empty_entry(entry));
+            let entry = map.entry(key);
+            assert!(matches!(entry, Entry::Vacant(_)));
+            // return true - item is not in index at all now
+            assert!(test.remove_if_slot_list_empty_entry(entry));
+        }
+
+        {
+            // add an entry with a NON empty slot list - it will NOT get removed
+            let val = Arc::new(AccountMapEntryInner::<u64>::default());
+            val.slot_list.write().unwrap().push((1, 1));
+            map.insert(key, val);
+            // does NOT remove it since it has a non-empty slot list
+            let entry = map.entry(key);
+            assert!(!test.remove_if_slot_list_empty_entry(entry));
+            let entry = map.entry(key);
+            assert!(matches!(entry, Entry::Occupied(_)));
+        }
+    }
+
+    #[test]
+    fn test_lock_and_update_slot_list() {
+        let test = AccountMapEntryInner::<u64>::default();
+        let info = 65;
+        let mut reclaims = Vec::default();
+        // first upsert, should increase
+        let len = InMemAccountsIndex::lock_and_update_slot_list(
+            &test,
+            (1, info),
+            None,
+            &mut reclaims,
+            UpsertReclaim::IgnoreReclaims,
+        );
+        assert_eq!(test.slot_list.read().unwrap().len(), len);
+        assert_eq!(len, 1);
+        // update to different slot, should increase
+        let len = InMemAccountsIndex::lock_and_update_slot_list(
+            &test,
+            (2, info),
+            None,
+            &mut reclaims,
+            UpsertReclaim::IgnoreReclaims,
+        );
+        assert_eq!(test.slot_list.read().unwrap().len(), len);
+        assert_eq!(len, 2);
+        // update to same slot, should not increase
+        let len = InMemAccountsIndex::lock_and_update_slot_list(
+            &test,
+            (2, info),
+            None,
+            &mut reclaims,
+            UpsertReclaim::IgnoreReclaims,
+        );
+        assert_eq!(test.slot_list.read().unwrap().len(), len);
+        assert_eq!(len, 2);
+    }
+>>>>>>> 1811d684b (clean race condition with extra unref (#27682))
 }
