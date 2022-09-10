@@ -1315,7 +1315,7 @@ impl Default for Scheduler {
 
                     datapoint_info!(
                         "individual_tx_stats",
-                        ("slot", slot, i64), // what? why dropped bank can be used here??
+                        ("slot", slot, i64),
                         ("thread", current_thread_name, String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
