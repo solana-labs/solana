@@ -1541,7 +1541,7 @@ impl ScheduleStage {
                 while executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
-                    if let Some(ee) = Self::schedule_next_execution(
+                    let maybe_ee = Self::schedule_next_execution(
                         ast,
                         &task_sender,
                         runnable_queue,
@@ -1553,11 +1553,15 @@ impl ScheduleStage {
                         &mut execute_clock,
                         &mut provisioning_tracker_count,
                         true
-                    ) {
+                    )
+                    if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
+                    } else {
+                        break;
                     }
                     debug!("schedule_once id_{:016x} [R] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} done: {}", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count);
+
                     interval_count += 1;
                     if interval_count % 100 == 0 {
                         let elapsed = start.elapsed();
