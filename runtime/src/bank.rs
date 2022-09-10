@@ -1205,7 +1205,7 @@ struct Scheduler {
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
     errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
-    bank: std::sync::ArcSwapOption<std::sync::Weak<Bank>>,
+    bank: arcswap::ArcSwapOption<std::sync::Weak<Bank>>,
     transaction_index: AtomicUsize,
 }
 
