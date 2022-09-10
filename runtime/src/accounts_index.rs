@@ -358,10 +358,6 @@ impl<T: IndexValue> ReadAccountMapEntry<T> {
         self.borrow_owned_entry().ref_count()
     }
 
-    pub fn unref(&self) {
-        self.borrow_owned_entry().unref();
-    }
-
     pub fn addref(&self) {
         self.borrow_owned_entry().addref();
     }
