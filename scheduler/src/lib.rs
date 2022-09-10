@@ -882,14 +882,14 @@ enum SelectionContext {
 
 impl SelectionContext {
     fn should_continue(&self) -> bool {
-        match(self) {
+        match self {
             SelectionContext::Runnable -> true,
             SelectionContext::Contended(failure_count) -> failure_count < 2,
         }
     }
 
     fn runnable_exclusive(&self) -> bool {
-        match(self) {
+        match self {
             SelectionContext::Runnable -> true,
             SelectionContext::Contended(_) -> false,
         }
