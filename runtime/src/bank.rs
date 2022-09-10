@@ -1290,8 +1290,8 @@ impl Default for Scheduler {
                     None
                 );
                 drop(bank);
-                drop(weak_bank);
-                drop(ro_bank);
+                //drop(weak_bank);
+                //drop(ro_bank);
 
                 let TransactionResults {
                     fee_collection_results,
