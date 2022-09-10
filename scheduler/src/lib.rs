@@ -1514,7 +1514,7 @@ impl ScheduleStage {
                        assert_eq!(from_prev.len(), 0);
                        from_disconnected |= true;
                        from_prev = never;
-                       info!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
+                       trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
                    }
                }
             }
@@ -1550,7 +1550,7 @@ impl ScheduleStage {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
                     }
-                    debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} done: {}", random_id, from_prev.len(), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count);
+                    debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} done: {}", random_id, (if from_disconnected { "N/A" } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count);
                     interval_count += 1;
                     if interval_count % 100 == 0 {
                         let elapsed = last_time.elapsed();
