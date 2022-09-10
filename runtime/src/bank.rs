@@ -6452,7 +6452,7 @@ impl Bank {
                 // safe.
                 let w = self.scheduler.write().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
-                w.slot = Some(bank.slot);
+                *w.slot = Some(bank.slot);
                 drop(w);
                 self.scheduler.read().unwrap()
             } else {
