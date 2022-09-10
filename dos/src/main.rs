@@ -734,19 +734,4 @@ pub mod test {
             },
         );
     }
-<<<<<<< HEAD
-=======
-
-    #[test]
-    #[ignore]
-    fn test_dos_with_blockhash_and_payer() {
-        run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ false)
-    }
-
-    #[test]
-    #[ignore]
-    fn test_dos_with_blockhash_and_payer_and_quic() {
-        run_dos_with_blockhash_and_payer(/*tpu_use_quic*/ true)
-    }
->>>>>>> 4bda909827 (Enable QUIC client by default. Add arg to disable QUIC client. Take 2 (#26927))
 }
