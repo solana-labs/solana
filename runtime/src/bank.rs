@@ -6447,7 +6447,7 @@ impl Bank {
         let scheduler = {
             let r = self.scheduler.read().unwrap();
 
-            if r.bank.read().unwrap().is_none() {
+            if r.bank.is_none() {
                 drop(r);
                 let w = self.scheduler.write().unwrap();
                 *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
