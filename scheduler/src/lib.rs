@@ -1553,7 +1553,7 @@ impl ScheduleStage {
                         &mut execute_clock,
                         &mut provisioning_tracker_count,
                         true
-                    )
+                    );
                     if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
