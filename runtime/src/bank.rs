@@ -1305,9 +1305,9 @@ impl Default for Scheduler {
                 let status_str = if tx_result.is_ok() {
                     let details = execution_results[0].details().unwrap();
                     ee.cu = details.executed_units;
-                    send_metrics.and_then(|| format!("{:?}", details.status))
+                    send_metrics.then(|| format!("{:?}", details.status))
                 } else {
-                    send_metrics.and_then(|| format!("{:?}", ts_result))
+                    send_metrics.then(|| format!("{:?}", ts_result))
                 };
 
                 if send_metrics {
