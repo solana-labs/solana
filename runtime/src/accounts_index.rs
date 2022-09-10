@@ -1251,18 +1251,6 @@ impl<T: IndexValue> AccountsIndex<T> {
             .collect()
     }
 
-    // returns the rooted entries and the storage ref count
-    pub fn roots_and_ref_count(
-        &self,
-        locked_account_entry: &ReadAccountMapEntry<T>,
-        max_inclusive: Option<Slot>,
-    ) -> (SlotList<T>, RefCount) {
-        (
-            self.get_rooted_entries(locked_account_entry.slot_list(), max_inclusive),
-            locked_account_entry.ref_count(),
-        )
-    }
-
     pub fn purge_exact<'a, C>(
         &'a self,
         pubkey: &Pubkey,

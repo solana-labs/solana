@@ -9383,7 +9383,9 @@ pub mod tests {
         super::*,
         crate::{
             accounts_hash::MERKLE_FANOUT,
-            accounts_index::{tests::*, AccountSecondaryIndexesIncludeExclude, RefCount},
+            accounts_index::{
+                tests::*, AccountSecondaryIndexesIncludeExclude, ReadAccountMapEntry, RefCount,
+            },
             append_vec::{test_utils::TempFile, AccountMeta},
             inline_spl_token,
         },
@@ -13230,6 +13232,18 @@ pub mod tests {
     const UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE: UpsertReclaim =
         UpsertReclaim::PopulateReclaims;
 
+    // returns the rooted entries and the storage ref count
+    fn roots_and_ref_count<T: IndexValue>(
+        index: &AccountsIndex<T>,
+        locked_account_entry: &ReadAccountMapEntry<T>,
+        max_inclusive: Option<Slot>,
+    ) -> (SlotList<T>, RefCount) {
+        (
+            index.get_rooted_entries(locked_account_entry.slot_list(), max_inclusive),
+            locked_account_entry.ref_count(),
+        )
+    }
+
     #[test]
     fn test_delete_dependencies() {
         solana_logger::setup();
@@ -13308,11 +13322,20 @@ pub mod tests {
         accounts_index.add_root(3, false);
         let mut purges = HashMap::new();
         let (key0_entry, _) = accounts_index.get_for_tests(&key0, None, None).unwrap();
-        purges.insert(key0, accounts_index.roots_and_ref_count(&key0_entry, None));
+        purges.insert(
+            key0,
+            roots_and_ref_count(&accounts_index, &key0_entry, None),
+        );
         let (key1_entry, _) = accounts_index.get_for_tests(&key1, None, None).unwrap();
-        purges.insert(key1, accounts_index.roots_and_ref_count(&key1_entry, None));
+        purges.insert(
+            key1,
+            roots_and_ref_count(&accounts_index, &key1_entry, None),
+        );
         let (key2_entry, _) = accounts_index.get_for_tests(&key2, None, None).unwrap();
-        purges.insert(key2, accounts_index.roots_and_ref_count(&key2_entry, None));
+        purges.insert(
+            key2,
+            roots_and_ref_count(&accounts_index, &key2_entry, None),
+        );
         for (key, (list, ref_count)) in &purges {
             info!(" purge {} ref_count {} =>", key, ref_count);
             for x in list {
