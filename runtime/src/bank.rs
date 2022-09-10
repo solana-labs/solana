@@ -1291,9 +1291,9 @@ impl Default for Scheduler {
                     None
                 );
                 drop(bank);
+                drop(batch);
                 drop(weak_bank);
                 drop(ro_bank);
-                drop(batch);
 
                 let TransactionResults {
                     fee_collection_results,
