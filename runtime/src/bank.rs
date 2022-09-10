@@ -10752,15 +10752,15 @@ pub(crate) mod tests {
         let bank = create_simple_test_bank(100);
 
         // Test new account
-        let key = Keypair::new();
-        let new_balance = bank.deposit(&key.pubkey(), 10).unwrap();
+        let key = solana_sdk::pubkey::new_rand();
+        let new_balance = bank.deposit(&key, 10).unwrap();
         assert_eq!(new_balance, 10);
-        assert_eq!(bank.get_balance(&key.pubkey()), 10);
+        assert_eq!(bank.get_balance(&key), 10);
 
         // Existing account
-        let new_balance = bank.deposit(&key.pubkey(), 3).unwrap();
+        let new_balance = bank.deposit(&key, 3).unwrap();
         assert_eq!(new_balance, 13);
-        assert_eq!(bank.get_balance(&key.pubkey()), 13);
+        assert_eq!(bank.get_balance(&key), 13);
     }
 
     #[test]
@@ -10768,24 +10768,24 @@ pub(crate) mod tests {
         let bank = create_simple_test_bank(100);
 
         // Test no account
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         assert_eq!(
-            bank.withdraw(&key.pubkey(), 10),
+            bank.withdraw(&key, 10),
             Err(TransactionError::AccountNotFound)
         );
 
-        bank.deposit(&key.pubkey(), 3).unwrap();
-        assert_eq!(bank.get_balance(&key.pubkey()), 3);
+        bank.deposit(&key, 3).unwrap();
+        assert_eq!(bank.get_balance(&key), 3);
 
         // Low balance
         assert_eq!(
-            bank.withdraw(&key.pubkey(), 10),
+            bank.withdraw(&key, 10),
             Err(TransactionError::InsufficientFundsForFee)
         );
 
         // Enough balance
-        assert_eq!(bank.withdraw(&key.pubkey(), 2), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.withdraw(&key, 2), Ok(()));
+        assert_eq!(bank.get_balance(&key), 1);
     }
 
     #[test]
@@ -10848,17 +10848,17 @@ pub(crate) mod tests {
 
         let capitalization = bank.capitalization();
 
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let tx = system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             arbitrary_transfer_amount,
             bank.last_blockhash(),
         );
 
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount);
+        assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             mint - arbitrary_transfer_amount - expected_fee_paid
@@ -10894,14 +10894,13 @@ pub(crate) mod tests {
 
         // Verify that an InstructionError collects fees, too
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
-        let mut tx =
-            system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, bank.last_blockhash());
+        let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
         // Create a bogus instruction to system_program to cause an instruction error
         tx.message.instructions[0].data[0] = 40;
 
         bank.process_transaction(&tx)
             .expect_err("instruction error");
-        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount); // no change
+        assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount); // no change
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             mint - arbitrary_transfer_amount - 2 * expected_fee_paid
@@ -10933,7 +10932,7 @@ pub(crate) mod tests {
     fn test_bank_tx_compute_unit_fee() {
         solana_logger::setup();
 
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let arbitrary_transfer_amount = 42;
         let mint = arbitrary_transfer_amount * 10_000_000;
         let leader = solana_sdk::pubkey::new_rand();
@@ -10964,14 +10963,14 @@ pub(crate) mod tests {
 
         let tx = system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             arbitrary_transfer_amount,
             bank.last_blockhash(),
         );
 
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount);
+        assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             mint - arbitrary_transfer_amount - expected_fee_paid
@@ -11007,14 +11006,13 @@ pub(crate) mod tests {
 
         // Verify that an InstructionError collects fees, too
         let mut bank = Bank::new_from_parent(&Arc::new(bank), &leader, 1);
-        let mut tx =
-            system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, bank.last_blockhash());
+        let mut tx = system_transaction::transfer(&mint_keypair, &key, 1, bank.last_blockhash());
         // Create a bogus instruction to system_program to cause an instruction error
         tx.message.instructions[0].data[0] = 40;
 
         bank.process_transaction(&tx)
             .expect_err("instruction error");
-        assert_eq!(bank.get_balance(&key.pubkey()), arbitrary_transfer_amount); // no change
+        assert_eq!(bank.get_balance(&key), arbitrary_transfer_amount); // no change
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             mint - arbitrary_transfer_amount - 2 * expected_fee_paid
@@ -11072,22 +11070,22 @@ pub(crate) mod tests {
         let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
 
         // Send a transfer using cheap_blockhash
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
-        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, cheap_blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &key, 1, cheap_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key), 1);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             initial_mint_balance - 1 - cheap_lamports_per_signature
         );
 
         // Send a transfer using expensive_blockhash
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
-        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, expensive_blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &key, 1, expensive_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key), 1);
         assert_eq!(
             bank.get_balance(&mint_keypair.pubkey()),
             initial_mint_balance - 1 - expensive_lamports_per_signature
@@ -11124,11 +11122,11 @@ pub(crate) mod tests {
         let bank = Bank::new_from_parent(&Arc::new(bank), &leader, 2);
 
         // Send a transfer using cheap_blockhash
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
-        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, cheap_blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &key, 1, cheap_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key), 1);
         let cheap_fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
             cheap_lamports_per_signature,
@@ -11142,11 +11140,11 @@ pub(crate) mod tests {
         );
 
         // Send a transfer using expensive_blockhash
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let initial_mint_balance = bank.get_balance(&mint_keypair.pubkey());
-        let tx = system_transaction::transfer(&mint_keypair, &key.pubkey(), 1, expensive_blockhash);
+        let tx = system_transaction::transfer(&mint_keypair, &key, 1, expensive_blockhash);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+        assert_eq!(bank.get_balance(&key), 1);
         let expensive_fee = Bank::calculate_fee(
             &SanitizedMessage::try_from(Message::new(&[], Some(&Pubkey::new_unique()))).unwrap(),
             expensive_lamports_per_signature,
@@ -11171,16 +11169,16 @@ pub(crate) mod tests {
         genesis_config.fee_rate_governor = FeeRateGovernor::new(5000, 0);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             2,
             genesis_config.hash(),
         ));
         let tx2 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             5,
             genesis_config.hash(),
         ));
@@ -11222,16 +11220,16 @@ pub(crate) mod tests {
         genesis_config.fee_rate_governor = FeeRateGovernor::new(2, 0);
         let bank = Bank::new_for_tests(&genesis_config);
 
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
         let tx1 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             2,
             genesis_config.hash(),
         ));
         let tx2 = SanitizedTransaction::from_transaction_for_tests(system_transaction::transfer(
             &mint_keypair,
-            &key.pubkey(),
+            &key,
             5,
             genesis_config.hash(),
         ));
@@ -12232,10 +12230,10 @@ pub(crate) mod tests {
         let (genesis_config, mint_keypair) = create_genesis_config(500);
         let mut bank = Bank::new_for_tests(&genesis_config);
         bank.fee_rate_governor.lamports_per_signature = 2;
-        let key = Keypair::new();
+        let key = solana_sdk::pubkey::new_rand();
 
         let mut transfer_instruction =
-            system_instruction::transfer(&mint_keypair.pubkey(), &key.pubkey(), 0);
+            system_instruction::transfer(&mint_keypair.pubkey(), &key, 0);
         transfer_instruction.accounts[0].is_signer = false;
         let message = Message::new(&[transfer_instruction], None);
         let tx = Transaction::new(&[&Keypair::new(); 0], message, bank.last_blockhash());
@@ -12244,7 +12242,7 @@ pub(crate) mod tests {
             bank.process_transaction(&tx),
             Err(TransactionError::SanitizeFailure)
         );
-        assert_eq!(bank.get_balance(&key.pubkey()), 0);
+        assert_eq!(bank.get_balance(&key), 0);
     }
 
     #[test]
