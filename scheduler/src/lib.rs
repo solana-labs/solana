@@ -874,6 +874,27 @@ enum TaskSource {
     Stuck,
 }
 
+enum SelectionContext {
+    Runnable,
+    Contended(u8, Vec<TaskInQueue>),
+}
+
+impl SelectionContext {
+    fn should_continue(&self) -> bool {
+        match(self) {
+            SelectionContext::Runnable => true,
+            SelectionContext::Contended(failure_count) => failure_count < 2,
+        }
+    }
+
+    fn runnable_exclusive(&self) -> bool {
+        match(self) {
+            SelectionContext::Runnable => true,
+            SelectionContext::Contended(_) => false,
+        }
+    }
+}
+
 impl ScheduleStage {
     fn push_to_runnable_queue(task: TaskInQueue, runnable_queue: &mut TaskQueue) {
         runnable_queue.add_to_schedule(task.unique_weight, task);
