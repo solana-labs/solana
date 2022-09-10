@@ -1539,7 +1539,7 @@ impl ScheduleStage {
             let (mut empty_from, mut empty_from_exec) = (false, false);
             let (mut from_len, mut from_exec_len) = (0, 0);
             let log =  || {
-                    if interval_count % 100 == 0 {
+                    if intrval_count % 100 == 0 {
                         let elapsed = last_time.elapsed();
                         if elapsed > std::time::Duration::from_millis(150) {
                             let delta = (processed_count - last_processed_count) as u128;
