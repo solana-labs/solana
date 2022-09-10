@@ -1270,6 +1270,7 @@ impl Default for Scheduler {
                 let ro_bank = bank.read().unwrap();
                 let weak_bank = ro_bank.as_ref().unwrap().upgrade();
                 let bank = weak_bank.as_ref().unwrap();
+                let slot = bank.slot();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
                 let lock_result = ee.task.tx.0
@@ -1290,8 +1291,8 @@ impl Default for Scheduler {
                     None
                 );
                 drop(bank);
-                //drop(weak_bank);
-                //drop(ro_bank);
+                drop(weak_bank);
+                drop(ro_bank);
 
                 let TransactionResults {
                     fee_collection_results,
@@ -1313,7 +1314,7 @@ impl Default for Scheduler {
 
                     datapoint_info!(
                         "individual_tx_stats",
-                        ("slot", bank.slot(), i64), // what? why dropped bank can be used here??
+                        ("slot", slot, i64), // what? why dropped bank can be used here??
                         ("thread", current_thread_name, String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
