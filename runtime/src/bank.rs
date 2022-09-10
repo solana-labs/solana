@@ -6443,6 +6443,8 @@ impl Bank {
         bank: &Arc<Bank>,
         transaction_indexes: &Vec<usize>,
     ) {
+        assert_eq!(bank.slot(), batch.bank().slot());
+
         let scheduler = {
             let r = self.scheduler.read().unwrap();
 
@@ -6456,7 +6458,6 @@ impl Bank {
                 drop(w);
                 self.scheduler.read().unwrap()
             } else {
-                assert_eq!(bank.slot(), batch.bank().slot());
                 assert_eq!(bank.slot(), r.slot.unwrap());
                 r
             }
