@@ -884,7 +884,7 @@ impl SelectionContext {
     fn should_continue(&self) -> bool {
         match self {
             SelectionContext::OnlyRunnable => true,
-            SelectionContext::OnlyContended(failure_count) => failure_count < 2,
+            SelectionContext::OnlyContended(ref failure_count) => failure_count < 2,
         }
     }
 
