@@ -1243,7 +1243,7 @@ impl Default for Scheduler {
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
-        let bank = Arc::new(None::<std::sync::Weak<Bank>>);
+        let bank = arc_swap::ArcSwapOption::new(None::<std::sync::Weak<Bank>>);
 
         let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
             .unwrap_or(format!("{}", 1))
