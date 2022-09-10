@@ -6456,7 +6456,7 @@ impl Bank {
                 drop(w);
                 self.scheduler.read().unwrap()
             } else {
-                assert_eq!(bank.slot(), batch.bank.slot());
+                assert_eq!(bank.slot(), batch.bank().slot());
                 assert_eq!(bank.slot(), r.slot);
                 r
             }
