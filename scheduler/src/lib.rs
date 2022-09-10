@@ -874,6 +874,7 @@ enum TaskSource {
     Stuck,
 }
 
+/*
 enum SelectionContext {
     Runnable,
     Contended(u8, Vec<TaskInQueue>),
@@ -894,6 +895,7 @@ impl SelectionContext {
         }
     }
 }
+*/
 
 impl ScheduleStage {
     fn push_to_runnable_queue(task: TaskInQueue, runnable_queue: &mut TaskQueue) {
