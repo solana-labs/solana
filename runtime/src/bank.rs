@@ -6449,7 +6449,7 @@ impl Bank {
 
             if r.bank.is_none() {
                 drop(r);
-                let w = self.scheduler.write().unwrap();
+                let mut w = self.scheduler.write().unwrap();
                 *w.bank = Some(Arc::downgrade(&bank));
                 drop(w);
                 self.scheduler.read().unwrap()
