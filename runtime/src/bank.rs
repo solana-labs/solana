@@ -1255,7 +1255,6 @@ impl Default for Scheduler {
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), processed_ee_sender.clone());
             let bank = bank.clone();
-            let mut execute_time = 0;
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
             let current_thread_name = std::thread::current().name().unwrap().to_string();
@@ -1264,7 +1263,6 @@ impl Default for Scheduler {
                 let mut process_message_time = Measure::start("process_message_time");
 
                 let current_execute_clock = ee.task.execute_time();
-                execute_time += 1;
                 trace!("execute_substage: thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
 
                 let ro_bank = bank.read().unwrap();
