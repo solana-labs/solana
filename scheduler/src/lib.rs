@@ -881,7 +881,7 @@ enum TaskSelection {
 
 
 impl TaskSelection {
-    fn should_continue(&self) -> bool {
+    fn should_proceed(&self) -> bool {
         match self {
             TaskSelection::OnlyFromRunnable => true,
             TaskSelection::OnlyFromContended(failure_count) => *failure_count < 2,
@@ -1540,9 +1540,9 @@ impl ScheduleStage {
 
             loop {
                 let executing_like_count = executing_queue_count + provisioning_tracker_count;
-                if executing_like_count < max_executing_queue_count {
+                let mut selection = TaskSelection::OnlyFromContended(0);
+                if selection.should_proceed() && executing_like_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
-                    let mut selection = TaskSelection::OnlyFromContended(0);
 
                     if let Some(ee) = Self::schedule_next_execution(
                         ast,
@@ -1573,9 +1573,9 @@ impl ScheduleStage {
                         }
                     }
                 }
-                while executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
+                let mut selection = TaskSelection::OnlyFromRunnable;
+                while selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
-                    let mut selection = TaskSelection::OnlyFromRunnable;
 
                     let maybe_ee = Self::schedule_next_execution(
                         ast,
