@@ -1308,7 +1308,7 @@ impl Default for Scheduler {
                     send_metrics.and_then(|| format!("{:?}", details.status))
                 } else {
                     send_metrics.and_then(|| format!("{:?}", ts_result))
-                }
+                };
 
                 if send_metrics {
                     let sig = ee.task.tx.0.signature().to_string();
