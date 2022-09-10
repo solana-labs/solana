@@ -1575,7 +1575,7 @@ impl ScheduleStage {
                 }
                 while executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
-                    let mut selection = TaskSelection::OnlyFromRunnable();
+                    let mut selection = TaskSelection::OnlyFromRunnable;
 
                     let maybe_ee = Self::schedule_next_execution(
                         ast,
