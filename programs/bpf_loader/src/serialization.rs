@@ -1,7 +1,7 @@
 #![allow(clippy::integer_arithmetic)]
 
 use {
-    byteorder::{ByteOrder, LittleEndian, WriteBytesExt},
+    byteorder::{ByteOrder, LittleEndian},
     solana_rbpf::{aligned_memory::AlignedMemory, ebpf::HOST_ALIGN},
     solana_sdk::{
         bpf_loader_deprecated,
@@ -11,7 +11,7 @@ use {
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
         transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
     },
-    std::{io::prelude::*, mem::size_of},
+    std::mem::size_of,
 };
 
 /// Maximum number of instruction accounts that can be serialized into the
@@ -108,50 +108,43 @@ pub fn serialize_parameters_unaligned(
          + size_of::<Pubkey>(); // program id
     let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
-    v.write_u64::<LittleEndian>(instruction_context.get_number_of_instruction_accounts() as u64)
-        .map_err(|_| InstructionError::InvalidArgument)?;
-    for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
-        let duplicate =
-            instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
-        if let Some(position) = duplicate {
-            v.write_u8(position as u8)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-        } else {
-            let borrowed_account = instruction_context
-                .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
-            v.write_u8(NON_DUP_MARKER)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u8(borrowed_account.is_signer() as u8)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u8(borrowed_account.is_writable() as u8)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_all(borrowed_account.get_key().as_ref())
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u64::<LittleEndian>(borrowed_account.get_lamports())
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u64::<LittleEndian>(borrowed_account.get_data().len() as u64)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_all(borrowed_account.get_data())
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_all(borrowed_account.get_owner().as_ref())
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u8(borrowed_account.is_executable() as u8)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u64::<LittleEndian>(borrowed_account.get_rent_epoch() as u64)
-                .map_err(|_| InstructionError::InvalidArgument)?;
+    unsafe {
+        v.write_u64_unchecked(
+            (instruction_context.get_number_of_instruction_accounts() as u64).to_le(),
+        );
+        for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts()
+        {
+            let duplicate =
+                instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
+
+            if let Some(position) = duplicate {
+                v.write_u8_unchecked(position as u8);
+            } else {
+                let borrowed_account = instruction_context.try_borrow_instruction_account(
+                    transaction_context,
+                    instruction_account_index,
+                )?;
+                v.write_u8_unchecked(NON_DUP_MARKER);
+                v.write_u8_unchecked(borrowed_account.is_signer() as u8);
+                v.write_u8_unchecked(borrowed_account.is_writable() as u8);
+                v.write_all_unchecked(borrowed_account.get_key().as_ref());
+                v.write_u64_unchecked(borrowed_account.get_lamports().to_le());
+                v.write_u64_unchecked((borrowed_account.get_data().len() as u64).to_le());
+                v.write_all_unchecked(borrowed_account.get_data());
+                v.write_all_unchecked(borrowed_account.get_owner().as_ref());
+                v.write_u8_unchecked(borrowed_account.is_executable() as u8);
+                v.write_u64_unchecked((borrowed_account.get_rent_epoch() as u64).to_le());
+            }
         }
+        v.write_u64_unchecked((instruction_context.get_instruction_data().len() as u64).to_le());
+        v.write_all_unchecked(instruction_context.get_instruction_data());
+        v.write_all_unchecked(
+            instruction_context
+                .try_borrow_last_program_account(transaction_context)?
+                .get_key()
+                .as_ref(),
+        );
     }
-    v.write_u64::<LittleEndian>(instruction_context.get_instruction_data().len() as u64)
-        .map_err(|_| InstructionError::InvalidArgument)?;
-    v.write_all(instruction_context.get_instruction_data())
-        .map_err(|_| InstructionError::InvalidArgument)?;
-    v.write_all(
-        instruction_context
-            .try_borrow_last_program_account(transaction_context)?
-            .get_key()
-            .as_ref(),
-    )
-    .map_err(|_| InstructionError::InvalidArgument)?;
     Ok(v)
 }
 
@@ -241,61 +234,52 @@ pub fn serialize_parameters_aligned(
     + size_of::<Pubkey>(); // program id;
     let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
-    // Serialize into the buffer
-    v.write_u64::<LittleEndian>(instruction_context.get_number_of_instruction_accounts() as u64)
-        .map_err(|_| InstructionError::InvalidArgument)?;
-    for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
-        let duplicate =
-            instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
-        if let Some(position) = duplicate {
-            v.write_u8(position as u8)
+    unsafe {
+        // Serialize into the buffer
+        v.write_u64_unchecked(
+            (instruction_context.get_number_of_instruction_accounts() as u64).to_le(),
+        );
+        for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts()
+        {
+            let duplicate =
+                instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
+            if let Some(position) = duplicate {
+                v.write_u8_unchecked(position as u8);
+                v.write_all_unchecked(&[0u8, 0, 0, 0, 0, 0, 0]);
+            } else {
+                let borrowed_account = instruction_context.try_borrow_instruction_account(
+                    transaction_context,
+                    instruction_account_index,
+                )?;
+                v.write_u8_unchecked(NON_DUP_MARKER);
+                v.write_u8_unchecked(borrowed_account.is_signer() as u8);
+                v.write_u8_unchecked(borrowed_account.is_writable() as u8);
+                v.write_u8_unchecked(borrowed_account.is_executable() as u8);
+                v.write_all_unchecked(&[0u8, 0, 0, 0]);
+                v.write_all_unchecked(borrowed_account.get_key().as_ref());
+                v.write_all_unchecked(borrowed_account.get_owner().as_ref());
+                v.write_u64_unchecked(borrowed_account.get_lamports().to_le());
+                v.write_u64_unchecked((borrowed_account.get_data().len() as u64).to_le());
+                v.write_all_unchecked(borrowed_account.get_data());
+                v.fill_write(
+                    MAX_PERMITTED_DATA_INCREASE
+                        + (borrowed_account.get_data().len() as *const u8)
+                            .align_offset(BPF_ALIGN_OF_U128),
+                    0,
+                )
                 .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_all(&[0u8, 0, 0, 0, 0, 0, 0])
-                .map_err(|_| InstructionError::InvalidArgument)?; // 7 bytes of padding to make 64-bit aligned
-        } else {
-            let borrowed_account = instruction_context
-                .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
-            v.write_u8(NON_DUP_MARKER)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u8(borrowed_account.is_signer() as u8)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u8(borrowed_account.is_writable() as u8)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u8(borrowed_account.is_executable() as u8)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_all(&[0u8, 0, 0, 0])
-                .map_err(|_| InstructionError::InvalidArgument)?; // 4 bytes of padding to make 128-bit aligned
-            v.write_all(borrowed_account.get_key().as_ref())
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_all(borrowed_account.get_owner().as_ref())
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u64::<LittleEndian>(borrowed_account.get_lamports())
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u64::<LittleEndian>(borrowed_account.get_data().len() as u64)
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_all(borrowed_account.get_data())
-                .map_err(|_| InstructionError::InvalidArgument)?;
-            v.fill_write(
-                MAX_PERMITTED_DATA_INCREASE
-                    + (v.write_index() as *const u8).align_offset(BPF_ALIGN_OF_U128),
-                0,
-            )
-            .map_err(|_| InstructionError::InvalidArgument)?;
-            v.write_u64::<LittleEndian>(borrowed_account.get_rent_epoch() as u64)
-                .map_err(|_| InstructionError::InvalidArgument)?;
+                v.write_u64_unchecked((borrowed_account.get_rent_epoch() as u64).to_le());
+            }
         }
+        v.write_u64_unchecked((instruction_context.get_instruction_data().len() as u64).to_le());
+        v.write_all_unchecked(instruction_context.get_instruction_data());
+        v.write_all_unchecked(
+            instruction_context
+                .try_borrow_last_program_account(transaction_context)?
+                .get_key()
+                .as_ref(),
+        );
     }
-    v.write_u64::<LittleEndian>(instruction_context.get_instruction_data().len() as u64)
-        .map_err(|_| InstructionError::InvalidArgument)?;
-    v.write_all(instruction_context.get_instruction_data())
-        .map_err(|_| InstructionError::InvalidArgument)?;
-    v.write_all(
-        instruction_context
-            .try_borrow_last_program_account(transaction_context)?
-            .get_key()
-            .as_ref(),
-    )
-    .map_err(|_| InstructionError::InvalidArgument)?;
     Ok(v)
 }
 
