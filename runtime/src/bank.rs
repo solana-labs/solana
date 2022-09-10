@@ -1207,6 +1207,7 @@ struct Scheduler {
     errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     transaction_index: AtomicUsize,
+    slot: Option<Slot>,
 }
 
 impl Scheduler {
