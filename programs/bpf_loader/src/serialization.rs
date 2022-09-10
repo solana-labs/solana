@@ -9,7 +9,9 @@ use {
         instruction::InstructionError,
         pubkey::Pubkey,
         system_instruction::MAX_PERMITTED_DATA_LENGTH,
-        transaction_context::{IndexOfAccount, InstructionContext, TransactionContext},
+        transaction_context::{
+            BorrowedAccount, IndexOfAccount, InstructionContext, TransactionContext,
+        },
     },
     std::mem::size_of,
 };
@@ -17,6 +19,11 @@ use {
 /// Maximum number of instruction accounts that can be serialized into the
 /// BPF VM.
 const MAX_INSTRUCTION_ACCOUNTS: u8 = NON_DUP_MARKER;
+
+enum SerializeAccount<'a> {
+    Account(IndexOfAccount, BorrowedAccount<'a>),
+    Duplicate(IndexOfAccount),
+}
 
 pub fn serialize_parameters(
     transaction_context: &TransactionContext,
@@ -27,27 +34,39 @@ pub fn serialize_parameters(
     if should_cap_ix_accounts && num_ix_accounts > MAX_INSTRUCTION_ACCOUNTS as IndexOfAccount {
         return Err(InstructionError::MaxAccountsExceeded);
     }
-
     let is_loader_deprecated = *instruction_context
         .try_borrow_last_program_account(transaction_context)?
         .get_owner()
         == bpf_loader_deprecated::id();
-    if is_loader_deprecated {
-        serialize_parameters_unaligned(transaction_context, instruction_context)
-    } else {
-        serialize_parameters_aligned(transaction_context, instruction_context)
+
+    let num_accounts = instruction_context.get_number_of_instruction_accounts() as usize;
+    let mut accounts = Vec::with_capacity(num_accounts);
+    let mut account_lengths: Vec<usize> = Vec::with_capacity(num_accounts);
+    for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
+        if let Some(index) =
+            instruction_context.is_instruction_account_duplicate(instruction_account_index)?
+        {
+            accounts.push(SerializeAccount::Duplicate(index));
+            // unwrap here is safe: if an account is a duplicate, we must have
+            // seen the original already
+            account_lengths.push(*account_lengths.get(index as usize).unwrap());
+        } else {
+            let account = instruction_context
+                .try_borrow_instruction_account(transaction_context, instruction_account_index)?;
+            account_lengths.push(account.get_data().len());
+            accounts.push(SerializeAccount::Account(
+                instruction_account_index,
+                account,
+            ));
+        };
     }
-    .and_then(|buffer| {
-        let account_lengths = (0..instruction_context.get_number_of_instruction_accounts())
-            .map(|instruction_account_index| {
-                Ok(instruction_context
-                    .try_borrow_instruction_account(transaction_context, instruction_account_index)?
-                    .get_data()
-                    .len())
-            })
-            .collect::<Result<Vec<usize>, InstructionError>>()?;
-        Ok((buffer, account_lengths))
-    })
+
+    if is_loader_deprecated {
+        serialize_parameters_unaligned(transaction_context, instruction_context, accounts)
+    } else {
+        serialize_parameters_aligned(transaction_context, instruction_context, accounts)
+    }
+    .map(|buffer| (buffer, account_lengths))
 }
 
 pub fn deserialize_parameters(
@@ -77,30 +96,28 @@ pub fn deserialize_parameters(
     }
 }
 
-pub fn serialize_parameters_unaligned(
+fn serialize_parameters_unaligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
+    accounts: Vec<SerializeAccount>,
 ) -> Result<AlignedMemory<HOST_ALIGN>, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
-    for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
-        let duplicate =
-            instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
+    for account in &accounts {
         size += 1; // dup
-        if duplicate.is_none() {
-            let data_len = instruction_context
-                .try_borrow_instruction_account(transaction_context, instruction_account_index)?
-                .get_data()
-                .len();
-            size += size_of::<u8>() // is_signer
+        match account {
+            SerializeAccount::Duplicate(_) => {}
+            SerializeAccount::Account(_, account) => {
+                size += size_of::<u8>() // is_signer
                 + size_of::<u8>() // is_writable
                 + size_of::<Pubkey>() // key
                 + size_of::<u64>()  // lamports
                 + size_of::<u64>()  // data len
-                + data_len // data
+                + account.get_data().len() // data
                 + size_of::<Pubkey>() // owner
                 + size_of::<u8>() // executable
                 + size_of::<u64>(); // rent_epoch
+            }
         }
     }
     size += size_of::<u64>() // instruction data len
@@ -109,32 +126,23 @@ pub fn serialize_parameters_unaligned(
     let mut v = AlignedMemory::<HOST_ALIGN>::with_capacity(size);
 
     unsafe {
-        v.write_u64_unchecked(
-            (instruction_context.get_number_of_instruction_accounts() as u64).to_le(),
-        );
-        for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts()
-        {
-            let duplicate =
-                instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
-
-            if let Some(position) = duplicate {
-                v.write_u8_unchecked(position as u8);
-            } else {
-                let borrowed_account = instruction_context.try_borrow_instruction_account(
-                    transaction_context,
-                    instruction_account_index,
-                )?;
-                v.write_u8_unchecked(NON_DUP_MARKER);
-                v.write_u8_unchecked(borrowed_account.is_signer() as u8);
-                v.write_u8_unchecked(borrowed_account.is_writable() as u8);
-                v.write_all_unchecked(borrowed_account.get_key().as_ref());
-                v.write_u64_unchecked(borrowed_account.get_lamports().to_le());
-                v.write_u64_unchecked((borrowed_account.get_data().len() as u64).to_le());
-                v.write_all_unchecked(borrowed_account.get_data());
-                v.write_all_unchecked(borrowed_account.get_owner().as_ref());
-                v.write_u8_unchecked(borrowed_account.is_executable() as u8);
-                v.write_u64_unchecked((borrowed_account.get_rent_epoch() as u64).to_le());
-            }
+        v.write_u64_unchecked((accounts.len() as u64).to_le());
+        for account in accounts {
+            match account {
+                SerializeAccount::Duplicate(position) => v.write_u8_unchecked(position as u8),
+                SerializeAccount::Account(_, account) => {
+                    v.write_u8_unchecked(NON_DUP_MARKER);
+                    v.write_u8_unchecked(account.is_signer() as u8);
+                    v.write_u8_unchecked(account.is_writable() as u8);
+                    v.write_all_unchecked(account.get_key().as_ref());
+                    v.write_u64_unchecked(account.get_lamports().to_le());
+                    v.write_u64_unchecked((account.get_data().len() as u64).to_le());
+                    v.write_all_unchecked(account.get_data());
+                    v.write_all_unchecked(account.get_owner().as_ref());
+                    v.write_u8_unchecked(account.is_executable() as u8);
+                    v.write_u64_unchecked((account.get_rent_epoch() as u64).to_le());
+                }
+            };
         }
         v.write_u64_unchecked((instruction_context.get_instruction_data().len() as u64).to_le());
         v.write_all_unchecked(instruction_context.get_instruction_data());
@@ -145,6 +153,7 @@ pub fn serialize_parameters_unaligned(
                 .as_ref(),
         );
     }
+
     Ok(v)
 }
 
@@ -198,24 +207,20 @@ pub fn deserialize_parameters_unaligned(
     Ok(())
 }
 
-pub fn serialize_parameters_aligned(
+fn serialize_parameters_aligned(
     transaction_context: &TransactionContext,
     instruction_context: &InstructionContext,
+    accounts: Vec<SerializeAccount>,
 ) -> Result<AlignedMemory<HOST_ALIGN>, InstructionError> {
     // Calculate size in order to alloc once
     let mut size = size_of::<u64>();
-    for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts() {
-        let duplicate =
-            instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
+    for account in &accounts {
         size += 1; // dup
-        if duplicate.is_some() {
-            size += 7; // padding to 64-bit aligned
-        } else {
-            let data_len = instruction_context
-                .try_borrow_instruction_account(transaction_context, instruction_account_index)?
-                .get_data()
-                .len();
-            size += size_of::<u8>() // is_signer
+        match account {
+            SerializeAccount::Duplicate(_) => size += 7, // padding to 64-bit aligned
+            SerializeAccount::Account(_, account) => {
+                let data_len = account.get_data().len();
+                size += size_of::<u8>() // is_signer
                 + size_of::<u8>() // is_writable
                 + size_of::<u8>() // executable
                 + size_of::<u32>() // original_data_len
@@ -227,6 +232,7 @@ pub fn serialize_parameters_aligned(
                 + MAX_PERMITTED_DATA_INCREASE
                 + (data_len as *const u8).align_offset(BPF_ALIGN_OF_U128)
                 + size_of::<u64>(); // rent epoch
+            }
         }
     }
     size += size_of::<u64>() // data len
@@ -236,40 +242,35 @@ pub fn serialize_parameters_aligned(
 
     unsafe {
         // Serialize into the buffer
-        v.write_u64_unchecked(
-            (instruction_context.get_number_of_instruction_accounts() as u64).to_le(),
-        );
-        for instruction_account_index in 0..instruction_context.get_number_of_instruction_accounts()
-        {
-            let duplicate =
-                instruction_context.is_instruction_account_duplicate(instruction_account_index)?;
-            if let Some(position) = duplicate {
-                v.write_u8_unchecked(position as u8);
-                v.write_all_unchecked(&[0u8, 0, 0, 0, 0, 0, 0]);
-            } else {
-                let borrowed_account = instruction_context.try_borrow_instruction_account(
-                    transaction_context,
-                    instruction_account_index,
-                )?;
-                v.write_u8_unchecked(NON_DUP_MARKER);
-                v.write_u8_unchecked(borrowed_account.is_signer() as u8);
-                v.write_u8_unchecked(borrowed_account.is_writable() as u8);
-                v.write_u8_unchecked(borrowed_account.is_executable() as u8);
-                v.write_all_unchecked(&[0u8, 0, 0, 0]);
-                v.write_all_unchecked(borrowed_account.get_key().as_ref());
-                v.write_all_unchecked(borrowed_account.get_owner().as_ref());
-                v.write_u64_unchecked(borrowed_account.get_lamports().to_le());
-                v.write_u64_unchecked((borrowed_account.get_data().len() as u64).to_le());
-                v.write_all_unchecked(borrowed_account.get_data());
-                v.fill_write(
-                    MAX_PERMITTED_DATA_INCREASE
-                        + (borrowed_account.get_data().len() as *const u8)
-                            .align_offset(BPF_ALIGN_OF_U128),
-                    0,
-                )
-                .map_err(|_| InstructionError::InvalidArgument)?;
-                v.write_u64_unchecked((borrowed_account.get_rent_epoch() as u64).to_le());
-            }
+
+        v.write_u64_unchecked((accounts.len() as u64).to_le());
+        for account in accounts {
+            match account {
+                SerializeAccount::Account(_, borrowed_account) => {
+                    v.write_u8_unchecked(NON_DUP_MARKER);
+                    v.write_u8_unchecked(borrowed_account.is_signer() as u8);
+                    v.write_u8_unchecked(borrowed_account.is_writable() as u8);
+                    v.write_u8_unchecked(borrowed_account.is_executable() as u8);
+                    v.write_all_unchecked(&[0u8, 0, 0, 0]);
+                    v.write_all_unchecked(borrowed_account.get_key().as_ref());
+                    v.write_all_unchecked(borrowed_account.get_owner().as_ref());
+                    v.write_u64_unchecked(borrowed_account.get_lamports().to_le());
+                    v.write_u64_unchecked((borrowed_account.get_data().len() as u64).to_le());
+                    v.write_all_unchecked(borrowed_account.get_data());
+                    v.fill_write(
+                        MAX_PERMITTED_DATA_INCREASE
+                            + (borrowed_account.get_data().len() as *const u8)
+                                .align_offset(BPF_ALIGN_OF_U128),
+                        0,
+                    )
+                    .map_err(|_| InstructionError::InvalidArgument)?;
+                    v.write_u64_unchecked((borrowed_account.get_rent_epoch() as u64).to_le());
+                }
+                SerializeAccount::Duplicate(position) => {
+                    v.write_u8_unchecked(position as u8);
+                    v.write_all_unchecked(&[0u8, 0, 0, 0, 0, 0, 0]);
+                }
+            };
         }
         v.write_u64_unchecked((instruction_context.get_instruction_data().len() as u64).to_le());
         v.write_all_unchecked(instruction_context.get_instruction_data());
