@@ -1206,7 +1206,6 @@ struct Scheduler {
     graceful_stop_initiated: bool,
     errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
-    transaction_index: AtomicUsize,
     slot: Option<Slot>,
 }
 
@@ -1380,7 +1379,7 @@ impl Default for Scheduler {
             graceful_stop_initiated: Default::default(),
             errors,
             bank,
-            transaction_index: Default::default(),
+            slot: Default::default(),
         }
     }
 }
