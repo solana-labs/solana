@@ -258,49 +258,47 @@ impl BankForks {
         let mut total_squash_accounts_store_ms = 0;
         let mut total_squash_cache_ms = 0;
         let mut total_snapshot_ms = 0;
-        for bank in banks.iter() {
+        if let Some(bank) = banks.iter().find(|bank| {
+            bank.slot() > self.last_accounts_hash_slot
+                && bank.block_height() % self.accounts_hash_interval_slots == 0
+        }) {
             let bank_slot = bank.slot();
-            if bank.block_height() % self.accounts_hash_interval_slots == 0
-                && bank_slot > self.last_accounts_hash_slot
-            {
-                self.last_accounts_hash_slot = bank_slot;
-                let squash_timing = bank.squash();
-                total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
-                total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
-                total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
-                total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
-                total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
-                is_root_bank_squashed = bank_slot == root;
+            self.last_accounts_hash_slot = bank_slot;
+            let squash_timing = bank.squash();
+            total_squash_accounts_ms += squash_timing.squash_accounts_ms as i64;
+            total_squash_accounts_index_ms += squash_timing.squash_accounts_index_ms as i64;
+            total_squash_accounts_cache_ms += squash_timing.squash_accounts_cache_ms as i64;
+            total_squash_accounts_store_ms += squash_timing.squash_accounts_store_ms as i64;
+            total_squash_cache_ms += squash_timing.squash_cache_ms as i64;
+            is_root_bank_squashed = bank_slot == root;
 
-                let mut snapshot_time = Measure::start("squash::snapshot_time");
-                if self.snapshot_config.is_some()
-                    && accounts_background_request_sender.is_snapshot_creation_enabled()
-                {
-                    if bank.is_startup_verification_complete() {
-                        // Save off the status cache because these may get pruned if another
-                        // `set_root()` is called before the snapshots package can be generated
-                        let status_cache_slot_deltas =
-                            bank.status_cache.read().unwrap().root_slot_deltas();
-                        if let Err(e) = accounts_background_request_sender.send_snapshot_request(
-                            SnapshotRequest {
-                                snapshot_root_bank: Arc::clone(bank),
-                                status_cache_slot_deltas,
-                                request_type: SnapshotRequestType::Snapshot,
-                            },
-                        ) {
-                            warn!(
-                                "Error sending snapshot request for bank: {}, err: {:?}",
-                                bank_slot, e
-                            );
-                        }
-                    } else {
-                        info!("Not sending snapshot request for bank: {}, startup verification is incomplete", bank_slot);
+            let mut snapshot_time = Measure::start("squash::snapshot_time");
+            if self.snapshot_config.is_some()
+                && accounts_background_request_sender.is_snapshot_creation_enabled()
+            {
+                if bank.is_startup_verification_complete() {
+                    // Save off the status cache because these may get pruned if another
+                    // `set_root()` is called before the snapshots package can be generated
+                    let status_cache_slot_deltas =
+                        bank.status_cache.read().unwrap().root_slot_deltas();
+                    if let Err(e) =
+                        accounts_background_request_sender.send_snapshot_request(SnapshotRequest {
+                            snapshot_root_bank: Arc::clone(bank),
+                            status_cache_slot_deltas,
+                            request_type: SnapshotRequestType::Snapshot,
+                        })
+                    {
+                        warn!(
+                            "Error sending snapshot request for bank: {}, err: {:?}",
+                            bank_slot, e
+                        );
                     }
+                } else {
+                    info!("Not sending snapshot request for bank: {}, startup verification is incomplete", bank_slot);
                 }
-                snapshot_time.stop();
-                total_snapshot_ms += snapshot_time.as_ms() as i64;
-                break;
             }
+            snapshot_time.stop();
+            total_snapshot_ms += snapshot_time.as_ms() as i64;
         }
         if !is_root_bank_squashed {
             let squash_timing = root_bank.squash();
