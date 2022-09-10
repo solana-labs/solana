@@ -14,7 +14,7 @@ use {
     test::Bencher,
 };
 
-fn create_inputs(owner: Pubkey) -> TransactionContext {
+fn create_inputs(owner: Pubkey, num_instruction_accounts: usize) -> TransactionContext {
     let program_id = solana_sdk::pubkey::new_rand();
     let transaction_accounts = vec![
         (
@@ -89,8 +89,11 @@ fn create_inputs(owner: Pubkey) -> TransactionContext {
         ),
     ];
     let mut instruction_accounts: Vec<InstructionAccount> = Vec::new();
-    for (instruction_account_index, index_in_transaction) in
-        [1, 1, 2, 3, 4, 4, 5, 6].into_iter().enumerate()
+    for (instruction_account_index, index_in_transaction) in [1, 1, 2, 3, 4, 4, 5, 6]
+        .into_iter()
+        .cycle()
+        .take(num_instruction_accounts)
+        .enumerate()
     {
         let index_in_callee = instruction_accounts
             .iter()
@@ -118,7 +121,7 @@ fn create_inputs(owner: Pubkey) -> TransactionContext {
 
 #[bench]
 fn bench_serialize_unaligned(bencher: &mut Bencher) {
-    let transaction_context = create_inputs(bpf_loader_deprecated::id());
+    let transaction_context = create_inputs(bpf_loader_deprecated::id(), 7);
     let instruction_context = transaction_context
         .get_current_instruction_context()
         .unwrap();
@@ -129,7 +132,30 @@ fn bench_serialize_unaligned(bencher: &mut Bencher) {
 
 #[bench]
 fn bench_serialize_aligned(bencher: &mut Bencher) {
-    let transaction_context = create_inputs(bpf_loader::id());
+    let transaction_context = create_inputs(bpf_loader::id(), 7);
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .unwrap();
+
+    bencher.iter(|| {
+        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+    });
+}
+
+#[bench]
+fn bench_serialize_unaligned_max_accounts(bencher: &mut Bencher) {
+    let transaction_context = create_inputs(bpf_loader_deprecated::id(), 255);
+    let instruction_context = transaction_context
+        .get_current_instruction_context()
+        .unwrap();
+    bencher.iter(|| {
+        let _ = serialize_parameters(&transaction_context, instruction_context, true).unwrap();
+    });
+}
+
+#[bench]
+fn bench_serialize_aligned_max_accounts(bencher: &mut Bencher) {
+    let transaction_context = create_inputs(bpf_loader::id(), 255);
     let instruction_context = transaction_context
         .get_current_instruction_context()
         .unwrap();
