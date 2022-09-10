@@ -1548,7 +1548,7 @@ impl ScheduleStage {
                             (last_time, last_processed_count) = (std::time::Instant::now(), processed_count);
                         }
                     }
-            }
+            };
 
             loop {
                 let executing_like_count = executing_queue_count + provisioning_tracker_count;
