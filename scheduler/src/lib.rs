@@ -874,24 +874,24 @@ enum TaskSource {
     Stuck,
 }
 
-enum SelectionContext {
-    OnlyRunnable,
-    OnlyContended(usize),
+enum TaskSelection {
+    OnlyFromRunnable,
+    OnlyFromContended(usize),
 }
 
 
-impl SelectionContext {
+impl TaskSelection {
     fn should_continue(&self) -> bool {
         match self {
-            SelectionContext::OnlyRunnable => true,
-            SelectionContext::OnlyContended(failure_count) => *failure_count < 2,
+            TaskSelection::OnlyFromRunnable => true,
+            TaskSelection::OnlyFromContended(failure_count) => *failure_count < 2,
         }
     }
 
     fn runnable_exclusive(&self) -> bool {
         match self {
-            SelectionContext::OnlyRunnable => true,
-            SelectionContext::OnlyContended(_) => false,
+            TaskSelection::OnlyFromRunnable => true,
+            TaskSelection::OnlyFromContended(_) => false,
         }
     }
 }
@@ -913,7 +913,7 @@ impl ScheduleStage {
         runnable_queue: &'a mut TaskQueue,
         address_book: &mut AddressBook,
         contended_count: &usize,
-        runnable_exclusive: bool,
+        task_selection: &mut TaskSelection,
     ) -> Option<(TaskSource, TaskInQueue)> {
         match (
             runnable_queue.heaviest_entry_to_execute(),
@@ -921,7 +921,7 @@ impl ScheduleStage {
         ) {
             (Some(heaviest_runnable_entry), None) => {
                 trace!("select: runnable only");
-                if runnable_exclusive {
+                if task_selection.runnable_exclusive() {
                     let t = heaviest_runnable_entry.remove();
                     Some((TaskSource::Runnable, t))
                 } else {
@@ -930,7 +930,7 @@ impl ScheduleStage {
             }
             (None, Some(weight_from_contended)) => {
                 trace!("select: contended only");
-                if runnable_exclusive {
+                if task_selection.runnable_exclusive() {
                     None
                 } else {
                     let t = weight_from_contended.remove();
@@ -950,7 +950,7 @@ impl ScheduleStage {
                     Some((TaskSource::Runnable, t))
                     */
                 } else if uw > weight_from_runnable {
-                    if runnable_exclusive {
+                    if task_selection.runnable_exclusive() {
                         trace!("select: contended > runnnable, runnable_exclusive");
                         let t = heaviest_runnable_entry.remove();
                         Some((TaskSource::Runnable, t))
@@ -1000,7 +1000,7 @@ impl ScheduleStage {
         sequence_clock: &usize,
         queue_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
-        runnable_exclusive: bool,
+        task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
@@ -1016,7 +1016,7 @@ impl ScheduleStage {
 
         loop {
             if let Some((task_source, mut next_task)) =
-                Self::select_next_task(runnable_queue, address_book, contended_count, runnable_exclusive)
+                Self::select_next_task(runnable_queue, address_book, contended_count, task_selection)
             {
                 let from_runnable = task_source == TaskSource::Runnable;
                 if from_runnable {
@@ -1372,7 +1372,7 @@ impl ScheduleStage {
         queue_clock: &mut usize,
         execute_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
-        runnable_exclusive: bool,
+        task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<Box<ExecutionEnvironment>> {
         let maybe_ee = Self::pop_from_queue_then_lock(
@@ -1385,7 +1385,7 @@ impl ScheduleStage {
             sequence_time,
             queue_clock,
             provisioning_tracker_count,
-            runnable_exclusive,
+            task_selection,
             failed_lock_count,
         )
         .map(|(uw, t, ll)| {
@@ -1542,6 +1542,7 @@ impl ScheduleStage {
                 let executing_like_count = executing_queue_count + provisioning_tracker_count;
                 if executing_like_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
+                    let mut selection = TaskSelection::OnlyFromContended(0);
 
                     if let Some(ee) = Self::schedule_next_execution(
                         ast,
@@ -1554,7 +1555,7 @@ impl ScheduleStage {
                         &mut queue_clock,
                         &mut execute_clock,
                         &mut provisioning_tracker_count,
-                        false,
+                        &mut selection,
                         &mut failed_lock_count,
                     ) {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
@@ -1574,6 +1575,7 @@ impl ScheduleStage {
                 }
                 while executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
+                    let mut selection = TaskSelection::OnlyFromRunnable();
 
                     let maybe_ee = Self::schedule_next_execution(
                         ast,
@@ -1586,7 +1588,7 @@ impl ScheduleStage {
                         &mut queue_clock,
                         &mut execute_clock,
                         &mut provisioning_tracker_count,
-                        true,
+                        &mut selection,
                         &mut failed_lock_count,
                     );
                     if let Some(ee) = maybe_ee {
