@@ -6450,7 +6450,7 @@ impl Bank {
             if r.bank.is_none() {
                 drop(r);
                 let w = self.scheduler.write().unwrap();
-                *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
+                *w.bank = Some(Arc::downgrade(&bank));
                 drop(w);
                 self.scheduler.read().unwrap()
             } else {
