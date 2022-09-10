@@ -1307,6 +1307,7 @@ impl Default for Scheduler {
                     ee.cu = details.executed_units;
                     send_metrics.then(|| format!("{:?}", details.status))
                 } else {
+                    error!("found odd tx error: {:?}", tx_result);
                     send_metrics.then(|| format!("{:?}", tx_result))
                 };
 

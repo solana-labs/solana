@@ -1485,39 +1485,46 @@ impl ScheduleStage {
                 })
                 .unwrap()
         }).collect::<Vec<_>>();
-        let (mut last_time, mut last_processed_count) = (std::time::Instant::now(), 0_usize);
-        let start_time = last_time.clone();
 
+        let start_time = std::time::Instant::now();
+        let (mut last_time, mut last_processed_count) = (start_time.clone(), 0_usize);
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (bool, bool, bool) = Default::default();
+
         loop {
+            let mut select_skipped = false;
+
             if !from_disconnected || executing_queue_count >= 1 {
-            crossbeam_channel::select! {
-               recv(from_exec) -> maybe_from_exec => {
-                   if let Ok(UnlockablePayload(mut processed_execution_environment)) = maybe_from_exec {
-                       executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
-                       processed_count = processed_count.checked_add(1).unwrap();
-                       Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
-                       to_next_stage.send(ExaminablePayload(processed_execution_environment)).unwrap();
-                   } else {
-                       assert_eq!(from_exec.len(), 0);
-                       from_exec_disconnected |= true;
-                       info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
-                       if from_disconnected {
-                           break;
+                crossbeam_channel::select! {
+                   recv(from_exec) -> maybe_from_exec => {
+                       if let Ok(UnlockablePayload(mut processed_execution_environment)) = maybe_from_exec {
+                           executing_queue_count = executing_queue_count.checked_sub(1).unwrap();
+                           processed_count = processed_count.checked_add(1).unwrap();
+                           Self::commit_processed_execution(ast, &mut processed_execution_environment, address_book, &mut commit_clock, &mut provisioning_tracker_count);
+                           to_next_stage.send(ExaminablePayload(processed_execution_environment)).unwrap();
+                       } else {
+                           assert_eq!(from_exec.len(), 0);
+                           from_exec_disconnected = true;
+                           info!("flushing1..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
+                           if from_disconnected {
+                               break;
+                           }
                        }
                    }
-               }
-               recv(from_prev) -> maybe_from => {
-                   if let Ok(SchedulablePayload(task)) = maybe_from {
-                       Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
-                   } else {
-                       assert_eq!(from_prev.len(), 0);
-                       from_disconnected |= true;
-                       from_prev = never;
-                       trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
+                   recv(from_prev) -> maybe_from => {
+                       if let Ok(SchedulablePayload(task)) = maybe_from {
+                           Self::register_runnable_task(task, runnable_queue, &mut sequence_time);
+                       } else {
+                           assert_eq!(from_prev.len(), 0);
+                           assert!(!from_disconnected);
+                           from_disconnected = true;
+                           from_prev = never;
+                           trace!("flushing2..: {:?} {} {} {} {}", (from_disconnected, from_exec_disconnected), runnable_queue.task_count(), contended_count, executing_queue_count, provisioning_tracker_count);
+                       }
                    }
-               }
-            }
+                }
+            } else {
+                // no execution at all => absolutely no active locks
+                select_skipped = true;
             }
 
            no_more_work = from_disconnected && runnable_queue.task_count() + contended_count + executing_queue_count + provisioning_tracker_count == 0;
@@ -1642,12 +1649,12 @@ impl ScheduleStage {
                     }
                 }
             }
+            assert!(!select_skipped || executing_queue_count > 0);
         }
         drop(to_next_stage);
         drop(ee_sender);
         drop(task_sender);
         drop(task_receiver);
-        info!("run finished...");
         if let Some(h) = maybe_reaper_thread_handle {
             h.join().unwrap().unwrap();
         }
