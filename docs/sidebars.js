@@ -83,18 +83,48 @@ module.exports = {
     },
     {
       type: "category",
-      label: "Getting Started",
+      label: "Get Started",
       items: [
         {
-          type: "doc",
-          id: "developing/intro/programs",
-          label: "What are Programs?",
+          type: "link",
+          href: "/getstarted",
+          label: "All guides",
         },
         {
           type: "doc",
-          id: "developing/intro/rent",
-          label: "What is Rent?",
+          id: "getstarted/hello-world",
+          label: "Hello world",
         },
+        {
+          type: "doc",
+          id: "getstarted/local",
+          label: "Local development",
+        },
+        {
+          type: "doc",
+          id: "getstarted/rust",
+          label: "Rust program",
+        },
+        // {
+        //   type: "doc",
+        //   id: "getstarted/token",
+        //   label: "Create a token",
+        // },
+        // {
+        //   type: "doc",
+        //   id: "getstarted/nft",
+        //   label: "Create a NFT",
+        // },
+        // {
+        //   type: "doc",
+        //   id: "getstarted/c",
+        //   label: "C / C++",
+        // },
+        // {
+        //   type: "doc",
+        //   id: "getstarted/web3js",
+        //   label: "Web3.js",
+        // },
       ],
     },
     {
@@ -104,13 +134,23 @@ module.exports = {
       items: [
         {
           type: "doc",
+          id: "developing/programming-model/accounts",
+          label: "Accounts",
+        },
+        {
+          type: "doc",
           id: "developing/programming-model/transactions",
           label: "Transactions",
         },
         {
           type: "doc",
-          id: "developing/programming-model/accounts",
-          label: "Accounts",
+          id: "developing/intro/programs",
+          label: "Programs",
+        },
+        {
+          type: "doc",
+          id: "developing/intro/rent",
+          label: "Rent",
         },
         {
           type: "doc",
