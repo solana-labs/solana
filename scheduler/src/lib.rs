@@ -1486,7 +1486,7 @@ impl ScheduleStage {
                 .unwrap()
         }).collect::<Vec<_>>();
         let (mut last_time, mut last_processed_count) = (std::time::Instant::now(), 0_usize);
-        let start_time = last_time.copy();
+        let start_time = last_time.clone();
 
         let (mut from_disconnected, mut from_exec_disconnected, mut no_more_work): (bool, bool, bool) = Default::default();
         loop {
