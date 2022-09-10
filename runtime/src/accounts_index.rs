@@ -1137,15 +1137,20 @@ impl<T: IndexValue> AccountsIndex<T> {
         read_lock.slot_list_mut(pubkey, user)
     }
 
+    /// Remove keys from the account index if the key's slot list is empty.
+    /// Returns the keys that were removed from the index. These keys should not be accessed again in the current code path.
+    #[must_use]
     pub fn handle_dead_keys(
         &self,
         dead_keys: &[&Pubkey],
         account_indexes: &AccountSecondaryIndexes,
-    ) {
+    ) -> HashSet<Pubkey> {
+        let mut pubkeys_removed_from_accounts_index = HashSet::default();
         if !dead_keys.is_empty() {
             for key in dead_keys.iter() {
                 let w_index = self.get_bin(key);
                 if w_index.remove_if_slot_list_empty(**key) {
+                    pubkeys_removed_from_accounts_index.insert(**key);
                     // Note it's only safe to remove all the entries for this key
                     // because we have the lock for this key's entry in the AccountsIndex,
                     // so no other thread is also updating the index
@@ -1153,6 +1158,7 @@ impl<T: IndexValue> AccountsIndex<T> {
                 }
             }
         }
+        pubkeys_removed_from_accounts_index
     }
 
     /// call func with every pubkey and index visible from a given set of ancestors
@@ -1738,26 +1744,34 @@ impl<T: IndexValue> AccountsIndex<T> {
         });
     }
 
+    /// return true if pubkey was removed from the accounts index
+    ///  or does not exist in the accounts index
+    /// This means it should NOT be unref'd later.
+    #[must_use]
     pub fn clean_rooted_entries(
         &self,
         pubkey: &Pubkey,
         reclaims: &mut SlotList<T>,
         max_clean_root_inclusive: Option<Slot>,
-    ) {
+    ) -> bool {
         let mut is_slot_list_empty = false;
-        self.slot_list_mut(pubkey, |slot_list| {
-            self.purge_older_root_entries(slot_list, reclaims, max_clean_root_inclusive);
-            is_slot_list_empty = slot_list.is_empty();
-        });
+        let missing_in_accounts_index = self
+            .slot_list_mut(pubkey, |slot_list| {
+                self.purge_older_root_entries(slot_list, reclaims, max_clean_root_inclusive);
+                is_slot_list_empty = slot_list.is_empty();
+            })
+            .is_none();
 
+        let mut removed = false;
         // If the slot list is empty, remove the pubkey from `account_maps`. Make sure to grab the
         // lock and double check the slot list is still empty, because another writer could have
         // locked and inserted the pubkey in-between when `is_slot_list_empty=true` and the call to
         // remove() below.
         if is_slot_list_empty {
             let w_maps = self.get_bin(pubkey);
-            w_maps.remove_if_slot_list_empty(*pubkey);
+            removed = w_maps.remove_if_slot_list_empty(*pubkey);
         }
+        removed || missing_in_accounts_index
     }
 
     /// When can an entry be purged?
@@ -3510,7 +3524,7 @@ pub mod tests {
             &mut vec![],
         );
 
-        index.handle_dead_keys(&[&account_key], secondary_indexes);
+        let _ = index.handle_dead_keys(&[&account_key], secondary_indexes);
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
     }
@@ -3728,7 +3742,7 @@ pub mod tests {
         index.slot_list_mut(&account_key, |slot_list| slot_list.clear());
 
         // Everything should be deleted
-        index.handle_dead_keys(&[&account_key], &secondary_indexes);
+        let _ = index.handle_dead_keys(&[&account_key], &secondary_indexes);
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
     }
@@ -3849,7 +3863,7 @@ pub mod tests {
         // pubkey as dead and finally remove all the secondary indexes
         let mut reclaims = vec![];
         index.purge_exact(&account_key, &later_slot, &mut reclaims);
-        index.handle_dead_keys(&[&account_key], secondary_indexes);
+        let _ = index.handle_dead_keys(&[&account_key], secondary_indexes);
         assert!(secondary_index.index.is_empty());
         assert!(secondary_index.reverse_index.is_empty());
     }
@@ -3956,6 +3970,209 @@ pub mod tests {
                 .take(usize::MAX)
                 .collect::<Vec<_>>(),
             vec![1]
+        );
+    }
+
+    #[test]
+    fn test_get_newest_root_in_slot_list() {
+        let index = AccountsIndex::<bool>::default_for_tests();
+        let return_0 = 0;
+        let slot1 = 1;
+        let slot2 = 2;
+        let slot99 = 99;
+
+        // no roots, so always 0
+        {
+            let roots_tracker = &index.roots_tracker.read().unwrap();
+            let slot_list = Vec::<(Slot, bool)>::default();
+            assert_eq!(
+                return_0,
+                AccountsIndex::get_newest_root_in_slot_list(
+                    &roots_tracker.alive_roots,
+                    &slot_list,
+                    Some(slot1),
+                )
+            );
+            assert_eq!(
+                return_0,
+                AccountsIndex::get_newest_root_in_slot_list(
+                    &roots_tracker.alive_roots,
+                    &slot_list,
+                    Some(slot2),
+                )
+            );
+            assert_eq!(
+                return_0,
+                AccountsIndex::get_newest_root_in_slot_list(
+                    &roots_tracker.alive_roots,
+                    &slot_list,
+                    Some(slot99),
+                )
+            );
+        }
+
+        index.add_root(slot2, true);
+
+        {
+            let roots_tracker = &index.roots_tracker.read().unwrap();
+            let slot_list = vec![(slot2, true)];
+            assert_eq!(
+                slot2,
+                AccountsIndex::get_newest_root_in_slot_list(
+                    &roots_tracker.alive_roots,
+                    &slot_list,
+                    Some(slot2),
+                )
+            );
+            // no newest root
+            assert_eq!(
+                return_0,
+                AccountsIndex::get_newest_root_in_slot_list(
+                    &roots_tracker.alive_roots,
+                    &slot_list,
+                    Some(slot1),
+                )
+            );
+            assert_eq!(
+                slot2,
+                AccountsIndex::get_newest_root_in_slot_list(
+                    &roots_tracker.alive_roots,
+                    &slot_list,
+                    Some(slot99),
+                )
+            );
+        }
+    }
+
+    impl<T: IndexValue> AccountsIndex<T> {
+        fn upsert_simple_test(&self, key: &Pubkey, slot: Slot, value: T) {
+            let mut gc = Vec::new();
+            self.upsert(
+                slot,
+                slot,
+                key,
+                &AccountSharedData::default(),
+                &AccountSecondaryIndexes::default(),
+                value,
+                &mut gc,
+                UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+            );
+            assert!(gc.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_clean_rooted_entries_return() {
+        solana_logger::setup();
+        let value = true;
+        let key = solana_sdk::pubkey::new_rand();
+        let key_unknown = solana_sdk::pubkey::new_rand();
+        let index = AccountsIndex::<bool>::default_for_tests();
+        let slot1 = 1;
+
+        let mut gc = Vec::new();
+        // return true if we don't know anything about 'key_unknown'
+        // the item did not exist in the accounts index at all, so index is up to date
+        assert!(index.clean_rooted_entries(&key_unknown, &mut gc, None));
+
+        index.upsert_simple_test(&key, slot1, value);
+
+        let slot2 = 2;
+        // none for max root because we don't want to delete the entry yet
+        assert!(!index.clean_rooted_entries(&key, &mut gc, None));
+        // this is because of inclusive vs exclusive in the call to can_purge_older_entries
+        assert!(!index.clean_rooted_entries(&key, &mut gc, Some(slot1)));
+        // this will delete the entry because it is <= max_root_inclusive and NOT a root
+        // note this has to be slot2 because of inclusive vs exclusive in the call to can_purge_older_entries
+        {
+            let mut gc = Vec::new();
+            assert!(index.clean_rooted_entries(&key, &mut gc, Some(slot2)));
+            assert_eq!(gc, vec![(slot1, value)]);
+        }
+
+        // re-add it
+        index.upsert_simple_test(&key, slot1, value);
+
+        index.add_root(slot1, value);
+        assert!(!index.clean_rooted_entries(&key, &mut gc, Some(slot2)));
+        index.upsert_simple_test(&key, slot2, value);
+
+        assert_eq!(
+            2,
+            index
+                .get_account_read_entry(&key)
+                .unwrap()
+                .slot_list()
+                .len()
+        );
+        assert_eq!(
+            &vec![(slot1, value), (slot2, value)],
+            index.get_account_read_entry(&key).unwrap().slot_list()
+        );
+        assert!(!index.clean_rooted_entries(&key, &mut gc, Some(slot2)));
+        assert_eq!(
+            2,
+            index
+                .get_account_read_entry(&key)
+                .unwrap()
+                .slot_list()
+                .len()
+        );
+        assert!(gc.is_empty());
+        {
+            {
+                let roots_tracker = &index.roots_tracker.read().unwrap();
+                let slot_list = vec![(slot2, value)];
+                assert_eq!(
+                    0,
+                    AccountsIndex::get_newest_root_in_slot_list(
+                        &roots_tracker.alive_roots,
+                        &slot_list,
+                        None,
+                    )
+                );
+            }
+            index.add_root(slot2, true);
+            {
+                let roots_tracker = &index.roots_tracker.read().unwrap();
+                let slot_list = vec![(slot2, value)];
+                assert_eq!(
+                    slot2,
+                    AccountsIndex::get_newest_root_in_slot_list(
+                        &roots_tracker.alive_roots,
+                        &slot_list,
+                        None,
+                    )
+                );
+                assert_eq!(
+                    0,
+                    AccountsIndex::get_newest_root_in_slot_list(
+                        &roots_tracker.alive_roots,
+                        &slot_list,
+                        Some(0),
+                    )
+                );
+            }
+        }
+
+        assert!(gc.is_empty());
+        assert!(!index.clean_rooted_entries(&key, &mut gc, Some(slot2)));
+        assert_eq!(gc, vec![(slot1, value)]);
+        gc.clear();
+        index.clean_dead_slot(slot2, &mut AccountsIndexRootsStats::default());
+        let slot3 = 3;
+        assert!(index.clean_rooted_entries(&key, &mut gc, Some(slot3)));
+        assert_eq!(gc, vec![(slot2, value)]);
+    }
+
+    #[test]
+    fn test_handle_dead_keys_return() {
+        let key = solana_sdk::pubkey::new_rand();
+        let index = AccountsIndex::<bool>::default_for_tests();
+
+        assert_eq!(
+            index.handle_dead_keys(&[&key], &AccountSecondaryIndexes::default()),
+            vec![key].into_iter().collect::<HashSet<_>>()
         );
     }
 
