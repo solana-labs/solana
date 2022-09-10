@@ -1303,7 +1303,7 @@ impl Default for Scheduler {
 
                 let tx_result = fee_collection_results.into_iter().collect::<Result<_>>();
                 let status_str = if tx_result.is_ok() {
-                    let details = execution_results[0].details().unwrap();
+                    let details = execution_results[0].details().expect(format!("tx_result: {:?}", tx_result));
                     ee.cu = details.executed_units;
                     send_metrics.then(|| format!("{:?}", details.status))
                 } else {
