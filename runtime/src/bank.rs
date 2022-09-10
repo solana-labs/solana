@@ -1205,7 +1205,7 @@ struct Scheduler {
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
     errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
-    bank: arc_swap::ArcSwapOption<std::sync::Weak<Bank>>,
+    bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     transaction_index: AtomicUsize,
 }
 
@@ -1243,7 +1243,7 @@ impl Default for Scheduler {
         let (processed_ee_sender, processed_ee_receiver) = crossbeam_channel::unbounded();
         let (retired_ee_sender, retired_ee_receiver) = crossbeam_channel::unbounded();
 
-        let bank = arc_swap::ArcSwapAny::new(None::<std::sync::Weak<Bank>>);
+        let bank = Arc::new(std::sync::RwLock::new(None::<std::sync::Weak<Bank>>));
 
         let executing_thread_count = std::env::var("EXECUTING_THREAD_COUNT")
             .unwrap_or(format!("{}", 1))
@@ -1271,9 +1271,8 @@ impl Default for Scheduler {
                 execute_time += 1;
                 trace!("execute_substage: thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
 
-                panic!();
-                let ro_bank = bank.unwrap();
-                let weak_bank = ro_bank.upgrade();
+                let ro_bank = bank.read().unwrap();
+                let weak_bank = ro_bank.as_ref().unwrap().upgrade();
                 let bank = weak_bank.as_ref().unwrap();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
@@ -6447,10 +6446,13 @@ impl Bank {
         let scheduler = {
             let r = self.scheduler.read().unwrap();
 
-            if r.bank.is_none() {
+            if r.bank.read().unwrap().is_none() {
                 drop(r);
-                let mut w = self.scheduler.write().unwrap();
-                *w.bank = Some(Arc::downgrade(&bank));
+                // this is racy here; we want parking_lot's upgrade; but overwriting should be
+                // safe.
+                let w = self.scheduler.write().unwrap();
+                *w.bank.write().unwrap() = Some(Arc::downgrade(&bank));
+                w.slot = Some(bank.slot);
                 drop(w);
                 self.scheduler.read().unwrap()
             } else {

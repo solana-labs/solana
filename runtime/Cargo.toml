@@ -10,7 +10,6 @@ documentation = "https://docs.rs/solana-runtime"
 edition = "2021"
 
 [dependencies]
-arc-swap = "1.5.0"
 arrayref = "0.3.6"
 bincode = "1.3.3"
 blake3 = "1.3.1"
