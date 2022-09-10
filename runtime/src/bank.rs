@@ -1251,7 +1251,6 @@ impl Default for Scheduler {
             .unwrap();
 
         let send_metrics = std::env::var("SEND_METRICS").is_ok();
-        let disable_clock_asserts = std::env::var("DISABLE_CLOCK_ASSERTS").is_ok();
 
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), processed_ee_sender.clone());
@@ -1265,9 +1264,6 @@ impl Default for Scheduler {
                 let mut process_message_time = Measure::start("process_message_time");
 
                 let current_execute_clock = ee.task.execute_time();
-                if !disable_clock_asserts {
-                    assert_eq!(current_execute_clock, execute_time);
-                }
                 execute_time += 1;
                 trace!("execute_substage: thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
 
@@ -1294,6 +1290,8 @@ impl Default for Scheduler {
                     None
                 );
                 drop(bank);
+                drop(weak_bank);
+                drop(ro_bank);
 
                 let TransactionResults {
                     fee_collection_results,
@@ -1315,7 +1313,7 @@ impl Default for Scheduler {
 
                     datapoint_info!(
                         "individual_tx_stats",
-                        ("slot", bank.slot(), i64),
+                        ("slot", bank.slot(), i64), // what? why dropped bank can be used here??
                         ("thread", current_thread_name, String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
