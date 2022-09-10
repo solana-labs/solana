@@ -1002,7 +1002,7 @@ impl ScheduleStage {
         queue_clock: &mut usize,
         provisioning_tracker_count: &mut usize,
         runnable_exclusive: bool,
-        &mut failed_lock_count: usize,
+        failed_lock_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
         if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!(
@@ -1042,7 +1042,7 @@ impl ScheduleStage {
                     );
 
                 if unlockable_count > 0 {
-                    failed_lock_count += 1;
+                    *failed_lock_count += 1;
                     //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                     Self::reset_lock_for_failed_execution(
                         ast,
