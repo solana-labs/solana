@@ -1273,7 +1273,7 @@ impl Default for Scheduler {
 
                 panic!();
                 let ro_bank = bank.unwrap();
-                let weak_bank = ro_bank.as_ref().unwrap().upgrade();
+                let weak_bank = ro_bank.unwrap().upgrade();
                 let bank = weak_bank.as_ref().unwrap();
 
                 let tx_account_lock_limit = bank.get_transaction_account_lock_limit();
