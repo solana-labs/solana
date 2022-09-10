@@ -690,11 +690,13 @@ pub struct BorrowedAccount<'a> {
 
 impl<'a> BorrowedAccount<'a> {
     /// Returns the index of this account (transaction wide)
+    #[inline]
     pub fn get_index_in_transaction(&self) -> IndexOfAccount {
         self.index_in_transaction
     }
 
     /// Returns the public key of this account (transaction wide)
+    #[inline]
     pub fn get_key(&self) -> &Pubkey {
         self.transaction_context
             .get_key_of_account_at_index(self.index_in_transaction)
@@ -702,6 +704,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns the owner of this account (transaction wide)
+    #[inline]
     pub fn get_owner(&self) -> &Pubkey {
         self.account.owner()
     }
@@ -750,6 +753,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns the number of lamports of this account (transaction wide)
+    #[inline]
     pub fn get_lamports(&self) -> u64 {
         self.account.lamports()
     }
@@ -814,6 +818,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns a read-only slice of the account data (transaction wide)
+    #[inline]
     pub fn get_data(&self) -> &[u8] {
         self.account.data()
     }
@@ -902,6 +907,7 @@ impl<'a> BorrowedAccount<'a> {
     }
 
     /// Returns whether this account is executable (transaction wide)
+    #[inline]
     pub fn is_executable(&self) -> bool {
         self.account.executable()
     }
@@ -948,6 +954,7 @@ impl<'a> BorrowedAccount<'a> {
 
     /// Returns the rent epoch of this account (transaction wide)
     #[cfg(not(target_os = "solana"))]
+    #[inline]
     pub fn get_rent_epoch(&self) -> u64 {
         self.account.rent_epoch()
     }
