@@ -162,6 +162,7 @@ pub struct ValidatorConfig {
     pub no_os_disk_stats_reporting: bool,
     pub poh_pinned_cpu_core: usize,
     pub poh_hashes_per_batch: u64,
+    pub process_ledger_before_services: bool,
     pub account_indexes: AccountSecondaryIndexes,
     pub accounts_db_caching_enabled: bool,
     pub accounts_db_config: Option<AccountsDbConfig>,
@@ -226,6 +227,7 @@ impl Default for ValidatorConfig {
             no_os_disk_stats_reporting: true,
             poh_pinned_cpu_core: poh_service::DEFAULT_PINNED_CPU_CORE,
             poh_hashes_per_batch: poh_service::DEFAULT_HASHES_PER_BATCH,
+            process_ledger_before_services: false,
             account_indexes: AccountSecondaryIndexes::default(),
             accounts_db_caching_enabled: false,
             warp_slot: None,
@@ -671,6 +673,9 @@ impl Validator {
             &leader_schedule_cache,
         )?;
 
+        if config.process_ledger_before_services {
+            process_blockstore.process()?;
+        }
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
         let sample_performance_service =
