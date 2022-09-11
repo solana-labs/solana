@@ -1123,7 +1123,8 @@ impl ScheduleStage {
                             .insert(next_task.stuck_task_id(), removed);
                         assert!(a.is_none());
                         */
-                        address_book.uncontended_task_ids.insert(next_task.unique_weight, next_task);
+
+                        //address_book.uncontended_task_ids.insert(next_task.unique_weight, next_task);
                         
                         break;
                     } else {
@@ -1620,6 +1621,8 @@ impl ScheduleStage {
                     }
                 }
 
+                // this is hand-written unrolled select loop to reduce sched_yield (futex) as much
+                // as possible, taking advangage of only 2 select target for our impl
                 if first_iteration {
                     first_iteration = false;
                     (from_len, from_exec_len) = (from_prev.len(), from_exec.len());
