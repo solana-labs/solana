@@ -1042,7 +1042,7 @@ impl ScheduleStage {
 
                 if unlockable_count > 0 {
                     *failed_lock_count += 1;
-                    if let TaskSelection::OnlyFromContended(failure_count) = task_selection {
+                    if let TaskSelection::OnlyFromContended(ref mut failure_count) = task_selection {
                         *failure_count += 1;
                     }
 
