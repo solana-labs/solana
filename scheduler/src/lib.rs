@@ -1540,7 +1540,7 @@ impl ScheduleStage {
 
             loop {
                 let executing_like_count = executing_queue_count + provisioning_tracker_count;
-                let mut selection = TaskSelection::OnlyFromContended(0);
+                let mut selection = TaskSelection::OnlyFromContended(Default::default());
                 if selection.should_proceed() && executing_like_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
