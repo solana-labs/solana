@@ -1042,6 +1042,10 @@ impl ScheduleStage {
 
                 if unlockable_count > 0 {
                     *failed_lock_count += 1;
+                    if let TaskSelection::OnlyFromContended(ref mut failure_count) = task_selection {
+                        failure_count += 1;
+                    }
+
                     //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
                     Self::reset_lock_for_failed_execution(
                         ast,
