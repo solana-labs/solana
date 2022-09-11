@@ -708,7 +708,7 @@ impl Validator {
         );
 
         if config.process_ledger_before_services {
-            process_blockstore.process()?;
+            process_blockstore.process();
         }
         *start_progress.write().unwrap() = ValidatorStartProgress::StartingServices;
 
