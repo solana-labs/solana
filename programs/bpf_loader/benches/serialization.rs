@@ -89,19 +89,23 @@ fn create_inputs() -> TransactionContext {
             }),
         ),
     ];
-    let instruction_accounts = [1, 1, 2, 3, 4, 4, 5, 6]
-        .into_iter()
-        .enumerate()
-        .map(
-            |(instruction_account_index, index_in_transaction)| InstructionAccount {
-                index_in_caller: instruction_account_index as IndexOfAccount,
-                index_in_transaction,
-                index_in_callee: instruction_account_index as IndexOfAccount,
-                is_signer: false,
-                is_writable: instruction_account_index >= 4,
-            },
-        )
-        .collect::<Vec<_>>();
+    let mut instruction_accounts: Vec<InstructionAccount> = Vec::new();
+    for (instruction_account_index, index_in_transaction) in
+        [1, 1, 2, 3, 4, 4, 5, 6].into_iter().enumerate()
+    {
+        let index_in_callee = instruction_accounts
+            .iter()
+            .position(|account| account.index_in_transaction == index_in_transaction)
+            .unwrap_or(instruction_account_index) as IndexOfAccount;
+        instruction_accounts.push(InstructionAccount {
+            index_in_caller: instruction_account_index as IndexOfAccount,
+            index_in_transaction,
+            index_in_callee,
+            is_signer: false,
+            is_writable: instruction_account_index >= 4,
+        });
+    }
+
     let mut transaction_context =
         TransactionContext::new(transaction_accounts, Some(Rent::default()), 1, 1);
     let instruction_data = vec![1u8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
