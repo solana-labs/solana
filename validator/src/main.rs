@@ -1650,6 +1650,12 @@ pub fn main() {
                 .help("Specify hashes per batch in PoH service"),
         )
         .arg(
+            Arg::with_name("process_ledger_before_services")
+                .long("process-ledger-before-services")
+                .hidden(true)
+                .help("Process the local ledger fully before starting networking services")
+        )
+        .arg(
             Arg::with_name("account_indexes")
                 .long("account-index")
                 .takes_value(true)
@@ -2789,6 +2795,7 @@ pub fn main() {
             .unwrap_or(poh_service::DEFAULT_PINNED_CPU_CORE),
         poh_hashes_per_batch: value_of(&matches, "poh_hashes_per_batch")
             .unwrap_or(poh_service::DEFAULT_HASHES_PER_BATCH),
+        process_ledger_before_services: matches.is_present("process_ledger_before_services"),
         account_indexes,
         accounts_db_caching_enabled: !matches.is_present("no_accounts_db_caching"),
         accounts_db_test_hash_calculation: matches.is_present("accounts_db_test_hash_calculation"),
