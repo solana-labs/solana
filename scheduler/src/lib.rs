@@ -1544,12 +1544,11 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                let executing_like_count = executing_queue_count + provisioning_tracker_count;
                 let mut selection = TaskSelection::OnlyFromContended(Default::default());
-                if selection.should_proceed() && executing_like_count < max_executing_queue_count {
+                while selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
-                    if let Some(ee) = Self::schedule_next_execution(
+                    let maybe_ee = Self::schedule_next_execution(
                         ast,
                         &task_sender,
                         runnable_queue,
@@ -1562,11 +1561,20 @@ impl ScheduleStage {
                         &mut provisioning_tracker_count,
                         &mut selection,
                         &mut failed_lock_count,
-                    ) {
+                    );
+                    if let Some(ee) = maybe_ee {
                         executing_queue_count = executing_queue_count.checked_add(1).unwrap();
                         to_execute_substage.send(ExecutablePayload(ee)).unwrap();
+                        debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
+                    } else {
+                        debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
+                        break;
                     }
-                    debug!("schedule_once id_{:016x} [C] ch(prev: {}, exec: {}|{}), r: {}, u/c: {}/{}, (imm+provi)/max: ({}+{})/{} s: {} l(s+f): {}+{}", random_id, (if from_disconnected { "-".to_string() } else { format!("{}", from_prev.len()) }), to_execute_substage.len(), from_exec.len(), runnable_queue.task_count(), address_book.uncontended_task_ids.len(), contended_count, executing_queue_count, provisioning_tracker_count, max_executing_queue_count, address_book.stuck_tasks.len(), processed_count, failed_lock_count);
+                    if !from_exec.is_empty() {
+                        trace!("abort aggressive contended queue processing due to non-empty from_exec");
+                        break;
+                    }
+
                     interval_count += 1;
                     if interval_count % 100 == 0 {
                         let elapsed = last_time.elapsed();
@@ -1605,7 +1613,7 @@ impl ScheduleStage {
                         break;
                     }
                     if !from_exec.is_empty() {
-                        trace!("abort aggressive readable queue processing due to non-empty from_exec");
+                        trace!("abort aggressive runnable queue processing due to non-empty from_exec");
                         break;
                     }
 
