@@ -63,7 +63,7 @@ impl ExecutionEnvironment {
             .contention_count
             .load(std::sync::atomic::Ordering::SeqCst)
             > 0;
-        for mut lock_attempt in self.finalized_lock_attempts.iter_mut() {
+        for lock_attempt in self.finalized_lock_attempts.iter_mut() {
             let contended_unique_weights = lock_attempt.target_contended_unique_weights();
             contended_unique_weights
                 .heaviest_task_cursor()
@@ -1007,7 +1007,7 @@ impl ScheduleStage {
         task_selection: &mut TaskSelection,
         failed_lock_count: &mut usize,
     ) -> Option<(UniqueWeight, TaskInQueue, Vec<LockAttempt>)> {
-        if let Some(mut a) = address_book.fulfilled_provisional_task_ids.pop_last() {
+        if let Some(a) = address_book.fulfilled_provisional_task_ids.pop_last() {
             trace!(
                 "expediate pop from provisional queue [rest: {}]",
                 address_book.fulfilled_provisional_task_ids.len()
@@ -1019,7 +1019,7 @@ impl ScheduleStage {
         }
 
         loop {
-            if let Some((task_source, mut next_task)) =
+            if let Some((task_source, next_task)) =
                 Self::select_next_task(runnable_queue, address_book, contended_count, task_selection)
             {
                 let from_runnable = task_source == TaskSource::Runnable;
@@ -1457,7 +1457,7 @@ impl ScheduleStage {
                     unsafe impl NotAtScheduleThread for NotAtTopOfScheduleThread {}
                     let nast = NotAtTopOfScheduleThread;
 
-                    while let Ok(ExaminablePayload(mut a)) = ee_receiver.recv() {
+                    while let Ok(ExaminablePayload(a)) = ee_receiver.recv() {
                         assert!(a.task.lock_attempts_not_mut(nast).is_empty());
                         //assert!(a.task.sequence_time() != usize::max_value());
                         //let lock_attempts = std::mem::take(&mut a.lock_attempts);
@@ -1726,9 +1726,3 @@ pub struct SchedulablePayload(pub TaskInQueue);
 pub struct ExecutablePayload(pub Box<ExecutionEnvironment>);
 pub struct UnlockablePayload(pub Box<ExecutionEnvironment>);
 pub struct ExaminablePayload(pub Box<ExecutionEnvironment>);
-
-struct ExecuteStage {
-    //bank: Bank,
-}
-
-impl ExecuteStage {}
