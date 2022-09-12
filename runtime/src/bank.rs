@@ -1377,7 +1377,7 @@ impl Default for Scheduler {
             drop(scheduled_ee_sender);
             drop(processed_ee_receiver);
 
-            Ok(started)
+            Ok(started.elapsed())
         }).unwrap();
 
         let s = Self {
