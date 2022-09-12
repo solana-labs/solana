@@ -1364,7 +1364,7 @@ impl Default for Scheduler {
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
             let started = cpu_time::ThreadTime::now();
             if max_thread_priority {
-                thread_priority::set_current_thread_priority(thread_prioirty::ThreadPriority::Max).unwrap();
+                thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
             }
 
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
