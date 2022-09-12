@@ -16,6 +16,7 @@ use {
         iter::{IntoParallelIterator, ParallelIterator},
         ThreadPool, ThreadPoolBuilder,
     },
+    regex::Regex,
     solana_sdk::clock::Slot,
     std::{
         collections::HashMap,
@@ -348,32 +349,20 @@ enum SnapshotFileKind {
 
 /// Determines `SnapshotFileKind` for `filename` if any
 fn get_snapshot_file_kind(filename: &str) -> Option<SnapshotFileKind> {
-    if filename == "version" {
-        return Some(SnapshotFileKind::Version);
-    }
+    lazy_static! {
+        static ref VERSION_FILE_REGEX: Regex = Regex::new(r"^version$").unwrap();
+        static ref BANK_FIELDS_FILE_REGEX: Regex = Regex::new(r"^[0-9]+$").unwrap();
+        static ref STORAGE_FILE_REGEX: Regex = Regex::new(r"^[0-9]+\.[0-9]+$").unwrap();
+    };
 
-    let mut periods = 0;
-    let mut saw_numbers = false;
-    for x in filename.chars() {
-        if !x.is_ascii_digit() {
-            if x == '.' {
-                if periods > 0 || !saw_numbers {
-                    return None;
-                }
-                saw_numbers = false;
-                periods += 1;
-            } else {
-                return None;
-            }
-        } else {
-            saw_numbers = true;
-        }
-    }
-
-    match (periods, saw_numbers) {
-        (0, true) => Some(SnapshotFileKind::BankFields),
-        (1, true) => Some(SnapshotFileKind::Storage),
-        (_, _) => None,
+    if VERSION_FILE_REGEX.is_match(filename) {
+        Some(SnapshotFileKind::Version)
+    } else if BANK_FIELDS_FILE_REGEX.is_match(filename) {
+        Some(SnapshotFileKind::BankFields)
+    } else if STORAGE_FILE_REGEX.is_match(filename) {
+        Some(SnapshotFileKind::Storage)
+    } else {
+        None
     }
 }
 
