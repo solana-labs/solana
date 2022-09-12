@@ -4,6 +4,10 @@
 
 use {
     crate::{
+        bank_process_decision::{
+            BankPacketProcessingDecision, BankingDecisionMaker,
+            FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET,
+        },
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
         immutable_deserialized_packet::ImmutableDeserializedPacket,
         latest_unprocessed_votes::{LatestUnprocessedVotes, VoteSource},
@@ -54,10 +58,7 @@ use {
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
-        clock::{
-            Slot, DEFAULT_TICKS_PER_SLOT, FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET,
-            HOLD_TRANSACTIONS_SLOT_OFFSET, MAX_PROCESSING_AGE,
-        },
+        clock::{Slot, MAX_PROCESSING_AGE},
         feature_set::allow_votes_to_directly_update_vote_state,
         pubkey::Pubkey,
         saturating_add_assign,
@@ -353,14 +354,6 @@ pub struct BankingStage {
 }
 
 #[derive(Debug, Clone)]
-pub enum BufferedPacketsDecision {
-    Consume(u128),
-    Forward,
-    ForwardAndHold,
-    Hold,
-}
-
-#[derive(Debug, Clone)]
 pub enum ForwardOption {
     NotForward,
     ForwardTpuVote,
@@ -485,6 +478,8 @@ impl BankingStage {
 
                 let mut packet_deserializer = PacketDeserializer::new(verified_receiver);
                 let poh_recorder = poh_recorder.clone();
+                let banking_decision_maker =
+                    BankingDecisionMaker::new(poh_recorder.clone(), cluster_info.id());
                 let cluster_info = cluster_info.clone();
                 let mut recv_start = Instant::now();
                 let transaction_status_sender = transaction_status_sender.clone();
@@ -499,6 +494,7 @@ impl BankingStage {
                         Self::process_loop(
                             &mut packet_deserializer,
                             &poh_recorder,
+                            &banking_decision_maker,
                             &cluster_info,
                             &mut recv_start,
                             i,
@@ -788,44 +784,12 @@ impl BankingStage {
             .fetch_add(consumed_buffered_packets_count, Ordering::Relaxed);
     }
 
-    fn consume_or_forward_packets(
-        my_pubkey: &Pubkey,
-        leader_pubkey: Option<Pubkey>,
-        bank_still_processing_txs: Option<&Arc<Bank>>,
-        would_be_leader: bool,
-        would_be_leader_shortly: bool,
-    ) -> BufferedPacketsDecision {
-        // If has active bank, then immediately process buffered packets
-        // otherwise, based on leader schedule to either forward or hold packets
-        if let Some(bank) = bank_still_processing_txs {
-            // If the bank is available, this node is the leader
-            BufferedPacketsDecision::Consume(bank.ns_per_slot)
-        } else if would_be_leader_shortly {
-            // If the node will be the leader soon, hold the packets for now
-            BufferedPacketsDecision::Hold
-        } else if would_be_leader {
-            // Node will be leader within ~20 slots, hold the transactions in
-            // case it is the only node which produces an accepted slot.
-            BufferedPacketsDecision::ForwardAndHold
-        } else if let Some(x) = leader_pubkey {
-            if x != *my_pubkey {
-                // If the current node is not the leader, forward the buffered packets
-                BufferedPacketsDecision::Forward
-            } else {
-                // If the current node is the leader, return the buffered packets as is
-                BufferedPacketsDecision::Hold
-            }
-        } else {
-            // We don't know the leader. Hold the packets for now
-            BufferedPacketsDecision::Hold
-        }
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn process_buffered_packets(
         my_pubkey: &Pubkey,
         socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
+        banking_decision_maker: &BankingDecisionMaker,
         cluster_info: &ClusterInfo,
         unprocessed_transaction_storage: &mut UnprocessedTransactionStorage,
         transaction_status_sender: &Option<TransactionStatusSender>,
@@ -845,35 +809,10 @@ impl BankingStage {
         }
         let ((metrics_action, decision), make_decision_time) = measure!(
             {
-                let bank_start;
-                let (
-                    leader_at_slot_offset,
-                    bank_still_processing_txs,
-                    would_be_leader,
-                    would_be_leader_shortly,
-                ) = {
-                    let poh = poh_recorder.read().unwrap();
-                    bank_start = poh.bank_start();
-                    (
-                        poh.leader_after_n_slots(FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET),
-                        PohRecorder::get_working_bank_if_not_expired(&bank_start.as_ref()),
-                        poh.would_be_leader(HOLD_TRANSACTIONS_SLOT_OFFSET * DEFAULT_TICKS_PER_SLOT),
-                        poh.would_be_leader(
-                            (FORWARD_TRANSACTIONS_TO_LEADER_AT_SLOT_OFFSET - 1)
-                                * DEFAULT_TICKS_PER_SLOT,
-                        ),
-                    )
-                };
-
+                let bank_start = poh_recorder.read().unwrap().bank_start();
                 (
                     slot_metrics_tracker.check_leader_slot_boundary(&bank_start),
-                    Self::consume_or_forward_packets(
-                        my_pubkey,
-                        leader_at_slot_offset,
-                        bank_still_processing_txs,
-                        would_be_leader,
-                        would_be_leader_shortly,
-                    ),
+                    banking_decision_maker.make_decision(),
                 )
             },
             "make_decision",
@@ -881,7 +820,7 @@ impl BankingStage {
         slot_metrics_tracker.increment_make_decision_us(make_decision_time.as_us());
 
         match decision {
-            BufferedPacketsDecision::Consume(max_tx_ingestion_ns) => {
+            BankPacketProcessingDecision::Consume(max_tx_ingestion_ns) => {
                 // Take metrics action before consume packets (potentially resetting the
                 // slot metrics tracker to the next slot) so that we don't count the
                 // packet processing metrics from the next slot towards the metrics
@@ -908,7 +847,7 @@ impl BankingStage {
                 slot_metrics_tracker
                     .increment_consume_buffered_packets_us(consume_buffered_packets_time.as_us());
             }
-            BufferedPacketsDecision::Forward => {
+            BankPacketProcessingDecision::Forward => {
                 let (_, forward_time) = measure!(
                     Self::handle_forwarding(
                         cluster_info,
@@ -930,7 +869,7 @@ impl BankingStage {
                 // metrics into current slot
                 slot_metrics_tracker.apply_action(metrics_action);
             }
-            BufferedPacketsDecision::ForwardAndHold => {
+            BankPacketProcessingDecision::ForwardAndHold => {
                 let (_, forward_and_hold_time) = measure!(
                     Self::handle_forwarding(
                         cluster_info,
@@ -1056,6 +995,7 @@ impl BankingStage {
     fn process_loop(
         packet_deserializer: &mut PacketDeserializer,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
+        banking_decision_maker: &BankingDecisionMaker,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
         id: u32,
@@ -1087,6 +1027,7 @@ impl BankingStage {
                         &my_pubkey,
                         &socket,
                         poh_recorder,
+                        banking_decision_maker,
                         cluster_info,
                         &mut unprocessed_transaction_storage,
                         &transaction_status_sender,
@@ -2667,88 +2608,6 @@ mod tests {
                 &[1, 6, 7, 9, 31, 43]
             ),
             [1, 9, 31, 43]
-        );
-    }
-
-    #[test]
-    fn test_should_process_or_forward_packets() {
-        let my_pubkey = solana_sdk::pubkey::new_rand();
-        let my_pubkey1 = solana_sdk::pubkey::new_rand();
-        let bank = Arc::new(Bank::default_for_tests());
-        // having active bank allows to consume immediately
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(&my_pubkey, None, Some(&bank), false, false),
-            BufferedPacketsDecision::Consume(_)
-        );
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(&my_pubkey, None, None, false, false),
-            BufferedPacketsDecision::Hold
-        );
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(&my_pubkey1, None, None, false, false),
-            BufferedPacketsDecision::Hold
-        );
-
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey,
-                Some(my_pubkey1),
-                None,
-                false,
-                false
-            ),
-            BufferedPacketsDecision::Forward
-        );
-
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey,
-                Some(my_pubkey1),
-                None,
-                true,
-                true
-            ),
-            BufferedPacketsDecision::Hold
-        );
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey,
-                Some(my_pubkey1),
-                None,
-                true,
-                false
-            ),
-            BufferedPacketsDecision::ForwardAndHold
-        );
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey,
-                Some(my_pubkey1),
-                Some(&bank),
-                false,
-                false
-            ),
-            BufferedPacketsDecision::Consume(_)
-        );
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey1,
-                Some(my_pubkey1),
-                None,
-                false,
-                false
-            ),
-            BufferedPacketsDecision::Hold
-        );
-        assert_matches!(
-            BankingStage::consume_or_forward_packets(
-                &my_pubkey1,
-                Some(my_pubkey1),
-                Some(&bank),
-                false,
-                false
-            ),
-            BufferedPacketsDecision::Consume(_)
         );
     }
 
