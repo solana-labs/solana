@@ -587,7 +587,7 @@ pub fn process_new_vote_state(
     let mut finalized_slot_count = 1_u64;
 
     if let Some(new_root) = new_root {
-        for current_vote in &self.votes {
+        for current_vote in &vote_state.votes {
             // Find the first vote in the current vote state for a slot greater
             // than the new proposed root
             if current_vote.slot <= new_root {
