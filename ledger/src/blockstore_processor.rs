@@ -179,9 +179,11 @@ fn execute_batches_internal(
                          batch_idx,
                      }| {
                         let batch_idx = batch_idx.unwrap();
+
                         processing_state[batch_idx] = ExecutionState::Processed;
-                        num_left_to_process -= 1;
                         transaction_results[batch_idx] = result;
+
+                        num_left_to_process -= 1;
                     },
                 );
 
@@ -208,7 +210,7 @@ fn execute_batches_internal(
                 .iter()
                 .enumerate()
                 .filter_map(|(i, dependencies)| {
-                    if matches!(processing_state[i], ExecutionState::Processed)
+                    if matches!(processing_state[i], ExecutionState::Blocked)
                         && dependencies.iter().all(|dependency_idx| {
                             matches!(processing_state[*dependency_idx], ExecutionState::Processed)
                         })
