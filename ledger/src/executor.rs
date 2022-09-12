@@ -19,6 +19,7 @@ use {
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
+        borrow::Cow,
         collections::HashMap,
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
@@ -36,42 +37,55 @@ pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 pub struct ReplayResponse {
     pub result: transaction::Result<()>,
     pub timing: ExecuteTimings,
-    pub idx: Option<usize>,
+    pub batch_idx: Option<usize>,
 }
 
 /// Request for replay, sends responses back on this channel
 pub struct ReplayRequest {
+    pub tx_and_idx: (SanitizedTransaction, usize),
     pub bank: Arc<Bank>,
-    pub tx: SanitizedTransaction,
     pub transaction_status_sender: Option<TransactionStatusSender>,
     pub replay_vote_sender: Option<ReplayVoteSender>,
     pub cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
+    pub tx_cost: u64,
+    pub log_messages_bytes_limit: Option<usize>,
     pub entry_callback: Option<ProcessCallback>,
-    pub idx: Option<usize>,
+    pub batch_idx: Option<usize>,
 }
 
 pub struct Replayer {
     threads: Vec<JoinHandle<()>>,
+    request_sender: Sender<(Sender<ReplayResponse>, ReplayRequest)>,
 }
 
 pub struct ReplayerHandle {
-    request_sender: Sender<ReplayRequest>,
+    request_sender: Sender<(Sender<ReplayResponse>, ReplayRequest)>,
+    response_sender: Sender<ReplayResponse>,
     response_receiver: Receiver<ReplayResponse>,
 }
 
+/// A handle to the replayer. Each replayer handle has a separate channel that responses are sent on.
+/// This means multiple threads can have a handle to the replayer and results are sent back to the
+/// correct replayer handle each time.
 impl ReplayerHandle {
     pub fn new(
-        request_sender: Sender<ReplayRequest>,
+        request_sender: Sender<(Sender<ReplayResponse>, ReplayRequest)>,
+        response_sender: Sender<ReplayResponse>,
         response_receiver: Receiver<ReplayResponse>,
     ) -> ReplayerHandle {
         ReplayerHandle {
             request_sender,
+            response_sender,
             response_receiver,
         }
     }
 
-    pub fn send(&self, request: ReplayRequest) -> Result<(), SendError<ReplayRequest>> {
-        self.request_sender.send(request)
+    pub fn send(
+        &self,
+        request: ReplayRequest,
+    ) -> Result<(), SendError<(Sender<ReplayResponse>, ReplayRequest)>> {
+        self.request_sender
+            .send((self.response_sender.clone(), request))
     }
 
     pub fn recv_and_drain(&self) -> Result<Vec<ReplayResponse>, RecvError> {
@@ -82,69 +96,85 @@ impl ReplayerHandle {
 }
 
 impl Replayer {
-    pub fn new(num_threads: usize) -> (Replayer, ReplayerHandle) {
+    pub fn new(num_threads: usize) -> Replayer {
         let (request_sender, request_receiver) = unbounded();
+        let threads = Self::start_replay_threads(num_threads, request_receiver);
+        Replayer {
+            threads,
+            request_sender,
+        }
+    }
+
+    pub fn handle(&self) -> ReplayerHandle {
         let (response_sender, response_receiver) = unbounded();
-        let threads = Self::start_replay_threads(num_threads, request_receiver, response_sender);
-        (
-            Replayer { threads },
-            ReplayerHandle {
-                request_sender,
-                response_receiver,
-            },
+        ReplayerHandle::new(
+            self.request_sender.clone(),
+            response_sender,
+            response_receiver,
         )
     }
 
     pub fn start_replay_threads(
         num_threads: usize,
-        request_receiver: Receiver<ReplayRequest>,
-        response_sender: Sender<ReplayResponse>,
+        request_receiver: Receiver<(Sender<ReplayResponse>, ReplayRequest)>,
     ) -> Vec<JoinHandle<()>> {
         (0..num_threads)
             .map(|i| {
                 let request_receiver = request_receiver.clone();
-                let response_sender = response_sender.clone();
                 Builder::new()
                     .name(format!("solReplayer-{}", i))
                     .spawn(move || loop {
                         match request_receiver.recv() {
-                            Ok(ReplayRequest {
-                                bank,
-                                tx,
-                                transaction_status_sender,
-                                replay_vote_sender,
-                                cost_capacity_meter,
-                                entry_callback,
-                                idx,
-                            }) => {
-                                // let mut timing = ExecuteTimings::default();
-                                //
-                                // let txs = vec![tx];
-                                // let batch =
-                                //     TransactionBatch::new(vec![Ok(())], &bank, Cow::Borrowed(&txs));
-                                // let result = execute_batch(
-                                //     &batch,
-                                //     &bank,
-                                //     transaction_status_sender.as_ref(),
-                                //     replay_vote_sender.as_ref(),
-                                //     &mut timing,
-                                //     cost_capacity_meter.clone(),
-                                // );
-                                //
-                                // if let Some(entry_callback) = entry_callback {
-                                //     entry_callback(&bank);
-                                // }
-                                //
-                                // if response_sender
-                                //     .send(ReplayResponse {
-                                //         result,
-                                //         timing,
-                                //         idx,
-                                //     })
-                                //     .is_err()
-                                // {
-                                //     break;
-                                // }
+                            Ok((
+                                response_sender,
+                                ReplayRequest {
+                                    tx_and_idx,
+                                    bank,
+                                    transaction_status_sender,
+                                    replay_vote_sender,
+                                    cost_capacity_meter,
+                                    tx_cost,
+                                    log_messages_bytes_limit,
+                                    entry_callback,
+                                    batch_idx,
+                                },
+                            )) => {
+                                let mut timings = ExecuteTimings::default();
+
+                                let txs = vec![tx_and_idx.0];
+                                let mut batch =
+                                    TransactionBatch::new(vec![Ok(())], &bank, Cow::Borrowed(&txs));
+                                batch.set_needs_unlock(false);
+                                let batch_with_idx = TransactionBatchWithIndexes {
+                                    batch,
+                                    transaction_indexes: vec![tx_and_idx.1],
+                                };
+
+                                let result = execute_batch(
+                                    &batch_with_idx,
+                                    &bank,
+                                    transaction_status_sender.as_ref(),
+                                    replay_vote_sender.as_ref(),
+                                    &mut timings,
+                                    cost_capacity_meter,
+                                    tx_cost,
+                                    log_messages_bytes_limit,
+                                );
+
+                                if let Some(entry_callback) = entry_callback {
+                                    entry_callback(&bank);
+                                }
+
+                                if response_sender
+                                    .send(ReplayResponse {
+                                        result,
+                                        timing: timings,
+                                        batch_idx,
+                                    })
+                                    .is_err()
+                                {
+                                    break;
+                                }
                             }
                             Err(_) => {
                                 return;
@@ -272,7 +302,7 @@ fn execute_batch(
             transaction_indexes.to_vec(),
         );
     }
-
+    // todo lb
     // let first_err = get_first_error(batch, fee_collection_results);
     // first_err.map(|(result, _)| result).unwrap_or(Ok(()))
     Ok(())

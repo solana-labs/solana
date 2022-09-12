@@ -470,7 +470,7 @@ impl ReplayStage {
                 let mut voted_signatures = Vec::new();
                 let mut has_new_vote_been_rooted = !wait_for_vote_to_start_leader;
 
-                let (replayer, replayer_handle) = Replayer::new(get_thread_count());
+                let replayer = Replayer::new(get_thread_count());
 
                 let mut last_vote_refresh_time = LastVoteRefreshTime {
                     last_refresh_time: Instant::now(),
@@ -540,7 +540,7 @@ impl ReplayStage {
                         log_messages_bytes_limit,
                         replay_slots_concurrently,
                         &prioritization_fee_cache,
-                        &replayer_handle,
+                        &replayer,
                     );
                     replay_active_banks_time.stop();
 
@@ -949,8 +949,6 @@ impl ReplayStage {
                         retransmit_not_propagated_time.as_us(),
                     );
                 }
-                drop(replayer_handle);
-                replayer.join();
             })
             .unwrap();
 
@@ -1733,24 +1731,28 @@ impl ReplayStage {
         let mut w_replay_stats = replay_stats.write().unwrap();
         let mut w_replay_progress = replay_progress.write().unwrap();
         let tx_count_before = w_replay_progress.num_txs;
-        // All errors must lead to marking the slot as dead, otherwise,
-        // the `check_slot_agrees_with_cluster()` called by `replay_active_banks()`
-        // will break!
-        blockstore_processor::confirm_slot(
-            blockstore,
-            bank,
-            &mut w_replay_stats,
-            &mut w_replay_progress,
-            false,
-            transaction_status_sender,
-            Some(replay_vote_sender),
-            None,
-            verify_recyclers,
-            false,
-            log_messages_bytes_limit,
-            prioritization_fee_cache,
-            replayer_handle,
-        )?;
+
+        let mut did_process_entries = true;
+        while did_process_entries {
+            // All errors must lead to marking the slot as dead, otherwise,
+            // the `check_slot_agrees_with_cluster()` called by `replay_active_banks()`
+            // will break!
+            did_process_entries = blockstore_processor::confirm_slot(
+                blockstore,
+                bank,
+                &mut w_replay_stats,
+                &mut w_replay_progress,
+                false,
+                transaction_status_sender,
+                Some(replay_vote_sender),
+                None,
+                verify_recyclers,
+                false,
+                log_messages_bytes_limit,
+                prioritization_fee_cache,
+                replayer_handle,
+            )?;
+        }
         let tx_count_after = w_replay_progress.num_txs;
         let tx_count = tx_count_after - tx_count_before;
         Ok(tx_count)
@@ -2253,16 +2255,22 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         active_bank_slots: &[Slot],
         prioritization_fee_cache: &PrioritizationFeeCache,
+        replayer: &Replayer,
     ) -> Vec<ReplaySlotFromBlockstore> {
         // Make mutable shared structures thread safe.
         let progress = RwLock::new(progress);
         let longest_replay_time_us = AtomicU64::new(0);
 
+        let bank_slots_replayers: Vec<_> = active_bank_slots
+            .into_iter()
+            .map(|s| (s, replayer.handle()))
+            .collect();
+
         // Allow for concurrent replaying of slots from different forks.
         let replay_result_vec: Vec<ReplaySlotFromBlockstore> = PAR_THREAD_POOL.install(|| {
-            active_bank_slots
+            bank_slots_replayers
                 .into_par_iter()
-                .map(|bank_slot| {
+                .map(|(bank_slot, replayer_handle)| {
                     let bank_slot = *bank_slot;
                     let mut replay_result = ReplaySlotFromBlockstore {
                         is_slot_dead: false,
@@ -2319,7 +2327,6 @@ impl ReplayStage {
                     if bank.collector_id() != my_pubkey {
                         let mut replay_blockstore_time =
                             Measure::start("replay_blockstore_into_bank");
-                        let (replayer, replayer_handle) = Replayer::new(get_thread_count());
                         let blockstore_result = Self::replay_blockstore_into_bank(
                             bank,
                             blockstore,
@@ -2336,9 +2343,6 @@ impl ReplayStage {
                         replay_result.replay_result = Some(blockstore_result);
                         longest_replay_time_us
                             .fetch_max(replay_blockstore_time.as_us(), Ordering::Relaxed);
-
-                        drop(replayer_handle);
-                        let _ = replayer.join();
                     }
                     replay_result
                 })
@@ -2365,7 +2369,7 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         bank_slot: Slot,
         prioritization_fee_cache: &PrioritizationFeeCache,
-        replayer_handle: &ReplayerHandle,
+        replayer: &Replayer,
     ) -> ReplaySlotFromBlockstore {
         let mut replay_result = ReplaySlotFromBlockstore {
             is_slot_dead: false,
@@ -2405,6 +2409,7 @@ impl ReplayStage {
             });
 
             if bank.collector_id() != my_pubkey {
+                let replayer_handle = replayer.handle();
                 let mut replay_blockstore_time = Measure::start("replay_blockstore_into_bank");
                 let blockstore_result = Self::replay_blockstore_into_bank(
                     bank,
@@ -2416,7 +2421,7 @@ impl ReplayStage {
                     &verify_recyclers.clone(),
                     log_messages_bytes_limit,
                     prioritization_fee_cache,
-                    replayer_handle,
+                    &replayer_handle,
                 );
                 replay_blockstore_time.stop();
                 replay_result.replay_result = Some(blockstore_result);
@@ -2638,7 +2643,7 @@ impl ReplayStage {
         log_messages_bytes_limit: Option<usize>,
         replay_slots_concurrently: bool,
         prioritization_fee_cache: &PrioritizationFeeCache,
-        replayer_handle: &ReplayerHandle,
+        replayer: &Replayer,
     ) -> bool /* completed a bank */ {
         let active_bank_slots = bank_forks.read().unwrap().active_bank_slots();
         let num_active_banks = active_bank_slots.len();
@@ -2662,6 +2667,7 @@ impl ReplayStage {
                     log_messages_bytes_limit,
                     &active_bank_slots,
                     prioritization_fee_cache,
+                    replayer,
                 )
             } else {
                 active_bank_slots
@@ -2680,7 +2686,7 @@ impl ReplayStage {
                             log_messages_bytes_limit,
                             *bank_slot,
                             prioritization_fee_cache,
-                            replayer_handle,
+                            replayer,
                         )
                     })
                     .collect()
