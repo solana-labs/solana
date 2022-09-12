@@ -6196,6 +6196,7 @@ dependencies = [
  "tar",
  "tempfile",
  "thiserror",
+ "thread-priority",
  "zstd",
 ]
 
@@ -7261,6 +7262,18 @@ dependencies = [
  "proc-macro2 1.0.41",
  "quote 1.0.18",
  "syn 1.0.98",
+]
+
+[[package]]
+name = "thread-priority"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a8a950b52fd40d98ac6ed41c7fa9e8dd62b131f48b74f418e810476b01a7460"
+dependencies = [
+ "cfg-if 1.0.0",
+ "libc",
+ "log",
+ "winapi 0.3.9",
 ]
 
 [[package]]
