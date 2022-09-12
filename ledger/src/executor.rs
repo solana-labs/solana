@@ -15,12 +15,14 @@ use {
         clock::MAX_PROCESSING_AGE,
         feature_set,
         pubkey::Pubkey,
-        transaction::{self, SanitizedTransaction, TransactionError},
+        signature::Signature,
+        transaction::{Result, SanitizedTransaction, TransactionError},
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
         borrow::Cow,
         collections::HashMap,
+        result,
         sync::{Arc, RwLock},
         thread::{self, Builder, JoinHandle},
     },
@@ -35,7 +37,7 @@ pub(crate) struct TransactionBatchWithIndexes<'a, 'b> {
 pub type ProcessCallback = Arc<dyn Fn(&Bank) + Sync + Send>;
 
 pub struct ReplayResponse {
-    pub result: transaction::Result<()>,
+    pub result: Result<()>,
     pub timing: ExecuteTimings,
     pub batch_idx: Option<usize>,
 }
@@ -83,12 +85,12 @@ impl ReplayerHandle {
     pub fn send(
         &self,
         request: ReplayRequest,
-    ) -> Result<(), SendError<(Sender<ReplayResponse>, ReplayRequest)>> {
+    ) -> result::Result<(), SendError<(Sender<ReplayResponse>, ReplayRequest)>> {
         self.request_sender
             .send((self.response_sender.clone(), request))
     }
 
-    pub fn recv_and_drain(&self) -> Result<Vec<ReplayResponse>, RecvError> {
+    pub fn recv_and_drain(&self) -> result::Result<Vec<ReplayResponse>, RecvError> {
         let mut results = vec![self.response_receiver.recv()?];
         results.extend(self.response_receiver.try_iter());
         Ok(results)
@@ -207,6 +209,37 @@ fn aggregate_total_execution_units(execute_timings: &ExecuteTimings) -> u64 {
     execute_cost_units
 }
 
+// Includes transaction signature for unit-testing
+fn get_first_error(
+    batch: &TransactionBatch,
+    fee_collection_results: Vec<Result<()>>,
+) -> Option<(Result<()>, Signature)> {
+    let mut first_err = None;
+    for (result, transaction) in fee_collection_results
+        .iter()
+        .zip(batch.sanitized_transactions())
+    {
+        if let Err(ref err) = result {
+            if first_err.is_none() {
+                first_err = Some((result.clone(), *transaction.signature()));
+            }
+            warn!(
+                "Unexpected validator error: {:?}, transaction: {:?}",
+                err, transaction
+            );
+            datapoint_error!(
+                "validator_process_entry_error",
+                (
+                    "error",
+                    format!("error: {:?}, transaction: {:?}", err, transaction),
+                    String
+                )
+            );
+        }
+    }
+    first_err
+}
+
 fn execute_batch(
     batch: &TransactionBatchWithIndexes,
     bank: &Arc<Bank>,
@@ -216,7 +249,7 @@ fn execute_batch(
     cost_capacity_meter: Arc<RwLock<BlockCostCapacityMeter>>,
     tx_cost: u64,
     log_messages_bytes_limit: Option<usize>,
-) -> transaction::Result<()> {
+) -> Result<()> {
     let TransactionBatchWithIndexes {
         batch,
         transaction_indexes,
@@ -302,8 +335,6 @@ fn execute_batch(
             transaction_indexes.to_vec(),
         );
     }
-    // todo lb
-    // let first_err = get_first_error(batch, fee_collection_results);
-    // first_err.map(|(result, _)| result).unwrap_or(Ok(()))
-    Ok(())
+    let first_err = get_first_error(batch, fee_collection_results);
+    first_err.map(|(result, _)| result).unwrap_or(Ok(()))
 }

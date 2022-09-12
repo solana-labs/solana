@@ -17,7 +17,6 @@ use {
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
     solana_measure::measure::Measure,
-    solana_metrics::datapoint_error,
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
@@ -262,24 +261,11 @@ fn execute_batches_internal(
 
             // check for errors. if there's an error, make sure to wait for the rest of the replays
             // in flight return before exiting out of this function to avoid issues on the next iteration
-            if let Some((idx, err)) = transaction_results
+            if let Some((_, err)) = transaction_results
                 .iter()
                 .enumerate()
                 .find(|(_, r)| r.is_err())
             {
-                let transaction = &transactions_indices_to_schedule[idx].0;
-                warn!(
-                    "Unexpected validator error: {:?}, transaction: {:?}",
-                    err, transaction
-                );
-                datapoint_error!(
-                    "validator_process_entry_error",
-                    (
-                        "error",
-                        format!("error: {:?}, transaction: {:?}", err, transaction),
-                        String
-                    )
-                );
                 while processing_state
                     .iter()
                     .any(|p| matches!(p, ExecutionState::Processing))
