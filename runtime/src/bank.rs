@@ -1253,12 +1253,14 @@ impl Default for Scheduler {
 
         let send_metrics = std::env::var("SEND_METRICS").is_ok();
 
+        let max_thread_priority = std::env::var("MAX_THREAD_PRIORITY").is_ok();
+
         let executing_thread_handles = (0..executing_thread_count).map(|thx| {
             let (scheduled_ee_receiver, processed_ee_sender) = (scheduled_ee_receiver.clone(), processed_ee_sender.clone());
             let bank = bank.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
-            let started =  cpu_time::ThreadTime::now();
+            let started = cpu_time::ThreadTime::now();
             let current_thread_name = std::thread::current().name().unwrap().to_string();
 
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
@@ -1343,7 +1345,7 @@ impl Default for Scheduler {
         let errors_in_collector_thread = Arc::clone(&errors);
 
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
-            let started =  cpu_time::ThreadTime::now();
+            let started = cpu_time::ThreadTime::now();
 
             while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
                 if ee.is_aborted() {
@@ -1360,7 +1362,11 @@ impl Default for Scheduler {
         }).unwrap();
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
-            let started =  cpu_time::ThreadTime::now();
+            let started = cpu_time::ThreadTime::now();
+            if max_thread_priority {
+                thread_priority::set_current_thread_priority(ThreadPriority::Max).unwrap();
+            }
+
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
             let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
                 .unwrap_or(format!("{}", 1))
