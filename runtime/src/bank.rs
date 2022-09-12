@@ -1236,6 +1236,7 @@ impl Scheduler {
 
 impl Default for Scheduler {
     fn default() -> Self {
+        let start = Instant::now();
         let mut address_book = solana_scheduler::AddressBook::default();
         let preloader = Arc::new(address_book.preloader());
         let (transaction_sender, transaction_receiver) = crossbeam_channel::unbounded();
@@ -1305,7 +1306,9 @@ impl Default for Scheduler {
                     ee.cu = details.executed_units;
                     send_metrics.then(|| format!("{:?}", details.status))
                 } else {
-                    error!("found odd tx error: {:?}", tx_result);
+                    let sig = ee.task.tx.0.signature().to_string();
+                    error!("found odd tx error: slot: {}, signature: {}, {:?}", slot, sig, tx_result);
+
                     send_metrics.then(|| format!("{:?}", tx_result))
                 };
 
@@ -1376,7 +1379,7 @@ impl Default for Scheduler {
             Ok(())
         }).unwrap();
 
-        Self {
+        let s = Self {
             scheduler_thread_handle: Some(scheduler_thread_handle),
             executing_thread_handles: Some(executing_thread_handles),
             error_collector_thread_handle: Some(error_collector_thread_handle),
@@ -1387,6 +1390,9 @@ impl Default for Scheduler {
             bank,
             slot: Default::default(),
         }
+        info!("scheduler: setup done with {}us", start.elapsed());
+
+        s
     }
 }
 
@@ -4088,13 +4094,15 @@ impl Bank {
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
         info!("register_recent_blockhash: slot: {} reinitializing the scheduler: start", self.slot());
 
-        self.wait_for_scheduler().unwrap();
+        let last_error = self.wait_for_scheduler();
 
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        *self.scheduler.write().unwrap() = Default::default();
+        let mut new_scheduler = Default::default();
+        new_scheduler.errors.lock().unwrap().push(last_error);
+        *self.scheduler.write().unwrap() = new_scheduler;
 
         info!("register_recent_blockhash: slot: {} reinitializing the scheduler: end", self.slot());
 
