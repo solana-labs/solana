@@ -182,21 +182,22 @@ impl ForwardPacketBatchesByAccounts {
 mod tests {
     use {
         super::*,
-        crate::unprocessed_packet_batches::DeserializedPacket,
+        crate::unprocessed_packet_batches::{self, DeserializedPacket},
         solana_runtime::transaction_priority_details::TransactionPriorityDetails,
-        solana_sdk::{hash::Hash, signature::Keypair, system_transaction},
+        solana_sdk::{
+            feature_set::FeatureSet, hash::Hash, signature::Keypair, system_transaction,
+            transaction::SimpleAddressLoader,
+        },
+        std::sync::Arc,
     };
 
     fn build_deserialized_packet_for_test(
         priority: u64,
+        write_to_account: &Pubkey,
         compute_unit_limit: u64,
     ) -> DeserializedPacket {
-        let tx = system_transaction::transfer(
-            &Keypair::new(),
-            &solana_sdk::pubkey::new_rand(),
-            1,
-            Hash::new_unique(),
-        );
+        let tx =
+            system_transaction::transfer(&Keypair::new(), write_to_account, 1, Hash::new_unique());
         let packet = Packet::from_data(None, &tx).unwrap();
         DeserializedPacket::new_with_priority_details(
             packet,
@@ -219,7 +220,7 @@ mod tests {
         let mut forward_batch = ForwardBatch::new(limit_ratio);
 
         let write_lock_accounts = vec![Pubkey::new_unique(), Pubkey::new_unique()];
-        let packet = build_deserialized_packet_for_test(10, requested_cu);
+        let packet = build_deserialized_packet_for_test(10, &write_lock_accounts[1], requested_cu);
         // first packet will be successful
         assert!(forward_batch
             .try_add(
@@ -263,8 +264,10 @@ mod tests {
 
         let hot_account = solana_sdk::pubkey::new_rand();
         let other_account = solana_sdk::pubkey::new_rand();
-        let packet_high_priority = build_deserialized_packet_for_test(10, requested_cu);
-        let packet_low_priority = build_deserialized_packet_for_test(0, requested_cu);
+        let packet_high_priority =
+            build_deserialized_packet_for_test(10, &hot_account, requested_cu);
+        let packet_low_priority =
+            build_deserialized_packet_for_test(0, &other_account, requested_cu);
         // with 4 packets, first 3 write to same hot_account with higher priority,
         // the 4th write to other_account with lower priority;
         // assert the 1st and 4th fit in first batch, the 2nd in 2nd batch and 3rd will be dropped.
@@ -318,6 +321,90 @@ mod tests {
             assert_eq!(2, batches.next().unwrap().len());
             assert_eq!(1, batches.next().unwrap().len());
             assert!(batches.next().is_none());
+        }
+    }
+
+    #[test]
+    fn test_try_add_packet() {
+        solana_logger::setup();
+        // set test batch limit to be 1 millionth of regular block limit
+        let limit_ratio = 1_000_000u32;
+        let number_of_batches = 1;
+        // set requested_cu to be batch account limit
+        let requested_cu =
+            block_cost_limits::MAX_WRITABLE_ACCOUNT_UNITS.saturating_div(limit_ratio as u64);
+
+        let mut forward_packet_batches_by_accounts =
+            ForwardPacketBatchesByAccounts::new(limit_ratio, number_of_batches);
+
+        let hot_account = solana_sdk::pubkey::new_rand();
+        let other_account = solana_sdk::pubkey::new_rand();
+
+        // assert initially batch is empty, and accepting new packets
+        {
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
+            assert_eq!(0, batches.next().unwrap().len());
+            assert!(batches.next().is_none());
+            assert!(forward_packet_batches_by_accounts.accepting_packets);
+        }
+
+        // build a packet that would take up hot account limit, add it to batches
+        // assert it is added, and buffer still accepts more packets
+        {
+            let packet = build_deserialized_packet_for_test(10, &hot_account, requested_cu);
+            let tx = unprocessed_packet_batches::transaction_from_deserialized_packet(
+                packet.immutable_section(),
+                &Arc::new(FeatureSet::default()),
+                false, //votes_only,
+                SimpleAddressLoader::Disabled,
+            )
+            .unwrap();
+            assert!(forward_packet_batches_by_accounts
+                .try_add_packet(&tx, packet.immutable_section().clone()));
+
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
+            assert_eq!(1, batches.next().unwrap().len());
+            assert!(forward_packet_batches_by_accounts.accepting_packets);
+        }
+
+        // build a small packet that writes to hot account, try add it to batches
+        // assert it is not added, and buffer is no longer accept packets
+        {
+            let packet =
+                build_deserialized_packet_for_test(100, &hot_account, 1 /*requested_cu*/);
+            let tx = unprocessed_packet_batches::transaction_from_deserialized_packet(
+                packet.immutable_section(),
+                &Arc::new(FeatureSet::default()),
+                false, //votes_only,
+                SimpleAddressLoader::Disabled,
+            )
+            .unwrap();
+            assert!(!forward_packet_batches_by_accounts
+                .try_add_packet(&tx, packet.immutable_section().clone()));
+
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
+            assert_eq!(1, batches.next().unwrap().len());
+            assert!(!forward_packet_batches_by_accounts.accepting_packets);
+        }
+
+        // build a small packet that writes to other account, try add it to batches
+        // assert it is not added due to buffer is no longer accept any packet
+        {
+            let packet =
+                build_deserialized_packet_for_test(100, &other_account, 1 /*requested_cu*/);
+            let tx = unprocessed_packet_batches::transaction_from_deserialized_packet(
+                packet.immutable_section(),
+                &Arc::new(FeatureSet::default()),
+                false, //votes_only,
+                SimpleAddressLoader::Disabled,
+            )
+            .unwrap();
+            assert!(!forward_packet_batches_by_accounts
+                .try_add_packet(&tx, packet.immutable_section().clone()));
+
+            let mut batches = forward_packet_batches_by_accounts.iter_batches();
+            assert_eq!(1, batches.next().unwrap().len());
+            assert!(!forward_packet_batches_by_accounts.accepting_packets);
         }
     }
 }
