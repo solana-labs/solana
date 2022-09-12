@@ -1733,6 +1733,10 @@ impl ReplayStage {
         let tx_count_before = w_replay_progress.num_txs;
 
         let mut did_process_entries = true;
+
+        // more entries may have been received while replaying this slot.
+        // looping over this ensures that slots will be processed as fast as possible with the
+        // lowest latency.
         while did_process_entries {
             // All errors must lead to marking the slot as dead, otherwise,
             // the `check_slot_agrees_with_cluster()` called by `replay_active_banks()`
