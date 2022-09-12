@@ -4100,7 +4100,7 @@ impl Bank {
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
-        let mut new_scheduler = Default::default();
+        let mut new_scheduler = Scheduler::default();
         new_scheduler.errors.lock().unwrap().push(last_error);
         *self.scheduler.write().unwrap() = new_scheduler;
 
