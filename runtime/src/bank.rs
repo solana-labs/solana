@@ -1205,7 +1205,7 @@ struct Scheduler {
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
-    errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
+    collected_errors: Arc<std::sync::Mutex<Vec<Result<()>>>>,
     bank: std::sync::Arc<std::sync::RwLock<std::option::Option<std::sync::Weak<Bank>>>>,
     slot: Option<Slot>,
 }
@@ -1346,8 +1346,8 @@ impl Default for Scheduler {
             Ok(started.elapsed())
         }).unwrap()}).collect();
 
-        let errors = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let errors_in_collector_thread = Arc::clone(&errors);
+        let collected_errors = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let collected_errors_in_collector_thread = Arc::clone(&collected_errors);
 
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
             let started = cpu_time::ThreadTime::now();
@@ -1361,7 +1361,7 @@ impl Default for Scheduler {
                         "scheduler: Unexpected validator error: {:?}, transaction: {:?}",
                         ee.execution_result, ee.task.tx.0
                     );
-                    errors_in_collector_thread.lock().unwrap().push(ee.execution_result.take().unwrap());
+                    collected_errors_in_collector_thread.lock().unwrap().push(ee.execution_result.take().unwrap());
                 }
 
                 drop(ee);
@@ -1408,7 +1408,7 @@ impl Default for Scheduler {
             transaction_sender: Some(transaction_sender),
             preloader,
             graceful_stop_initiated: Default::default(),
-            errors,
+            collected_errors,
             bank,
             slot: Default::default(),
         };
@@ -1438,13 +1438,13 @@ impl Scheduler {
         let h = self.error_collector_thread_handle.take().unwrap();
         let error_collector_thread_cpu_us = h.join().unwrap()?.as_micros();
 
-        info!("Scheduler::gracefully_stop(): id_{:016x} stopped: schduler: {}, error_collector: {}, lanes: total({}) = ({:?})", self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
+        info!("Scheduler::gracefully_stop(): id_{:016x} cpu times: schduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
 
         Ok(())
     }
 
     fn handle_aborted_executions(&self) -> Vec<Result<()>> {
-        std::mem::take(&mut self.errors.lock().unwrap())
+        std::mem::take(&mut self.collected_errors.lock().unwrap())
     }
 }
 
@@ -4127,7 +4127,7 @@ impl Bank {
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         let new_scheduler = Scheduler::default();
         if maybe_last_error.is_err() {
-            new_scheduler.errors.lock().unwrap().push(maybe_last_error);
+            new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
         }
         *self.scheduler.write().unwrap() = new_scheduler;
 
