@@ -1411,13 +1411,15 @@ impl Scheduler {
         info!("Scheduler::gracefully_stop(): waiting..");
         let transaction_sender = self.transaction_sender.take().unwrap();
         drop(transaction_sender);
-        for executing_thread_handle in self.executing_thread_handles.take().unwrap() {
-            executing_thread_handle.join().unwrap()?;
-        }
+        let executing_thread_cpu_us = self.executing_thread_handles.take().unwrap().map(|executing_thread_handle| {
+            executing_thread_handle.join().unwrap()?.as_micros();
+        });
         let h = self.scheduler_thread_handle.take().unwrap();
-        h.join().unwrap()?;
+        let scheduler_thread_cpu_us = h.join().unwrap()?.as_micros();
         let h = self.error_collector_thread_handle.take().unwrap();
-        h.join().unwrap()?;
+        let error_collector_thread_cpu_us = h.join().unwrap()?.as_micros();
+
+        info!("Scheduler::gracefully_stop(): stopped: schduler: {}, error_collector: {}, executing: {} = {:?}", scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum(), &executing_thread_cpu_us);
 
         Ok(())
     }
