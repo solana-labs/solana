@@ -5547,6 +5547,7 @@ dependencies = [
  "histogram",
  "itertools",
  "log",
+ "rand 0.7.3",
  "regex",
  "serde",
  "serde_json",
