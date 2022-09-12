@@ -1463,6 +1463,7 @@ fn load_blockstore(
                 .cache_block_meta_sender
                 .as_ref(),
             accounts_update_notifier,
+            exit,
         );
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that
