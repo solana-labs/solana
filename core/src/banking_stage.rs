@@ -10,7 +10,7 @@ use {
         leader_slot_banking_stage_timing_metrics::{
             LeaderExecuteAndCommitTimings, RecordTransactionsTimings,
         },
-        packet_deserializer_stage::ReceivePacketResults,
+        packet_deserializer_stage::DeserializedPacketsInfo,
         qos_service::QosService,
         sigverify::SigverifyTracerPacketStats,
         tracer_packet_stats::TracerPacketStats,
@@ -97,7 +97,7 @@ const UNPROCESSED_BUFFER_STEP_SIZE: usize = 128;
 const SLOT_BOUNDARY_CHECK_PERIOD: Duration = Duration::from_millis(10);
 pub type BankingPacketBatch = (Vec<PacketBatch>, Option<SigverifyTracerPacketStats>);
 pub type BankingPacketSender = CrossbeamSender<BankingPacketBatch>;
-pub type BankingPacketReceiver = CrossbeamReceiver<ReceivePacketResults>;
+pub type BankingPacketReceiver = CrossbeamReceiver<DeserializedPacketsInfo>;
 
 pub struct ProcessTransactionBatchOutput {
     // The number of transactions filtered out by the cost model
@@ -2019,7 +2019,7 @@ impl BankingStage {
 
         let mut dropped_packets_count = 0;
         let mut newly_buffered_packets_count = 0;
-        for ReceivePacketResults {
+        for DeserializedPacketsInfo {
             deserialized_packets,
             new_tracer_stats_option,
             passed_sigverify_count,
@@ -2072,7 +2072,7 @@ impl BankingStage {
         deserialized_packet_receiver: &BankingPacketReceiver,
         recv_timeout: Duration,
         capacity: usize,
-    ) -> Result<Vec<ReceivePacketResults>, RecvTimeoutError> {
+    ) -> Result<Vec<DeserializedPacketsInfo>, RecvTimeoutError> {
         let stop = Instant::now() + recv_timeout;
         let mut deserialized_packet_batches =
             vec![deserialized_packet_receiver.recv_timeout(recv_timeout)?];
