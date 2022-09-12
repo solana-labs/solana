@@ -1304,7 +1304,7 @@ impl Default for Scheduler {
                 drop(weak_bank);
                 drop(ro_bank);
 
-                trace!("execute_substage: slot: {} transaction_index: {} timings: {}", slot, transaction_index, timings);
+                trace!("execute_substage: slot: {} transaction_index: {} timings: {:?}", slot, transaction_index, timings);
 
                 let TransactionResults {
                     fee_collection_results,
