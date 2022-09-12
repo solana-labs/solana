@@ -4832,7 +4832,7 @@ export class Connection {
     signersOrOptions?: Array<Signer> | SendOptions,
     options?: SendOptions,
   ): Promise<TransactionSignature> {
-    if ('message' in transaction) {
+    if ('version' in transaction) {
       if (signersOrOptions && Array.isArray(signersOrOptions)) {
         throw new Error('Invalid arguments');
       }
