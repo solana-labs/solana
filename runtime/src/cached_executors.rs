@@ -21,7 +21,7 @@ use {
 };
 
 pub(crate) mod executor_cache {
-    use {super::*, log};
+    use super::*;
 
     #[derive(Debug, Default)]
     pub struct Stats {
@@ -193,8 +193,12 @@ impl CachedExecutors {
 
     pub(crate) fn put(&mut self, executors: Vec<(Pubkey, Arc<dyn Executor>)>) {
         for (pubkey, executor) in executors {
-            self.entries.entry(pubkey).or_default().hit_count.fetch_add(1, Relaxed);
-            
+            self.entries
+                .entry(pubkey)
+                .or_default()
+                .hit_count
+                .fetch_add(1, Relaxed);
+
             match self.executors.entry(pubkey) {
                 Entry::Vacant(entry) => {
                     self.stats.insertions.fetch_add(1, Relaxed);

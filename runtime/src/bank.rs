@@ -15022,8 +15022,6 @@ pub(crate) mod tests {
         assert_eq!(native_mint_account.owner(), &inline_spl_token::id());
     }
 
-
-
     #[test]
     fn test_compute_active_feature_set() {
         let bank0 = create_simple_test_arc_bank(100_000);
