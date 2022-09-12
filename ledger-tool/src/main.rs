@@ -281,7 +281,7 @@ fn output_slot(
     let t1 = std::thread::Builder::new()
         .name("sol-scheduler".to_string())
         .spawn(move || {
-            let random_id = rng::rand::thread_rng().gen::<u64>();
+            let random_id = rand::thread_rng().gen::<u64>();
             loop {
             ScheduleStage::run(
                 random_id,
