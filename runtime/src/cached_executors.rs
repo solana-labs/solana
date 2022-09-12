@@ -26,7 +26,7 @@ pub(crate) mod executor_cache {
     #[derive(Debug, Default)]
     pub struct Stats {
         pub hits: AtomicU64,
-        pub num_gets: AtomicU64,
+        pub misses: AtomicU64,
         pub evictions: HashMap<Pubkey, u64>,
         pub insertions: AtomicU64,
         pub replacements: AtomicU64,
@@ -36,7 +36,7 @@ pub(crate) mod executor_cache {
     impl Stats {
         pub fn submit(&self, slot: Slot) {
             let hits = self.hits.load(Relaxed);
-            let misses = self.num_gets.load(Relaxed) - hits;
+            let misses = self.misses.load(Relaxed) - hits;
             let insertions = self.insertions.load(Relaxed);
             let replacements = self.replacements.load(Relaxed);
             let one_hit_wonders = self.one_hit_wonders.load(Relaxed);
@@ -181,17 +181,36 @@ impl CachedExecutors {
     }
 
     pub(crate) fn get(&self, pubkey: &Pubkey) -> Option<Arc<dyn Executor>> {
-        self.stats.num_gets.fetch_add(1, Relaxed);
+        let executor = self.executors.get(pubkey);
+        let entry = self.entries.get(pubkey);
+
         // self.entries never discards keys with cached executor;
         // So if the key is not in the entries, the executor is not cached.
-        let entry = self.entries.get(pubkey)?;
-        entry.epoch_count.fetch_add(1, Relaxed);
-        let executor = self.executors.get(pubkey)?;
-        self.stats.hits.fetch_add(1, Relaxed);
-        Some(executor.clone())
+        assert!(executor.is_none() || entry.is_some());
+
+        if let (Some(executor), Some(entry)) = (executor, entry) {
+            self.stats.hits.fetch_add(1, Relaxed);
+            entry.epoch_count.fetch_add(1, Relaxed);
+            entry.hit_count.fetch_add(1, Relaxed);
+            Some(executor.clone())
+        } else {
+            self.stats.misses.fetch_add(1, Relaxed);
+            None
+        }
     }
 
     pub(crate) fn put(&mut self, executors: Vec<(Pubkey, Arc<dyn Executor>)>) {
+        // Note: always add elements to self.entries before self.executors and
+        // remove entries from self.executors before self.entries, because in CachedExecutors::get
+        // we require that if there's an extry in self.executors for the given pubkey, there will
+        // also be an entry for that pubkey in self.entries (but not necessarily the inverse).
+        // Indexmaps themselves are thread-safe but for performance reasons, we don't use a
+        // critical section to "atomically" modify both self.executors and self.entries.
+        // Note 2: the above reasoning about the relative order should hold
+        // (we should actually observe the modifications to self.entries and self.executors in the
+        // right order as long as it's the right order in the code)
+        // as long as IndexMap internally uses a lock or some other synchronizing operation;
+        // this will almost certainly be the case but you know where to look if this suddenly starts failing :)
         for (pubkey, executor) in executors {
             self.entries
                 .entry(pubkey)
@@ -242,14 +261,13 @@ impl CachedExecutors {
     }
 
     pub(crate) fn remove(&mut self, pubkey: &Pubkey) -> Option<CachedExecutorsEntry> {
+        self.executors.remove(pubkey);
         let maybe_entry = self.entries.remove(pubkey);
         if let Some(entry) = maybe_entry.as_ref() {
             if entry.hit_count.load(Relaxed) == 1 {
                 self.stats.one_hit_wonders.fetch_add(1, Relaxed);
             }
         }
-
-        self.executors.remove(pubkey);
         maybe_entry
     }
 
@@ -378,7 +396,7 @@ pub(crate) mod tests {
             fn from(stats: &executor_cache::Stats) -> Self {
                 let executor_cache::Stats {
                     hits,
-                    num_gets,
+                    misses,
                     evictions,
                     insertions,
                     replacements,
@@ -386,7 +404,7 @@ pub(crate) mod tests {
                 } = stats;
                 ComparableStats {
                     hits: hits.load(Relaxed),
-                    misses: num_gets.load(Relaxed) - hits.load(Relaxed),
+                    misses: misses.load(Relaxed),
                     evictions: evictions.clone(),
                     insertions: insertions.load(Relaxed),
                     replacements: replacements.load(Relaxed),
