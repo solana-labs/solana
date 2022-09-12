@@ -1261,6 +1261,10 @@ impl Default for Scheduler {
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
             let started = cpu_time::ThreadTime::now();
+            if max_thread_priority {
+                thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
+            }
+
             let current_thread_name = std::thread::current().name().unwrap().to_string();
 
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
@@ -1346,6 +1350,9 @@ impl Default for Scheduler {
 
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
             let started = cpu_time::ThreadTime::now();
+            if max_thread_priority {
+                thread_priority::set_current_thread_priority(thread_priority::ThreadPriority::Max).unwrap();
+            }
 
             while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
                 if ee.is_aborted() {
