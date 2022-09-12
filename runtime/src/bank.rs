@@ -1333,6 +1333,7 @@ impl Default for Scheduler {
                     datapoint_info!(
                         "individual_tx_stats",
                         ("slot", slot, i64),
+                        ("index", transaction_index, i64),
                         ("thread", current_thread_name, String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
@@ -1425,12 +1426,12 @@ impl Default for Scheduler {
 impl Scheduler {
     fn gracefully_stop(&mut self) -> Result<()> {
         if self.graceful_stop_initiated {
-            info!("Scheduler::gracefully_stop(): (skipped..?)");
+            info!("Scheduler::gracefully_stop(): id_{:016x} (skipped..?)", self.random_id);
             return Ok(());
         }
         self.graceful_stop_initiated = true;
 
-        info!("Scheduler::gracefully_stop(): waiting..");
+        info!("Scheduler::gracefully_stop(): id_{:016x} waiting..", self.random_id);
         let transaction_sender = self.transaction_sender.take().unwrap();
         drop(transaction_sender);
         let executing_thread_cpu_us: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
@@ -1454,9 +1455,9 @@ impl Scheduler {
 
 impl Drop for Scheduler {
     fn drop(&mut self) {
-        info!("Scheduler::drop(): begin..");
+        info!("Scheduler::drop(): id_{:016x} begin..", self.random_id);
         self.gracefully_stop().unwrap();
-        info!("Scheduler::drop(): end...");
+        info!("Scheduler::drop(): id_{:016x} end...", self.random_id);
     }
 }
 
