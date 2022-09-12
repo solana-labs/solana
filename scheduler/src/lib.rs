@@ -884,7 +884,7 @@ impl TaskSelection {
     fn should_proceed(&self) -> bool {
         match self {
             TaskSelection::OnlyFromRunnable => true,
-            TaskSelection::OnlyFromContended(failure_count) => *failure_count < 2,
+            TaskSelection::OnlyFromContended(retry_count) => retry_count > 0,
         }
     }
 
@@ -1042,8 +1042,8 @@ impl ScheduleStage {
 
                 if unlockable_count > 0 {
                     *failed_lock_count += 1;
-                    if let TaskSelection::OnlyFromContended(ref mut failure_count) = task_selection {
-                        *failure_count += 1;
+                    if let TaskSelection::OnlyFromContended(ref mut retry_count) = task_selection {
+                        *retry_count -= 1;
                     }
 
                     //trace!("reset_lock_for_failed_execution(): {:?} {}", (&unique_weight, from_runnable), next_task.tx.0.signature());
@@ -1544,7 +1544,7 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                let mut selection = TaskSelection::OnlyFromContended(Default::default());
+                let mut selection = TaskSelection::OnlyFromContended(if from_disconnected { usize::max_value() } else { 2 });
                 while selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
