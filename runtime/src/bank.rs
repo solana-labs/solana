@@ -7170,6 +7170,7 @@ impl Bank {
                 self.epoch_schedule(),
                 &self.rent_collector,
                 is_startup,
+                true,
             );
         if total_lamports != self.capitalization() {
             datapoint_info!(
@@ -7196,6 +7197,7 @@ impl Bank {
                         self.epoch_schedule(),
                         &self.rent_collector,
                         is_startup,
+                        true,
                     );
             }
 
