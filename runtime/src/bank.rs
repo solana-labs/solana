@@ -1442,7 +1442,7 @@ impl Scheduler {
         let h = self.error_collector_thread_handle.take().unwrap();
         let error_collector_thread_cpu_us = h.join().unwrap()?.as_micros();
 
-        info!("Scheduler::gracefully_stop(): id_{:016x} cpu times: schduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
+        info!("Scheduler::gracefully_stop(): id_{:016x} cpu times: scheduler: {}us, error_collector: {}us, lanes: {}us = {:?}", self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
 
         Ok(())
     }
@@ -4131,6 +4131,7 @@ impl Bank {
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         let new_scheduler = Scheduler::default();
         if maybe_last_error.is_err() {
+            info!("register_recent_blockhash: carrying over this error: {:?}", maybe_last_error);
             new_scheduler.collected_errors.lock().unwrap().push(maybe_last_error);
         }
         *self.scheduler.write().unwrap() = new_scheduler;
