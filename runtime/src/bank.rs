@@ -4101,7 +4101,7 @@ impl Bank {
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         let mut new_scheduler = Scheduler::default();
-        if maybe_last_error.is_error() {
+        if maybe_last_error.is_err() {
             new_scheduler.errors.lock().unwrap().push(maybe_last_error);
         }
         *self.scheduler.write().unwrap() = new_scheduler;
