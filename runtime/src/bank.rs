@@ -1389,7 +1389,7 @@ impl Default for Scheduler {
             errors,
             bank,
             slot: Default::default(),
-        }
+        };
         info!("scheduler: setup done with {}us", start.elapsed());
 
         s
