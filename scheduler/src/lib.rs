@@ -1544,7 +1544,7 @@ impl ScheduleStage {
             let (mut from_len, mut from_exec_len) = (0, 0);
 
             loop {
-                let mut selection = TaskSelection::OnlyFromContended(if from_disconnected { usize::max_value() } else { 2 });
+                let mut selection = TaskSelection::OnlyFromContended(if from_disconnected && runnable_queue.is_empty() { usize::max_value() } else { 2 });
                 while selection.should_proceed() && executing_queue_count + provisioning_tracker_count < max_executing_queue_count {
                     let prefer_immediate = true; //provisioning_tracker_count / 4 > executing_queue_count;
 
