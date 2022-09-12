@@ -1332,7 +1332,7 @@ impl Default for Scheduler {
                         ("thread", current_thread_name, String),
                         ("signature", &sig, String),
                         ("account_locks_in_json", "{}", String),
-                        ("status", format!("{:?}", status_str.unwrap()), String),
+                        ("status", status_str.unwrap(), String),
                         ("duration", duration_with_overhead, i64),
                         ("compute_units", ee.cu, i64),
                     );
