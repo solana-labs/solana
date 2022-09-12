@@ -1258,6 +1258,7 @@ impl Default for Scheduler {
             let bank = bank.clone();
 
             std::thread::Builder::new().name(format!("solScExLane{:02}", thx)).spawn(move || {
+            let started =  cpu_time::ThreadTime::now();
             let current_thread_name = std::thread::current().name().unwrap().to_string();
 
             while let Ok(solana_scheduler::ExecutablePayload(mut ee)) = scheduled_ee_receiver.recv() {
@@ -1335,7 +1336,7 @@ impl Default for Scheduler {
                 //ee.reindex_with_address_book();
                 processed_ee_sender.send(solana_scheduler::UnlockablePayload(ee)).unwrap();
             }
-            Ok(())
+            Ok(started.elapsed())
         }).unwrap()}).collect();
 
         let errors = Arc::new(std::sync::Mutex::new(Vec::new()));
