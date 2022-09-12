@@ -1413,7 +1413,7 @@ impl Scheduler {
         drop(transaction_sender);
         let executing_thread_cpu_us: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().iter().map(|executing_thread_handle| {
             executing_thread_handle.join().unwrap().map(|u| u.as_micros())
-        }).collect()?;
+        }).collect();
         let h = self.scheduler_thread_handle.take().unwrap();
         let scheduler_thread_cpu_us = h.join().unwrap()?.as_micros();
         let h = self.error_collector_thread_handle.take().unwrap();
