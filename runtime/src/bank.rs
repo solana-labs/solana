@@ -1272,7 +1272,8 @@ impl Default for Scheduler {
                 let mut process_message_time = Measure::start("process_message_time");
 
                 let current_execute_clock = ee.task.execute_time();
-                trace!("execute_substage: thread: {} transaction_index: {} execute_clock: {}", thx, ee.task.transaction_index_in_entries_for_replay(), current_execute_clock);
+                let transaction_index = ee.task.transaction_index_in_entries_for_replay();
+                trace!("execute_substage: thread: {} transaction_index: {} execute_clock: {}", thx, transaction_index, current_execute_clock);
 
                 let ro_bank = bank.read().unwrap();
                 let weak_bank = ro_bank.as_ref().unwrap().upgrade();
@@ -1287,6 +1288,7 @@ impl Default for Scheduler {
                     TransactionBatch::new(vec![lock_result], &bank, Cow::Owned(vec![ee.task.tx.0.clone()]));
                 batch.set_needs_unlock(false);
 
+                let mut timings = Default::default();
                 let (tx_results, _balances) = bank.load_execute_and_commit_transactions(
                     &batch,
                     MAX_PROCESSING_AGE,
@@ -1294,13 +1296,15 @@ impl Default for Scheduler {
                     false,
                     false,
                     false,
-                    &mut Default::default(),
+                    &mut timings,
                     None
                 );
                 drop(bank);
                 drop(batch);
                 drop(weak_bank);
                 drop(ro_bank);
+
+                trace!("execute_substage: slot: {} transaction_index: {} timings: {}", slot, transaction_index, timings);
 
                 let TransactionResults {
                     fee_collection_results,
