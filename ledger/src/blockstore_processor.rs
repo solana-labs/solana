@@ -14,7 +14,6 @@ use {
     itertools::Itertools,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
-    rayon::prelude::*,
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
@@ -763,7 +762,7 @@ impl ConfirmationTiming {
         let ConfirmationTiming {
             execute_timings: ref mut cumulative_execute_timings,
             execute_batches_us: ref mut cumulative_execute_batches_us,
-            ref mut end_to_end_execute_timings,
+            end_to_end_execute_timings: _,
             ..
         } = self;
 
