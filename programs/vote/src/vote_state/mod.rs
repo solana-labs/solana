@@ -597,7 +597,7 @@ pub fn process_new_vote_state(
                 }
                 continue;
             }
-            
+
             break;
         }
     }
