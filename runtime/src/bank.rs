@@ -1357,6 +1357,7 @@ impl Default for Scheduler {
         }).unwrap();
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
+            let started =  cpu_time::ThreadTime::now();
             let mut runnable_queue = solana_scheduler::TaskQueue::default();
             let max_executing_queue_count = std::env::var("MAX_EXECUTING_QUEUE_COUNT")
                 .unwrap_or(format!("{}", 1))
@@ -1376,7 +1377,7 @@ impl Default for Scheduler {
             drop(scheduled_ee_sender);
             drop(processed_ee_receiver);
 
-            Ok(())
+            Ok(started)
         }).unwrap();
 
         let s = Self {
