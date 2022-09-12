@@ -1342,6 +1342,8 @@ impl Default for Scheduler {
         let errors_in_collector_thread = Arc::clone(&errors);
 
         let error_collector_thread_handle = std::thread::Builder::new().name(format!("solScErrCol{:02}", 0)).spawn(move || {
+            let started =  cpu_time::ThreadTime::now();
+
             while let Ok(solana_scheduler::ExaminablePayload(mut ee)) = retired_ee_receiver.recv() {
                 if ee.is_aborted() {
                     warn!(
@@ -1353,7 +1355,7 @@ impl Default for Scheduler {
 
                 drop(ee);
             }
-            Ok(())
+            Ok(started.elapsed())
         }).unwrap();
 
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
