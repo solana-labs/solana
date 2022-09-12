@@ -602,6 +602,7 @@ fn process_entries_with_callback(
             EntryType::Transactions(transactions) => {
                 let starting_index = *starting_index;
                 let transaction_indexes = if randomize {
+                    panic!("randomize isn't supported");
                     let mut transactions_and_indexes: Vec<(SanitizedTransaction, usize)> =
                         transactions.drain(..).zip(starting_index..).collect();
                     transactions_and_indexes.shuffle(&mut rng);
