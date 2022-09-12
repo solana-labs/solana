@@ -1198,6 +1198,7 @@ impl AbiExample for BuiltinPrograms {
 
 #[derive(Debug)]
 struct Scheduler {
+    random_id: u64,
     scheduler_thread_handle: Option<std::thread::JoinHandle<Result<Duration>>>,
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<Duration>>>>,
     error_collector_thread_handle: Option<std::thread::JoinHandle<Result<Duration>>>,
@@ -1368,6 +1369,8 @@ impl Default for Scheduler {
             Ok(started.elapsed())
         }).unwrap();
 
+        let random_id = rand::thread_rng().gen::<u64>();
+
         let scheduler_thread_handle = std::thread::Builder::new().name("solScheduler".to_string()).spawn(move || {
             let started = cpu_time::ThreadTime::now();
             if max_thread_priority {
@@ -1381,6 +1384,7 @@ impl Default for Scheduler {
                 .unwrap();
 
             solana_scheduler::ScheduleStage::run(
+                random_id,
                 max_executing_queue_count,
                 &mut runnable_queue,
                 &mut address_book,
@@ -1397,6 +1401,7 @@ impl Default for Scheduler {
         }).unwrap();
 
         let s = Self {
+            random_id,
             scheduler_thread_handle: Some(scheduler_thread_handle),
             executing_thread_handles: Some(executing_thread_handles),
             error_collector_thread_handle: Some(error_collector_thread_handle),
@@ -1407,7 +1412,7 @@ impl Default for Scheduler {
             bank,
             slot: Default::default(),
         };
-        info!("scheduler: setup done with {}us", start.elapsed().as_micros());
+        info!("scheduler: id_{:016x} setup done with {}us", random_id, start.elapsed().as_micros());
 
         s
     }
@@ -1433,7 +1438,7 @@ impl Scheduler {
         let h = self.error_collector_thread_handle.take().unwrap();
         let error_collector_thread_cpu_us = h.join().unwrap()?.as_micros();
 
-        info!("Scheduler::gracefully_stop(): stopped: schduler: {}, error_collector: {}, lanes: total({}) = ({:?})", scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
+        info!("Scheduler::gracefully_stop(): id_{:016x} stopped: schduler: {}, error_collector: {}, lanes: total({}) = ({:?})", self.random_id, scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
 
         Ok(())
     }

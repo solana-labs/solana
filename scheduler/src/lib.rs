@@ -1417,6 +1417,7 @@ impl ScheduleStage {
 
     fn _run<'a, AST: AtScheduleThread>(
         ast: AST,
+        random_id: u64,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -1428,7 +1429,6 @@ impl ScheduleStage {
     ) {
         let start_time = std::time::Instant::now();
         let (mut last_time, mut last_processed_count) = (start_time.clone(), 0_usize);
-        let random_id = rand::thread_rng().gen::<u64>();
         info!("schedule_once:initial id_{:016x}", random_id);
 
         let mut executing_queue_count = 0_usize;
@@ -1694,6 +1694,7 @@ impl ScheduleStage {
     }
 
     pub fn run(
+        random_id: u64,
         max_executing_queue_count: usize,
         runnable_queue: &mut TaskQueue,
         address_book: &mut AddressBook,
@@ -1708,6 +1709,7 @@ impl ScheduleStage {
 
         Self::_run::<AtTopOfScheduleThread>(
             AtTopOfScheduleThread,
+            random_id,
             max_executing_queue_count,
             runnable_queue,
             address_book,
