@@ -4320,10 +4320,10 @@ pub mod tests {
             vec![
                 HashSet::from_iter([]),
                 HashSet::from_iter([0]),
-                HashSet::from_iter([0, 1]),
+                HashSet::from_iter([1]),
                 HashSet::from_iter([]),
                 HashSet::from_iter([3]),
-                HashSet::from_iter([3, 4]),
+                HashSet::from_iter([4]),
                 HashSet::from_iter([0, 3]),
             ]
         );
