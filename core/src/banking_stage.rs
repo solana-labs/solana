@@ -2077,15 +2077,15 @@ impl BankingStage {
         let mut deserialized_packet_batches =
             vec![deserialized_packet_receiver.recv_timeout(recv_timeout)?];
 
-        let mut received_capacity = deserialized_packet_batches[0].deserialized_packets.len();
+        let mut received_count = deserialized_packet_batches[0].deserialized_packets.len();
 
         while let Ok(deserialized_packets) = deserialized_packet_receiver.try_recv() {
-            let (new_received_capacity, overflowed) =
-                received_capacity.overflowing_add(deserialized_packets.deserialized_packets.len());
-            received_capacity = new_received_capacity;
+            let (new_received_count, overflowed) =
+                received_count.overflowing_add(deserialized_packets.deserialized_packets.len());
+            received_count = new_received_count;
             deserialized_packet_batches.push(deserialized_packets);
 
-            if overflowed || received_capacity >= capacity || Instant::now() >= stop {
+            if overflowed || received_count >= capacity || Instant::now() >= stop {
                 break;
             }
         }
