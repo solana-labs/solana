@@ -7892,7 +7892,11 @@ impl AccountsDb {
         measure.stop();
         accounts_index_root_stats.clean_dead_slot_us += measure.as_us();
         if self.log_dead_slots.load(Ordering::Relaxed) {
-            info!("remove_dead_slots_metadata: slots {:?}", dead_slots);
+            info!(
+                "remove_dead_slots_metadata: {} dead slots",
+                dead_slots.len()
+            );
+            trace!("remove_dead_slots_metadata: dead_slots: {:?}", dead_slots);
         }
 
         accounts_index_root_stats.rooted_cleaned_count += rooted_cleaned_count;
