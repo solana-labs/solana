@@ -1420,7 +1420,7 @@ impl Scheduler {
         let h = self.error_collector_thread_handle.take().unwrap();
         let error_collector_thread_cpu_us = h.join().unwrap()?.as_micros();
 
-        info!("Scheduler::gracefully_stop(): stopped: schduler: {}, error_collector: {}, executing: {} = {:?}", scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
+        info!("Scheduler::gracefully_stop(): stopped: schduler: {}, error_collector: {}, lanes: total({}) = ({:?})", scheduler_thread_cpu_us, error_collector_thread_cpu_us, executing_thread_cpu_us.iter().sum::<u128>(), &executing_thread_cpu_us);
 
         Ok(())
     }
