@@ -571,10 +571,10 @@ pub fn process_new_vote_state(
     //   new vote state; these have been "popped off the back" of the tower and thus represent finalized slots
     let mut finalized_slot_count = 1_u64;
 
-    for current_vote in &vote_state.votes {
-        // Find the first vote in the current vote state for a slot greater
-        // than the new proposed root
-        if let Some(new_root) = new_root {
+    if let Some(new_root) = new_root {
+        for current_vote in &vote_state.votes {
+            // Find the first vote in the current vote state for a slot greater
+            // than the new proposed root
             if current_vote.slot <= new_root {
                 current_vote_state_index += 1;
                 if current_vote.slot != new_root {
@@ -582,9 +582,9 @@ pub fn process_new_vote_state(
                 }
                 continue;
             }
-        }
 
-        break;
+            break;
+        }
     }
 
     // All the votes in our current vote state that are missing from the new vote state
