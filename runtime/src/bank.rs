@@ -1412,7 +1412,7 @@ impl Scheduler {
         let transaction_sender = self.transaction_sender.take().unwrap();
         drop(transaction_sender);
         let executing_thread_cpu_us = self.executing_thread_handles.take().unwrap().iter().map(|executing_thread_handle| {
-            executing_thread_handle.join().unwrap()?.as_micros();
+            executing_thread_handle.join().unwrap()?.as_micros()
         });
         let h = self.scheduler_thread_handle.take().unwrap();
         let scheduler_thread_cpu_us = h.join().unwrap()?.as_micros();
