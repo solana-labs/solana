@@ -4,7 +4,9 @@ use {
         blockstore::Blockstore,
         blockstore_db::BlockstoreError,
         blockstore_meta::SlotMeta,
-        executor::{ReplayRequest, ReplayResponse, Replayer, ReplayerHandle},
+        executor::{
+            build_dependency_graph, ReplayRequest, ReplayResponse, Replayer, ReplayerHandle,
+        },
         leader_schedule_cache::LeaderScheduleCache,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
@@ -12,13 +14,13 @@ use {
     itertools::Itertools,
     log::*,
     rand::{seq::SliceRandom, thread_rng},
-    rayon::{prelude::*, ThreadPool},
+    rayon::prelude::*,
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
     solana_measure::measure::Measure,
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
-    solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
+    solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{
         accounts_background_service::AbsRequestSender,
         accounts_db::{AccountShrinkThreshold, AccountsDbConfig},
@@ -45,8 +47,8 @@ use {
         signature::Keypair,
         timing,
         transaction::{
-            Result, SanitizedTransaction, TransactionAccountLocks, TransactionError,
-            TransactionVerificationMode, VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
+            Result, SanitizedTransaction, TransactionError, TransactionVerificationMode,
+            VersionedTransaction, MAX_TX_ACCOUNT_LOCKS,
         },
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
@@ -94,82 +96,6 @@ struct ReplayEntry {
     starting_index: usize,
 }
 
-// get_max_thread_count to match number of threads in the old code.
-// see: https://github.com/solana-labs/solana/pull/24853
-lazy_static! {
-    static ref PAR_THREAD_POOL: ThreadPool = rayon::ThreadPoolBuilder::new()
-        .num_threads(get_max_thread_count())
-        .thread_name(|ix| format!("solBstoreProc{:02}", ix))
-        .build()
-        .unwrap();
-}
-
-const DEFAULT_CONFLICT_SET_SIZE: usize = 30;
-
-// The dependency graph contains a set of indices < N that must be executed before index N.
-pub fn build_dependency_graphs(
-    tx_account_locks_results: &Vec<Result<TransactionAccountLocks>>,
-) -> Result<Vec<HashSet<usize>>> {
-    if let Some(err) = tx_account_locks_results.iter().find(|r| r.is_err()) {
-        err.clone()?;
-    }
-    let transaction_locks: Vec<_> = tx_account_locks_results
-        .iter()
-        .map(|r| r.as_ref().unwrap())
-        .collect();
-
-    // build a map whose key is a pubkey + value is a sorted vector of all indices that
-    // lock that account
-    let mut indices_read_locking_account = HashMap::new();
-    let mut indicies_write_locking_account = HashMap::new();
-    transaction_locks
-        .iter()
-        .enumerate()
-        .for_each(|(idx, tx_account_locks)| {
-            for account in &tx_account_locks.readonly {
-                indices_read_locking_account
-                    .entry(**account)
-                    .and_modify(|indices: &mut Vec<usize>| indices.push(idx))
-                    .or_insert_with(|| vec![idx]);
-            }
-            for account in &tx_account_locks.writable {
-                indicies_write_locking_account
-                    .entry(**account)
-                    .and_modify(|indices: &mut Vec<usize>| indices.push(idx))
-                    .or_insert_with(|| vec![idx]);
-            }
-        });
-
-    Ok(PAR_THREAD_POOL.install(|| {
-        transaction_locks
-            .par_iter()
-            .enumerate()
-            .map(|(idx, account_locks)| {
-                // user measured value from mainnet; rarely see more than 30 conflicts or so
-                let mut dep_graph = HashSet::with_capacity(DEFAULT_CONFLICT_SET_SIZE);
-                let readlock_accs = account_locks.writable.iter();
-                let writelock_accs = account_locks
-                    .readonly
-                    .iter()
-                    .chain(account_locks.writable.iter());
-
-                for acc in readlock_accs {
-                    if let Some(indices) = indices_read_locking_account.get(acc) {
-                        dep_graph.extend(indices.iter().take_while(|l_idx| **l_idx < idx));
-                    }
-                }
-
-                for read_acc in writelock_accs {
-                    if let Some(indices) = indicies_write_locking_account.get(read_acc) {
-                        dep_graph.extend(indices.iter().take_while(|l_idx| **l_idx < idx));
-                    }
-                }
-                dep_graph
-            })
-            .collect()
-    }))
-}
-
 #[derive(Default)]
 struct ExecuteBatchesInternalMetrics {
     execute_batches_us: u64,
@@ -209,7 +135,7 @@ fn execute_batches_internal(
         .map(|(tx, _)| tx.get_account_locks(MAX_TX_ACCOUNT_LOCKS))
         .collect();
     let now = Instant::now();
-    let dependency_graph = build_dependency_graphs(&tx_account_locks_results)?;
+    let dependency_graph = build_dependency_graph(&tx_account_locks_results)?;
     confirmation_timing.planning_elapsed += now.elapsed().as_micros() as u64;
 
     let mut indices_need_scheduling: Vec<usize> = dependency_graph
@@ -294,10 +220,6 @@ fn execute_batches_internal(
                 })
                 .collect();
             if !indices_need_scheduling.is_empty() {
-                debug!(
-                    "more ready to be scheduled: {:?}",
-                    indices_need_scheduling.len()
-                );
                 break;
             }
         }
