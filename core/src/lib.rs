@@ -10,6 +10,7 @@
 
 pub mod accounts_hash_verifier;
 pub mod ancestor_hashes_service;
+pub mod bank_process_decision;
 pub mod banking_stage;
 pub mod banking_tracer_packet_stats;
 pub mod broadcast_stage;

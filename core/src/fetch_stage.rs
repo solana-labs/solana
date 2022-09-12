@@ -2,7 +2,7 @@
 
 use {
     crate::{
-        banking_stage::HOLD_TRANSACTIONS_SLOT_OFFSET,
+        bank_process_decision::HOLD_TRANSACTIONS_SLOT_OFFSET,
         result::{Error, Result},
     },
     crossbeam_channel::{unbounded, RecvTimeoutError},
