@@ -107,6 +107,7 @@ enum ExecutionState {
     Processed,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_batches_internal(
     bank: &Arc<Bank>,
     transactions_indices_to_schedule: &[(SanitizedTransaction, usize)],
@@ -140,7 +141,7 @@ fn execute_batches_internal(
     let mut indices_need_scheduling: Vec<usize> = dependency_graph
         .iter()
         .enumerate()
-        .filter_map(|(idx, indices)| indices.is_empty().then(|| idx))
+        .filter_map(|(idx, indices)| indices.is_empty().then_some(idx))
         .collect();
 
     while num_left_to_process > 0 {
@@ -158,7 +159,7 @@ fn execute_batches_internal(
                     replay_vote_sender: replay_vote_sender.cloned(),
                     cost_capacity_meter: cost_capacity_meter.clone(),
                     tx_cost: tx_costs[*idx],
-                    log_messages_bytes_limit: log_messages_bytes_limit.clone(),
+                    log_messages_bytes_limit,
                     entry_callback: entry_callback.cloned(),
                     batch_idx: Some(*idx),
                 })
@@ -231,6 +232,7 @@ fn execute_batches_internal(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_batches(
     bank: &Arc<Bank>,
     transactions_indices_to_schedule: &[(SanitizedTransaction, usize)],
@@ -391,7 +393,7 @@ fn process_entries_with_callback(
                     transactions_indices_to_schedule.extend(
                         transactions
                             .iter()
-                            .map(|tx| tx.clone())
+                            .cloned()
                             .zip(indices.into_iter())
                             .into_iter(),
                     );
@@ -1367,6 +1369,7 @@ fn supermajority_root_from_vote_accounts(
 
 // Processes and replays the contents of a single slot, returns Error
 // if failed to play the slot
+#[allow(clippy::too_many_arguments)]
 fn process_single_slot(
     blockstore: &Blockstore,
     bank: &Arc<Bank>,

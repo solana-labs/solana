@@ -358,7 +358,7 @@ fn execute_batch(
 
 // The dependency graph contains a set of indices < N that must be executed before index N.
 pub fn build_dependency_graph(
-    tx_account_locks_results: &Vec<Result<TransactionAccountLocks>>,
+    tx_account_locks_results: &[Result<TransactionAccountLocks>],
 ) -> Result<Vec<HashSet<usize>>> {
     if let Some(err) = tx_account_locks_results.iter().find(|r| r.is_err()) {
         err.clone()?;
