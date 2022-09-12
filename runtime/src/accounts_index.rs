@@ -4039,7 +4039,7 @@ pub mod tests {
                 &AccountSecondaryIndexes::default(),
                 value,
                 &mut gc,
-                UPSERT_PREVIOUS_SLOT_ENTRY_WAS_CACHED_FALSE,
+                UPSERT_POPULATE_RECLAIMS,
             );
             assert!(gc.is_empty());
         }
