@@ -27,7 +27,7 @@ export function encodeData<TInputData extends IInstructionInputData>(
 ): Buffer {
   const allocLength =
     type.layout.span >= 0 ? type.layout.span : Layout.getAlloc(type, fields);
-  const data = Buffer.alloc(allocLength);
+  const data = new Uint8Array(Buffer.alloc(allocLength));
   const layoutFields = Object.assign({instruction: type.index}, fields);
   type.layout.encode(layoutFields, data);
   return data;
