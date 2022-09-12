@@ -884,7 +884,7 @@ impl TaskSelection {
     fn should_proceed(&self) -> bool {
         match self {
             TaskSelection::OnlyFromRunnable => true,
-            TaskSelection::OnlyFromContended(retry_count) => retry_count > 0,
+            TaskSelection::OnlyFromContended(retry_count) => *retry_count > 0,
         }
     }
 
