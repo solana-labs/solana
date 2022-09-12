@@ -4,7 +4,7 @@ use {
     crate::{
         id,
         vote_state::{
-            CompactVoteStateUpdate, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
+            serde_compact_vote_state_update, Vote, VoteAuthorize, VoteAuthorizeCheckedWithSeedArgs,
             VoteAuthorizeWithSeedArgs, VoteInit, VoteState, VoteStateUpdate,
         },
     },
@@ -14,17 +14,6 @@ use {
         instruction::{AccountMeta, Instruction},
         pubkey::Pubkey,
         system_instruction, sysvar,
-<<<<<<< HEAD:programs/vote/src/vote_instruction.rs
-=======
-        vote::{
-            program::id,
-            state::{
-                serde_compact_vote_state_update, Vote, VoteAuthorize,
-                VoteAuthorizeCheckedWithSeedArgs, VoteAuthorizeWithSeedArgs, VoteInit, VoteState,
-                VoteStateUpdate,
-            },
-        },
->>>>>>> 4f22ee8f9 (uses varint encoding for vote-state lockout offsets):sdk/program/src/vote/instruction.rs
     },
 };
 

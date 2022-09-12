@@ -6486,9 +6486,11 @@ name = "solana-vote-program"
 version = "1.11.11"
 dependencies = [
  "bincode",
+ "itertools",
  "log",
  "num-derive",
  "num-traits",
+ "rand 0.7.3",
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
