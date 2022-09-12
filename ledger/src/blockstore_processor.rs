@@ -1560,7 +1560,7 @@ pub mod tests {
             signature::{Keypair, Signer},
             system_instruction::SystemError,
             system_transaction,
-            transaction::{Transaction, TransactionError},
+            transaction::{Transaction, TransactionAccountLocks, TransactionError},
         },
         solana_vote_program::{
             self,
@@ -4197,5 +4197,131 @@ pub mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_build_dependency_graph_chained() {
+        let a = Pubkey::new_unique();
+        let b = Pubkey::new_unique();
+
+        // WR
+        let transaction_acccount_locks = vec![
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&a, &b],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![&a, &b],
+                writable: vec![],
+            }),
+        ];
+        assert_eq!(
+            build_dependency_graph(&transaction_acccount_locks).unwrap(),
+            vec![HashSet::new(), HashSet::from_iter([0])]
+        );
+
+        // RW
+        let transaction_acccount_locks = vec![
+            Ok(TransactionAccountLocks {
+                readonly: vec![&a, &b],
+                writable: vec![],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&a, &b],
+            }),
+        ];
+        assert_eq!(
+            build_dependency_graph(&transaction_acccount_locks).unwrap(),
+            vec![HashSet::new(), HashSet::from_iter([0])]
+        );
+
+        // WW
+        let transaction_acccount_locks = vec![
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&a, &b],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&a, &b],
+            }),
+        ];
+        assert_eq!(
+            build_dependency_graph(&transaction_acccount_locks).unwrap(),
+            vec![HashSet::new(), HashSet::from_iter([0])]
+        );
+
+        // RR
+        let transaction_acccount_locks = vec![
+            Ok(TransactionAccountLocks {
+                readonly: vec![&a, &b],
+                writable: vec![],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![&a, &b],
+                writable: vec![],
+            }),
+        ];
+        assert_eq!(
+            build_dependency_graph(&transaction_acccount_locks).unwrap(),
+            vec![HashSet::new(), HashSet::new()]
+        );
+    }
+
+    #[test]
+    fn test_build_dependency_graph_rw() {
+        let a = Pubkey::new_unique();
+        let b = Pubkey::new_unique();
+        let c = Pubkey::new_unique();
+        let d = Pubkey::new_unique();
+        let e = Pubkey::new_unique();
+        let f = Pubkey::new_unique();
+        let g = Pubkey::new_unique();
+        let h = Pubkey::new_unique();
+        let i = Pubkey::new_unique();
+
+        let transaction_acccount_locks = vec![
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&a, &b],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&b, &c],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&c, &d],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&e, &f],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&f, &g],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&g, &h],
+            }),
+            Ok(TransactionAccountLocks {
+                readonly: vec![],
+                writable: vec![&i, &a, &e],
+            }),
+        ];
+        assert_eq!(
+            build_dependency_graph(&transaction_acccount_locks).unwrap(),
+            vec![
+                HashSet::from_iter([]),
+                HashSet::from_iter([0]),
+                HashSet::from_iter([0, 1]),
+                HashSet::from_iter([]),
+                HashSet::from_iter([3]),
+                HashSet::from_iter([3, 4]),
+                HashSet::from_iter([0, 3]),
+            ]
+        );
     }
 }
