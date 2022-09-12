@@ -4094,14 +4094,16 @@ impl Bank {
     pub fn register_recent_blockhash(&self, blockhash: &Hash) {
         info!("register_recent_blockhash: slot: {} reinitializing the scheduler: start", self.slot());
 
-        let last_error = self.wait_for_scheduler();
+        let maybe_last_error = self.wait_for_scheduler();
 
         // Only acquire the write lock for the blockhash queue on block boundaries because
         // readers can starve this write lock acquisition and ticks would be slowed down too
         // much if the write lock is acquired for each tick.
         let mut w_blockhash_queue = self.blockhash_queue.write().unwrap();
         let mut new_scheduler = Scheduler::default();
-        new_scheduler.errors.lock().unwrap().push(last_error);
+        if maybe_last_error.is_error() {
+            new_scheduler.errors.lock().unwrap().push(maybe_last_error);
+        }
         *self.scheduler.write().unwrap() = new_scheduler;
 
         info!("register_recent_blockhash: slot: {} reinitializing the scheduler: end", self.slot());
