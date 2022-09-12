@@ -1273,7 +1273,7 @@ impl Default for Scheduler {
 
                 let current_execute_clock = ee.task.execute_time();
                 let transaction_index = ee.task.transaction_index_in_entries_for_replay();
-                trace!("execute_substage: thread: {} transaction_index: {} execute_clock: {}", thx, transaction_index, current_execute_clock);
+                trace!("execute_substage: transaction_index: {} execute_clock: {} at thread: {}", thx, transaction_index, current_execute_clock);
 
                 let ro_bank = bank.read().unwrap();
                 let weak_bank = ro_bank.as_ref().unwrap().upgrade();
