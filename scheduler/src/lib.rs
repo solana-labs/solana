@@ -807,6 +807,10 @@ impl TaskQueue {
     fn task_count(&self) -> usize {
         self.tasks.len()
     }
+
+    fn is_empty(&self) -> bool {
+        self.tasks.is_empty()
+    }
 }
 
 #[inline(never)]
