@@ -280,8 +280,11 @@ fn output_slot(
     let preloader = address_book.preloader();
     let t1 = std::thread::Builder::new()
         .name("sol-scheduler".to_string())
-        .spawn(move || loop {
+        .spawn(move || {
+            let random_id = rand::thread_rng().gen::<u64>();
+            loop {
             ScheduleStage::run(
+                random_id,
                 lane_count * lane_channel_factor,
                 &mut runnable_queue,
                 &mut address_book,
@@ -290,7 +293,7 @@ fn output_slot(
                 &post_execute_env_receiver,
                 Some(&post_schedule_env_sender),
             );
-        })
+        }})
         .unwrap();
     let handles = (0..lane_count)
         .map(|thx| {
