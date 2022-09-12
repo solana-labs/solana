@@ -19,11 +19,13 @@ use {
     solana_ledger::{
         blockstore::Blockstore,
         blockstore_processor::process_entries_for_tests,
+        executor::{Replayer, ReplayerHandle},
         genesis_utils::{create_genesis_config, GenesisConfigInfo},
         get_tmp_ledger_path,
     },
     solana_perf::{packet::to_packet_batches, test_tx::test_tx},
     solana_poh::poh_recorder::{create_test_recorder, WorkingBankEntry},
+    solana_rayon_threadlimit::get_thread_count,
     solana_runtime::{bank::Bank, bank_forks::BankForks, cost_model::CostModel},
     solana_sdk::{
         genesis_config::GenesisConfig,
@@ -305,6 +307,7 @@ fn simulate_process_entries(
     keypairs: &[Keypair],
     initial_lamports: u64,
     num_accounts: usize,
+    replayer_handle: &ReplayerHandle,
 ) {
     let bank = Arc::new(Bank::new_for_benches(genesis_config));
 
@@ -331,7 +334,15 @@ fn simulate_process_entries(
         hash: next_hash(&bank.last_blockhash(), 1, &tx_vector),
         transactions: tx_vector,
     };
-    process_entries_for_tests(&bank, vec![entry], randomize_txs, None, None).unwrap();
+    process_entries_for_tests(
+        &bank,
+        vec![entry],
+        randomize_txs,
+        None,
+        None,
+        replayer_handle,
+    )
+    .unwrap();
 }
 
 #[allow(clippy::same_item_push)]
@@ -349,6 +360,8 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
         mint_keypair,
         ..
     } = create_genesis_config((num_accounts + 1) as u64 * initial_lamports);
+    let replayer = Replayer::new(get_thread_count());
+    let replayer_handle = replayer.handle();
 
     let mut keypairs: Vec<Keypair> = vec![];
     let tx_vector: Vec<VersionedTransaction> = Vec::with_capacity(num_accounts / 2);
@@ -367,6 +380,7 @@ fn bench_process_entries(randomize_txs: bool, bencher: &mut Bencher) {
             &keypairs,
             initial_lamports,
             num_accounts,
+            &replayer_handle,
         );
     });
 }

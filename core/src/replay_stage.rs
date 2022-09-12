@@ -441,7 +441,7 @@ impl ReplayStage {
         );
 
         #[allow(clippy::cognitive_complexity)]
-            let t_replay = Builder::new()
+        let t_replay = Builder::new()
             .name("solReplayStage".to_string())
             .spawn(move || {
                 let verify_recyclers = VerifyRecyclers::default();
@@ -671,7 +671,7 @@ impl ReplayStage {
                                                     &authorized_voter_keypairs.read().unwrap(),
                                                     &mut voted_signatures,
                                                     has_new_vote_been_rooted, &mut
-                                                        last_vote_refresh_time,
+                                                    last_vote_refresh_time,
                                                     &voting_sender,
                                                     wait_to_vote_slot,
                             );
