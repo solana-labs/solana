@@ -3465,23 +3465,35 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_valid_packets() {
+    fn test_filter_and_forward_with_account_limits() {
         solana_logger::setup();
-        let GenesisConfigInfo { genesis_config, .. } = create_slow_genesis_config(10);
-        let bank = Bank::new_no_wallclock_throttle_for_tests(&genesis_config);
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(bank)));
-        let current_bank = bank_forks.read().unwrap().root_bank();
+        let GenesisConfigInfo {
+            genesis_config,
+            mint_keypair,
+            ..
+        } = create_genesis_config(10);
+        let current_bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
-        let mut packets: Vec<DeserializedPacket> = (0..256)
-            .map(|packets_id| {
+        let simple_transactions: Vec<Transaction> = (0..256)
+            .map(|_id| {
                 // packets are deserialized upon receiving, failed packets will not be
                 // forwarded; Therefore we need to create real packets here.
-                let keypair = Keypair::new();
-                let pubkey = solana_sdk::pubkey::new_rand();
-                let blockhash = genesis_config.hash();
-                let transaction = system_transaction::transfer(&keypair, &pubkey, 1, blockhash);
-                let mut p = Packet::from_data(None, &transaction).unwrap();
-                p.meta.port = packets_id;
+                let key1 = Keypair::new();
+                system_transaction::transfer(
+                    &mint_keypair,
+                    &key1.pubkey(),
+                    genesis_config.rent.minimum_balance(0),
+                    genesis_config.hash(),
+                )
+            })
+            .collect_vec();
+
+        let mut packets: Vec<DeserializedPacket> = simple_transactions
+            .iter()
+            .enumerate()
+            .map(|(packets_id, transaction)| {
+                let mut p = Packet::from_data(None, transaction).unwrap();
+                p.meta.port = packets_id as u16;
                 p.meta.set_tracer(true);
                 DeserializedPacket::new(p).unwrap()
             })
@@ -3491,7 +3503,8 @@ mod tests {
         {
             let mut buffered_packet_batches: UnprocessedPacketBatches =
                 UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
-            let mut forward_packet_batches_by_accounts = ForwardPacketBatchesByAccounts::new(1, 2);
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
 
             let FilterForwardingResults {
                 total_forwardable_packets,
@@ -3533,7 +3546,8 @@ mod tests {
             }
             let mut buffered_packet_batches: UnprocessedPacketBatches =
                 UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
-            let mut forward_packet_batches_by_accounts = ForwardPacketBatchesByAccounts::new(1, 2);
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
             let FilterForwardingResults {
                 total_forwardable_packets,
                 total_tracer_packets_in_buffer,
@@ -3554,6 +3568,39 @@ mod tests {
             assert_eq!(
                 total_forwardable_tracer_packets,
                 packets.len() - num_already_forwarded
+            );
+        }
+
+        // some packets are invalid (already processed)
+        {
+            let num_already_processed = 16;
+            for tx in &simple_transactions[0..num_already_processed] {
+                assert_eq!(current_bank.process_transaction(tx), Ok(()));
+            }
+            let mut buffered_packet_batches: UnprocessedPacketBatches =
+                UnprocessedPacketBatches::from_iter(packets.clone().into_iter(), packets.len());
+            let mut forward_packet_batches_by_accounts =
+                ForwardPacketBatchesByAccounts::new_with_default_batch_limits();
+            let FilterForwardingResults {
+                total_forwardable_packets,
+                total_tracer_packets_in_buffer,
+                total_forwardable_tracer_packets,
+            } = BankingStage::filter_and_forward_with_account_limits(
+                &current_bank,
+                &mut buffered_packet_batches,
+                &mut forward_packet_batches_by_accounts,
+                UNPROCESSED_BUFFER_STEP_SIZE,
+                &mut LeaderSlotMetricsTracker::new(1),
+                &BankingStageStats::default(),
+            );
+            assert_eq!(
+                total_forwardable_packets,
+                packets.len() - num_already_processed
+            );
+            assert_eq!(total_tracer_packets_in_buffer, packets.len());
+            assert_eq!(
+                total_forwardable_tracer_packets,
+                packets.len() - num_already_processed
             );
         }
     }
