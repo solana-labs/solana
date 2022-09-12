@@ -4629,6 +4629,38 @@ pub mod tests {
     }
 
     #[test]
+    fn test_multi_get() {
+        const TEST_PUT_ENTRY_COUNT: usize = 100;
+        let ledger_path = get_tmp_ledger_path_auto_delete!();
+        let blockstore = Blockstore::open(ledger_path.path()).unwrap();
+
+        // Test meta column family
+        for i in 0..TEST_PUT_ENTRY_COUNT {
+            let k = u64::try_from(i).unwrap();
+            let meta = SlotMeta::new(k, Some(k + 1));
+            blockstore.meta_cf.put(k, &meta).unwrap();
+            let result = blockstore
+                .meta_cf
+                .get(k)
+                .unwrap()
+                .expect("Expected meta object to exist");
+            assert_eq!(result, meta);
+        }
+        let mut keys: Vec<u64> = vec![0; TEST_PUT_ENTRY_COUNT];
+        for (i, key) in keys.iter_mut().enumerate().take(TEST_PUT_ENTRY_COUNT) {
+            *key = u64::try_from(i).unwrap();
+        }
+        let values = blockstore.meta_cf.multi_get(keys);
+        for (i, value) in values.iter().enumerate().take(TEST_PUT_ENTRY_COUNT) {
+            let k = u64::try_from(i).unwrap();
+            assert_eq!(
+                value.as_ref().unwrap().as_ref().unwrap(),
+                &SlotMeta::new(k, Some(k + 1))
+            );
+        }
+    }
+
+    #[test]
     fn test_read_shred_bytes() {
         let slot = 0;
         let (shreds, _) = make_slot_entries(slot, 0, 100);
