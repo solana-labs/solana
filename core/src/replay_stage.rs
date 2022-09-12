@@ -4182,6 +4182,8 @@ pub(crate) mod tests {
                 validator_keypairs,
                 ..
             } = vote_simulator;
+            let replayer = Replayer::new(get_thread_count());
+            let replayer_handle = replayer.handle();
 
             let bank0 = bank_forks.read().unwrap().get(0).unwrap();
             assert!(bank0.is_frozen());
@@ -4209,6 +4211,7 @@ pub(crate) mod tests {
                 &VerifyRecyclers::default(),
                 None,
                 &PrioritizationFeeCache::new(0u64),
+                &replayer_handle,
             );
             let max_complete_transaction_status_slot = Arc::new(AtomicU64::default());
             let rpc_subscriptions = Arc::new(RpcSubscriptions::new_for_tests(

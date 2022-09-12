@@ -4,11 +4,8 @@ use {
         blockstore::Blockstore,
         blockstore_db::BlockstoreError,
         blockstore_meta::SlotMeta,
-        executor::{
-            ReplayRequest, ReplayResponse, Replayer, ReplayerHandle, TransactionBatchWithIndexes,
-        },
+        executor::{ReplayRequest, ReplayResponse, Replayer, ReplayerHandle},
         leader_schedule_cache::LeaderScheduleCache,
-        token_balances::collect_token_balances,
     },
     chrono_humanize::{Accuracy, HumanTime, Tense},
     crossbeam_channel::Sender,
@@ -19,8 +16,8 @@ use {
     solana_entry::entry::{
         self, create_ticks, Entry, EntrySlice, EntryType, EntryVerificationStatus, VerifyRecyclers,
     },
-    solana_measure::{measure, measure::Measure},
-    solana_metrics::{datapoint_error, inc_new_counter_debug},
+    solana_measure::measure::Measure,
+    solana_metrics::datapoint_error,
     solana_program_runtime::timings::{ExecuteTimingType, ExecuteTimings, ThreadExecuteTimings},
     solana_rayon_threadlimit::{get_max_thread_count, get_thread_count},
     solana_runtime::{
@@ -30,26 +27,23 @@ use {
         accounts_update_notifier_interface::AccountsUpdateNotifier,
         bank::{
             Bank, RentDebits, TransactionBalancesSet, TransactionExecutionDetails,
-            TransactionExecutionResult, TransactionResults, VerifyBankHash,
+            TransactionExecutionResult, VerifyBankHash,
         },
         bank_forks::BankForks,
-        bank_utils,
         block_cost_limits::*,
         commitment::VOTE_THRESHOLD_SIZE,
         cost_model::CostModel,
         prioritization_fee_cache::PrioritizationFeeCache,
         runtime_config::RuntimeConfig,
-        transaction_batch::TransactionBatch,
         vote_account::VoteAccountsHashMap,
         vote_sender_types::ReplayVoteSender,
     },
     solana_sdk::{
-        clock::{Slot, MAX_PROCESSING_AGE},
-        feature_set,
+        clock::Slot,
         genesis_config::GenesisConfig,
         hash::Hash,
         pubkey::Pubkey,
-        signature::{Keypair, Signature},
+        signature::Keypair,
         timing,
         transaction::{
             Result, SanitizedTransaction, TransactionAccountLocks, TransactionError,
@@ -58,11 +52,10 @@ use {
     },
     solana_transaction_status::token_balances::TransactionTokenBalancesSet,
     std::{
-        borrow::Cow,
         collections::{HashMap, HashSet},
         path::PathBuf,
         result,
-        sync::{Arc, Mutex, RwLock},
+        sync::{Arc, RwLock},
         time::{Duration, Instant},
     },
     thiserror::Error,
@@ -250,8 +243,6 @@ fn execute_batches_internal(
         });
 
         while num_left_to_process > 0 {
-            transaction_results = vec![Ok(()); transactions_indices_to_schedule.len()];
-
             replayer_handle
                 .recv_and_drain()
                 .unwrap()
@@ -1654,6 +1645,7 @@ pub mod tests {
         solana_sdk::{
             account::{AccountSharedData, WritableAccount},
             epoch_schedule::EpochSchedule,
+            feature_set,
             hash::Hash,
             native_token::LAMPORTS_PER_SOL,
             pubkey::Pubkey,
@@ -2344,8 +2336,11 @@ pub mod tests {
             Err(TransactionError::BlockhashNotFound)
         );
 
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        process_entries_for_tests(&bank, slot_entries, true, None, None).unwrap();
+        process_entries_for_tests(&bank, slot_entries, true, None, None, &replayer_handle).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -2533,11 +2528,14 @@ pub mod tests {
         let GenesisConfigInfo { genesis_config, .. } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         // ensure bank can process a tick
         assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_config.hash(), 1, vec![]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![tick], true, None, None),
+            process_entries_for_tests(&bank, vec![tick], true, None, None, &replayer_handle),
             Ok(())
         );
         assert_eq!(bank.tick_height(), 1);
@@ -2550,6 +2548,9 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -2572,7 +2573,14 @@ pub mod tests {
         );
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1, entry_2], true, None, None),
+            process_entries_for_tests(
+                &bank,
+                vec![entry_1, entry_2],
+                true,
+                None,
+                None,
+                &replayer_handle
+            ),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -2587,6 +2595,9 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -2634,6 +2645,7 @@ pub mod tests {
                 false,
                 None,
                 None,
+                &replayer_handle
             ),
             Ok(())
         );
@@ -2650,6 +2662,9 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -2706,6 +2721,7 @@ pub mod tests {
             false,
             None,
             None,
+            &replayer_handle
         )
         .is_err());
 
@@ -2737,6 +2753,9 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -2818,6 +2837,7 @@ pub mod tests {
             false,
             None,
             None,
+            &replayer_handle
         )
         .is_err());
 
@@ -2834,6 +2854,9 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(1000);
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -2865,7 +2888,14 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair4.pubkey(), 1, bank.last_blockhash());
         let entry_2 = next_entry(&entry_1.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1, entry_2], true, None, None),
+            process_entries_for_tests(
+                &bank,
+                vec![entry_1, entry_2],
+                true,
+                None,
+                None,
+                &replayer_handle
+            ),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -2881,6 +2911,9 @@ pub mod tests {
             ..
         } = create_genesis_config(1_000_000_000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
 
         const NUM_TRANSFERS_PER_ENTRY: usize = 8;
         const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
@@ -2926,7 +2959,7 @@ pub mod tests {
             })
             .collect();
         assert_eq!(
-            process_entries_for_tests(&bank, entries, true, None, None),
+            process_entries_for_tests(&bank, entries, true, None, None, &replayer_handle),
             Ok(())
         );
     }
@@ -2948,6 +2981,9 @@ pub mod tests {
         } = create_genesis_config((num_accounts + 1) as u64 * initial_lamports);
 
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
 
         let mut keypairs: Vec<Keypair> = vec![];
 
@@ -2989,7 +3025,7 @@ pub mod tests {
         // Transfer lamports to each other
         let entry = next_entry(&bank.last_blockhash(), 1, tx_vector);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry], true, None, None),
+            process_entries_for_tests(&bank, vec![entry], true, None, None, &replayer_handle),
             Ok(())
         );
         bank.squash();
@@ -3015,6 +3051,10 @@ pub mod tests {
             ..
         } = create_genesis_config(1000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
@@ -3054,7 +3094,8 @@ pub mod tests {
                 vec![entry_1, tick, entry_2.clone()],
                 true,
                 None,
-                None
+                None,
+                &replayer_handle
             ),
             Ok(())
         );
@@ -3066,7 +3107,7 @@ pub mod tests {
             system_transaction::transfer(&keypair2, &keypair3.pubkey(), 1, bank.last_blockhash());
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_3], true, None, None),
+            process_entries_for_tests(&bank, vec![entry_3], true, None, None, &replayer_handle),
             Err(TransactionError::AccountNotFound)
         );
     }
@@ -3121,6 +3162,10 @@ pub mod tests {
             ..
         } = create_genesis_config(11_000);
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
+
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let success_tx = system_transaction::transfer(
@@ -3146,7 +3191,14 @@ pub mod tests {
         );
 
         assert_eq!(
-            process_entries_for_tests(&bank, vec![entry_1_to_mint], false, None, None),
+            process_entries_for_tests(
+                &bank,
+                vec![entry_1_to_mint],
+                false,
+                None,
+                None,
+                &replayer_handle
+            ),
             Err(TransactionError::AccountInUse)
         );
 
@@ -3191,6 +3243,8 @@ pub mod tests {
         let GenesisConfigInfo {
             mut genesis_config, ..
         } = create_genesis_config(123);
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
 
         let ticks_per_slot = 1;
         genesis_config.ticks_per_slot = ticks_per_slot;
@@ -3242,6 +3296,7 @@ pub mod tests {
             None,
             None,
             &mut ExecuteTimings::default(),
+            &replayer_handle,
         )
         .unwrap();
         bank_forks.set_root(
@@ -3298,6 +3353,9 @@ pub mod tests {
         } = create_genesis_config(1_000_000_000);
         let mut bank = Arc::new(Bank::new_for_tests(&genesis_config));
 
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         const NUM_TRANSFERS_PER_ENTRY: usize = 8;
         const NUM_TRANSFERS: usize = NUM_TRANSFERS_PER_ENTRY * 32;
 
@@ -3345,7 +3403,8 @@ pub mod tests {
                 })
                 .collect();
             info!("paying iteration {}", i);
-            process_entries_for_tests(&bank, entries, true, None, None).expect("paying failed");
+            process_entries_for_tests(&bank, entries, true, None, None, &replayer_handle)
+                .expect("paying failed");
 
             let entries: Vec<_> = (0..NUM_TRANSFERS)
                 .step_by(NUM_TRANSFERS_PER_ENTRY)
@@ -3368,7 +3427,8 @@ pub mod tests {
                 .collect();
 
             info!("refunding iteration {}", i);
-            process_entries_for_tests(&bank, entries, true, None, None).expect("refunding failed");
+            process_entries_for_tests(&bank, entries, true, None, None, &replayer_handle)
+                .expect("refunding failed");
 
             // advance to next block
             process_entries_for_tests(
@@ -3379,6 +3439,7 @@ pub mod tests {
                 true,
                 None,
                 None,
+                &replayer_handle,
             )
             .expect("process ticks failed");
 
@@ -3406,6 +3467,9 @@ pub mod tests {
             ..
         } = create_genesis_config(100);
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let genesis_hash = genesis_config.hash();
         let keypair = Keypair::new();
 
@@ -3421,7 +3485,7 @@ pub mod tests {
         let entry = next_entry(&new_blockhash, 1, vec![tx]);
         entries.push(entry);
 
-        process_entries_for_tests(&bank0, entries, true, None, None).unwrap();
+        process_entries_for_tests(&bank0, entries, true, None, None, &replayer_handle).unwrap();
         assert_eq!(bank0.get_balance(&keypair.pubkey()), 1)
     }
 
@@ -3476,6 +3540,9 @@ pub mod tests {
             &validator_keypairs,
             vec![100; validator_keypairs.len()],
         );
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let bank0 = Arc::new(Bank::new_for_tests(&genesis_config));
         bank0.freeze();
 
@@ -3536,8 +3603,14 @@ pub mod tests {
             .collect();
         let entry = next_entry(&bank_1_blockhash, 1, vote_txs);
         let (replay_vote_sender, replay_vote_receiver) = crossbeam_channel::unbounded();
-        let _ =
-            process_entries_for_tests(&bank1, vec![entry], true, None, Some(&replay_vote_sender));
+        let _ = process_entries_for_tests(
+            &bank1,
+            vec![entry],
+            true,
+            None,
+            Some(&replay_vote_sender),
+            &replayer_handle,
+        );
         let signatures: BTreeSet<_> = replay_vote_receiver
             .try_iter()
             .map(|(.., signature)| signature)
@@ -3823,6 +3896,7 @@ pub mod tests {
         slot_entries: Vec<Entry>,
         slot_full: bool,
         prev_entry_hash: Hash,
+        replayer_handle: &ReplayerHandle,
     ) -> result::Result<(), BlockstoreProcessorError> {
         confirm_slot_entries(
             bank,
@@ -3836,6 +3910,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
+            replayer_handle,
         )
     }
 
@@ -3851,6 +3926,10 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
+
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK);
         genesis_config.ticks_per_slot = TICKS_PER_SLOT;
         let genesis_hash = genesis_config.hash();
@@ -3866,7 +3945,14 @@ pub mod tests {
 
         let slot_0_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, genesis_hash);
         let slot_0_hash = slot_0_entries.last().unwrap().hash;
-        confirm_slot_entries_for_tests(&slot_0_bank, slot_0_entries, true, genesis_hash).unwrap();
+        confirm_slot_entries_for_tests(
+            &slot_0_bank,
+            slot_0_entries,
+            true,
+            genesis_hash,
+            &replayer_handle,
+        )
+        .unwrap();
         assert_eq!(slot_0_bank.tick_height(), slot_0_bank.max_tick_height());
         assert_eq!(slot_0_bank.last_blockhash(), slot_0_hash);
         assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
@@ -3880,7 +3966,14 @@ pub mod tests {
 
         let slot_1_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, slot_0_hash);
         let slot_1_hash = slot_1_entries.last().unwrap().hash;
-        confirm_slot_entries_for_tests(&slot_2_bank, slot_1_entries, false, slot_0_hash).unwrap();
+        confirm_slot_entries_for_tests(
+            &slot_2_bank,
+            slot_1_entries,
+            false,
+            slot_0_hash,
+            &replayer_handle,
+        )
+        .unwrap();
         assert_eq!(slot_2_bank.tick_height(), 4);
         assert_eq!(slot_2_bank.last_blockhash(), slot_1_hash);
         assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(2));
@@ -3916,7 +4009,14 @@ pub mod tests {
             entries
         };
         let slot_2_hash = slot_2_entries.last().unwrap().hash;
-        confirm_slot_entries_for_tests(&slot_2_bank, slot_2_entries, true, slot_1_hash).unwrap();
+        confirm_slot_entries_for_tests(
+            &slot_2_bank,
+            slot_2_entries,
+            true,
+            slot_1_hash,
+            &replayer_handle,
+        )
+        .unwrap();
         assert_eq!(slot_2_bank.tick_height(), slot_2_bank.max_tick_height());
         assert_eq!(slot_2_bank.last_blockhash(), slot_2_hash);
         assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(3));
@@ -3932,6 +4032,10 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(100 * LAMPORTS_PER_SOL);
+
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         let genesis_hash = genesis_config.hash();
         let bank = Arc::new(Bank::new_for_tests(&genesis_config));
         let mut timing = ConfirmationTiming::default();
@@ -3980,6 +4084,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
+            &replayer_handle,
         )
         .unwrap();
         assert_eq!(progress.num_txs, 2);
@@ -4026,6 +4131,7 @@ pub mod tests {
             &VerifyRecyclers::default(),
             None,
             &PrioritizationFeeCache::new(0u64),
+            &replayer_handle,
         )
         .unwrap();
         assert_eq!(progress.num_txs, 5);
@@ -4054,6 +4160,10 @@ pub mod tests {
             mint_keypair,
             ..
         } = create_genesis_config(10_000);
+
+        let replayer = Replayer::new(get_thread_count());
+        let replayer_handle = replayer.handle();
+
         genesis_config.poh_config.hashes_per_tick = Some(HASHES_PER_TICK);
         genesis_config.ticks_per_slot = TICKS_PER_SLOT;
         let genesis_hash = genesis_config.hash();
@@ -4067,7 +4177,14 @@ pub mod tests {
 
         let slot_0_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, genesis_hash);
         let slot_0_hash = slot_0_entries.last().unwrap().hash;
-        confirm_slot_entries_for_tests(&slot_0_bank, slot_0_entries, true, genesis_hash).unwrap();
+        confirm_slot_entries_for_tests(
+            &slot_0_bank,
+            slot_0_entries,
+            true,
+            genesis_hash,
+            &replayer_handle,
+        )
+        .unwrap();
         assert_eq!(slot_0_bank.tick_height(), slot_0_bank.max_tick_height());
         assert_eq!(slot_0_bank.last_blockhash(), slot_0_hash);
         assert_eq!(slot_0_bank.get_hash_age(&genesis_hash), Some(1));
@@ -4081,7 +4198,14 @@ pub mod tests {
 
         let slot_1_entries = entry::create_ticks(TICKS_PER_SLOT, HASHES_PER_TICK, slot_0_hash);
         let slot_1_hash = slot_1_entries.last().unwrap().hash;
-        confirm_slot_entries_for_tests(&slot_2_bank, slot_1_entries, false, slot_0_hash).unwrap();
+        confirm_slot_entries_for_tests(
+            &slot_2_bank,
+            slot_1_entries,
+            false,
+            slot_0_hash,
+            &replayer_handle,
+        )
+        .unwrap();
         assert_eq!(slot_2_bank.tick_height(), 4);
         assert_eq!(slot_2_bank.last_blockhash(), slot_0_hash);
         assert_eq!(slot_2_bank.get_hash_age(&genesis_hash), Some(1));
@@ -4136,8 +4260,13 @@ pub mod tests {
             };
 
             let slot_2_hash = slot_2_entries.last().unwrap().hash;
-            let result =
-                confirm_slot_entries_for_tests(&slot_2_bank, slot_2_entries, true, slot_1_hash);
+            let result = confirm_slot_entries_for_tests(
+                &slot_2_bank,
+                slot_2_entries,
+                true,
+                slot_1_hash,
+                &replayer_handle,
+            );
             match (result, expected_result) {
                 (Ok(()), Ok(())) => {
                     assert_eq!(slot_2_bank.tick_height(), slot_2_bank.max_tick_height());
