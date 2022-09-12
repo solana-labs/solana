@@ -1716,6 +1716,7 @@ impl ReplayStage {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn replay_blockstore_into_bank(
         bank: &Arc<Bank>,
         blockstore: &Blockstore,
@@ -2266,7 +2267,7 @@ impl ReplayStage {
         let longest_replay_time_us = AtomicU64::new(0);
 
         let bank_slots_replayers: Vec<_> = active_bank_slots
-            .into_iter()
+            .iter()
             .map(|s| (s, replayer.handle()))
             .collect();
 
