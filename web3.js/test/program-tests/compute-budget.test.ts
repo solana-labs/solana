@@ -72,51 +72,6 @@ describe('ComputeBudgetProgram', () => {
   });
 
   if (process.env.TEST_LIVE) {
-    it('send live request units ix', async () => {
-      const connection = new Connection(url, 'confirmed');
-      const FEE_AMOUNT = LAMPORTS_PER_SOL;
-      const STARTING_AMOUNT = 2 * LAMPORTS_PER_SOL;
-      const baseAccount = Keypair.generate();
-      const basePubkey = baseAccount.publicKey;
-      await helpers.airdrop({
-        connection,
-        address: basePubkey,
-        amount: STARTING_AMOUNT,
-      });
-
-      const additionalFeeTooHighTransaction = new Transaction().add(
-        ComputeBudgetProgram.requestUnits({
-          units: 150_000,
-          additionalFee: STARTING_AMOUNT,
-        }),
-      );
-
-      await expect(
-        sendAndConfirmTransaction(
-          connection,
-          additionalFeeTooHighTransaction,
-          [baseAccount],
-          {preflightCommitment: 'confirmed'},
-        ),
-      ).to.be.rejected;
-
-      const validAdditionalFeeTransaction = new Transaction().add(
-        ComputeBudgetProgram.requestUnits({
-          units: 150_000,
-          additionalFee: FEE_AMOUNT,
-        }),
-      );
-      await sendAndConfirmTransaction(
-        connection,
-        validAdditionalFeeTransaction,
-        [baseAccount],
-        {preflightCommitment: 'confirmed'},
-      );
-      expect(await connection.getBalance(baseAccount.publicKey)).to.be.at.most(
-        STARTING_AMOUNT - FEE_AMOUNT,
-      );
-    });
-
     it('send live request heap ix', async () => {
       const connection = new Connection(url, 'confirmed');
       const STARTING_AMOUNT = 2 * LAMPORTS_PER_SOL;
