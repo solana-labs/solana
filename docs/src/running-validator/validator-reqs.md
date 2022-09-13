@@ -83,7 +83,7 @@ releases at [solanalabs/solana](https://hub.docker.com/r/solanalabs/solana).
 ## Software
 
 - We build and run on Ubuntu 20.04.
-- See [Installing Solana](../cli/install-solana-cli-tools.md) for the current Solana software release.
+- See [Installing Solana](../cli/install-solana-cli-tools.md) for the current Solana software release. If you intend to have your validator sync with the network (as opposed to casual testing) be sure to install the release used by the majority of other nodes. I.e. release vX.**11**.10 might already be out, but  most validators are still using vX.**10**.10
 
 Prebuilt binaries are available for Linux x86_64 on CPUs supporting AVX2 \(Ubuntu 20.04 recommended\).
 MacOS or WSL users may build from source.
