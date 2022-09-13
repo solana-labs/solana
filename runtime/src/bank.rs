@@ -1328,7 +1328,7 @@ impl Default for Scheduler {
                     let sig = ee.task.tx.0.signature().to_string();
 
                     wall_time.stop();
-                    let duration_with_overhead = wall_time.as_micros();
+                    let duration_with_overhead = wall_time.as_us();
 
                     datapoint_info!(
                         "individual_tx_stats",
@@ -1339,7 +1339,7 @@ impl Default for Scheduler {
                         ("account_locks_in_json", "{}", String),
                         ("status", status_str.unwrap(), String),
                         ("duration", duration_with_overhead, i64),
-                        ("cpu_duration", cpu_time.elapsed().as_us(), i64),
+                        ("cpu_duration", cpu_time.elapsed().as_micros(), i64),
                         ("compute_units", ee.cu, i64),
                     );
                 }
