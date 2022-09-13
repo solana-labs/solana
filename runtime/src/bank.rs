@@ -1199,9 +1199,9 @@ impl AbiExample for BuiltinPrograms {
 #[derive(Debug)]
 struct Scheduler {
     random_id: u64,
-    scheduler_thread_handle: Option<std::thread::JoinHandle<Result<Duration>>>,
+    scheduler_thread_handle: Option<std::thread::JoinHandle<Result<(Duration Duration)>>>,
     executing_thread_handles: Option<Vec<std::thread::JoinHandle<Result<(Duration, Duration)>>>>,
-    error_collector_thread_handle: Option<std::thread::JoinHandle<Result<Duration>>>,
+    error_collector_thread_handle: Option<std::thread::JoinHandle<Result<(Duration, Duration)>>>,
     transaction_sender: Option<crossbeam_channel::Sender<solana_scheduler::SchedulablePayload>>,
     preloader: Arc<solana_scheduler::Preloader>,
     graceful_stop_initiated: bool,
