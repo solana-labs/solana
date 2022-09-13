@@ -1435,7 +1435,7 @@ impl Scheduler {
         info!("Scheduler::gracefully_stop(): id_{:016x} waiting..", self.random_id);
         let transaction_sender = self.transaction_sender.take().unwrap();
         drop(transaction_sender);
-        let executing_thread_cpu_us: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().map(|executing_thread_handle| {
+        let executing_thread_cpu_us: Result<Vec<_>> = self.executing_thread_handles.take().unwrap().into_iter().unzip().map(|executing_thread_handle| {
             executing_thread_handle.join().unwrap().map(|u| u.as_micros())
         }).collect();
         let mut executing_thread_cpu_us = executing_thread_cpu_us?;
