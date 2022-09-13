@@ -171,6 +171,16 @@ struct ServeRepairStats {
     outgoing_bytes_requested: HashMap<Pubkey, /*bytes*/ u64>,
 }
 
+#[derive(Default)]
+struct RepairStakeStats {
+    staked_peer_count: usize,
+    unstaked_peer_count: usize,
+    staked_response_bytes: u64,
+    unstaked_response_bytes: u64,
+    max_staked_peer_response_bytes: u64,
+    max_unstaked_peer_response_bytes: u64,
+}
+
 impl ServeRepairStats {
     fn record_outgoing_bytes(&mut self, id: &Pubkey, bytes: u64) {
         let requested = self.outgoing_bytes_requested.entry(*id).or_default();
@@ -514,6 +524,36 @@ impl ServeRepair {
         Ok(())
     }
 
+    fn repair_stake_stats(
+        &self,
+        bytes_requested: &HashMap<Pubkey, /*bytes*/ u64>,
+    ) -> Option<RepairStakeStats> {
+        let root_bank = self.bank_forks.read().unwrap().root_bank();
+        let epoch_schedule = root_bank.epoch_schedule();
+        let epoch = epoch_schedule.get_epoch(root_bank.slot());
+        root_bank.epoch_staked_nodes(epoch).map(|staked_nodes| {
+            let (staked, unstaked): (Vec<_>, Vec<_>) = bytes_requested
+                .iter()
+                .partition(|(id, _)| staked_nodes.contains_key(id));
+            let staked_peer_count = staked.len();
+            let unstaked_peer_count = unstaked.len();
+            let staked_response_bytes: u64 = staked.iter().map(|(_, x)| *x).sum();
+            let unstaked_response_bytes: u64 = unstaked.iter().map(|(_, x)| *x).sum();
+            let max_staked_peer_response_bytes: u64 =
+                staked.iter().map(|(_, x)| **x).max().unwrap_or_default();
+            let max_unstaked_peer_response_bytes: u64 =
+                unstaked.iter().map(|(_, x)| **x).max().unwrap_or_default();
+            RepairStakeStats {
+                staked_peer_count,
+                unstaked_peer_count,
+                staked_response_bytes,
+                unstaked_response_bytes,
+                max_staked_peer_response_bytes,
+                max_unstaked_peer_response_bytes,
+            }
+        })
+    }
+
     fn report_reset_stats(&self, stats: &mut ServeRepairStats) {
         if stats.self_repair > 0 {
             let my_id = self.cluster_info.id();
@@ -524,17 +564,9 @@ impl ServeRepair {
             inc_new_counter_debug!("serve_repair-handle-repair--eq", stats.self_repair);
         }
 
-        let staked_nodes = self.bank_forks.read().unwrap().root_bank().staked_nodes();
-        let (staked, unstaked): (Vec<_>, Vec<_>) = stats
-            .outgoing_bytes_requested
-            .iter()
-            .partition(|(id, _)| staked_nodes.contains_key(id));
-        let staked_response_bytes: u64 = staked.iter().map(|(_, x)| *x).sum();
-        let unstaked_response_bytes: u64 = unstaked.iter().map(|(_, x)| *x).sum();
-        let max_staked_peer_response_bytes: u64 =
-            staked.iter().map(|(_, x)| **x).max().unwrap_or_default();
-        let max_unstaked_peer_response_bytes: u64 =
-            unstaked.iter().map(|(_, x)| **x).max().unwrap_or_default();
+        let repair_stake_stats = self
+            .repair_stake_stats(&stats.outgoing_bytes_requested)
+            .unwrap_or_default();
 
         datapoint_info!(
             "serve_repair-requests_received",
@@ -567,18 +599,34 @@ impl ServeRepair {
             ("err_sig_verify", stats.err_sig_verify, i64),
             ("err_unsigned", stats.err_unsigned, i64),
             ("err_id_mismatch", stats.err_id_mismatch, i64),
-            ("staked_peer_count", staked.len(), i64),
-            ("unstaked_peer_count", unstaked.len(), i64),
-            ("staked_response_bytes", staked_response_bytes, i64),
-            ("unstaked_response_bytes", unstaked_response_bytes, i64),
+            (
+                "staked_peer_count",
+                repair_stake_stats.staked_peer_count,
+                i64
+            ),
+            (
+                "unstaked_peer_count",
+                repair_stake_stats.unstaked_peer_count,
+                i64
+            ),
+            (
+                "staked_response_bytes",
+                repair_stake_stats.staked_response_bytes,
+                i64
+            ),
+            (
+                "unstaked_response_bytes",
+                repair_stake_stats.unstaked_response_bytes,
+                i64
+            ),
             (
                 "max_staked_peer_response_bytes",
-                max_staked_peer_response_bytes,
+                repair_stake_stats.max_staked_peer_response_bytes,
                 i64
             ),
             (
                 "max_unstaked_peer_response_bytes",
-                max_unstaked_peer_response_bytes,
+                repair_stake_stats.max_unstaked_peer_response_bytes,
                 i64
             ),
         );
